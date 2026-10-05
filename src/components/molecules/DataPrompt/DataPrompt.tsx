@@ -122,7 +122,7 @@ const DataPrompt = ({
                 />
             </form>
             <span className={styles.rule} aria-hidden="true" />
-            {suggestions && (
+            {suggestions && suggestions.length > 0 && (
                 <TryChips
                     examples={suggestions}
                     onPick={submit}
