@@ -29,10 +29,13 @@ export type AidCounts = {
     years: { first: number; last: number } | null;
 };
 
-/** What DFO holds as a whole. */
+/** What DFO holds as a whole. `indicators` counts the StatVars search can
+ *  serve and `datasets` the source datasets behind them. */
 export type CatalogueCounts = {
     publishers: number;
     countries: number;
+    indicators: number;
+    datasets: number;
     aid: AidCounts;
 };
 
@@ -59,8 +62,9 @@ export type PlaceCatalogue = {
     examples: CatalogueExample[];
 };
 
-/** The first idle chip. It shows the starting point from the catalogue the
- *  page already holds, with no search call. */
+/** The starting point's own question. Asked as a search, it shows the
+ *  starting point from the catalogue the page already holds, with no search
+ *  call. */
 export const STARTING_POINT_QUERY = 'What data do you have?';
 
 /** How many examples a declined out_of_scope answer offers. */
@@ -83,7 +87,14 @@ const isExample = (value: unknown): value is CatalogueExample => {
 
 type CatalogueBody = {
     catalogue_version?: unknown;
-    counts?: { publishers?: unknown; countries?: unknown; variables?: unknown; aid?: unknown };
+    counts?: {
+        publishers?: unknown;
+        countries?: unknown;
+        indicators?: unknown;
+        datasets?: unknown;
+        variables?: unknown;
+        aid?: unknown;
+    };
     examples?: unknown;
 };
 
@@ -141,14 +152,23 @@ const parseBody = (body: unknown, scoped: 'countries' | 'variables') => {
 /** The whole catalogue read off the wire, or null when the body is not one. */
 export function parseCatalogue(body: unknown): SearchCatalogue | null {
     const read = parseBody(body, 'countries');
+    const counts = (body as CatalogueBody | null)?.counts;
 
-    return (
-        read && {
-            catalogue_version: read.catalogue_version,
-            counts: { publishers: read.publishers, countries: read.scoped, aid: read.aid },
-            examples: read.examples,
-        }
-    );
+    if (!read || !isCount(counts?.indicators) || !isCount(counts.datasets)) {
+        return null;
+    }
+
+    return {
+        catalogue_version: read.catalogue_version,
+        counts: {
+            publishers: read.publishers,
+            countries: read.scoped,
+            indicators: counts.indicators,
+            datasets: counts.datasets,
+            aid: read.aid,
+        },
+        examples: read.examples,
+    };
 }
 
 /** One country's catalogue read off the wire, or null when the body is not
@@ -165,12 +185,29 @@ export function parsePlaceCatalogue(body: unknown): PlaceCatalogue | null {
     );
 }
 
-/** The idle prompt's chips: the starting point, then every example. */
+/** The idle prompt's chips: every example. */
 export function catalogueChips(catalogue: SearchCatalogue | null): string[] {
-    return [STARTING_POINT_QUERY, ...(catalogue?.examples ?? []).map((example) => example.text)];
+    return (catalogue?.examples ?? []).map((example) => example.text);
 }
 
 const formatCount = (value: number): string => value.toLocaleString('en-GB');
+
+// `en` writes millions as `1M`, where `en-GB` writes `1m`.
+const compactFormat = new Intl.NumberFormat('en', { notation: 'compact' });
+
+/** A count of 1,000 or more floored to one significant figure in compact
+ *  form, with a `+` when the floor drops part of it: 112,866 reads `100K+`,
+ *  100,000 reads `100K`. A smaller count reads exactly. */
+export function roundedCount(count: number): string {
+    if (count < 1000) {
+        return formatCount(count);
+    }
+
+    const magnitude = 10 ** Math.floor(Math.log10(count));
+    const floored = Math.floor(count / magnitude) * magnitude;
+
+    return `${compactFormat.format(floored)}${floored < count ? '+' : ''}`;
+}
 
 const publisherCount = (publishers: number): string =>
     `${formatCount(publishers)} ${publishers === 1 ? 'publisher' : 'publishers'}`;
@@ -213,7 +250,7 @@ export function declinedExamples(
     return (placed.length > 0 ? placed : (catalogue?.examples ?? [])).slice(0, count);
 }
 
-/** The stat tiles on /data and the homepage: publishers and countries, or
+/** The stat tiles on /data and the homepage: indicators and datasets, or
  *  none without a catalogue. */
 export function catalogueTiles(
     catalogue: SearchCatalogue | null,
@@ -223,7 +260,7 @@ export function catalogueTiles(
     }
 
     return [
-        { value: formatCount(catalogue.counts.publishers), label: 'Publishers' },
-        { value: formatCount(catalogue.counts.countries), label: 'Countries' },
+        { value: roundedCount(catalogue.counts.indicators), label: 'Indicators' },
+        { value: formatCount(catalogue.counts.datasets), label: 'Datasets' },
     ];
 }
