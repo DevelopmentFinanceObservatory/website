@@ -1,0 +1,2923 @@
+{
+  "id": "ghana-debt-indicators",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "Key debt indicators for Ghana",
+  "views": {},
+  "layout": {
+    "cmp_01M46S4NDPEBQ5J82R6QZA23PX": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    },
+    "cmp_01M46S4NSH03K33M5KT2HXHJ8P": {
+      "h": 14,
+      "w": 22,
+      "col": 23,
+      "row": 0
+    },
+    "cmp_01M46S4P44QTJR2AA0QDVQ3HP1": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 15
+    },
+    "cmp_01M46S4PRN6WA7R2B4650VE1JN": {
+      "h": 14,
+      "w": 22,
+      "col": 23,
+      "row": 15
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "id": "cmp_01M46S2BPWTTJN2M13Y7GSDH1P",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S2BPWTTJN2M13Y7GSDH1P"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "1970",
+            572138164.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1971",
+            542386913.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1972",
+            601807880.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1973",
+            756428483.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1974",
+            730055396.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1975",
+            720589134.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1976",
+            710690900.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1977",
+            1066624519.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1978",
+            1278646090.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1979",
+            1281964511.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1980",
+            1398364945.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1981",
+            1538834501.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1982",
+            1484226949.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1983",
+            1666180356,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1984",
+            1963074302.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1985",
+            2256468113.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1986",
+            2766891477.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1987",
+            3313222736.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1988",
+            3131102815.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1989",
+            3402456463.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1990",
+            3880932790.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1991",
+            4380166480.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1992",
+            4508061699,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1993",
+            4886542112,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1994",
+            5469152460.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1995",
+            5935777124.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1996",
+            6442990348.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1997",
+            6347327632.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1998",
+            6969089358.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1999",
+            7103705178.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2000",
+            6743341663.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2001",
+            6860995876.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2002",
+            7640294825.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2003",
+            8301000837.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2004",
+            7243731089.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2005",
+            8091993817.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2006",
+            6059739098.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2007",
+            8311291215.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2008",
+            10058853977.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2009",
+            12962573037,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2010",
+            17984659771.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2011",
+            21317880741.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2012",
+            23151628039.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2013",
+            28508533533.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2014",
+            28517251145.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2015",
+            31306595150.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2016",
+            34860777089.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2017",
+            33725981614.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2018",
+            35100516069.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2019",
+            32685329069.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2020",
+            40295305085.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2021",
+            46584318739.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2022",
+            43607006146.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2023",
+            41700706280.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2024",
+            37414621429.7,
+            "US Dollar"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "1970"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialPosition_AmountOutstanding_Nominal",
+            "name": "Outstanding external debt (current US$)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 1,
+      "frame": {
+        "spec_id": "spec_9d223cf1ff91c6411456065ac08d5848",
+        "content_version": "cv_2ae39300b5a6dd433c5d27c416b4723b"
+      },
+      "title": "Ghana: External debt stocks, 1970–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            572138164.6,
+            542386913.4,
+            601807880.4,
+            756428483.1,
+            730055396.5,
+            720589134.4,
+            710690900.3,
+            1066624519.4,
+            1278646090.2,
+            1281964511.1,
+            1398364945.5,
+            1538834501.5,
+            1484226949.7,
+            1666180356,
+            1963074302.9,
+            2256468113.8,
+            2766891477.4,
+            3313222736.3,
+            3131102815.6,
+            3402456463.2,
+            3880932790.8,
+            4380166480.7,
+            4508061699,
+            4886542112,
+            5469152460.4,
+            5935777124.3,
+            6442990348.8,
+            6347327632.8,
+            6969089358.3,
+            7103705178.5,
+            6743341663.2,
+            6860995876.9,
+            7640294825.3,
+            8301000837.7,
+            7243731089.5,
+            8091993817.5,
+            6059739098.4,
+            8311291215.1,
+            10058853977.2,
+            12962573037,
+            17984659771.3,
+            21317880741.9,
+            23151628039.4,
+            28508533533.3,
+            28517251145.9,
+            31306595150.8,
+            34860777089.7,
+            33725981614.6,
+            35100516069.1,
+            32685329069.8,
+            40295305085.6,
+            46584318739.8,
+            43607006146.1,
+            41700706280.4,
+            37414621429.7
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "1970",
+        "1971",
+        "1972",
+        "1973",
+        "1974",
+        "1975",
+        "1976",
+        "1977",
+        "1978",
+        "1979",
+        "1980",
+        "1981",
+        "1982",
+        "1983",
+        "1984",
+        "1985",
+        "1986",
+        "1987",
+        "1988",
+        "1989",
+        "1990",
+        "1991",
+        "1992",
+        "1993",
+        "1994",
+        "1995",
+        "1996",
+        "1997",
+        "1998",
+        "1999",
+        "2000",
+        "2001",
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S2CD9Q2HR1K73WQ8DXD42",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S2CD9Q2HR1K73WQ8DXD42"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "1970",
+            51137550.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1971",
+            56634922.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1972",
+            32562144.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1973",
+            32350035.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1974",
+            32858247,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1975",
+            58070210.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1976",
+            51930975.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1977",
+            37914744.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1978",
+            73945122.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1979",
+            103589307.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1980",
+            159050865.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1981",
+            118545462.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1982",
+            111044616.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1983",
+            145234162,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1984",
+            132870052.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1985",
+            159395839.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1986",
+            227935863.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1987",
+            415014373,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1988",
+            545659709.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1989",
+            453880561.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1990",
+            368040248.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1991",
+            301432617.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1992",
+            319047133.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1993",
+            308194889.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1994",
+            368905573.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1995",
+            405865160,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1996",
+            482544864.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1997",
+            559036281.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1998",
+            582311791.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "1999",
+            526160036,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2000",
+            467600895.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2001",
+            312287321.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2002",
+            222097579.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2003",
+            502193608.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2004",
+            277254091.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2005",
+            352084625.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2006",
+            325252901,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2007",
+            296385009.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2008",
+            313015382.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2009",
+            355886881.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2010",
+            467768152.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2011",
+            519341105,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2012",
+            958681739.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2013",
+            862456980.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2014",
+            2570910339.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2015",
+            1244422207.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2016",
+            4611538710.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2017",
+            6357700977.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2018",
+            4413150154.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2019",
+            9385877852.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2020",
+            2905487631.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2021",
+            3309815558.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2022",
+            5857919216.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2023",
+            3856390448.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2024",
+            2729878836.7,
+            "US Dollar"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "1970"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialFlow_ServicingPayment_Nominal",
+            "name": "Debt service on external debt (current US$)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 1,
+      "frame": {
+        "spec_id": "spec_ca84cb9ee39782625481aba3fd7d736e",
+        "content_version": "cv_9024f4652c1e60f29b7257567e50e1e4"
+      },
+      "title": "Ghana: External debt service, 1970–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            51137550.4,
+            56634922.4,
+            32562144.2,
+            32350035.5,
+            32858247,
+            58070210.7,
+            51930975.9,
+            37914744.1,
+            73945122.6,
+            103589307.9,
+            159050865.9,
+            118545462.7,
+            111044616.6,
+            145234162,
+            132870052.7,
+            159395839.4,
+            227935863.6,
+            415014373,
+            545659709.8,
+            453880561.6,
+            368040248.1,
+            301432617.8,
+            319047133.9,
+            308194889.1,
+            368905573.1,
+            405865160,
+            482544864.2,
+            559036281.6,
+            582311791.2,
+            526160036,
+            467600895.9,
+            312287321.7,
+            222097579.3,
+            502193608.3,
+            277254091.8,
+            352084625.5,
+            325252901,
+            296385009.8,
+            313015382.2,
+            355886881.4,
+            467768152.1,
+            519341105,
+            958681739.9,
+            862456980.1,
+            2570910339.8,
+            1244422207.6,
+            4611538710.9,
+            6357700977.6,
+            4413150154.9,
+            9385877852.5,
+            2905487631.3,
+            3309815558.8,
+            5857919216.5,
+            3856390448.4,
+            2729878836.7
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "1970",
+        "1971",
+        "1972",
+        "1973",
+        "1974",
+        "1975",
+        "1976",
+        "1977",
+        "1978",
+        "1979",
+        "1980",
+        "1981",
+        "1982",
+        "1983",
+        "1984",
+        "1985",
+        "1986",
+        "1987",
+        "1988",
+        "1989",
+        "1990",
+        "1991",
+        "1992",
+        "1993",
+        "1994",
+        "1995",
+        "1996",
+        "1997",
+        "1998",
+        "1999",
+        "2000",
+        "2001",
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S2D0TAFCPJGQ1NE1WM1FG",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S2D0TAFCPJGQ1NE1WM1FG"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "1993",
+            2.0455951809,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1994",
+            34.8745166571,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1995",
+            25.8075681721,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1996",
+            23.9231498082,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1997",
+            16.3906161379,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1998",
+            18.5377864049,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1999",
+            11.9200167154,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2000",
+            10.0344167204,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2001",
+            5.268235152,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2002",
+            5.6761071999,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2003",
+            8.3849492954,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2004",
+            5.4045424395,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2005",
+            5.6772871496,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2006",
+            3.6389687904,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2007",
+            9.6719587492,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2008",
+            9.9178562387,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2009",
+            9.317233244,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2010",
+            9.1549833307,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2011",
+            7.8768999796,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2019",
+            14.5764400139,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2020",
+            13.2090586624,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2021",
+            13.1888635943,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2022",
+            8.7442467015,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2023",
+            7.7091619513,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2024",
+            9.2035158679,
+            "Percent"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Development Indicators · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "1993"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "dc/base/WorldDevelopmentIndicators",
+            "url": "https://datatopics.worldbank.org/world-development-indicators/",
+            "name": "World Development Indicators",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Development Indicators via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "dc/base/WorldDevelopmentIndicators",
+        "indicators": [
+          {
+            "id": "dcid:Amount_Stock_AsFractionOf_Amount_EconomicActivity_GrossDomesticProduction_Nominal",
+            "name": "Stock Value as a Percentage of Nominal GDP",
+            "description": "md=Amount_EconomicActivity_GrossDomesticProduction_Nominal,mp=amount,pt=Stock"
+          }
+        ],
+        "sourceName": "World Development Indicators",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 1,
+      "frame": {
+        "spec_id": "spec_ebbf7739cb59f468bc65756851b3128b",
+        "content_version": "cv_425a5a9ef8ea4af3be3ecbe76e0f0dc2"
+      },
+      "title": "Ghana: External debt stocks as a share of GDP, 1993–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            2.0455951809,
+            34.8745166571,
+            25.8075681721,
+            23.9231498082,
+            16.3906161379,
+            18.5377864049,
+            11.9200167154,
+            10.0344167204,
+            5.268235152,
+            5.6761071999,
+            8.3849492954,
+            5.4045424395,
+            5.6772871496,
+            3.6389687904,
+            9.6719587492,
+            9.9178562387,
+            9.317233244,
+            9.1549833307,
+            7.8768999796,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            14.5764400139,
+            13.2090586624,
+            13.1888635943,
+            8.7442467015,
+            7.7091619513,
+            9.2035158679
+          ]
+        }
+      ],
+      "source": "World Development Indicators · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "1993",
+        "1994",
+        "1995",
+        "1996",
+        "1997",
+        "1998",
+        "1999",
+        "2000",
+        "2001",
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S2DHY1APJBER55CZKJJ60",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S2DHY1APJBER55CZKJJ60"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "1975",
+            6.48542,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1976",
+            5.8088,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1977",
+            3.71585,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1978",
+            7.41415,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1979",
+            8.89484,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1980",
+            13.11111,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1981",
+            14.25137,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1982",
+            15.55563,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1983",
+            30.40916,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1984",
+            21.72144,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1985",
+            23.57927,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1986",
+            28.32451,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1987",
+            45.80227,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1988",
+            56.91663,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1989",
+            50.76964,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1990",
+            38.79008,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1991",
+            28.13446,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1992",
+            28.35218,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1993",
+            25.63804,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1994",
+            26.68974,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1995",
+            25.43812,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1996",
+            27.56927,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1997",
+            33.24708,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1998",
+            22.76078,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "1999",
+            21.14536,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2000",
+            19.03797,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2001",
+            12.93076,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2002",
+            8.59248,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2003",
+            15.62536,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2004",
+            8.03338,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2005",
+            8.90913,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2006",
+            6.27564,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2007",
+            4.86835,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2008",
+            4.37405,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2009",
+            4.60122,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2010",
+            4.92891,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2011",
+            3.54478,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2012",
+            5.68367,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2013",
+            5.23003,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2014",
+            16.7244,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2015",
+            7.38188,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2016",
+            26.04238,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2017",
+            30.64521,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2018",
+            19.09378,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2019",
+            35.99532,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2020",
+            12.7347,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2021",
+            13.36723,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2022",
+            22.12208,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2023",
+            15.285,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2024",
+            9.43593,
+            "Percent"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "1975"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialFlow_ServicingPayment_AsAFractionOf_Amount_EconomicActivity_ExportsOfGoodsServicesAndPrimaryIncome_Nominal",
+            "name": "Debt service on external debt (% of exports of goods, services and primary income)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 2
+      },
+      "kind": "chart",
+      "turn": 1,
+      "frame": {
+        "spec_id": "spec_31f96a9813f051f6a03bcbcd36b2601e",
+        "content_version": "cv_6bf1c04d79e476b5617e4e1c967adbbb"
+      },
+      "title": "Ghana: Debt service as a share of exports, 1975–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            6.48542,
+            5.8088,
+            3.71585,
+            7.41415,
+            8.89484,
+            13.11111,
+            14.25137,
+            15.55563,
+            30.40916,
+            21.72144,
+            23.57927,
+            28.32451,
+            45.80227,
+            56.91663,
+            50.76964,
+            38.79008,
+            28.13446,
+            28.35218,
+            25.63804,
+            26.68974,
+            25.43812,
+            27.56927,
+            33.24708,
+            22.76078,
+            21.14536,
+            19.03797,
+            12.93076,
+            8.59248,
+            15.62536,
+            8.03338,
+            8.90913,
+            6.27564,
+            4.86835,
+            4.37405,
+            4.60122,
+            4.92891,
+            3.54478,
+            5.68367,
+            5.23003,
+            16.7244,
+            7.38188,
+            26.04238,
+            30.64521,
+            19.09378,
+            35.99532,
+            12.7347,
+            13.36723,
+            22.12208,
+            15.285,
+            9.43593
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "1975",
+        "1976",
+        "1977",
+        "1978",
+        "1979",
+        "1980",
+        "1981",
+        "1982",
+        "1983",
+        "1984",
+        "1985",
+        "1986",
+        "1987",
+        "1988",
+        "1989",
+        "1990",
+        "1991",
+        "1992",
+        "1993",
+        "1994",
+        "1995",
+        "1996",
+        "1997",
+        "1998",
+        "1999",
+        "2000",
+        "2001",
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S4NDPEBQ5J82R6QZA23PX",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S4NDPEBQ5J82R6QZA23PX"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "2002",
+            7640294825.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2003",
+            8301000837.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2004",
+            7243731089.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2005",
+            8091993817.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2006",
+            6059739098.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2007",
+            8311291215.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2008",
+            10058853977.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2009",
+            12962573037,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2010",
+            17984659771.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2011",
+            21317880741.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2012",
+            23151628039.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2013",
+            28508533533.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2014",
+            28517251145.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2015",
+            31306595150.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2016",
+            34860777089.7,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2017",
+            33725981614.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2018",
+            35100516069.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2019",
+            32685329069.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2020",
+            40295305085.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2021",
+            46584318739.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2022",
+            43607006146.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2023",
+            41700706280.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2024",
+            37414621429.7,
+            "US Dollar"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialPosition_AmountOutstanding_Nominal",
+            "name": "Outstanding external debt (current US$)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 2,
+      "frame": {
+        "spec_id": "spec_ee64557ef128aceef0cf0c7c23629e76",
+        "content_version": "cv_7ab60d0a102d45d2676303b2660478ee"
+      },
+      "title": "Ghana: External debt stocks, 2002–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            7640294825.3,
+            8301000837.7,
+            7243731089.5,
+            8091993817.5,
+            6059739098.4,
+            8311291215.1,
+            10058853977.2,
+            12962573037,
+            17984659771.3,
+            21317880741.9,
+            23151628039.4,
+            28508533533.3,
+            28517251145.9,
+            31306595150.8,
+            34860777089.7,
+            33725981614.6,
+            35100516069.1,
+            32685329069.8,
+            40295305085.6,
+            46584318739.8,
+            43607006146.1,
+            41700706280.4,
+            37414621429.7
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S4NSH03K33M5KT2HXHJ8P",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S4NSH03K33M5KT2HXHJ8P"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "2002",
+            222097579.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2003",
+            502193608.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2004",
+            277254091.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2005",
+            352084625.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2006",
+            325252901,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2007",
+            296385009.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2008",
+            313015382.2,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2009",
+            355886881.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2010",
+            467768152.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2011",
+            519341105,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2012",
+            958681739.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2013",
+            862456980.1,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2014",
+            2570910339.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2015",
+            1244422207.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2016",
+            4611538710.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2017",
+            6357700977.6,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2018",
+            4413150154.9,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2019",
+            9385877852.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2020",
+            2905487631.3,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2021",
+            3309815558.8,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2022",
+            5857919216.5,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2023",
+            3856390448.4,
+            "US Dollar"
+          ],
+          [
+            "Ghana",
+            "2024",
+            2729878836.7,
+            "US Dollar"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialFlow_ServicingPayment_Nominal",
+            "name": "Debt service on external debt (current US$)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 2,
+      "frame": {
+        "spec_id": "spec_e974e9cb4ac7d0e76a994cc797d99900",
+        "content_version": "cv_0c9c5b6d9bde878e98c95d4385af00c2"
+      },
+      "title": "Ghana: External debt service, 2002–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            222097579.3,
+            502193608.3,
+            277254091.8,
+            352084625.5,
+            325252901,
+            296385009.8,
+            313015382.2,
+            355886881.4,
+            467768152.1,
+            519341105,
+            958681739.9,
+            862456980.1,
+            2570910339.8,
+            1244422207.6,
+            4611538710.9,
+            6357700977.6,
+            4413150154.9,
+            9385877852.5,
+            2905487631.3,
+            3309815558.8,
+            5857919216.5,
+            3856390448.4,
+            2729878836.7
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S4P44QTJR2AA0QDVQ3HP1",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S4P44QTJR2AA0QDVQ3HP1"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "2002",
+            126.56283,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2003",
+            111.15807,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2004",
+            83.42201,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2005",
+            76.24299,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2006",
+            29.83211,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2007",
+            33.66698,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2008",
+            35.21671,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2009",
+            49.94358,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2010",
+            56.79934,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2011",
+            55.93237,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2012",
+            59.09696,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2013",
+            46.6629,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2014",
+            55.03003,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2015",
+            65.28951,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2016",
+            64.62711,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2017",
+            58.74403,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2018",
+            54.64637,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2019",
+            49.86946,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2020",
+            56.96149,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2021",
+            60.43757,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2022",
+            60.02275,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2023",
+            55.29638,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2024",
+            46.91717,
+            "Percent"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialPosition_AmountOutstanding_AsAFractionOf_Amount_EconomicActivity_GrossNationalIncome_Nominal",
+            "name": "Outstanding external debt (% of GNI)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 2,
+      "frame": {
+        "spec_id": "spec_7bbbf3925ed450753eee2ea42430ad45",
+        "content_version": "cv_4b05593f689a9a72ea31f19d79ba9e81"
+      },
+      "title": "Ghana: External debt stocks as a share of GNI, 2002–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            126.56283,
+            111.15807,
+            83.42201,
+            76.24299,
+            29.83211,
+            33.66698,
+            35.21671,
+            49.94358,
+            56.79934,
+            55.93237,
+            59.09696,
+            46.6629,
+            55.03003,
+            65.28951,
+            64.62711,
+            58.74403,
+            54.64637,
+            49.86946,
+            56.96149,
+            60.43757,
+            60.02275,
+            55.29638,
+            46.91717
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M46S4PRN6WA7R2B4650VE1JN",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M46S4PRN6WA7R2B4650VE1JN"
+      },
+      "data": {
+        "rows": [
+          [
+            "Ghana",
+            "2002",
+            8.59248,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2003",
+            15.62536,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2004",
+            8.03338,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2005",
+            8.90913,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2006",
+            6.27564,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2007",
+            4.86835,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2008",
+            4.37405,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2009",
+            4.60122,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2010",
+            4.92891,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2011",
+            3.54478,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2012",
+            5.68367,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2013",
+            5.23003,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2014",
+            16.7244,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2015",
+            7.38188,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2016",
+            26.04238,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2017",
+            30.64521,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2018",
+            19.09378,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2019",
+            35.99532,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2020",
+            12.7347,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2021",
+            13.36723,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2022",
+            22.12208,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2023",
+            15.285,
+            "Percent"
+          ],
+          [
+            "Ghana",
+            "2024",
+            9.43593,
+            "Percent"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": null,
+        "label": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2002"
+        },
+        "licence": "Creative Commons Attribution License",
+        "sources": [
+          {
+            "id": "provenance/WorldBankInternationalDebtStatistics",
+            "url": "https://datacatalog.worldbank.org/search/dataset/0038015/international-debt-statistics",
+            "name": "World Bank International Debt Statistics (IDS)",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": "2026-10-05"
+          }
+        ],
+        "citation": "World Bank International Debt Statistics (IDS) via ONE DFO, retrieved 2026-10-05",
+        "sourceId": "provenance/WorldBankInternationalDebtStatistics",
+        "indicators": [
+          {
+            "id": "dcid:Amount_FinancialFlow_ServicingPayment_AsAFractionOf_Amount_EconomicActivity_ExportsOfGoodsServicesAndPrimaryIncome_Nominal",
+            "name": "Debt service on external debt (% of exports of goods, services and primary income)",
+            "description": ""
+          }
+        ],
+        "sourceName": "World Bank International Debt Statistics (IDS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-05",
+        "indicatorCount": 2
+      },
+      "kind": "chart",
+      "turn": 2,
+      "frame": {
+        "spec_id": "spec_84cd3a45f71a1781e6aa15842f5819b0",
+        "content_version": "cv_a2cd021ed2ac14ad04c9513b69b606a0"
+      },
+      "title": "Ghana: Debt service as a share of exports, 2002–2024",
+      "series": [
+        {
+          "label": "Ghana",
+          "values": [
+            8.59248,
+            15.62536,
+            8.03338,
+            8.90913,
+            6.27564,
+            4.86835,
+            4.37405,
+            4.60122,
+            4.92891,
+            3.54478,
+            5.68367,
+            5.23003,
+            16.7244,
+            7.38188,
+            26.04238,
+            30.64521,
+            19.09378,
+            35.99532,
+            12.7347,
+            13.36723,
+            22.12208,
+            15.285,
+            9.43593
+          ]
+        }
+      ],
+      "source": "World Bank International Debt Statistics (IDS) · 2 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2002",
+        "2003",
+        "2004",
+        "2005",
+        "2006",
+        "2007",
+        "2008",
+        "2009",
+        "2010",
+        "2011",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    }
+  ],
+  "activity": [],
+  "graceIds": [],
+  "messages": [],
+  "graceTurn": 0,
+  "pinnedIds": [],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 2,
+  "updatedAt": 1791229112264,
+  "removedIds": [],
+  "shareMarks": [
+    {
+      "at": 1791229079403,
+      "shareId": "Uo0GFkLM",
+      "messageIndex": 4
+    },
+    {
+      "at": 1791229111335,
+      "shareId": "LMSSSbxv",
+      "messageIndex": 4
+    }
+  ]
+}

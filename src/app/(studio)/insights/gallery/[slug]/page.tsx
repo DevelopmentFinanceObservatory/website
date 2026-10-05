@@ -37,8 +37,9 @@ export const generateMetadata = async ({ params }: GalleryItemPageProps): Promis
 /**
  * One gallery item: the curated session, opened in the Studio read-only.
  * There is no input — the only action is carrying the session on in your
- * own Studio, which forks it into your account. A dataset item opens its
- * search instead, where the same result is built live.
+ * own Studio, which forks it into your account. A dataset item redirects to
+ * its saved search, `/data?share=<sharedFrom>`, the page `/s/<id>` sends a
+ * search share to.
  */
 const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
     const item = galleryItem((await params).slug);
@@ -48,7 +49,7 @@ const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
     }
 
     if (item.kind === 'dataset') {
-        redirect(`/data?q=${encodeURIComponent(item.query ?? item.title)}`);
+        redirect(`/data?share=${item.sharedFrom}`);
     }
 
     // The page is prerendered, and the Studio reads the URL (useSearchParams).

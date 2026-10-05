@@ -89,6 +89,9 @@ export type ChartWidget = {
     unit?: string;
     categories: string[];
     series: { label: string; values: (number | null)[] }[];
+    /** Bars run along the value axis, categories down the side: a comparison
+     *  of named things at one moment rather than a run over time. */
+    horizontal?: boolean;
     ref?: CardRef;
     frame?: FrameRef;
     data?: CardData;

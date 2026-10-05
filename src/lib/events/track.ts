@@ -20,6 +20,7 @@ import { event } from '../../../db/schema';
  * - auth.signin       a sign-in (provider)
  * - guest.wall_hit    a guest ran out of free prompts
  * - feedback.submit   a feedback sent (kind)
+ * - embed.view        an embed loaded in an iframe (share id, kind, host site)
  */
 export const EVENT_NAMES = [
     'search.query',
@@ -31,6 +32,7 @@ export const EVENT_NAMES = [
     'auth.signin',
     'guest.wall_hit',
     'feedback.submit',
+    'embed.view',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];

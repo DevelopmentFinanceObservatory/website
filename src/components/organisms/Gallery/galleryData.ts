@@ -18,12 +18,14 @@ export const GALLERY_REGIONS = [
     { id: 'mena', label: 'Middle East & North Africa' },
     { id: 'asia', label: 'Asia' },
     { id: 'americas', label: 'Americas' },
+    { id: 'g7', label: 'G7' },
     { id: 'global', label: 'Global' },
 ] as const;
 
 export const GALLERY_SOURCES = [
     { id: 'oecd-dac', label: 'OECD DAC' },
     { id: 'oecd-crs', label: 'OECD CRS' },
+    { id: 'one', label: 'ONE Data' },
     { id: 'wb-ids', label: 'World Bank IDS' },
     { id: 'wb-wdi', label: 'World Bank WDI' },
     { id: 'who-ghed', label: 'WHO GHED' },
@@ -33,22 +35,29 @@ export type GalleryType = (typeof GALLERY_TYPES)[number]['id'];
 export type GalleryRegion = (typeof GALLERY_REGIONS)[number]['id'];
 export type GallerySource = (typeof GALLERY_SOURCES)[number]['id'];
 
-// What the item opens as: the three Studio shapes, or a Get Data query.
+// What the item opens as: the three Studio shapes, or a Get Data search share.
 export type GalleryKind = 'conversation' | 'canvas' | 'card' | 'dataset';
 
-export type GalleryItem = {
+type GalleryItemBase = {
     slug: string;
-    kind: GalleryKind;
     title: string;
     description: string;
     types: GalleryType[];
     region: GalleryRegion;
     source: GallerySource;
-    // Dataset items reopen their own search instead of a saved session.
-    query?: string;
-    // The share this session was curated from — provenance, not a link.
-    sharedFrom?: string;
 };
+
+export type GalleryItem =
+    | (GalleryItemBase & {
+          kind: Exclude<GalleryKind, 'dataset'>;
+          // The share this session was copied from, kept as provenance. The page opens the copy.
+          sharedFrom?: string;
+      })
+    | (GalleryItemBase & {
+          kind: 'dataset';
+          // The id of the search share the item opens, at `/data?share=<id>`.
+          sharedFrom: string;
+      });
 
 export const GALLERY_ITEMS = items as GalleryItem[];
 

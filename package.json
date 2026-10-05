@@ -14,7 +14,7 @@
     "lint:css": "stylelint \"src/**/*.scss\"",
     "lint:css:fix": "stylelint \"src/**/*.scss\" --fix",
     "typecheck": "tsc --noEmit",
-    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/test/*.test.ts",
+    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/test/*.test.ts src/lib/docs/test/*.test.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,scss}\"",
     "optimize:svg": "svgo -f src/assets -r",
     "db:generate": "drizzle-kit generate",

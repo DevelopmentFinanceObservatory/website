@@ -1,8 +1,12 @@
 name: CI
 
-# Runs on every push and pull request with no path filter. Once ci is a
-# required check, filtering by path would leave a docs-only PR without a
-# triggered run, and the merge would block forever.
+# Runs on every ready pull request and on every push to staging, with no path
+# filter. Once ci is a required check, filtering by path would leave a
+# docs-only PR without a triggered run, and the merge would block forever.
+# A draft pull request runs nothing; marking it ready starts the run. main
+# moves either by fast-forward to a staging commit that already ran here or
+# through a pull request whose own run tested the merge, so main has no push
+# trigger.
 #
 # The contract is the root README's conventions: pnpm with a committed
 # lockfile, and `lint`, `typecheck`, `test`, `build` scripts in package.json,
@@ -10,13 +14,16 @@ name: CI
 
 on:
   push:
-    branches: [main, staging]
+    branches: [staging]
   # fix/** and feat/** cover a stacked PR, whose base is the branch below it.
+  # `ready_for_review` starts the run when a draft is marked ready.
   pull_request:
     branches: [main, staging, "fix/**", "feat/**"]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   ci:
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
     # Backs the Test step below. Migration 0000's grant/revoke assertions and
