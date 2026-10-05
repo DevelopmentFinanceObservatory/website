@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    OPERATION_DEADLINE,
     pollOperation,
     type OperationEnvelope,
     type OperationPollError,
@@ -223,7 +224,7 @@ test('pollOperation refuses once the wall-clock deadline elapses without a termi
             now,
             deadlineMs: 5,
         }),
-        /did not reach a terminal state within 5ms/,
+        { message: /did not reach a terminal state within 5ms/, code: OPERATION_DEADLINE },
     );
 });
 

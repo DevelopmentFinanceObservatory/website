@@ -1,10 +1,10 @@
 /**
  * Search snapshot shares: capture (mint and pin). A snapshot share holds
- * `{spec_id, content_version}`. Capture mints the part with the default
- * options and pins an artifact the manifest lists. dfo-apis keeps the
- * version's canonical frame for as long as any of its artifacts is pinned, so
- * the version outlives the working tier. The share view reads the frozen
- * observations back from dfo-apis
+ * `{spec_id, content_version, artifact_digest}`. Capture mints the part with
+ * the default options and pins the file they render, the one the share's
+ * download link serves. dfo-apis keeps the version's canonical frame for as
+ * long as any of its artifacts is pinned, so the version outlives the working
+ * tier. The share view reads the frozen observations back from dfo-apis
  * (`GET /api/datasets/{spec_id}/{content_version}/observations`, see
  * `fetchSnapshotObservations` in searchClient.ts).
  *
@@ -20,8 +20,43 @@ import { SPEC_SHAPE, VERSION_SHAPE } from './versionLink.ts';
 export type SnapshotManifest = {
     content_version?: string;
     definition?: { spec_id?: string } | null;
-    artifacts?: { artifact_digest?: string; tier?: string }[];
+    artifacts?: { artifact_digest?: string; tier?: string; rendering?: object }[];
 };
+
+/** The rendering a file was made with, as a manifest lists it
+ *  (`MintOptions` dumped without its unset fields). */
+export type FileRendering = { format: string; bundle: boolean };
+
+/** What a mint without options renders (dfo-apis' `MintOptions` defaults), a
+ *  CSV bundle. A snapshot capture mints and pins this rendering. */
+export const MINT_DEFAULT_RENDERING: FileRendering = { format: 'csv', bundle: true };
+
+// A rendering that carries any of these is reshaped or enriched, so it is a
+// different file from the plain one with the same format and bundle.
+const RESHAPES = ['columns', 'pivot', 'groupby'];
+
+/**
+ * The listed file made with exactly `format` and `bundle` and no reshape, or
+ * undefined. A version manifest lists every rendering stored for the
+ * version, so the first bundle it lists can be an xlsx or column-enriched
+ * one. A statistics artifact carries no format and never matches.
+ */
+export const renderingArtifact = <
+    TArtifact extends { artifact_digest?: string; rendering?: object },
+>(
+    artifacts: readonly TArtifact[] | undefined,
+    { format, bundle }: FileRendering,
+): TArtifact | undefined =>
+    artifacts?.find((artifact) => {
+        const rendering = (artifact.rendering ?? {}) as Record<string, unknown>;
+
+        return (
+            !!artifact.artifact_digest &&
+            rendering.format === format &&
+            rendering.bundle === bundle &&
+            RESHAPES.every((key) => !(key in rendering))
+        );
+    });
 
 /** The pin failed or cannot be attempted, so the snapshot would expire with
  *  the working tier. POST /api/share answers this code as its `detail`. */
@@ -118,11 +153,12 @@ type CaptureOptions = {
 };
 
 /**
- * Mints the part with the default options and pins the first artifact the
- * manifest lists. Throws on a refused mint (the platform's code as the
- * message), `PIN_REFUSED` when the manifest lists no artifact, and
- * `PIN_REFUSED` or `PIN_UNAVAILABLE` when the pin cannot be made, so no
- * unpinned snapshot is ever stored.
+ * Mints the part with the default options and pins the file they render
+ * (MINT_DEFAULT_RENDERING), which a snapshot share's download link serves.
+ * Resolves to the version and the digest it pinned. Throws on a refused mint
+ * (the platform's code as the message), `PIN_REFUSED` when the manifest
+ * lists no such file, and `PIN_REFUSED` or `PIN_UNAVAILABLE` when the pin
+ * cannot be made, so no unpinned snapshot is ever stored.
  */
 export const captureSnapshot = async ({
     base,
@@ -133,7 +169,7 @@ export const captureSnapshot = async ({
     principal,
     pollDeadlineMs,
     fetchImpl = fetch,
-}: CaptureOptions): Promise<{ specId: string; contentVersion: string }> => {
+}: CaptureOptions): Promise<{ specId: string; contentVersion: string; artifactDigest: string }> => {
     // dfo-apis refuses every pin without the principal: fail before minting.
     if (!principal) {
         throw new Error(PIN_REFUSED, { cause: new Error('DFO_PRINCIPAL is not set') });
@@ -187,10 +223,12 @@ export const captureSnapshot = async ({
         throw new Error('snapshot_version_moved', { cause: new Error(contentVersion) });
     }
 
-    const digest = firstArtifact(manifest)?.artifact_digest;
+    // An async mint's done manifest lists every rendering of the version,
+    // so the default one is picked by its rendering.
+    const digest = renderingArtifact(manifest.artifacts, MINT_DEFAULT_RENDERING)?.artifact_digest;
 
     if (!digest) {
-        throw new Error(PIN_REFUSED, { cause: new Error('mint listed no artifact') });
+        throw new Error(PIN_REFUSED, { cause: new Error('mint listed no default rendering') });
     }
 
     await pinArtifact({
@@ -202,7 +240,7 @@ export const captureSnapshot = async ({
         fetchImpl,
     });
 
-    return { specId: capturedSpecId, contentVersion };
+    return { specId: capturedSpecId, contentVersion, artifactDigest: digest };
 };
 
 type FramePinOptions = Omit<CaptureOptions, 'principal' | 'expectedContentVersion'> & {

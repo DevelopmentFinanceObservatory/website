@@ -64,13 +64,23 @@ const hoverGuide: Plugin<'bar' | 'line', { color: string }> = {
             return;
         }
 
-        const { top, bottom } = chart.chartArea;
+        const { top, bottom, left, right } = chart.chartArea;
         const { ctx } = chart;
+        const element = active[0]!.element;
 
         ctx.save();
         ctx.beginPath();
-        ctx.moveTo(active[0]!.element.x, top);
-        ctx.lineTo(active[0]!.element.x, bottom);
+
+        // The guide crosses the index axis: a column on a time run, a row on
+        // a transposed comparison.
+        if (chart.options.indexAxis === 'y') {
+            ctx.moveTo(left, element.y);
+            ctx.lineTo(right, element.y);
+        } else {
+            ctx.moveTo(element.x, top);
+            ctx.lineTo(element.x, bottom);
+        }
+
         ctx.strokeStyle = options.color;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -221,7 +231,12 @@ const htmlTooltip = ({
 // Options are built per scale factor and theme — Chart.js draws in raw px,
 // so every font/padding rides the same fluid factor as the grid, and every
 // colour is the theme's resolved hex.
-export const buildChartOptions = (scale: number, autoSkip: boolean, theme: ThemeDerived) => {
+export const buildChartOptions = (
+    scale: number,
+    autoSkip: boolean,
+    theme: ThemeDerived,
+    horizontal = false,
+) => {
     // Small tick type on both axes — long names fit more text per line.
     const labelFont = { family: 'Outfit', size: Math.round(8 * scale), weight: 700 as const };
 
@@ -245,10 +260,16 @@ export const buildChartOptions = (scale: number, autoSkip: boolean, theme: Theme
         // The HTML tooltip reads the palette off the options (it only gets
         // the chart, not our closure).
         seriesPalette: theme.series,
-        // Hover finds the nearest category column, no need to touch the bar
-        // itself — near-zero values stay hittable from the column's full
-        // height.
-        interaction: { mode: 'index' as const, intersect: false },
+        // Hover finds the nearest category slot, no need to touch the bar
+        // itself — near-zero values stay hittable from the slot's full
+        // width. The search runs ACROSS the slots, so it follows the index
+        // axis: down the rows on a transposed comparison, along the columns
+        // otherwise.
+        interaction: {
+            mode: 'index' as const,
+            intersect: false,
+            axis: (horizontal ? 'y' : 'x') as 'x' | 'y',
+        },
         plugins: {
             legend: { display: false },
             hoverGuide: { color: theme.muted },
@@ -260,8 +281,12 @@ export const buildChartOptions = (scale: number, autoSkip: boolean, theme: Theme
                 external: htmlTooltip,
             },
         },
+        indexAxis: (horizontal ? 'y' : 'x') as 'x' | 'y',
         scales: {
-            x: {
+            // The category axis carries the names, the value axis the
+            // numbers — which one is x and which is y flips with the
+            // orientation, the configs do not.
+            [horizontal ? 'y' : 'x']: {
                 grid: { display: false },
                 border: { display: false },
                 ticks: {
@@ -277,7 +302,7 @@ export const buildChartOptions = (scale: number, autoSkip: boolean, theme: Theme
                     },
                 },
             },
-            y: {
+            [horizontal ? 'x' : 'y']: {
                 beginAtZero: true,
                 grid: { color: theme.line },
                 border: { display: false },

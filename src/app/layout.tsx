@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 
 import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
+import { EMBED_PREFIX } from '@/lib/embed';
 
 import '@fontsource/outfit/300.css';
 import '@fontsource/outfit/400.css';
@@ -50,17 +51,26 @@ gtag('consent', 'default', {
                 </Script>
                 {/* Usercentrics (the CMP ONE pays for; DFO has its own settings
                     id, styled to match this site, with the logo served from
-                    public/logo.svg): consent has to be asked before anything
-                    that needs it runs, so this loads ahead of our own code, as
-                    do the consent defaults above. Inside <body>: a
-                    <script> straight under <html> is invalid markup and breaks
-                    hydration. */}
-                <Script
-                    id="usercentrics-cmp"
-                    src="https://web.cmp.usercentrics.eu/ui/loader.js"
-                    data-settings-id="yv5DSuw_0kFrRJ"
-                    strategy="beforeInteractive"
-                />
+                    public/logo.svg). Embeds (/embed/) run inside other sites
+                    and load no consent manager, so this script injects the
+                    loader everywhere else. The loader loads async alongside
+                    hydration; the consent defaults above still run first, so
+                    GA waits for the update or falls back to denied. A separate
+                    root layout for /embed would keep a blocking <Script src>,
+                    but Next 16.3 then serves unknown URLs' 404 either without
+                    the consent scripts or only behind its experimental
+                    globalNotFound flag. Inside <body>: a <script> straight
+                    under <html> is invalid markup and breaks hydration. */}
+                <Script id="usercentrics-cmp-loader" strategy="beforeInteractive">
+                    {`if (!location.pathname.startsWith(${JSON.stringify(EMBED_PREFIX)})) {
+    const cmp = document.createElement('script');
+    cmp.id = 'usercentrics-cmp';
+    cmp.src = 'https://web.cmp.usercentrics.eu/ui/loader.js';
+    cmp.setAttribute('data-settings-id', 'yv5DSuw_0kFrRJ');
+    cmp.async = true;
+    document.head.appendChild(cmp);
+}`}
+                </Script>
                 {children}
                 <GoogleAnalytics />
             </body>

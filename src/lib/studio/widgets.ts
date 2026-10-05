@@ -21,6 +21,7 @@ import type {
     TextWidget,
     Widget,
 } from '../chat/widgets';
+import { comparison } from './comparison.ts';
 import {
     payloadChart,
     payloadFrameRef,
@@ -369,19 +370,26 @@ const chartWidget = (frame: ComponentCreated): ChartWidget | null => {
     const chart = payloadChart(frame.payload);
     const plot = chart ? payloadPlot(chart) : sketchPlot(facts);
 
-    return plot
-        ? {
-              kind: 'chart',
-              id: frame.component_id,
-              chartType: frame.type === 'bar_chart' ? 'bar' : 'line',
-              title: titleOf(frame.payload, facts),
-              unit: unitLabel(facts.unit),
-              ...plot,
-              ref: refOf(frame),
-              data: chart ? chartData(chart) : sketchData(facts),
-              source: facts.attribution.label,
-          }
-        : null;
+    if (!plot) {
+        return null;
+    }
+
+    return comparison(
+        {
+            kind: 'chart',
+            id: frame.component_id,
+            chartType: frame.type === 'bar_chart' ? 'bar' : 'line',
+            title: titleOf(frame.payload, facts),
+            unit: unitLabel(facts.unit),
+            ...plot,
+            ref: refOf(frame),
+            data: chart ? chartData(chart) : sketchData(facts),
+            source: facts.attribution.label,
+        },
+        plot.categories,
+        plot.series,
+        chart?.entityPeriod,
+    );
 };
 
 const tableWidget = (frame: ComponentCreated): TableWidget | null => {
@@ -531,7 +539,18 @@ const redraw = (widget: Widget, payload: Record<string, unknown>): Widget | unde
         case 'chart': {
             const chart = payloadChart(payload);
 
-            return chart && { ...widget, ...payloadPlot(chart), data: chartData(chart) };
+            if (!chart) {
+                return undefined;
+            }
+
+            const plot = payloadPlot(chart);
+
+            return comparison(
+                { ...widget, ...plot, data: chartData(chart) },
+                plot.categories,
+                plot.series,
+                chart.entityPeriod,
+            );
         }
         case 'table': {
             const table = payloadTable(payload);

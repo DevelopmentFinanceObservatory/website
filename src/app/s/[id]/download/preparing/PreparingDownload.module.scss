@@ -1,0 +1,38 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// One plain message block, below the header.
+.section {
+    @include flex(column, flex-start, flex-start);
+
+    min-height: 60dvh;
+    padding: rem(160) rem(20) rem(80);
+    color: var(--color-charcoal);
+    background-color: var(--color-bg);
+}
+
+.title {
+    @include font-size(40px, 1.1);
+
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.lead {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(560);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+
+    a {
+        text-decoration: underline;
+    }
+}
+
+.progress {
+    margin-top: rem(20);
+    font-family: var(--font-dm-mono);
+}

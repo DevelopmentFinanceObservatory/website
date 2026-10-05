@@ -4,17 +4,12 @@ import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp } from '@/lib/proxy/forward';
 import { hit } from '@/lib/proxy/rateLimit';
 import { MAX_DOWNLOAD_PIN_BODY, parseDownloadPin, pinVersionFrame } from '@/lib/search/snapshot';
+import { needsPin, pinVersionOnce } from '@/lib/search/versionPin';
 import { searchApiBase } from '@/lib/searchApi';
 
 // Bounds the poll of an over-budget mint; each upstream call carries
 // its own timeout (see lib/search/snapshot).
 const CAPTURE_POLL_DEADLINE_MS = 50_000;
-
-// The versions this instance has pinned or is pinning, so a repeat call
-// makes no upstream request. A failure leaves the set so a later call can
-// retry.
-const MAX_REMEMBERED = 10_000;
-const pinnedVersions = new Set<string>();
 
 // POST /api/download-pin { specId, contentVersion, definition,
 // resolvedStatVarDcids } → 204
@@ -22,8 +17,9 @@ const pinnedVersions = new Set<string>();
 // on the answer. The route pins one artifact per version: the first the
 // version lists, minted when it lists none. That keeps the version link in
 // the bundle opening and the version's rows readable. The pin needs the
-// site's own principal, so it runs here. Without DFO_PRINCIPAL there is
-// nothing to pin with, quietly. Every call counts against the pin allowance
+// site's own principal, so it runs here, once per version per instance
+// (pinVersionOnce). Without DFO_PRINCIPAL there is nothing to pin with,
+// quietly. Every call counts against the pin allowance
 // before its body is read. A body over MAX_DOWNLOAD_PIN_BODY bytes is refused
 // 413 as soon as the count passes it, chunked or not, and a malformed one
 // fails parseDownloadPin. A pin the door refuses, or cannot take right now, is
@@ -60,37 +56,28 @@ export const POST = async (req: NextRequest) => {
         return Response.json({ error: 'bad_request' }, { status: 400 });
     }
 
-    const principal = process.env.DFO_PRINCIPAL;
-    const key = `${body.specId}/${body.contentVersion}`;
-
-    if (!principal || pinnedVersions.has(key)) {
+    if (!needsPin(body)) {
         return new Response(null, { status: 204 });
     }
 
     // Outside the try, so a missing SEARCH_API_BASE is a 500 rather than a 502.
     const base = searchApiBase();
 
-    if (pinnedVersions.size >= MAX_REMEMBERED) {
-        pinnedVersions.clear();
-    }
-
-    pinnedVersions.add(key);
-
     try {
-        await pinVersionFrame({
-            base,
-            specId: body.specId,
-            contentVersion: body.contentVersion,
-            definition: body.definition,
-            resolvedStatVarDcids: body.resolvedStatVarDcids,
-            principal,
-            pollDeadlineMs: CAPTURE_POLL_DEADLINE_MS,
-        });
+        await pinVersionOnce(body, (principal) =>
+            pinVersionFrame({
+                base,
+                specId: body.specId,
+                contentVersion: body.contentVersion,
+                definition: body.definition,
+                resolvedStatVarDcids: body.resolvedStatVarDcids,
+                principal,
+                pollDeadlineMs: CAPTURE_POLL_DEADLINE_MS,
+            }),
+        );
 
         return new Response(null, { status: 204 });
     } catch (error) {
-        pinnedVersions.delete(key);
-
         // The download already happened; the log is the only place this shows.
         const { message, cause } = error as Error;
 
