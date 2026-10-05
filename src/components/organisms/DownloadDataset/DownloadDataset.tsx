@@ -11,10 +11,16 @@ import DataPrompt from '@/components/molecules/DataPrompt/DataPrompt';
 import SectionHeading from '@/components/molecules/SectionHeading/SectionHeading';
 import StatTiles from '@/components/molecules/StatTiles/StatTiles';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
-import { catalogueChips, catalogueTiles, type SearchCatalogue } from '@/lib/search/catalogue';
+import {
+    catalogueChips,
+    catalogueTiles,
+    roundedCount,
+    type SearchCatalogue,
+} from '@/lib/search/catalogue';
 
 // `catalogue` is the search catalogue the homepage loaded on the server, or
-// null: its examples are the chips, its counts the tiles.
+// null: its examples are the chips, its counts the tiles and the indicator
+// figure in the description.
 const DownloadDataset = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const router = useRouter();
     const sectionRef = useReveal<HTMLElement>();
@@ -46,7 +52,10 @@ const DownloadDataset = ({ catalogue }: { catalogue: SearchCatalogue | null }) =
                 <div className={styles.aside} data-reveal-group="trigger">
                     <p className={styles.description} data-reveal="text" style={revealIndex(0)}>
                         Describe the data you need, tune your parameters, and export a clean
-                        structured dataset from over 40,000 indicators with more to come.
+                        structured dataset
+                        {catalogue &&
+                            ` from ${roundedCount(catalogue.counts.indicators)} indicators`}
+                        .
                     </p>
                     <Button
                         variant="dark"
