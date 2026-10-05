@@ -38,7 +38,7 @@ const ChartCard = ({
     const options = useMemo(
         // Every category keeps its label; only a truly dense axis (long year
         // runs) falls back to skipping.
-        () => buildChartOptions(scale, widget.categories.length > 14, theme),
+        () => buildChartOptions(scale, widget.categories.length > 14, theme, widget.horizontal),
         [widget, scale, theme],
     );
     const barData = useMemo(
@@ -48,6 +48,9 @@ const ChartCard = ({
                 label: s.label,
                 data: s.values,
                 hidden: hiddenSeries.includes(si),
+                // A transposed comparison runs as one series, so every bar
+                // takes the accent: colour would otherwise repeat the name
+                // the category axis already carries.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
                 // Hover resolves the weave into the solid base color.
                 hoverBackgroundColor: seriesPair(theme.series, si)[0],
@@ -59,22 +62,25 @@ const ChartCard = ({
                 // 0.8/0.9 category/bar percentages.
                 borderRadius: (ctx: ScriptableContext<'bar'>) => {
                     const { chart } = ctx;
-                    const xScale = chart.scales['x'];
+                    // The category slot is measured across the index axis,
+                    // which is y once the chart is transposed.
+                    const indexScale = chart.scales[widget.horizontal ? 'y' : 'x'];
                     const visible = chart.data.datasets.filter((_, i) =>
                         chart.isDatasetVisible(i),
                     ).length;
                     const categories = chart.data.labels?.length || 1;
 
-                    if (!xScale || !visible) {
+                    if (!indexScale || !visible) {
                         return 4 * scale;
                     }
 
-                    const slot = (xScale.width / categories) * 0.8;
+                    const span = widget.horizontal ? indexScale.height : indexScale.width;
+                    const slot = (span / categories) * 0.8;
                     const width = Math.min((slot / visible) * 0.9, 28 * scale);
 
                     return Math.max(1, width / 3);
                 },
-                borderSkipped: 'bottom' as const,
+                borderSkipped: (widget.horizontal ? 'left' : 'bottom') as 'left' | 'bottom',
                 maxBarThickness: 28 * scale,
             })),
         }),
@@ -100,10 +106,12 @@ const ChartCard = ({
         [widget, scale, hiddenSeries, theme],
     );
 
-    // A lone "Value" is the table→chart converter's placeholder, not a real
-    // series name — no legend for it.
+    // A lone "Value" is the table->chart converter's placeholder, and a
+    // transposed comparison's one series is the period already in the title:
+    // neither earns a legend.
     const showLegend =
         widget.series.some((s) => s.label) &&
+        !widget.horizontal &&
         !(widget.series.length === 1 && widget.series[0]!.label === 'Value');
 
     return (

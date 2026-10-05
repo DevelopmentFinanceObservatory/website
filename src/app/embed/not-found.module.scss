@@ -1,0 +1,15 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.message {
+    @include flex(column, center, center);
+    @include font-size(18px, 1.3);
+
+    position: fixed;
+    inset: 0;
+    padding: rem(20);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    text-align: center;
+    background-color: var(--color-bg);
+}

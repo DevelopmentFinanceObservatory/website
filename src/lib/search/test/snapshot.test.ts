@@ -11,11 +11,19 @@ import {
     pinVersionFrame,
 } from '../snapshot.ts';
 
-// The manifest lists a statistics artifact first, then a Parquet frame. The
-// pin takes whichever the manifest lists first, whatever its rendering.
-const artifacts = [
+// The manifest lists a statistics artifact, a Parquet frame, a
+// column-enriched CSV bundle, then the plain CSV bundle a mint without
+// options renders. A capture pins the plain CSV bundle; a version pin takes
+// whichever the manifest lists first.
+const artifacts: { artifact_digest: string; url: string; rendering: object }[] = [
     { artifact_digest: 'sha256:stats', url: 'u1', rendering: { statistics: 'series' } },
     { artifact_digest: 'sha256:frame', url: 'u2', rendering: { format: 'parquet', bundle: false } },
+    {
+        artifact_digest: 'sha256:cols',
+        url: 'u3',
+        rendering: { format: 'csv', bundle: true, columns: ['country_income'] },
+    },
+    { artifact_digest: 'sha256:csv', url: 'u4', rendering: { format: 'csv', bundle: true } },
 ];
 
 type Call = { url: string; headers: Record<string, string>; body: unknown };
@@ -58,12 +66,13 @@ const capture = (fetchImpl: typeof fetch, principal: string | undefined) =>
         fetchImpl,
     });
 
-test('captureSnapshot pins a listed artifact, with the principal', async () => {
+test('captureSnapshot pins the plain CSV bundle, with the principal, and returns its digest', async () => {
     const { calls, fetchImpl } = datasetsApi(200);
 
     assert.deepEqual(await capture(fetchImpl, 'site'), {
         specId: 'spec_crs',
         contentVersion: 'cv_abc',
+        artifactDigest: 'sha256:csv',
     });
     assert.deepEqual(
         calls.map((call) => call.url),
@@ -71,7 +80,7 @@ test('captureSnapshot pins a listed artifact, with the principal', async () => {
     );
     assert.equal(calls[0]!.headers['x-dfo-principal'], undefined);
     assert.equal(calls[1]!.headers['x-dfo-principal'], 'site');
-    assert.deepEqual(calls[1]!.body, { schema_version: 1, artifact_digest: 'sha256:stats' });
+    assert.deepEqual(calls[1]!.body, { schema_version: 1, artifact_digest: 'sha256:csv' });
 });
 
 test('captureSnapshot mints with the default options', async () => {
@@ -82,11 +91,13 @@ test('captureSnapshot mints with the default options', async () => {
     assert.equal('options' in (calls[0]!.body as object), false);
 });
 
-test('captureSnapshot fails when the mint lists no artifact', async () => {
-    const { calls, fetchImpl } = datasetsApi(200, []);
+test('captureSnapshot fails when the mint lists no plain CSV bundle', async () => {
+    for (const listed of [[], artifacts.slice(0, 3)]) {
+        const { calls, fetchImpl } = datasetsApi(200, listed);
 
-    await assert.rejects(capture(fetchImpl, 'site'), { message: PIN_REFUSED });
-    assert.equal(calls.length, 1);
+        await assert.rejects(capture(fetchImpl, 'site'), { message: PIN_REFUSED });
+        assert.equal(calls.length, 1);
+    }
 });
 
 test('captureSnapshot fails when the pin is refused', async () => {
@@ -227,7 +238,7 @@ test('pinVersionFrame mints a version that lists no artifact with the download i
     const { calls, fetchImpl } = frameApi();
 
     assert.equal(await pinFrame(fetchImpl), 'minted');
-    assert.deepEqual(pinnedDigests(calls), ['sha256:stats']);
+    assert.deepEqual(pinnedDigests(calls), ['sha256:csv']);
     assert.deepEqual(calls.find((call) => call.url === 'https://api/api/datasets')?.body, {
         schema_version: 1,
         input: {

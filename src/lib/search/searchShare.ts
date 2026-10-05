@@ -16,9 +16,10 @@ import { captureSnapshot } from './snapshot.ts';
  *   live     — the definitions are registered (`POST /api/datasets/register`)
  *              and the link replays them through `dataset_resubmit`, so it
  *              always shows today's data.
- *   snapshot — each part is minted as Parquet (`POST /api/datasets`) and
- *              that artifact pinned (`POST /api/datasets/{id}/{cv}/pin`), so
- *              the link serves the exact bytes captured here. A pin that
+ *   snapshot — each part is minted with the default options, a CSV bundle
+ *              (`POST /api/datasets`), and that artifact pinned
+ *              (`POST /api/datasets/{id}/{cv}/pin`) and stored by its digest,
+ *              so the link serves the exact bytes captured here. A pin that
  *              fails fails the share: an unpinned snapshot would expire with
  *              the working tier. See `captureSnapshot` in snapshot.ts.
  */
@@ -48,6 +49,9 @@ export type SearchShareRef = {
     resolvedStatVarDcids: string[] | null;
     operations: Operation[];
     contentVersion: string | null;
+    // The file a snapshot captured and pinned. Null for a live share, and
+    // for a snapshot stored before digests were kept.
+    artifactDigest: string | null;
 };
 
 export type SearchShare = {
@@ -123,7 +127,10 @@ export const createSearchShare = async (
     const ordered = [...parts].sort((a, b) => a.partIndex - b.partIndex);
     // Two parts can fold onto one dataset: register / capture each once.
     const distinct = [...new Map(ordered.map((part) => [part.specId, part])).values()];
-    const capturedBySpec = new Map<string, { specId: string; contentVersion: string }>();
+    const capturedBySpec = new Map<
+        string,
+        { specId: string; contentVersion: string; artifactDigest: string }
+    >();
 
     if (mode === 'snapshot') {
         const results = await Promise.all(distinct.map(capture));
@@ -155,6 +162,7 @@ export const createSearchShare = async (
                 resolvedStatVarDcids: part.resolvedStatVarDcids ?? null,
                 operations: part.operations,
                 contentVersion: captured?.[index]?.contentVersion ?? null,
+                artifactDigest: captured?.[index]?.artifactDigest ?? null,
             })),
         );
     });
@@ -188,6 +196,7 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
             resolvedStatVarDcids: (ref.resolvedStatVarDcids as string[] | null) ?? null,
             operations: ref.operations as Operation[],
             contentVersion: ref.contentVersion,
+            artifactDigest: ref.artifactDigest,
         })),
     };
 };

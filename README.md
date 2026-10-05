@@ -20,8 +20,9 @@ Around it:
   connector and applies forward-only migrations before each deploy moves
   the service to a new image.
 - `.github/workflows/` holds the CI and deploy workflows. CI runs `lint`,
-  `typecheck`, `test`, and `build` on every PR. The deploy workflow runs
-  on pushes to `staging` that touch the image's inputs.
+  `typecheck`, `test`, and `build` on every PR that is not a draft, and on
+  each push to `staging`. The deploy workflow runs on pushes to `staging`
+  that touch the image's inputs.
 - `docs/development.md` — how to run the app locally and the conventions
   the code follows (styles, components, animation system).
 - `docs/feedback.md` — the feedback endpoint (`POST /api/feedback`): the

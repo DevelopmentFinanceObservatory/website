@@ -11,6 +11,7 @@ import SearchAnswer from './SearchAnswer';
 import SearchCards from './SearchCards';
 import SearchPanel from './SearchPanel';
 import SearchShareModal from './SearchShareModal';
+import type { CreateSearchShare } from './SearchShare';
 import {
     answerRefineItems,
     headingTokens,
@@ -42,7 +43,6 @@ import {
     fetchVersionLink,
     type OpenedSearchShare,
     resolveBuffered,
-    type SearchShareMode,
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
 import {
@@ -708,7 +708,12 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const sharedParts = parts.filter(
         (part) => part.part?.status === 'definite' && part.hydratedSpec,
     );
-    const createShare = (mode: SearchShareMode) =>
+    const sharedDatasets = sharedParts.map((part) => ({
+        partIndex: part.index,
+        specId: part.hydratedSpec!.spec_id,
+        label: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
+    }));
+    const createShare: CreateSearchShare = (mode) =>
         createSearchShare({
             mode,
             query,
@@ -725,7 +730,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                     definition: spec.definition,
                 };
             }),
-        });
+        }).then((result) => ('id' in result ? { ...result, datasets: sharedDatasets } : result));
     // A part whose question asked for more than search does carries an
     // operation_not_applied departure, whose action hands it to Studio;
     // without one, the side panel offers Studio itself, so a page shows one

@@ -1,43 +1,32 @@
 [
     {
-        "slug": "life-expectancy-two-countries",
-        "kind": "conversation",
-        "title": "Life Expectancy: Nigeria vs Guatemala",
-        "description": "A worked Studio session comparing life expectancy in two countries — the questions asked, the answers given, and the charts they produced.",
-        "types": ["charts"],
-        "region": "global",
-        "source": "wb-wdi",
-        "sharedFrom": "qROSBqut"
-    },
-    {
-        "slug": "life-expectancy-canvas",
+        "slug": "ghana-debt-indicators",
         "kind": "canvas",
-        "title": "Two Countries, One Canvas",
-        "description": "The same comparison as a canvas alone: both charts side by side, without the conversation that built them.",
-        "types": ["charts"],
-        "region": "global",
-        "source": "wb-wdi",
-        "sharedFrom": "56yUjCbg"
-    },
-    {
-        "slug": "life-expectancy-nigeria-chart",
-        "kind": "card",
-        "title": "Life Expectancy in Nigeria, 1960–2023",
-        "description": "One chart on its own — six decades of life expectancy from the World Development Indicators.",
+        "title": "Key debt indicators for Ghana",
+        "description": "Four charts from World Bank International Debt Statistics: Ghana's external debt stocks and debt service from 2002 to 2024, in dollars and against GNI and exports.",
         "types": ["charts"],
         "region": "ssa",
-        "source": "wb-wdi",
-        "sharedFrom": "zKV5jIUt"
+        "source": "wb-ids",
+        "sharedFrom": "Rpcqpj2Q"
     },
     {
-        "slug": "gdp-growth-african-countries",
+        "slug": "nigeria-multilateral-health-aid",
         "kind": "dataset",
-        "title": "GDP Growth Across African Countries",
-        "description": "A dataset built in Get Data: annual GDP growth for African economies, ready to filter, download or carry into Studio.",
+        "title": "Latest imputed multilateral aid for health to Nigeria",
+        "description": "ONE's estimate of the health aid donors send to Nigeria through multilateral agencies, built from OECD data and refreshed as the sources update.",
         "types": ["tables"],
         "region": "ssa",
+        "source": "one",
+        "sharedFrom": "F6U11JLb"
+    },
+    {
+        "slug": "g7-outward-remittances",
+        "kind": "dataset",
+        "title": "Outward remittances for G7 countries",
+        "description": "Remittances paid out of the seven G7 economies each year since 1970, in US dollars, from the World Bank's World Development Indicators.",
+        "types": ["tables"],
+        "region": "g7",
         "source": "wb-wdi",
-        "query": "GDP growth rate african countries",
-        "sharedFrom": "4RWMjQXo"
+        "sharedFrom": "UISlvsXE"
     }
 ]

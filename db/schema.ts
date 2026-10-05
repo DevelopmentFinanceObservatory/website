@@ -78,7 +78,8 @@ export const share = pgTable(
  * without the language model. `operations` holds what the question asked
  * of the part beyond its data (empty for none), which the replay carries
  * back so the part keeps its operation strip. A snapshot share also carries
- * the `content_version` it captured.
+ * the `content_version` it captured and the `artifact_digest` of the file it
+ * pinned, which the share's download link serves.
  */
 export const shareRef = pgTable(
     'share_ref',
@@ -92,6 +93,8 @@ export const shareRef = pgTable(
         variableText: text('variable_text'),
         resolvedStatVarDcids: jsonb('resolved_stat_var_dcids'),
         contentVersion: text('content_version'),
+        // Null for a live share and for snapshots stored before the column.
+        artifactDigest: text('artifact_digest'),
         operations: jsonb('operations').notNull().default([]),
     },
     (table) => [primaryKey({ columns: [table.shareId, table.partIndex] })],
