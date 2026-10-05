@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-02T16:54:36Z",
+  "generator_commit": "67347a1e21db53717e646660adb2b22a9f755753",
+  "track": "platform",
+  "categories": [
+    {
+      "id": "infrastructure",
+      "label": "Placeholder: Infrastructure"
+    },
+    {
+      "id": "integrations",
+      "label": "Placeholder: Integrations"
+    },
+    {
+      "id": "developer-experience",
+      "label": "Placeholder: Developer experience"
+    }
+  ],
+  "entries": [
+    {
+      "id": "placeholder-released-no-version",
+      "title": "Placeholder: Released Entry Without a Version",
+      "description": "This is a placeholder showing a released entry that carries no version number, and it carries no commitment. It exists only so a reader can see a released entry whose shipped thing has no version to display.",
+      "status": "released",
+      "released_on": "2026-02-01"
+    },
+    {
+      "id": "placeholder-in-development-two-categories",
+      "title": "Placeholder: In-Development Entry With Two Categories",
+      "description": "This is a placeholder showing the in-development status paired with two categories from this track's own vocabulary, and it carries no commitment. It exists only so a reader can see an in-development entry filed under two filter chips at once.",
+      "categories": [
+        "infrastructure",
+        "integrations"
+      ],
+      "status": "in-development",
+      "expected": "2026-Q2"
+    }
+  ]
+}

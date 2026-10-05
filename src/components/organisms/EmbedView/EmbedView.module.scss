@@ -1,0 +1,11 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The whole viewport is the sheet: the board's scroll container (CanvasWidgets
+// expects its parent to scroll), light grid ground, no chrome.
+.sheet {
+    position: fixed;
+    inset: 0;
+    overflow: auto;
+    background-color: var(--color-grid-bg-light);
+}

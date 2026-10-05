@@ -1,0 +1,246 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Off-screen card beacons: tiny pills pinned to the view's edges, an arrow
+// pointing at the card plus its title and distance. Positioned in board
+// coordinates recomputed from the live scroll, always above the cards.
+// Zero-size sticky anchor riding the scroller's visible corner — beacons
+// inside are laid out in view space and stay put through any pan/scroll.
+.beaconLayer {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 998;
+    width: 0;
+    height: 0;
+    overflow: visible;
+}
+
+// A beacon anchors its edge (not centre) to the view boundary — the inline
+// `translate` picks which. Collapsed it's just the circle; hovering swaps in
+// the full panel.
+.beacon {
+    position: absolute;
+    z-index: 998;
+    cursor: pointer;
+    animation: beacon-in 0.25s ease both;
+
+    &:hover,
+    &.beaconOpen {
+        z-index: 999;
+    }
+}
+
+@keyframes beacon-in {
+    from {
+        opacity: 0;
+    }
+}
+
+// The collapsed state: an arrow (aimed at the group) in a yellow circle,
+// plus a count when it stands for several cards. Fades away under the
+// expanding panel.
+.beaconBadge {
+    @include flex(row, center, center);
+
+    gap: rem(3);
+    width: rem(26);
+    height: rem(26);
+    background-color: var(--th-accent, var(--color-yellow-hover));
+    border-radius: 50%;
+    transition: opacity 0.2s ease;
+}
+
+.beaconCount {
+    @include font-size(10px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--th-on-accent, var(--color-charcoal));
+}
+
+// The expanded list, one clickable row per full-titled card. Anchored (per
+// edge) over the badge and grown from it — opacity + scale on hover, so the
+// swap reads as one smooth bloom instead of a snap.
+.beaconPanel {
+    @include flex(column, flex-start, stretch);
+
+    position: absolute;
+    gap: rem(3);
+    padding: rem(6) rem(9);
+    visibility: hidden;
+    background-color: var(--th-accent, var(--color-yellow-hover));
+    border-radius: rem(8);
+    opacity: 0;
+    scale: 0.75;
+    transition:
+        opacity 0.2s ease,
+        scale 0.25s $ease-out,
+        visibility 0s linear 0.2s;
+}
+
+// Hover only where hover exists — on iOS a hover that reveals content
+// turns the first tap into "hover only" and swallows the click; touch opens
+// the panel by tap (.beaconOpen) instead.
+
+@media (hover: hover) {
+    .beacon:hover .beaconBadge {
+        opacity: 0;
+    }
+
+    .beacon:hover .beaconPanel {
+        visibility: visible;
+        opacity: 1;
+        scale: 1;
+        transition:
+            opacity 0.2s ease,
+            scale 0.25s $ease-out,
+            visibility 0s;
+    }
+}
+
+.beaconOpen .beaconBadge {
+    opacity: 0;
+}
+
+.beaconOpen .beaconPanel {
+    visibility: visible;
+    opacity: 1;
+    scale: 1;
+    transition:
+        opacity 0.2s ease,
+        scale 0.25s $ease-out,
+        visibility 0s;
+}
+
+// Where the panel blooms from — the same corner the pill is pinned by.
+.beaconLeft .beaconPanel {
+    top: 50%;
+    left: 0;
+    transform-origin: left center;
+    translate: 0 -50%;
+}
+
+.beaconRight .beaconPanel {
+    top: 50%;
+    right: 0;
+    transform-origin: right center;
+    translate: 0 -50%;
+}
+
+.beaconTop .beaconPanel {
+    top: 0;
+    left: 50%;
+    transform-origin: center top;
+    translate: -50% 0;
+}
+
+.beaconBottom .beaconPanel {
+    bottom: 0;
+    left: 50%;
+    transform-origin: center bottom;
+    translate: -50% 0;
+}
+
+// Near a corner the panel grows inward from it instead of centred, so it
+// never clips outside the canvas.
+.beaconStart.beaconTop .beaconPanel,
+.beaconStart.beaconBottom .beaconPanel {
+    right: auto;
+    left: 0;
+    translate: 0 0;
+}
+
+.beaconStart.beaconTop .beaconPanel {
+    transform-origin: left top;
+}
+
+.beaconStart.beaconBottom .beaconPanel {
+    transform-origin: left bottom;
+}
+
+.beaconEnd.beaconTop .beaconPanel,
+.beaconEnd.beaconBottom .beaconPanel {
+    right: 0;
+    left: auto;
+    translate: 0 0;
+}
+
+.beaconEnd.beaconTop .beaconPanel {
+    transform-origin: right top;
+}
+
+.beaconEnd.beaconBottom .beaconPanel {
+    transform-origin: right bottom;
+}
+
+.beaconStart.beaconLeft .beaconPanel,
+.beaconStart.beaconRight .beaconPanel {
+    top: 0;
+    bottom: auto;
+    translate: 0 0;
+}
+
+.beaconStart.beaconLeft .beaconPanel {
+    transform-origin: left top;
+}
+
+.beaconStart.beaconRight .beaconPanel {
+    transform-origin: right top;
+}
+
+.beaconEnd.beaconLeft .beaconPanel,
+.beaconEnd.beaconRight .beaconPanel {
+    top: auto;
+    bottom: 0;
+    translate: 0 0;
+}
+
+.beaconEnd.beaconLeft .beaconPanel {
+    transform-origin: left bottom;
+}
+
+.beaconEnd.beaconRight .beaconPanel {
+    transform-origin: right bottom;
+}
+
+.beaconRow {
+    @include flex(row, flex-start, center);
+
+    gap: rem(6);
+    width: 100%;
+    padding: rem(2) 0;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+        opacity: 0.65;
+    }
+}
+
+// A crisp little arrow (shaft + head) spun straight toward the card.
+.beaconArrow {
+    flex-shrink: 0;
+    width: rem(9);
+    height: rem(9);
+
+    path {
+        fill: none;
+        stroke: var(--th-on-accent, var(--color-charcoal));
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+}
+
+// Full titles, one line each — the panel sizes itself to the longest.
+.beaconTitle {
+    @include font-size(11px, 1.2);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--th-on-accent, var(--color-charcoal));
+    text-align: left;
+    white-space: nowrap;
+}

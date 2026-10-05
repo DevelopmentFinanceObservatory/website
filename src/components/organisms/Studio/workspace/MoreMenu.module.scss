@@ -1,0 +1,100 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The ⋮ trigger: a quiet rem(28) square (like the chat collapse toggle),
+// dark while its menu is open.
+.trigger {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    padding: 0;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    transition:
+        color 0.2s ease,
+        background-color 0.2s ease;
+
+    &[data-state="open"] {
+        color: var(--color-white);
+        background-color: var(--color-charcoal);
+    }
+}
+
+.triggerIcon {
+    width: rem(16);
+    height: auto;
+}
+
+// The sage panel with mono rows (the card menu's look).
+.menu {
+    z-index: $z-header;
+    display: flex;
+    flex-direction: column;
+    gap: rem(2);
+    min-width: rem(150);
+    padding: rem(10);
+    background-color: var(--color-popup);
+    border-radius: rem(4);
+
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(-8);
+    }
+}
+
+@keyframes pop-out {
+    to {
+        opacity: 0;
+        translate: 0 rem(-8);
+    }
+}
+
+.row {
+    @include font-size(11px, 1);
+
+    display: flex;
+    gap: rem(8);
+    align-items: center;
+    padding: rem(8) rem(4);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    text-align: left;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    outline: none;
+    transition: background-color 0.2s ease;
+
+    &:hover,
+    &:focus-visible,
+    &[data-highlighted] {
+        background-color: rgb(255 255 255 / 45%);
+    }
+}
+
+.row .rowIcon {
+    flex-shrink: 0;
+    width: rem(16);
+    height: auto;
+}
+
+.rowLabel {
+    translate: 0 rem(-1);
+}

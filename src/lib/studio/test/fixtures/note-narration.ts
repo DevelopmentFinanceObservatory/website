@@ -1,0 +1,32 @@
+/**
+ * A `note_narration` `payload`, from dfo-ai's
+ * `services/presentation-mcp/tests/fixtures/resolved_revision/note_narration.json`.
+ * A note carries no data spec, so `provenance.inputs` is empty and
+ * `component` has no `title`, only `text`.
+ */
+export const noteNarration = {
+    schema_version: 1,
+    catalog_version: '2026.8.0',
+    component_id: 'cmp_01j9zc4a1qm4p7q9r1sz',
+    revision: 1,
+    provenance: {
+        inputs: [],
+        execution_ref: null,
+        sources: [],
+        freshness: {
+            data_through: null,
+            last_refreshed: null,
+            next_expected: null,
+            partial_period: false,
+        },
+        warnings: [],
+        generated_at: '2026-07-14T10:02:00Z',
+        citation: 'ONE DFO',
+        refreshed_from: null,
+    },
+    component: {
+        type: 'note_narration',
+        text: 'Malaria grant disbursements to Ethiopia held broadly steady from 2019 to 2024, after a dip in 2018.',
+        authorship: 'model',
+    },
+};

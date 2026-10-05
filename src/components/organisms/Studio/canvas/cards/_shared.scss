@@ -1,0 +1,40 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The series swatch and the bars share one checkered weave: alternating
+// squares of the pair carried in --series-dark / --series-light.
+
+@mixin series-checker {
+    background-image: repeating-conic-gradient(
+        var(--series-light) 0% 25%,
+        var(--series-dark) 0% 50%
+    );
+    background-size: rem(6) rem(6);
+}
+
+// The house popup motion (Radix data-state): a short rise in, a drop out.
+// Included per module (CSS-module keyframes are local).
+
+@mixin popup-motion {
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+
+    @keyframes pop-in {
+        from {
+            opacity: 0;
+            translate: 0 rem(10);
+        }
+    }
+
+    @keyframes pop-out {
+        to {
+            opacity: 0;
+            translate: 0 rem(10);
+        }
+    }
+}

@@ -1,0 +1,73 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.form {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+.field {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+}
+
+.label {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+// House inputs: white face, sage hairline, Outfit 500 (the landing prompt).
+.input,
+.textarea,
+.titleArea {
+    @include font-size(14px, 1.2);
+
+    width: 100%;
+    padding: rem(12) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+    outline: none;
+    transition: border-color 0.2s ease;
+
+    &::placeholder {
+        color: var(--color-gray-1400);
+        opacity: 1;
+    }
+
+    &:focus {
+        border-color: var(--color-charcoal);
+    }
+}
+
+// Multi-line fields (note, text-card body) grow with their content — no
+// resize handle, no inner scroll until the modal itself would overflow.
+.textarea {
+    min-height: rem(96);
+    max-height: 50vh;
+    resize: none;
+    field-sizing: content;
+}
+
+// The title field: a short wrapping textarea (titles are one logical line
+// but may be long) — same face as .input.
+.titleArea {
+    min-height: rem(60);
+    resize: none;
+    field-sizing: content;
+}
+
+.actions {
+    @include flex(row, flex-end, center);
+
+    margin-top: rem(24);
+}

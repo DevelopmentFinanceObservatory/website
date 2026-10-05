@@ -1,0 +1,236 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    position: relative;
+    padding: rem(105) 0 rem(220);
+    overflow: hidden;
+    background-color: var(--color-bg);
+}
+
+.title {
+    @include font-size(19px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    text-align: center;
+    letter-spacing: -0.01em;
+}
+
+.cards {
+    position: relative;
+
+    // card 3: top 604 + height 508
+    min-height: rem(1112);
+    margin-top: rem(51);
+}
+
+.watermark {
+    @include font-size(133.33px, 0.92);
+
+    position: absolute;
+    top: rem(162);
+    right: 0;
+    left: 0;
+    z-index: 0;
+    font-family: var(--font-outfit);
+    font-weight: 900;
+    color: var(--color-net-light);
+    text-align: center;
+    letter-spacing: -0.05em;
+    opacity: 0;
+    transition: opacity 0.7s $ease-out;
+}
+
+.watermarkIn {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .watermark {
+        opacity: 1;
+        transition: none;
+    }
+}
+
+.card {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    gap: 1px;
+    width: rem(380);
+    height: rem(508);
+    border-radius: rem(4);
+
+    &[data-card="1"] {
+        top: 0;
+        left: rem(93);
+
+        .chip {
+            background: linear-gradient(135deg, #e786a8, #d06a6a);
+        }
+    }
+
+    &[data-card="2"] {
+        top: rem(234);
+        right: rem(142);
+
+        .chip {
+            background-color: #5b70f2;
+        }
+    }
+
+    &[data-card="3"] {
+        top: rem(604);
+        left: rem(236);
+
+        .chip {
+            background-color: #7a2e35;
+        }
+    }
+}
+
+.cover {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: rem(4) rem(4) 0 0;
+}
+
+.body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: rem(20) rem(10) rem(10);
+    background-color: var(--color-net-light);
+    border-radius: rem(4);
+}
+
+.meta {
+    display: flex;
+    gap: rem(15);
+    align-items: center;
+}
+
+.chip {
+    @include font-size(13px, 1);
+
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: rem(36);
+    height: rem(36);
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    color: var(--color-step-text);
+    border-radius: rem(4);
+}
+
+.org {
+    @include font-size(12px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.orgMeta {
+    @include font-size(11px, 1);
+
+    margin-top: rem(6);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-text-muted);
+    letter-spacing: -0.02em;
+}
+
+.cardTitle {
+    @include font-size(24px, 1);
+
+    margin-top: rem(50);
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.cardText {
+    @include font-size(16px, 1.3);
+
+    margin-top: rem(19);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.visit {
+    justify-content: flex-end;
+    margin-top: auto;
+    margin-left: auto;
+}
+
+.footer {
+    display: flex;
+    justify-content: center;
+    margin-top: rem(122);
+}
+
+@include breakpoint(not-desktop) {
+    .cards {
+        display: flex;
+        flex-direction: column;
+        gap: rem(24);
+        align-items: center;
+        min-height: 0;
+        padding-inline: var(--page-gutter);
+    }
+
+    .watermark {
+        display: none;
+    }
+
+    .card {
+        &[data-card="1"],
+        &[data-card="2"],
+        &[data-card="3"] {
+            position: static;
+            width: 100%;
+            max-width: rem(380);
+        }
+    }
+}
+
+@include breakpoint(tablet) {
+    .cards {
+        flex-flow: row wrap;
+        justify-content: center;
+    }
+
+    .card {
+        &[data-card="1"],
+        &[data-card="2"],
+        &[data-card="3"] {
+            width: calc(50% - #{rem(12)});
+            max-width: none;
+            height: auto;
+            min-height: rem(508);
+        }
+    }
+}
+
+@include breakpoint(phone) {
+    .section {
+        padding-block: rem(80) rem(100);
+    }
+
+    .footer {
+        margin-top: rem(56);
+    }
+}

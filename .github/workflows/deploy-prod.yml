@@ -1,0 +1,33 @@
+name: Deploy production
+
+# Builds, migrates and deploys production on every push to main, and on a
+# manual dispatch from main to redeploy. The steps live in
+# build-migrate-deploy.yml, the same ones deploy.yml runs on staging, here
+# against the `production` GitHub Environment.
+#
+# Production runs from the DevelopmentFinanceObservatory copy of this repo,
+# whose main is a tree copy of a ONEcampaign commit, so the deploy is guarded
+# to that owner. The `production` environment restricts deploys to main.
+# The human gate is the release approval on the pull request into main,
+# since environment reviewers are unavailable on private repos.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production-website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository_owner == 'DevelopmentFinanceObservatory'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/build-migrate-deploy.yml
+    # A called workflow sees no secrets, its environment's included, without this.
+    secrets: inherit
+    with:
+      environment: production

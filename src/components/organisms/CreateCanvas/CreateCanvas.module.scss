@@ -1,0 +1,135 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    // Section-scoped button theme.
+
+    --color-gray-2700: var(--color-stone);
+    --color-gray-2700-hover: var(--color-stone-hover);
+
+    position: relative;
+    padding-top: rem(208);
+    padding-bottom: rem(272);
+    overflow: hidden;
+    background-color: var(--color-charcoal);
+}
+
+.headingBlock {
+    --section-label-color: var(--color-sage);
+    --section-heading-color: var(--color-step-text);
+    --text-fill-bg: var(--color-charcoal);
+
+    max-width: rem(955);
+    margin-left: rem(163);
+}
+
+.canvas {
+    position: relative;
+    width: rem(1080);
+    height: rem(620);
+    margin: rem(128) auto 0;
+    border-radius: rem(10);
+}
+
+.patternClip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+}
+
+.patternLayer {
+    position: absolute;
+    inset: 0;
+}
+
+// Positioned from JS in px, not rem() — must sit on the pattern's fixed-px grid.
+.fill {
+    position: absolute;
+    border-radius: rem(4);
+    animation: fill-in 0.9s $ease-out;
+    transition: opacity 0.9s $ease-out;
+}
+
+.fillOut {
+    opacity: 0;
+}
+
+@keyframes fill-in {
+    from {
+        opacity: 0;
+    }
+}
+
+// One more widget on the sheet: placed on the grid from CreateCanvas.tsx
+// (its slot, cells → px) so the cards keep clear of it; the description
+// and the buttons keep their own stack inside it.
+.content {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: rem(48);
+    align-items: center;
+    justify-content: center;
+    padding: rem(20) rem(16);
+}
+
+.description {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(514);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-step-text);
+    text-align: center;
+    letter-spacing: -0.01em;
+}
+
+.actions {
+    display: flex;
+    gap: rem(4);
+}
+
+@include breakpoint(not-desktop) {
+    .headingBlock {
+        max-width: none;
+        margin-inline: var(--page-gutter);
+    }
+
+    .canvas {
+        width: auto;
+        margin-inline: var(--page-gutter);
+    }
+}
+
+@include breakpoint(phone) {
+    .section {
+        padding-top: rem(120);
+        padding-bottom: rem(260);
+    }
+
+    .canvas {
+        height: rem(460);
+        margin-top: rem(56);
+    }
+
+    .description {
+        @include font-size(22, 1.35);
+    }
+
+    // No sheet on a phone — the copy sits in the middle of the box and the
+    // one card hangs under it (ShowcaseCards' own styles).
+    .content {
+        inset: 50% auto auto 50% !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 0 rem(16);
+        transform: translate(-50%, -50%);
+    }
+
+    .actions {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}

@@ -1,0 +1,6 @@
+@use "mixins" as *;
+
+.fade {
+    height: rem(200);
+    background: linear-gradient(to bottom, var(--color-bg), var(--color-net-mid));
+}

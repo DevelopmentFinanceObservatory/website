@@ -1,0 +1,211 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The whole column caps at rem(600) and the spacing is tight enough for the
+// full view to sit inside 100dvh.
+// Vertically centered between the bar and the viewport bottom.
+.stage {
+    @include flex(column, center, center);
+
+    position: relative;
+    z-index: 1;
+    flex-grow: 1;
+    width: 100%;
+    max-width: rem(600);
+    margin-inline: auto;
+    padding: rem(24) var(--page-gutter, rem(32)) rem(16);
+    text-align: center;
+}
+
+.eyebrow {
+    @include font-size(14px, 1.3);
+
+    margin-bottom: min(#{rem(20)}, 2dvh);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+
+.title {
+    @include font-size(60px, 1.2);
+
+    margin-bottom: min(#{rem(30)}, 3dvh);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.lead {
+    @include font-size(17px, 1.3);
+
+    margin-bottom: min(#{rem(60)}, 5.5dvh);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.tabs {
+    @include flex(row, center, center);
+
+    margin-bottom: rem(20);
+}
+
+// The two landing panels (Try one of these / My History) share this box; its
+// min-height is the taller panel's measured height (set inline), so the
+// vertically centred stage stays put while they swap.
+.panels {
+    width: 100%;
+}
+
+// Grid-rows accordion (the house convention): height animates 0fr→1fr, the
+// inner wrapper owns min-height:0 + overflow clipping.
+.accordion {
+    display: grid;
+    grid-template-rows: 0fr;
+    width: 100%;
+    transition: grid-template-rows 0.4s $ease-custom;
+}
+
+.accordionOpen {
+    grid-template-rows: 1fr;
+}
+
+.accordionInner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.suggestions {
+    @include flex(column, flex-start, center);
+
+    gap: rem(10);
+}
+
+.suggestion {
+    @include font-size(16px, 1.3);
+
+    padding: rem(5) rem(14);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background-color: var(--color-net-mid);
+    border: 0;
+    border-radius: rem(28);
+    transition: background-color 0.25s ease;
+
+    &:hover {
+        background-color: var(--color-sage);
+    }
+}
+
+// A history row while its document is being fetched.
+.suggestionBusy {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+// Under the landing's three most recent canvases: the way to the full list.
+.historyAll {
+    @include flex(row, center, center);
+    @include font-size(12px, 1.3);
+
+    gap: rem(6);
+    margin-top: rem(4);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    transition: color 0.25s ease;
+
+    &:hover {
+        color: var(--color-charcoal);
+    }
+}
+
+.historyAllIcon {
+    width: rem(12);
+    height: rem(12);
+    transition: translate 0.3s $ease-custom;
+
+    .historyAll:hover & {
+        translate: rem(3) 0;
+    }
+}
+
+.historyEmpty {
+    @include font-size(16px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    opacity: 0.7;
+}
+
+// History rows reuse the suggestion pill; the date rides along quietly.
+.historyTitle {
+    display: inline-block;
+    overflow: hidden;
+    max-width: rem(360);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.historyDate {
+    @include font-size(11px, 1);
+
+    margin-left: rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+}
+
+// --- Landing → workspace choreography --------------------------------------
+
+// The landing staggers out child by child (an animation, not a transition —
+// it has to override the reveal system's own opacity styling cleanly).
+.stageOut > * {
+    animation: stage-out 0.35s $ease-out both;
+}
+
+@for $i from 1 through 6 {
+    .stageOut > *:nth-child(#{$i}) {
+        animation-delay: #{($i - 1) * 40}ms;
+    }
+}
+
+@keyframes stage-out {
+    to {
+        opacity: 0;
+        translate: 0 rem(-12);
+    }
+}
+
+@include breakpoint(phone) {
+    // Top-anchored, not centred: the eyebrow sits rem(160) from the viewport
+    // top (bar rem(60) + rem(100)) — the same line My History and Sign in
+    // start on, so the pages don't jump between each other.
+    .stage {
+        justify-content: flex-start;
+        padding-top: rem(100);
+    }
+
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .historyTitle {
+        max-width: rem(200);
+    }
+
+    .lead {
+        @include font-size(17px, 1.35);
+    }
+
+    .suggestion {
+        @include font-size(14px, 1.3);
+    }
+}

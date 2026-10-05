@@ -1,0 +1,80 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+.title {
+    @include font-size(64px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--color-charcoal);
+    letter-spacing: -0.04em;
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(44px, 0.95);
+    }
+}
+
+// The page itself: one column, aligned with the hero box's inner edge.
+.body {
+    max-width: rem(760);
+    padding: rem(60) rem(30) rem(120);
+    margin-inline: auto;
+}
+
+.lead {
+    @include font-size(17px, 1.45);
+
+    margin-bottom: rem(48);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Matches the docs' own prose scale — a policy reads like a docs page.
+.prose {
+    @include font-size(17px, 1.45);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+
+    > * + * {
+        margin-top: rem(18);
+    }
+
+    h2 {
+        @include font-size(28px, 1);
+
+        margin-top: rem(48);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+    }
+
+    ul {
+        padding-left: rem(22);
+        list-style: disc;
+    }
+
+    li + li {
+        margin-top: rem(6);
+    }
+
+    strong {
+        font-weight: 600;
+    }
+
+    a {
+        color: inherit;
+        text-underline-offset: 0.15em;
+    }
+}

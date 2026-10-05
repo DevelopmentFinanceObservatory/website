@@ -1,0 +1,337 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The rem(836) content column's insets.
+.section {
+    --search-inset: #{rem(30)};
+
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+// --- Hero contents (the box itself is PageHero) -------------------------------
+
+.back {
+    @include flex(row, flex-start, center);
+    @include font-size(14px, 1);
+
+    gap: rem(10);
+    margin-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-bg);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.7;
+    }
+}
+
+// The arrow sits in a small lighter square (a step up from the box).
+.backIcon {
+    @include flex(row, center, center);
+
+    box-sizing: content-box;
+    width: rem(14);
+    height: rem(14);
+    padding: rem(6);
+    background-color: var(--color-stone);
+    border-radius: rem(4);
+    rotate: 180deg;
+}
+
+.title {
+    @include font-size(52px, 0.95);
+
+    max-width: rem(640);
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.org {
+    @include font-size(17px, 1.3);
+
+    margin-bottom: rem(40);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+// The tabs row hugs the box's bottom edge (the box has no bottom padding).
+.tabs {
+    align-self: stretch;
+    margin-top: auto;
+}
+
+// Visit Source inside the box — tablet / phone only.
+.visitInline {
+    display: none;
+    margin-bottom: rem(30);
+}
+
+// --- Body -------------------------------------------------------------------
+
+// rem(100) from the hero to the first separator; the content column is
+// rem(836) wide (plus the side insets), centred.
+.body {
+    max-width: calc(#{rem(836)} + 2 * var(--search-inset));
+    padding: rem(100) var(--search-inset) 0;
+    margin-inline: auto;
+
+    // A tab switch scrolls here — flush with the viewport top: the bar hides
+    // on a downward scroll anyway, and the body's own top padding is the air.
+    scroll-margin-top: 0;
+}
+
+// Shown above the tab's body when the platform could not read part of the
+// document.
+.notice {
+    @include font-size(17px, 1.3);
+
+    padding-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Overview: hairline-separated two-column blocks (title left, content right).
+.overview {
+    @include flex(column, flex-start, stretch);
+}
+
+// Every separator sits rem(42) above and rem(42) below its content.
+.block {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: rem(40);
+    padding: rem(42) 0;
+    border-top: 1px solid var(--color-net-mid);
+    animation: block-in 0.5s $ease-out both;
+}
+
+@keyframes block-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.blockTitle {
+    @include font-size(24px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.blockBody {
+    @include flex(column, flex-start, stretch);
+
+    max-width: rem(413);
+}
+
+// "Publisher", "Type", "Source data URL"… have rem(20) under each and rem(30)
+// above the ones that follow a value.
+.label {
+    @include font-size(14px, 1.1);
+
+    margin-top: rem(30);
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+
+    &:first-child {
+        margin-top: 0;
+    }
+}
+
+// A code box's label: rem(10) above the box (the plain rem(20) is for text).
+.labelCode {
+    @include flex(row, flex-start, center);
+
+    gap: rem(6);
+    margin-bottom: rem(10);
+}
+
+.labelIcon {
+    width: rem(18);
+    height: rem(18);
+}
+
+.value,
+.prose {
+    @include font-size(19px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.valueLink {
+    text-decoration: underline;
+    overflow-wrap: anywhere;
+}
+
+// Rendered Markdown: paragraphs and lists sit a rem(16) apart, the first
+// flush with the top.
+.markdown {
+    > * + * {
+        margin-top: rem(16);
+    }
+
+    ul,
+    ol {
+        padding-left: rem(24);
+        list-style: revert;
+    }
+
+    a {
+        text-decoration: underline;
+    }
+
+    // Long URLs and inline code break rather than push the column wider;
+    // a fenced block scrolls sideways instead of being clipped by the page.
+    a,
+    code {
+        overflow-wrap: anywhere;
+    }
+
+    pre {
+        max-width: 100%;
+        overflow-x: auto;
+
+        code {
+            overflow-wrap: normal;
+        }
+    }
+}
+
+// Methodology folds to a few lines behind "+ Read More".
+.proseClamped {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+}
+
+.proseStack {
+    gap: rem(16);
+}
+
+.readMore {
+    margin-top: rem(40);
+}
+
+// Version History: one group per change kind, its label above the notes.
+.changeGroup + .changeGroup {
+    margin-top: rem(24);
+}
+
+.changeKind {
+    @include font-size(14px, 1.1);
+
+    margin-bottom: rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.changeNotes {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+    list-style: none;
+}
+
+// Transformation Log: numbered white cards, the number glued to its box.
+.log {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+    list-style: none;
+}
+
+.logItem {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1px;
+    align-items: start;
+    animation: block-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+}
+
+.logNumber {
+    @include flex(row, center, center);
+    @include font-size(20px, 1);
+
+    height: rem(26);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-bg);
+    text-align: center;
+    letter-spacing: -0.02em;
+    background-color: var(--color-charcoal);
+    border-radius: rem(4);
+}
+
+@include breakpoint(not-desktop) {
+    .visitInline {
+        display: block;
+    }
+
+    // Screen-tall at least, so a tab switch can always scroll the hero
+    // clean out of view — even for a short log.
+    .body {
+        min-height: 100svh;
+    }
+}
+
+@include breakpoint(tablet) {
+    .block {
+        grid-template-columns: minmax(0, 1fr);
+        gap: rem(16);
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(36px, 1);
+    }
+
+    // The page's phone gutter — the content runs wider than the desktop
+    // column's insets.
+    .body {
+        padding: rem(60) var(--page-gutter) 0;
+    }
+
+    .block {
+        grid-template-columns: minmax(0, 1fr);
+        gap: rem(20);
+        padding: rem(30) 0;
+    }
+
+    .blockBody {
+        max-width: none;
+    }
+
+    .logItem {
+        grid-template-columns: minmax(0, 1fr);
+        gap: rem(6);
+    }
+
+    .logNumber {
+        justify-self: start;
+    }
+}

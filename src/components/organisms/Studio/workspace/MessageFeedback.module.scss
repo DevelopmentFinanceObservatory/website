@@ -1,0 +1,156 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Sizes and colours below are the design's own (Figma: Chat Base – Feedback
+// Negative): the block stacks on a rem(10) rhythm, like the rest of the turn.
+.feedback {
+    @include flex(column, flex-start, stretch);
+
+    // The turn itself already spaces its blocks by rem(10) (.botTurn's own
+    // gap), so this only owns the rhythm inside the block.
+    gap: rem(10);
+}
+
+// Copy · thumbs up · thumbs down: rem(14) squares, rem(2) apart.
+.actions {
+    @include flex(row, flex-start, center);
+
+    gap: rem(2);
+}
+
+.action {
+    @include flex(row, center, center);
+
+    width: rem(14);
+    height: rem(14);
+    padding: 0;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(2);
+    transition: background-color 0.2s ease;
+
+    &:hover {
+        background-color: var(--color-net-light);
+    }
+}
+
+// The vote that was cast keeps the pressed shade.
+.actionOn {
+    background-color: var(--color-popup);
+}
+
+.actionIcon {
+    width: rem(14);
+    height: rem(14);
+}
+
+// One thumb asset, turned over for the down vote.
+.thumbDown {
+    rotate: 180deg;
+}
+
+.thanks {
+    @include font-size(10px, 1.34);
+
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+}
+
+// The reasons a thumbs-down can carry — several may be true at once, and
+// the row wraps (the third pill sits on its own line in the design).
+.reasons {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(2);
+}
+
+.reason {
+    @include font-size(10px, 1);
+
+    // The design's rem(21) pill: the padding owns the height, so the text's
+    // own line box doesn't push it taller.
+    padding: rem(5) rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-gray-2600);
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background-color: var(--color-net-light);
+    border: 0;
+    border-radius: rem(100);
+    transition:
+        color 0.2s ease,
+        background-color 0.2s ease;
+
+    &:hover {
+        background-color: var(--color-popup);
+    }
+}
+
+// A picked reason inverts — the same pill, read as chosen.
+.reasonOn {
+    color: var(--color-bg);
+    background-color: var(--color-charcoal);
+
+    &:hover {
+        background-color: var(--color-charcoal);
+    }
+}
+
+.noteRow {
+    @include flex(row, flex-start, stretch);
+
+    gap: rem(4);
+}
+
+.note {
+    @include font-size(12px, 1);
+
+    flex: 1;
+    min-width: 0;
+
+    // The design's rem(28) box, counted from the padding rather than a
+    // fixed height, so the hairline doesn't add to it.
+    padding: rem(7) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(4);
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-charcoal);
+        opacity: 0.6;
+    }
+}
+
+.submit {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(28);
+    height: rem(28);
+    color: var(--color-bg);
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 0;
+    border-radius: rem(4);
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 0.85;
+    }
+}
+
+.submitIcon {
+    width: rem(10);
+    height: rem(10);
+}

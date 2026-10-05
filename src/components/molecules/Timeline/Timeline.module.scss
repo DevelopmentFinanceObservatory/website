@@ -1,0 +1,124 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// A grid so the year rows share the dot + date columns exactly.
+.timeline {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    row-gap: rem(10);
+    list-style: none;
+}
+
+.item {
+    position: relative;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    gap: 1px;
+    align-items: start;
+    animation: item-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+
+    // The rail: from this dot down to the next one (through a year row too);
+    // none after the last.
+    &:not(:last-child)::before {
+        position: absolute;
+        top: rem(13);
+        bottom: rem(-10);
+        left: rem(12.5);
+        width: 1px;
+        content: "";
+        background-color: var(--color-charcoal);
+    }
+}
+
+@keyframes item-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.dot {
+    position: relative;
+    z-index: 1;
+    width: rem(26);
+    height: rem(26);
+    background-color: var(--color-charcoal);
+    border-radius: 50%;
+}
+
+.date {
+    @include flex(row, center, center);
+    @include font-size(20px, 1);
+
+    height: rem(26);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-bg);
+    text-align: center;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    background-color: var(--color-charcoal);
+    border-radius: rem(4);
+}
+
+// The year row: the year in bold where the entries start, the rail running
+// straight through; rem(50) of air above and below (plus the row gap).
+.year {
+    position: relative;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    gap: 1px;
+    align-items: center;
+    padding: rem(50) 0;
+
+    &::before {
+        position: absolute;
+        top: rem(-10);
+        bottom: rem(-10);
+        left: rem(12.5);
+        width: 1px;
+        content: "";
+        background-color: var(--color-charcoal);
+    }
+}
+
+.yearLabel {
+    @include font-size(24px, 0.95);
+
+    grid-column: 3;
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+@include breakpoint(phone) {
+    // Dot + date on one row, the entry under the date (right of the rail,
+    // which keeps running from dot to dot).
+    .timeline {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .item,
+    .year {
+        grid-template-columns: subgrid;
+    }
+
+    .item > :last-child {
+        grid-column: 2;
+        margin-top: rem(6);
+    }
+
+    .yearLabel {
+        grid-column: 2;
+    }
+
+    .date {
+        @include font-size(16px, 1);
+    }
+}

@@ -1,0 +1,62 @@
+-- Grants target `public`, the schema drizzle.config.ts and the runner
+-- agree on for `__drizzle_migrations` bookkeeping. That differs from
+-- drizzle-orm's default `drizzle` schema.
+--
+-- `{{MIGRATOR_DB_USER}}` / `{{RUNTIME_DB_USER}}` are substituted by the
+-- runner from WEBSITE_MIGRATOR_DB_USER / WEBSITE_RUNTIME_DB_USER before this
+-- file reaches Postgres. Both differ between dev and staging, so neither
+-- can be literal here.
+--
+-- ALTER DEFAULT PRIVILEGES only applies to objects a later migration
+-- creates while connected as the named role. Every migration in this
+-- runner connects as the migrator, so the runtime role gets read/write on
+-- every table the europe team's migrations add, with no per-migration
+-- grant of their own.
+ALTER DEFAULT PRIVILEGES FOR ROLE "{{MIGRATOR_DB_USER}}" IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "{{RUNTIME_DB_USER}}";
+--> statement-breakpoint
+ALTER DEFAULT PRIVILEGES FOR ROLE "{{MIGRATOR_DB_USER}}" IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO "{{RUNTIME_DB_USER}}";
+--> statement-breakpoint
+-- Postgres grants EXECUTE on every newly created function to PUBLIC, and
+-- that grant is baked into CREATE FUNCTION itself. The runtime role is a
+-- member of PUBLIC, the pseudo-role every role belongs to, and a SECURITY
+-- DEFINER function runs with the migrator's rights, so an unrevoked grant
+-- is a live privilege escalation. This was verified against
+-- postgres:18.4. A SECURITY DEFINER function created by the migrator
+-- without this revoke was callable by the bare runtime role and returned
+-- the migrator's identity.
+--
+-- This REVOKE omits the `IN SCHEMA` clause used by the two ADP statements
+-- above. Per the PostgreSQL docs for ALTER DEFAULT PRIVILEGES: "Default
+-- privileges that are specified per-schema are added to whatever the
+-- global default privileges are for the particular object type. This
+-- means you cannot revoke privileges per-schema if they are granted
+-- globally (either by default, or according to a previous ALTER DEFAULT
+-- PRIVILEGES command that did not specify a schema). Per-schema REVOKE is
+-- only useful to reverse the effects of a previous per-schema GRANT."
+-- PUBLIC's EXECUTE grant on new functions is that kind of global default
+-- (it's wired into CREATE FUNCTION, not a prior per-schema grant), so only
+-- a schema-less REVOKE can strip it. Adding `IN SCHEMA public` here would
+-- silently produce a no-op ADP entry that leaves every new function
+-- callable by the runtime role. This was confirmed directly. The
+-- schema-scoped form left zero rows in pg_default_acl and the new
+-- function's ACL unchanged (PUBLIC still had EXECUTE); only the global
+-- form below produced a pg_default_acl row and stripped it.
+--
+-- This entry is written to pg_default_acl keyed to
+-- "{{MIGRATOR_DB_USER}}"'s role name, not to the service account behind
+-- it. Renaming that service account leaves this entry attached to a role
+-- name that no longer authenticates, and the new role name starts with no
+-- protection until the grant is reissued under the new name. Reissuing it
+-- is part of the infra repo's account-rename procedure.
+--
+-- This revoke holds centrally only while every migration creates routines
+-- connected as "{{MIGRATOR_DB_USER}}" with no SET ROLE to another role
+-- first, since ALTER DEFAULT PRIVILEGES FOR ROLE only governs objects
+-- subsequently created by that role. It also holds only while no migration
+-- follows a CREATE FUNCTION with an explicit GRANT EXECUTE ... TO PUBLIC or
+-- TO "{{RUNTIME_DB_USER}}"; either one reopens this exact hole for that
+-- function regardless of this revoke.
+ALTER DEFAULT PRIVILEGES FOR ROLE "{{MIGRATOR_DB_USER}}"
+  REVOKE EXECUTE ON ROUTINES FROM PUBLIC;

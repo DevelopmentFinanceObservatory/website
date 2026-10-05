@@ -1,0 +1,526 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The chat compartment slides in from beyond the left page edge.
+.chatPanel {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+
+    // min-height:0 — same reason as .workspace; the scroll region lives inside.
+    min-height: 0;
+    gap: rem(12);
+    width: var(--ws-chat);
+    padding: rem(20) rem(10) rem(12);
+    text-align: left;
+    pointer-events: auto;
+    background-color: var(--color-white);
+    border-radius: rem(10);
+
+    // `backwards`, not `both`: a filled entry animation would keep owning
+    // `translate` after it ends, and the collapse transition could never run.
+    animation: chat-in 0.65s $ease-custom 0.25s backwards;
+    transition:
+        translate var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        opacity var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+// Collapsed: the panel rides back out beyond the left edge.
+.chatHidden {
+    pointer-events: none;
+    opacity: 0;
+    translate: calc(-100% - var(--ws-left)) 0;
+}
+
+// The Chat + Canvas share point: everything below is the owner's alone.
+.shareMark {
+    @include flex(row, center, center);
+    @include font-size(8px, 1.3);
+
+    gap: rem(6);
+    align-self: stretch;
+    padding: rem(4) 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+.shareMarkIcon {
+    flex-shrink: 0;
+    width: rem(12);
+    height: rem(12);
+}
+
+// Bot turn: the streamed text, then any suggested follow-ups.
+.botTurn {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(10);
+    align-self: flex-start;
+    width: 100%;
+    min-width: 0;
+}
+
+.thinking {
+    @include flex(row, flex-start, flex-start);
+    @include font-size(12px, 1.3);
+
+    // Full panel width (the scroll column otherwise shrink-wraps entries).
+    align-self: stretch;
+
+    // A long status (the agent's preamble) wraps; the dot never squeezes
+    // (flex-shrink 0 below).
+    gap: rem(7);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+}
+
+.thinkingDot {
+    flex-shrink: 0;
+    width: rem(7);
+    height: rem(7);
+
+    // Centred on the first text line (the row aligns to the top for wraps).
+    margin-top: rem(4);
+    background-color: var(--color-stone);
+    border-radius: 50%;
+    animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+    50% {
+        opacity: 0.25;
+        scale: 0.7;
+    }
+}
+
+.followups {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(6);
+}
+
+// Quiet, small bordered chips — a light suggestion, not a call to action.
+.followupChip {
+    @include font-size(11px, 1.25);
+
+    padding: rem(5) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    text-align: left;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(14);
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+// Clarify picker: a card that stands in for the input while the agent waits
+// on a choice. rem(10) padding all round, options as bordered rows.
+.picker {
+    @include flex(column, flex-start, stretch);
+
+    min-height: 0;
+    padding: rem(10);
+    overflow-y: auto;
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.pickerHead {
+    @include flex(row, space-between, flex-start);
+
+    gap: rem(10);
+    margin-bottom: rem(20);
+}
+
+.pickerQuestion {
+    @include font-size(14px, 1.1);
+
+    // Caps well short of the count so it wraps earlier, with clear air between.
+    flex: 1;
+    min-width: 0;
+    max-width: rem(210);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.pickerCount {
+    @include font-size(14px, 1.1);
+
+    flex-shrink: 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.pickerOptions {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+    margin-bottom: rem(20);
+}
+
+.pickerOption {
+    @include flex(column, flex-start, stretch);
+    @include font-size(12px, 1.34);
+
+    gap: rem(4);
+    padding: rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    text-align: left;
+    letter-spacing: -0.031em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(8);
+    transition:
+        border-color 0.25s ease,
+        background-color 0.25s ease;
+
+    &:hover {
+        background-color: var(--color-net-mid);
+        border-color: var(--color-sage);
+    }
+}
+
+.pickerOptionLabel {
+    @include flex(row, flex-start, center);
+
+    gap: rem(8);
+}
+
+.pickerOptionBadge {
+    @include font-size(9px, 1);
+
+    padding: rem(3) rem(6);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background-color: var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.pickerOptionDescription {
+    color: var(--color-stone);
+}
+
+.pickerRationale {
+    @include font-size(11px, 1.3);
+
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+}
+
+// The free-text answer: styled like PromptForm's own bar (same height,
+// border and input treatment) so the picker's field reads as the same
+// control family as the follow-up input it stands in for.
+.pickerText {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    height: rem(48);
+    margin-bottom: rem(20);
+    padding: rem(10);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.pickerTextInput {
+    @include font-size(14px, 1.1);
+
+    flex-grow: 1;
+    min-width: 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background: none;
+    border: 0;
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-gray-1400);
+    }
+}
+
+.pickerTextSubmit {
+    flex-shrink: 0;
+}
+
+.pickerSkip {
+    align-self: flex-start;
+}
+
+@keyframes chat-in {
+    from {
+        opacity: 0;
+        translate: calc(-100% - var(--page-gutter, #{rem(32)})) 0;
+    }
+}
+
+// The one scroll region: grows to fill, clips its own overflow. Content
+// fades out at both edges — the eased stops reach FULL transparency exactly
+// at the boundary, so nothing ever reads as a hard cut; padding gives the
+// fade room so resting content isn't dimmed.
+.chatScroll {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: rem(20);
+    align-items: flex-end;
+    min-height: 0;
+    padding-block: rem(24);
+    overflow-y: auto;
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0,
+        rgb(0 0 0 / 35%) rem(8),
+        rgb(0 0 0 / 80%) rem(16),
+        #000 rem(24),
+        #000 calc(100% - #{rem(24)}),
+        rgb(0 0 0 / 80%) calc(100% - #{rem(16)}),
+        rgb(0 0 0 / 35%) calc(100% - #{rem(8)}),
+        transparent 100%
+    );
+}
+
+// The foot gives up height only when what sits above the input (a plan, a
+// long clarify) outgrows the panel: that card scrolls inside and the input
+// never leaves the screen. Everything else in it keeps its natural height
+// (flex items don't shrink below their content unless they opt in with
+// min-height: 0, which only the plan and the picker do).
+.chatFoot {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+// The panel body: Chat (transcript + input) and Activity stacked in ONE grid
+// cell, crossfaded by the tab. Both keep the panel's full height; the
+// inactive one is invisible and inert.
+.views {
+    display: grid;
+    flex: 1;
+    grid-template-areas: "view";
+    min-width: 0;
+    min-height: 0;
+}
+
+.view {
+    @include flex(column, flex-start, stretch);
+
+    grid-area: view;
+    gap: rem(12);
+
+    // min-width: 0 — a grid item's auto minimum is its content's min-content;
+    // without this a long unbreakable line (chip title) widens the whole
+    // panel and the input with it.
+    min-width: 0;
+    min-height: 0;
+    visibility: hidden;
+    opacity: 0;
+    translate: 0 rem(8);
+    transition:
+        opacity 0.3s $ease-custom,
+        translate 0.35s $ease-custom,
+        visibility 0s linear 0.3s;
+    pointer-events: none;
+}
+
+.viewActive {
+    visibility: visible;
+    opacity: 1;
+    translate: 0 0;
+    transition:
+        opacity 0.3s $ease-custom 0.05s,
+        translate 0.35s $ease-custom 0.05s,
+        visibility 0s;
+    pointer-events: auto;
+}
+
+.chatBubble {
+    @include font-size(12px, 1.2);
+
+    max-width: rem(220);
+    padding: rem(5) rem(11);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    background-color: var(--color-net-light);
+    border-radius: rem(6);
+}
+
+// A message waiting behind the streaming turn: the user bubble, dimmed,
+// with a remove control beside it.
+.queued {
+    @include flex(row, flex-end, center);
+
+    gap: rem(6);
+}
+
+.queuedBubble {
+    opacity: 0.55;
+}
+
+// Bot turns: markdown with quiet, chat-scale element styles.
+.botText {
+    @include font-size(12px, 1.34);
+
+    align-self: flex-start;
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    letter-spacing: -0.031em;
+
+    // One consistent gap between EVERY top-level block (paragraph, list,
+    // heading) — `* + *` catches list→paragraph too, which `p + p` missed.
+    > * + * {
+        margin-top: 0.9em;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @include font-size(13px, 1.3);
+
+        font-weight: 500;
+    }
+
+    strong {
+        font-weight: 500;
+    }
+
+    ul,
+    ol {
+        padding-left: 1.2em;
+
+        li + li {
+            margin-top: 0.5em;
+        }
+    }
+
+    a {
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
+
+    code {
+        @include font-size(10px, 1.3);
+
+        padding: 0.1em 0.4em;
+        font-family: var(--font-dm-mono);
+        background-color: var(--color-net-light);
+        border-radius: rem(3);
+    }
+
+    // GFM pipe tables (remark-gfm) at chat scale.
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        @include font-size(10px, 1.3);
+
+        padding: rem(6) rem(8);
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        color: var(--color-stone);
+        text-align: left;
+        letter-spacing: -0.02em;
+        border-bottom: 1px solid var(--color-net-light);
+    }
+
+    td {
+        @include font-size(12px, 1.3);
+
+        padding: rem(6) rem(8);
+        border-bottom: 1px solid var(--color-net-light);
+    }
+
+    tr:last-child td {
+        border-bottom: 0;
+    }
+
+    th:last-child,
+    td:last-child {
+        text-align: right;
+        white-space: nowrap;
+    }
+}
+
+.chatNote {
+    @include font-size(8px, 1.3);
+
+    margin-top: rem(11);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-gray-1400);
+    letter-spacing: -0.01em;
+}
+
+// A canvas/card share has no chat at all (compound selector so it beats
+// the base display rules).
+.chatPanel.chatGone {
+    display: none;
+}
+
+// "Editing <card>" — the card a pending message is scoped to, above the
+// input. Sits in the prompt's own rounding family, tucked under it like the
+// plan's proceed bar.
+.editTarget {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    padding: rem(8) rem(10) rem(22) rem(12);
+    margin-bottom: rem(-16);
+    background-color: var(--color-grid-bg-light);
+    border: 1px solid var(--color-sage-light);
+    border-bottom: 0;
+    border-radius: rem(10) rem(10) 0 0;
+}
+
+.editTargetLabel {
+    @include font-size(12px, 1.1);
+
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+}
+
+.editTargetClear,
+.queuedRemove {
+    @include font-size(12px, 1);
+
+    flex-shrink: 0;
+    padding: rem(2) rem(4);
+    color: var(--color-stone);
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:hover {
+        color: var(--color-charcoal);
+    }
+}

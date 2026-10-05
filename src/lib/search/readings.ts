@@ -1,0 +1,84 @@
+/**
+ * A candidates part's readings: the text each reading card draws, and the
+ * envelope plan with each candidates part's summary folded into one marked
+ * phrase, since the cards show the readings and the summary is only their
+ * screen-reader text. Pure; no React.
+ */
+
+import { refsStatedBesides, sentenceBlocks } from './departures.ts';
+import { planSentenceText, tokenPart } from './sentencePlan.ts';
+import type { Part, SentenceToken } from './types';
+
+/** What one reading card shows: its heading and byline as plain text, the
+ *  measure token its About block describes, and the refs the reading's
+ *  other tokens state, which that block leaves to them. */
+export type Reading = {
+    heading: string;
+    byline: string;
+    measure: SentenceToken | null;
+    statedElsewhere: Set<string>;
+};
+
+const blockText = (plan: readonly SentenceToken[], segment: 'heading' | 'byline'): string =>
+    sentenceBlocks(plan)
+        .filter((block) => block.segment === segment)
+        .map((block) => block.tokens.map((token) => token.text).join(''))
+        .join(' ');
+
+/** The reading a candidate spec's own sentence plan states. */
+export function readingOf(spec: { sentence_plan?: SentenceToken[] | null }): Reading {
+    const plan = spec.sentence_plan ?? [];
+    const measure = plan.find((token) => token.kind === 'slot' && token.axis === 'what') ?? null;
+
+    return {
+        heading: blockText(plan, 'heading'),
+        byline: blockText(plan, 'byline'),
+        measure,
+        statedElsewhere: measure ? refsStatedBesides(plan, 1, measure) : new Set(),
+    };
+}
+
+/** A candidates part's summary plan read as one line, for screen readers:
+ *  "2 readings." and each reading's heading and byline. */
+export function readingsSummary(plan: readonly SentenceToken[] | null | undefined): string {
+    return (plan ?? [])
+        .filter((token) => token.segment !== 'departure')
+        .map((token) => token.text)
+        .join('')
+        .trim();
+}
+
+/**
+ * `plan` with every candidates part's tokens replaced by one heading slot
+ * token, at the place of that part's first token: a what-token whose text
+ * is the part's variable text ("debt flows to Ghana"), or the summary's own
+ * heading when the part has none. The heading draws it as a marked phrase
+ * and the reading cards below carry the choice. Returns `plan` itself when
+ * no part is a candidates part.
+ */
+export function foldReadings(
+    plan: readonly SentenceToken[],
+    parts: readonly (Pick<Part, 'status' | 'variable_text'> | null | undefined)[],
+): readonly SentenceToken[] {
+    const partCount = parts.length;
+    const isReadings = (partIndex: number | null) =>
+        partIndex != null && parts[partIndex]?.status === 'candidates';
+
+    if (!plan.some((token) => isReadings(tokenPart(token, partCount)))) return plan;
+
+    const folded = new Set<number>();
+
+    return plan.flatMap((token): SentenceToken[] => {
+        const partIndex = tokenPart(token, partCount);
+
+        if (partIndex == null || !isReadings(partIndex)) return [token];
+        if (folded.has(partIndex)) return [];
+
+        folded.add(partIndex);
+
+        const own = plan.filter((other) => tokenPart(other, partCount) === partIndex);
+        const text = parts[partIndex]?.variable_text?.trim() || planSentenceText(own);
+
+        return [{ kind: 'slot', axis: 'what', text, segment: 'heading', part_index: partIndex }];
+    });
+}

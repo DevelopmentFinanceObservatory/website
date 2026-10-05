@@ -1,0 +1,185 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "shared" as *;
+
+// Pin + kebab, 1px apart, top-right of every card, and the kebab's menu.
+.cardActions {
+    @include flex(row, center, center);
+
+    gap: 1px;
+    flex-shrink: 0;
+
+    // Optical: the buttons' own padding would keep their ink shy of the
+    // card's edge — pull them back out.
+    margin-right: rem(-8);
+    color: var(--th-muted, var(--color-stone));
+}
+
+// Doubled specificity — the Icon atom's per-name classes must not win.
+.pinBtn .actionIcon,
+.menuBtn .actionIcon {
+    width: rem(16);
+    height: auto;
+}
+
+.pinBtn {
+    @include flex(row, center, center);
+
+    padding: 0;
+    color: var(--th-muted, var(--color-stone));
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition:
+        color 0.2s ease,
+        opacity 0.2s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+// Pinned: the pin fills in and darkens.
+.pinActive {
+    color: var(--th-text, var(--color-charcoal));
+
+    svg path:first-child {
+        fill: currentColor;
+    }
+}
+
+// The ⋮ trigger: quiet like the pin, flips to a dark chip while its menu is
+// open (per the design).
+.menuBtn {
+    @include flex(row, center, center);
+
+    padding: rem(2);
+    color: var(--th-muted, var(--color-stone));
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(5);
+    transition:
+        color 0.2s ease,
+        background-color 0.2s ease,
+        opacity 0.2s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+
+    &[data-state="open"] {
+        color: var(--th-card, var(--color-white));
+        background-color: var(--th-text, var(--color-charcoal));
+        opacity: 1;
+    }
+}
+
+// The card menu (Radix content): three stacked sage panels — actions, the
+// card-type switcher, and the red remove.
+.cardMenu {
+    @include popup-motion;
+
+    z-index: $z-header;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-width: rem(140);
+}
+
+.cardMenuSection {
+    display: flex;
+    flex-direction: column;
+    gap: rem(2);
+    min-width: rem(140);
+    padding: rem(10);
+    background-color: var(--th-popup, var(--color-popup));
+    border-radius: rem(4);
+}
+
+.cardMenuRow {
+    @include font-size(10px, 1);
+
+    display: flex;
+    gap: rem(8);
+    align-items: center;
+    padding: rem(6) rem(4);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--th-text, var(--color-charcoal));
+    text-align: left;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    outline: none;
+    transition: background-color 0.2s ease;
+
+    &:hover,
+    &:focus-visible,
+    &[data-highlighted] {
+        background-color: rgb(255 255 255 / 45%);
+    }
+}
+
+// Doubled specificity on purpose: the Icon atom's per-name classes (pin,
+// edit, … at rem(20)) must not win here — every menu icon is rem(16), so
+// all the labels start on the same x.
+.cardMenuRow .cardMenuIcon,
+.cardMenuType .cardMenuIcon {
+    flex-shrink: 0;
+    width: rem(16);
+    height: auto;
+}
+
+// DM Mono carries extra space above its cap height — nudge the labels up so
+// they sit optically centred against the icons.
+.cardMenuLabel {
+    translate: 0 rem(-1);
+}
+
+// The type switcher: a row of three plain icon-only buttons, active one
+// inked dark.
+.cardMenuTypes {
+    flex-direction: row;
+    gap: rem(4);
+    justify-content: space-between;
+}
+
+.cardMenuType {
+    @include flex(row, center, center);
+    @include font-size(10px, 1);
+
+    width: rem(28);
+    height: rem(28);
+    padding: 0;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--th-text, var(--color-charcoal));
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
+
+    &:hover {
+        background-color: rgb(255 255 255 / 45%);
+    }
+}
+
+.cardMenuTypeActive {
+    color: var(--th-card, var(--color-white));
+    background-color: var(--th-text, var(--color-charcoal));
+
+    &:hover {
+        background-color: var(--th-text, var(--color-charcoal));
+    }
+}
+
+.cardMenuDanger {
+    color: var(--color-red);
+}

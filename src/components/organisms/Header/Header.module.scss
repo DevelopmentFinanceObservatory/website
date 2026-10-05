@@ -1,0 +1,629 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.header {
+    @include flex(row, space-between, center);
+
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: $z-header;
+    gap: rem(16);
+    padding: calc(#{rem(16)} + env(safe-area-inset-top)) rem(10) rem(16) rem(30);
+    transition: translate 0.5s $ease-custom;
+
+    @include breakpoint(phone) {
+        padding: calc(#{rem(12)} + env(safe-area-inset-top)) rem(16) rem(12);
+    }
+}
+
+.hidden {
+    translate: 0 -100%;
+}
+
+.nav {
+    @include flex(row, flex-start, center);
+
+    position: relative;
+    gap: rem(18);
+}
+
+// --- Section dropdowns ------------------------------------------------------
+// Panel colours ride the bar's theme: dark rows on light pages, light rows
+// when the bar itself sits on a dark section.
+
+.navItem {
+    position: relative;
+    display: inline-flex;
+}
+
+// Hidden at rest; the visibility flip waits out the rows' exit so a leaving
+// cursor doesn't cut the fade. padding-top bridges the gap under the link,
+// keeping the hover unbroken on the way down.
+.navMenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: rem(140);
+    padding-top: rem(18);
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear 0.35s;
+}
+
+// One row: label + an arrow segment that slides out on the row's own
+// hover — the Button atom's metrics (28-tall segments, 8 side padding).
+.navMenuItem {
+    display: flex;
+
+    // 1px seams — the Button atom's segment gap.
+    gap: 1px;
+    align-items: stretch;
+    text-decoration: none;
+    opacity: 0;
+    translate: 0 rem(-8);
+    transition:
+        opacity 0.3s $ease-in,
+        translate 0.3s $ease-in;
+}
+
+.navMenuLabel,
+.navMenuArrow {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--dd-text, var(--color-step-text));
+    letter-spacing: -0.02em;
+    background-color: var(--dd-bg, var(--color-stone));
+    border-radius: rem(4);
+    transition: background-color 0.2s ease;
+}
+
+.navMenuLabel {
+    @include flex(row, flex-start, center);
+
+    flex: 1;
+    min-width: 0;
+    height: rem(28);
+    padding-inline: rem(8);
+}
+
+.navMenuArrow {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: 0;
+    height: rem(28);
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        width 0.3s $ease-out,
+        opacity 0.3s $ease-out,
+        background-color 0.2s ease;
+
+    svg {
+        flex-shrink: 0;
+        width: rem(20);
+        height: rem(20);
+    }
+}
+
+// The rows land together, each a breath behind the one before. Two ways
+// in: hover (desktop) and the tapped-open data-open state (touch).
+.navItem:hover .navMenu,
+.navItem[data-open] .navMenu {
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+
+    // Entry waits out a leaving menu's fade (0.3s), so switching
+    // sections reads as one closing, THEN the other opening.
+    .navMenuItem {
+        opacity: 1;
+        translate: 0 0;
+        transition:
+            opacity 0.35s $ease-out calc(0.3s + var(--i, 0) * 0.035s),
+            translate 0.35s $ease-out calc(0.3s + var(--i, 0) * 0.035s);
+    }
+}
+
+// The current page's row sits in its hover look for good — arrow out,
+// hover shade — and stops being a click target (it leads here).
+.navMenuItem[data-current] {
+    pointer-events: none;
+
+    .navMenuLabel,
+    .navMenuArrow {
+        background-color: var(--dd-bg-hover, var(--color-charcoal));
+    }
+
+    .navMenuArrow {
+        width: rem(28);
+        opacity: 1;
+
+        // Pointing back at the label: you are here.
+        svg {
+            rotate: 180deg;
+        }
+    }
+}
+
+@media (hover: hover) {
+    .navMenuItem:hover {
+        .navMenuLabel,
+        .navMenuArrow {
+            background-color: var(--dd-bg-hover, var(--color-charcoal));
+        }
+
+        .navMenuArrow {
+            width: rem(28);
+            opacity: 1;
+        }
+    }
+}
+
+.link {
+    @include font-size(14px, 1.3);
+
+    position: relative;
+
+    // A hover trigger, not a link or text — the plain arrow cursor.
+    cursor: default;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-text);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    transition:
+        opacity 0.2s ease,
+        color 0.25s ease;
+
+    // Hover underline on the indicator's exact shelf: rem(14) wide, slides
+    // out left-to-right on hover and retracts the same way on leave — the
+    // current tab skips it (the real indicator already sits there).
+    &::after {
+        content: "";
+        position: absolute;
+        top: calc(100% + #{rem(7)});
+        left: 0;
+
+        // Raw px on purpose — the underline keeps its size on every screen.
+        width: 14px;
+        height: 1.5px;
+        background-color: var(--color-gray-2700);
+        transform: scaleX(0);
+        transform-origin: 0 50%;
+        transition:
+            transform 0.25s $ease-out,
+            background-color 0.25s ease;
+    }
+}
+
+@media (hover: hover) {
+    .link:hover {
+        opacity: 0.6;
+    }
+
+    .link:hover:not([aria-current="page"])::after {
+        transform: scaleX(1);
+    }
+}
+
+.indicator {
+    position: absolute;
+    top: calc(100% + #{rem(7)});
+
+    // Raw px on purpose — matches the links' hover underline exactly.
+    height: 1.5px;
+    background-color: var(--color-gray-2700);
+    opacity: 0;
+    transition:
+        left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+        width 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
+        opacity 0.2s ease,
+        background-color 0.25s ease;
+}
+
+.visible {
+    opacity: 1;
+}
+
+.snap {
+    transition: opacity 0.2s ease;
+}
+
+.logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    color: var(--color-text);
+    transform: translate(-50%, -50%);
+    transition: color 0.25s ease;
+
+    svg {
+        width: rem(58);
+        height: auto;
+        overflow: visible;
+    }
+}
+
+.actions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(4);
+}
+
+// Letter-by-letter color wave on hover: the letters take the buttons' hover
+// shade in sequence (charcoal → gray-2600; the dark header remaps it to
+// popup) and KEEP it while hovered; leaving rolls them back the same way.
+.logo svg path {
+    fill: currentColor;
+    transition: fill 0.25s ease;
+}
+
+@for $i from 1 through 3 {
+    .logo svg path:nth-child(#{$i}) {
+        transition-delay: #{($i - 1) * 70}ms;
+    }
+}
+
+@media (hover: hover) {
+    .logo:hover svg path {
+        fill: var(--logo-wave-color, var(--color-gray-2600));
+    }
+}
+
+// --- Studio variant ---------------------------------------------------------
+
+// Static in-flow bar on the light canvas: back arrow + logo + title on the
+// left; the right side ends on the same axis as the site header.
+.studio {
+    position: static;
+
+    // The bar's height must stay what it always was — rem(60): rem(16)
+    // padding around the rem(28) back/logo row. The two-line title row
+    // (rem(35.2)) is taller than that row, so the vertical padding shrinks
+    // to keep the total at rem(60) and the workspace below (laid out from
+    // --ws-top) never shifts.
+    padding: calc(#{rem(12.4)} + env(safe-area-inset-top)) rem(10) rem(12.4) rem(14);
+    color: var(--color-charcoal);
+
+    .logo {
+        position: static;
+        margin-left: rem(5);
+        color: var(--color-charcoal);
+        transform: none;
+    }
+}
+
+// A scrolling studio page (My History): fixed on top like the site header —
+// transparent, slides away/back with the scroll (the .hidden translate).
+.studioFixed {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: $z-header;
+}
+
+.studioLeft {
+    @include flex(row, flex-start, center);
+
+    // The title may wrap to two lines — the row must be allowed to shrink;
+    // its height is pinned to two title lines so nothing below ever jumps.
+    flex: 1 1 auto;
+    min-width: 0;
+    height: calc(2 * 1.1 * #{rem(16)});
+}
+
+// The arrow glyph carries its natural 20-grid margin inside a rem(28) box —
+// pull the box left so the VISIBLE arrow starts at the bar's padding edge.
+.back {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    margin-left: rem(-8);
+    padding: 0;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.5;
+    }
+}
+
+.backIcon {
+    rotate: 180deg;
+}
+
+.studioDivider {
+    width: 1px;
+    height: rem(24);
+    margin-inline: rem(11);
+    background-color: var(--color-charcoal);
+    opacity: 0.25;
+}
+
+// Long conversation titles wrap to at most two lines, then elide.
+// Long conversation titles wrap to at most two lines, then elide. The row
+// is fixed at two lines' height (text vertically centred), so a wrap never
+// moves the header or anything under it.
+.studioTitle {
+    @include font-size(16px, 1.1);
+
+    display: -webkit-box;
+    max-width: rem(560);
+    min-width: 0;
+
+    // Two lines exactly; a one-line title floats in the middle of it via the
+    // wrapper's align-items: center. The tight line-height would clip
+    // descenders at the overflow edge, so the box keeps 0.2em of room below
+    // the last line (and the negative margin keeps the centring honest).
+    max-height: calc(2 * 1.1em + 0.2em);
+    margin-bottom: -0.2em;
+    padding-bottom: 0.2em;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+// A title that needs its second line steps down a size (measured in JS).
+.studioTitleWrapped {
+    @include font-size(13px, 1.1);
+}
+
+// Inline after the text: an inline-flex box on the baseline, a hair after
+// the last glyph.
+// Inline after the text. Sized to the line box (1em) and hung just under
+// the baseline, so it never pokes past the clamped box's bottom edge on a
+// two-line title; the glyph keeps its rem(20) drawing size and simply
+// overflows the little box.
+.editTitle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    margin-left: rem(6);
+    padding: 0;
+    overflow: visible;
+
+    // Centred on the x-height band of the line, not hung off the baseline.
+    vertical-align: middle;
+
+    // The rename glyph sits a step quieter than the title (design's sage).
+    color: var(--color-gray-1600);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.5;
+    }
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+// Mobile nav lives in a dropdown; the inline links hide on phone.
+.menuTrigger {
+    display: none;
+}
+
+.menuContent {
+    z-index: $z-header;
+    min-width: rem(180);
+    padding: rem(6);
+
+    // Tokens not touched by the header's dark override — same look on any background.
+    background-color: var(--color-media-bg);
+    border: 1px solid var(--color-beige);
+    border-radius: rem(6);
+    transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+
+    &[data-state="open"] {
+        animation: menu-in 0.3s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: menu-out 0.2s $ease-in forwards;
+    }
+}
+
+// Navigating away closes the menu instantly.
+.menuInstant[data-state="closed"] {
+    animation: none;
+}
+
+// A section heading inside the phone menu (Insights / Data / Docs): an
+// accordion toggle — its pages unfold indented below, the chevron flips.
+.menuSection {
+    @include flex(row, space-between, center);
+    @include font-size(12px, 1.3);
+
+    width: 100%;
+    padding: rem(10) rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+        color: var(--color-stone);
+        transition: rotate 0.25s $ease-out;
+    }
+
+    &:hover,
+    &:focus-visible {
+        background-color: var(--color-beige);
+        outline: none;
+    }
+}
+
+.menuSectionOpen svg {
+    rotate: 180deg;
+}
+
+// The accordion body: rows stay mounted; the grid row animates 0fr → 1fr
+// (heights need no measuring) while the inner clips its overflow.
+.menuSub {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s $ease-out;
+}
+
+.menuSubOpen {
+    grid-template-rows: 1fr;
+}
+
+.menuSubInner {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.menuItemSub {
+    padding-left: rem(24);
+}
+
+.menuSeparator {
+    height: 1px;
+    margin: rem(4) rem(2);
+    background-color: var(--color-beige);
+}
+
+.menuItem {
+    @include font-size(14px, 1.3);
+
+    display: block;
+    padding: rem(10) rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    border-radius: rem(4);
+
+    &:hover,
+    &:focus-visible {
+        background-color: var(--color-beige);
+        outline: none;
+    }
+
+    &[aria-current="page"] {
+        font-weight: 500;
+        background-color: var(--color-net-light);
+    }
+}
+
+@keyframes menu-in {
+    from {
+        scale: 0.9;
+        opacity: 0;
+    }
+}
+
+@keyframes menu-out {
+    to {
+        scale: 0.9;
+        opacity: 0;
+    }
+}
+
+@include breakpoint(phone) {
+    .nav {
+        display: none;
+    }
+
+    // Matches the account Button's phone icon segment (rem(36)).
+    .menuTrigger {
+        @include flex(row, center, center);
+
+        width: rem(36);
+        height: rem(36);
+        color: var(--color-gray-2800);
+        background-color: var(--color-yellow-800);
+        border: 0;
+        border-radius: rem(4);
+        cursor: pointer;
+        transition: background-color 0.25s ease;
+    }
+
+    // Phone keeps only the account button — text buttons hide.
+    .actions > *:not(.account) {
+        display: none;
+    }
+}
+
+.divider {
+    align-self: center;
+    width: 1px;
+    height: rem(28);
+    margin-inline: rem(6);
+    background-color: var(--color-yellow-800);
+    transition: background-color 0.25s ease;
+}
+
+// Dark variant — swapped in when a [data-nav-dark] section sits under the nav.
+.dark {
+    --color-text: var(--color-bg);
+    --color-yellow-800: var(--color-stone);
+    --color-yellow-800-hover: var(--color-stone-hover);
+    --color-gray-2700: var(--color-sage);
+    --color-gray-2700-hover: var(--color-popup);
+    --color-step-text: var(--color-charcoal);
+
+    .indicator,
+    .link::after {
+        background-color: var(--color-bg);
+    }
+
+    --logo-wave-color: var(--color-popup);
+
+    // Dropdown panels flip: light rows, charcoal type. The resting shade is
+    // the design's one-off (#B0B09A — no token holds it).
+
+    --dd-bg: #b0b09a;
+    --dd-bg-hover: var(--color-sage);
+    --dd-text: var(--color-charcoal);
+
+    .divider {
+        background-color: var(--color-stone);
+    }
+
+    // The avatar's own hover pair on the dark ground.
+    .account {
+        --seg-hover: var(--color-gray-1800-hover);
+    }
+
+    // Direct segments only — the button's inner .mover span must stay
+    // transparent or it covers the hover fill underneath.
+    .account > span,
+    .menuTrigger {
+        color: var(--color-gray-2800);
+        background-color: var(--color-gray-1800);
+    }
+}

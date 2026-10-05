@@ -1,0 +1,133 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Only what the landing doesn't already provide: the page shell, a smaller
+// title, the card, errors and the provider buttons. Stage, eyebrow, title
+// and lead come from StudioLanding.module.scss.
+.section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    overflow: hidden;
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+// The bar stays above the stage that's pulled up underneath it.
+.bar {
+    position: relative;
+    z-index: 2;
+}
+
+// The copy stack is centred on the PAGE, not on the space under the bar:
+// the stage is pulled up under the studio bar (rem(60)) so its centring box
+// spans the full viewport, with symmetric padding that clears the bar.
+.stage {
+    margin-top: rem(-60);
+    padding-block: rem(72);
+}
+
+// A notch below the landing's 60px — this page carries buttons, not a pitch.
+.title {
+    @include font-size(44px, 1.15);
+}
+
+.lead {
+    max-width: rem(400);
+    margin-bottom: min(#{rem(30)}, 3dvh);
+}
+
+// One card, one button per provider.
+.card {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    width: 100%;
+    max-width: rem(320);
+    padding: rem(10);
+    text-align: left;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.error {
+    @include font-size(12px, 1.3);
+
+    padding: rem(8) rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+    background-color: var(--color-net-light);
+    border-radius: rem(6);
+}
+
+// A provider: dark pill, the brand mark in a white well, the label beside.
+.provider {
+    @include flex(row, flex-start, center);
+    @include font-size(14px, 1.1);
+
+    gap: rem(12);
+    width: 100%;
+    height: rem(44);
+    padding: rem(6) rem(10) rem(6) rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-bg);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 0;
+    border-radius: rem(6);
+    transition: background-color 0.25s ease,
+        color 0.25s ease,
+        opacity 0.25s ease;
+
+    &:hover:not(:disabled) {
+        background-color: var(--color-gray-2600);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.7;
+    }
+}
+
+.providerMark {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(32);
+    height: rem(32);
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border-radius: rem(4);
+
+    svg {
+        width: rem(16);
+        height: rem(16);
+    }
+}
+
+.providerLabel {
+    flex: 1;
+    text-align: left;
+}
+
+@include breakpoint(phone) {
+    // Same line as the Studio landing's eyebrow (the stage is pulled up under
+    // the in-flow bar, so rem(160) counts from the viewport top).
+    .stage.stage {
+        justify-content: flex-start;
+        padding-block: rem(160) rem(60);
+    }
+
+    .title {
+        @include font-size(36px, 1.1);
+    }
+}

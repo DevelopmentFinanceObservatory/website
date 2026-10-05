@@ -1,0 +1,126 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    // Section-scoped button theme.
+
+    --color-yellow-800: var(--color-step-text);
+    --color-yellow-800-hover: var(--color-popup);
+
+    display: flex;
+    gap: rem(20);
+    align-items: flex-start;
+    padding: rem(60) rem(47) rem(100) rem(10);
+    background-color: var(--color-charcoal);
+}
+
+.grid {
+    display: flex;
+    flex-shrink: 0;
+    gap: rem(10);
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    gap: rem(10);
+
+    &:first-child {
+        margin-top: rem(85);
+    }
+
+    &:last-child {
+        margin-top: rem(225);
+    }
+}
+
+.box {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    width: rem(308);
+    height: rem(300);
+    padding: rem(20) rem(10) rem(10);
+    color: var(--color-bg);
+    background-color: var(--color-stone);
+    border-radius: rem(4);
+}
+
+.boxTitle {
+    @include font-size(26px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.boxText {
+    @include font-size(19px, 1.3);
+
+    margin-top: rem(49);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.boxButton {
+    align-self: flex-end;
+    margin-top: auto;
+}
+
+.headingBlock {
+    --section-label-color: var(--color-sage);
+    --section-heading-color: var(--color-step-text);
+    --text-fill-bg: var(--color-charcoal);
+
+    position: sticky;
+    top: rem(120);
+    flex: 1;
+
+    h2 {
+        max-width: rem(575);
+    }
+}
+
+@include breakpoint(not-desktop) {
+    .section {
+        flex-direction: column-reverse;
+        gap: rem(64);
+        padding-inline: var(--page-gutter);
+    }
+
+    // Sticky only makes sense next to the scrolling columns.
+    .headingBlock {
+        position: static;
+    }
+
+    .grid {
+        width: 100%;
+    }
+
+    .column {
+        flex: 1;
+
+        &:first-child,
+        &:last-child {
+            margin-top: 0;
+        }
+    }
+
+    .box {
+        width: 100%;
+    }
+}
+
+@include breakpoint(phone) {
+    .grid {
+        flex-direction: column;
+    }
+
+    .box {
+        width: 100%;
+        height: auto;
+        min-height: rem(240);
+    }
+}

@@ -1,0 +1,19 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// A ring: faint full circle, one quarter in currentColor, spinning.
+.spinner {
+    display: inline-block;
+    flex-shrink: 0;
+    border: 1.5px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    opacity: 0.8;
+    animation: spinner-turn 0.8s linear infinite;
+}
+
+@keyframes spinner-turn {
+    to {
+        rotate: 360deg;
+    }
+}

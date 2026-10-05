@@ -1,0 +1,64 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+:root {
+    --app-height: 100svh;
+    --page-gutter: #{rem(32)};
+    --color-lime: #{$color-lime};
+    --color-periwinkle: #{$color-periwinkle};
+    --color-charcoal: #{$color-charcoal};
+    --color-sage: #{$color-sage};
+    --color-sage-light: #{$color-sage-light};
+    --color-gray-1400: #{$color-gray-1400};
+    --color-gray-1500: #{$color-gray-1500};
+    --color-gray-1600: #{$color-gray-1600};
+    --color-popup: #{$color-popup};
+    --color-red: #{$color-red};
+    --color-mint: #{$color-mint};
+    --color-mint-dark: #{$color-mint-dark};
+    --color-red-light: #{$color-red-light};
+    --color-stone: #{$color-stone};
+    --color-beige: #{$color-beige};
+    --color-hero-wrapper: #{$color-hero-wrapper};
+    --color-hero-core: #{$color-hero-core};
+    --color-net-light: #{$color-net-light};
+    --color-net-mid: #{$color-net-mid};
+    --color-blue-gray: #{$color-blue-gray};
+    --color-yellow-800: #{$color-yellow-800};
+    --color-yellow-hover: #{$color-yellow-hover};
+    --color-stone-hover: #{$color-stone-hover};
+    --color-gray-1800-hover: #{$color-gray-1800-hover};
+    --color-gray-2650: #{$color-gray-2650};
+    --color-sage-dark: #{$color-sage-dark};
+
+    // Hover companion of --color-yellow-800: sections that remap the base
+    // remap this one alongside (stone→stone-hover, whites→popup).
+
+    --color-yellow-800-hover: #{$color-sage};
+    --color-gray-2700-hover: #{$color-gray-2600};
+    --color-yellow-stat: #{$color-yellow-stat};
+    --color-gray-1800: #{$color-gray-1800};
+    --color-gray-2600: #{$color-gray-2600};
+    --color-gray-2700: #{$color-gray-2700};
+    --color-gray-2800: #{$color-gray-2800};
+    --color-gray-2900: #{$color-gray-2900};
+    --color-grid-line-dark: #{$color-grid-line-dark};
+    --color-grid-dot-dark: #{$color-grid-dot-dark};
+    --color-grid-bg-light: #{$color-grid-bg-light};
+    --color-grid-line-light: #{$color-grid-line-light};
+    --color-grid-dot-light: #{$color-grid-dot-light};
+    --color-text-faded: #{$color-text-faded};
+    --color-stone-light: #{$color-stone-light};
+    --color-white: #{$color-white};
+    --color-bg: #{$color-bg};
+    --color-text: #{$color-text};
+    --color-text-muted: #{$color-text-muted};
+    --color-accent: #{$color-accent};
+    --color-surface: #{$color-surface};
+    --color-border: #{$color-border};
+    --color-step-text: #{$color-step-text};
+    --color-media-bg: #{$color-media-bg};
+    --color-panel-bg: #{$color-panel-bg};
+    --font-outfit: #{$font-outfit};
+    --font-dm-mono: #{$font-dm-mono};
+}

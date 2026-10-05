@@ -1,0 +1,356 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+.title {
+    @include font-size(60px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+// --- Body: nav | content ---------------------------------------------------
+
+// The nav column (rem(202)) hugs the left edge, rem(10) in; a matching empty
+// column on the right keeps the content centred — rem(100) under the hero.
+// minmax(0, 1fr): a wide table or code line scrolls inside its own box
+// instead of widening the column past the screen.
+.body {
+    display: grid;
+    grid-template-columns: rem(202) minmax(0, 1fr) rem(202);
+    gap: rem(40);
+    padding: rem(100) rem(10) 0;
+}
+
+.nav {
+    position: sticky;
+    top: rem(100);
+    align-self: start;
+}
+
+// The items hang off a hairline; the current one darkens its stretch of it.
+.items {
+    list-style: none;
+    border-left: 1px solid var(--color-net-mid);
+}
+
+.item {
+    position: relative;
+    padding-left: rem(18);
+    margin-bottom: rem(8);
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.itemActive::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    content: "";
+    background-color: var(--color-charcoal);
+}
+
+.itemLink {
+    @include font-size(14px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.7;
+    }
+
+    .itemActive > & {
+        font-weight: 700;
+    }
+}
+
+.content {
+    width: min(100%, #{rem(624)});
+    min-width: 0;
+    margin-inline: auto;
+}
+
+.sectionTitle {
+    @include font-size(36px, 0.95);
+
+    margin-bottom: rem(48);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+// --- Nav tree ---------------------------------------------------------------
+
+.treeColumn {
+    max-height: calc(100svh - #{rem(140)});
+    overflow-y: auto;
+}
+
+// A nested group sits on the same hairline rhythm, one step in.
+.group > ul {
+    margin-top: rem(8);
+}
+
+.groupSummary {
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+        display: none;
+    }
+}
+
+.treePhone {
+    display: none;
+}
+
+.treePhoneSummary {
+    @include font-size(14px, 1.1);
+
+    padding: rem(12) rem(14);
+    margin-bottom: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background-color: var(--color-white);
+    border-radius: rem(6);
+}
+
+// --- Page -------------------------------------------------------------------
+
+.crumbs {
+    @include font-size(11px, 1.3);
+
+    margin-bottom: rem(16);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+.external {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(12);
+    padding: rem(24);
+    color: var(--color-charcoal);
+    text-decoration: none;
+    background-color: var(--color-white);
+    border-radius: rem(6);
+}
+
+.externalText {
+    @include font-size(19px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+}
+
+.externalLink {
+    @include font-size(13px, 1.2);
+
+    font-family: var(--font-dm-mono);
+    text-decoration: underline;
+}
+
+.raw {
+    @include font-size(12px, 1.3);
+
+    margin-top: rem(60);
+    font-family: var(--font-dm-mono);
+
+    a {
+        color: var(--color-stone);
+    }
+}
+
+// --- Rendered markdown --------------------------------------------------------
+
+.prose {
+    @include font-size(17px, 1.45);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+
+    > * + * {
+        margin-top: rem(18);
+    }
+
+    a {
+        color: inherit;
+        text-underline-offset: 0.15em;
+    }
+
+    strong {
+        font-weight: 600;
+    }
+
+    ul,
+    ol {
+        padding-left: rem(22);
+    }
+
+    li + li {
+        margin-top: rem(6);
+    }
+
+    :not(pre) > code {
+        @include font-size(14px, 1.3);
+
+        padding: rem(1) rem(5);
+        font-family: var(--font-dm-mono);
+        background-color: var(--color-white);
+        border-radius: rem(4);
+    }
+
+    hr {
+        border: 0;
+        border-top: 1px solid var(--color-net-mid);
+    }
+}
+
+.h2,
+.h3,
+.h4 {
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    scroll-margin-top: rem(100);
+
+    .prose > & {
+        margin-top: rem(48);
+    }
+}
+
+.h2 {
+    @include font-size(28px, 1);
+}
+
+.h3 {
+    @include font-size(21px, 1.1);
+}
+
+.h4 {
+    @include font-size(17px, 1.2);
+}
+
+.code {
+    pre {
+        @include font-size(13px, 1.5);
+
+        padding: rem(14) rem(16);
+        overflow-x: auto;
+        font-family: var(--font-dm-mono);
+        background-color: var(--color-white);
+        border: 1px solid var(--color-net-mid);
+        border-radius: rem(6);
+    }
+}
+
+.codeTitle {
+    @include font-size(12px, 1.2);
+
+    margin-bottom: rem(6);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+}
+
+.tableScroll {
+    overflow-x: auto;
+
+    table {
+        @include font-size(14px, 1.35);
+
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: rem(8) rem(10);
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--color-net-mid);
+    }
+
+    th {
+        font-weight: 600;
+    }
+}
+
+// GitHub alerts: a white card with the kind as a mono label, tinted rule.
+.callout {
+    padding: rem(14) rem(18);
+    background-color: var(--color-white);
+    border-left: 3px solid var(--color-sage);
+    border-radius: rem(6);
+
+    &[data-kind="warning"],
+    &[data-kind="caution"] {
+        border-left-color: var(--color-red);
+    }
+
+    > * + * {
+        margin-top: rem(8);
+    }
+}
+
+.calloutTitle {
+    @include font-size(11px, 1.2);
+
+    font-family: var(--font-dm-mono);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+@include breakpoint(tablet) {
+    .body {
+        grid-template-columns: rem(202) minmax(0, 1fr);
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .body {
+        grid-template-columns: minmax(0, 1fr);
+        gap: rem(30);
+        padding: rem(60) var(--page-gutter) 0;
+    }
+
+    .nav {
+        position: static;
+    }
+
+    .sectionTitle {
+        @include font-size(30px, 0.95);
+    }
+
+    .treeColumn {
+        display: none;
+    }
+
+    .treePhone {
+        display: block;
+    }
+}

@@ -1,0 +1,63 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.card {
+    @include flex(column, flex-start, stretch);
+
+    width: 100%;
+    padding: rem(30) rem(20);
+    text-align: left;
+    color: inherit;
+    background-color: var(--color-white);
+}
+
+.rounded {
+    border-radius: rem(6);
+}
+
+.clickable {
+    cursor: pointer;
+    border: 0;
+    transition: background-color 0.25s ease;
+
+    &:hover {
+        background-color: var(--color-grid-bg-light);
+    }
+}
+
+.head {
+    @include flex(row, space-between, center);
+
+    gap: rem(20);
+    min-height: rem(28);
+    margin-bottom: rem(12);
+}
+
+.title {
+    @include font-size(20px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.text {
+    @include font-size(19px, 1.3);
+
+    display: block;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Phone: the head's meta ("Expected: Q3 2026", a vote button) drops under
+// the title when the two don't share the width.
+@include breakpoint(phone) {
+    .head {
+        flex-wrap: wrap;
+        row-gap: rem(10);
+    }
+}

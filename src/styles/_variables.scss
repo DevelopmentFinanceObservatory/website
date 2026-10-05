@@ -1,0 +1,79 @@
+$color-lime: #c3fd3e;
+$color-periwinkle: #b8c0ff;
+$color-charcoal: #484842;
+$color-sage: #cdcdb6;
+$color-sage-light: #c6cebc;
+$color-gray-1400: #bbb;
+$color-gray-1500: #abb4b7;
+$color-stone: #5e5e52;
+$color-stone-light: #b4b4a6;
+$color-beige: #d2d2c5;
+$color-hero-wrapper: #e8e8d5;
+$color-hero-core: #e8e8ce;
+$color-net-light: #ececdb;
+$color-net-mid: #e8e8ce;
+$color-net-mid: #e0e0c7;
+$color-blue-gray: #656b71;
+$color-yellow-800: #e0e0c7;
+$color-yellow-hover: #fdeb82;
+$color-stone-hover: #72725f;
+$color-gray-1800-hover: #8d9399;
+$color-gray-2650: #4e4e48;
+$color-sage-dark: #afb9a4;
+$color-yellow-stat: #ebd243;
+$color-gray-1800: #848484;
+$color-gray-2600: #626251;
+$color-gray-1600: #a2ae95;
+$color-popup: #e8e8d5;
+$color-red: #c70202;
+$color-mint: #b3efdc;
+$color-mint-dark: #147a5f;
+$color-red-light: #f8dcd6;
+$color-gray-2700: #484842;
+$color-gray-2800: #3d3d3d;
+$color-gray-2900: #363636;
+$color-grid-line-dark: #454545;
+$color-grid-dot-dark: #8f8f87;
+$color-grid-bg-light: #f7f7ee;
+$color-grid-line-light: #e5e5d3;
+$color-grid-dot-light: #90907c;
+$color-text-faded: #b0b0a2;
+$color-white: #fff;
+$color-bg: #f6f6e8;
+$color-text: $color-charcoal;
+$color-text-muted: #5c5c5c;
+$color-accent: $color-lime;
+$color-surface: $color-periwinkle;
+$color-border: #e0e0e0;
+$color-step-text: #f7f7ee;
+$color-media-bg: #ededde;
+$color-panel-bg: rgb(237 237 222 / 70%);
+$font-outfit: "Outfit", system-ui, sans-serif;
+$font-dm-mono: "DM Mono", ui-monospace, monospace;
+$ease-in: cubic-bezier(0.895, 0.03, 0.685, 0.22);
+$ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
+$ease-custom: cubic-bezier(0.5, 0, 0.2, 1);
+$reveal-stagger: 0.09s;
+$line-height: 1.5;
+$size-hd: 1800px;
+$size-desktop: 1024px;
+$size-big: 1440px;
+$size-wide: 1680px;
+$size-tablet: 660px;
+$size-min: 320px;
+$size-laptop-height: 710px;
+$widths: (
+    desktop: 1280,
+    tablet: 768,
+    phone: 375,
+);
+$heights: (
+    desktop: 750,
+    tablet: 1024,
+    phone: 667,
+);
+$container-max: 1200px;
+$container-padding: 1.5rem;
+$z-hero: 9;
+$z-footer: 200;
+$z-header: 300;

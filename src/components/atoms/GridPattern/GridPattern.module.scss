@@ -1,0 +1,31 @@
+.pattern {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: var(--grid-bg);
+    border-radius: inherit;
+}
+
+.dark {
+    --grid-bg: var(--color-gray-2900);
+    --grid-line: var(--color-grid-line-dark);
+    --grid-dot: var(--color-grid-dot-dark);
+}
+
+.light {
+    --grid-bg: var(--color-grid-bg-light);
+    --grid-line: var(--color-grid-line-light);
+    --grid-dot: var(--color-grid-dot-light);
+}
+
+.line {
+    fill: none;
+    stroke: var(--grid-line);
+    stroke-width: 1;
+}
+
+.dot {
+    fill: var(--grid-dot);
+}

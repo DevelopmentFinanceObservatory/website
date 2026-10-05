@@ -1,0 +1,473 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The rem(836) content column's insets.
+.section {
+    --search-inset: #{rem(30)};
+
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+// --- Hero contents (the box itself is PageHero) -------------------------------
+
+.title {
+    @include flex(row, flex-start, center);
+    @include font-size(60px, 0.95);
+
+    gap: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+// "Last checked…" and the subscribe link (PageHero's aside, right of the box).
+.heroAside {
+    @include font-size(19px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    text-align: right;
+    letter-spacing: -0.01em;
+}
+
+// --- Status chip: dot + label on the status colour --------------------------
+
+.chip {
+    @include flex(row, center, center);
+    @include font-size(14px, 1.09);
+
+    gap: rem(6);
+    height: rem(28);
+    padding: 0 rem(8);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: #139955;
+    letter-spacing: -0.031em;
+    white-space: nowrap;
+    background-color: rgb(115 224 169 / 30%);
+    border-radius: rem(4);
+}
+
+// The marker: a small empty square.
+.chipDot {
+    width: rem(3);
+    height: rem(3);
+    border: 1px solid currentColor;
+}
+
+.chipCheck {
+    width: rem(10);
+    height: rem(10);
+}
+
+// stylelint-disable selector-class-pattern -- keyed by status id
+.chip_degraded {
+    color: #8a5a00;
+    background-color: #ffe7b3;
+}
+
+.chip_outage {
+    color: var(--color-red);
+    background-color: var(--color-red-light);
+}
+// stylelint-enable selector-class-pattern
+
+// --- Body: the rem(836) column ----------------------------------------------
+
+.body {
+    max-width: calc(#{rem(836)} + 2 * var(--search-inset));
+    padding: rem(100) var(--search-inset) 0;
+    margin-inline: auto;
+}
+
+// The notify box: dark, copy left, the email form bottom-right.
+.notify {
+    @include flex(row, space-between, flex-end);
+
+    gap: rem(30);
+    padding: rem(20);
+    color: var(--color-bg);
+    background-color: var(--color-gray-2700);
+    border-radius: rem(4);
+    animation: rise-in 0.5s $ease-out both;
+}
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.notifyTitle {
+    @include font-size(20px, 0.95);
+
+    margin-bottom: rem(12);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.notifyLead {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(500);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.notifyForm {
+    @include flex(row, flex-end, center);
+
+    flex-shrink: 0;
+    gap: 1px;
+}
+
+.emailInput {
+    @include font-size(11px, 1);
+
+    width: rem(190);
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-net-light);
+    border: 0;
+    border-radius: rem(4);
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-charcoal);
+    }
+
+    &:focus {
+        background-color: var(--color-white);
+    }
+}
+
+.notifyDone {
+    @include flex(row, flex-end, center);
+    @include font-size(11px, 1);
+
+    gap: rem(6);
+    height: rem(28);
+    font-family: var(--font-dm-mono);
+    color: var(--color-mint);
+    letter-spacing: -0.02em;
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+    }
+}
+
+// "All Services" / "Incident History"
+.heading {
+    @include font-size(24px, 0.95);
+
+    margin-top: rem(100);
+    margin-bottom: rem(60);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.headingIncidents {
+    margin-top: rem(60);
+}
+
+// --- Services: hairline rows opening to the strip and the stats -------------
+
+.services {
+    list-style: none;
+}
+
+.service {
+    border-bottom: 1px solid var(--color-net-mid);
+    animation: rise-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+}
+
+.serviceHead {
+    @include flex(row, space-between, center);
+
+    width: 100%;
+    padding: rem(30) 0;
+    text-align: left;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+}
+
+.serviceName {
+    @include font-size(36px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.serviceMeta {
+    @include flex(row, flex-end, center);
+
+    gap: rem(23);
+}
+
+.uptime {
+    @include font-size(14px, 1);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+.chevron {
+    width: rem(20);
+    height: rem(20);
+    transition: rotate 0.3s $ease-custom;
+
+    .serviceOpen & {
+        rotate: 180deg;
+    }
+}
+
+// Grid-rows accordion.
+.serviceBody {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s $ease-custom;
+
+    .serviceOpen & {
+        grid-template-rows: 1fr;
+    }
+}
+
+.serviceBodyInner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.stripLabels {
+    @include flex(row, space-between, center);
+    @include font-size(14px, 1);
+
+    margin-bottom: rem(18);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+// 90 thin bars, oldest left; up green, degraded amber, down red.
+.strip {
+    display: grid;
+    grid-template-columns: repeat(90, #{rem(2)});
+
+    // The bars run edge to edge (≈ rem(7) between them at the column's width).
+    justify-content: space-between;
+    height: rem(45);
+}
+
+.day {
+    background-color: #4a9d5b;
+    border-radius: 1px;
+
+    &[data-state="degraded"] {
+        background-color: #e8a33d;
+    }
+
+    &[data-state="down"] {
+        background-color: var(--color-red);
+    }
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: rem(20);
+    margin-top: rem(24);
+    margin-bottom: rem(30);
+}
+
+.statValue {
+    @include font-size(24px, 0.95);
+
+    margin-bottom: rem(16);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--color-charcoal);
+    letter-spacing: -0.04em;
+}
+
+.statLabel {
+    @include font-size(14px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+}
+
+// --- Incidents: the date chip glued to a white card -------------------------
+
+.incidents {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+    list-style: none;
+}
+
+.incident {
+    display: grid;
+    grid-template-columns: rem(200) 1fr;
+    gap: 1px;
+    align-items: start;
+    animation: rise-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+}
+
+.incidentDate {
+    @include flex(row, center, center);
+    @include font-size(20px, 1);
+
+    height: rem(26);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-bg);
+    text-align: center;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    background-color: var(--color-charcoal);
+    border-radius: rem(4);
+}
+
+.incidentFacts {
+    display: grid;
+    margin-top: rem(30);
+    grid-template-columns: repeat(3, auto);
+    gap: rem(40);
+    justify-content: start;
+
+    dt {
+        @include font-size(16px, 1.3);
+
+        margin-bottom: rem(20);
+        font-family: var(--font-outfit);
+        font-weight: 500;
+        color: var(--color-charcoal);
+        letter-spacing: -0.01em;
+    }
+
+    dd {
+        @include font-size(14px, 1);
+
+        font-family: var(--font-dm-mono);
+        color: var(--color-charcoal);
+        text-transform: uppercase;
+        letter-spacing: -0.02em;
+    }
+}
+
+.viewAll {
+    @include flex(row, flex-end, center);
+
+    margin-top: rem(60);
+}
+
+// rem(100) from View All to the footer's dark.
+
+@include breakpoint(not-desktop) {
+    // Over the box (PageHero moves the aside up there): left-aligned.
+    .heroAside {
+        text-align: left;
+    }
+}
+
+@include breakpoint(tablet) {
+    .notify {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+
+        flex-wrap: wrap;
+        gap: rem(12);
+    }
+
+    .body {
+        padding: rem(60) var(--page-gutter) 0;
+    }
+
+    .notify {
+        flex-direction: column;
+        gap: rem(20);
+        align-items: flex-start;
+    }
+
+    .notifyForm {
+        width: 100%;
+    }
+
+    // As tall as the (phone-size) button beside it.
+    .emailInput {
+        @include font-size(13px, 1);
+
+        flex: 1;
+        width: auto;
+        height: rem(36);
+    }
+
+    .heading {
+        margin-top: rem(60);
+    }
+
+    .serviceHead {
+        flex-wrap: wrap;
+        gap: rem(12);
+        padding: rem(24) 0;
+    }
+
+    .serviceName {
+        @include font-size(28px, 0.95);
+
+        width: 100%;
+    }
+
+    .serviceMeta {
+        gap: rem(12);
+    }
+
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    // The date chip over the card, the facts stacked.
+    .incident {
+        grid-template-columns: 1fr;
+    }
+
+    .incidentDate {
+        justify-self: start;
+    }
+
+    .incidentFacts {
+        grid-template-columns: 1fr;
+        gap: rem(16);
+    }
+}

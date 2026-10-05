@@ -1,0 +1,511 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.hero {
+    position: relative;
+    z-index: $z-hero;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+
+    // The only in-flow child is the signature — this parks it at the
+    // bottom corner, where its sticky offset takes over.
+    justify-content: flex-end;
+    height: 100svh;
+
+    // `clip`, not `hidden`: hidden would make the hero its own scroll
+    // container and the signature would stick to the hero's box instead
+    // of the viewport.
+    overflow: clip;
+    background-color: var(--color-bg);
+}
+
+.decor {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+// Hero-only entrances: same data-reveal/data-revealed clock as everywhere
+// (so triggers, resets and the stagger indices stay systemic), but the
+// motion is bespoke — declared here, later in the cascade than _reveal, so
+// these override the stock rise at equal specificity.
+
+// The map settles from closer in — a satellite pulling back — instead of
+// rising. No translate at all; just the slow zoom-out and the fade.
+.decor[data-reveal] {
+    translate: 0 0;
+    scale: 1.08;
+    transform-origin: 50% 35%;
+    transition: opacity 0.4s $ease-in,
+        scale 0.4s $ease-in;
+}
+
+.hero[data-revealed] .decor {
+    translate: 0 0;
+    scale: 1;
+    transition: opacity 0.9s $ease-out,
+        scale 1.6s $ease-out;
+}
+
+.map {
+    position: absolute;
+
+    // Glued to the hero's top edge, full design width. The viewBox runs to
+    // 826 (South America's tip included), so on ordinary viewport heights
+    // the whole drawing fits; only a short window crops the bottom.
+    top: rem(-50);
+    left: 0;
+    width: rem(1280);
+    height: auto;
+    pointer-events: none;
+
+    path {
+        fill: none;
+        stroke: var(--color-beige);
+    }
+}
+
+// The hero enters like the live site: the map first, then the boxes in
+// strict 1-2-3 order — the wrapper panel, then the canvas squares (they ARE
+// the middle box: .inner has no ground of its own, so hero-net's
+// INTRO_HOLD_MS sits between the wrapper's beat and $hero-core-delay), then
+// the text box, with the words riding that third panel's scale.
+// The map takes the stage alone first — everything else waits this long
+// before its own beat starts.
+$hero-wait: 0.3s;
+$hero-core-delay: $hero-wait + 0.55s;
+
+// The text rides the core's own entrance (the reference site starts the
+// words 0.65s into the core's scale), tighter than the stock stagger
+// (indices start at 5 — the formula rebases them).
+$hero-text-delay: $hero-core-delay + 0.45s;
+$hero-text-stagger: 0.09s;
+
+// The three panels telescope out of the bottom-left corner, mirroring the
+// live developmentfinance.org hero: scale 0 → 1 with the origin pinned to
+// that corner, 1.5s on the custom ease, each starting 0.15s behind the one
+// before (the nested scales compound — that IS the look). No fades: the
+// panels are solid the whole way.
+.wrapper[data-reveal] {
+    scale: 0;
+    opacity: 1;
+    translate: 0 0;
+    transform-origin: 0 100%;
+    transition: scale 0.3s $ease-in;
+}
+
+.hero[data-revealed] .wrapper {
+    scale: 1;
+    opacity: 1;
+    translate: 0 0;
+    transition: scale 1.1s $ease-custom calc(#{$hero-wait} + 0.05s);
+}
+
+.wrapper[data-reveal] .inner {
+    scale: 0;
+    transform-origin: 0 100%;
+    transition: scale 0.3s $ease-in;
+}
+
+.hero[data-revealed] .inner {
+    scale: 1;
+    transition: scale 1.1s $ease-custom calc(#{$hero-wait} + 0.15s);
+}
+
+.wrapper {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    justify-content: flex-start;
+    width: rem(1126);
+    height: rem(524);
+    background-color: var(--color-hero-wrapper);
+}
+
+.inner {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    justify-content: flex-start;
+    width: rem(901);
+    height: rem(484);
+    overflow: hidden;
+}
+
+.net {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+// The third panel of the telescope (see the block above the wrapper).
+.core[data-reveal] {
+    scale: 0;
+    opacity: 1;
+    translate: 0 0;
+    transform-origin: 0 100%;
+    transition: scale 0.3s $ease-in;
+}
+
+.hero[data-revealed] .core {
+    scale: 1;
+    opacity: 1;
+    translate: 0 0;
+    transition: scale 1.1s $ease-custom $hero-core-delay;
+}
+
+.core {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    width: rem(710);
+    height: rem(399);
+    padding: 0 rem(15) rem(10) rem(10);
+    background-color: var(--color-hero-core);
+}
+
+.tagline {
+    @include font-size(68px, 0.95);
+
+    margin: 0 0 rem(63);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--color-charcoal);
+    letter-spacing: -0.04em;
+}
+
+.line {
+    display: block;
+}
+
+// The phone's three-line split hides until its breakpoint.
+.linePhone {
+    display: none;
+}
+
+// Header & body enter from behind a mask instead of the stock fade-rise:
+// each element starts a full height below its own box with a matching clip,
+// and both retreat on the same clock — so in screen space the mask line
+// (the element's final bottom edge) never moves while the words slide up
+// from under it. No opacity, no scale. The negative outsets keep ascenders
+// and descenders of the tight line-height out of the final clip.
+.line[data-reveal],
+.description[data-reveal] {
+    opacity: 1;
+    translate: 0 100%;
+    clip-path: inset(-0.2em 0 100% 0);
+    transition: translate 0.3s $ease-in,
+        clip-path 0.3s $ease-in;
+}
+
+.hero[data-revealed] .line,
+.hero[data-revealed] .description {
+    opacity: 1;
+    translate: 0 0;
+    clip-path: inset(-0.2em 0 -0.2em 0);
+    transition: translate 0.8s $ease-out,
+        clip-path 0.8s $ease-out;
+}
+
+// The closing beat: the text rides its indices — only the clock starts
+// after the core (exit stays immediate; the delay rides the revealed state
+// alone). Declared after the mask shorthands above, so it survives them.
+.hero[data-revealed] .line,
+.hero[data-revealed] .scroll,
+.hero[data-revealed] .description {
+    transition-delay: calc(#{$hero-text-delay} + (var(--i, 5) - 5) * #{$hero-text-stagger});
+}
+
+.bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: rem(24);
+}
+
+// The intro paragraph and, right beneath it, the platform credit. Google
+// asked for it here: under the scroll cue it read as "get started with
+// Data Commons".
+.intro {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: rem(413);
+
+    // Sits a touch above the row's baseline (the Get Started link keeps it).
+    margin: 0 rem(60) rem(17) auto;
+}
+
+// The platform credit ("Built on Data Commons by Google"): a quiet mono
+// line — present above the fold, never competing with the tagline.
+.credit {
+    @include font-size(11px, 1.2);
+
+    margin-top: rem(14);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+// Hover dims the CHILDREN, not the link — the link is a [data-reveal] element
+// whose reveal transition (with its stagger delay) would swallow the hover.
+.scroll {
+    display: inline-flex;
+    gap: rem(11);
+    align-items: center;
+    color: var(--color-charcoal);
+    text-decoration: none;
+
+    > * {
+        transition: opacity 0.25s ease;
+    }
+
+    &:hover > * {
+        opacity: 0.6;
+    }
+}
+
+.title {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.scroll svg {
+    width: rem(16);
+    height: rem(16);
+}
+
+// The arrow swaps on hover exactly like a Button's: the mover flies out
+// the bottom while the copy from above rides into its place; the one-shot
+// class comes off on a pixel-identical frame, so the reset is invisible.
+// Timings mirror Button.tsx's ARROW_MS via Hero.tsx's ARROW_SWAP_MS.
+.arrow {
+    @include flex(row, center, center);
+
+    position: relative;
+    width: rem(16);
+    height: rem(16);
+    overflow: hidden;
+}
+
+.arrowMover {
+    @include flex(row, center, center);
+
+    width: 100%;
+    height: 100%;
+
+    svg:last-child {
+        position: absolute;
+        inset: 0;
+        translate: 0 -130%;
+    }
+}
+
+.scrollSwapping .arrowMover {
+    animation: arrow-swap 0.75s $ease-custom;
+}
+
+@keyframes arrow-swap {
+    100% {
+        translate: 0 130%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scrollSwapping .arrowMover {
+        animation: none;
+    }
+
+    // The bespoke entrances bow out with the rest of the reveal system.
+    .decor[data-reveal],
+    .wrapper[data-reveal],
+    .wrapper[data-reveal] .inner,
+    .core[data-reveal],
+    .signature[data-reveal] {
+        translate: 0 0;
+        scale: 1;
+        transition: none;
+    }
+
+    .line[data-reveal],
+    .description[data-reveal] {
+        translate: 0 0;
+        clip-path: none;
+        transition: none;
+    }
+}
+
+.description {
+    @include font-size(19px, 1.2);
+
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Sticks rem(48) above the screen's bottom edge (clear of the feedback
+// badge) while the hero is on screen, then rides up with the hero's own
+// bottom edge — never under the next section.
+.signature {
+    position: sticky;
+    bottom: rem(48);
+    z-index: 1;
+    width: rem(132);
+    height: auto;
+    margin: 0 rem(10) rem(12) 0;
+    color: var(--color-charcoal);
+}
+
+// The signature rises in from below its resting spot.
+.signature[data-reveal] {
+    translate: 0 rem(28);
+    scale: 1;
+    transition: opacity 0.3s $ease-in,
+        translate 0.3s $ease-in;
+}
+
+.hero[data-revealed] .signature {
+    translate: 0 0;
+    transition: opacity 0.9s $ease-out calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger),
+        translate 0.9s $ease-out calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger);
+}
+
+@include breakpoint(not-desktop) {
+    .wrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .inner,
+    .core {
+        width: 100%;
+    }
+
+    .map {
+        left: 50%;
+        width: 200%;
+        max-width: none;
+        transform: translateX(-42%);
+    }
+
+    .core {
+        padding-inline: var(--page-gutter);
+    }
+
+    // Description drops under the heading; the signature logo gets its own room.
+    .bottom {
+        flex-direction: column-reverse;
+        gap: rem(24);
+        align-items: flex-start;
+    }
+
+    .intro {
+        margin: 0;
+    }
+}
+
+@include breakpoint(tablet) {
+    // Logo (132) gets the same gap to the wrapper and to the screen edge.
+    .wrapper {
+        width: calc(100% - #{rem(132)} - var(--page-gutter) * 2);
+        height: auto;
+        min-height: rem(650);
+    }
+
+    // Tall canvas strip above the core so the drifting squares get room to play.
+    .inner {
+        height: auto;
+        min-height: rem(610);
+    }
+
+    .core {
+        height: auto;
+        min-height: rem(399);
+        padding-top: rem(24);
+    }
+
+    .tagline {
+        margin-bottom: rem(32);
+    }
+
+    // Sits on the global page baseline.
+    .signature {
+        margin-right: var(--page-gutter);
+    }
+}
+
+@include breakpoint(phone) {
+    .wrapper {
+        height: auto;
+        min-height: rem(560);
+    }
+
+    .inner {
+        height: auto;
+        min-height: rem(520);
+    }
+
+    .core {
+        width: 100%;
+        height: auto;
+        padding-block: rem(28) rem(20);
+    }
+
+    .bottom {
+        gap: rem(72);
+    }
+
+    .tagline {
+        @include font-size(44, 0.95);
+
+        margin-bottom: rem(28);
+    }
+
+    // Swap to the split that reads right at this width ("Development" /
+    // "Finance Data" / "Simplified.") — same spans, same reveal.
+    .lineWide {
+        display: none;
+    }
+
+    .linePhone {
+        display: block;
+    }
+
+    .description {
+        @include font-size(18, 1.35);
+    }
+
+    // Above the feedback badge (rem(30) on the bottom edge), not under it.
+    .signature {
+        bottom: rem(46);
+        width: rem(100);
+        margin-right: var(--page-gutter);
+        margin-bottom: rem(12);
+    }
+}

@@ -1,0 +1,73 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+@use "root";
+@use "reset";
+@use "reveal";
+@use "layout";
+@use "typography";
+
+@include breakpoint(phone) {
+    :root {
+        --page-gutter: #{rem(16)};
+    }
+}
+
+html {
+    font-size: vw($browser-context);
+
+    // What shows behind the safe areas and on overscroll.
+    background-color: var(--color-bg);
+
+    @include breakpoint(tablet) {
+        font-size: vw($browser-context, tablet);
+    }
+
+    @include breakpoint(phone) {
+        font-size: vw($browser-context, phone);
+    }
+}
+
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background-color: var(--color-bg);
+}
+
+// Keeps the footer pinned to the bottom on short pages.
+main {
+    flex: 1 0 auto;
+}
+
+body {
+    font-family: var(--font-outfit);
+    background-color: var(--color-bg);
+}
+
+html,
+body {
+    -webkit-font-smoothing: subpixel-antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
+}
+
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* stylelint-disable-next-line property-no-vendor-prefix */
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+    box-sizing: border-box;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+
+    &:focus {
+        outline: none;
+    }
+}

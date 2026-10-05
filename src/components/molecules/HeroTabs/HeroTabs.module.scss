@@ -1,0 +1,78 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.tabs {
+    @include flex(row, flex-start, flex-end);
+
+    align-self: stretch;
+    margin-top: auto;
+}
+
+// Every label is followed by --tab-air, so the next tab starts there; the
+// bottom padding holds the tongue plus the gap above it.
+.tab {
+    @include font-size(19px, 1.3);
+
+    position: relative;
+    padding: 0 var(--tab-air) calc(var(--tongue-h) + var(--tab-gap)) 0;
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: inherit;
+    text-align: left;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.8;
+    }
+
+    // The tongue: from the label's start, continuing into the page ground.
+    &::after {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: var(--tongue-w);
+        height: var(--tongue-h);
+        content: "";
+        background-color: var(--color-bg);
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+}
+
+.tabActive::after {
+    opacity: 1;
+}
+
+// Tablet and phone: the tabs stack under each other; the tongue (meant to
+// run into the ground below the box) becomes a short underline under the
+// active label, the rest sit back.
+@include breakpoint(not-desktop) {
+    .tabs {
+        flex-direction: column;
+        gap: rem(14);
+        align-items: flex-start;
+        margin-top: 0;
+        padding-bottom: rem(20);
+    }
+
+    .tab {
+        @include font-size(17px, 1.3);
+
+        padding: 0 0 rem(4);
+        opacity: 0.6;
+
+        &::after {
+            width: 100%;
+            height: 2px;
+        }
+    }
+
+    .tabActive {
+        opacity: 1;
+    }
+}

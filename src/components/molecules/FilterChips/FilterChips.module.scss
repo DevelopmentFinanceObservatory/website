@@ -1,0 +1,74 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.chips {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(6);
+}
+
+.chipsTight {
+    gap: 2px;
+}
+
+// Mono label on the group's colour (--chip; "All" is the light ground, or
+// the dark one), the count as a tiny dark square riding the top-right corner.
+.chip {
+    @include flex(row, center, center);
+    @include font-size(14px, 1);
+
+    --chip: var(--color-media-bg);
+
+    position: relative;
+    height: rem(30);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    text-align: center;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background-color: var(--chip);
+    border: 0;
+    border-radius: rem(4);
+    opacity: 0.6;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 1;
+    }
+}
+
+.chipDark {
+    --chip: var(--color-charcoal);
+
+    color: var(--color-bg);
+}
+
+.chipActive {
+    opacity: 1;
+}
+
+.chipCount {
+    @include flex(row, center, center);
+    @include font-size(11px, 1);
+
+    // In flow, so the chip grows with the digits. The negative right margin
+    // pulls the square back over the chip's padding to 1px from the corner.
+    flex-shrink: 0;
+    align-self: flex-start;
+    margin: 1px rem(-9) 0 rem(4);
+    min-width: rem(12);
+    height: rem(12);
+    padding: 0 rem(2);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+
+    // The digit takes the chip's own colour on the dark square.
+    color: var(--chip);
+    text-align: center;
+    letter-spacing: -0.02em;
+    background-color: var(--color-charcoal);
+    border-radius: rem(4);
+}

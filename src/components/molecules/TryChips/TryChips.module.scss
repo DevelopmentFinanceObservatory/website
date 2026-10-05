@@ -1,0 +1,88 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Themeable via --prompt-label / --prompt-chip-text / --prompt-chip-bg /
+// --prompt-chip-hover-bg.
+.try {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: rem(12);
+    align-items: flex-start;
+}
+
+.tryHidden {
+    display: none;
+}
+
+// Wrapped rows align with the first tag, not under the "Try" label.
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: rem(12);
+}
+
+.tryLabel {
+    @include font-size(19px, 1.3);
+
+    display: flex;
+    align-items: center;
+    height: rem(31);
+    margin-right: rem(14);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--prompt-label, var(--color-charcoal));
+    letter-spacing: -0.01em;
+}
+
+.chip {
+    @include font-size(16px, 1.3);
+
+    display: inline-flex;
+    align-items: center;
+    height: rem(31);
+    padding-inline: rem(14);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--prompt-chip-text, var(--color-charcoal));
+    letter-spacing: -0.01em;
+    background-color: var(--prompt-chip-bg, var(--color-hero-core));
+    border: 0;
+    border-radius: rem(24);
+    cursor: pointer;
+
+    // No own transition: the chip is a [data-reveal] element, and a same-
+    // specificity shorthand here would override the reveal exit transition
+    // (chips would pop out instantly). The reveal lists cover bg/color too.
+    &:hover {
+        background-color: var(--prompt-chip-hover-bg, var(--color-yellow-800));
+    }
+}
+
+@include breakpoint(phone) {
+    // "Try" above the chips; chips as full-width left-aligned rows.
+    .try {
+        flex-direction: column;
+        gap: rem(14);
+    }
+
+    .tryLabel {
+        height: auto;
+    }
+
+    .chips {
+        gap: rem(8);
+    }
+
+    // Tighter type and padding so the short queries pair up two to a row.
+    .chip {
+        @include font-size(13px, 1.3);
+
+        height: auto;
+        min-height: rem(30);
+        padding-block: rem(6);
+        padding-inline: rem(10);
+        text-align: left;
+    }
+}

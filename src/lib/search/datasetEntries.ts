@@ -1,0 +1,196 @@
+/**
+ * `dataset_resubmit`'s `entries` list, built from the run's current parts.
+ *
+ * Pure: no React, no store, no fetch. Every edit action (editSlot, editWindow,
+ * editEntity, pickCandidate, editShared) builds one `entries` list this way and
+ * posts it through the door. See useSearchRun.ts for the wiring. This module
+ * only shapes the list; it never mutates an identity itself (that stays in
+ * promote.ts).
+ *
+ * A definite part becomes an `identity` entry whose `identity` and
+ * `base_identity`/`base_spec_id` are all the part's own current spec. The
+ * base always names what the part resolved to before this post, whether or
+ * not this post edits it. A candidates part becomes a `candidates` entry,
+ * preserving posted candidate order. A no_data/unsupported part becomes a
+ * `placeholder` entry, holding its position without asking the engine to
+ * re-derive anything. Every entry, overrides included, carries its part's
+ * `operations`, so an edit keeps what the question asked of the data.
+ */
+
+import { promoteFromSpec } from './promote.ts';
+import type {
+    BaseIdentity,
+    DatasetCandidateIdentity,
+    DatasetCandidatesEntry,
+    DatasetIdentityEntry,
+    DatasetPlaceholderEntry,
+    DatasetResubmitEntry,
+    HydratedPart,
+} from './types';
+
+/**
+ * How `buildDatasetEntries` deviates from "every part's own current spec":
+ * - `{ index, entry }` replaces the entry at one index outright. editSlot,
+ *   editWindow, editEntity and pickCandidate all build the edited entry
+ *   themselves (identity edited, base left at the part's pre-edit spec; a
+ *   pick posts the chosen candidate's identity as both identity and base)
+ *   and hand it in whole.
+ * - `{ rewriteIdentity }` is editShared's fan-out: the same axis rewritten in
+ *   every definite entry's `identity` (never its base, never a candidates or
+ *   placeholder entry), in one list, so one post carries every part's edit.
+ *
+ * A caller may pass more than one override (an array): each applies in turn
+ * over the previous step's result, so a later one wins where two touch the
+ * same index. useSearchRun.ts's edit lane needs this to chain a post that's
+ * already carrying a still-unconfirmed edit: a second edit landing before
+ * the first returns keeps both. Permalink replay needs it to apply every
+ * stored edit at its own index in one post.
+ */
+export type DatasetEntriesOverride =
+    | { index: number; entry: DatasetResubmitEntry }
+    | { rewriteIdentity: (identity: BaseIdentity, part: HydratedPart) => BaseIdentity };
+
+function identityEntryFor(part: HydratedPart): DatasetIdentityEntry {
+    const spec = part.hydratedSpec;
+    if (!spec?.identity) {
+        throw new Error(
+            `buildDatasetEntries: part ${part.index} is definite but has no hydrated identity`,
+        );
+    }
+    const { resolved_stat_var_dcids } = promoteFromSpec(spec);
+
+    return {
+        entry_kind: 'identity',
+        variable_text: part.variableText ?? '',
+        identity: spec.identity,
+        base_spec_id: spec.spec_id,
+        base_identity: spec.identity,
+        ...(resolved_stat_var_dcids ? { resolved_stat_var_dcids } : {}),
+    };
+}
+
+function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
+    const candidateSet = part.part?.candidates;
+    if (!candidateSet) {
+        throw new Error(`buildDatasetEntries: part ${part.index} has no candidate set`);
+    }
+
+    const candidates: DatasetCandidateIdentity[] = candidateSet.specs.map((spec) => {
+        if (!spec.identity) {
+            throw new Error(
+                `buildDatasetEntries: part ${part.index} has a candidate spec with no identity`,
+            );
+        }
+        const { resolved_stat_var_dcids } = promoteFromSpec(spec);
+
+        return {
+            identity: spec.identity,
+            ...(resolved_stat_var_dcids ? { resolved_stat_var_dcids } : {}),
+        };
+    });
+
+    return {
+        entry_kind: 'candidates',
+        variable_text: part.variableText ?? '',
+        ordering: candidateSet.ordering,
+        // The door requires truncated on every candidates entry ("Field
+        // required" otherwise); the source CandidateSet marks it optional,
+        // so default to false when the response didn't carry one.
+        truncated: candidateSet.truncated ?? false,
+        candidates,
+    };
+}
+
+function placeholderEntryFor(part: HydratedPart): DatasetPlaceholderEntry {
+    const variable_text = part.variableText ?? '';
+
+    if (part.part?.status === 'no_data') {
+        const reason = part.part.no_data?.reason;
+        return {
+            entry_kind: 'placeholder',
+            variable_text,
+            status: 'no_data',
+            ...(reason ? { reason } : {}),
+        };
+    }
+
+    const code = part.part?.unsupported?.code;
+    return {
+        entry_kind: 'placeholder',
+        variable_text,
+        status: 'unsupported',
+        ...(code ? { code } : {}),
+    };
+}
+
+/** One part's own entry, straight from its current content, no override
+ *  applied. Throws if the part has no settled outcome yet (still loading, or
+ *  no response has landed for it): a dataset_resubmit only ever posts over
+ *  parts that already have content. */
+function entryForPart(part: HydratedPart): DatasetResubmitEntry {
+    switch (part.part?.status) {
+        case 'definite':
+            return identityEntryFor(part);
+        case 'candidates':
+            return candidatesEntryFor(part);
+        case 'no_data':
+        case 'unsupported':
+            return placeholderEntryFor(part);
+        default:
+            throw new Error(
+                `buildDatasetEntries: part ${part.index} has no settled outcome (status=${part.part?.status ?? 'none'})`,
+            );
+    }
+}
+
+/** Apply one override over an already-built `entries` list (see
+ *  `DatasetEntriesOverride`'s two forms). Never re-derives from `parts`
+ *  itself, since `buildDatasetEntries` is the only place that does that, so
+ *  this composes cleanly when a caller folds several overrides in sequence. */
+function applyOverride(
+    entries: DatasetResubmitEntry[],
+    parts: HydratedPart[],
+    override: DatasetEntriesOverride,
+): DatasetResubmitEntry[] {
+    if ('index' in override) {
+        return entries.map((entry, i) => (i === override.index ? override.entry : entry));
+    }
+
+    return entries.map((entry, i) => {
+        if (entry.entry_kind !== 'identity') return entry;
+        return { ...entry, identity: override.rewriteIdentity(entry.identity, parts[i]) };
+    });
+}
+
+/** `entry` with its part's operations attached: on the entry itself, or on
+ *  a `parsed` entry's `part`. A part with none leaves the entry as it is. */
+function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
+    const operations = part.part?.operations;
+
+    if (!operations?.length) return entry;
+    if (entry.entry_kind === 'parsed') {
+        return { ...entry, part: { ...entry.part, operations } };
+    }
+    return { ...entry, operations };
+}
+
+/**
+ * Build the `entries` list for a `dataset_resubmit` post from the run's
+ * current `parts`, in part order. With no override, every entry reflects
+ * each part's own current content untouched: the shape a fresh post between
+ * edits would carry. See `DatasetEntriesOverride` for what an edit changes;
+ * pass an array to apply more than one, in order. Operations attach after
+ * the overrides, so an edited entry keeps its part's operations too.
+ */
+export function buildDatasetEntries(
+    parts: HydratedPart[],
+    override?: DatasetEntriesOverride | DatasetEntriesOverride[],
+): DatasetResubmitEntry[] {
+    const overrides = override ? (Array.isArray(override) ? override : [override]) : [];
+    const entries = overrides.reduce(
+        (acc, one) => applyOverride(acc, parts, one),
+        parts.map(entryForPart),
+    );
+
+    return entries.map((entry, i) => withOperations(entry, parts[i]));
+}

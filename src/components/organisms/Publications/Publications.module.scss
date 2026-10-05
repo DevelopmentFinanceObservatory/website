@@ -1,0 +1,152 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+.title {
+    @include font-size(60px, 0.95);
+
+    margin-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.lead {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(360);
+    margin-bottom: auto;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+// --- Report rows ------------------------------------------------------------
+
+.list {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(90);
+    max-width: rem(960);
+    margin-inline: auto;
+    padding: rem(80) rem(30) rem(120);
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    gap: rem(40);
+    align-items: flex-start;
+    animation: row-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.08s);
+}
+
+@keyframes row-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+// The text column: rem(516) from the design; everything inside spans it.
+.body {
+    flex: 0 1 rem(516);
+    min-width: 0;
+}
+
+.rowTitle {
+    @include font-size(20px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.byline {
+    @include font-size(19px, 1.3);
+
+    margin-top: rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+
+    // Design's one-off byline gray (no token holds it).
+    color: #9e9f98;
+    letter-spacing: -0.01em;
+}
+
+.abstract {
+    @include font-size(16px, 1.3);
+
+    margin-block: rem(40) rem(32);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+// --- The cover --------------------------------------------------------------
+
+// The design handoff's SVG plate at its design size (280×400; the artwork's
+// 397 viewBox stretches the last 3px invisibly).
+.cover {
+    flex-shrink: 0;
+    width: rem(280);
+    height: rem(400);
+    object-fit: cover;
+    border-radius: rem(2);
+}
+
+// Below desktop the rem base is the tablet/phone design width, so the
+// desktop row (280 + 40 + 516 = 836) would overflow — the row tightens on
+// tablet and stacks on phone.
+@include breakpoint(not-desktop) {
+    .list {
+        max-width: none;
+        padding-inline: var(--page-gutter);
+    }
+}
+
+@include breakpoint(tablet) {
+    .row {
+        gap: rem(30);
+    }
+
+    .cover {
+        width: rem(220);
+        height: rem(314);
+    }
+
+    .body {
+        flex: 1;
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .list {
+        gap: rem(60);
+        padding-block: rem(60) rem(90);
+    }
+
+    .row {
+        flex-direction: column;
+        gap: rem(24);
+    }
+
+    // Column direction: the rem(516) flex basis would set the HEIGHT here.
+    .body {
+        flex: initial;
+    }
+
+    .cover {
+        width: rem(240);
+        height: auto;
+    }
+}

@@ -1,0 +1,319 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.button {
+    @include flex(row, flex-start, stretch);
+
+    gap: 1px;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-decoration: none;
+
+    // Disabled: dimmed, inert — pointer-events off so no hover fill either.
+    &:disabled {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+}
+
+.label {
+    @include flex(row, center, center);
+    @include font-size(11px, 1);
+
+    gap: 0.6ch;
+    height: rem(28);
+    overflow: hidden;
+    padding-inline: rem(8);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    position: relative;
+    background-color: var(--seg-bg, transparent);
+    border-radius: rem(4);
+    transition: background-color 0.25s ease,
+        box-shadow 0.25s ease,
+        color 0.25s ease;
+}
+
+.icon {
+    @include flex(row, center, center);
+
+    position: relative;
+    width: rem(28);
+    height: rem(28);
+    overflow: hidden;
+    background-color: var(--seg-bg, transparent);
+    border-radius: rem(4);
+    transition: background-color 0.25s ease,
+        box-shadow 0.25s ease,
+        color 0.25s ease;
+
+    svg {
+        width: rem(20);
+        height: rem(20);
+    }
+}
+
+// One-shot swap driven by the .swapping class from JS (not :hover) — once started
+// it always plays to the end. Lifestories-style roll: a copy sits on the opposite
+// side and ONE continuous move on ONE curve brings it into place (no mid-air jump).
+.mover {
+    @include flex(row, center, center);
+
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.ghost {
+    @include flex(row, center, center);
+
+    position: absolute;
+    inset: 0;
+}
+
+.icon[data-icon="arrow"] .ghost {
+    translate: -130% 0;
+}
+
+.icon[data-icon="arrow-down"] .ghost {
+    translate: 0 -130%;
+}
+
+.icon[data-icon="arrow-up-right"] .ghost {
+    translate: -130% 130%;
+}
+
+.swapping .icon[data-icon="arrow"] .mover {
+    animation: fly-right var(--arrow-duration, var(--swap-duration)) $ease-custom;
+}
+
+.swapping .icon[data-icon="arrow-down"] .mover {
+    animation: fly-down var(--arrow-duration, var(--swap-duration)) $ease-custom;
+}
+
+.swapping .icon[data-icon="arrow-up-right"] .mover {
+    animation: fly-up-right var(--arrow-duration, var(--swap-duration)) $ease-custom;
+}
+
+// The label's word-roll is DETACHED (arrows keep their swap): the word
+// markup and the hidden copies stay in place, no animation rides them.
+.word {
+    display: inline-block;
+}
+
+.wordInner {
+    position: relative;
+    display: inline-block;
+
+    &::after {
+        content: attr(data-word);
+        position: absolute;
+        top: 250%;
+        left: 0;
+    }
+}
+
+@keyframes fly-right {
+    100% {
+        translate: 130% 0;
+    }
+}
+
+@keyframes fly-down {
+    100% {
+        translate: 0 130%;
+    }
+}
+
+@keyframes fly-up-right {
+    100% {
+        translate: 130% -130%;
+    }
+}
+
+// Hover fills only where hover exists — on touch the :hover state sticks
+// to the last tapped button, which read as a focus that never left. The
+// fill shifts to its variant's hover partner (--seg-hover); text and icon
+// colors never change.
+
+@media (hover: hover) {
+    .button:hover,
+    :global([data-button-zone]:hover) .button {
+        .label,
+        .icon {
+            background-color: var(--seg-hover, var(--seg-bg, transparent));
+        }
+    }
+}
+
+.wide {
+    .label {
+        padding-right: rem(30);
+    }
+}
+
+.light {
+    --seg-bg: var(--color-yellow-800);
+    --seg-hover: var(--color-yellow-800-hover);
+
+    .label {
+        color: var(--color-text);
+    }
+
+    .icon {
+        color: var(--color-gray-2800);
+    }
+}
+
+.dark {
+    --seg-bg: var(--color-gray-2700);
+    --seg-hover: var(--color-gray-2700-hover);
+
+    .label,
+    .icon {
+        color: var(--color-step-text);
+    }
+}
+
+// Paper: the canvas' own off-white (#F7F7EE) — quiet buttons on white
+// surfaces (e.g. a dialog's Reset). Shares the hover ring.
+.paper {
+    --seg-bg: var(--color-grid-bg-light);
+    --seg-hover: var(--color-popup);
+
+    .label,
+    .icon {
+        color: var(--color-charcoal);
+    }
+}
+
+// Bare text button — no fill, muted color (e.g. "Why these results?").
+// With an icon (chevron) the segment shrinks to ride inline with the text.
+.plain {
+    gap: rem(6);
+
+    .label {
+        padding-inline: 0;
+        color: var(--color-media-bg);
+        background-color: transparent;
+    }
+
+    .icon {
+        align-self: center;
+        width: rem(14);
+        height: rem(14);
+        color: var(--color-media-bg);
+        background-color: transparent;
+
+        svg {
+            width: rem(12);
+            height: rem(12);
+            transition: rotate 0.3s $ease-out;
+        }
+    }
+}
+
+// Hover: a gentle dim only — no color fill.
+.button.plain {
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.7;
+
+        .label,
+        .icon {
+            color: var(--color-media-bg);
+            background-color: transparent;
+        }
+    }
+}
+
+// Chevron flips when the toggled panel is open.
+.plain[data-open="true"] .icon svg {
+    rotate: 180deg;
+}
+
+// Compact size: same type, rem(20) tall segments.
+.small {
+    .label,
+    .icon {
+        height: rem(20);
+    }
+
+    .icon {
+        width: rem(20);
+    }
+}
+
+// Stretches to its container; label alignment via --button-justify token.
+.full {
+    width: 100%;
+
+    .label {
+        flex-grow: 1;
+        justify-content: var(--button-justify, center);
+    }
+}
+
+// Transparent with a hairline ring — result-page actions on dark sections.
+// Hover: the ring steps warmer and a quiet fill rises under it.
+.outline {
+    --seg-bg: transparent;
+    --seg-hover: var(--color-gray-2650);
+
+    .label,
+    .icon {
+        color: var(--color-bg);
+        box-shadow: inset 0 0 0 1px var(--color-gray-2700);
+    }
+}
+
+// The outline's light-background sibling: charcoal text, sage hairline.
+.bordered {
+    --seg-bg: transparent;
+    --seg-hover: var(--color-media-bg);
+
+    .label,
+    .icon {
+        color: var(--color-charcoal);
+        box-shadow: inset 0 0 0 1px var(--color-sage);
+    }
+}
+
+// The ring variants' hover rings (the fill rides the shared --seg-hover).
+
+@media (hover: hover) {
+    .outline:hover,
+    :global([data-button-zone]:hover) .outline {
+        .label,
+        .icon {
+            box-shadow: inset 0 0 0 1px var(--color-stone-hover);
+        }
+    }
+
+    .bordered:hover,
+    :global([data-button-zone]:hover) .bordered {
+        .label,
+        .icon {
+            box-shadow: inset 0 0 0 1px var(--color-sage-dark);
+        }
+    }
+}
+
+@include breakpoint(phone) {
+    .label {
+        @include font-size(13px, 1);
+
+        height: rem(36);
+        padding-inline: rem(12);
+    }
+
+    .icon {
+        width: rem(36);
+        height: rem(36);
+    }
+}
