@@ -8,8 +8,8 @@ import {
     parseCatalogue,
     parsePlaceCatalogue,
     placeScopeLine,
+    roundedCount,
     scopeLine,
-    STARTING_POINT_QUERY,
     type CatalogueExample,
     type PlaceCatalogue,
     type SearchCatalogue,
@@ -32,6 +32,8 @@ const catalogue = (examples: CatalogueExample[]): SearchCatalogue => ({
     counts: {
         publishers: 40,
         countries: 205,
+        indicators: 112866,
+        datasets: 90,
         aid: { donors: 169, recipients: 205, years: { first: 1973, last: 2024 } },
     },
     examples,
@@ -99,9 +101,18 @@ test('parseCatalogue refuses a body without numeric counts', () => {
     assert.equal(parseCatalogue({ ...whole, examples: undefined }), null);
 });
 
-test('catalogueChips puts the starting point first, then every example', () => {
+test('parseCatalogue refuses a whole body missing indicators or datasets', () => {
+    for (const field of ['indicators', 'datasets'] as const) {
+        const counts = Object.fromEntries(
+            Object.entries(wholeCatalogueBody.counts).filter(([key]) => key !== field),
+        );
+
+        assert.equal(parseCatalogue({ ...wholeCatalogueBody, counts }), null, field);
+    }
+});
+
+test('catalogueChips offers every example', () => {
     assert.deepEqual(catalogueChips(whole), [
-        STARTING_POINT_QUERY,
         'Health aid to Ethiopia',
         'Humanitarian aid from Germany',
         'Debt service paid by Ghana',
@@ -109,8 +120,8 @@ test('catalogueChips puts the starting point first, then every example', () => {
     ]);
 });
 
-test('catalogueChips offers the starting point alone without a catalogue', () => {
-    assert.deepEqual(catalogueChips(null), [STARTING_POINT_QUERY]);
+test('catalogueChips offers no chips without a catalogue', () => {
+    assert.deepEqual(catalogueChips(null), []);
 });
 
 test('scopeLine counts publishers and countries for the whole catalogue', () => {
@@ -164,10 +175,27 @@ test('declinedExamples falls back to the first three of the whole catalogue', ()
     assert.deepEqual(declinedExamples(null, null), []);
 });
 
-test('catalogueTiles shows publishers and countries, or nothing without a catalogue', () => {
+test('catalogueTiles shows indicators and datasets, or nothing without a catalogue', () => {
     assert.deepEqual(catalogueTiles(whole), [
-        { value: '40', label: 'Publishers' },
-        { value: '205', label: 'Countries' },
+        { value: '100K+', label: 'Indicators' },
+        { value: '90', label: 'Datasets' },
     ]);
     assert.deepEqual(catalogueTiles(null), []);
 });
+
+for (const [count, shown] of [
+    [0, '0'],
+    [999, '999'],
+    [1000, '1K'],
+    [1234, '1K+'],
+    [100000, '100K'],
+    [112866, '100K+'],
+    [250000, '200K+'],
+    [999999, '900K+'],
+    [1000000, '1M'],
+    [1234567, '1M+'],
+] as const) {
+    test(`roundedCount shows ${count} as ${shown}`, () => {
+        assert.equal(roundedCount(count), shown);
+    });
+}
