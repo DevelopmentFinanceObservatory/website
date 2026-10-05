@@ -1,0 +1,8 @@
+@use "variables" as *;
+
+// Suspense fallback: holds the dark, full-height canvas (and the header's dark
+// theme via data-nav-dark) so a refresh never flashes the light body/footer.
+.fallback {
+    min-height: 100dvh;
+    background-color: var(--color-gray-2800);
+}

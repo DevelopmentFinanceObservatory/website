@@ -1,0 +1,119 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Themeable via --prompt-text / --prompt-placeholder / --prompt-line.
+.search {
+    position: relative;
+    z-index: 1;
+    padding-left: calc(1px + #{rem(7)});
+    transition: padding-left 0.25s $ease-out;
+
+    // The caret bar doubles as the blinking "waiting for input" cursor —
+    // size/offset ride on tokens so pages can tune it.
+    &::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: var(--prompt-caret-offset, 0);
+        width: var(--prompt-caret-width, 1px);
+        height: var(--prompt-caret-height, #{rem(68)});
+        background-color: var(--prompt-caret, var(--color-stone));
+        transform: translateY(-50%);
+        transition: opacity 0.25s $ease-out;
+    }
+
+    // Blinks like a cursor only while the input actually has focus;
+    // unfocused it sits static.
+    &:focus-within::before {
+        animation: caret-blink 1.1s step-end infinite;
+    }
+}
+
+// The custom bar plays the cursor, so the native caret stays hidden until text
+// exists (then the bar is gone and the real caret takes over).
+.search:not(.searchFilled) .input {
+    caret-color: transparent;
+}
+
+@keyframes caret-blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .search:focus-within::before {
+        animation: none;
+    }
+}
+
+// The caret bar accompanies the empty prompt only — its reserved space
+// collapses too, so typed text starts flush left.
+.searchFilled {
+    padding-left: 0;
+}
+
+// animation: none matters — a running blink animation holds a stale snapshot
+// of the pre-typing opacity and would keep flashing the bar. The doubled
+// selector outguns the :focus-within blink rule in specificity.
+.search.searchFilled::before {
+    opacity: 0;
+    animation: none;
+}
+
+.input {
+    @include font-size(56px, 0.95);
+
+    display: block;
+    width: 100%;
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--prompt-text, var(--color-charcoal));
+    letter-spacing: -0.04em;
+    caret-color: var(--prompt-text, var(--color-charcoal));
+    background: none;
+    border: 0;
+    resize: none;
+    overflow: hidden auto;
+
+    // Breathing room inside the scroll container so cap-height glyphs aren't
+    // clipped by the tight 0.95 line-height; margins cancel it out visually.
+    padding-block: 0.1em;
+    margin-block: -0.1em;
+
+    &::placeholder {
+        color: var(--prompt-placeholder, var(--color-beige));
+    }
+}
+
+// The separator stays with the input (it survives the Try row disappearing).
+.rule {
+    position: relative;
+    z-index: 1;
+    display: block;
+    height: 1px;
+    margin-top: rem(31);
+    background-color: var(--prompt-line, var(--color-stone));
+}
+
+// Space between the rule and the Try row.
+.try {
+    margin-top: rem(21);
+}
+
+@include breakpoint(not-desktop) {
+    .input {
+        @include font-size(44px, 1.1);
+    }
+}
+
+@include breakpoint(phone) {
+    .search::before {
+        height: rem(44);
+    }
+
+    .input {
+        @include font-size(34, 1);
+    }
+}

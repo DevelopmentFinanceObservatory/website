@@ -1,0 +1,218 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Radix flips data-state to "closed" and holds the node until the exit
+// animation ends — every layer gets an in AND an out.
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: $z-header + 9;
+    background-color: rgb(28 27 26 / 24%);
+
+    &[data-state="open"] {
+        animation: fade-in 0.2s ease;
+    }
+
+    &[data-state="closed"] {
+        animation: fade-out 0.2s ease forwards;
+    }
+}
+
+.modal {
+    @include flex(column, flex-start, stretch);
+
+    position: fixed;
+    z-index: $z-header + 10;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-net-light);
+    border-radius: rem(10);
+    outline: none;
+}
+
+// Docked drawer: the right edge, rem(10) off the top, right and bottom.
+.panel {
+    top: calc(#{rem(10)} + env(safe-area-inset-top));
+    right: rem(10);
+    bottom: calc(#{rem(10)} + env(safe-area-inset-bottom));
+    width: rem(315);
+    max-width: calc(100vw - #{rem(20)});
+
+    &[data-state="open"] {
+        animation: slide-in 0.35s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: slide-out 0.25s $ease-in forwards;
+    }
+}
+
+// Content-sized: no bottom anchor, the body just fits (capped to the page).
+.fit {
+    bottom: auto;
+    max-height: calc(100vh - #{rem(20)});
+}
+
+.center {
+    top: 50%;
+    left: 50%;
+    width: rem(480);
+    max-width: calc(100vw - #{rem(40)});
+    max-height: calc(100vh - #{rem(40)});
+    translate: -50% -50%;
+
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+}
+
+// Title row: rem(20) off the top, rem(10) at the sides, rem(40) of air
+// beneath before the body starts.
+.head {
+    @include flex(row, space-between, center);
+
+    flex-shrink: 0;
+    gap: rem(16);
+    padding: rem(20) rem(10) rem(40);
+}
+
+.title {
+    @include font-size(18px, 0.9);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.headActions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(12);
+}
+
+.close {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    padding: 0;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: rotate 0.3s $ease-out;
+
+    // Hover spins the X a quarter turn.
+    &:hover {
+        rotate: 90deg;
+    }
+
+    // The 28×28 is the hit area; the glyph keeps its natural 20 grid and a
+    // hairline stroke.
+    svg {
+        width: rem(20);
+        height: rem(20);
+
+        path {
+            stroke-width: 1;
+        }
+    }
+}
+
+.body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 rem(10) rem(20);
+    overflow-y: auto;
+}
+
+// Scroll cue: a soft shade at whichever edge has more content beyond it.
+// The white covers ride the content (local) and hide the shades (scroll)
+// once that edge is reached.
+.bodyFooted {
+    background-image:
+        linear-gradient(var(--color-white) 30%, rgb(255 255 255 / 0%)),
+        linear-gradient(rgb(255 255 255 / 0%), var(--color-white) 70%),
+        linear-gradient(rgb(28 27 26 / 12%), rgb(28 27 26 / 0%)),
+        linear-gradient(rgb(28 27 26 / 0%), rgb(28 27 26 / 12%));
+    background-repeat: no-repeat;
+    background-attachment: local, local, scroll, scroll;
+    background-position: top, bottom, top, bottom;
+    background-size:
+        100% rem(40),
+        100% rem(40),
+        100% rem(10),
+        100% rem(10);
+}
+
+.foot {
+    flex-shrink: 0;
+    padding: rem(12) rem(10) rem(20);
+    border-top: 1px solid var(--color-net-light);
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes fade-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes slide-out {
+    to {
+        opacity: 0;
+        translate: rem(24) 0;
+    }
+}
+
+@keyframes pop-out {
+    to {
+        opacity: 0;
+        translate: -50% calc(-50% + #{rem(12)});
+    }
+}
+
+@keyframes slide-in {
+    from {
+        opacity: 0;
+        translate: rem(24) 0;
+    }
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        translate: -50% calc(-50% + #{rem(12)});
+    }
+}
+
+// Phone: every dialog — drawers included — sits in the middle of the screen,
+// full width (rem(10) off the sides), content-sized up to the screen.
+@include breakpoint(phone) {
+    .modal.panel,
+    .modal.center {
+        inset: 50% auto auto 50%;
+        width: calc(100vw - #{rem(20)});
+        max-width: none;
+        max-height: calc(
+            100dvh - #{rem(40)} - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+        );
+        translate: -50% -50%;
+
+        &[data-state="open"] {
+            animation: pop-in 0.25s $ease-out;
+        }
+
+        &[data-state="closed"] {
+            animation: pop-out 0.2s $ease-in forwards;
+        }
+    }
+}

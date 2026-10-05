@@ -1,0 +1,285 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.footer {
+    // Section-scoped button theme.
+
+    --color-yellow-800: var(--color-media-bg);
+    --color-yellow-800-hover: var(--color-popup);
+    --text-fill-bg: var(--color-charcoal);
+
+    position: relative;
+    z-index: $z-footer;
+    display: flex;
+    gap: rem(116);
+    height: rem(676);
+    padding: rem(40) rem(10) calc(#{rem(20)} + env(safe-area-inset-bottom));
+    overflow: hidden;
+    background-color: var(--color-charcoal);
+    box-shadow: 0 rem(-24) rem(60) rgb(54 54 54 / 35%);
+}
+
+// The data page's dark canvas meets the footer directly — no seam shadow.
+.flat {
+    box-shadow: none;
+}
+
+.mapBg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+
+    path {
+        fill: none;
+        stroke: var(--color-stone);
+    }
+}
+
+.dfoWatermark {
+    position: absolute;
+
+    // Low enough that the wordmark's top clears the CTA's Contact us button
+    // (the overflow crops whatever bleeds past the footer's bottom edge).
+    bottom: rem(-140);
+    left: rem(-30);
+    z-index: 0;
+    width: calc(100% + #{rem(60)});
+    pointer-events: none;
+    will-change: transform;
+
+    svg {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+}
+
+// The stroked pass underneath… (overflow stays visible: the stroke is
+// centred on the path, so at the glyphs' tops its outer half pokes past
+// the viewBox — the svg's default hidden overflow was clipping the O.)
+.dfoStroke {
+    overflow: visible;
+}
+
+.dfoStroke path {
+    // Filled with the footer color so the letters cover the map underneath.
+    fill: var(--color-charcoal);
+    stroke: var(--color-stone);
+    stroke-width: 0.08;
+}
+
+// …and the fill-only pass on top: it swallows every stroke that runs
+// inside the letters, leaving one continuous outline around the wordmark.
+.dfoFill {
+    position: absolute;
+    inset: 0;
+
+    path {
+        fill: var(--color-charcoal);
+    }
+}
+
+.left,
+.right {
+    position: relative;
+    z-index: 1;
+}
+
+.left {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    justify-content: space-between;
+}
+
+.right {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.cta {
+    display: flex;
+    flex-direction: column;
+    gap: rem(20);
+    align-items: flex-start;
+    max-width: rem(510);
+}
+
+.heading {
+    @include font-size(38px, 0.95);
+
+    --text-fill-color: var(--color-sage);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--color-sage);
+    letter-spacing: -0.02em;
+}
+
+.contact {
+    flex-shrink: 0;
+}
+
+.columns {
+    display: flex;
+    gap: rem(45);
+
+    // Bottom-aligns with the CTA block (its height minus the columns block).
+    margin-top: rem(52);
+}
+
+.column {
+    min-width: rem(100);
+}
+
+.columnTitle {
+    @include font-size(16px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 500;
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+}
+
+.columnLinks {
+    margin-top: rem(18);
+    list-style: none;
+
+    li {
+        margin-top: rem(8);
+
+        &:first-child {
+            margin-top: 0;
+        }
+    }
+
+    a {
+        @include font-size(16px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        font-weight: 300;
+        color: var(--color-stone-light);
+        text-decoration: none;
+        letter-spacing: -0.01em;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: var(--color-step-text);
+        }
+    }
+}
+
+.trf {
+    display: block;
+    width: rem(81);
+    height: auto;
+    margin-bottom: rem(30);
+    color: var(--color-bg);
+}
+
+.attributionText {
+    @include font-size(16px, 1.22);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+
+    a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: rem(3);
+        transition: opacity 0.25s ease;
+
+        &:hover {
+            opacity: 0.7;
+        }
+    }
+}
+
+.policies {
+    display: flex;
+    gap: rem(40);
+
+    a,
+    button {
+        @include font-size(12px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        font-weight: 300;
+        color: var(--color-stone-light);
+        text-decoration: none;
+        letter-spacing: -0.01em;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: var(--color-step-text);
+        }
+    }
+
+    button {
+        padding: 0;
+        background: none;
+        border: 0;
+        cursor: pointer;
+    }
+}
+
+@include breakpoint(not-desktop) {
+    .footer {
+        flex-direction: column;
+        gap: rem(80);
+        height: auto;
+        padding-inline: var(--page-gutter);
+    }
+
+    // The desktop drop (clearing the CTA button) is far too deep for the
+    // narrow wordmark here — it was vanishing under the footer's edge.
+    .dfoWatermark {
+        bottom: rem(-40);
+    }
+
+    .left,
+    .right {
+        gap: rem(48);
+    }
+
+    .columns {
+        flex-wrap: wrap;
+        gap: rem(32);
+        margin-top: 0;
+    }
+}
+
+@include breakpoint(phone) {
+    .footer {
+        gap: rem(56);
+        padding-block: rem(56) calc(#{rem(24)} + env(safe-area-inset-bottom));
+    }
+
+    // At the phone's rendering scale the 0.08 hairline lands under a pixel —
+    // scaled up hard so the wordmark's shared outline reads clearly.
+    .dfoStroke path {
+        stroke-width: 0.4;
+    }
+
+    .heading {
+        @include font-size(28, 1);
+    }
+
+    .columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: rem(24);
+    }
+
+    .policies {
+        gap: rem(24);
+    }
+}

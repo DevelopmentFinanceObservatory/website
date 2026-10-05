@@ -1,0 +1,59 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Rides above the pattern and below the copy; the parent moves it for the
+// parallax, so it has no transform of its own.
+.layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+// One card's slot — positioned from ShowcaseCards.tsx (cells → px). In and
+// out on opacity alone: no lift, no slide. The entrance has no fill mode
+// on purpose: a filled animation keeps owning `opacity`, and the exit
+// transition below would never run.
+.slot {
+    position: absolute;
+    animation: card-in 0.7s ease;
+    transition: opacity 0.7s ease;
+}
+
+// The card at its on-canvas size, scaled down as a whole from the slot's
+// corner (the `scale` is set inline). Its own on-canvas entrance
+// (Card.module.scss) rises a little — not here.
+.card {
+    transform-origin: 0 0;
+
+    article {
+        animation: none;
+    }
+}
+
+.slotOut {
+    opacity: 0;
+}
+
+@keyframes card-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@include breakpoint(phone) {
+    // One card at a time: centred, hung from a line just inside the box's
+    // bottom edge so every card starts on the same top edge and grows
+    // downward into the section's bottom padding, never wider than the
+    // screen. The inline inset/width from ShowcaseCards.tsx is the desktop
+    // layout — overridden here.
+    .slot {
+        inset: calc(100% - #{rem(40)}) auto auto 50% !important;
+        max-width: calc(100vw - 2 * var(--page-gutter));
+        transform: translateX(-50%);
+    }
+
+    .slot:not(:first-child) {
+        display: none;
+    }
+}

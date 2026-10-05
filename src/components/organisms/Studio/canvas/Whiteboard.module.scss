@@ -1,0 +1,230 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The whiteboard sheet: carries its own grid pattern (so lines scroll with
+// the cards) and hosts absolutely-placed cards pinned to exact cells. It
+// sizes itself to the content (inline width/height, never below the window)
+// and grabbing it — cards included — pans the view.
+.board {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
+    cursor: grab;
+    touch-action: none;
+
+    // A whiteboard, not a document — dragging around must never start
+    // selecting card text.
+    user-select: none;
+}
+
+.boardPanning {
+    cursor: grabbing;
+    user-select: none;
+}
+
+// Oversized by one cell top-left (inline offsets) so the pattern's own line
+// grid lands on the same screen positions as the static pattern beneath.
+.gridLayer {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+// Effects layer: a zero-size sticky anchor pinning a view-sized 2D canvas to
+// the visible window — shockwaves are DRAWN (rAF), not DOM-animated.
+.fxLayer {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.fxCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+// The vacated slot: an empty outline that stays put while its card is being
+// dragged (the pattern shows through).
+.ghost {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    border: 1px solid var(--th-line, var(--color-sage-light));
+    border-radius: rem(6);
+}
+
+// The landing preview — same visual language as the vacated slot, just
+// stronger (darker border + a filled face). Only shown over a free spot, so
+// its absence reads as "drop rejected, the card will glide back".
+.ghostTarget {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    background-color: rgb(28 27 26 / 6%);
+    border: 1px solid var(--th-muted, var(--color-sage));
+    border-radius: rem(6);
+}
+
+// A placed card: cell-exact box; dropping animates the settle (left/top and
+// the drag translate resolve on the same curve, so it glides into the cells).
+// The same left/top transition carries the live swap preview. The curve
+// launches fast and decelerates long — a moving drop reads as carried
+// momentum easing out, not a snap.
+.slot {
+    position: absolute;
+    transition:
+        left 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        top 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        translate 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        width 0.2s $ease-out,
+        height 0.2s $ease-out,
+        opacity 0.3s ease;
+}
+
+// Filtered out by the card-type tabs: faded down, never fully gone, and
+// inert except for moving/resizing — the card's own controls and hovers are
+// switched off (Card.module.scss reads the slot's data-dimmed; the grab bar
+// and grip sit outside the card, so they keep working).
+.slotDimmed {
+    opacity: 0.4;
+}
+
+// The card whose More Info panel is open: lifted out of the canvas and
+// centred over the dim, clear of the panel on the right (its width plus the
+// drawer's own inset).
+.slotFocused {
+    position: fixed;
+    top: 50%;
+    left: calc(50% - #{rem(162)});
+    z-index: $z-header + 10;
+    translate: -50% -50%;
+    transition: none;
+}
+
+// Replaced by a newer turn: fades away in place, inert, then its slot is
+// pruned (LEAVE_MS in the component).
+.slotLeaving {
+    pointer-events: none;
+    opacity: 0;
+}
+
+.slotDragging {
+    user-select: none;
+    transition: none;
+
+    // The pendulum drives --tilt per frame, so rotate must NOT be in the
+    // transition list here (it would smear the physics) — scale still eases
+    // in. On release the base list takes over and everything (angle, scale,
+    // shadow, tint, position) settles on one curve.
+    .cardBox {
+        rotate: var(--tilt, 0deg);
+        scale: 0.9;
+        transition: scale 0.3s $ease-out;
+    }
+
+    // (The lifted card's sage tint lives in Card.module.scss, off the
+    // slot's data-dragging.)
+    .handle {
+        cursor: grabbing;
+        opacity: 1;
+    }
+}
+
+// The grab bar: a slim dark pill just inside the card's top edge (per the
+// design), inside a generous hit area, shown on card hover.
+.handle {
+    @include flex(row, center, center);
+
+    position: absolute;
+    top: rem(2);
+    left: 50%;
+    z-index: 2;
+    width: rem(72);
+    height: rem(16);
+    cursor: grab;
+    touch-action: none;
+    opacity: 0;
+    translate: -50% 0;
+    transition: opacity 0.2s ease;
+
+    &::after {
+        content: "";
+        width: rem(40);
+        height: rem(2);
+        background-color: var(--th-text, var(--color-charcoal));
+        border-radius: rem(2);
+    }
+}
+
+.slot:hover .handle {
+    opacity: 1;
+}
+
+// The resize grip: a corner glyph at the card's bottom-right, hover-only.
+// Dragging it resizes the card cell by cell within its kind's range.
+.resizeGrip {
+    @include flex(row, center, center);
+
+    position: absolute;
+    right: rem(2);
+    bottom: rem(2);
+    z-index: 2;
+    width: rem(16);
+    height: rem(16);
+    cursor: nwse-resize;
+    touch-action: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    svg {
+        width: rem(10);
+        height: rem(10);
+
+        path {
+            fill: none;
+            stroke: var(--th-text, var(--color-charcoal));
+            stroke-width: 1.4;
+            stroke-linecap: round;
+        }
+    }
+}
+
+.slot:hover .resizeGrip {
+    opacity: 1;
+}
+
+// The card's transform box: grab bar + resize grip + the card itself, so
+// the lift (tilt + scale) carries all three together.
+.cardBox {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    rotate: 0deg;
+    scale: 1;
+
+    // The pivot for rotate/scale = the exact grab point (fed by JS). It stays
+    // set after release too, so the settle spins around the same point.
+    transform-origin: var(--grab-x, 50%) var(--grab-y, 50%);
+
+    // The release settle: angle and scale ease back on the same
+    // curve/duration as the slot's position, so the drop is one motion.
+    transition:
+        rotate 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        scale 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+// No hover on touch: the grab bar and the grip stay visible.
+
+@media (hover: none) {
+    .handle,
+    .resizeGrip {
+        opacity: 1;
+    }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-02T16:54:36Z",
+  "generator_commit": "67347a1e21db53717e646660adb2b22a9f755753",
+  "tracks": [
+    {
+      "id": "data",
+      "label": "Data",
+      "description": "Datasets and coverage the data team is building, has shipped, or is still weighing.",
+      "file": "roadmap/data.json"
+    },
+    {
+      "id": "platform",
+      "label": "Platform",
+      "file": "roadmap/platform.json"
+    },
+    {
+      "id": "ai-tools",
+      "label": "AI tools",
+      "file": "roadmap/ai-tools.json"
+    }
+  ]
+}

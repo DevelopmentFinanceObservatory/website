@@ -1,0 +1,91 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.section {
+    position: relative;
+    padding: rem(220) rem(47) rem(175);
+    overflow: hidden;
+    background-color: var(--color-bg);
+}
+
+.net {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.intro {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: rem(63);
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+.headingBlock {
+    max-width: rem(562);
+}
+
+.aside {
+    display: flex;
+    flex-direction: column;
+    gap: rem(27);
+    align-items: flex-start;
+    max-width: rem(511);
+}
+
+.description {
+    @include font-size(19px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.prompt {
+    margin-top: rem(136);
+}
+
+.tiles {
+    margin-top: rem(136);
+}
+
+@include breakpoint(not-desktop) {
+    .section {
+        padding-inline: var(--page-gutter);
+    }
+
+    .intro {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .aside {
+        margin-top: 0;
+    }
+
+    .tiles {
+        margin-top: rem(100);
+    }
+}
+
+@include breakpoint(phone) {
+    .section {
+        padding-block: rem(120);
+    }
+
+    .prompt {
+        margin-top: rem(72);
+    }
+
+    .tiles {
+        margin-top: rem(80);
+    }
+}

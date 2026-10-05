@@ -1,0 +1,148 @@
+name: Build, migrate and deploy
+
+# The deploy steps deploy.yml (staging) and deploy-prod.yml (production)
+# share. Called with the GitHub Environment to run in. Every name comes
+# from that environment's vars and secrets, so the steps are identical in
+# both and only the environment differs.
+#
+# This workflow only swaps the image on a Cloud Run service and migration
+# Job that already exist. dfo-infra owns creating and configuring both. See
+# deploy/README.md for the division of responsibility and the vars and
+# secrets each environment needs.
+#
+# The service moves to an image only after the migration Job has run to
+# completion on that same image. The job builds and pushes the SHA-tagged
+# image, points the migration Job at it, executes it, then updates the
+# service. The Job applies forward-only migrations and is idempotent. Given
+# an image with nothing new to apply, it reports nothing to apply and exits
+# 0. Every deploy runs it rather than trying to detect whether it's needed.
+# A failed step stops the job before any step after it runs, so a failed
+# migration leaves the service on its current image.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Environment holding the target's vars and secrets.
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # This check runs before authentication, so a missing var or secret
+      # in the GitHub Environment fails here with a message naming what's
+      # missing, rather than as an opaque empty-input error inside the auth
+      # action.
+      - name: Check the environment is configured
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SERVICE_WEBSITE: ${{ vars.SERVICE_WEBSITE }}
+          MIGRATE_JOB_WEBSITE: ${{ vars.MIGRATE_JOB_WEBSITE }}
+          REGION: ${{ vars.REGION }}
+          PROJECT_ID: ${{ vars.PROJECT_ID }}
+          AR_REPO: ${{ vars.AR_REPO }}
+          WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
+          WIF_SA: ${{ secrets.WIF_SA }}
+        run: |
+          missing=""
+          for v in SERVICE_WEBSITE MIGRATE_JOB_WEBSITE REGION PROJECT_ID AR_REPO WIF_PROVIDER WIF_SA; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::The '$ENVIRONMENT' GitHub Environment is missing:$missing -- see deploy/README.md for who provides each."
+            exit 1
+          fi
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SA }}
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ vars.REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Resolve image ref
+        id: target
+        run: |
+          image="${{ vars.REGION }}-docker.pkg.dev/${{ vars.PROJECT_ID }}/${{ vars.AR_REPO }}/dfo-website:${{ github.sha }}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: ${{ steps.target.outputs.image }}
+
+      # The Job and service updates below pin to the digest this push just
+      # produced, not to the mutable `:${{ github.sha }}` tag, so the
+      # service always gets the exact image the migration Job just ran,
+      # even if the same SHA gets retagged to something else in between.
+      # The tag itself is still pushed above (for `docker pull
+      # dfo-website:<sha>` and anything else that expects it). Only the
+      # ref this workflow acts on below is pinned.
+      #
+      # dfo-infra leaves this repo's Artifact Registry without immutable
+      # tags, because immutable tags also block deletion and a rebuild that
+      # replaces an existing SHA's digest would have no way back. Pinning
+      # here is a consumer-side control on top of that. Do not simplify
+      # this back to the tag.
+      - name: Resolve pinned image ref
+        id: pinned
+        run: |
+          image="${{ vars.REGION }}-docker.pkg.dev/${{ vars.PROJECT_ID }}/${{ vars.AR_REPO }}/dfo-website@${{ steps.build.outputs.digest }}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      # The migration Job's `command` override to `node dist/migrate.cjs`
+      # lives in the Job's own Terraform definition, set once. This step
+      # only points the Job at the new image. deploy/Dockerfile bundles the
+      # migrate entrypoint into every website image, so whichever image the
+      # Job runs carries its own migrations. lifecycle.ignore_changes on
+      # the Job's image in Terraform keeps this update from reading as
+      # drift between deploys.
+      - name: Point the migration job at the new image
+        run: |
+          gcloud run jobs update "${{ vars.MIGRATE_JOB_WEBSITE }}" \
+            --image="${{ steps.pinned.outputs.image }}" \
+            --region="${{ vars.REGION }}" \
+            --project="${{ vars.PROJECT_ID }}" \
+            --quiet
+
+      - name: Run the migration job
+        run: |
+          gcloud run jobs execute "${{ vars.MIGRATE_JOB_WEBSITE }}" \
+            --region="${{ vars.REGION }}" \
+            --project="${{ vars.PROJECT_ID }}" \
+            --wait
+
+      # Image-only update against the service dfo-infra already defined,
+      # using `--image` rather than `gcloud run services replace`, which
+      # takes a full manifest and would fight dfo-infra for ownership of
+      # scaling, secrets, and service-account config. This step runs only
+      # once the migration job above has exited 0, so the service never
+      # serves an image ahead of the schema it expects.
+      - name: Point Cloud Run at the new image
+        run: |
+          gcloud run services update "${{ vars.SERVICE_WEBSITE }}" \
+            --image="${{ steps.pinned.outputs.image }}" \
+            --region="${{ vars.REGION }}" \
+            --project="${{ vars.PROJECT_ID }}" \
+            --quiet

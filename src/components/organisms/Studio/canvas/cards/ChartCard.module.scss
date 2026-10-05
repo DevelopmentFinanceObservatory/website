@@ -1,0 +1,128 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "shared" as *;
+
+.legend {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(10);
+    list-style: none;
+
+    li {
+        display: flex;
+    }
+}
+
+// Each entry is a toggle: clicking parks/revives its series; a parked one
+// greys out here and leaves the plot.
+.legendItem {
+    @include flex(row, flex-start, center);
+    @include font-size(10px, 1.3);
+
+    gap: rem(4);
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: inherit;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.2s ease;
+}
+
+.legendOff {
+    opacity: 0.35;
+}
+
+.legendDot {
+    @include series-checker;
+
+    flex-shrink: 0;
+    width: rem(10);
+    height: rem(10);
+    border-radius: rem(2);
+}
+
+// Chart.js host: fills whatever the cell-fixed card height leaves over — and
+// shrinks all the way if it must, so the chrome bar below never gets pushed
+// out of the card. Chart.js observes this box and sizes its canvas to it.
+.plot {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+// The chart tooltip (Chart.js external → HTML, see chart/chartSetup): the
+// house popup — popup face, radius 4, no shadow. Title = category, one row
+// per series with a checkered swatch, the name wrapping to two lines, the
+// value bold.
+.chartTip {
+    @include flex(column, flex-start, stretch);
+
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    gap: rem(4);
+    width: max-content;
+    max-width: rem(180);
+    padding: rem(6) rem(8);
+    pointer-events: none;
+    background-color: var(--th-popup, var(--color-popup));
+    border-radius: rem(4);
+    opacity: 0;
+    transition:
+        opacity 0.15s ease,
+        transform 0.1s ease-out;
+}
+
+.chartTipTitle {
+    @include font-size(8px, 1.3);
+
+    margin-bottom: rem(2);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--th-text, var(--color-charcoal));
+}
+
+.chartTipRow {
+    @include flex(row, flex-start, flex-start);
+
+    gap: rem(4);
+}
+
+.chartTipDot {
+    @include series-checker;
+
+    flex-shrink: 0;
+    width: rem(8);
+    height: rem(8);
+    margin-top: rem(1);
+    border-radius: rem(2);
+}
+
+.chartTipLabel {
+    @include font-size(8px, 1.3);
+
+    display: -webkit-box;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    color: var(--th-text, var(--color-charcoal));
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.chartTipValue {
+    @include font-size(8px, 1.3);
+
+    flex-shrink: 0;
+    font-family: var(--font-dm-mono);
+    font-weight: 700;
+    color: var(--th-text, var(--color-charcoal));
+    white-space: nowrap;
+}

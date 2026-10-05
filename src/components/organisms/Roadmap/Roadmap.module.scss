@@ -1,0 +1,284 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The rem(836) content column's insets.
+.section {
+    --search-inset: #{rem(30)};
+
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+// --- Hero contents (the box itself is PageHero) -------------------------------
+
+.title {
+    @include font-size(60px, 0.95);
+
+    margin-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.lead {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(437);
+    margin-bottom: rem(40);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+// The tabs row hugs the box's bottom edge (the box has no bottom padding).
+.tabs {
+    align-self: stretch;
+    margin-top: auto;
+}
+
+// --- Body -------------------------------------------------------------------
+
+// rem(100) under the hero; the rem(836) column, centred.
+.body {
+    max-width: calc(#{rem(836)} + 2 * var(--search-inset));
+    padding: rem(100) var(--search-inset) 0;
+    margin-inline: auto;
+
+    // A tab / switch scrolls here — flush with the viewport top (the bar
+    // hides on a downward scroll; the body's own padding is the air).
+    scroll-margin-top: 0;
+}
+
+// The Upcoming / Released pill on the left, the group filters on the right.
+// Top-aligned: when the chips wrap to a second row, the toggle stays level
+// with the first one instead of floating to the middle.
+.controls {
+    @include flex(row, space-between, flex-start);
+
+    gap: rem(20);
+    margin-bottom: rem(40);
+}
+
+// The chips ride the controls row's right end.
+.filters {
+    margin-left: auto;
+}
+
+// "Have a request?" — a dark bar: copy left, Submit Request bottom-right.
+.request {
+    @include flex(row, space-between, flex-end);
+
+    gap: rem(30);
+    padding: rem(20);
+    margin-bottom: rem(60);
+    color: var(--color-bg);
+    background-color: var(--color-gray-2700);
+    border-radius: rem(4);
+    animation: rise-in 0.5s $ease-out both;
+}
+
+.requestTitle {
+    @include font-size(24px, 0.95);
+
+    margin-bottom: rem(12);
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.requestLead {
+    @include font-size(19px, 1.3);
+
+    max-width: rem(470);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.empty {
+    @include font-size(19px, 1.3);
+
+    padding: rem(42) 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+    list-style: none;
+}
+
+// --- Upcoming: hairline-separated stages, the title left, the cards right --
+
+.stage {
+    display: grid;
+    grid-template-columns: rem(180) 1fr;
+    gap: rem(40);
+    padding: rem(42) 0;
+    border-top: 1px solid var(--color-net-mid);
+    animation: rise-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+}
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.stageTitle {
+    @include font-size(24px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 700;
+    color: var(--color-charcoal);
+    letter-spacing: -0.03em;
+}
+
+.cards {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+    list-style: none;
+}
+
+.expected {
+    @include font-size(20px, 1);
+
+    flex-shrink: 0;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+// "↑ 31 Votes" — the house "paper" button (canvas off-white), arrow first.
+.vote {
+    @include flex(row, center, center);
+    @include font-size(11px, 1);
+
+    flex-shrink: 0;
+    gap: rem(6);
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    cursor: pointer;
+    background-color: var(--color-grid-bg-light);
+    border: 0;
+    border-radius: rem(4);
+    transition: background-color 0.25s ease;
+
+    &:hover {
+        background-color: var(--color-popup);
+    }
+}
+
+.voted {
+    background-color: var(--color-mint);
+}
+
+.voteIcon {
+    width: rem(10);
+    height: rem(10);
+    rotate: -90deg;
+}
+
+// --- Release panel ----------------------------------------------------------
+
+// The house drawer, rem(400) wide (the change cards need the room).
+.releasePanel.releasePanel {
+    width: rem(400);
+
+    @include breakpoint(phone) {
+        width: calc(100vw - #{rem(20)});
+    }
+}
+
+.release {
+    @include flex(column, flex-start, stretch);
+}
+
+.releaseMeta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: rem(24) rem(20);
+}
+
+.releaseWide {
+    grid-column: 1 / -1;
+}
+
+.releaseLabel {
+    @include font-size(12px, 1);
+
+    margin-bottom: rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+}
+
+.releaseValue {
+    @include font-size(14px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+@include breakpoint(not-desktop) {
+    // Screen-tall at least, so a switch can always scroll the hero clean
+    // out of view.
+    .body {
+        min-height: 100svh;
+    }
+}
+
+@include breakpoint(tablet) {
+    .stage {
+        grid-template-columns: 1fr;
+        gap: rem(16);
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .body {
+        padding: rem(60) var(--page-gutter) 0;
+    }
+
+    .controls {
+        flex-direction: column;
+        gap: rem(16);
+        align-items: flex-start;
+    }
+
+    .filters {
+        margin-left: 0;
+    }
+
+    .request {
+        flex-direction: column;
+        gap: rem(20);
+        align-items: flex-start;
+    }
+
+    .stage {
+        grid-template-columns: 1fr;
+        gap: rem(16);
+        padding: rem(30) 0;
+    }
+
+    .expected {
+        @include font-size(13px, 1);
+    }
+}

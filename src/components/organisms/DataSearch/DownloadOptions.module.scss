@@ -1,0 +1,64 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The Download options dialog: Format, Include and the extra columns as
+// stacked sections, each under a hairline, inside the Modal's scrolling body.
+.options {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(24);
+}
+
+.section {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+
+    & + & {
+        padding-top: rem(24);
+        border-top: 1px solid var(--color-net-light);
+    }
+}
+
+.sectionTitle {
+    @include font-size(14px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+}
+
+// The pill spans the dialog: the tabs component sizes to its labels, the
+// wrapper stretches it.
+.tabs > * {
+    width: 100%;
+}
+
+// One entity column's extras under the role it plays (Donor, Recipient).
+.role {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(12);
+
+    & + & {
+        margin-top: rem(8);
+    }
+}
+
+.roleTitle {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-stone);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.pending {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+}

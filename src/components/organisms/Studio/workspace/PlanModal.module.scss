@@ -1,0 +1,173 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// A touch wider than the house centred dialog: a plan's descriptions are
+// paragraphs.
+.modal {
+    width: rem(560);
+}
+
+.body {
+    padding-bottom: rem(8);
+}
+
+// --- The step timeline (all of it) -----------------------------------------
+
+.steps {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+    margin: 0;
+    padding: 0 rem(6);
+    list-style: none;
+}
+
+// Dot rail: each step draws its dot; the connecting line spans between
+// dots (skipped after the last one).
+.step {
+    position: relative;
+    padding-left: rem(24);
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: rem(9);
+        left: 0;
+        width: rem(10);
+        height: rem(10);
+        background-color: var(--color-charcoal);
+        border-radius: 50%;
+    }
+
+    &:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: rem(19);
+        bottom: rem(-13);
+        left: rem(4.5);
+        width: 1px;
+        background-color: var(--color-charcoal);
+    }
+}
+
+.stepRow {
+    @include flex(row, space-between, center);
+
+    gap: rem(8);
+    width: 100%;
+    padding: rem(6) 0;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: 0;
+}
+
+.stepRowStatic {
+    cursor: default;
+}
+
+.stepLabel {
+    @include font-size(13px, 1.34);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+}
+
+.stepChevron {
+    flex-shrink: 0;
+    width: rem(12);
+    height: rem(12);
+    color: var(--color-charcoal);
+    transition: rotate 0.25s $ease-out;
+}
+
+.stepChevronOpen {
+    rotate: 180deg;
+}
+
+// The house accordion: grid rows 0fr → 1fr animate the fold with no
+// height measuring; the inner clips.
+.fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s $ease-out;
+}
+
+.foldOpen {
+    grid-template-rows: 1fr;
+}
+
+.foldInner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.stepDetail {
+    @include font-size(11px, 1.4);
+
+    padding: 0 rem(20) rem(10) 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+}
+
+// The agent's own choices, quiet under the timeline.
+.decisions {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    margin: rem(12) rem(6) 0;
+    padding: rem(12) 0 0;
+    list-style: none;
+    border-top: 1px solid var(--color-sage-light);
+}
+
+.decision {
+    @include font-size(11px, 1.4);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+
+    strong {
+        font-weight: 500;
+        color: var(--color-charcoal);
+    }
+}
+
+// --- "Start building?" ------------------------------------------------------
+
+// Pinned to the dialog's bottom edge, under the scrolling steps; the
+// negative side margins take it to the dialog's own edges.
+.proceed {
+    @include flex(row, space-between, center);
+
+    position: sticky;
+    bottom: rem(-20);
+    z-index: 1;
+    gap: rem(10);
+    margin: rem(16) rem(-10) rem(-20);
+    padding: rem(10) rem(10) rem(10) rem(16);
+    background-color: var(--color-grid-bg-light);
+    border-top: 1px solid var(--color-sage-light);
+    border-radius: 0 0 rem(10) rem(10);
+}
+
+.proceedLabel {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.proceedActions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(6);
+}

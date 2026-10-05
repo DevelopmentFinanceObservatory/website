@@ -1,0 +1,108 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildDatasetEntries } from '../datasetEntries.ts';
+import { buildAmbiguousPickPart } from '../parsedEdit.ts';
+import { normalizeResponse, restorePlaceholderParts } from '../searchClient.ts';
+import type {
+    DatasetIdentityEntry,
+    DatasetParsedEntry,
+    HydratedPart,
+    Part,
+    Resolution,
+} from '../types.ts';
+import { fixtures, type FixtureName } from './fixtures/index.ts';
+
+/** The fixture's normalized parts as a settled run holds them. */
+function hydratedParts(name: FixtureName): HydratedPart[] {
+    const parts: Part[] = normalizeResponse(fixtures[name]).parts;
+
+    return parts.map((part, index) => ({
+        index,
+        variableText: part.variable_text ?? null,
+        part,
+        hydratedSpec: part.status === 'definite' ? (part.spec ?? null) : null,
+        observationsPending: false,
+        phase: 'done',
+        editError: null,
+    }));
+}
+
+/** The `parsed` entry an entity_ambiguous pick posts for `part`: its
+ *  restatement with `dcid` pinned on the "Congo" wording. */
+function congoPick(part: HydratedPart, dcid: string): DatasetParsedEntry {
+    const restatement = part.part?.restatement;
+    const candidate = part.part?.no_data?.ambiguous_entities
+        ?.find((group) => group.text === 'Congo')
+        ?.candidates.find((option) => option.dcid === dcid);
+
+    assert.ok(restatement && candidate);
+
+    const picked = buildAmbiguousPickPart(restatement, 'Congo', candidate);
+
+    assert.ok(picked);
+    return { entry_kind: 'parsed', part: picked };
+}
+
+test('buildDatasetEntries posts the pick as the parsed entry at its part', () => {
+    const parts = hydratedParts('entity-ambiguous');
+    const entry = congoPick(parts[0], 'country/COD');
+
+    assert.deepEqual(buildDatasetEntries(parts, { index: 0, entry }), [entry]);
+});
+
+test('a pick on part 1 of two posts the parsed entry there and keeps part 0 as its own entry', () => {
+    const parts = hydratedParts('two-part-ambiguous');
+    const entry = congoPick(parts[1], 'country/COD');
+    const entries = buildDatasetEntries(parts, { index: 1, entry });
+
+    assert.equal(entries.length, 2);
+    assert.deepEqual(entries[0], buildDatasetEntries(parts)[0]);
+    assert.equal(entries[0].entry_kind, 'identity');
+    assert.deepEqual(entries[1], entry);
+});
+
+test("the pick's answer lands at part 1 and part 0 keeps its dataset", () => {
+    const parts = hydratedParts('two-part-ambiguous');
+    const [pick] = normalizeResponse(fixtures['definite-rank-operation']).parts;
+    const answer: Resolution = normalizeResponse(fixtures['two-part-ambiguous']);
+    // The door's answer: part 0 re-resolved from its identity entry, part 1
+    // resolved from the pinned parsed entry.
+    const posted: Resolution = { ...answer, parts: [answer.parts[0], pick] };
+
+    const merged = restorePlaceholderParts(
+        posted,
+        parts.map((part) => part.part),
+        2,
+    );
+
+    assert.equal(merged.parts.length, 2);
+    assert.equal(merged.parts[0].spec?.spec_id, parts[0].part?.spec?.spec_id);
+    assert.equal(merged.parts[1], pick);
+    assert.equal(merged.status, 'definite');
+});
+
+test("buildDatasetEntries carries a part's operations on its own entry", () => {
+    const parts = hydratedParts('definite-rank-operation');
+    const [entry] = buildDatasetEntries(parts);
+
+    assert.equal(entry.entry_kind, 'identity');
+    assert.deepEqual((entry as DatasetIdentityEntry).operations, [
+        { verb: 'rank', phrase: 'top 5 donors', over: 'origin' },
+    ]);
+});
+
+test("buildDatasetEntries carries a part's operations on an edit's override entry", () => {
+    const parts = hydratedParts('definite-rank-operation');
+    const [base] = buildDatasetEntries(parts) as DatasetIdentityEntry[];
+    const override: DatasetIdentityEntry = { ...base, operations: undefined };
+    const [entry] = buildDatasetEntries(parts, { index: 0, entry: override });
+
+    assert.deepEqual((entry as DatasetIdentityEntry).operations, parts[0].part?.operations);
+});
+
+test('buildDatasetEntries leaves operations off a part that has none', () => {
+    const [entry] = buildDatasetEntries(hydratedParts('definite-single'));
+
+    assert.equal('operations' in entry, false);
+});

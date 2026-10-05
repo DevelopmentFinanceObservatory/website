@@ -1,0 +1,140 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.sectionLabel {
+    @include font-size(11px, 1);
+
+    margin: 0 0 rem(16);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+// Preset tiles: two columns of swatch strips with a name beneath; the
+// active one wears a charcoal outline (per the design).
+// Preset tiles in two content-sized columns. The selection ring is the
+// tile's own border — part of its box, inside the row — with rem(8) of
+// padding between it and the swatches (matches the design).
+.presets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: rem(16) rem(20);
+    margin-bottom: rem(40);
+}
+
+.preset {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(8);
+    min-width: 0;
+    padding: rem(8);
+    margin: 0;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: rem(6);
+    transition: border-color 0.2s ease;
+
+    &:hover {
+        border-color: var(--color-net-light);
+    }
+}
+
+.presetActive,
+.presetActive:hover {
+    border-color: var(--color-charcoal);
+}
+
+// Five swatches share the tile's width evenly, 1px apart — no fixed width,
+// so the strip stretches with the column.
+.swatches {
+    @include flex(row, flex-start, stretch);
+
+    gap: 1px;
+    width: 100%;
+}
+
+.swatch {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    height: rem(16);
+    border-radius: rem(3);
+}
+
+.presetName {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Custom rows: label · #HEX · colour well, in bordered pills.
+.rows {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+}
+
+.row {
+    @include flex(row, flex-start, center);
+
+    gap: rem(12);
+    padding: rem(12) rem(10);
+    cursor: pointer;
+    border: 1px solid var(--color-net-light);
+    border-radius: rem(10);
+}
+
+// Same type as the preset names.
+.rowLabel {
+    @include font-size(12px, 1.1);
+
+    flex: 1;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.rowHex {
+    @include font-size(10px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-gray-2700);
+    letter-spacing: -0.01em;
+}
+
+.hash {
+    margin-right: rem(3);
+    color: var(--color-blue-gray);
+    opacity: 0.5;
+}
+
+// The colour well hides the native picker beneath a styled swatch.
+.well {
+    position: relative;
+    display: block;
+    width: rem(28);
+    height: rem(16);
+    overflow: hidden;
+    border: 1px solid var(--color-net-light);
+    border-radius: rem(4);
+}
+
+.wellInput {
+    position: absolute;
+    inset: rem(-10);
+    width: calc(100% + #{rem(20)});
+    height: calc(100% + #{rem(20)});
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+    border: 0;
+}

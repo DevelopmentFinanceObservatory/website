@@ -1,0 +1,149 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// A card on the whiteboard: the shared shell (face, head, title) plus the
+// stat and note bodies. Charts, tables and the chrome bar have their own
+// modules; the pin + kebab live in CardActions.
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: rem(16);
+    width: 100%;
+    height: 100%;
+    padding: rem(16);
+    overflow: hidden;
+    color: var(--th-text, var(--color-charcoal));
+    background-color: var(--th-card, var(--color-white));
+    border: 1px solid var(--th-line, var(--color-net-light));
+    border-radius: rem(6);
+    animation: widget-in 0.45s $ease-out both;
+
+    // Tint and shadow settle on the same curve as the box's transform.
+    transition:
+        background-color 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        border-color 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes widget-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+// The slot's state reaches the card by attribute (the slot is another
+// module): lifted → the sage tint per the design; filtered out → inert.
+[data-dragging] .card {
+    background-color: var(--th-line, var(--color-net-light));
+    border-color: var(--th-line, var(--color-net-light));
+    box-shadow: 0 rem(14) rem(30) rgb(28 27 26 / 14%);
+    transition:
+        background-color 0.3s $ease-out,
+        border-color 0.3s $ease-out,
+        box-shadow 0.3s $ease-out;
+}
+
+[data-dimmed] .card {
+    pointer-events: none;
+}
+
+.cardHead {
+    @include flex(row, space-between, flex-start);
+
+    flex-shrink: 0;
+    gap: rem(12);
+}
+
+.cardTitle {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+}
+
+// The stat card: rem(20) between title and number (others keep the base
+// gap), and its text caps at rem(188) so it wraps clear of the pin.
+.cardStat {
+    gap: rem(20);
+
+    .cardTitle {
+        max-width: rem(188);
+    }
+}
+
+.keyNumber {
+    @include font-size(28px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+}
+
+// The number with its caption close under it, as one block the card's gap
+// spaces from the title.
+.keyFace {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+}
+
+// A per cent sign: attached to the number, lighter.
+.keySuffix {
+    font-weight: 300;
+    letter-spacing: -0.02em;
+}
+
+// The caption under the number: unit, price basis, period and change.
+.keyContext {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+}
+
+// The user note: title (Outfit 500 12) over free text (Outfit 300 12). The
+// inner stack is content-sized (the card's own height follows it, cell by
+// cell, via TextCard's measurement) — nothing scrolls or clips.
+.cardText .cardTitle {
+    font-weight: 500;
+}
+
+.textInner {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+.textBody {
+    @include font-size(12px, 1.2);
+
+    max-width: rem(243);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.031em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+// Phone: the cell shrinks to fit the screen (useGridCell), so the card's
+// own air shrinks with it.
+@include breakpoint(phone) {
+    .card {
+        gap: rem(12);
+        padding: rem(12);
+    }
+
+    .cardStat {
+        gap: rem(14);
+    }
+
+    .keyNumber {
+        @include font-size(24px, 0.95);
+    }
+}

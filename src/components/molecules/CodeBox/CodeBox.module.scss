@@ -1,0 +1,83 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Code / URL box: mono text, Copy square (and a quiet "View Docs") at right.
+.codeBox {
+    @include flex(row, space-between, flex-start);
+
+    gap: rem(10);
+    min-height: rem(40);
+    padding: rem(8) rem(10);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-net-mid);
+    border-radius: rem(6);
+}
+
+.code {
+    @include font-size(10px, 1.2);
+
+    flex: 1;
+    align-self: center;
+    min-width: 0;
+    margin: 0;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.codeSans {
+    font-family: var(--font-outfit);
+}
+
+.codeActions {
+    @include flex(row, flex-end, center);
+
+    flex-shrink: 0;
+    gap: rem(10);
+}
+
+.codeLink {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+    transition: color 0.25s ease;
+
+    &:hover {
+        color: var(--color-charcoal);
+    }
+}
+
+.copy {
+    @include flex(row, center, center);
+
+    width: rem(24);
+    height: rem(24);
+    color: var(--color-bg);
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 0;
+    border-radius: rem(4);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+    }
+
+    &:hover {
+        background-color: var(--color-gray-2600);
+    }
+}
+
+.copied {
+    color: var(--color-mint-dark);
+    background-color: var(--color-mint);
+}

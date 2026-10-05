@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# builds and coverage
+/build/
+coverage/
+*.tsbuildinfo
+
+# the bundled migrate entrypoint (pnpm run build:migrate)
+dist/
+
+# env files — commit only an example, never values
+.env*
+!.env.example
+
+# agent guidance files that `next dev` (re)generates locally
+AGENTS.md
+CLAUDE.md
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# local redis (rate-limit dev runs)
+dump.rdb

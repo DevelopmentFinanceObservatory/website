@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-02T16:54:36Z",
+  "generator_commit": "67347a1e21db53717e646660adb2b22a9f755753",
+  "track": "ai-tools",
+  "categories": [
+    {
+      "id": "assistants",
+      "label": "Placeholder: Assistants"
+    },
+    {
+      "id": "automation",
+      "label": "Placeholder: Automation"
+    }
+  ],
+  "entries": [
+    {
+      "id": "placeholder-under-consideration",
+      "title": "Placeholder: Under-Consideration Entry",
+      "description": "This is a placeholder showing the under-consideration status with a category from this track's own vocabulary, and it carries no commitment. It exists only so a reader can see an unscheduled entry in this track.",
+      "categories": [
+        "assistants"
+      ],
+      "status": "under-consideration"
+    }
+  ]
+}

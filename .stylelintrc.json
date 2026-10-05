@@ -1,0 +1,96 @@
+{
+  "customSyntax": "postcss-scss",
+  "extends": "stylelint-config-standard-scss",
+  "plugins": [
+    "@stylistic/stylelint-plugin",
+    "stylelint-selector-bem-pattern"
+  ],
+  "ignoreFiles": [
+    "**/*.css"
+  ],
+  "rules": {
+    "selector-pseudo-class-no-unknown": [
+      true,
+      {
+        "ignorePseudoClasses": ["global", "local"]
+      }
+    ],
+    "selector-class-pattern": [
+      "^[a-z][a-zA-Z0-9-]*$",
+      {
+        "message": "Class names must be kebab-case or camelCase (CSS Modules)"
+      }
+    ],
+    "plugin/selector-bem-pattern": {
+      "componentName": "[a-z]+(?:-[a-z]+)*",
+      "componentSelectors": {
+        "initial": "^\\.{componentName}(?:__[a-z]+(?:-[a-z]+)*)?(?:--[a-z]+(?:-[a-z]+)*)?$",
+        "combined": "^\\.combined-{componentName}-[a-z]+$"
+      },
+      "utilitySelectors": "^\\.(?:util|font|icon)-[a-z]+(?:-[a-z]+)*$",
+      "ignoreSelectors": [
+        "^\\.page$",
+        "^\\.container$",
+        "^\\.visually-hidden$"
+      ]
+    },
+    "at-rule-no-vendor-prefix": true,
+    "at-rule-empty-line-before": [
+      "always",
+      {
+        "except": ["first-nested"],
+        "ignoreAtRules": ["include", "import", "else", "use"]
+      }
+    ],
+    "block-no-empty": true,
+    "@stylistic/block-closing-brace-empty-line-before": "never",
+    "comment-empty-line-before": "always",
+    "custom-property-empty-line-before": [
+      "always",
+      {
+        "except": ["after-custom-property", "first-nested"]
+      }
+    ],
+    "@stylistic/declaration-block-trailing-semicolon": "always",
+    "@stylistic/declaration-colon-space-after": "always-single-line",
+    "@stylistic/declaration-colon-space-before": "never",
+    "font-weight-notation": "numeric",
+    "@stylistic/function-comma-space-after": "always-single-line",
+    "@stylistic/function-parentheses-space-inside": "never-single-line",
+    "function-url-quotes": "always",
+    "@stylistic/indentation": 4,
+    "@stylistic/max-empty-lines": 3,
+    "@stylistic/media-feature-colon-space-after": "always",
+    "@stylistic/media-feature-colon-space-before": "never",
+    "media-feature-name-no-vendor-prefix": true,
+    "@stylistic/media-feature-parentheses-space-inside": "never",
+    "media-feature-range-notation": null,
+    "no-duplicate-selectors": true,
+    "@stylistic/number-leading-zero": null,
+    "rule-empty-line-before": [
+      "always-multi-line",
+      { "ignore": ["first-nested", "after-comment"] }
+    ],
+    "@stylistic/selector-attribute-brackets-space-inside": "never",
+    "@stylistic/selector-attribute-operator-space-after": "never",
+    "selector-attribute-quotes": "always",
+    "@stylistic/selector-combinator-space-after": "always",
+    "selector-no-vendor-prefix": true,
+    "@stylistic/selector-pseudo-class-parentheses-space-inside": "never",
+    "selector-pseudo-element-colon-notation": "double",
+    "@stylistic/string-quotes": "double",
+    "@stylistic/value-list-comma-newline-after": "always-multi-line",
+    "@stylistic/value-list-comma-space-after": "always-single-line",
+    "@stylistic/value-list-comma-space-before": "never",
+    "@stylistic/value-list-max-empty-lines": 0,
+    "value-no-vendor-prefix": true,
+    "value-keyword-case": [
+      "lower",
+      {
+        "camelCaseSvgKeywords": true,
+        "ignoreFunctions": ["var"]
+      }
+    ],
+    "scss/at-rule-conditional-no-parentheses": null
+  }
+}

@@ -1,0 +1,336 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// One screen where it fits (five rows a page keep the list within a normal
+// viewport); on short screens the page simply scrolls.
+.section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+}
+
+// The grid ground spans the whole section (it grows with the content) and
+// clips its own drifting tiles — the section itself never scrolls; the page
+// does, and only when it must.
+.canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.bar {
+    position: relative;
+    z-index: 2;
+}
+
+// Anchored to the top (doubled selector: it must beat the landing stage's
+// vertical centring whatever the stylesheet order), tight paddings — a
+// shorter result list never moves the search box, and the whole thing fits
+// the viewport.
+// Centred on the PAGE like the sign-in screen: the stage is pulled up under
+// the fixed bar (rem(60)) so its centring box spans the full viewport, with
+// symmetric padding that clears the bar when the content is tall (doubled
+// selector: it must beat the landing stage's own rules whatever the order).
+.stage.stage {
+    justify-content: center;
+    min-height: 0;
+    margin-top: rem(-60);
+    padding-block: rem(72);
+}
+
+.title {
+    @include font-size(36px, 1.1);
+
+    margin-bottom: rem(14);
+}
+
+.lead {
+    max-width: rem(400);
+    margin-bottom: rem(20);
+}
+
+.list {
+    width: 100%;
+    max-width: rem(560);
+}
+
+// The landing prompt shell, tightened for search: no landing margin, a
+// quiet icon on the right (or the clear X while there's a query).
+.search {
+    margin-bottom: rem(10);
+
+    // We draw our own clear button.
+    input::-webkit-search-cancel-button,
+    input::-webkit-search-decoration {
+        appearance: none;
+    }
+}
+
+.searchHint,
+.searchClear {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(28);
+    height: rem(28);
+    color: var(--color-stone);
+
+    svg {
+        width: rem(14);
+        height: rem(14);
+    }
+}
+
+.searchClear {
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(6);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+
+    &:hover {
+        color: var(--color-charcoal);
+        background-color: var(--color-net-light);
+    }
+}
+
+.emptyBox {
+    @include flex(column, flex-start, center);
+
+    gap: rem(16);
+    padding: rem(24) rem(10);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.empty {
+    @include font-size(13px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+.rows {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+    list-style: none;
+    text-align: left;
+}
+
+// One conversation: title + meta on the left (the whole thing opens it), the
+// arrow and Remove on the right.
+.row {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    padding: rem(8) rem(8) rem(8) rem(12);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+
+    // Entrance: fade + rise, staggered by --i (rows remount per result set /
+    // page, so the entrance plays every time the list changes).
+    animation: row-in 0.5s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+    transition:
+        border-color 0.25s ease,
+        opacity 0.25s ease;
+
+    &:hover {
+        border-color: var(--color-sage);
+    }
+}
+
+@keyframes row-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.rowBusy {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+// While fetching: the five-row footprint (rows + gaps), spinner centred.
+.loading {
+    @include flex(row, center, center);
+
+    min-height: calc(5 * #{rem(50)} + 4 * #{rem(6)});
+    color: var(--color-stone);
+}
+
+.pager {
+    @include flex(row, center, center);
+
+    gap: rem(10);
+    margin-top: rem(12);
+}
+
+.pagerCount {
+    @include font-size(11px, 1);
+
+    min-width: rem(40);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-align: center;
+    letter-spacing: -0.02em;
+}
+
+.rowMain {
+    @include flex(column, flex-start, flex-start);
+
+    flex: 1;
+    gap: rem(4);
+    min-width: 0;
+    text-decoration: none;
+}
+
+.rowTitle {
+    @include font-size(14px, 1.2);
+
+    display: -webkit-box;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.rowMeta {
+    @include font-size(10px, 1.2);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+.rowActions {
+    @include flex(row, flex-end, center);
+
+    flex-shrink: 0;
+    gap: rem(4);
+}
+
+// The prompt's submit square, reused as "open".
+.open {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    color: var(--color-bg);
+    background-color: var(--color-charcoal);
+    border-radius: rem(6);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+
+    svg {
+        width: rem(14);
+        height: rem(14);
+    }
+
+    &:hover {
+        background-color: var(--color-gray-2600);
+    }
+}
+
+// Remove: quiet bordered pill; the confirmation lives in the panel.
+.remove {
+    @include flex(row, center, center);
+    @include font-size(11px, 1);
+
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+    transition:
+        color 0.25s ease,
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+
+    &:hover {
+        border-color: var(--color-sage);
+    }
+
+    &:disabled {
+        cursor: default;
+    }
+}
+
+// The Remove panel: what goes, and the one red action (the dark button's
+// shape, in red — same as Delete account).
+.confirm {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+.confirmCopy {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+
+    strong {
+        font-weight: 500;
+    }
+}
+
+.danger {
+    @include flex(row, center, center);
+    @include font-size(12px, 1.34);
+
+    width: 100%;
+    height: rem(36);
+    padding: 0 rem(14);
+    font-family: var(--font-dm-mono);
+    color: var(--color-white);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background-color: var(--color-red);
+    border: 0;
+    border-radius: rem(6);
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.85;
+    }
+}
+
+@include breakpoint(phone) {
+    // No vertical centring on a phone: the stage starts where the Studio
+    // landing's "Create a Canvas" sits and the page scrolls normally past the
+    // list.
+    // (Fixed bar, so the stage starts at the viewport top: rem(160) puts the
+    // eyebrow on the Studio landing's line.)
+    .stage.stage {
+        justify-content: flex-start;
+        margin-top: 0;
+        padding-block: rem(160) rem(60);
+    }
+
+    .title {
+        @include font-size(36px, 1.1);
+    }
+}

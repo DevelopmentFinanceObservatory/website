@@ -1,0 +1,43 @@
+[
+    {
+        "slug": "life-expectancy-two-countries",
+        "kind": "conversation",
+        "title": "Life Expectancy: Nigeria vs Guatemala",
+        "description": "A worked Studio session comparing life expectancy in two countries — the questions asked, the answers given, and the charts they produced.",
+        "types": ["charts"],
+        "region": "global",
+        "source": "wb-wdi",
+        "sharedFrom": "qROSBqut"
+    },
+    {
+        "slug": "life-expectancy-canvas",
+        "kind": "canvas",
+        "title": "Two Countries, One Canvas",
+        "description": "The same comparison as a canvas alone: both charts side by side, without the conversation that built them.",
+        "types": ["charts"],
+        "region": "global",
+        "source": "wb-wdi",
+        "sharedFrom": "56yUjCbg"
+    },
+    {
+        "slug": "life-expectancy-nigeria-chart",
+        "kind": "card",
+        "title": "Life Expectancy in Nigeria, 1960–2023",
+        "description": "One chart on its own — six decades of life expectancy from the World Development Indicators.",
+        "types": ["charts"],
+        "region": "ssa",
+        "source": "wb-wdi",
+        "sharedFrom": "zKV5jIUt"
+    },
+    {
+        "slug": "gdp-growth-african-countries",
+        "kind": "dataset",
+        "title": "GDP Growth Across African Countries",
+        "description": "A dataset built in Get Data: annual GDP growth for African economies, ready to filter, download or carry into Studio.",
+        "types": ["tables"],
+        "region": "ssa",
+        "source": "wb-wdi",
+        "query": "GDP growth rate african countries",
+        "sharedFrom": "4RWMjQXo"
+    }
+]

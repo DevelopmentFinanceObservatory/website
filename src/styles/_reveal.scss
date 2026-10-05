@@ -1,0 +1,72 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Organic staggered entrances (pattern from lifestories' tag picker):
+// mark elements with data-reveal + `--i`; the observer toggles data-revealed.
+[data-reveal],
+[data-reveal-group] {
+    opacity: 0;
+    translate: 0 rem(16);
+    scale: 0.985;
+
+    // Exit: quick, uniform, no stagger (pattern from lifestories).
+    // background/color ride along so hover transitions survive on revealed
+    // elements (this shorthand would otherwise clobber their own lists).
+    transition: opacity 0.3s $ease-in,
+        translate 0.3s $ease-in,
+        scale 0.3s $ease-in,
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+// Text never scales — it only fades and rises.
+[data-reveal="text"] {
+    scale: 1;
+}
+
+// Trigger-only group: children animate, the container itself does not.
+[data-reveal-group="trigger"] {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+    transition: none;
+}
+
+[data-reveal][data-revealed],
+[data-reveal-group][data-revealed],
+[data-reveal-group][data-revealed] [data-reveal] {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+
+    // Delays per entrance property only — a blanket transition-delay would lag hovers.
+    transition: opacity 0.7s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        translate 0.85s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        scale 0.85s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+// Historically the no-bounce sibling of the stock reveal; since the stock
+// settle dropped its overshoot the two are identical, and the value stays
+// only so existing data-reveal="soft" markup keeps working.
+[data-reveal="soft"][data-revealed],
+[data-reveal-group="soft"][data-revealed],
+[data-reveal-group="soft"][data-revealed] [data-reveal],
+[data-reveal-group][data-revealed] [data-reveal="soft"] {
+    transition: opacity 0.7s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        translate 0.85s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        scale 0.85s $ease-out calc(var(--i, 0) * $reveal-stagger),
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-reveal],
+    [data-reveal-group] {
+        opacity: 1;
+        translate: 0 0;
+        scale: 1;
+        transition: none;
+    }
+}

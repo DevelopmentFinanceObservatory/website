@@ -1,0 +1,40 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+
+    // Scroll anchoring corrects the scroll position when content shifts —
+    // with this many scroll-driven animations it causes occasional jumps.
+    overflow-anchor: none;
+}
+
+body {
+    margin: 0;
+    color: var(--color-text);
+    background-color: var(--color-bg);
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+a {
+    color: inherit;
+}

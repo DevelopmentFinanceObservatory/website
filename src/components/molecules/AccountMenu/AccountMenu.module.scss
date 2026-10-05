@@ -1,0 +1,127 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Same shell as the header's nav dropdown (tokens the dark header doesn't
+// override) so it reads the same on any background.
+.content {
+    z-index: $z-header;
+    min-width: rem(220);
+    padding: rem(6);
+    background-color: var(--color-media-bg);
+    border: 1px solid var(--color-beige);
+    border-radius: rem(6);
+    transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+
+    &[data-state="open"] {
+        animation: account-in 0.3s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: account-out 0.2s $ease-in forwards;
+    }
+}
+
+@keyframes account-in {
+    from {
+        opacity: 0;
+        scale: 0.94;
+    }
+}
+
+@keyframes account-out {
+    to {
+        opacity: 0;
+        scale: 0.96;
+    }
+}
+
+.who {
+    @include flex(row, flex-start, center);
+
+    gap: rem(10);
+    padding: rem(8) rem(10);
+}
+
+.avatar,
+.avatarFallback {
+    flex-shrink: 0;
+    width: rem(28);
+    height: rem(28);
+    border-radius: 50%;
+}
+
+.avatar {
+    object-fit: cover;
+}
+
+.avatarFallback {
+    @include flex(row, center, center);
+    @include font-size(13px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-bg);
+    background-color: var(--color-charcoal);
+}
+
+.whoText {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(2);
+    min-width: 0;
+}
+
+.name {
+    @include font-size(13px, 1.2);
+
+    overflow: hidden;
+    max-width: rem(180);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.email {
+    @include font-size(10px, 1.2);
+
+    overflow: hidden;
+    max-width: rem(180);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.separator {
+    height: 1px;
+    margin: rem(4) rem(2);
+    background-color: var(--color-beige);
+}
+
+.item {
+    @include font-size(14px, 1.3);
+
+    display: block;
+    width: 100%;
+    padding: rem(10) rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-align: left;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    &:hover,
+    &:focus-visible {
+        background-color: var(--color-beige);
+        outline: none;
+    }
+}
+
+.itemDanger {
+    color: var(--color-red);
+}

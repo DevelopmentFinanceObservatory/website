@@ -1,0 +1,232 @@
+/** Promote fields and identity-edit helpers for a `dataset_resubmit` identity
+ *  entry. */
+
+import type {
+    BaseIdentity,
+    EntityRoleKey,
+    IdentityBinding,
+    IdentityFacetAxis,
+    IdentityFacetRefBinding,
+    IdentityFacets,
+    RemovedParts,
+    Spec,
+} from './types';
+
+export interface PromoteFields {
+    // Harmless when the identity names a measure family: the API elects
+    // that family's membership from the packaged code index and ignores a
+    // posted list.
+    resolved_stat_var_dcids?: string[];
+}
+
+/** Derive the promote fields for a dataset_resubmit identity entry of `spec`:
+ *  the sibling fields that ride alongside `identity`, not inside it. The
+ *  dcids are the members `stat_vars.items` carries. The API ignores them when
+ *  the packaged code index elects the identity's family. A standard
+ *  (catch-all) shape has no such election, so for it the list is the
+ *  membership. */
+export function promoteFromSpec(spec: Spec): PromoteFields {
+    const out: PromoteFields = {};
+    const svs = (spec.stat_vars?.items ?? []).map((item) => item.ref).filter(Boolean);
+    if (svs.length) out.resolved_stat_var_dcids = svs;
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Resolved-binding → identity-binding adapters
+// ---------------------------------------------------------------------------
+// The page's slot editors (SearchSentence.tsx, SlotMenu.tsx) build a binding
+// in the engine's RESOLVED wire shape (`{kind:'unbound'}` /
+// `{kind:'value', value:{ref, value_kind}}` — Spec.slots[i].binding), because
+// that's what slot_options entries and the currently-bound value carry. The
+// identity core's own binding shape is `{state, ref}` (bare dcid), not
+// `{kind, value:{ref:{dcid,label}}}` — these adapters bridge the two without
+// asking the editors to know about the identity wire shape at all.
+
+/** The bound dcid a resolved binding carries, or null when it binds nothing
+ *  (unbound, or a shape this adapter doesn't recognise). */
+function resolvedBindingDcid(binding: unknown): string | null {
+    const b = binding as { kind?: string; value?: { ref?: { dcid?: string } } } | null | undefined;
+    if (!b || b.kind === 'unbound') return null;
+    return b.value?.ref?.dcid ?? null;
+}
+
+/** One dcid for value, every member's for set. None for unbound/absent or
+ *  an unrecognised shape. */
+function resolvedBindingDcids(binding: unknown): string[] {
+    const b = binding as
+        | {
+              kind?: string;
+              value?: { ref?: { dcid?: string } };
+              values?: { ref?: { dcid?: string } }[];
+          }
+        | null
+        | undefined;
+
+    if (!b) return [];
+
+    if (b.kind === 'set') {
+        return (b.values ?? [])
+            .map((value) => value?.ref?.dcid)
+            .filter((dcid): dcid is string => !!dcid);
+    }
+
+    return b.value?.ref?.dcid ? [b.value.ref.dcid] : [];
+}
+
+/** Convert a resolved what/how slot binding to its identity-slot form. Every
+ *  shape-declared slot is dense (always present, `unbound` if nothing is
+ *  bound), so — unlike facets/entities — there is no "drop" case here. */
+export function toIdentitySlotBinding(binding: unknown): IdentityBinding {
+    const dcid = resolvedBindingDcid(binding);
+    return dcid ? { state: 'value', ref: dcid } : { state: 'unbound' };
+}
+
+/** Convert a resolved binding to a facet binding, or null when it should be
+ *  dropped from the sparse `facets` map entirely (the facet union has no
+ *  `unbound` state — an unconstrained axis is simply absent). */
+function toIdentityFacetBinding(binding: unknown): IdentityFacetRefBinding | null {
+    const dcid = resolvedBindingDcid(binding);
+    return dcid ? { state: 'value', ref: dcid } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Identity-edit helpers: each returns the next identity plus any `removed`
+// accounting the edit requires (identity_edit.check_edit_incomplete refuses
+// 422 if a base-bound facet axis / entity role arrives neither re-sent nor
+// named in `removed`).
+// ---------------------------------------------------------------------------
+
+export interface IdentityEdit {
+    identity: BaseIdentity;
+    removed?: RemovedParts;
+}
+
+/** Replace one what/how slot's binding, matched by property dcid. Every
+ *  other slot rides through untouched, so shape-declared completeness
+ *  (identity_edit.check_slots_declared) is preserved for free. */
+export function withSlotBinding(
+    identity: BaseIdentity,
+    property: string | null | undefined,
+    binding: IdentityBinding,
+): BaseIdentity {
+    if (!property) return identity;
+    return {
+        ...identity,
+        slots: identity.slots.map((slot) =>
+            slot.property === property ? { ...slot, binding } : slot,
+        ),
+    };
+}
+
+/** Bind or drop one entity role (`observationAbout`/`origin`/`destination`).
+ *  `dcids` null/empty drops the role entirely; dropping a role the base had
+ *  bound is acknowledged in `removed.entities`, since a role absent from
+ *  `identity.entities` reads as "not asked about" rather than "unbound".
+ *  Changing the role's members drops its `entity_groups` entry, since the
+ *  group named exactly those members and the API refuses a group whose role
+ *  binds nothing. */
+export function withEntityEdit(
+    identity: BaseIdentity,
+    role: EntityRoleKey,
+    dcids: string[] | null,
+): IdentityEdit {
+    const entities = { ...identity.entities };
+    const hadRole = role in entities;
+    const bound = dcids && dcids.length > 0;
+
+    if (bound) {
+        entities[role] = dcids;
+    } else {
+        delete entities[role];
+    }
+
+    return {
+        identity: {
+            ...identity,
+            entities,
+            ...(identity.entity_groups
+                ? { entity_groups: withoutChangedGroup(identity, role, entities[role]) }
+                : {}),
+        },
+        removed: !bound && hadRole ? { entities: [role] } : undefined,
+    };
+}
+
+function withoutChangedGroup(
+    identity: BaseIdentity,
+    role: EntityRoleKey,
+    next: string[] | undefined,
+): BaseIdentity['entity_groups'] {
+    const groups = identity.entity_groups;
+    if (!groups || !(role in groups)) return groups;
+
+    const before = identity.entities[role] ?? [];
+    const beforeSet = new Set(before);
+    const unchanged =
+        next !== undefined &&
+        new Set(next).size === beforeSet.size &&
+        next.every((dcid) => beforeSet.has(dcid));
+    if (unchanged) return groups;
+
+    const rest = { ...groups };
+    delete rest[role];
+    return rest;
+}
+
+/** Bind or drop one facet axis (e.g. `provenance` for the source picker).
+ *  `binding` null drops the axis from the sparse map; dropping an axis the
+ *  base had bound is acknowledged in `removed.facets` (see the module doc). */
+export function withFacetEdit<A extends IdentityFacetAxis>(
+    identity: BaseIdentity,
+    axis: A,
+    binding: IdentityFacets[A] | null,
+): IdentityEdit {
+    const facets: IdentityFacets = { ...identity.facets };
+    const hadAxis = axis in facets;
+
+    if (binding) {
+        facets[axis] = binding;
+    } else {
+        delete facets[axis];
+    }
+
+    return {
+        identity: { ...identity, facets: Object.keys(facets).length ? facets : undefined },
+        removed: !binding && hadAxis ? { facets: [axis] } : undefined,
+    };
+}
+
+/**
+ * Route one resolved-slot edit (editSlot's `(spec, slotIndex, binding)`) to
+ * the right member of `identity`: what/how slots by property dcid, `where`
+ * to the role carried by its sentence token, `source` to facets.provenance.
+ * A non-directional where token has no role and uses observationAbout.
+ * `when` never reaches here — SearchSentence.tsx's WindowEditor calls
+ * onEditWindow directly.
+ */
+export function withResolvedSlotEdit(
+    spec: Pick<Spec, 'identity' | 'slots'>,
+    slotIndex: number,
+    binding: unknown,
+    entityRole: EntityRoleKey = 'observationAbout',
+): IdentityEdit {
+    const identity = spec.identity as BaseIdentity;
+    const slot = spec.slots[slotIndex];
+    const axis = slot?.key?.axis;
+
+    if (axis === 'where') {
+        const dcids = resolvedBindingDcids(binding);
+        return withEntityEdit(identity, entityRole, dcids.length ? dcids : null);
+    }
+    if (axis === 'source') {
+        return withFacetEdit(identity, 'provenance', toIdentityFacetBinding(binding));
+    }
+    return {
+        identity: withSlotBinding(
+            identity,
+            slot?.key?.property?.dcid,
+            toIdentitySlotBinding(binding),
+        ),
+    };
+}

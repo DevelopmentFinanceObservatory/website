@@ -1,0 +1,18 @@
+@use "mixins" as *;
+
+// All icons are authored on a 20×20 grid (glyph centered with natural padding).
+.arrow,
+.arrow-down,
+.arrow-small,
+.arrow-up-right,
+.chevron-down,
+.closer,
+.collapse,
+.edit,
+.menu,
+.pin,
+.user {
+    display: block;
+    width: rem(20);
+    height: auto;
+}

@@ -1,0 +1,25 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.wall {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: rem(16);
+    max-width: rem(420);
+    margin: 0 auto;
+    padding: rem(24) rem(20);
+    text-align: center;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+.copy {
+    @include font-size(14px, 1.4);
+
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}

@@ -1,0 +1,37 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// Scroll-scrubbed text fill. Set --text-fill-color on the element (or ancestor)
+// to pick the full color; the dim state derives from it, mixed with the
+// section's ground (--text-fill-bg) rather than transparency — an opaque
+// dim, so decor behind the section (the map's strokes) never shows through
+// the letters.
+// No --fill-progress default here: in external mode it must inherit from the ancestor.
+.wrapper {
+    display: block;
+}
+
+.word {
+    position: relative;
+    display: inline-block;
+    color: color-mix(in sRGB,
+    var(--text-fill-color, var(--color-charcoal)) 18%,
+    var(--text-fill-bg, var(--color-bg)));
+}
+
+.wordFill {
+    position: absolute;
+    inset: 0;
+    color: var(--text-fill-color, var(--color-charcoal));
+    user-select: none;
+
+    --word-fill: clamp(0, (var(--fill-progress, 0) - var(--w, 0)) * var(--fill-span, 8), 1);
+
+    clip-path: inset(-0.35em calc((1 - var(--word-fill)) * 100% - var(--word-fill) * 0.35em) -0.35em -0.1em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wordFill {
+        clip-path: none;
+    }
+}

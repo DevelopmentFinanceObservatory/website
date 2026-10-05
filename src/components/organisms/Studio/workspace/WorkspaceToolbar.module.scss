@@ -1,0 +1,200 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// rem(77) from the viewport top (the bar above is rem(60) tall), rem(5) above
+// the chat/canvas line — which lands that line exactly at --ws-top (110).
+.wsTools {
+    @include flex(row, flex-start, center);
+
+    position: relative;
+    width: 100%;
+    margin-top: rem(17);
+    margin-bottom: rem(5);
+    pointer-events: auto;
+}
+
+// Spans the chat column: pill left, collapse toggle glued to the column's
+// right edge. Collapsing shrinks the column to just the toggle — it glides
+// left with the width, the pill fades and clips away.
+.wsToolsLeft {
+    @include flex(row, flex-start, center);
+
+    // No overflow clip — the pill slides until the SCREEN edge cuts it, not
+    // the shrinking column.
+    position: relative;
+    flex-shrink: 0;
+    width: var(--ws-chat);
+    height: rem(28);
+    animation: ws-rise 0.5s $ease-out 0.4s both;
+    transition: width var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+// rem(34): the toggle rides the right edge, so its rem(28) box spans
+// 16–44 — dead centre of the rem(60) strip left of the collapsed canvas.
+.wsToolsLeftCollapsed {
+    width: rem(34);
+}
+
+// The pill rides out to the left in step with the chat panel below it (the
+// shrinking column clips it) instead of fading in place.
+.chatTabs {
+    transition: translate var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+.chatTabsHidden {
+    pointer-events: none;
+    translate: calc(var(--ws-chat) * -1) 0;
+}
+
+// The conversation's title rides rem(10) inside the canvas' left edge in
+// both states — its offset is derived from the same variables as the clip
+// box and moves on the same clock, so it tracks the edge exactly. It takes
+// whatever width is left up to the filters and elides.
+.title {
+    @include font-size(16px, 0.9);
+
+    @include flex(row, flex-start, center);
+
+    flex: 1 1 auto;
+    gap: rem(6);
+    min-width: 0;
+    margin-left: calc(var(--ws-canvas-left) - var(--ws-left) - var(--ws-chat) + #{rem(10)});
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    color: var(--color-charcoal);
+    letter-spacing: 0.02em;
+    animation: ws-rise 0.5s $ease-out 0.5s both;
+    transition: margin-left var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+.titleShifted {
+    margin-left: calc(var(--ws-collapsed-left) - var(--ws-left) - #{rem(34)} + #{rem(10)});
+}
+
+.titleText {
+    min-width: 0;
+    overflow: hidden;
+
+    // Overflow clips at the padding edge — the vertical padding (cancelled
+    // by the margins) keeps the tight 0.9 line-height's descenders visible.
+    padding-block: 0.2em;
+    margin-block: -0.2em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// The pencil: a 1em box on the text's line, the rem(20) glyph overflowing it.
+.editTitle {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    padding: 0;
+    overflow: visible;
+
+    // The rename glyph sits a step quieter than the title (design's sage).
+    color: var(--color-gray-1600);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.5;
+    }
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+// The card-type pills at the far right of the row.
+.cardTabs {
+    flex-shrink: 0;
+    margin-left: rem(10);
+    animation: ws-rise 0.5s $ease-out 0.55s both;
+}
+
+.chatCollapse {
+    @include flex(row, center, center);
+
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: rem(28);
+    height: rem(28);
+    padding: 0;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    translate: 0 -50%;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.5;
+    }
+
+    // Deliberately snaps — a spinning glyph reads wrong here.
+    &[data-collapsed="true"] {
+        rotate: 180deg;
+    }
+}
+
+@keyframes ws-rise {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+// --- Canvas-only / one-card share ("solo") -----------------------------------
+// No chat at all: its controls are gone (compound selector so it beats the
+// base display rules) and the filters sit at the sheet's edge.
+.wsToolsLeft.wsToolsLeftGone {
+    display: none;
+}
+
+// Flush with the DFO logo in the bar above: the logo sits rem(19) from the
+// viewport edge (bar padding rem(14) + logo margin rem(5), no back arrow on
+// a share); the tools row itself starts at --ws-left, hence the difference.
+.title.titleSolo {
+    margin-left: calc(#{rem(19)} - var(--ws-left));
+}
+
+// The tools row keeps its usual height (the chat controls gave it rem(28))
+// so the filters stay on the same baseline as everywhere else.
+.wsTools.wsToolsSolo {
+    height: rem(28);
+}
+
+// --- Phone ------------------------------------------------------------------
+// One pill (Chat / Activity / Canvas) left, the ⋮ menu right; the filters on
+// a strip over the sheet's top edge, scrolling sideways when they don't fit.
+.wsToolsPhone {
+    flex-shrink: 0;
+    justify-content: space-between;
+    height: rem(28);
+    animation: ws-rise 0.5s $ease-out 0.4s both;
+}
+
+// A second tools row (the section moves --ws-top down for it) so it never
+// covers a card.
+.cardTabsPhone {
+    display: flex;
+    flex-shrink: 0;
+    width: 100%;
+    height: rem(28);
+    margin: rem(5) 0;
+    overflow-x: auto;
+    pointer-events: auto;
+    scrollbar-width: none;
+    animation: ws-rise 0.5s $ease-out 0.5s both;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}

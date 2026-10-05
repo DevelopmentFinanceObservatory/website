@@ -1,0 +1,154 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The plan preview + the "Start building?" bar stack with a small seam.
+.planWrap {
+    @include flex(column, flex-start, stretch);
+
+    flex-shrink: 0;
+    gap: rem(8);
+}
+
+.plan {
+    overflow: hidden;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+
+    // The prompt input's rounding — the whole stack reads as one family.
+    border-radius: rem(10);
+}
+
+.head {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    padding: rem(14) rem(16) rem(10);
+}
+
+.title {
+    @include font-size(14px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.version,
+.count {
+    font-weight: 400;
+    color: var(--color-stone);
+}
+
+// "View Plan" — the full plan, in a modal.
+.view {
+    @include font-size(12px, 1.34);
+
+    flex-shrink: 0;
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    letter-spacing: -0.031em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+// --- The step timeline (the first few) -------------------------------------
+
+.steps {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+    margin: 0;
+    padding: 0 rem(16) rem(14);
+    list-style: none;
+}
+
+// More steps behind "View Plan": the last shown one fades out, as a cue
+// that the list goes on.
+.stepsMore .step:last-child {
+    opacity: 0.35;
+}
+
+// Dot rail: each step draws its dot; the connecting line spans between
+// dots (skipped after the last one).
+.step {
+    position: relative;
+    padding: rem(6) 0 rem(6) rem(24);
+
+    // The dot rides the label's own midline (the row's padding is even, so
+    // that is the row's centre); the line runs from under it to the next.
+    &::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: rem(10);
+        height: rem(10);
+        translate: 0 -50%;
+        background-color: var(--color-charcoal);
+        border-radius: 50%;
+    }
+
+    &:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: calc(50% + #{rem(5)});
+        bottom: calc(-50% + #{rem(5)});
+        left: rem(4.5);
+        width: 1px;
+        background-color: var(--color-charcoal);
+    }
+}
+
+.stepLabel {
+    @include font-size(12px, 1.34);
+
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+}
+
+// --- "Start building?" ------------------------------------------------------
+
+// Grows OUT of the input below: rounded on top only, its bottom edge
+// borrowed from the input's own top border (no gap, no double line).
+.proceed {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+
+    // The extra bottom padding + the negative margin tuck the bar's lower
+    // band UNDER the input that follows (the input paints over it).
+    padding: rem(10) rem(10) rem(26) rem(16);
+    margin-bottom: rem(-18);
+    background-color: var(--color-grid-bg-light);
+    border: 1px solid var(--color-sage-light);
+    border-bottom: 0;
+    border-radius: rem(10) rem(10) 0 0;
+}
+
+.proceedLabel {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.proceedActions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(6);
+}

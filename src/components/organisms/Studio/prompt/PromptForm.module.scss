@@ -1,0 +1,77 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.prompt {
+    @include flex(row, space-between, center);
+
+    // Positioned: paints ABOVE static neighbours — the plan's "Shall we
+    // proceed?" bar tucks its lower band underneath.
+    position: relative;
+    gap: rem(10);
+    width: 100%;
+    height: rem(48);
+    margin-bottom: rem(20);
+    padding: rem(10);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(10);
+}
+
+// Text sits rem(10) from the border (the container's own padding) and the
+// flex gap keeps it clear of the submit button on the right.
+.promptInput {
+    @include font-size(14px, 1.1);
+
+    flex-grow: 1;
+    min-width: 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background: none;
+    border: 0;
+    outline: none;
+
+    &::placeholder {
+        color: var(--color-charcoal);
+    }
+
+    &:focus::placeholder {
+        opacity: 0.4;
+    }
+}
+
+.promptSubmit {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(28);
+    height: rem(28);
+    color: var(--color-bg);
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 0;
+    border-radius: rem(6);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+
+    &:hover {
+        background-color: var(--color-gray-2600);
+    }
+}
+
+.promptSubmitIcon {
+    rotate: -90deg;
+}
+
+// Inside the chat panel. Unlike the landing (dark placeholder by design),
+// the follow-up hint reads as a quiet gray — typed text stays charcoal.
+.chatPrompt {
+    margin-bottom: 0;
+
+    .promptInput::placeholder {
+        color: var(--color-gray-1400);
+        opacity: 1;
+    }
+}

@@ -1,0 +1,254 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The Studio: a full-viewport light canvas (grid + drifting cell fills on
+// the landing, the docked whiteboard in the workspace), its own slim bar
+// instead of the site nav.
+.section {
+    // Workspace geometry, shared by the docked pattern and the flow layout:
+    // top = tools row at rem(77) (header rem(60) + rem(17) gap) + its rem(28)
+    // height + rem(5) gap — level with the chat panel.
+
+    --ws-header: #{rem(60)};
+    --ws-chat: #{rem(308)};
+
+    // The safe areas (phones): the bar sits under the notch band, the
+    // workspace ends above the home indicator.
+
+    --ws-safe-top: env(safe-area-inset-top, 0px);
+    --ws-top: calc(#{rem(110)} + var(--ws-safe-top));
+    --ws-bottom: calc(#{rem(10)} + env(safe-area-inset-bottom, 0px));
+    --ws-left: #{rem(10)};
+    --ws-canvas-left: calc(var(--ws-left) + var(--ws-chat) + #{rem(10)});
+    --ws-collapsed-left: #{rem(60)};
+
+    // One clock for the whole morph: canvas clip, counter-move, chat panel
+    // and pill all ride the same curve/duration/delay.
+
+    --ws-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ws-dur: 0.9s;
+    --ws-delay: 0.1s;
+
+    // Fixed viewport height (not min-height): the chat scrolls INSIDE, so the
+    // section must never grow past the screen. The landing fits by design
+    // (its big gaps carry min(rem, dvh) fallbacks).
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    color: var(--color-charcoal);
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 0;
+    transition:
+        inset var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        border-color var(--ws-dur) ease var(--ws-delay),
+        border-radius var(--ws-dur) ease var(--ws-delay);
+    will-change: inset;
+}
+
+// The clip box shrinks into the workspace's canvas region — rem(10) right of
+// the chat column, level with its top, framed and rounded; it runs off the
+// bottom edge (the negative inset hides the bottom corners).
+.canvasDocked {
+    inset: var(--ws-top) rem(10) rem(-10) var(--ws-canvas-left);
+    border: 1px solid var(--color-net-light);
+    border-radius: rem(10);
+}
+
+// Counter-move with IDENTICAL timing to the clip box's inset. Deliberately
+// left/top (layout), NOT translate: the clip's inset animates on the main
+// thread while a translate would ride the compositor — two clocks, visible
+// drift. Same-lane properties resolve in the same layout pass and cancel
+// exactly, so the grid never shifts on screen.
+.canvasInner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    transition:
+        top var(--ws-dur) var(--ws-ease) var(--ws-delay),
+        left var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+.canvasDocked .canvasInner {
+    top: calc(var(--ws-top) * -1);
+    left: calc(var(--ws-canvas-left) * -1);
+}
+
+// Collapsed chat: the clip box widens to the collapsed toggle's axis (toggle
+// stays left of the canvas edge, per the design); the counter-translation
+// keeps the grid screen-static through this move too.
+.canvasWide {
+    inset: var(--ws-top) rem(10) rem(-10) var(--ws-collapsed-left);
+}
+
+.canvasWide .canvasInner {
+    top: calc(var(--ws-top) * -1);
+    left: calc(var(--ws-collapsed-left) * -1);
+}
+
+// Entry rides an animation FROM 0 over an implicit base opacity of 1, exit is
+// a class flipping the specified value to 0 — that's what lets the transition
+// fire. (A base of 0 held up by `forwards` snaps on removal: the specified
+// value never changes, so there's nothing to transition.)
+.fill {
+    position: absolute;
+    border-radius: rem(4);
+    animation: fill-in 0.9s $ease-out;
+    transition: opacity 0.9s $ease-out;
+}
+
+.fillOut {
+    opacity: 0;
+}
+
+@keyframes fill-in {
+    from {
+        opacity: 0;
+    }
+}
+
+// Extra bar actions (passed into the shared Header) cascade in once the
+// workspace lands.
+.barExtra {
+    animation: bar-in 0.4s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 70ms + 500ms);
+}
+
+@keyframes bar-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(-8);
+    }
+}
+
+.workspace {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+
+    // The container spans the full viewport width OVER the canvas layer — as a
+    // hit-target it would swallow every hover/drag/wheel meant for the board.
+    // Only its real children catch the pointer.
+    pointer-events: none;
+
+    // min-height: 0 lets the flex chain (down to chatScroll) actually clip and
+    // scroll instead of growing the section past 100dvh.
+    min-height: 0;
+
+    // Right padding rem(15): Add Text Card's margin-left:auto lands it rem(5)
+    // inside the canvas' right edge (which sits rem(10) off the screen).
+    align-items: flex-start;
+    padding: 0 rem(15) var(--ws-bottom) var(--ws-left);
+}
+
+// The live sheet over the docked pattern — same geometry & clock as
+// .canvasDocked. It paints the full canvas itself (bg, border, radius) so its
+// own grid + cards scroll as one; the fade-in lands exactly as the dock morph
+// ends (mounted at 0.56s + 0.45s delay ≈ the 1s morph), and the sheet's grid
+// is offset-aligned to the static one it covers — an invisible swap.
+.canvasContent {
+    position: absolute;
+    inset: var(--ws-top) rem(10) rem(-10) var(--ws-canvas-left);
+    z-index: 1;
+
+    // Both axes: the sheet is a fixed logical area wider than the window —
+    // panning/edge-scroll move across it.
+    overflow: auto;
+    background-color: var(--color-grid-bg-light);
+    border: 1px solid var(--color-net-light);
+    border-radius: rem(10);
+    animation: board-in 0.35s ease 0.45s backwards;
+    transition: inset var(--ws-dur) var(--ws-ease) var(--ws-delay);
+}
+
+@keyframes board-in {
+    from {
+        opacity: 0;
+    }
+}
+
+.canvasContentWide {
+    inset: var(--ws-top) rem(10) rem(-10) var(--ws-collapsed-left);
+}
+
+// --- Canvas-only / one-card share ("solo") -----------------------------------
+// No chat: the sheet spans from the left gutter (compound selectors so they
+// beat the base inset rules).
+.canvas.canvasSolo,
+.canvasContent.canvasContentSolo {
+    inset: var(--ws-top) rem(10) rem(-10) var(--ws-left);
+}
+
+.canvas.canvasSolo .canvasInner {
+    top: calc(var(--ws-top) * -1);
+    left: calc(var(--ws-left) * -1);
+}
+
+// --- Tablet: the two panes stay, the chat column narrows ---------------------
+@include breakpoint(tablet) {
+    .section {
+        --ws-chat: #{rem(260)};
+    }
+}
+
+// --- Phone: chat and sheet take turns (the toolbar's pill switches them);
+// the sheet spans the whole width, the chat panel slides over it. -----------
+@include breakpoint(phone) {
+    .section {
+        --ws-chat: calc(100vw - 2 * var(--ws-left));
+    }
+
+    .canvasDocked,
+    .canvasWide,
+    .canvas.canvasSolo,
+    .canvasContent,
+    .canvasContentWide,
+    .canvasContent.canvasContentSolo {
+        inset: var(--ws-top) var(--ws-left) rem(-10) var(--ws-left);
+    }
+
+    .canvasDocked .canvasInner,
+    .canvasWide .canvasInner,
+    .canvas.canvasSolo .canvasInner {
+        top: calc(var(--ws-top) * -1);
+        left: calc(var(--ws-left) * -1);
+    }
+
+    .workspace {
+        padding: 0 var(--ws-left) var(--ws-bottom);
+    }
+
+    // The filters take a second tools row: the sheet starts rem(38) lower.
+    .section.filtersRow {
+        --ws-top: calc(#{rem(148)} + var(--ws-safe-top));
+    }
+
+    // Chat on screen: the sheet is fully out of sight (it peeked out under
+    // the panel otherwise).
+    .section.chatShown .canvasDocked,
+    .section.chatShown .canvasContent {
+        visibility: hidden;
+    }
+}
+
+// A gallery item with no chat panel (a canvas or a single card): the one
+// action it offers rides over the sheet's bottom-left corner.
+.continueBar {
+    position: fixed;
+    bottom: calc(#{rem(20)} + env(safe-area-inset-bottom));
+    left: calc(#{rem(20)} + env(safe-area-inset-left));
+    z-index: $z-header;
+}

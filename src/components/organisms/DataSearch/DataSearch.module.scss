@@ -1,0 +1,2264 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Stuck offset of the results-table head (≈ the fixed nav's height).
+$table-head-cover: rem(48);
+
+// Dark full-page search experience. Local re-theme: light text on gray-2800,
+// prompt tokens flipped for the dark background.
+.section {
+    --prompt-text: var(--color-yellow-hover);
+    --prompt-label: var(--color-bg);
+    --prompt-placeholder: var(--color-stone);
+
+    // Left caret bar stays yellow on the dark page; only the separator grays out.
+
+    --prompt-caret: var(--color-yellow-hover);
+    --prompt-line: var(--color-gray-2600);
+    --prompt-chip-bg: var(--color-gray-2700);
+    --prompt-chip-hover-bg: var(--color-gray-2650);
+    --prompt-chip-text: var(--color-bg);
+
+    // Two horizontal axes shared by every full-bleed block: the section
+    // gutter (cancelled by heroes/results) and the inner content inset.
+
+    // rem(30) lines the page's left baseline (the idle prompt's caret, the
+    // hero boxes' inner edge) up with the nav's Insights link.
+
+    --search-gutter: #{rem(30)};
+    --search-inset: #{rem(30)};
+
+    // The stat tiles' dark variant (the light defaults live in StatTiles).
+
+    --stat-value-text: var(--color-gray-2800);
+    --stat-label-bg: var(--color-gray-2650);
+    --stat-label-text: var(--color-step-text);
+    --stat-logo: var(--color-gray-1800);
+
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding: rem(100) var(--search-gutter) rem(30);
+    color: var(--color-bg);
+    background-color: var(--color-gray-2800);
+}
+
+// --- Idle (standalone prompt) ---------------------------------------------
+
+.idle {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+// rem(265) from the top of the SCREEN (section already pads rem(100)) — but
+// never more than a quarter of the viewport, so on shorter screens (and the
+// fluid rem scale of big ones) the prompt rises and the bottom boxes stay in
+// view; while typing the whole prompt rises to rem(140) and the "Your Query"
+// label fades in.
+.idlePrompt {
+    margin-top: calc(min(#{rem(265)}, 25dvh) - #{rem(100)});
+    transition: margin-top 0.5s $ease-custom;
+}
+
+.idle[data-typing] .idlePrompt {
+    margin-top: calc(#{rem(140)} - #{rem(100)});
+}
+
+// Always in flow (reserves its height so the input doesn't jump) — only fades.
+.queryLabel {
+    @include font-size(14px, 1.3);
+
+    margin-bottom: rem(28);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+    opacity: 0;
+    transition: opacity 0.3s $ease-out;
+}
+
+.idle[data-typing] .queryLabel {
+    opacity: 1;
+}
+
+// Standard reset spot while typing: rem(30) under the prompt block.
+.idleActions {
+    margin-top: rem(30);
+}
+
+.idleBottom {
+    display: flex;
+    gap: rem(10);
+    align-items: stretch;
+    justify-content: space-between;
+    margin-top: auto;
+
+    // Breathing room above the boxes, capped by the viewport (see .idlePrompt).
+    padding-top: min(#{rem(80)}, 6dvh);
+    transition:
+        opacity 0.3s $ease-out,
+        visibility 0.3s;
+}
+
+// Suggestions take over the boxes' slot — full width, cards flush to the top.
+// Sticky: with a wrapped (2-line) prompt the column can outgrow the viewport,
+// and the cards must stay fully in view instead of sliding below the fold.
+.idleBottomTyping {
+    display: block;
+    position: sticky;
+    bottom: rem(30);
+    padding-top: rem(40);
+
+    .cardsBlock {
+        margin-top: rem(32);
+    }
+
+    .stepsLine {
+        animation: rise-in 0.4s $ease-out both;
+    }
+}
+
+.buildBox {
+    display: flex;
+    flex-direction: column;
+    gap: rem(16);
+    justify-content: flex-end;
+    max-width: rem(660);
+    padding: rem(20) rem(10);
+    border: 1px solid var(--color-gray-2700);
+    border-radius: rem(5);
+}
+
+.buildTitle {
+    @include font-size(24px, 0.95);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.buildText {
+    @include font-size(16px, 1.2);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+}
+
+// --- Result frame ----------------------------------------------------------
+
+.result {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+// A single share button sits above the part blocks and covers the whole view.
+.resultToolbar {
+    display: flex;
+    gap: rem(12);
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: rem(12);
+}
+
+// "Snapshot · data as of …" — a link that serves frozen data says so,
+// left of the Share button.
+.shareNote {
+    @include font-size(12px, 1.3);
+
+    margin-right: auto;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-media-bg);
+    letter-spacing: -0.02em;
+}
+
+.hero {
+    display: flex;
+
+    // Full-bleed: boxes span the whole page width; the section gutter is
+    // cancelled and each box carries its own internal padding instead.
+    margin-inline: calc(var(--search-gutter) * -1);
+    align-items: stretch;
+    justify-content: space-between;
+    border-top: 1px solid var(--color-gray-2600);
+    border-bottom: 1px solid var(--color-gray-2600);
+}
+
+.heroMain {
+    flex-grow: 1;
+    max-width: rem(862);
+    padding: rem(40) rem(10) rem(40) var(--search-inset);
+}
+
+// No dataset on screen (loading, candidates, no_data, error): no right rail,
+// so the frame lines and the column cap are just noise — full width, no lines.
+.heroBare {
+    border-top: 0;
+    border-bottom: 0;
+
+    .heroMain {
+        max-width: none;
+    }
+}
+
+.eyebrow {
+    @include font-size(14px, 1.3);
+
+    // Tops the SAME LINE as the panel's big count: both columns pad rem(40)
+    // from the hero top, and the count's cap line sits rem(10) deeper into
+    // its line box than the eyebrow's does (actual-glyph-metric math:
+    // 60px/1.2 Outfit "159" vs 14px/1.3 DM Mono caps).
+    margin-top: rem(10);
+    margin-bottom: rem(28);
+    animation: rise-in 0.5s $ease-out both;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+}
+
+.query,
+.sentence {
+    @include font-size(60px, 1.2);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    animation: rise-in 0.6s $ease-out 0.08s both;
+}
+
+// DataSearch.tsx mounts one persistent .sentence <h1> across the whole
+// loading→done transition (the user's own words, then the early bind-stage
+// heading, then the resolved one). The same element never unmounts, so
+// rise-in above never replays. A token the resolved heading adds beyond the
+// early one (an empty placeholder filled in, most often) gets this short
+// fade instead, so only the genuinely new text visibly changes.
+.sentenceTokenNew {
+    animation: token-fade-in 0.25s $ease-out both;
+}
+
+@keyframes token-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sentenceTokenNew {
+        animation: none;
+    }
+}
+
+.stepsLine,
+.errorLine {
+    @include font-size(14px, 1.3);
+
+    margin-top: rem(28);
+    font-family: var(--font-dm-mono);
+    color: var(--color-media-bg);
+}
+
+.errorLine {
+    color: var(--color-yellow-stat);
+}
+
+// The muted lead above a heading that shows the nearest measure the data
+// holds.
+.closestLead {
+    @include font-size(14px, 1.3);
+
+    margin-bottom: rem(10);
+    animation: token-fade-in 0.25s $ease-out both;
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+}
+
+// The byline (unit and source) and the departures under the heading, in
+// small type.
+.byline,
+.departures {
+    @include font-size(15px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+    animation: token-fade-in 0.25s $ease-out both;
+}
+
+.byline {
+    margin-top: rem(16);
+
+    // The heading's 3px underline is drawn for 60px type.
+    .slot {
+        background-size:
+            100% 0,
+            100% 1px;
+
+        &:hover,
+        &:focus-visible,
+        &[data-state="open"] {
+            background-size:
+                100% 100%,
+                100% 0;
+        }
+    }
+}
+
+.departures {
+    display: grid;
+    gap: rem(4);
+    margin-top: rem(12);
+    padding: 0;
+    list-style: none;
+}
+
+.departureAction {
+    padding: 0;
+    font: inherit;
+    color: var(--color-yellow-hover);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:hover,
+    &:focus-visible {
+        color: #f6db45;
+    }
+}
+
+// A departure that hands the question to Studio: the sentence, then the
+// arrow Button beside it (below it at phone width).
+.departureStudio {
+    display: flex;
+    gap: rem(16);
+    align-items: center;
+    margin-block: rem(4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .closestLead,
+    .byline,
+    .departures {
+        animation: none;
+    }
+}
+
+// One warning a reader needs, in body colour; a degraded one reads as a
+// problem.
+.noteLine {
+    @include font-size(15px, 1.3);
+
+    margin-top: rem(8);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+
+    &[data-problem] {
+        color: var(--color-red);
+    }
+}
+
+// A small pulsing marker after a part's what-token while an edit targeting
+// it is in flight — the rest of that part's phrase keeps showing its prior
+// value until the edit resolves.
+.slotUpdating {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 0.35em;
+    vertical-align: middle;
+    background-color: var(--color-yellow-hover);
+    border-radius: 50%;
+    animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%,
+    100% {
+        opacity: 0.25;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+// Sentence slots: yellow, underlined, clickable. The underline and the
+// hover fill are two stacked BACKGROUND layers (not a pseudo-element): a
+// slot can be an inline span that wraps across lines, and with
+// box-decoration-break: clone every line fragment gets its own underline
+// and its own fill — an absolutely-positioned box would anchor to one
+// fragment and smear. On hover the two layers trade sizes on one clock:
+// the stone line shrinks away as the tint climbs from the bottom — the
+// underline reads as becoming the fill.
+.slot {
+    padding: 0;
+    font: inherit;
+    color: var(--color-yellow-hover);
+    text-align: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    background-color: transparent;
+
+    // The tint layer carries its own transparent top strip: the band tops
+    // out 0.12em below the em box even at full size (the fill read as
+    // riding too high without it).
+    background-image:
+        linear-gradient(transparent 0 0.12em, rgb(253 235 130 / 12%) 0.12em),
+        linear-gradient(var(--color-stone), var(--color-stone));
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size:
+        100% 0,
+        100% 3px;
+    border: 0;
+    outline: none;
+    transition:
+        background-size 0.4s $ease-out,
+        color 0.4s ease;
+    box-decoration-break: clone;
+
+    // Full-height fill: an inline's background paints the em box (the
+    // leading stays clear of the line above), and only at the element's own
+    // edges can border-radius round the band — which is also why the radius
+    // arrives WITH the hover, so the resting underline keeps square ends.
+    // The words themselves settle a shade deeper (design's #F6DB45 — no
+    // token holds it).
+    &:hover,
+    &:focus-visible,
+    &[data-state="open"] {
+        color: #f6db45;
+        background-size:
+            100% 100%,
+            100% 0;
+    }
+}
+
+// A part that still needs a decision (candidates), or can't offer one
+// (no_data/unsupported): a dashed underline instead of the solid one, so a
+// phrase asking for attention reads differently from an ordinary edit slot.
+// UnresolvedToken (no_data/unsupported) reuses this on a plain, non-clickable
+// span — no cursor, no hover fill.
+.slotMarked {
+    position: relative;
+    z-index: 0;
+    color: var(--color-yellow-hover);
+
+    &::before {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: -1;
+        height: 3px;
+        background-color: transparent;
+        border-bottom: 3px dashed var(--color-stone);
+    }
+}
+
+span.slotMarked {
+    cursor: help;
+}
+
+// Two stacked panels (title, then the list) with a hairline seam between —
+// the same tile rhythm as the stat cards. The panel grows past rem(300) to
+// fit its rows' labels, up to rem(420) or the screen's margins; the About
+// block wraps to whatever width the rows set (.tokenAbout).
+.slotMenu {
+    z-index: $z-header + 2; // over the Feedback widget ($z-header + 1)
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: rem(300);
+    max-width: min(#{rem(420)}, calc(100vw - 32px));
+
+    // Radix flips the panel to the side with room and reports the height
+    // left there; the list scrolls inside it, so no edge of the screen clips
+    // the panel.
+    max-height: var(--radix-dropdown-menu-content-available-height);
+    font-weight: 400;
+    letter-spacing: normal;
+
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+}
+
+// Content sits rem(10) from the panel edges; height follows the content.
+// Rows are stacked full-width Buttons with a hairline rhythm.
+.slotMenuBody {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+    min-height: 0;
+    max-height: rem(280);
+    padding: rem(10);
+    overflow-y: auto;
+    background-color: var(--color-yellow-800);
+    border-radius: rem(4);
+}
+
+// Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
+// donor/recipient rows) doesn't scroll Apply out of reach; background
+// matches the menu so a scrolling row underneath doesn't show through.
+.multiSelectApply {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-top: rem(6);
+    background-color: var(--color-yellow-800);
+}
+
+.slotOption {
+    @include font-size(10px, 1);
+
+    display: flex;
+    gap: rem(10);
+    align-items: center;
+
+    // Full-bleed hover: the row cuts through the body's rem(10) side
+    // padding, the wider row padding keeps the text on its old axis.
+    width: calc(100% + #{rem(20)});
+    margin-inline: rem(-10);
+    padding: rem(10) rem(20);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    text-align: left;
+    letter-spacing: -0.02em;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    border-radius: rem(4);
+    outline: none;
+    opacity: 0.75;
+    transition:
+        opacity 0.25s ease,
+        background-color 0.25s ease;
+
+    &:hover,
+    &:focus-visible,
+    &[data-highlighted],
+    &[data-state="open"] {
+        opacity: 1;
+        background-color: var(--color-sage);
+    }
+
+    // A candidate the site couldn't read: the label already says so in
+    // words, this just keeps it from reading as an ordinary, pickable row.
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+
+        &:hover,
+        &[data-highlighted] {
+            background-color: transparent;
+        }
+    }
+}
+
+.slotOptionChecked {
+    opacity: 1;
+}
+
+// A confirmed-no-data option (optionMuted/optionCoverage's 'probed-zero'):
+// still selectable — dimmer than a resting row rather than removed, so a
+// user's own current pick can stay muted without disappearing.
+.slotOptionMuted {
+    opacity: 0.4;
+
+    &:hover,
+    &:focus-visible,
+    &[data-highlighted] {
+        opacity: 0.65;
+    }
+}
+
+.slotOptionMuted.slotOptionChecked {
+    opacity: 0.55;
+}
+
+// The current pick's accent bar and label weight mark selection at rest,
+// distinct from this row's own hover fill, so a hovered ordinary row is
+// never mistaken for the current pick.
+.slotOptionPinned {
+    position: relative;
+    font-weight: 500;
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: rem(6);
+        bottom: rem(6);
+        left: 0;
+        width: 3px;
+        background-color: var(--color-charcoal);
+        border-radius: rem(2);
+    }
+}
+
+// Long labels (country names) trim to an ellipsis instead of widening the
+// panel past its cap. Overflow clips at the padding edge, so the vertical
+// padding (cancelled by the margins) keeps ascenders and descenders of the
+// tight row line-height out of the clip.
+.optionLabel {
+    min-width: 0;
+    overflow: hidden;
+    padding-block: 0.3em;
+    margin-block: -0.3em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// Criteria rows: label left, small arrow hugging the right edge.
+.slotOptionSub {
+    justify-content: space-between;
+}
+
+// Icons ride the 20-grid with a natural rem(5) glyph margin — pull it back in
+// so the visual inset matches the row padding.
+.rowArrow {
+    display: block;
+    margin: rem(-5);
+}
+
+// Check gutter: reserved on every option row so labels align; the mark only
+// shows on the current pick.
+.optionCheck {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(10);
+
+    svg {
+        display: block;
+        width: rem(10);
+        height: auto;
+    }
+}
+
+// A level-scoped menu's leaf note: aligned under the option label (past
+// the check gutter and its gap), dimmer than a pickable row since there is
+// nothing to click.
+.levelHint {
+    @include font-size(10px, 1);
+
+    padding: rem(4) rem(20) rem(4) rem(30);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+// Content-fitted menus (Add Criteria and its submenu): no rem(300) floor,
+// the panel hugs its widest row.
+.fitMenu {
+    width: max-content;
+    min-width: 0;
+}
+
+// Submenus are anchored at the trigger's edge (sideOffset 0), then pushed
+// past the parent's rem(10) padding to sit 1px off its edge — the same
+// hairline seam as the panels.
+.subMenu {
+    margin-left: calc(rem(10) + 1px);
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+@keyframes pop-out {
+    to {
+        opacity: 0;
+        translate: 0 rem(10);
+    }
+}
+
+.slotMenuTitle {
+    @include font-size(14px, 1);
+
+    flex-shrink: 0;
+    padding: rem(10) rem(43) rem(10) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-yellow-800);
+    border-radius: rem(4);
+}
+
+.phraseEditor {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    color: var(--color-charcoal);
+}
+
+.slotInput {
+    @include font-size(10px, 1);
+
+    // .slotMenuBody scrolls, so a long list would otherwise shrink this
+    // field below its height.
+    flex-shrink: 0;
+    flex-grow: 1;
+    min-width: rem(140);
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background: none;
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-stone);
+    }
+
+    &:focus {
+        border-color: var(--color-charcoal);
+        outline: none;
+    }
+}
+
+.slotNote {
+    @include font-size(12px, 1.4);
+
+    // The loading/empty note spans the width the LOADED rows will take
+    // (rem(280) + the body's padding = the panel's rem(300) cap), so the
+    // menu doesn't jump wider once the options arrive.
+    width: rem(280);
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+}
+
+// A place picker or window/donor fetch that failed outright (a refused or
+// dropped request), rather than one that simply came back with nothing —
+// the note names what the door said, the button re-runs it.
+.slotFailed {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+}
+
+.slotGroupTitle {
+    @include font-size(11px, 1.4);
+
+    padding: rem(6) 0 rem(2);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+.windowEditor {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    color: var(--color-charcoal);
+}
+
+.windowInputs {
+    @include flex(row, flex-start, center);
+
+    gap: rem(8);
+
+    input {
+        flex-grow: 1;
+    }
+}
+
+.windowInput {
+    @include font-size(10px, 1);
+
+    width: rem(64);
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background: none;
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-stone);
+    }
+
+    &:focus {
+        border-color: var(--color-charcoal);
+        outline: none;
+    }
+}
+
+// A label with a detail line under it (a source's publisher and origin).
+// The pair takes the row's free width, the label keeps its ellipsis, and
+// the detail wraps.
+.optionText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: rem(4);
+    min-width: 0;
+}
+
+.optionDetail {
+    @include font-size(10px, 1.3);
+
+    color: var(--color-stone);
+    overflow-wrap: anywhere;
+}
+
+// An option's data footprint, trailing the label at the row's right edge.
+.optionMeta {
+    margin-left: auto;
+    padding-left: rem(10);
+    color: var(--color-stone);
+    white-space: nowrap;
+}
+
+// A menu row's info icon: pushed to the row's end, quiet until hovered.
+.optionInfo {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(8);
+    height: rem(8);
+    margin-left: auto;
+    color: #a2ae95;
+    transition: color 0.25s ease;
+
+    .optionMeta + & {
+        margin-left: rem(8);
+    }
+
+    &:hover,
+    &[data-state="open"] {
+        color: var(--color-charcoal);
+    }
+
+    svg {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+// Its note, and the About line's: the house note face (the Studio card's
+// own source popup), fixed beside the panel (placed by GraphInfo.tsx's
+// useSideNote) and inert, since a press on its mark pins it. One note is
+// open at a time. It stays within the screen's margins.
+.optionInfoPopup,
+.tokenAboutNote {
+    @include font-size(10px, 1.4);
+
+    position: fixed;
+    z-index: $z-header + 3; // over the menus (.slotMenu)
+    display: block;
+    width: max-content;
+    max-width: min(#{rem(260)}, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: hidden;
+    pointer-events: none;
+    padding: rem(10);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+
+    // A measure's definition puts each value on its own line.
+    white-space: pre-line;
+    background-color: var(--color-popup);
+    border-radius: rem(4);
+    animation: info-pop-in 0.2s $ease-out;
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+@keyframes info-pop-in {
+    from {
+        opacity: 0;
+        translate: rem(-4) 0;
+    }
+}
+
+// A row's definition as its second line, shown in place of the icon and its
+// note where nothing hovers (a touch screen).
+.optionInfoLine {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .slotOption:has(.optionInfoLine) {
+        flex-wrap: wrap;
+    }
+
+    .optionInfo,
+    .optionInfoPopup,
+    .tokenAboutNote {
+        display: none;
+    }
+
+    .optionInfoLine {
+        @include font-size(10px, 1.3);
+
+        // Last, so a submenu row's arrow stays on the label's line.
+        order: 1;
+        display: block;
+        flex-basis: 100%;
+        padding-left: rem(20);
+        color: var(--color-stone);
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+    }
+}
+
+// A token panel's About line: the current value's name, its short facts
+// and any Sources-page link in one wrapping run, with an info mark at its
+// end. A rule parts it from the options below it; a panel holding the line
+// alone has none.
+.tokenAbout {
+    // Wraps to the panel rather than widening it.
+    contain: inline-size;
+    flex-shrink: 0;
+    padding: rem(2) 0 rem(4);
+    color: var(--color-charcoal);
+
+    &:not(:last-child) {
+        padding-bottom: rem(8);
+        margin-bottom: rem(4);
+        border-bottom: 1px solid var(--color-sage);
+    }
+}
+
+.tokenAboutLine {
+    @include font-size(10px, 1.5);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+}
+
+.tokenAboutTitle {
+    @include font-size(14px, 1.2);
+
+    margin-right: rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+}
+
+// The facts after the title, parted by middle dots.
+.tokenAboutFact + .tokenAboutFact::before {
+    content: " · ";
+}
+
+.tokenAboutLink {
+    display: inline-flex;
+    align-items: center;
+    margin-left: rem(6);
+    color: var(--color-charcoal);
+    vertical-align: bottom;
+
+    svg {
+        width: rem(12);
+        height: rem(12);
+        color: var(--color-stone);
+    }
+}
+
+// The info mark: quiet until hovered, focused or open, like a row's.
+.tokenAboutMark {
+    display: inline-flex;
+    width: rem(10);
+    height: rem(10);
+    margin-left: rem(6);
+    padding: 0;
+    color: #a2ae95;
+    vertical-align: -0.1em;
+    cursor: help;
+    background: none;
+    border: 0;
+    border-radius: 50%;
+    transition: color 0.25s ease;
+
+    &:hover,
+    &:focus-visible,
+    &[data-state="open"] {
+        color: var(--color-charcoal);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+
+    svg {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+// One entry of the note: a definition, a source's publisher and
+// description, or a longer fact.
+.tokenAboutNoteEntry {
+    display: block;
+
+    & + & {
+        margin-top: rem(6);
+    }
+}
+
+.tokenAboutTerm {
+    font-weight: 500;
+}
+
+// The note in place under the line, opened by a tap where nothing hovers
+// (a touch screen). Elsewhere the side note shows instead.
+.tokenAboutNoteInline {
+    display: none;
+
+    @media (pointer: coarse) {
+        @include flex(column, flex-start, stretch);
+        @include font-size(10px, 1.4);
+
+        margin-top: rem(8);
+        font-family: var(--font-dm-mono);
+        letter-spacing: -0.02em;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+    }
+}
+
+// The unit picker's price switch and currency search, each below a rule.
+.unitGroup {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    padding-top: rem(4);
+    margin-top: rem(4);
+    border-top: 1px solid var(--color-sage);
+}
+
+.unitSwitch {
+    @include flex(row, flex-start, stretch);
+
+    padding: 2px;
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+}
+
+.unitSwitchOption {
+    @include font-size(10px, 1);
+
+    flex: 1;
+    height: rem(24);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background: none;
+    border: 0;
+    border-radius: rem(3);
+    cursor: pointer;
+    opacity: 0.75;
+    transition:
+        opacity 0.25s ease,
+        background-color 0.25s ease;
+
+    &:hover,
+    &:focus-visible {
+        opacity: 1;
+        background-color: var(--color-sage);
+        outline: none;
+    }
+}
+
+.unitSwitchOptionOn {
+    font-weight: 500;
+    color: var(--color-yellow-800);
+    background-color: var(--color-charcoal);
+    opacity: 1;
+
+    &:hover,
+    &:focus-visible {
+        background-color: var(--color-charcoal);
+    }
+}
+
+// The related measures, below a rule under the card.
+// A slot the measure token states, under the measure alternatives: its
+// name, then its options.
+.measureGroup {
+    padding-top: rem(4);
+    margin-top: rem(4);
+    border-top: 1px solid var(--color-sage);
+}
+
+.measureRelated {
+    padding-top: rem(4);
+    margin-top: rem(4);
+    border-top: 1px solid var(--color-sage);
+}
+
+// The search for a different measure, below a rule at the card's foot.
+.measureSearch {
+    padding-top: rem(8);
+    margin-top: rem(4);
+    border-top: 1px solid var(--color-sage);
+}
+
+.actions {
+    @include flex(row, flex-start, center);
+
+    // Same as .panelButtons: the outline rings (Add Criteria, Start New)
+    // step up to gray-2600 (#626251) on the dark ground.
+
+    --color-gray-2700: var(--color-gray-2600);
+
+    gap: rem(8);
+    margin-top: rem(40);
+    animation: rise-in 0.55s $ease-out 0.18s both;
+}
+
+// A plain Button after the outline ones in an actions row ("About this
+// answer", "See every source").
+.quietAction {
+    margin-left: rem(12);
+}
+
+// "About this answer": boxed key/value rows like the Details panel, then
+// groups (assumptions, variables, how each value was chosen, sources) under
+// mono titles, with chip-styled dcids. With several parts, each part is a
+// section under its own title.
+.why {
+    @include font-size(14px, 1.4);
+
+    max-width: rem(640);
+    margin-top: rem(20);
+    padding: 0 rem(16) rem(16);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-bg);
+    border: 1px solid var(--color-gray-2700);
+    border-radius: rem(5);
+
+    code {
+        @include font-size(10px, 1.4);
+
+        padding: rem(2) rem(6);
+        font-family: var(--font-dm-mono);
+        color: var(--color-sage);
+        overflow-wrap: anywhere;
+        background-color: var(--color-gray-2700);
+        border-radius: rem(4);
+    }
+}
+
+.whySection + .whySection {
+    margin-top: rem(16);
+    padding-top: rem(12);
+    border-top: 1px solid var(--color-gray-2700);
+}
+
+.whySectionTitle {
+    @include font-size(11px, 1.4);
+
+    margin-top: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+}
+
+// The coverage sentence opens the section.
+.whyCoverage {
+    margin-top: rem(12);
+}
+
+.whyRows {
+    margin-top: rem(4);
+}
+
+.whyRow {
+    display: grid;
+    grid-template-columns: rem(110) 1fr;
+    column-gap: rem(16);
+    align-items: baseline;
+    padding-block: rem(8);
+
+    dt {
+        @include font-size(11px, 1.4);
+
+        font-family: var(--font-dm-mono);
+        color: var(--color-sage);
+        letter-spacing: -0.01em;
+    }
+
+    dd code {
+        margin-left: rem(8);
+    }
+}
+
+// Sits under the rows' value column.
+.whyFamily {
+    margin: rem(4) 0 rem(12) rem(126);
+    color: var(--color-sage);
+}
+
+.whyGroup {
+    padding-top: rem(12);
+    margin-top: rem(4);
+    border-top: 1px solid var(--color-gray-2700);
+}
+
+.whyGroupTitle {
+    @include font-size(11px, 1.4);
+
+    display: flex;
+    gap: rem(8);
+    margin-bottom: rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+}
+
+.whyRef {
+    @include flex(row, flex-start, baseline);
+    @include font-size(14px, 1.4);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+    margin-bottom: rem(6);
+}
+
+.whySummary {
+    margin-bottom: rem(6);
+}
+
+// One axis's values with their variable counts, under the summary.
+.whyBreakdown {
+    margin: rem(12) 0;
+}
+
+.whyBreakdownTitle {
+    @include font-size(11px, 1.4);
+
+    margin-bottom: rem(4);
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+}
+
+.whyBreakdownRow {
+    @include flex(row, space-between, baseline);
+
+    gap: rem(16);
+    margin-bottom: rem(4);
+}
+
+.whyOrigin {
+    color: var(--color-sage);
+}
+
+.whyLink {
+    @include flex(row, flex-start, baseline);
+
+    gap: rem(2);
+    color: inherit;
+    text-decoration: none;
+
+    svg {
+        align-self: center;
+        width: rem(16);
+        height: rem(16);
+        margin-left: rem(-2);
+        color: var(--color-sage);
+    }
+
+    &:hover,
+    &:focus-visible {
+        color: var(--color-yellow-hover);
+
+        svg {
+            color: inherit;
+        }
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-yellow-hover);
+        outline-offset: 2px;
+    }
+}
+
+.whyMore {
+    margin-top: rem(6);
+}
+
+// --- Right rail ------------------------------------------------------------
+
+.panel {
+    flex-shrink: 0;
+    width: rem(300);
+    padding: rem(40) rem(30) rem(20);
+    border-left: 1px solid var(--color-gray-2600);
+    animation: rise-in 0.6s $ease-out 0.24s both;
+}
+
+.count {
+    @include font-size(60px, 1.2);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+// "up to" before a row count the API gives only as an upper bound.
+.countPrefix {
+    @include font-size(22px, 1);
+
+    margin-right: rem(8);
+    font-weight: 500;
+    color: var(--color-sage);
+    letter-spacing: -0.02em;
+}
+
+.countRow {
+    @include flex(row, space-between, center);
+}
+
+.countLabel {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-sage);
+    letter-spacing: -0.02em;
+}
+
+// Grid-rows accordion: 0fr → 1fr transitions height without measuring.
+.accordion {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.4s $ease-custom;
+}
+
+.accordionOpen {
+    grid-template-rows: 1fr;
+}
+
+.accordionInner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.details {
+    // Mirrors .panelActions' margin — the air above the rows equals the air
+    // between the rows and the buttons.
+    padding-top: rem(40);
+}
+
+.detailRow {
+    @include flex(row, space-between, center);
+    @include font-size(14px, 1.3);
+
+    gap: rem(16);
+    padding-bottom: rem(9);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    border-bottom: 1px solid var(--color-gray-2700);
+
+    &:not(:first-child) {
+        padding-top: rem(9);
+    }
+
+    &:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    dd {
+        text-align: right;
+    }
+}
+
+.panelActions {
+    // The share box floats from here (see .sharePop).
+    position: relative;
+    margin-top: rem(40);
+}
+
+// Download CSV keeps its label left-aligned inside the full-width Button.
+// The caret flips while the options dialog is open.
+.downloadRow {
+    @include flex(row, flex-start, stretch);
+
+    --button-justify: flex-start;
+
+    gap: 1px;
+
+    button svg {
+        // The stock rem(20) chevron overpowers the row — a caret, not an icon.
+        width: rem(14);
+        height: rem(14);
+        transition:
+            scale var(--swap-duration) $ease-custom,
+            rotate 0.3s $ease-out;
+    }
+
+    [data-open="true"] svg {
+        rotate: 180deg;
+    }
+}
+
+.downloadError {
+    @include font-size(11px, 1.3);
+
+    margin-top: rem(8);
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+// What a download will hold when the search could not confirm it, under
+// the Download button.
+.downloadNote {
+    @include font-size(11px, 1.3);
+
+    margin-top: rem(8);
+    font-family: var(--font-outfit);
+    color: var(--color-sage);
+}
+
+// The country list inside the default-scope place picker: capped and
+// scrollable (216 rows), under its filter box.
+.placeList {
+    display: flex;
+    flex-direction: column;
+    gap: rem(2);
+
+    // Bled through the body's side padding (the scroll clips children, so
+    // the rows can't overhang it themselves) at the panel's fixed measure:
+    // rem(300) with, and rem(280) without, the padding — the same width the
+    // loading note reserves, so the menu never jumps.
+    width: rem(300);
+    max-height: rem(280);
+    margin-top: rem(6);
+    margin-inline: rem(-10);
+    overflow-y: auto;
+
+    // The rows fill the already-bled list instead of overhanging it again.
+    .slotOption {
+        width: 100%;
+        margin-inline: 0;
+    }
+}
+
+// The Download options dialog's checkbox groups (DownloadOptions.tsx): rows
+// sit flush left under their title with rem(16) of air between them.
+.downloadOptions {
+    display: flex;
+    flex-direction: column;
+    gap: rem(16);
+
+    .slotOption {
+        // DM Mono Medium 10/100%/-2% (the base row is the same face at 400).
+        // Compact checkbox rows — no full-bleed band here.
+        width: 100%;
+        margin-inline: 0;
+        padding: 0;
+        font-weight: 500;
+
+        &:hover,
+        &:focus-visible {
+            background-color: transparent;
+        }
+    }
+}
+
+// Segmented format control: one pill track, the active choice as a dark pill,
+// hairline "|" separators between inactive neighbours.
+// No inset ring: the track is exactly as tall as the tabs themselves.
+.panelButtons {
+    @include flex(row, flex-start, center);
+
+    // The outline rings ride --color-gray-2700 — a step lighter here
+    // (gray-2600 #626251), so Share/Studio read on the dark panel.
+
+    --color-gray-2700: var(--color-gray-2600);
+
+    gap: rem(4);
+    margin-top: rem(6);
+}
+
+// Share, open: the toggle holds the pressed shade while its box is down.
+.panelButtons .shareToggleOpen {
+    --seg-bg: var(--color-gray-2650);
+}
+
+// The share box under Share / Studio: the download row's sage face, a title,
+// the live/snapshot pill, one line of what the mode means, and the link.
+.share {
+    @include flex(column, flex-start, stretch);
+
+    margin-top: rem(6);
+    padding: rem(16);
+    color: var(--color-charcoal);
+    background-color: var(--color-yellow-800);
+    border-radius: rem(4);
+}
+
+// Opens and closes on the same pop as the download and slot menus, and
+// floats over what's below like they do — it takes no room in the panel.
+.sharePop {
+    position: absolute;
+    right: 0;
+    left: 0;
+    z-index: $z-header;
+
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+}
+
+.shareTitle {
+    @include font-size(20px, 1.1);
+
+    margin-bottom: rem(15);
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+// The pill spans the box: the tabs size to their labels, the wrapper
+// stretches them.
+.shareTabs > * {
+    width: 100%;
+}
+
+.shareCopy {
+    @include font-size(8px, 1.5);
+
+    margin-block: rem(15);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+}
+
+.shareError {
+    @include font-size(12px, 1.4);
+
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+.shareLink {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    height: rem(40);
+    padding: rem(4) rem(4) rem(4) rem(12);
+    border: 1px solid var(--color-gray-1800);
+    border-radius: rem(6);
+}
+
+.shareUrl {
+    @include font-size(10px, 1.2);
+
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.shareUrlPending {
+    color: var(--color-stone);
+}
+
+.shareCopyButton {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(30);
+    height: rem(30);
+    color: var(--color-bg);
+    cursor: pointer;
+    background-color: var(--color-charcoal);
+    border: 0;
+    border-radius: rem(6);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease,
+        opacity 0.25s ease;
+
+    svg {
+        width: rem(18);
+        height: rem(18);
+    }
+
+    &:hover:not(:disabled) {
+        background-color: var(--color-gray-2600);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.4;
+    }
+}
+
+.shareCopied {
+    color: var(--color-mint-dark);
+    background-color: var(--color-mint);
+}
+
+// "View latest" after the snapshot date: the same datasets, replayed live.
+.shareLatest {
+    margin-left: rem(12);
+    padding: 0;
+    font: inherit;
+    color: var(--color-bg);
+    letter-spacing: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+}
+
+// A version link the Datasets API could not open, under the idle prompt.
+.linkRefusal {
+    @include font-size(14px, 1.3);
+
+    margin-top: rem(28);
+    font-family: var(--font-dm-mono);
+    color: var(--color-yellow-stat);
+}
+
+// --- Results table ---------------------------------------------------------
+
+// Aligned with the hero boxes' inner edge (rem(30) from the page edge), not
+// the section gutter — the hero went full-bleed and set the page baseline.
+.results {
+    margin-inline: calc(var(--search-gutter) * -1);
+    padding-top: rem(60);
+    padding-inline: var(--search-inset);
+    animation: rise-in 0.6s $ease-out 0.3s both;
+}
+
+.resultsTitle {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+// The per-variable row breakdown trailing the preview's title, once the
+// table holds more than one part.
+.resultsByVariable {
+    color: var(--color-media-bg);
+    font-weight: 300;
+}
+
+// The preview's limit, on the table it describes: one left-aligned line
+// saying what the preview holds.
+.resultsCaption {
+    @include font-size(11px, 1.4);
+
+    margin-top: rem(28);
+    padding-bottom: rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.01em;
+    border-bottom: 1px solid var(--color-gray-2700);
+}
+
+// Further caption lines sit directly under the first.
+.resultsCaption + .resultsCaption {
+    margin-top: 0;
+}
+
+// The head's own box (cover border + tall band) already provides the visual
+// gap below "Results Preview" — no extra margin on top of it.
+.resultsEmpty {
+    @include font-size(16px, 1.4);
+
+    max-width: rem(560);
+    margin-top: rem(24);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-media-bg);
+}
+
+.table {
+    --table-col-year: #{rem(90)};
+    --table-col-value: #{rem(120)};
+
+    margin-top: 0;
+}
+
+// One FIXED column template shared by every row (set inline from the dynamic
+// column list; widths live in these tokens) — a per-row auto track would
+// resize with its content and make the columns stagger from row to row.
+// Cells align to their FIRST LINE, not the vertical center — a wrapped cell
+// must not push its neighbours' text off the shared baseline. The top padding
+// reproduces the old centered position for the common single-line row
+// ((61 − one 1.3 line) / 2 ≈ 20).
+.tableRow {
+    display: grid;
+    column-gap: rem(24);
+    align-items: start;
+    min-height: rem(61);
+    padding-top: rem(20);
+
+    span {
+        overflow-wrap: break-word;
+    }
+}
+
+// The header's sticky wrapper (the row itself sits inside — on phone it's
+// translated sideways in step with the rows' scroll, so the wrapper clips).
+// Only `top` animates, in step with the nav's transition.
+.tableHeadStick {
+    position: sticky;
+    top: -2px;
+    z-index: 1;
+    transition: top 0.5s $ease-custom;
+    will-change: top;
+}
+
+:global([data-nav-hidden]) .tableHeadStick {
+    top: calc(-2px - #{$table-head-cover});
+}
+
+.tableHead {
+    @include font-size(11px, 1);
+
+    // One element, no overlays: the thick top border (page-bg colored) is the
+    // strip that hides rows scrolling underneath. It's constant, so the flow
+    // never shifts.
+    // box-sizing includes the cover border in min-height — add it back so the
+    // visible label band matches a full row's height.
+    min-height: calc(#{$table-head-cover} + 2px + #{rem(61)});
+    height: auto;
+    align-items: end;
+    padding-top: 0;
+    padding-bottom: rem(8);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-media-bg);
+    letter-spacing: -0.02em;
+    background-color: var(--color-gray-2800);
+    border-top: calc(#{$table-head-cover} + 2px) solid var(--color-gray-2800);
+    border-bottom: 1px solid var(--color-gray-2600);
+}
+
+.tableRow:not(.tableHead) {
+    @include font-size(16px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.usd {
+    text-align: right;
+}
+
+.loadMore {
+    @include flex(row, center, center);
+
+    margin-top: rem(40);
+
+    // Air before the footer below.
+    margin-bottom: rem(200);
+}
+
+// --- Candidate / subset cards ---------------------------------------------
+
+// In the result view these sit OUTSIDE the full-bleed hero — pull them onto
+// the same rem(30) page axis its content uses (idle keeps the section gutter),
+// and anchor them to the bottom of the 100dvh viewport so the whole stage
+// fits on screen by default instead of spilling below the fold.
+.result .cardsBlock {
+    margin-block: auto 0;
+    margin-inline: calc(var(--search-inset) - var(--search-gutter));
+    padding-top: rem(40);
+}
+
+// Suggestion states enter organically: block fades up, cards ride a stagger.
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(16);
+    }
+}
+
+.cardsBlock {
+    margin-top: rem(64);
+    animation: rise-in 0.5s $ease-out both;
+}
+
+.cardsTitle {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(rem(280), 1fr));
+    gap: rem(13);
+    margin-top: rem(40);
+    padding: 0;
+    list-style: none;
+}
+
+// A candidates part's summary plan, read by screen readers only: the cards
+// draw the same readings.
+.readingsSummary {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    white-space: nowrap;
+    clip-path: inset(50%);
+}
+
+// One reading: its heading and byline, its measure's About block, and the
+// button that picks it. Same frame as a card, with nothing to hover.
+.readingCard {
+    display: flex;
+    flex-direction: column;
+    gap: rem(16);
+    padding: rem(20);
+    color: var(--color-bg);
+    animation: rise-in 0.65s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+    border: 1px solid var(--color-gray-2700);
+    border-radius: rem(4);
+
+    // Same step-up as .cardUnreadable: the outline ring needs it on this
+    // dark card.
+
+    --color-gray-2700: var(--color-gray-2600);
+
+    .cardMeta {
+        margin-top: rem(8);
+    }
+
+    .cardRetry {
+        margin-top: auto;
+    }
+}
+
+// The About line on the dark card: its panel colours lightened.
+.readingAbout .tokenAbout {
+    color: var(--color-bg);
+
+    .tokenAboutLine,
+    .tokenAboutMark {
+        color: var(--color-media-bg);
+    }
+
+    .tokenAboutTitle,
+    .tokenAboutMark:hover,
+    .tokenAboutMark:focus-visible,
+    .tokenAboutMark[data-state="open"] {
+        color: var(--color-bg);
+    }
+
+    .tokenAboutLink,
+    .tokenAboutLink svg {
+        color: var(--color-media-bg);
+    }
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: rem(24);
+    justify-content: space-between;
+    padding: rem(20);
+    color: var(--color-bg);
+    animation: rise-in 0.65s $ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.07s);
+    text-align: left;
+    background: none;
+    border: 1px solid var(--color-gray-2700);
+    border-radius: rem(4);
+    cursor: pointer;
+    transition:
+        border-color 0.25s ease,
+        background-color 0.25s ease;
+
+    &:hover {
+        background-color: rgb(255 255 255 / 4%);
+        border-color: var(--color-media-bg);
+    }
+}
+
+.cardTitle {
+    @include font-size(18px, 1.2);
+
+    display: -webkit-box;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
+// Coverage, then origin. A long publisher wraps to a second line and
+// clamps there (SearchCards puts the full text in the title attribute).
+.cardMeta {
+    @include font-size(16px, 1.3);
+
+    display: -webkit-box;
+    overflow: hidden;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-media-bg);
+    letter-spacing: -0.01em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+// A card whose spec carries a stat_vars shape the client couldn't parse
+// (searchClient.flattenSpec flags it and logs the raw value) — shown instead
+// of a blank title rather than swallowed.
+.cardTitleUnreadable {
+    color: var(--color-yellow-stat);
+}
+
+// The unreadable card itself: a plain div standing in for the button (it has
+// nothing to pick), so the pointer and hover affordances of a live card are
+// dropped rather than left dangling on dead content.
+.cardUnreadable {
+    justify-content: flex-start;
+    cursor: default;
+
+    // Same step-up as .actions/.panelButtons: the outline ring needs it to
+    // read on this dark card, not the light-page default.
+
+    --color-gray-2700: var(--color-gray-2600);
+
+    &:hover {
+        background-color: transparent;
+        border-color: var(--color-gray-2700);
+    }
+}
+
+.cardRetry {
+    align-self: flex-start;
+}
+
+// --- Answers with no parts ------------------------------------------------
+
+// A declined answer, under the query: why search stops here and where to go.
+.callout {
+    display: flex;
+    flex-direction: column;
+    gap: rem(30);
+    align-items: flex-start;
+    max-width: rem(560);
+    margin-top: rem(40);
+    padding-left: rem(24);
+    border-left: 2px solid var(--color-yellow-hover);
+    animation: rise-in 0.5s $ease-out both;
+}
+
+.calloutTitle {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.calloutText {
+    @include font-size(16px, 1.2);
+
+    max-width: rem(442);
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-media-bg);
+    letter-spacing: -0.02em;
+}
+
+// The catalogue answer, under the query: the scope line and the actions.
+.startingPoint {
+    display: flex;
+    flex-direction: column;
+    gap: rem(30);
+    align-items: flex-start;
+    max-width: rem(560);
+    margin-top: rem(40);
+    animation: rise-in 0.5s $ease-out both;
+}
+
+.startingTitle {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.scopeLine {
+    @include font-size(18px, 1.3);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-media-bg);
+    letter-spacing: -0.02em;
+}
+
+// The actions row inside a callout or the starting point, which space
+// their children with their own gap.
+.callout .actions,
+.startingPoint .actions {
+    margin-top: 0;
+}
+
+// The examples under the answer's lead, as the landing's Try chips.
+.answerTry {
+    margin-top: rem(56);
+}
+
+// --- RWD -------------------------------------------------------------------
+
+@include breakpoint(not-desktop) {
+    .section {
+        --search-gutter: var(--page-gutter);
+        --search-inset: var(--page-gutter);
+    }
+
+    .hero {
+        flex-direction: column;
+    }
+
+    .heroMain {
+        max-width: none;
+        padding-right: var(--search-inset);
+    }
+
+    // Stacked columns: no count to share a baseline with.
+    .eyebrow {
+        margin-top: 0;
+    }
+
+    .panel {
+        width: 100%;
+        padding: rem(32) var(--search-inset) rem(20);
+        border-top: 1px solid var(--color-gray-2600);
+        border-left: 0;
+    }
+
+    // A touch smaller than desktop's 16px — five columns share less width.
+    .tableRow:not(.tableHead) {
+        @include font-size(14px, 1.3);
+    }
+
+    .query,
+    .sentence {
+        @include font-size(48px, 1.1);
+    }
+
+    .count {
+        @include font-size(48px, 1.2);
+    }
+
+    .why {
+        max-width: none;
+    }
+
+    // The desktop resting spot (rem(265)) can push the idle bottom past
+    // 100dvh on shorter viewports — both resting spots move up.
+    .idlePrompt {
+        margin-top: calc(#{rem(180)} - #{rem(100)});
+    }
+
+    .idle[data-typing] .idlePrompt {
+        margin-top: calc(#{rem(120)} - #{rem(100)});
+    }
+}
+
+@include breakpoint(tablet) {
+    // The full-width panel reads sparse — cap it at half the screen (the
+    // buttons keep the desktop stacked layout). The separator moves up to
+    // heroMain so the line still runs the full page width.
+    .panel {
+        max-width: 50%;
+        border-top: 0;
+    }
+
+    .heroMain:has(+ .panel) {
+        border-bottom: 1px solid var(--color-gray-2600);
+    }
+
+    // Build a Dataset box and the stat tiles share the row 50/50 (flex-basis 0
+    // beats the tiles' own width:100%, so nothing crushes).
+    .buildBox {
+        flex: 1;
+        max-width: none;
+    }
+
+    .idleBottom > :last-child {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+@include breakpoint(phone) {
+    .section {
+        padding-block: rem(100) rem(40);
+    }
+
+    .departureStudio {
+        flex-direction: column;
+        gap: rem(10);
+        align-items: flex-start;
+    }
+
+    // A phone has no room beside a submenu's trigger, so the panel drops
+    // under the trigger at the screen's width less the 16px collision
+    // padding. Radix still places it beside the trigger, on the side the
+    // data-side attribute names; the offset moves it from there to the
+    // left padding, using the trigger edges SlotMenu's subMenuRef records.
+    .subMenu {
+        --sub-drop: calc(var(--radix-dropdown-menu-trigger-height) + 1px);
+
+        position: relative;
+        top: var(--sub-drop);
+        width: calc(100vw - 32px);
+        max-width: none;
+        max-height: calc(var(--radix-dropdown-menu-content-available-height) - var(--sub-drop));
+        margin-left: 0;
+
+        &[data-side="right"] {
+            left: calc(16px - var(--sub-trigger-right));
+        }
+
+        &[data-side="left"] {
+            left: calc(100vw - 16px - var(--sub-trigger-left));
+        }
+
+        // Long labels wrap in the narrow panel instead of trimming.
+        .optionLabel {
+            overflow-wrap: anywhere;
+            white-space: normal;
+        }
+    }
+
+    .idleBottom {
+        flex-direction: column;
+    }
+
+    .buildBox {
+        max-width: none;
+    }
+
+    .query,
+    .sentence {
+        @include font-size(34px, 1.1);
+    }
+
+    .count {
+        @include font-size(40px, 1.2);
+    }
+
+    // Actions wrap instead of overflowing next to "Why these results?".
+    .actions {
+        flex-wrap: wrap;
+        row-gap: rem(12);
+    }
+
+    // Smaller type, tighter gaps, and NOTHING wraps: the columns take their
+    // content's width (measured in SearchTable), the rows scroll sideways in
+    // their own box, and the sticky header outside that box follows the
+    // scroll — so it keeps sticking under the nav exactly like on desktop.
+    .tableRow {
+        column-gap: rem(8);
+        min-height: rem(48);
+        padding-top: rem(14);
+
+        span {
+            overflow-wrap: normal;
+            white-space: nowrap;
+        }
+    }
+
+    .tableRow:not(.tableHead) {
+        @include font-size(12px, 1.3);
+    }
+
+    .tableHead {
+        @include font-size(10px, 1);
+
+        min-height: calc(#{$table-head-cover} + 2px + #{rem(44)});
+        padding-bottom: rem(6);
+    }
+
+    .tableHeadStick {
+        overflow-x: clip;
+    }
+
+    .tableBody {
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    // The header's labels, measured with the cells but never seen.
+    .tableHeadGhost {
+        height: 0;
+        min-height: 0;
+        padding: 0;
+        overflow: hidden;
+        visibility: hidden;
+        border: 0;
+    }
+}
+
+// Refine, first in .actions: the outline Button with gold text. The
+// `.actions` prefix outranks Button's own `.outline .label` colour.
+.actions .refineButton > span {
+    color: var(--color-yellow-hover);
+}

@@ -1,0 +1,243 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// Bottom-right, flush to the screen's edge (the design's Feedback-Badge sits
+// rem(10) in from the right, on the bottom line).
+.widget {
+    // The palette: charcoal badge and form on the site's pale ground; the
+    // light variant (over a dark section) is one swap below.
+
+    --fb-badge: var(--color-charcoal);
+    --fb-badge-hover: var(--color-gray-2600);
+    --fb-badge-text: var(--color-bg);
+    --fb-panel: var(--color-charcoal);
+    --fb-text: var(--color-bg);
+    --fb-field: var(--color-gray-2600);
+    --fb-field-line: var(--color-gray-2600);
+    --fb-send: var(--color-sage);
+    --fb-send-text: var(--color-charcoal);
+
+    @include flex(column, flex-end, flex-end);
+
+    position: fixed;
+    right: calc(#{rem(10)} + env(safe-area-inset-right));
+    bottom: env(safe-area-inset-bottom);
+    z-index: $z-header + 1;
+    gap: rem(8);
+}
+
+// Over a dark section: the header's "Open Studio" look — sage badge and
+// panel, charcoal ink, a pale field, charcoal send.
+.light {
+    --fb-badge: var(--color-sage);
+    --fb-badge-hover: var(--color-sage-dark);
+    --fb-badge-text: var(--color-charcoal);
+    --fb-panel: var(--color-sage);
+    --fb-text: var(--color-charcoal);
+    --fb-field: var(--color-bg);
+    --fb-field-line: var(--color-sage-dark);
+    --fb-send: var(--color-charcoal);
+    --fb-send-text: var(--color-bg);
+}
+
+.badge {
+    @include flex(row, center, center);
+    @include font-size(11px, 1);
+
+    gap: rem(5);
+    padding: rem(10) rem(8);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--fb-badge-text);
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background-color: var(--fb-badge);
+    border: 0;
+    border-radius: rem(4) rem(4) 0 0;
+    transition: background-color 0.25s ease;
+
+    &:hover {
+        background-color: var(--fb-badge-hover);
+    }
+}
+
+.badgeOpen {
+    background-color: var(--fb-badge-hover);
+}
+
+.badgeIcon {
+    width: rem(10);
+    height: rem(10);
+}
+
+// The form above the badge: the house card — pale ground, hairline, the
+// same rem(6) corner the Studio's own boxes use.
+.panel {
+    width: rem(320);
+    max-width: calc(100vw - #{rem(20)});
+    padding: rem(16);
+    background-color: var(--fb-panel);
+    border-radius: rem(6);
+    animation: feedback-pop 0.25s $ease-out;
+
+    @include breakpoint(phone) {
+        width: calc(100vw - #{rem(20)});
+    }
+}
+
+.form {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
+}
+
+.head {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+}
+
+.title {
+    @include font-size(16px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    color: var(--fb-text);
+    letter-spacing: -0.02em;
+}
+
+.close {
+    @include flex(row, center, center);
+
+    width: rem(18);
+    height: rem(18);
+    padding: 0;
+    color: var(--fb-text);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+.closeIcon {
+    width: rem(10);
+    height: rem(10);
+}
+
+.lead {
+    @include font-size(11px, 1.4);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--fb-text);
+    letter-spacing: -0.01em;
+}
+
+.message {
+    @include font-size(12px, 1.3);
+
+    padding: rem(8) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--fb-text);
+    letter-spacing: -0.01em;
+    background-color: var(--fb-field);
+    border: 1px solid var(--fb-field-line);
+    border-radius: rem(4);
+    outline: none;
+    resize: none;
+
+    &::placeholder {
+        color: var(--fb-text);
+        opacity: 0.6;
+    }
+
+    &:focus {
+        border-color: var(--fb-text);
+    }
+}
+
+// The optional email: the same field face as the message, one line.
+.email {
+    @include font-size(12px, 1.3);
+
+    padding: rem(8) rem(10);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--fb-text);
+    letter-spacing: -0.01em;
+    background-color: var(--fb-field);
+    border: 1px solid var(--fb-field-line);
+    border-radius: rem(4);
+    outline: none;
+
+    &::placeholder {
+        color: var(--fb-text);
+        opacity: 0.6;
+    }
+
+    &:focus {
+        border-color: var(--fb-text);
+    }
+}
+
+// Off-screen, and out of the tab order (see the component).
+.trap {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.error {
+    @include font-size(11px, 1.3);
+
+    font-family: var(--font-outfit);
+    color: var(--color-red);
+}
+
+.send {
+    @include font-size(11px, 1);
+
+    padding: rem(10) rem(12);
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--fb-send-text);
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background-color: var(--fb-send);
+    border: 0;
+    border-radius: rem(4);
+    transition: opacity 0.2s ease;
+
+    &:hover:not(:disabled) {
+        opacity: 0.85;
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.4;
+    }
+}
+
+.done {
+    @include font-size(12px, 1.4);
+
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--fb-text);
+    letter-spacing: -0.01em;
+}
+
+@keyframes feedback-pop {
+    from {
+        opacity: 0;
+        translate: 0 rem(8);
+    }
+}
