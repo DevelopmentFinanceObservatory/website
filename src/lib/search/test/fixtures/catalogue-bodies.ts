@@ -1,8 +1,8 @@
 /**
  * `GET /api/search/catalogue` bodies, written to the API's `CatalogueResponse`
  * model (dfo-apis `src/search/catalogue/response.py`) and checked against it
- * by scripts/check-search-fixtures.ts. The whole catalogue counts countries;
- * one country's counts variables in their place, and either may carry
+ * by scripts/check-search-fixtures.ts. The whole catalogue counts countries,
+ * indicators and datasets; one country's counts variables in their place, and either may carry
  * `aid.years: null` when the build holds no CRS rows.
  */
 
@@ -14,6 +14,8 @@ export const wholeCatalogueBody = {
     counts: {
         publishers: 40,
         countries: 205,
+        indicators: 112866,
+        datasets: 90,
         aid: { donors: 169, recipients: 205, years: { first: 1973, last: 2024 } },
     },
     examples: [

@@ -29,6 +29,7 @@ import { revealIndex, useReveal } from '@/hooks/useReveal';
 import {
     catalogueChips,
     catalogueTiles,
+    roundedCount,
     STARTING_POINT_QUERY,
     type SearchCatalogue,
 } from '@/lib/search/catalogue';
@@ -842,8 +843,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 <h2 className={styles.buildTitle}>Build a Dataset</h2>
                                 <p className={styles.buildText}>
                                     Describe the data you need, tune the parameters, and export a
-                                    structured dataset drawn from 40,000+ indicators in the DFO
-                                    knowledge graph.
+                                    structured dataset drawn from{' '}
+                                    {catalogue &&
+                                        `${roundedCount(catalogue.counts.indicators)} indicators in `}
+                                    the DFO knowledge graph.
                                 </p>
                             </div>
                             {tiles.length > 0 && <StatTiles stats={tiles} />}
