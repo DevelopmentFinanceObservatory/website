@@ -43,6 +43,10 @@ export type PollFetch = (url: string, signal?: AbortSignal) => Promise<PollRespo
  *  deadline outlasts any operation still running. */
 const DEFAULT_DEADLINE_MS = 35 * 60 * 1000;
 
+/** The `code` of the error pollOperation throws once its deadline passes,
+ *  so a caller can tell a slow operation from a failed one. */
+export const OPERATION_DEADLINE = 'operation_deadline';
+
 /** Floor for a server-supplied `retry_after_ms`. A hint of 0 (or anything
  *  smaller) would otherwise poll back-to-back, paced only by round-trip
  *  time rather than the server's own intended interval. */
@@ -152,7 +156,7 @@ const pollError = (body: unknown, status: number): OperationPollError => {
  * `202` (or a prior poll) returned. Resolves with the done manifest, or
  * throws an `OperationPollError` on `failed`, on any non-2xx poll
  * response, or once `deadlineMs` has elapsed without reaching a terminal
- * state.
+ * state (an Error whose `code` is OPERATION_DEADLINE).
  */
 export async function pollOperation(
     envelope: OperationEnvelope,
@@ -177,8 +181,11 @@ export async function pollOperation(
     let delay = initialDelayMs;
     const deadline = now() + deadlineMs;
     const pastDeadline = () =>
-        new Error(
-            `operation ${envelope.operation_id} did not reach a terminal state within ${deadlineMs}ms`,
+        Object.assign(
+            new Error(
+                `operation ${envelope.operation_id} did not reach a terminal state within ${deadlineMs}ms`,
+            ),
+            { code: OPERATION_DEADLINE },
         );
 
     while (now() < deadline) {

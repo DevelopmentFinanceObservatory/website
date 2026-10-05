@@ -494,7 +494,10 @@ test('a revision redraws from its payload', () => {
     });
     const revised = asChart(reviseWidget(drawn, revisedFrame(2, narrowed)));
 
-    assert.equal(revised.title, 'Top 3 donors');
+    // A comparison names its period in the title: the axis carries the
+    // places, so the moment has nowhere else to go (see studio/comparison).
+    assert.equal(revised.title, 'Top 3 donors, 2023');
+    assert.equal(revised.horizontal, true);
     assert.deepEqual(revised.categories, ['United States', 'Germany', 'EU Institutions']);
     assert.deepEqual(revised.series, [{ label: '2023', values: [64_000, 37_000, 26_000] }]);
     assert.equal(revised.data?.rows.length, 3);

@@ -133,7 +133,11 @@ const pinned = { identity_version: 'spec1', shape: { kind: 'stat_var' } };
 const stored = [
     { url: 'https://gcs/stats', rendering: { statistics: 'series' } },
     { url: 'https://gcs/frame.csv', rendering: { format: 'csv', bundle: false } },
-    { url: 'https://gcs/bundle.zip', rendering: { format: 'csv', bundle: true } },
+    {
+        url: 'https://gcs/bundle.zip',
+        artifact_digest: 'sha256:b1',
+        rendering: { format: 'csv', bundle: true },
+    },
 ];
 
 test('outcomeFromDocument offers a pinned-StatVar version as its stored bundle', () => {
@@ -185,10 +189,12 @@ test('storedDownload picks the bundle, else the first data file, by its signed U
     assert.deepEqual(storedDownload({ artifacts: stored }), {
         url: 'https://gcs/bundle.zip',
         format: 'zip',
+        digest: 'sha256:b1',
     });
     assert.deepEqual(storedDownload({ artifacts: stored.slice(0, 2) }), {
         url: 'https://gcs/frame.csv',
         format: 'csv',
+        digest: null,
     });
     assert.equal(storedDownload({ artifacts: stored.slice(0, 1) }), null);
 });

@@ -19,6 +19,7 @@ The browser stores `visitor_id` only after the visitor accepts "DFO usage statis
 | `auth.signin` | a provider callback ended in a session | `provider` |
 | `guest.wall_hit` | a guest used up the free prompts | `prompts` |
 | `feedback.submit` | a feedback submission | `kind` (`chat` / `widget`) |
+| `embed.view` | an `/embed/<id>` page rendered | `shareId`, `kind` (`card` / `canvas` / `conversation`), `host` (the hostname of the page the iframe sits on, else null) |
 
 Browser code calls `track()` from `src/lib/events/client.ts`, which posts to `POST /api/events` (allow-listed names, props capped at 8 KB, always 204); server code calls `track()` from `src/lib/events/track.ts` directly. The list of names lives in `track.ts` — add there first.
 
@@ -44,6 +45,8 @@ Source maps upload during `next build` when `SENTRY_ORG`, `SENTRY_PROJECT` and `
 `src/components/atoms/GoogleAnalytics/GoogleAnalytics.tsx` loads GA4 (measurement ID `G-NCWQ8XTXG1`) from the root layout when the page is served from `developmentfinance.org` or `www.developmentfinance.org`. The check reads the host name because production promotes the image built on staging, which makes every build-time variable the same on both. The ID and the host list are constants at the top of that file.
 
 Consent Mode v2 runs in advanced mode. An inline script in `src/app/layout.tsx` sets every consent type to `denied` on every host, ahead of the Usercentrics loader, and GA sends cookieless pings until the visitor chooses. Usercentrics has Google Consent Mode on and a "Google Analytics 4" service, and sends the `consent update` when the visitor chooses.
+
+Embeds load neither Usercentrics nor GA. On an `/embed/` path (`isEmbedPath()` in `src/lib/embed.ts`) the root layout's inline loader skips injecting the Usercentrics script and `GoogleAnalytics` renders nothing, because a banner would cover the card and iframe storage is partitioned per host site, so a reader would be asked again on every partner site. The server counts each embed render as `embed.view` instead, with no visitor id, no user id and nothing stored on the device. The count is iframe loads, including crawlers that render a host page and direct opens of the embed URL. `host` keeps only the hostname of the `Referer` and is null when the host page's referrer policy strips it.
 
 The "Privacy settings" button in the footer (`src/components/organisms/Footer/Footer.tsx`) calls `showPrivacySettings()` from `src/lib/consent.ts`, which opens the Usercentrics settings layer so a visitor can change either choice after the first banner.
 

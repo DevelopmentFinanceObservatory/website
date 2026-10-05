@@ -9,3 +9,22 @@
     overflow: auto;
     background-color: var(--color-grid-bg-light);
 }
+
+// A one-card share: the card is the whole viewport, whatever box the host
+// page gives the iframe (the card face fills its parent in both axes).
+.single {
+    position: fixed;
+    inset: 0;
+}
+
+// A text card grows with its text, as its whiteboard slot does, and the frame
+// scrolls; it still fills the frame when the text is short. Two classes so
+// this outranks the card's own height: 100%, whichever module loads last.
+.single.singleText {
+    overflow-y: auto;
+
+    > * {
+        height: auto;
+        min-height: 100%;
+    }
+}

@@ -45,8 +45,10 @@ export const versionLinkHref = ({ specId, contentVersion }: VersionLink): string
 
 /** The fields of a version manifest or options envelope this module reads. */
 export type VersionLinkDocument = {
+    content_version?: string;
     definition?: { spec_id?: string; identity?: unknown } | null;
     artifacts?: {
+        artifact_digest?: string;
         created_at?: string;
         url?: string;
         rendering?: { format?: string; bundle?: boolean };
@@ -74,23 +76,34 @@ export type VersionLinkOutcome =
 const isPinnedKind = (identity: unknown): boolean =>
     (identity as { shape?: { kind?: unknown } }).shape?.kind === 'stat_var';
 
-type StoredFile = { url: string; rendering: { format: string; bundle?: boolean } };
+type StoredFile = {
+    url: string;
+    artifact_digest?: string;
+    rendering: { format: string; bundle?: boolean };
+};
 
 /**
- * The version's file to offer, by its signed URL: the bundle, else its first
- * data file. A statistics rendering carries no format and is never offered.
- * `/api/version-download` redirects to it.
+ * The version's file to offer, by its signed URL, with its digest for a pin:
+ * the bundle, else its first data file. A statistics rendering carries no
+ * format and is never offered. `/api/version-download` and `/s/<id>/download`
+ * redirect to it.
  */
 export const storedDownload = (document: {
     artifacts?: VersionLinkDocument['artifacts'];
-}): { url: string; format: string } | null => {
+}): { url: string; format: string; digest: string | null } | null => {
     const files = (document.artifacts ?? []).filter(
         (artifact): artifact is StoredFile => !!artifact.url && !!artifact.rendering?.format,
     );
     const bundle = files.find((artifact) => artifact.rendering.bundle);
     const file = bundle ?? files[0];
 
-    return file ? { url: file.url, format: bundle ? 'zip' : file.rendering.format } : null;
+    return file
+        ? {
+              url: file.url,
+              format: bundle ? 'zip' : file.rendering.format,
+              digest: file.artifact_digest ?? null,
+          }
+        : null;
 };
 
 export const versionDownloadHref = ({ specId, contentVersion }: VersionLink): string =>
