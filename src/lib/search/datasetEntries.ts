@@ -7,17 +7,14 @@
  * only shapes the list; it never mutates an identity itself (that stays in
  * promote.ts).
  *
- * A definite part becomes an `identity` entry whose `identity` and
- * `base_identity`/`base_spec_id` are all the part's own current spec. The
- * base always names what the part resolved to before this post, whether or
- * not this post edits it. A candidates part becomes a `candidates` entry,
+ * A definite part becomes an `identity` entry carrying the part's own
+ * current identity. A candidates part becomes a `candidates` entry,
  * preserving posted candidate order. A no_data/unsupported part becomes a
  * `placeholder` entry, holding its position without asking the engine to
  * re-derive anything. Every entry, overrides included, carries its part's
  * `operations`, so an edit keeps what the question asked of the data.
  */
 
-import { promoteFromSpec } from './promote.ts';
 import type {
     BaseIdentity,
     DatasetCandidateIdentity,
@@ -32,12 +29,11 @@ import type {
  * How `buildDatasetEntries` deviates from "every part's own current spec":
  * - `{ index, entry }` replaces the entry at one index outright. editSlot,
  *   editWindow, editEntity and pickCandidate all build the edited entry
- *   themselves (identity edited, base left at the part's pre-edit spec; a
- *   pick posts the chosen candidate's identity as both identity and base)
- *   and hand it in whole.
+ *   themselves (a pick posts the chosen candidate's identity) and hand it in
+ *   whole.
  * - `{ rewriteIdentity }` is editShared's fan-out: the same axis rewritten in
- *   every definite entry's `identity` (never its base, never a candidates or
- *   placeholder entry), in one list, so one post carries every part's edit.
+ *   every definite entry's `identity` (never a candidates or placeholder
+ *   entry), in one list, so one post carries every part's edit.
  *
  * A caller may pass more than one override (an array): each applies in turn
  * over the previous step's result, so a later one wins where two touch the
@@ -57,15 +53,11 @@ function identityEntryFor(part: HydratedPart): DatasetIdentityEntry {
             `buildDatasetEntries: part ${part.index} is definite but has no hydrated identity`,
         );
     }
-    const { resolved_stat_var_dcids } = promoteFromSpec(spec);
 
     return {
         entry_kind: 'identity',
         variable_text: part.variableText ?? '',
         identity: spec.identity,
-        base_spec_id: spec.spec_id,
-        base_identity: spec.identity,
-        ...(resolved_stat_var_dcids ? { resolved_stat_var_dcids } : {}),
     };
 }
 
@@ -81,12 +73,7 @@ function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
                 `buildDatasetEntries: part ${part.index} has a candidate spec with no identity`,
             );
         }
-        const { resolved_stat_var_dcids } = promoteFromSpec(spec);
-
-        return {
-            identity: spec.identity,
-            ...(resolved_stat_var_dcids ? { resolved_stat_var_dcids } : {}),
-        };
+        return { identity: spec.identity };
     });
 
     return {

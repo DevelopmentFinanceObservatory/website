@@ -5,10 +5,11 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import styles from './DataSearch.module.scss';
-import { useNodeDescriptions, useSideNote, useSourceDocs } from './GraphInfo';
+import { useDefinitionMembers, useNodeDescriptions, useSideNote, useSourceDocs } from './GraphInfo';
 import { stopMenuFieldTypeahead } from './SlotMenu';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import type { MemberSpec } from '@/lib/search/definitionMembers';
 import type { TokenAboutModel } from '@/lib/search/tokenAbout';
 
 type NoteEntry = { key: string; term: string | null; text: string };
@@ -36,9 +37,24 @@ const NoteEntries = ({ entries }: { entries: NoteEntry[] }) =>
  * (`useSideNote`). The mark shows only once there is text to show. A
  * menu's current row carries no note of its own, so each definition prints
  * once per panel.
+ *
+ * `statVarSpec` (`singleStatVarSpec`) is a measure's Spec when it serves one
+ * StatVar. The block reads that StatVar from the members door as it mounts,
+ * which is when its panel opens, and defines it after the measure's values.
  */
-export const TokenAbout = ({ about }: { about: TokenAboutModel }) => {
-    const descriptions = useNodeDescriptions(about.definitions.map((entry) => entry.dcid));
+export const TokenAbout = ({
+    about,
+    statVarSpec = null,
+}: {
+    about: TokenAboutModel;
+    statVarSpec?: MemberSpec | null;
+}) => {
+    const members = useDefinitionMembers(statVarSpec);
+    const statVar = members?.ok && members.members.length === 1 ? members.members[0] : null;
+    const definitions = statVar
+        ? [...about.definitions, { label: null, dcid: statVar.dcid }]
+        : about.definitions;
+    const descriptions = useNodeDescriptions(definitions.map((entry) => entry.dcid));
     const docs = useSourceDocs(about.sources.map((source) => source.dcid));
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
@@ -47,7 +63,7 @@ export const TokenAbout = ({ about }: { about: TokenAboutModel }) => {
 
     const entries: NoteEntry[] = [
         ...about.notes.map((text, at) => ({ key: `note-${at}`, term: null, text })),
-        ...about.definitions.flatMap((definition, at) => {
+        ...definitions.flatMap((definition, at) => {
             const text = descriptions[at];
 
             return text ? [{ key: definition.dcid, term: definition.label, text }] : [];

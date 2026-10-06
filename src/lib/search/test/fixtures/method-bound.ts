@@ -12,17 +12,21 @@
  * Statistics).
  *
  * Trimmed for size; each body still validates against the API's models
- * (scripts/check-search-fixtures.mts). `stat_vars.items` and
- * `trace.resolved_stat_vars` keep two entries and are marked truncated
- * where that cut them, `slot_values` and `open_axis_facts[].values` keep
- * two, the specs' own `sentence_plan` is dropped (the envelope's stays),
- * `trace.pipeline_trace` and `trace.slot_filters` are empty, and timings
- * keep their totals. The server omits a `unit_conversion` currency's
+ * (scripts/check-search-fixtures.mts). `slot_values` and
+ * `open_axis_facts[].values` keep two, the specs' own `sentence_plan` is
+ * dropped (the envelope's stays), `trace.slot_filters` is empty, and
+ * timings keep their totals. The server omits a `unit_conversion` currency's
  * `current_years` when it is null, which its own model requires; this
  * file writes the null.
  * Each series keeps its latest 3 points, as method-unbound.ts does.
  * Option and alternative-measure counts (`served_rows`, `served_rows_exact`)
  * were read with the same requests.
+ *
+ * The capture's StatVar lists are folded into the current wire: each
+ * `stat_vars` carries counts and a date range (`served_count` is the listed members'
+ * count, or `member_count` where the list was cut and exact, and
+ * `data_date_range` spans the listed members), each related measure its
+ * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
  */
 
 export const methodBound: unknown = {
@@ -49,7 +53,6 @@ export const methodBound: unknown = {
       "timing_ms": {
         "total": 3558
       },
-      "restatement_reason": "no_phrase_inputs",
       "operations": [],
       "departures": [],
       "status": "definite",
@@ -266,41 +269,13 @@ export const methodBound: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_EconomicActivity_GrossValueAdded_RealValue",
-                "label": "Amount Of Economic Activity (Real Value): Gross Value Added",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "activitySource",
-                        "label": "activitySource"
-                      },
-                      "label": "activity source"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "GrossValueAdded",
-                        "label": "GrossValueAdded"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "activitySource"
-                ],
-                "data_date_range": {
-                  "start": "2015",
-                  "end": "2025"
-                }
-              }
-            ],
             "member_count": 1,
             "member_count_exact": true,
-            "truncated": false
+            "served_count": 1,
+            "data_date_range": {
+              "start": "2015",
+              "end": "2025"
+            }
           },
           "entities": [
             {
@@ -592,13 +567,6 @@ export const methodBound: unknown = {
           ],
           "rendered_sentence": "India's amount of economic activity (real value): gross value added, 2015 to 2025. Constant Indian rupees · India National Accounts Statistics.",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_EconomicActivity_GrossValueAdded_RealValue",
-                "label": "Amount Of Economic Activity (Real Value): Gross Value Added"
-              }
-            ],
-            "resolved_stat_vars_truncated": false,
             "resolved_entities": [
               {
                 "dcid": "country/IND",
@@ -621,13 +589,11 @@ export const methodBound: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
             "capability_version": "cap_cbe83b130f0e8d02"
           },
           "confidence": "high",
           "available_at_place": true,
           "measure_label_axes": [],
-          "measure_label_named_values": [],
           "measure_axis_values": [],
           "related_group": {
             "dcid": "dc/g/EconomicActivity_ActivitySource-GrossValueAdded",
@@ -635,10 +601,10 @@ export const methodBound: unknown = {
           },
           "related_measures": [
             {
-              "label": "Gross value added at constant prices",
-              "resolved_stat_var_dcids": [
-                "Nominal_Amount_EconomicActivity_GrossValueAdded"
-              ],
+              "stat_var": {
+                "dcid": "Nominal_Amount_EconomicActivity_GrossValueAdded",
+                "label": "Gross value added at constant prices"
+              },
               "definition": {
                 "schema_version": 1,
                 "spec_id": "spec_74f7b55e575e5aafce54f02c58867098",

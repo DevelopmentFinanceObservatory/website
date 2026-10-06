@@ -139,9 +139,6 @@ type CaptureOptions = {
     base: string;
     specId: string;
     definition: unknown;
-    /** The StatVars search resolved for the spec, posted with the mint as
-     *  the download's own mint posts them. */
-    resolvedStatVarDcids?: string[];
     /** The version the mint must land on to be pinned; a mint that lands
      *  elsewhere throws `snapshot_version_moved` and pins nothing. */
     expectedContentVersion?: string;
@@ -164,7 +161,6 @@ export const captureSnapshot = async ({
     base,
     specId,
     definition,
-    resolvedStatVarDcids,
     expectedContentVersion,
     principal,
     pollDeadlineMs,
@@ -185,9 +181,6 @@ export const captureSnapshot = async ({
                 kind: 'spec_id',
                 spec_id: specId,
                 definition,
-                ...(resolvedStatVarDcids?.length
-                    ? { resolved_stat_var_dcids: resolvedStatVarDcids }
-                    : {}),
             },
         },
         { timeoutMs: MINT_TIMEOUT_MS },
@@ -293,26 +286,21 @@ export const pinVersionFrame = async ({
     return 'minted';
 };
 
-/** The search page's resubmit maximum: dfo-apis'
- *  `_RESUBMIT_MAX_RESOLVED_STAT_VARS`. */
-export const MAX_RESOLVED_STAT_VARS = 2_000;
-
-/** The largest /api/download-pin body read, in bytes: room for the full
- *  StatVar list and a definition. */
+/** The largest /api/download-pin body read, in bytes: room for a
+ *  definition. */
 export const MAX_DOWNLOAD_PIN_BODY = 256_000;
 
 export type DownloadPinRequest = {
     specId: string;
     contentVersion: string;
     definition: Record<string, unknown> | null;
-    resolvedStatVarDcids: string[] | undefined;
 };
 
 /**
  * A /api/download-pin body, read up to `MAX_DOWNLOAD_PIN_BODY`, or null
- * when it is malformed: a spec and version of the link's shape, a definition
- * object (or none) and at most `MAX_RESOLVED_STAT_VARS` StatVar ids (or
- * none). The route mints with the last two when the version lists no artifact.
+ * when it is malformed: a spec and version of the link's shape and a
+ * definition object (or none). The route mints with the definition when the
+ * version lists no artifact.
  */
 export const parseDownloadPin = (text: string): DownloadPinRequest | null => {
     let body: unknown;
@@ -327,10 +315,7 @@ export const parseDownloadPin = (text: string): DownloadPinRequest | null => {
         return null;
     }
 
-    const { specId, contentVersion, definition, resolvedStatVarDcids } = body as Record<
-        string,
-        unknown
-    >;
+    const { specId, contentVersion, definition } = body as Record<string, unknown>;
 
     if (
         typeof specId !== 'string' ||
@@ -345,21 +330,9 @@ export const parseDownloadPin = (text: string): DownloadPinRequest | null => {
         return null;
     }
 
-    if (
-        resolvedStatVarDcids != null &&
-        !(
-            Array.isArray(resolvedStatVarDcids) &&
-            resolvedStatVarDcids.length <= MAX_RESOLVED_STAT_VARS &&
-            resolvedStatVarDcids.every((dcid) => typeof dcid === 'string' && dcid !== '')
-        )
-    ) {
-        return null;
-    }
-
     return {
         specId,
         contentVersion,
         definition: (definition as Record<string, unknown> | null | undefined) ?? null,
-        resolvedStatVarDcids: (resolvedStatVarDcids as string[] | null | undefined) ?? undefined,
     };
 };

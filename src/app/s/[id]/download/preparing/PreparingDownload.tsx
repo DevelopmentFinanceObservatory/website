@@ -69,7 +69,6 @@ const PreparingDownload = ({
                         specId,
                         contentVersion: manifest.content_version,
                         definition: null,
-                        resolvedStatVarDcids: undefined,
                     });
                 }
 

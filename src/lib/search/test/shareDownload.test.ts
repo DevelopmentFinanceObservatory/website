@@ -28,7 +28,6 @@ const ref = (
         variableText: `variable ${partIndex}`,
         specId,
         identity: {},
-        resolvedStatVarDcids: null,
         operations: [],
         contentVersion,
         artifactDigest,

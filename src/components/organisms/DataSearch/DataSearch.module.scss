@@ -514,7 +514,7 @@ span.slotMarked {
 }
 
 // Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
-// donor/recipient rows) doesn't scroll Apply out of reach; background
+// provider/recipient rows) doesn't scroll Apply out of reach; background
 // matches the menu so a scrolling row underneath doesn't show through.
 .multiSelectApply {
     position: sticky;
@@ -752,7 +752,7 @@ span.slotMarked {
     color: var(--color-stone);
 }
 
-// A place picker or window/donor fetch that failed outright (a refused or
+// A place picker or window/provider fetch that failed outright (a refused or
 // dropped request), rather than one that simply came back with nothing —
 // the note names what the door said, the button re-runs it.
 .slotFailed {

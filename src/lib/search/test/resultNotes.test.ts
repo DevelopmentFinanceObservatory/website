@@ -74,19 +74,18 @@ const humanitarianWarnings: Warning[] = [
 ];
 
 // dfo-apis src/search/engine/region/un_system.py un_unavailable_warning, for
-// a record holding one refused place and one failed read of two variables.
-const unSystemWarning: Warning = {
+// a record holding one refused place and one failed read of two variables,
+// with each variable's label in `variable_labels`.
+const unSystemWarning = (variableLabels: string[]): Warning => ({
     code: 'un_system_unavailable',
     severity: 'warn',
     message:
         'The UN System Data Commons refused reads for country/PRK; the answer holds no UN data there. ' +
         'The UN System Data Commons read for sdg/SH_STA_MORT, sdg/SH_DYN_MORT at country/KEN, country/UGA failed; the answer holds no UN data for them.',
-    params: { places: ['country/PRK'], variables: ['sdg/SH_STA_MORT', 'sdg/SH_DYN_MORT'] },
-};
-const unSpec = (labels: Record<string, string | null>) => ({
-    ...humanitarianSpec,
-    stat_vars: {
-        items: Object.entries(labels).map(([ref, label]) => ({ ref, label })),
+    params: {
+        places: ['country/PRK'],
+        variables: ['sdg/SH_STA_MORT', 'sdg/SH_DYN_MORT'],
+        variable_labels: variableLabels,
     },
 });
 
@@ -106,42 +105,43 @@ test('aboutAnswerNotes holds the coverage sentence and assumptions -- humanitari
 for (const [name, labels, line] of [
     [
         'by label',
-        {
-            'sdg/SH_STA_MORT': 'Maternal mortality ratio',
-            'sdg/SH_DYN_MORT': 'Under-five mortality rate',
-        },
+        ['Maternal mortality ratio', 'Under-five mortality rate'],
         'The UN System Data Commons could not be read for Maternal mortality ratio and Under-five mortality rate, so the answer holds no UN data for them.',
     ],
     [
         'by label, counting a variable with none',
-        { 'sdg/SH_STA_MORT': 'Maternal mortality ratio', 'sdg/SH_DYN_MORT': null },
+        ['Maternal mortality ratio', ''],
         'The UN System Data Commons could not be read for Maternal mortality ratio and 1 other variable, so the answer holds no UN data for them.',
     ],
     [
-        'by count when the spec labels none',
-        {},
+        'by count when the warning labels none',
+        [],
         'The UN System Data Commons could not be read for 2 variables, so the answer holds no UN data for them.',
     ],
 ] as const) {
     test(`aboutAnswerNotes names the failed UN reads ${name}, and leaves the refused places to the departure`, () => {
-        assert.deepEqual(aboutAnswerNotes(unSpec(labels), [unSystemWarning], {}).unavailable, [
-            line,
-        ]);
+        assert.deepEqual(
+            aboutAnswerNotes(humanitarianSpec, [unSystemWarning([...labels])], {}).unavailable,
+            [line],
+        );
     });
 }
 
 test('unSystemFailedReads states an unavailable UN search when the warning carries no params', () => {
-    const bare: Warning = { ...unSystemWarning, params: null };
+    const bare: Warning = { ...unSystemWarning([]), params: null };
 
-    assert.deepEqual(unSystemFailedReads(unSpec({}), [bare]), [
+    assert.deepEqual(unSystemFailedReads([bare]), [
         'The UN System Data Commons could not be searched, so the answer holds no UN data.',
     ]);
 });
 
 test('unSystemFailedReads is empty when the warning names only refused places', () => {
     assert.deepEqual(
-        unSystemFailedReads(unSpec({}), [
-            { ...unSystemWarning, params: { places: ['country/PRK'], variables: [] } },
+        unSystemFailedReads([
+            {
+                ...unSystemWarning([]),
+                params: { places: ['country/PRK'], variables: [], variable_labels: [] },
+            },
         ]),
         [],
     );

@@ -54,7 +54,7 @@ export function seedWindowYears({
     };
 }
 
-/** A direct read of requested_window, the same pattern the "Any donor"/"Any
+/** A direct read of requested_window, the same pattern the "Any provider"/"Any
  *  recipient" row's checked prop uses. */
 export function isAllYearsWindow(requestedWindow: IdentityWindow | undefined): boolean {
     return requestedWindow?.kind === 'all';

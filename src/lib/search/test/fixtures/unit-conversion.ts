@@ -15,17 +15,21 @@
  *   whose shared unit token hoists to the envelope plan (part_index null)
  *
  * Trimmed for size; each body still validates against the API's models
- * (scripts/check-search-fixtures.mts). `stat_vars.items` and
- * `trace.resolved_stat_vars` keep two entries and are marked truncated
- * where that cut them, `slot_values` and `open_axis_facts[].values` keep
- * two, the specs' own `sentence_plan` is dropped (the envelope's stays),
- * `trace.pipeline_trace` and `trace.slot_filters` are empty, and timings
- * keep their totals. The server omits a `unit_conversion` currency's
+ * (scripts/check-search-fixtures.mts). `slot_values` and
+ * `open_axis_facts[].values` keep two, the specs' own `sentence_plan` is
+ * dropped (the envelope's stays), `trace.slot_filters` is empty, and
+ * timings keep their totals. The server omits a `unit_conversion` currency's
  * `current_years` when it is null, which its own model requires; this
  * file writes the null. Slot option
  * lists keep two entries, and the specs' `observations` are dropped.
  * Option and alternative-measure counts (`served_rows`, `served_rows_exact`)
  * were read with the same requests.
+ *
+ * The capture's StatVar lists are folded into the current wire: each
+ * `stat_vars` carries counts and a date range (`served_count` is the listed members'
+ * count, or `member_count` where the list was cut and exact, and
+ * `data_date_range` spans the listed members), each related measure its
+ * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
  */
 
 export const unitAid: unknown = {
@@ -396,115 +400,13 @@ export const unitAid: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11110_Nominal",
-                "label": "Official development assistance gross disbursements for education policy and administrative management (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2003",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              },
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "1999",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 279,
             "member_count_exact": true,
-            "truncated": true
+            "served_count": 279,
+            "data_date_range": {
+              "start": "1999",
+              "end": "2009"
+            }
           },
           "entities": [
             {
@@ -753,17 +655,6 @@ export const unitAid: unknown = {
           "facet_options": [],
           "rendered_sentence": "Germany's gross ODA disbursements to Guatemala, 1976 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11110_Nominal",
-                "label": "Official development assistance gross disbursements for education policy and administrative management (standard grant)"
-              },
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)"
-              }
-            ],
-            "resolved_stat_vars_truncated": true,
             "resolved_entities": [
               {
                 "dcid": "country/GTM",
@@ -790,10 +681,7 @@ export const unitAid: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "n_recalled": 51,
             "capability_version": "cap_cbe83b130f0e8d02",
-            "declaration_version": "29967a15833349bbe4446023f170f5b77b21aa45963894a1b589848c3196d623",
             "default_reading": {
               "applied": true,
               "removed_stat_vars": []
@@ -1015,7 +903,6 @@ export const unitAid: unknown = {
             "financialFlowType",
             "nettingBasis"
           ],
-          "measure_label_named_values": [],
           "measure_axis_values": [
             {
               "axis": "populationType",
@@ -3334,7 +3221,6 @@ export const unitAidEuroConstant: unknown = {
       "timing_ms": {
         "total": 1100
       },
-      "restatement_reason": "no_phrase_inputs",
       "operations": [],
       "departures": [],
       "status": "definite",
@@ -3656,115 +3542,13 @@ export const unitAidEuroConstant: unknown = {
           "inapplicable_slots": [],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11110_Nominal",
-                "label": "Official development assistance gross disbursements for education policy and administrative management (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2003",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              },
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "1999",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 279,
             "member_count_exact": true,
-            "truncated": true
+            "served_count": 279,
+            "data_date_range": {
+              "start": "1999",
+              "end": "2009"
+            }
           },
           "entities": [
             {
@@ -4018,17 +3802,6 @@ export const unitAidEuroConstant: unknown = {
           "facet_options": [],
           "rendered_sentence": "Germany's gross ODA disbursements to Guatemala, 1976 to 2024. Constant 2024 euros · OECD Creditor Reporting System (CRS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11110_Nominal",
-                "label": "Official development assistance gross disbursements for education policy and administrative management (standard grant)"
-              },
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)"
-              }
-            ],
-            "resolved_stat_vars_truncated": true,
             "resolved_entities": [
               {
                 "dcid": "country/GTM",
@@ -4055,9 +3828,7 @@ export const unitAidEuroConstant: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "capability_version": "cap_cbe83b130f0e8d02",
-            "declaration_version": "29967a15833349bbe4446023f170f5b77b21aa45963894a1b589848c3196d623"
+            "capability_version": "cap_cbe83b130f0e8d02"
           },
           "confidence": "high",
           "available_at_place": true,
@@ -4295,7 +4066,6 @@ export const unitAidEuroConstant: unknown = {
             "financialFlowType",
             "nettingBasis"
           ],
-          "measure_label_named_values": [],
           "measure_axis_values": [
             {
               "axis": "populationType",
@@ -7032,42 +6802,13 @@ export const unitDebt: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_ServicingPayment_Nominal",
-                "label": "Debt service on external debt (current US$)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "ServicingPayment",
-                        "label": "servicing payment"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "financialFlowType"
-                ],
-                "data_date_range": {
-                  "start": "1970",
-                  "end": "2024"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 1,
             "member_count_exact": false,
-            "truncated": false
+            "served_count": 1,
+            "data_date_range": {
+              "start": "1970",
+              "end": "2024"
+            }
           },
           "entities": [
             {
@@ -7325,13 +7066,6 @@ export const unitDebt: unknown = {
           "facet_options": [],
           "rendered_sentence": "Ghana's external debt service owed to all creditors, 1970 to 2024. Current US dollars · World Bank International Debt Statistics (IDS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_ServicingPayment_Nominal",
-                "label": "Debt service on external debt (current US$)"
-              }
-            ],
-            "resolved_stat_vars_truncated": false,
             "resolved_entities": [
               {
                 "dcid": "country/GHA",
@@ -7354,8 +7088,6 @@ export const unitDebt: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "n_recalled": 55,
             "capability_version": "cap_cbe83b130f0e8d02",
             "default_reading": {
               "applied": true,
@@ -7365,7 +7097,6 @@ export const unitDebt: unknown = {
           "confidence": "high",
           "available_at_place": true,
           "measure_label_axes": [],
-          "measure_label_named_values": [],
           "measure_axis_values": [],
           "unit_conversion": {
             "currencies": [
@@ -9824,59 +9555,13 @@ export const unitHealth: unknown = {
           "inapplicable_slots": [],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_EconomicActivity_ExpenditureActivity_HealthcareExpenditure_AsFractionOf_Count_Person",
-                "label": "Healthcare expenditure per person",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "activitySource",
-                        "label": "activitySource"
-                      },
-                      "label": "activity source"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "ExpenditureActivity",
-                        "label": "ExpenditureActivity"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "expenditureType",
-                        "label": "expenditureType"
-                      },
-                      "label": "expenditure type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "HealthcareExpenditure",
-                        "label": "HealthcareExpenditure"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "activitySource",
-                  "expenditureType"
-                ],
-                "data_date_range": {
-                  "start": "2000",
-                  "end": "2023"
-                }
-              }
-            ],
             "member_count": 1,
             "member_count_exact": false,
-            "truncated": false
+            "served_count": 1,
+            "data_date_range": {
+              "start": "2000",
+              "end": "2023"
+            }
           },
           "entities": [
             {
@@ -9990,13 +9675,6 @@ export const unitHealth: unknown = {
           "facet_options": [],
           "rendered_sentence": "Kenya's health expenditure per capita in international dollars, 2000 to 2023. World Development Indicators.",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_EconomicActivity_ExpenditureActivity_HealthcareExpenditure_AsFractionOf_Count_Person",
-                "label": "Healthcare expenditure per person"
-              }
-            ],
-            "resolved_stat_vars_truncated": false,
             "resolved_entities": [
               {
                 "dcid": "country/KEN",
@@ -10019,8 +9697,6 @@ export const unitHealth: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "n_recalled": 64,
             "capability_version": "cap_cbe83b130f0e8d02",
             "default_reading": {
               "applied": true,
@@ -10030,7 +9706,6 @@ export const unitHealth: unknown = {
           "confidence": "high",
           "available_at_place": true,
           "measure_label_axes": [],
-          "measure_label_named_values": [],
           "measure_axis_values": [],
           "related_group": {
             "dcid": "dc/g/EconomicActivity_ActivitySource-ExpenditureActivity_ExpenditureType",
@@ -10038,10 +9713,10 @@ export const unitHealth: unknown = {
           },
           "related_measures": [
             {
-              "label": "Fraction of Government Expenditure on Tertiary Education",
-              "resolved_stat_var_dcids": [
-                "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government"
-              ],
+              "stat_var": {
+                "dcid": "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government",
+                "label": "Fraction of Government Expenditure on Tertiary Education"
+              },
               "definition": {
                 "schema_version": 1,
                 "spec_id": "spec_d672fed8d022cb7e1f9bf84fd9da292e",
@@ -10603,115 +10278,13 @@ export const unitAidLoans: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2001",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              },
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11130_Nominal",
-                "label": "Official development assistance gross disbursements for teacher training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2008",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 486,
             "member_count_exact": true,
-            "truncated": true
+            "served_count": 486,
+            "data_date_range": {
+              "start": "2001",
+              "end": "2009"
+            }
           },
           "entities": [
             {
@@ -10960,17 +10533,6 @@ export const unitAidLoans: unknown = {
           "facet_options": [],
           "rendered_sentence": "Germany's gross ODA disbursements to Kenya, 1973 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)"
-              },
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11130_Nominal",
-                "label": "Official development assistance gross disbursements for teacher training (standard grant)"
-              }
-            ],
-            "resolved_stat_vars_truncated": true,
             "resolved_entities": [
               {
                 "dcid": "country/KEN",
@@ -10997,10 +10559,7 @@ export const unitAidLoans: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "n_recalled": 51,
             "capability_version": "cap_cbe83b130f0e8d02",
-            "declaration_version": "29967a15833349bbe4446023f170f5b77b21aa45963894a1b589848c3196d623",
             "default_reading": {
               "applied": true,
               "removed_stat_vars": []
@@ -11222,7 +10781,6 @@ export const unitAidLoans: unknown = {
             "financialFlowType",
             "nettingBasis"
           ],
-          "measure_label_named_values": [],
           "measure_axis_values": [
             {
               "axis": "populationType",
@@ -13641,115 +13199,13 @@ export const unitAidLoans: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "nettingBasis",
-                        "label": "netting basis"
-                      },
-                      "label": "netting basis"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Gross",
-                        "label": "gross"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2001",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              },
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11130_Nominal",
-                "label": "Official development assistance gross disbursements for teacher training (standard grant)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "financialFlowType",
-                        "label": "financial flow type"
-                      },
-                      "label": "financial flow type"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Disbursement",
-                        "label": "disbursement"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "nettingBasis",
-                        "label": "netting basis"
-                      },
-                      "label": "netting basis"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "Gross",
-                        "label": "gross"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2008",
-                  "end": "2009"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 510,
             "member_count_exact": true,
-            "truncated": true
+            "served_count": 510,
+            "data_date_range": {
+              "start": "2001",
+              "end": "2009"
+            }
           },
           "entities": [
             {
@@ -13998,17 +13454,6 @@ export const unitAidLoans: unknown = {
           "facet_options": [],
           "rendered_sentence": "Germany's gross disbursements to Kenya, 1973 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11120_Nominal",
-                "label": "Official development assistance gross disbursements for education facility and training (standard grant)"
-              },
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode11130_Nominal",
-                "label": "Official development assistance gross disbursements for teacher training (standard grant)"
-              }
-            ],
-            "resolved_stat_vars_truncated": true,
             "resolved_entities": [
               {
                 "dcid": "country/KEN",
@@ -14035,10 +13480,7 @@ export const unitAidLoans: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "pipeline_trace": [],
-            "n_recalled": 54,
             "capability_version": "cap_cbe83b130f0e8d02",
-            "declaration_version": "29967a15833349bbe4446023f170f5b77b21aa45963894a1b589848c3196d623",
             "default_reading": {
               "applied": true,
               "removed_stat_vars": []
@@ -14258,7 +13700,6 @@ export const unitAidLoans: unknown = {
             "financialFlowType",
             "nettingBasis"
           ],
-          "measure_label_named_values": [],
           "measure_axis_values": [
             {
               "axis": "populationType",

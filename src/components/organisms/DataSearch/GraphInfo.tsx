@@ -16,6 +16,11 @@ import styles from './DataSearch.module.scss';
 import { OptionRowInfo } from './SlotMenu';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import {
+    definitionMembersReader,
+    type MemberSpec,
+    type MembersRead,
+} from '@/lib/search/definitionMembers';
 import { graphReader } from '@/lib/search/graphReads';
 import { graphNodeDescription } from '@/lib/search/measureMenu';
 import { notePosition, noteShown } from '@/lib/search/notePosition';
@@ -27,6 +32,8 @@ import type { GraphRef } from '@/lib/search/types';
 const readNoNote = () => null;
 
 const graph = graphReader({ fetchImpl: (url, init) => fetch(url, init) });
+
+const readMembers = definitionMembersReader();
 
 // The graph's own documentation for a source (the same door the Sources
 // pages read), shared by every row that asks. A source with no page (the
@@ -334,6 +341,27 @@ export const useNodeDescriptions = (dcids: string[]): (string | null)[] => {
     );
 
     return useSettled(pending) ?? dcids.map(() => null);
+};
+
+// Settles to null, so a hook given no Spec reads nothing.
+const NO_MEMBERS: Promise<MembersRead | null> = Promise.resolve(null);
+
+/** The StatVars `spec` serves, from the Datasets members door, null while
+ *  unread and for a null `spec`. A caller passes the Spec only once its
+ *  panel is open, so a closed panel asks nothing. */
+export const useDefinitionMembers = (spec: MemberSpec | null): MembersRead | null => {
+    const specId = spec?.spec_id ?? null;
+    const definition = spec?.definition;
+    const digest = spec?.shape?.member_digest ?? null;
+    const pending = useMemo(
+        () =>
+            specId
+                ? readMembers({ spec_id: specId, definition, shape: { member_digest: digest } })
+                : NO_MEMBERS,
+        [specId, definition, digest],
+    );
+
+    return useSettled(pending);
 };
 
 /** Each source's description from its documentation page, and whether the

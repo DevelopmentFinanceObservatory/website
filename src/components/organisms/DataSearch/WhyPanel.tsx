@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import styles from './DataSearch.module.scss';
 import { OptionFilterInput } from './SlotMenu';
-import { sourceDoc } from './GraphInfo';
+import { sourceDoc, useDefinitionMembers } from './GraphInfo';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
@@ -75,23 +75,24 @@ const Breakdown = ({ breakdown }: { breakdown: WhyBreakdown }) => (
 );
 
 // The summary, the breakdown by axis value when the variables differ on an
-// axis, and the list. With a breakdown, "Show all" opens the whole list.
-// Without one, the first variables show before it.
+// axis, and the list the members door answers. With a breakdown, "Show all"
+// opens the whole list. Without one, the first variables show before it.
 const VariablesGroup = ({ variables }: { variables: WhyVariables }) => {
     const [filter, setFilter] = useState('');
     const [showAll, setShowAll] = useState(false);
 
+    const items = variables.members.state === 'listed' ? variables.members.items : [];
     const first = variables.breakdown.length > 0 ? 0 : FIRST_VARIABLES;
     const needle = filter.trim().toLowerCase();
     const matches = needle
-        ? variables.items.filter(
+        ? items.filter(
               (item) =>
                   item.label.toLowerCase().includes(needle) ||
                   item.dcid.toLowerCase().includes(needle),
           )
-        : variables.items;
+        : items;
     const shown = needle || showAll ? matches : matches.slice(0, first);
-    const hidden = variables.items.length - first;
+    const hidden = items.length - first;
 
     return (
         <div className={styles.whyGroup}>
@@ -106,11 +107,17 @@ const VariablesGroup = ({ variables }: { variables: WhyVariables }) => {
             {variables.breakdown.map((breakdown) => (
                 <Breakdown key={breakdown.title} breakdown={breakdown} />
             ))}
+            {variables.members.state === 'loading' && (
+                <p className={styles.whySummary}>Reading the variables…</p>
+            )}
+            {variables.members.state === 'failed' && (
+                <p className={styles.whySummary}>The variables could not be listed.</p>
+            )}
             {hidden > 0 && (first > 0 || showAll) && (
                 <OptionFilterInput
                     value={filter}
                     onChange={setFilter}
-                    label={`Filter ${formatCount(variables.items.length)} variables`}
+                    label={`Filter ${formatCount(items.length)} variables`}
                 />
             )}
             {shown.map((item) => (
@@ -121,11 +128,6 @@ const VariablesGroup = ({ variables }: { variables: WhyVariables }) => {
             {needle && matches.length === 0 && (
                 <p className={styles.whySummary}>No variable matches the filter.</p>
             )}
-            {variables.items.length < variables.count && (showAll || needle) && (
-                <p className={styles.whySummary}>
-                    The list holds the first {formatCount(variables.items.length)} variables.
-                </p>
-            )}
             {!needle && hidden > 0 && (
                 <Button
                     variant="plain"
@@ -134,7 +136,7 @@ const VariablesGroup = ({ variables }: { variables: WhyVariables }) => {
                     data-open={showAll}
                     onClick={() => setShowAll((open) => !open)}
                 >
-                    {showAll ? 'Show fewer' : `Show all ${formatCount(variables.items.length)}`}
+                    {showAll ? 'Show fewer' : `Show all ${formatCount(items.length)}`}
                 </Button>
             )}
         </div>
@@ -229,27 +231,56 @@ const AboutSection = ({
     </section>
 );
 
+// One part's section. Its served members are read from the members door
+// once the panel opens.
+const AboutPartSection = ({
+    part,
+    label,
+    open,
+    optionsBySpec,
+}: {
+    part: AboutPart;
+    label: string | null;
+    open: boolean;
+    optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>;
+}) => {
+    const members = useDefinitionMembers(open ? part.spec : null);
+
+    return (
+        <AboutSection
+            label={label}
+            summary={buildWhySummary(
+                part.spec,
+                { warnings: part.warnings ?? [], variable_text: part.variableText },
+                members,
+            )}
+            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec)}
+        />
+    );
+};
+
 /** The "About this answer" panel: one section per definite part, each with
  *  the coverage sentence, what the search matched and assumed, the
  *  variables, how each facet and defaulted slot was chosen, and the sources
- *  with their licence. A lone part carries no title. */
+ *  with their licence. A lone part carries no title. `open` is whether the
+ *  panel shows, which starts the members reads. */
 const WhyPanel = ({
     parts,
+    open,
     optionsBySpec,
 }: {
     parts: AboutPart[];
+    open: boolean;
     optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>;
 }) => (
     <div className={styles.why}>
         {parts.map((part, at) => (
-            <AboutSection
+            <AboutPartSection
                 key={part.index}
+                part={part}
                 label={parts.length > 1 ? (part.variableText ?? `Part ${at + 1}`) : null}
-                summary={buildWhySummary(part.spec, {
-                    warnings: part.warnings ?? [],
-                    variable_text: part.variableText,
-                })}
-                notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec)}
+                open={open}
+                optionsBySpec={optionsBySpec}
             />
         ))}
     </div>

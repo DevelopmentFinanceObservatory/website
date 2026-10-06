@@ -49,7 +49,7 @@ export type PriceBases = {
 const LOCALE = 'en-GB';
 
 const ROLE_NAMES: Record<EntityRoleKey, string> = {
-    origin: 'Donor',
+    origin: 'Provider',
     destination: 'Recipient',
     observationAbout: 'Place',
 };
@@ -349,7 +349,7 @@ export const sharedUnitEdit = (
         override: {
             rewriteIdentity: (identity, part) =>
                 touched.includes(part.index)
-                    ? withFacetEdit(identity, 'unit', { state: 'value', request }).identity
+                    ? withFacetEdit(identity, 'unit', { state: 'value', request })
                     : identity,
         },
     };
