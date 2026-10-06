@@ -268,8 +268,8 @@ test('searchEventProps fits the events cap on the largest answer the API can sen
                     },
                 })),
                 entities: { ...spec.identity.entities, destination: members },
-                entity_groups: { destination: { dcid: 'grp/UN', label: 'United Nations members' } },
             },
+            entity_groups: { destination: { dcid: 'grp/UN', label: 'United Nations members' } },
             stat_vars: { member_count: 486, member_count_exact: true, served_count: 486 },
             resolution: {
                 ...spec.resolution,

@@ -27,6 +27,7 @@ import {
 import type {
     DatasetResubmitEntry,
     LateDepartures,
+    EntityGroup,
     EntityRoleKey,
     Operation,
     Part,
@@ -1157,6 +1158,9 @@ export type OpenedSearchShare = {
         variableText: string | null;
         specId: string;
         identity: unknown;
+        /** The shared Spec's named groups, posted beside the identity on
+         *  replay. Null when it had none. */
+        entityGroups: Record<string, EntityGroup> | null;
         operations: Operation[];
         contentVersion: string | null;
     }[];
@@ -1176,6 +1180,7 @@ export async function createSearchShare(req: {
         variableText: string | null;
         specId: string;
         identity: unknown;
+        entityGroups: Record<string, EntityGroup> | null;
         operations: Operation[];
         definition: unknown;
     }[];
