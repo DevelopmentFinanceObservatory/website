@@ -7,7 +7,7 @@ import {
     SEARCH_SHARE_MAX_PARTS,
     searchSharePart,
 } from '../searchShareRequest.ts';
-import type { HydratedPart } from '../types.ts';
+import type { HydratedPart, Spec } from '../types.ts';
 import { fixtures } from './fixtures/index.ts';
 
 const part = (partIndex: number) => ({
@@ -99,7 +99,7 @@ test('a part whose identity holds entity_groups is refused', () => {
 });
 
 test("a definite part shares its Spec's groups beside the identity, and null when it has none", () => {
-    const [response] = normalizeResponse(fixtures['definite-single']).parts;
+    const [response] = normalizeResponse(fixtures['definite-rank-operation']).parts;
     const hydrated: HydratedPart = {
         index: 0,
         variableText: response.variable_text ?? null,
@@ -115,9 +115,18 @@ test("a definite part shares its Spec's groups beside the identity, and null whe
         hydratedSpec: { ...hydrated.hydratedSpec!, entity_groups: groups },
     });
 
-    assert.deepEqual(shared.entityGroups, groups);
-    assert.equal(shared.identity, hydrated.hydratedSpec!.identity);
-    assert.equal(shared.specId, hydrated.hydratedSpec!.spec_id);
+    const spec = response.spec as Spec & { definition: unknown };
+
+    assert.ok(spec.definition && response.operations?.length);
+    assert.deepEqual(shared, {
+        partIndex: 0,
+        variableText: response.variable_text,
+        specId: spec.spec_id,
+        identity: spec.identity,
+        entityGroups: groups,
+        operations: response.operations,
+        definition: spec.definition,
+    });
     assert.equal(
         searchSharePart({
             ...hydrated,
