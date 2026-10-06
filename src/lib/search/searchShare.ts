@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 
 import { shortId } from '@/lib/chat/shareStore';
 import { db } from '@/lib/db';
-import type { Operation } from '@/lib/search/types';
+import type { EntityGroup, Operation } from '@/lib/search/types';
 import { searchApiBase } from '@/lib/searchApi';
 import { share, shareRef } from '../../../db/schema';
 import { registerDefinitions } from './registerDefinitions.ts';
@@ -31,6 +31,7 @@ export type SearchShareRef = {
     variableText: string | null;
     specId: string;
     identity: unknown;
+    entityGroups: Record<string, EntityGroup> | null;
     operations: Operation[];
     contentVersion: string | null;
     // The file a snapshot captured and pinned. Null for a live share, and
@@ -104,6 +105,7 @@ export const createSearchShare = async (
                 partIndex: part.partIndex,
                 specId: captured?.[index]?.specId ?? part.specId,
                 identity: part.identity,
+                entityGroups: part.entityGroups ?? null,
                 variableText: part.variableText,
                 operations: part.operations,
                 contentVersion: captured?.[index]?.contentVersion ?? null,
@@ -138,6 +140,7 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
             variableText: ref.variableText,
             specId: ref.specId,
             identity: ref.identity,
+            entityGroups: ref.entityGroups as Record<string, EntityGroup> | null,
             operations: ref.operations as Operation[],
             contentVersion: ref.contentVersion,
             artifactDigest: ref.artifactDigest,

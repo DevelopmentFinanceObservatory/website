@@ -71,6 +71,27 @@
       "when": 1791235492221,
       "tag": "0010_share_ref_artifact_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791306296532,
+      "tag": "0011_drop_share_ref_resolved_stat_var_dcids",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791306303899,
+      "tag": "0012_share_ref_entity_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791306304673,
+      "tag": "0013_move_share_ref_entity_groups",
+      "breakpoints": true
     }
   ]
 }

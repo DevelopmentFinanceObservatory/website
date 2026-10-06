@@ -153,8 +153,8 @@ test('a group question records the group, three members and the exact count', ()
                         },
                     ],
                     entities: { origin: ['country/FRA'], destination: members },
-                    entity_groups: { destination: { dcid: 'grp/UN', label: 'UN members' } },
                 },
+                entity_groups: { destination: { dcid: 'grp/UN', label: 'UN members' } },
             },
         } as HydratedPart,
     ]).resolved;

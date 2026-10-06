@@ -127,12 +127,13 @@ const isReplayableEditEntryKind = (kind: unknown): kind is PermalinkEdit['entry'
 const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] => {
     if (entry.entry_kind !== 'identity') return entry;
 
-    const { variable_text, identity, operations } = entry;
+    const { variable_text, identity, entity_groups, operations } = entry;
 
     return {
         entry_kind: 'identity',
         variable_text,
         identity,
+        ...(entity_groups ? { entity_groups } : {}),
         ...(operations ? { operations } : {}),
     };
 };

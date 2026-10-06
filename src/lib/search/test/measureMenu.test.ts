@@ -187,14 +187,21 @@ test("relatedMeasures lists the related measures under their group's name", () =
     assert.equal(relatedMeasures({ related_measures: [] }).title, null);
 });
 
-test("measureSwitchEntry posts the picked measure's own identity and nothing else", () => {
+test("measureSwitchEntry posts the picked measure's own identity with the groups of the Spec that offered it", () => {
     const measures = [...northKoreaMeasureSpec.alternative_measures.slice(0, 2), currentAccount];
+    const entity_groups = { observationAbout: { dcid: 'undata-geo/G00403000', label: 'Asia' } };
 
     for (const measure of measures) {
-        assert.deepEqual(measureSwitchEntry('inflation', measure), {
+        const entry = {
             entry_kind: 'identity',
             variable_text: 'inflation',
             identity: measure.definition.identity,
+        };
+
+        assert.deepEqual(measureSwitchEntry('inflation', measure, { entity_groups: null }), entry);
+        assert.deepEqual(measureSwitchEntry('inflation', measure, { entity_groups }), {
+            ...entry,
+            entity_groups,
         });
     }
 });

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
-import type { Operation } from './types.ts';
+import type { EntityGroup, EntityRoleKey, HydratedPart, Operation } from './types.ts';
 
 /**
  * The shape and limits of a search share request, checked before any
@@ -17,6 +17,9 @@ export type SearchSharePart = {
     variableText: string | null;
     specId: string;
     identity: unknown;
+    // The Spec's named groups, keyed by role key, which the replay posts
+    // beside the identity. Null when no role was asked for as a group.
+    entityGroups?: Record<string, EntityGroup> | null;
     // What the question asked of the part beyond its data. The replay
     // carries them back.
     operations: Operation[];
@@ -27,6 +30,39 @@ export type SearchSharePart = {
 
 const SPEC_SHAPE = /^spec_[a-z0-9]+$/;
 
+const ENTITY_ROLE_KEYS: string[] = [
+    'observationAbout',
+    'origin',
+    'destination',
+] satisfies EntityRoleKey[];
+
+// Search's own bounds on an `EntityGroup`: a label of 1 to 120 code points
+// and a dcid of at most 1024 characters.
+const GROUP_LABEL_MAX_LENGTH = 120;
+const GROUP_DCID_MAX_LENGTH = 1024;
+
+const isPlainObject = (value: any): boolean =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+
+const isEntityGroup = (value: any): value is EntityGroup =>
+    isPlainObject(value) &&
+    Object.keys(value).every((member) => member === 'dcid' || member === 'label') &&
+    typeof value.label === 'string' &&
+    value.label.length > 0 &&
+    // A label within the bound spans at most two UTF-16 units per code point.
+    value.label.length <= GROUP_LABEL_MAX_LENGTH * 2 &&
+    [...value.label].length <= GROUP_LABEL_MAX_LENGTH &&
+    (value.dcid == null ||
+        (typeof value.dcid === 'string' && value.dcid.length <= GROUP_DCID_MAX_LENGTH));
+
+/** A part's groups as Search takes them beside an identity: one group per
+ *  role key at most, each holding a label and an optional dcid only. */
+const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
+    isPlainObject(value) &&
+    Object.entries(value).every(
+        ([role, group]) => ENTITY_ROLE_KEYS.includes(role) && isEntityGroup(group),
+    );
+
 export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !!value &&
     typeof value === 'object' &&
@@ -35,9 +71,29 @@ export const isSearchSharePart = (value: any): value is SearchSharePart =>
     SPEC_SHAPE.test(value.specId) &&
     !!value.identity &&
     typeof value.identity === 'object' &&
+    // Search refuses an identity that holds its groups, so a share storing
+    // one cannot open.
+    !Object.hasOwn(value.identity, 'entity_groups') &&
+    (value.entityGroups == null || isEntityGroups(value.entityGroups)) &&
     Array.isArray(value.operations) &&
     !!value.definition &&
     typeof value.definition === 'object';
+
+/** The share part a definite part on screen posts: its Spec's identity, with
+ *  the Spec's groups beside it. */
+export const searchSharePart = (part: HydratedPart): Required<SearchSharePart> => {
+    const spec = part.hydratedSpec as any;
+
+    return {
+        partIndex: part.index,
+        variableText: part.variableText,
+        specId: spec.spec_id,
+        identity: spec.identity,
+        entityGroups: spec.entity_groups ?? null,
+        operations: part.part?.operations ?? [],
+        definition: spec.definition,
+    };
+};
 
 /**
  * The most parts one search share holds. Matches Search's `SEARCH_MAX_PARTS`,

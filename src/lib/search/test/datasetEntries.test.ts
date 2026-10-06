@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildDatasetEntries } from '../datasetEntries.ts';
+import { buildDatasetEntries, sharedRefEntry } from '../datasetEntries.ts';
 import { buildAmbiguousPickPart } from '../parsedEdit.ts';
+import { withEntityEdit } from '../promote.ts';
 import { normalizeResponse, restorePlaceholderParts } from '../searchClient.ts';
 import type {
     DatasetIdentityEntry,
@@ -105,4 +106,65 @@ test('buildDatasetEntries leaves operations off a part that has none', () => {
     const [entry] = buildDatasetEntries(hydratedParts('definite-single'));
 
     assert.equal('operations' in entry, false);
+});
+
+test("an identity entry and each candidate post their own Spec's groups beside the identity", () => {
+    const eu = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const g7 = { origin: { dcid: null, label: 'G7 countries' } };
+    const [definite] = hydratedParts('definite-single');
+    const [candidates] = hydratedParts('multi-candidate');
+    const [first, ...others] = candidates.part!.candidates!.specs;
+    const parts: HydratedPart[] = [
+        { ...definite, hydratedSpec: { ...definite.hydratedSpec!, entity_groups: eu } },
+        {
+            ...candidates,
+            index: 1,
+            part: {
+                ...candidates.part!,
+                candidates: {
+                    ...candidates.part!.candidates!,
+                    specs: [{ ...first, entity_groups: g7 }, ...others],
+                },
+            },
+        },
+    ];
+    const [identityEntry, candidatesEntry] = buildDatasetEntries(parts);
+
+    assert.ok(
+        identityEntry.entry_kind === 'identity' && candidatesEntry.entry_kind === 'candidates',
+    );
+    assert.deepEqual(identityEntry.entity_groups, eu);
+    assert.equal('entity_groups' in identityEntry.identity, false);
+    assert.deepEqual(candidatesEntry.candidates[0], {
+        identity: first.identity,
+        entity_groups: g7,
+    });
+    assert.deepEqual(candidatesEntry.candidates[1], { identity: others[0].identity });
+
+    // A fan-out edit rewrites the identity and leaves the entry's groups as posted.
+    const [rewritten] = buildDatasetEntries(parts, {
+        rewriteIdentity: (identity) => withEntityEdit(identity, 'origin', ['country/DEU']),
+    });
+
+    assert.ok(rewritten.entry_kind === 'identity');
+    assert.deepEqual(rewritten.identity.entities.origin, ['country/DEU']);
+    assert.deepEqual(rewritten.entity_groups, eu);
+});
+
+test('a stored share part replays its groups beside the identity, and no member when it has none', () => {
+    const identity = hydratedParts('definite-single')[0].hydratedSpec!.identity;
+    const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const ref = { variableText: 'aid', identity, entityGroups: groups, operations: [] };
+
+    assert.deepEqual(sharedRefEntry(ref), {
+        entry_kind: 'identity',
+        variable_text: 'aid',
+        identity,
+        entity_groups: groups,
+    });
+    assert.deepEqual(sharedRefEntry({ ...ref, variableText: null, entityGroups: null }), {
+        entry_kind: 'identity',
+        variable_text: '',
+        identity,
+    });
 });

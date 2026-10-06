@@ -3,6 +3,7 @@
  *  identity entry a pick posts, and the note lines a varying open axis with
  *  no menu contributes. */
 
+import { specEntityGroups } from './datasetEntries.ts';
 import { keyRef } from './searchClient.ts';
 import { priceBasis } from './unitLabel.ts';
 import type {
@@ -168,15 +169,18 @@ export function measureVarianceNotes(
 
 /** The resubmit entry a pick in the measure menu posts: the alternative's
  *  or related measure's own identity, from which the API resolves the
- *  membership. */
+ *  membership, and the named groups of `spec`, the Spec whose menu offered
+ *  the measure. */
 export function measureSwitchEntry(
     variableText: string,
     measure: Pick<SpecAlternativeMeasure | RelatedMeasure, 'definition'>,
+    spec: Pick<Spec, 'entity_groups'> | null | undefined,
 ): DatasetIdentityEntry {
     return {
         entry_kind: 'identity',
         variable_text: variableText,
         identity: measure.definition.identity,
+        ...specEntityGroups(spec),
     };
 }
 
