@@ -27,6 +27,7 @@ import type {
     IdentityBinding,
     OperationVerb,
     ResolveResponse,
+    Spec,
     SpecIdentity,
 } from './types.ts';
 
@@ -93,12 +94,15 @@ const clip = (text: string, max: number): string => {
 const boundRef = (binding: IdentityBinding): string | string[] | null =>
     binding.state === 'set' ? binding.refs : binding.state === 'unbound' ? null : binding.ref;
 
-// What a part asked for, from its hashed identity: the measure, the filters
+// What a part asked for, from its hashed identity and its Spec's named groups: the measure, the filters
 // it bound, the places per role, the window and the facets. This grows with
 // the question, never with the data. An aid answer elects hundreds of
 // StatVars and can span every recipient, so those expanded lists go in as
 // counts and samples.
-const askedFor = (identity: SpecIdentity | null | undefined): AskedFor | null => {
+const askedFor = (
+    identity: SpecIdentity | null | undefined,
+    groups: Spec['entity_groups'],
+): AskedFor | null => {
     if (!identity) {
         return null;
     }
@@ -121,7 +125,7 @@ const askedFor = (identity: SpecIdentity | null | undefined): AskedFor | null =>
         filters,
         entities: Object.fromEntries(
             Object.entries(identity.entities).map(([role, members]) => {
-                const group = identity.entity_groups?.[role];
+                const group = groups?.[role];
 
                 return [
                     role,
@@ -166,7 +170,7 @@ export function searchEventProps({
                 (source: { dcid: string }) => source.dcid,
             );
 
-            const asked = askedFor(spec.identity);
+            const asked = askedFor(spec.identity, spec.entity_groups);
             const counts = {
                 specId: spec.spec_id,
                 // The served members once settled, else the family's count.

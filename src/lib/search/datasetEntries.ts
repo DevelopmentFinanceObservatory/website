@@ -22,7 +22,10 @@ import type {
     DatasetIdentityEntry,
     DatasetPlaceholderEntry,
     DatasetResubmitEntry,
+    EntityGroup,
     HydratedPart,
+    Operation,
+    Spec,
 } from './types';
 
 /**
@@ -33,7 +36,8 @@ import type {
  *   whole.
  * - `{ rewriteIdentity }` is editShared's fan-out: the same axis rewritten in
  *   every definite entry's `identity` (never a candidates or placeholder
- *   entry), in one list, so one post carries every part's edit.
+ *   entry), in one list, so one post carries every part's edit. Each entry
+ *   keeps its own `entity_groups`.
  *
  * A caller may pass more than one override (an array): each applies in turn
  * over the previous step's result, so a later one wins where two touch the
@@ -45,6 +49,35 @@ import type {
 export type DatasetEntriesOverride =
     | { index: number; entry: DatasetResubmitEntry }
     | { rewriteIdentity: (identity: BaseIdentity, part: HydratedPart) => BaseIdentity };
+
+/** A Spec's named groups as a posted identity carries them: beside the
+ *  identity, unchanged, whatever edit the identity took. The engine decides
+ *  which survive. A Spec with none adds no member. */
+export function specEntityGroups(spec: Pick<Spec, 'entity_groups'> | null | undefined): {
+    entity_groups?: Record<string, EntityGroup>;
+} {
+    return spec?.entity_groups ? { entity_groups: spec.entity_groups } : {};
+}
+
+/** What a stored share part holds for its replay. */
+export type SharedEntryRef = {
+    variableText: string | null;
+    identity: unknown;
+    entityGroups: Record<string, EntityGroup> | null;
+    operations: Operation[];
+};
+
+/** The `identity` entry a stored share part replays: the identity as
+ *  stored, its groups beside it, and the operations its question asked. */
+export function sharedRefEntry(ref: SharedEntryRef): DatasetIdentityEntry {
+    return {
+        entry_kind: 'identity',
+        variable_text: ref.variableText ?? '',
+        identity: ref.identity as BaseIdentity,
+        ...specEntityGroups({ entity_groups: ref.entityGroups }),
+        ...(ref.operations.length ? { operations: ref.operations } : {}),
+    };
+}
 
 function identityEntryFor(part: HydratedPart): DatasetIdentityEntry {
     const spec = part.hydratedSpec;
@@ -58,6 +91,7 @@ function identityEntryFor(part: HydratedPart): DatasetIdentityEntry {
         entry_kind: 'identity',
         variable_text: part.variableText ?? '',
         identity: spec.identity,
+        ...specEntityGroups(spec),
     };
 }
 
@@ -73,7 +107,7 @@ function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
                 `buildDatasetEntries: part ${part.index} has a candidate spec with no identity`,
             );
         }
-        return { identity: spec.identity };
+        return { identity: spec.identity, ...specEntityGroups(spec) };
     });
 
     return {

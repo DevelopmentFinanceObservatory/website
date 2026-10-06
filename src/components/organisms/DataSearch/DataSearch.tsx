@@ -44,6 +44,7 @@ import {
     resolveBuffered,
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
+import { searchSharePart } from '@/lib/search/searchShareRequest';
 import {
     downloadNote,
     noDataCardParts,
@@ -715,18 +716,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         createSearchShare({
             mode,
             query,
-            parts: sharedParts.map((part) => {
-                const spec = part.hydratedSpec as any;
-
-                return {
-                    partIndex: part.index,
-                    variableText: part.variableText,
-                    specId: spec.spec_id,
-                    identity: spec.identity,
-                    operations: part.part?.operations ?? [],
-                    definition: spec.definition,
-                };
-            }),
+            parts: sharedParts.map(searchSharePart),
         }).then((result) => ('id' in result ? { ...result, datasets: sharedDatasets } : result));
     // A part whose question asked for more than search does carries an
     // operation_not_applied departure, whose action hands it to Studio;

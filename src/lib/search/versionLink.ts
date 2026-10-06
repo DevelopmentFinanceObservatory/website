@@ -160,6 +160,8 @@ export const outcomeFromDocument = (
                 variableText: sources.join(', ') || 'Dataset',
                 specId,
                 identity,
+                // A dataset document holds the definition alone.
+                entityGroups: null,
                 operations: [],
                 contentVersion: link.contentVersion,
             },

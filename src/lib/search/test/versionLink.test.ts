@@ -74,6 +74,7 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
                     variableText: 'OECD CRS, IMF WEO',
                     specId: 'spec_a1',
                     identity,
+                    entityGroups: null,
                     operations: [],
                     contentVersion: 'cv_b2',
                 },

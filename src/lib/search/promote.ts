@@ -91,9 +91,7 @@ export function withSlotBinding(
 }
 
 /** Bind or drop one entity role (`observationAbout`/`origin`/`destination`).
- *  `dcids` null/empty drops the role entirely. Changing the role's members drops its `entity_groups` entry, since the
- *  group named exactly those members and the API refuses a group whose role
- *  binds nothing. */
+ *  `dcids` null/empty drops the role entirely. */
 export function withEntityEdit(
     identity: BaseIdentity,
     role: EntityRoleKey,
@@ -108,34 +106,7 @@ export function withEntityEdit(
         delete entities[role];
     }
 
-    return {
-        ...identity,
-        entities,
-        ...(identity.entity_groups
-            ? { entity_groups: withoutChangedGroup(identity, role, entities[role]) }
-            : {}),
-    };
-}
-
-function withoutChangedGroup(
-    identity: BaseIdentity,
-    role: EntityRoleKey,
-    next: string[] | undefined,
-): BaseIdentity['entity_groups'] {
-    const groups = identity.entity_groups;
-    if (!groups || !(role in groups)) return groups;
-
-    const before = identity.entities[role] ?? [];
-    const beforeSet = new Set(before);
-    const unchanged =
-        next !== undefined &&
-        new Set(next).size === beforeSet.size &&
-        next.every((dcid) => beforeSet.has(dcid));
-    if (unchanged) return groups;
-
-    const rest = { ...groups };
-    delete rest[role];
-    return rest;
+    return { ...identity, entities };
 }
 
 /** Bind or drop one facet axis (e.g. `provenance` for the source picker).

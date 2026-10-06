@@ -797,10 +797,11 @@ export interface Spec {
     stat_vars: ResolvedStatVars;
     /** resolved entities the data is about; may be empty if "where" is unbound */
     entities: ResolvedEntity[];
-    /** the named group each role's entities stand for, keyed by role key:
-     *  the groups of `identity.entity_groups` whose members this Spec still
-     *  binds. Null when no role was asked for as a group. Read it afresh
-     *  after every response; the client never edits a group. */
+    /** the named group each role's entities stand for, keyed by role key.
+     *  Null when no role was asked for as a group. Read it afresh after
+     *  every response and post it unchanged beside any identity derived
+     *  from this Spec (`DatasetIdentityEntry.entity_groups`); the client
+     *  never edits a group. */
     entity_groups?: Record<string, EntityGroup> | null;
     coverage: Coverage;
     /** the facet axis values that backed this Spec's observations, sparse,
@@ -980,15 +981,12 @@ export interface BaseIdentity {
     entities: Record<string, string[]>;
     requested_window: IdentityWindow;
     facets?: IdentityFacets;
-    /** the named group each role's entities were asked for as, keyed by
-     *  role key. Outside the spec_id hash; echoed unchanged on resubmit. */
-    entity_groups?: Record<string, EntityGroup> | null;
 }
 
 /** A named group whose members fill one entity role ("European Union").
  *  The members are the role's dcids in `BaseIdentity.entities`. With a
  *  `dcid`, the API takes the label from the graph. Mirrors dfo-apis
- *  IdentityEntityGroup. */
+ *  EntityGroup. */
 export interface EntityGroup {
     /** the group's graph node; null when the graph holds none */
     dcid: string | null;
@@ -1623,18 +1621,24 @@ export interface ParsedPart {
  *  to, edited or not. Mirrors `ResubmitIdentityPayload` (dfo-apis
  *  src/search/models/request.py), which derives the membership from the
  *  identity alone. Every entry carries `variable_text`: the engine nulls it
- *  otherwise and the composer would render a blank phrase. */
+ *  otherwise and the composer would render a blank phrase. `entity_groups`
+ *  is the `Spec.entity_groups` of the Spec the identity derives from, keyed
+ *  by role key; the engine keeps a group whose role the identity still
+ *  binds to the group's members and drops the rest. */
 export interface DatasetIdentityEntry {
     entry_kind: 'identity';
     variable_text: string;
     identity: BaseIdentity;
+    entity_groups?: Record<string, EntityGroup> | null;
     operations?: Operation[];
 }
 
-/** One competing identity inside a `candidates` entry. Specs return in
+/** One competing identity inside a `candidates` entry, with the
+ *  `Spec.entity_groups` of the candidate Spec it came from. Specs return in
  *  posted order. */
 export interface DatasetCandidateIdentity {
     identity: BaseIdentity;
+    entity_groups?: Record<string, EntityGroup> | null;
 }
 
 /** A candidates part's entry: `ordering`/`truncated` echoed verbatim from the
