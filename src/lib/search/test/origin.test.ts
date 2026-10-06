@@ -227,7 +227,7 @@ test('flattenRows reads the row entity and unit from the series role tuple and f
     });
 
     assert.deepEqual(
-        rows.map((row) => [row.year, row.donor, row.unit]),
+        rows.map((row) => [row.year, row.cells['entity:observationAbout'], row.unit]),
         [['2020', 'Kenya', '%']],
     );
 });

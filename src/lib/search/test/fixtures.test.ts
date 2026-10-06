@@ -69,16 +69,22 @@ for (const name of specFixtureNames) {
         assert.equal(new Set(ids).size, ids.length);
     });
 
-    test(`${name}: resolved.stat_vars is {items, member_count, truncated}, truncated exactly when items is a subset`, () => {
+    test(`${name}: resolved.stat_vars carries counts and a date range, the served count at most the family's`, () => {
         for (const spec of rawSpecsIn(body)) {
             const statVars = spec.resolved.stat_vars;
-            assert.ok(Array.isArray(statVars.items), `${spec.spec_id}.stat_vars.items is an array`);
+
+            assert.deepEqual(
+                Object.keys(statVars).sort(),
+                ['data_date_range', 'member_count', 'member_count_exact', 'served_count'],
+                spec.spec_id,
+            );
             assert.equal(typeof statVars.member_count, 'number');
-            assert.equal(typeof statVars.truncated, 'boolean');
-            assert.equal(
-                statVars.truncated,
-                statVars.items.length < statVars.member_count,
-                `${spec.spec_id}: truncated must equal items.length < member_count`,
+            assert.equal(typeof statVars.member_count_exact, 'boolean');
+            assert.ok(
+                statVars.served_count === null ||
+                    statVars.served_count <= statVars.member_count ||
+                    !statVars.member_count_exact,
+                `${spec.spec_id}: served_count exceeds an exact member_count`,
             );
         }
     });
@@ -144,12 +150,6 @@ for (const name of specFixtureNames) {
         }
     });
 }
-
-test('broad-truncated: member_count exceeds items.length, the exact shape a naive items.length read would misreport', () => {
-    const [spec] = rawSpecsIn(fixtures['broad-truncated']);
-    assert.equal(spec.resolved.stat_vars.truncated, true);
-    assert.ok(spec.resolved.stat_vars.member_count > spec.resolved.stat_vars.items.length);
-});
 
 test('crs-hierarchical-purpose: the bound crsPurpose leaf carries a parent relation and no children', () => {
     const [spec] = rawSpecsIn(fixtures['crs-hierarchical-purpose']);

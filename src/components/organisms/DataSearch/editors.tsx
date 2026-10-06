@@ -251,7 +251,7 @@ const freshCommitted = (key: string): CommittedPlaceOptions => ({
 /** Only meaningful for a directional role. Null for a subject place,
  *  which has no unbind row. */
 export const unbindRoleLabel = (role?: EntityRoleKey): string | null => {
-    if (role === 'origin') return 'Any donor';
+    if (role === 'origin') return 'Any provider';
     if (role === 'destination') return 'Any recipient';
     return null;
 };
@@ -293,18 +293,18 @@ export const PlaceEditor = ({
     requireSelection?: boolean;
     /** Multi-select mode, set only by a per-part directional anchor (never
      *  the shared/hoisted picker, and never for a subject place, which has
-     *  no entities.<role> to unbind): an "Any donor"/"Any recipient" row
+     *  no entities.<role> to unbind): an "Any provider"/"Any recipient" row
      *  (AnySelectionRow) that stages the empty selection. */
     offerAny?: boolean;
     /** Prefetched place_options entries, by scope. PlaceOptionsEvent's own
      *  role is always observationAbout, so a directional `role` here ignores
      *  this prop even if a caller passes one — it can only ever race a
-     *  subject-place identity's own peers/children, never a donor/recipient
+     *  subject-place identity's own peers/children, never a provider/recipient
      *  candidate list. */
     prefetched?: Partial<Record<PlaceOptionsScope, PlaceOptionsEntry>>;
     /** the anchor entity's own role; omitted (subject) takes the door's
      *  'observationAbout' default, a directional token names 'origin' or
-     *  'destination' so a CRS donor/recipient anchor stops posting the
+     *  'destination' so a CRS provider/recipient anchor stops posting the
      *  subject role a directional identity refuses. */
     role?: EntityRoleKey;
     /** True while the BASE run's own resolve stream (the raw_text run, or
@@ -634,7 +634,7 @@ export const PlaceEditor = ({
                 the list, rather than in its usual ranked spot within a
                 group. Multi-select: a toggle like every other row here.
                 Unchecking one and pressing Apply with nothing else picked
-                drops the role, the same empty selection the "Any donor"/
+                drops the role, the same empty selection the "Any provider"/
                 "Any recipient" row above stages. Single-pick: clicking a pinned row re-posts it and
                 closes the menu, same as any other row. */}
             {hasIdentity &&
@@ -714,7 +714,7 @@ export const PlaceEditor = ({
                 while requireSelection has nothing checked, for a route that
                 can't express an empty pick. Pinned to the bottom of
                 .slotMenuBody's own scroll area (styles.multiSelectApply) so a
-                long list (hundreds of CRS donor/recipient rows) never
+                long list (hundreds of CRS provider/recipient rows) never
                 scrolls it out of reach. Single-pick mode never renders this:
                 every row above posts on its own. */}
             {hasIdentity && state.phase === 'loaded' && multiSelect && (
@@ -755,7 +755,7 @@ type PlaceScopeEditorState =
     | { phase: 'failed'; error: ApiError };
 
 const placeRoleLabel = (role: EntityRoleKey): string => {
-    if (role === 'origin') return 'donors';
+    if (role === 'origin') return 'providers';
     if (role === 'destination') return 'recipients';
     return 'places';
 };
@@ -1019,7 +1019,7 @@ export const PlaceScopeEditor = ({
                         own currently-bound set. Pinned to the bottom of
                         .slotMenuBody's own scroll area (styles.
                         multiSelectApply) so a long list (hundreds of CRS
-                        donor/recipient rows) never scrolls it out of
+                        provider/recipient rows) never scrolls it out of
                         reach. Single-pick mode never renders this: every row
                         above posts on its own. */}
                     {multiSelect && (

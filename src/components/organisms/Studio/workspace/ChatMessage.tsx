@@ -11,15 +11,12 @@ import type { CardView } from '../canvas/layout';
 
 type ChatMessageProps = {
     message: ChatMessageData;
-    // Is this the transcript's last entry (the live status shows there only).
+    // Is this the transcript's last entry (follow-ups show there only).
     isLast: boolean;
     // The bot turn's cards (already filtered to this turn).
     turnWidgets: TurnWidget[];
     // Which turn this answer is — the feedback box keys its vote on it.
     turn: number;
-    // The streaming status while a turn is in flight.
-    thinking: boolean;
-    status: string | null;
     titles: Record<string, string>;
     views: Record<string, CardView>;
     onCanvas: (id: string) => boolean;
@@ -32,17 +29,15 @@ type ChatMessageProps = {
 };
 
 /**
- * One transcript entry: a user bubble, the live status placeholder, or a
- * bot turn — markdown, the cards it put on the whiteboard as chips, and
- * (on the latest turn) the suggested follow-ups.
+ * One transcript entry: a user bubble, or a bot turn — markdown, the cards
+ * it put on the whiteboard as chips, and (on the latest turn) the suggested
+ * follow-ups.
  */
 const ChatMessage = ({
     message,
     isLast,
     turnWidgets,
     turn,
-    thinking,
-    status,
     titles,
     views,
     onCanvas,
@@ -56,16 +51,11 @@ const ChatMessage = ({
         return <p className={styles.chatBubble}>{message.text}</p>;
     }
 
-    // An empty bot turn is a placeholder: show the live status ONLY on the
-    // last one (a turn that ended on a clarify leaves an empty bot behind —
-    // it must not echo the status too).
+    // An empty bot turn shows nothing. The live line renders below the
+    // transcript, and a turn that ended on a clarify leaves an empty bot
+    // message behind.
     if (!message.text && (!message.followups || !message.followups.length)) {
-        return isLast && thinking ? (
-            <p className={styles.thinking}>
-                <span className={styles.thinkingDot} />
-                {status ?? 'Thinking'}…
-            </p>
-        ) : null;
+        return null;
     }
 
     return (

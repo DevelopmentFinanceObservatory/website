@@ -7,6 +7,7 @@
 
 import { originLine, viaLabel } from '../dataCommons.ts';
 import { spaceCamel } from '../spaceCamel.ts';
+import type { MemberRef, MembersRead } from './definitionMembers.ts';
 import { coverageRichness, coverageState, partitionOptions } from './optionCoverage.ts';
 import type { OperationProgress } from './operationPoll';
 import { entityOptionDcid } from './pickerState.ts';
@@ -44,14 +45,12 @@ export const optionLabel = (option: any): string =>
  *  label should show an explicit failure state rather than an empty one. */
 export const statVarsUnreadable = (spec: any): boolean => !!spec?.stat_vars_unreadable;
 
-/** The resolved spec's own primary StatVar label (spec.stat_vars.items[0]).
- *  ResolvedStatVar.ref is a bare dcid string on this shape — label rides as
- *  a sibling field, not nested under ref (contrast the server's own StatVar
- *  model, dfo-apis src/search/models/statvar.py's StatVar, whose `ref` is a
- *  nested GraphRef). Null when nothing resolved, or when the shape didn't
- *  parse — check statVarsUnreadable first to tell those two apart. */
+/** The resolved spec's measure, named for a card whose part carries no
+ *  variable_text: its measure label, else its shape's label. Null when
+ *  neither is stated — check statVarsUnreadable first to tell an unread
+ *  spec from an unnamed one. */
 export const primaryStatVarLabel = (spec: any): string | null =>
-    spec?.stat_vars?.items?.[0]?.label ?? null;
+    spec?.measure_label ?? spec?.shape?.label ?? null;
 
 /** A part's own variable_text for a card standing in for that part, or the
  *  full original question when the fallback needs more than the bare
@@ -215,7 +214,7 @@ export const mergeEntityOptionsEntry = (
     [specId]: [...(bySpec[specId] ?? []), entry],
 });
 
-/** Look up one directional entity axis without assuming it is the donor.
+/** Look up one directional entity axis without assuming it is the provider.
  * Sentence tokens carry the authoritative role, including an open
  * destination that identity.entities does not yet contain. */
 export const entityOptionsEntry = (
@@ -813,18 +812,30 @@ const slotBoundDcids = (slot: any): string[] => {
     return [];
 };
 
-/** How many StatVars the answer serves: coverage's "variables" count, else
- *  the listed items when the list is whole, else the family's count. */
-export const servedSeriesCount = (spec: any): number | null => {
-    const items = spec?.stat_vars?.items ?? [];
+/** The StatVars a Spec serves, counted from its resolved membership: the
+ *  members door's list once it names any (`listed`), else
+ *  `stat_vars.served_count` once membership settled, else the family's
+ *  `stat_vars.member_count`, which `member_count_exact` marks as a floor.
+ *  Null when the Spec states no membership. Coverage's "variables"
+ *  dimension counts the variables with data in the answer's rows, so it
+ *  takes no part. */
+const servedMembership = (
+    spec: any,
+    listed?: MemberRef[] | null,
+): { count: number; exact: boolean } | null => {
+    const statVars = spec?.stat_vars;
+    const served: number | null = listed?.length || (statVars?.served_count ?? null);
 
-    return (
-        dimensionCount(spec, 'variables') ??
-        (spec?.stat_vars?.truncated
-            ? (spec?.stat_vars?.member_count ?? null)
-            : items.length || null)
-    );
+    if (served != null) return { count: served, exact: true };
+    if (statVars?.member_count == null) return null;
+
+    return { count: statVars.member_count, exact: statVars.member_count_exact !== false };
 };
+
+/** How many StatVars the answer serves: the settled served count, else the
+ *  family's count. */
+export const servedSeriesCount = (spec: any): number | null =>
+    servedMembership(spec)?.count ?? null;
 
 /** Whether a slot's menu offers anything but what the answer already
  *  serves. A slot bound to one value offers an option it does not bind;
@@ -930,11 +941,18 @@ export type WhyVariables = {
     /** false when count is a floor (stat_vars.member_count_exact) */
     exact: boolean;
     summary: string;
-    /** the members on the wire, every one when the API does not truncate */
-    items: { dcid: string; label: string }[];
+    /** the served members, as the members door lists them */
+    members: WhyMembers;
     /** the members counted by each value of an axis they differ on */
     breakdown: WhyBreakdown[];
 };
+
+/** The served members as the Why panel lists them: still being read from
+ *  the members door, refused or failed, or listed. */
+export type WhyMembers =
+    | { state: 'loading' }
+    | { state: 'failed' }
+    | { state: 'listed'; items: { dcid: string; label: string }[] };
 
 /** One open axis the variables differ on ("By instrument"), its values with
  *  the most variables first, and how many values the list leaves out. */
@@ -999,7 +1017,7 @@ const ROLE_WORDS: Record<
     EntityRoleKey,
     { noun: string; one: string; many: string; dimension: string }
 > = {
-    origin: { noun: 'donor', one: 'Donor', many: 'Donors', dimension: 'donors' },
+    origin: { noun: 'provider', one: 'Provider', many: 'Providers', dimension: 'providers' },
     destination: {
         noun: 'recipient',
         one: 'Recipient',
@@ -1012,7 +1030,7 @@ const ROLE_WORDS: Record<
 const orList = (labels: string[]): string =>
     new Intl.ListFormat('en-GB', { type: 'disjunction' }).format(labels);
 
-// The years a single variable's data spans, from its data_date_range.
+// The years a DateRange spans.
 const dateRange = (range: any): string | null => {
     const start = range?.start?.slice(0, 4) ?? null;
     const end = range?.end?.slice(0, 4) ?? null;
@@ -1025,9 +1043,9 @@ const dateRange = (range: any): string | null => {
 };
 
 // Years in order of precedence: the window the query named, the coverage
-// window, the span of every bound variable's data when all of them are on
-// the wire, then the year a broad answer counts.
-const yearsText = (spec: any, items: any[], complete: boolean): string | null => {
+// window, the span of the served variables' data, then the year a broad
+// answer counts.
+const yearsText = (spec: any): string | null => {
     const named = formatWindow(spec.resolution?.requested_window);
 
     if (named) {
@@ -1040,19 +1058,10 @@ const yearsText = (spec: any, items: any[], complete: boolean): string | null =>
         return covered;
     }
 
-    const ranges = items.map((item) => item?.data_date_range).filter(Boolean);
+    const served = dateRange(spec.stat_vars?.data_date_range);
 
-    if (complete && ranges.length === items.length && ranges.length > 0) {
-        const starts = ranges
-            .map((range: any) => range.start)
-            .filter(Boolean)
-            .sort();
-        const ends = ranges
-            .map((range: any) => range.end)
-            .filter(Boolean)
-            .sort();
-
-        return dateRange({ start: starts[0], end: ends.at(-1) });
+    if (served) {
+        return served;
     }
 
     const year = spec.headline?.year;
@@ -1061,7 +1070,7 @@ const yearsText = (spec: any, items: any[], complete: boolean): string | null =>
 };
 
 // Every member of a spec shares its shape, so the shape label holds for all
-// of them, including members past the wire's cap.
+// of them.
 const variablesSummary = (count: number, exact: boolean, shapeLabel?: string | null): string => {
     const counted = exact
         ? `All ${formatCount(count)} variables`
@@ -1113,7 +1122,7 @@ const openRoles = (spec: any, codes: Set<string>): EntityRoleKey[] => {
 };
 
 /** What a definite part's answer assumed, one sentence per scope the
- *  question left open: the place, an open donor or recipient role, and the
+ *  question left open: the place, an open provider or recipient role, and the
  *  year. "About this answer" reads this list (through resultNotes's
  *  aboutAnswerNotes). The year sentence keys on `headline.year_named`
  *  as well as `time_window_defaulted`, since a role-bearing answer can say
@@ -1202,6 +1211,19 @@ const familyNote = (served: number, statVars: any, shapeLabel?: string | null): 
     return `This answer uses ${formatCount(served)} of ${total} ${shapeLabel ? `${shapeLabel} ` : ''}variables.`;
 };
 
+const whyMembers = (members: MembersRead | null | undefined): WhyMembers => {
+    if (!members) return { state: 'loading' };
+    if (!members.ok) return { state: 'failed' };
+
+    return {
+        state: 'listed',
+        items: members.members.map((member) => ({
+            dcid: member.dcid,
+            label: member.label ?? member.dcid,
+        })),
+    };
+};
+
 // Why a facet axis or slot holds its value (ResolvedFacet.basis).
 const CHOICE_REASONS: Record<FacetBasis, string> = {
     bound: 'Set by your request.',
@@ -1267,37 +1289,43 @@ const licenceText = (spec: any): string | null =>
 /** The "About this answer" summary for one definite part: what the search
  *  matched (rows), the variables when there is more than one, the sources
  *  with their licence, and how each facet and defaulted slot was chosen. The
- *  scope assumptions come from resultNotes's aboutAnswerNotes. Reads
- *  `stat_vars` for the variables.
+ *  scope assumptions come from resultNotes's aboutAnswerNotes.
  *
- *  The variables the answer serves decide the layout: coverage's "variables"
- *  dimension counts them, and `stat_vars.items` lists them up to the wire's
- *  cap. `stat_vars.member_count` counts the measure's whole family with data
- *  at the place, which can be larger (life expectancy in Kenya serves 1 of
- *  3), so it only feeds the family note. */
+ *  The resolved membership decides the layout (`servedMembership`).
+ *  `members` is the members door's answer (`useDefinitionMembers`),
+ *  undefined while it is read. Once it lists the served members, one member
+ *  names the measure and gives its code, and several fill the Variables
+ *  group. Until then, and when the read fails, `stat_vars.served_count`
+ *  chooses the layout, and the Measure row carries no code. With membership
+ *  unsettled (`served_count` null) and no list, the layout follows
+ *  `stat_vars.member_count`: one exact member takes the single-variable
+ *  layout, and any other count shows the Variables group, marked as a floor
+ *  when `member_count_exact` is false. `member_count` counts the measure's
+ *  whole family with data at the place, which can be larger than the served
+ *  set (life expectancy in Kenya serves 1 of 3), and feeds the family note.
+ *  Coverage's "variables" dimension counts the variables with data in the
+ *  answer's rows and chooses nothing here. */
 export const buildWhySummary = (
     spec: any,
     part?: Pick<Part, 'warnings' | 'variable_text'> | null,
+    members?: MembersRead | null,
 ): WhySummary => {
     const statVars = spec.stat_vars ?? {};
-    const items: any[] = Array.isArray(statVars.items) ? statVars.items : [];
-    const served = dimensionCount(spec, 'variables');
-    // Every served variable is on the wire.
-    const complete =
-        items.length > 0 && (served != null ? items.length >= served : !statVars.truncated);
-    const count: number = complete ? items.length : (served ?? statVars.member_count ?? 0);
-    const single = complete && items.length === 1;
+    const listed = members?.ok ? members.members : null;
+    const { count, exact } = servedMembership(spec, listed) ?? { count: 0, exact: true };
+    const single = exact && count === 1;
+    const member = single && listed?.length === 1 ? listed[0] : null;
     const codes = new Set((part?.warnings ?? []).map((warning) => warning?.code));
     const sources: any[] = spec.resolution?.resolved_sources ?? [];
 
-    const name = single
-        ? (items[0].label ?? items[0].ref)
+    const name = member
+        ? (member.label ?? member.dcid)
         : (spec.measure_label ?? spec.shape?.label ?? part?.variable_text ?? null);
     const measure: WhyMeasure = {
         name: name ? sentenceCase(name) : null,
-        code: single ? items[0].ref : null,
+        code: member?.dcid ?? null,
         unit: unitText(spec),
-        years: yearsText(spec, items, complete),
+        years: yearsText(spec),
     };
     const rows: WhyRow[] = [];
 
@@ -1345,23 +1373,21 @@ export const buildWhySummary = (
         }
     }
 
-    // A count from the list or from coverage is exact; only member_count can be a floor.
-    const exact = complete || served != null || statVars.member_count_exact !== false;
     const variables: WhyVariables | null =
-        single || items.length === 0
+        single || count === 0
             ? null
             : {
                   count,
                   exact,
                   summary: variablesSummary(count, exact, spec.shape?.label),
-                  items: items.map((item) => ({ dcid: item.ref, label: item.label ?? item.ref })),
+                  members: whyMembers(members),
                   breakdown: variablesBreakdown(spec),
               };
 
     return {
         measure,
         rows,
-        family: items.length > 0 ? familyNote(count, statVars, spec.shape?.label) : null,
+        family: count > 0 ? familyNote(count, statVars, spec.shape?.label) : null,
         variables,
         sources: sources.map((ref: any) => ({
             dcid: ref.dcid,
@@ -1406,7 +1432,7 @@ const roleScope = (count: number, members: number | null, noun: string): string 
  *  from `headline` and `coverage.dimensions` so each number names its
  *  scope: the year the counts are for, the values in that year, and each
  *  open role's count against the members with data in any year. A named
- *  donor or recipient closes the sentence. Null without a headline. */
+ *  provider or recipient closes the sentence. Null without a headline. */
 export const coverageSentence = (spec: any): string | null => {
     const headline = spec?.headline;
 
@@ -1452,8 +1478,12 @@ export const coverageSentence = (spec: any): string | null => {
 /** The caption over the preview table for each part whose preview the API
  *  cut to its cap (`observations_series_truncated`), counting the series
  *  the preview holds against the total in the warning's params ("Showing
- *  20 of 927 series"). Labelled by variable when the table holds more than
- *  one part. */
+ *  20 of 927 series") and saying how they were picked: "most recent and
+ *  largest first" under the observations' `order` "ranked", "in no
+ *  particular order" under "fixed" or from an API that sends no order. The
+ *  observations' own `order` describes the rows shown, so it wins over the
+ *  warning's `params.order`, which an API that predates the field still
+ *  sends. Labelled by variable when the table holds more than one part. */
 export const seriesPreviewCaptions = (
     parts: {
         variableText: string | null;
@@ -1478,14 +1508,19 @@ export const seriesPreviewCaptions = (
                 ? `${formatCount(shown)} of ${countNoun(total, 'series', 'series')}`
                 : countNoun(shown, 'series', 'series');
 
-        return [`${label}Showing ${counted}, in no particular order`];
+        const order =
+            (part.spec?.observations?.order ?? cut.params?.order) === 'ranked'
+                ? 'most recent and largest first'
+                : 'in no particular order';
+
+        return [`${label}Showing ${counted}, ${order}`];
     });
 
+/** One preview table row. `cells` holds the text of each entity and axis
+ *  column the row's part offers, keyed by `PreviewColumn.key`. */
 export type ResultRow = {
     year: string;
-    donor: string;
-    sector: string;
-    type: string;
+    cells: Record<string, string>;
     value: number | null;
     // The series' unit (facet), display-ready — null when the facet has none.
     unit: string | null;
@@ -1494,14 +1529,8 @@ export type ResultRow = {
     method: string | null;
 };
 
-// A series' subject entity: the observationAbout entry of its role tuple,
-// else its first entity.
-const seriesEntity = (s: any): { dcid: string | null; label: string | null } => {
-    const about =
-        (s?.entities ?? []).find((e: any) => e?.role === 'observationAbout') ?? s?.entities?.[0];
-
-    return { dcid: about?.ref ?? null, label: about?.label ?? null };
-};
+/** An entity or axis column of the preview table. */
+export type PreviewColumn = { key: string; label: string };
 
 // Units are on the wire as {ref, label} facets (resolved.facets.unit and per
 // series facet.unit) — e.g. USDollar / "USDollar". Formatting is ours: a few
@@ -1573,22 +1602,247 @@ export const axisLabel = (spec: any, property: string): string =>
     (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.dcid === property)?.key?.label ??
     openAxisFactLabel(property);
 
+// The cell of a row whose part has no such column.
+const NO_CELL = '—';
+
+// Entity columns lead in this order, then the axis columns.
+const ROLE_ORDER: string[] = ['origin', 'destination', 'observationAbout'];
+
+const entityKey = (role: string): string => `entity:${role}`;
+const axisKey = (property: string): string => `axis:${property}`;
+
+const slotOnAxis = (spec: any, axis: string): any =>
+    (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === axis);
+
+const slotOnProperty = (spec: any, property: string): any =>
+    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.dcid === property);
+
+// The one value ref a slot binds, null for an unbound slot or a set.
+const boundRef = (slot: any): string | null =>
+    slot?.binding?.kind === 'value' ? (slot.binding.value?.ref?.dcid ?? null) : null;
+
+// Provider and Recipient head their role's column. A single-role series'
+// entity takes the where slot's own label ("Place").
+const roleHeading = (spec: any, role: string): string =>
+    role === 'origin' || role === 'destination'
+        ? ROLE_WORDS[role].one
+        : sentenceCase(slotOnAxis(spec, 'where')?.key?.label ?? ROLE_WORDS.observationAbout.one);
+
+// A column one part offers. `bound` is the one ref the part's Spec binds it
+// to, so rows that all carry that ref restate the sentence. `named` says
+// the heading came from the Spec's own slot.
+type PartColumn = PreviewColumn & { bound: string | null; named: boolean };
+
+// Whether some series carries `ObservationSeries.axes`. A table from an API
+// that predates the field, or from a share saved before it, has none.
+const carriesAxes = (spec: any): boolean =>
+    (spec?.observations?.series ?? []).some((s: any) => Array.isArray(s?.axes));
+
+// A series' subject entity for a table without axes: the observationAbout
+// entry of its role tuple, else its first entity.
+const seriesEntity = (s: any): { role: string; label: string | null } => {
+    const about =
+        (s?.entities ?? []).find((e: any) => e?.role === 'observationAbout') ?? s?.entities?.[0];
+
+    return { role: about?.role ?? 'observationAbout', label: about?.label ?? null };
+};
+
+// A slot's bound value labels, the text a table without axes shows in its
+// how and what columns.
 const slotLabel = (spec: any, axis: string): string => {
-    const slot = (spec?.slots ?? []).find((s: any) => s?.key?.axis === axis);
-    const binding = slot?.binding;
+    const binding = slotOnAxis(spec, axis)?.binding;
 
     if (binding?.kind === 'value') {
-        return binding.value?.ref?.label ?? '—';
+        return binding.value?.ref?.label ?? NO_CELL;
     }
 
     if (binding?.kind === 'set') {
         const labels = (binding.values ?? []).map((v: any) => v?.ref?.label).filter(Boolean);
 
-        return labels.length ? labels.join(', ') : '—';
+        return labels.length ? labels.join(', ') : NO_CELL;
     }
 
-    return '—';
+    return NO_CELL;
 };
+
+const LEGACY_SLOT_HEADINGS: Record<string, string> = { how: 'Sector', what: 'Type' };
+
+// The cells of one series' rows: one per entity role and one per axis
+// property, or, without axes, the subject entity and the how and what
+// slots' bound values.
+const seriesCells = (s: any, spec: any, axes: boolean): Record<string, string> => {
+    if (!axes) {
+        const subject = seriesEntity(s);
+
+        return {
+            [entityKey(subject.role)]: subject.label ?? NO_CELL,
+            'slot:how': slotLabel(spec, 'how'),
+            'slot:what': slotLabel(spec, 'what'),
+        };
+    }
+
+    const cells: Record<string, string> = {};
+
+    for (const entity of s?.entities ?? []) {
+        cells[entityKey(entity.role)] = entity.label ?? entity.ref;
+    }
+
+    for (const axis of s?.axes ?? []) {
+        cells[axisKey(axis.property)] = sentenceCase(axis.label);
+    }
+
+    return cells;
+};
+
+// A series' refs per column: its entities' dcids by role and its axis
+// values by property.
+const seriesRefs = (s: any): Record<string, string> => {
+    const refs: Record<string, string> = {};
+
+    for (const entity of s?.entities ?? []) {
+        refs[entityKey(entity.role)] = entity.ref;
+    }
+
+    for (const axis of s?.axes ?? []) {
+        refs[axisKey(axis.property)] = axis.ref;
+    }
+
+    return refs;
+};
+
+// The columns one part offers: entities in role order, then its axes in
+// the Spec's slot order and by property dcid after that. Without axes, the
+// subject entity and the how and what slots, none of them hidden for a
+// shared value.
+const partColumns = (spec: any): PartColumn[] => {
+    const series: any[] = spec?.observations?.series ?? [];
+
+    if (!carriesAxes(spec)) {
+        const roles = [...new Set(series.map((s) => seriesEntity(s).role))];
+
+        return [
+            ...roles.map((role) => ({
+                key: entityKey(role),
+                label: roleHeading(spec, role),
+                bound: null,
+                named: true,
+            })),
+            ...Object.entries(LEGACY_SLOT_HEADINGS).map(([axis, fallback]) => {
+                const label: string | undefined = slotOnAxis(spec, axis)?.key?.label;
+
+                return {
+                    key: `slot:${axis}`,
+                    label: label ? sentenceCase(label) : fallback,
+                    bound: null,
+                    named: Boolean(label),
+                };
+            }),
+        ];
+    }
+
+    const roles = [
+        ...new Set<string>(series.flatMap((s) => (s?.entities ?? []).map((e: any) => e.role))),
+    ].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+    // A role the Spec names one entity for binds that entity.
+    const namedRef = (role: string): string | null => {
+        const refs = (spec?.entities ?? []).filter((e: any) => e?.role === role);
+
+        return refs.length === 1 ? (refs[0].ref ?? null) : null;
+    };
+    const slotIndex = (property: string): number => {
+        const index = (spec?.slots ?? []).findIndex(
+            (slot: any) => slot?.key?.property?.dcid === property,
+        );
+
+        return index === -1 ? Infinity : index;
+    };
+    const properties = [
+        ...new Set<string>(series.flatMap((s) => (s?.axes ?? []).map((a: any) => a.property))),
+    ].sort((a, b) => slotIndex(a) - slotIndex(b) || (a < b ? -1 : a > b ? 1 : 0));
+
+    return [
+        ...roles.map((role) => ({
+            key: entityKey(role),
+            label: roleHeading(spec, role),
+            bound: namedRef(role),
+            named: true,
+        })),
+        ...properties.map((property) => {
+            const slot = slotOnProperty(spec, property);
+
+            return {
+                key: axisKey(property),
+                label: sentenceCase(axisLabel(spec, property)),
+                bound: boundRef(slot),
+                named: Boolean(slot),
+            };
+        }),
+    ];
+};
+
+/**
+ * The preview table's entity and axis columns over every part, in the
+ * order the table shows them: entity roles (Provider, Recipient, the
+ * place), then axis properties in each part's slot order, a later part's
+ * new properties after the earlier ones. A column is headed from the first
+ * part whose Spec has a slot for it. A part restates a column when its Spec
+ * binds it to exactly one value (a slot bound to one value, or the one
+ * entity it names for that role) and every row of the part carries that
+ * value's ref, since the part's sentence states that value. Rows that all
+ * show a child of a bound parent code, or one member of a bound set, keep
+ * the column. The column is hidden when every part that offers it restates
+ * the same ref. Two parts bound to different values keep it, so their rows
+ * stay distinguishable, and a constant unbound axis still shows. A column
+ * with no text on any row is hidden too.
+ */
+export const previewColumns = (parts: { spec: any }[]): PreviewColumn[] => {
+    // Per column, the ref every part that offers it restates (null once one
+    // does not, or two disagree) and whether any row has text for it.
+    const offered = new Map<string, PartColumn & { restated: string | null; filled: boolean }>();
+
+    for (const { spec } of parts) {
+        const rows = flattenRows(spec);
+
+        if (rows.length === 0) {
+            continue;
+        }
+
+        // The series behind the rows, those with points.
+        const refs: Record<string, string>[] = (spec?.observations?.series ?? [])
+            .filter((s: any) => (s?.points ?? []).length > 0)
+            .map(seriesRefs);
+
+        for (const column of partColumns(spec)) {
+            const texts = new Set(rows.map((row) => previewCellText(row, column.key)));
+            const restated =
+                column.bound != null && refs.every((r) => r[column.key] === column.bound)
+                    ? column.bound
+                    : null;
+            const seen = offered.get(column.key);
+            const heading = !seen || (!seen.named && column.named) ? column : seen;
+
+            offered.set(column.key, {
+                ...heading,
+                restated: seen && seen.restated !== restated ? null : restated,
+                filled: Boolean(seen?.filled) || [...texts].some((text) => text !== NO_CELL),
+            });
+        }
+    }
+
+    const rank = (key: string): number => {
+        const role = key.startsWith('entity:') ? ROLE_ORDER.indexOf(key.slice(7)) : -1;
+
+        return role === -1 ? ROLE_ORDER.length : role;
+    };
+
+    return [...offered.values()]
+        .sort((a, b) => rank(a.key) - rank(b.key))
+        .filter((column) => column.filled && column.restated == null)
+        .map(({ key, label }) => ({ key, label }));
+};
+
+/** A row's text in an entity or axis column, "—" where its part has none. */
+export const previewCellText = (row: ResultRow, key: string): string => row.cells[key] ?? NO_CELL;
 
 // The unit a series' own points carry. The series facet names the currency
 // alone, so the price basis joins it only on a converted series (its
@@ -1602,20 +1856,19 @@ const seriesUnit = (series: any, spec: any): string | null =>
 
 export const flattenRows = (spec: any): ResultRow[] => {
     const series = spec?.observations?.series ?? [];
-    const sector = slotLabel(spec, 'how');
-    const type = slotLabel(spec, 'what');
+    const axes = carriesAxes(spec);
 
-    const rows: ResultRow[] = series.flatMap((s: any) =>
-        (s?.points ?? []).map((point: any) => ({
+    const rows: ResultRow[] = series.flatMap((s: any) => {
+        const cells = seriesCells(s, spec, axes);
+
+        return (s?.points ?? []).map((point: any) => ({
             year: String(point?.date ?? '—'),
-            donor: seriesEntity(s).label ?? '—',
-            sector,
-            type,
+            cells,
             value: typeof point?.value === 'number' ? point.value : null,
             unit: seriesUnit(s, spec),
             method: formatMethod(s?.facet?.measurementMethod),
-        })),
-    );
+        }));
+    });
 
     return rows.sort((a, b) => (a.year < b.year ? 1 : a.year > b.year ? -1 : 0));
 };
@@ -1625,8 +1878,7 @@ export type MethodChoice = {
     key: string;
     label: string;
     checked: boolean;
-    /** The facet binding a pick posts. Null drops the axis, which the
-     *  resubmit acknowledges in `removed.facets` when the base bound it. */
+    /** The facet binding a pick posts. Null drops the axis. */
     binding: IdentityFacets['measurementMethod'] | null;
 };
 
@@ -1932,7 +2184,7 @@ const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
     entity_role_not_admitted: "That place isn't a kind of place this data is reported for.",
     variable_not_resolved: "We couldn't match the measure in that query.",
     role_not_resolved:
-        'We couldn\'t tell whether that place is the aid donor or recipient. Try rephrasing with "to" or "from".',
+        'We couldn\'t tell whether that place is the aid provider or recipient. Try rephrasing with "to" or "from".',
     unit_not_resolved: "We couldn't read the requested unit in that query.",
     rate_coverage_gap: "We couldn't calculate that rate for the requested period.",
     no_matching_slice: 'That specific combination is unavailable as a data series.',
@@ -2077,20 +2329,20 @@ export const unresolvedPartText = (part: any): string | null => {
 
 /** What an ambiguous wording names, by the role its restatement entity
  *  plays. The engine echoes a directed role as "from" or "to" (dfo-apis
- *  search/engine/role_text.py), so "from" is a donor, "to" a recipient, and
+ *  search/engine/role_text.py), so "from" is a provider, "to" a recipient, and
  *  anything else a place. */
 const ambiguousEntityNoun = (restatement: ParsedPart | null | undefined, text: string): string => {
     const role = restatement?.entities
         ?.find((entity) => entity.text === text)
         ?.role_text?.toLowerCase();
 
-    return role === 'from' ? 'Donor' : role === 'to' ? 'Recipient' : 'Place';
+    return role === 'from' ? 'Provider' : role === 'to' ? 'Recipient' : 'Place';
 };
 
 /**
  * The title over an entity_ambiguous part's menu, naming what each of its
  * ambiguous wordings is: "Select Recipient" for "ODA to Congo", "Select
- * Donor or Recipient" when the donor and the recipient are both ambiguous.
+ * Provider or Recipient" when the provider and the recipient are both ambiguous.
  */
 export const ambiguousEntityMenuTitle = (
     part: { no_data?: NoData | null; restatement?: ParsedPart | null } | null | undefined,

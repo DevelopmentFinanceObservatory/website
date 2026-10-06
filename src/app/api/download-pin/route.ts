@@ -11,8 +11,7 @@ import { searchApiBase } from '@/lib/searchApi';
 // its own timeout (see lib/search/snapshot).
 const CAPTURE_POLL_DEADLINE_MS = 50_000;
 
-// POST /api/download-pin { specId, contentVersion, definition,
-// resolvedStatVarDcids } → 204
+// POST /api/download-pin { specId, contentVersion, definition } → 204
 // The search page posts here after a download's mint returns, without waiting
 // on the answer. The route pins one artifact per version: the first the
 // version lists, minted when it lists none. That keeps the version link in
@@ -70,7 +69,6 @@ export const POST = async (req: NextRequest) => {
                 specId: body.specId,
                 contentVersion: body.contentVersion,
                 definition: body.definition,
-                resolvedStatVarDcids: body.resolvedStatVarDcids,
                 principal,
                 pollDeadlineMs: CAPTURE_POLL_DEADLINE_MS,
             }),

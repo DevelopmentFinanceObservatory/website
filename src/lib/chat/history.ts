@@ -1,10 +1,7 @@
 import type { CardView } from '@/components/organisms/Studio/canvas/layout';
-import type {
-    ActivityEntry,
-    ChatMessage,
-    TurnWidget,
-} from '@/components/organisms/Studio/hooks/useChat';
+import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
 import type { TextWidget } from '@/lib/chat/widgets';
+import type { ActivityEntry } from '@/lib/studio/activity';
 import type { StudioTheme } from '@/lib/studio/theme';
 
 /**

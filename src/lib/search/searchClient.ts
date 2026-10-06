@@ -193,7 +193,6 @@ export function buildRequest(input: SearchInput, includeCoverage: boolean) {
         // view (which always needs observations), so — unlike coverage —
         // this isn't gated by a caller-supplied flag.
         response_options: {
-            include_sentence: true,
             include_option_coverage: includeCoverage,
             include_observations: true,
         },
@@ -222,39 +221,27 @@ type WireSpec = { spec_id: string; definition?: any; resolved?: any } & Record<s
 type StatVarsValidation = { valid: true } | { valid: false; reason: string };
 
 /** Validates that `value` carries the wire's ResolvedStatVars object shape
- *  ({items, member_count, truncated}, each item carrying a `ref` and,
- *  optionally, a `label`) — see types.ts's ResolvedStatVars. Every
- *  deployment since 15 Sep 2026 (dfo-apis #819) sends this shape; a value
- *  that doesn't match it is a contract break, not a variant to tolerate
- *  (see the console.error below). Checks the whole shape, not just
- *  `items`: `member_count` is what every user-visible count reads, so a
- *  value with a well-formed `items` array but no usable `member_count`
- *  must fail here too, not pass silently. */
+ *  ({member_count, member_count_exact, served_count, data_date_range}) — see types.ts's
+ *  ResolvedStatVars. A value that doesn't match it is a contract break, not
+ *  a variant to tolerate (see the console.error below). Every user-visible
+ *  count reads these fields, so a missing or mistyped one fails here rather
+ *  than rendering a wrong count. */
 function validateResolvedStatVars(value: unknown): StatVarsValidation {
     if (!value || typeof value !== 'object') {
         return { valid: false, reason: 'not an object' };
     }
     const v = value as Record<string, unknown>;
-    if (!Array.isArray(v.items)) {
-        return { valid: false, reason: 'items is not an array' };
-    }
     if (typeof v.member_count !== 'number') {
         return { valid: false, reason: 'member_count is not a number' };
     }
-    if (typeof v.truncated !== 'boolean') {
-        return { valid: false, reason: 'truncated is not a boolean' };
+    if (typeof v.member_count_exact !== 'boolean') {
+        return { valid: false, reason: 'member_count_exact is not a boolean' };
     }
-    for (const [i, item] of v.items.entries()) {
-        if (!item || typeof item !== 'object') {
-            return { valid: false, reason: `items[${i}] is not an object` };
-        }
-        const it = item as Record<string, unknown>;
-        if (typeof it.ref !== 'string' || !it.ref) {
-            return { valid: false, reason: `items[${i}].ref is not a string` };
-        }
-        if (it.label != null && typeof it.label !== 'string') {
-            return { valid: false, reason: `items[${i}].label is not a string` };
-        }
+    if (v.served_count != null && typeof v.served_count !== 'number') {
+        return { valid: false, reason: 'served_count is not a number' };
+    }
+    if (v.data_date_range != null && typeof v.data_date_range !== 'object') {
+        return { valid: false, reason: 'data_date_range is not an object' };
     }
     return { valid: true };
 }
@@ -293,7 +280,8 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
     };
 
     // Contract boundary check, deliberately not a coercion. A `stat_vars`
-    // that isn't the {items, member_count, truncated} object shape means the
+    // that isn't the {member_count, member_count_exact, served_count, data_date_range} object
+    // shape means the
     // wire changed. Silently tolerating a second shape here would repeat the
     // failure that hid the September break (spec.stat_vars?.[0] swallowing
     // an object into `undefined`), and no deployment sends anything else to
@@ -306,7 +294,7 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
         if (!validation.valid) {
             console.error(
                 `[searchClient] spec ${spec_id}: stat_vars is not the wire's ` +
-                    `{items, member_count, truncated} shape (ResolvedStatVars) — ${validation.reason} — got`,
+                    `{member_count, member_count_exact, served_count, data_date_range} shape (ResolvedStatVars) — ${validation.reason} — got`,
                 resolved.stat_vars,
             );
             flat.stat_vars_unreadable = true;
@@ -333,9 +321,8 @@ export function unflattenSpec(spec: any): {
     return { spec_id, definition, resolved };
 }
 
-/** A spec's own rendered sentence + plan, when the engine computed one
- * (response_options.include_sentence). Null when neither is set — a spec
- * with no sentence data at all (sentence support turned off). */
+/** A spec's own rendered sentence + plan, when the engine computed one.
+ * Null when neither is set — a spec with no sentence data at all. */
 export const sentenceOf = (
     spec: any,
 ): { rendered_sentence: string; sentence_plan: SentenceToken[] } | null =>
@@ -792,18 +779,11 @@ export async function mintDataset(
     req: {
         spec_id: string;
         definition?: any;
-        /** The StatVar dcids search resolved for this spec, posted as an
-         *  assertion. The mint resolves the identity itself and refuses 422
-         *  `member_not_resolvable` for a posted StatVar outside the
-         *  identity's family; a subset of its members passes. Unhashed: it
-         *  does not enter the identity and does not change `spec_id`. */
-        resolved_stat_var_dcids?: string[];
         format: DatasetFormat;
         bundle?: boolean;
-        /** The full output column list, in order: the dataset's own columns
-         *  (from its options) plus any enrichment tokens (`{column}_{field}`,
-         *  e.g. `observationAbout_iso3`). It SELECTS — a grain, unit or
-         *  provenance column left out is refused `column_not_droppable`. */
+        /** Enrichment tokens (`{column}_{field}`, e.g. `observationAbout_iso3`)
+         *  to add to the dataset's default columns. A token-only list keeps
+         *  every default column. */
         columns?: string[];
     },
     signal?: AbortSignal,
@@ -821,9 +801,6 @@ export async function mintDataset(
                 kind: 'spec_id',
                 spec_id: req.spec_id,
                 definition: req.definition ?? null,
-                ...(req.resolved_stat_var_dcids?.length
-                    ? { resolved_stat_var_dcids: req.resolved_stat_var_dcids }
-                    : {}),
             },
             options: {
                 format: req.format,
@@ -928,15 +905,15 @@ export type DatasetOptionsDocument = {
  * What one dataset says it can do (`/api/datasets/{spec_id}/options`):
  * per-definition, unlike the deployment-wide capability document above.
  * Formats carry a live state and enrichments carry their coverage. With a
- * `definition` (and the StatVars search resolved for it) the door is POSTed
- * and answers for a spec no one has minted yet, without registering it.
+ * `definition` the door is POSTed and answers for a spec no one has minted yet, without registering it.
  * Without one it is a GET, which answers for a registered spec, such as the
  * frame behind a Studio card. It materialises the frame to answer, so the
  * panel asks only when the download options open or a remembered extra
- * column needs the frame's columns. Null on any refusal or failure.
+ * column must be checked against the extras the answer offers. Null on any
+ * refusal or failure.
  */
 export async function fetchDatasetOptions(
-    req: { spec_id: string; definition?: any; resolved_stat_var_dcids?: string[] },
+    req: { spec_id: string; definition?: any },
     signal?: AbortSignal,
 ): Promise<DatasetOptionsDocument | null> {
     const url = `${SEARCH_BASE}/api/datasets/${encodeURIComponent(req.spec_id)}/options`;
@@ -946,13 +923,7 @@ export async function fetchDatasetOptions(
             ? await fetch(url, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      schema_version: 1,
-                      definition: req.definition,
-                      ...(req.resolved_stat_var_dcids?.length
-                          ? { resolved_stat_var_dcids: req.resolved_stat_var_dcids }
-                          : {}),
-                  }),
+                  body: JSON.stringify({ schema_version: 1, definition: req.definition }),
                   signal,
               })
             : await fetch(url, { signal });
@@ -967,6 +938,62 @@ export async function fetchDatasetOptions(
     } catch {
         return null;
     }
+}
+
+/** One StatVar a definition serves, as the members door lists it (dfo-apis
+ *  datasets_api/schema.py ServedMember): `ref` is `dcid:`-prefixed, `label`
+ *  null when the graph holds none, and `constraints` maps each constraint
+ *  property to its value, null when unbound. */
+export type DefinitionMember = {
+    ref: string;
+    label: string | null;
+    roles: string[];
+    constraints: Record<string, string | null>;
+};
+
+/** What the members door (`POST /api/datasets/{spec_id}/members`) answers
+ *  (MembersEnvelope): every StatVar the definition serves, sorted by `ref`,
+ *  the served count, and the size and digest of the family the members came
+ *  from, each null when the door cannot state it. */
+export type DefinitionMembers = {
+    members: DefinitionMember[];
+    served_count: number;
+    family_member_count: number | null;
+    family_member_digest: string | null;
+};
+
+/**
+ * The StatVars one definition serves, resolved by the Datasets members door
+ * as a mint would resolve them but without materialising a frame. The
+ * `definition` sidecar lets it answer for a spec no one has minted yet.
+ * Throws the door's refusal as an `ApiError`, so a caller can tell a
+ * definition with no served members from a failed read.
+ */
+export async function fetchDefinitionMembers(
+    req: { spec_id: string; definition?: any },
+    signal?: AbortSignal,
+): Promise<DefinitionMembers> {
+    const res = await fetch(
+        `${SEARCH_BASE}/api/datasets/${encodeURIComponent(req.spec_id)}/members`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                schema_version: 1,
+                ...(req.definition ? { definition: req.definition } : {}),
+            }),
+            signal,
+        },
+    );
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+        throw apiError(body, res.status);
+    }
+    return {
+        ...body,
+        members: Array.isArray(body?.members) ? body.members : [],
+    } as DefinitionMembers;
 }
 
 /** Default inactivity ceiling between reader.read() completions (see
@@ -1130,7 +1157,6 @@ export type OpenedSearchShare = {
         variableText: string | null;
         specId: string;
         identity: unknown;
-        resolvedStatVarDcids: string[] | null;
         operations: Operation[];
         contentVersion: string | null;
     }[];
@@ -1150,7 +1176,6 @@ export async function createSearchShare(req: {
         variableText: string | null;
         specId: string;
         identity: unknown;
-        resolvedStatVarDcids?: string[] | null;
         operations: Operation[];
         definition: unknown;
     }[];
@@ -1230,7 +1255,6 @@ export function pinDownloadedVersion(req: {
     specId: string;
     contentVersion: string;
     definition: unknown;
-    resolvedStatVarDcids: string[] | undefined;
 }): void {
     void fetch('/api/download-pin', {
         method: 'POST',

@@ -93,8 +93,6 @@ export type DatasetDownloadTarget = {
     // The spec's canonical definition, which lets the Datasets API answer
     // for a spec it has not registered.
     definition?: unknown;
-    // The StatVars search resolved for the spec, posted as an assertion.
-    resolvedStatVarDcids?: string[];
     // The answer's bound entities, whose type heads the observationAbout
     // group of extra columns ("Country").
     entities?: { role?: string; entity_type?: string | null }[] | null;
@@ -106,12 +104,7 @@ export type DatasetDownloadTarget = {
  * document, and the mint → manifest → signed URL download. Search's panel
  * uses it, through DatasetDownload.
  */
-export const useDatasetDownload = ({
-    specId,
-    definition,
-    resolvedStatVarDcids,
-    entities,
-}: DatasetDownloadTarget) => {
+export const useDatasetDownload = ({ specId, definition, entities }: DatasetDownloadTarget) => {
     const choices = useSyncExternalStore(subscribeChoices, readChoices, serverChoices);
     const [optionsOpen, setOptionsOpen] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -148,9 +141,9 @@ export const useDatasetDownload = ({
     };
 
     // The options door materialises the frame to answer, so it is asked
-    // only when the options dialog opens, or when a download needs the
-    // frame's columns for a remembered extra. A second caller waits on the
-    // request already out.
+    // only when the options dialog opens, or when a download must check a
+    // remembered extra against the extras the answer offers. A second caller
+    // waits on the request already out.
     const requestOptions = (): Promise<DatasetOptionsDocument | null> | null => {
         if (!specId) {
             return null;
@@ -164,14 +157,7 @@ export const useDatasetDownload = ({
 
         const controller = new AbortController();
         const asked = optionsAsk.ask(specId, () =>
-            fetchDatasetOptions(
-                {
-                    spec_id: specId,
-                    definition,
-                    resolved_stat_var_dcids: resolvedStatVarDcids,
-                },
-                controller.signal,
-            ),
+            fetchDatasetOptions({ spec_id: specId, definition }, controller.signal),
         );
 
         if (!asked) {
@@ -273,10 +259,6 @@ export const useDatasetDownload = ({
                 {
                     spec_id: specId,
                     definition: definition ?? undefined,
-                    // They seed the mint's member walk, and the mint refuses
-                    // any that is not a member of the identity's family. A
-                    // subset of its members passes.
-                    resolved_stat_var_dcids: resolvedStatVarDcids,
                     format,
                     bundle,
                     // No extras chosen → no column list at all (the dataset as is).
@@ -320,7 +302,6 @@ export const useDatasetDownload = ({
                     specId: manifest.definition?.spec_id ?? specId,
                     contentVersion: manifest.content_version,
                     definition: definition ?? null,
-                    resolvedStatVarDcids,
                 });
             }
 

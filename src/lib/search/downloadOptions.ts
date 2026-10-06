@@ -1,7 +1,7 @@
 /**
  * The download sheet's choices and the words for its extra columns: the
  * choices a viewer last made (format, bundle, extra columns), read back from
- * storage; the column list a mint posts for them; and the extra columns an
+ * storage; the extra-column tokens a mint posts for them; and the extra columns an
  * answer offers, grouped by the entity column they join onto and headed by
  * the role that column plays.
  *
@@ -78,10 +78,10 @@ export const offeredEnrichment = (
         .filter((token) => remembered.includes(token));
 
 /**
- * The `options.columns` a mint posts: the frame's own columns, then the
- * chosen extras this answer offers. `options.columns` is the full output
- * column list, so an extra posted alone would ask to drop every grain column
- * and be refused. Undefined (the dataset as is) when no extra applies.
+ * The `options.columns` a mint posts: the chosen extras this answer offers,
+ * as enrichment tokens only. The API keeps every default column when
+ * `columns` names tokens alone and appends each token's column. Undefined
+ * (the dataset as is) when no extra applies.
  */
 export const mintColumns = (
     remembered: readonly string[],
@@ -89,9 +89,7 @@ export const mintColumns = (
 ): string[] | undefined => {
     const extras = offeredEnrichment(remembered, options);
 
-    return extras.length
-        ? [...(options?.columns ?? []).map((column) => column.name), ...extras]
-        : undefined;
+    return extras.length ? extras : undefined;
 };
 
 /** The formats this dataset renders; all three until its options document
@@ -109,7 +107,7 @@ export const formatChoicesFor = (options: DatasetOutputOptions | null | undefine
 /**
  * The remembered choices narrowed to what this answer offers: a format it
  * renders (its first one when the remembered format is not), the bundle only
- * where offered, and the mint's column list. Without an options document
+ * where offered, and the mint's extra columns. Without an options document
  * every format and the bundle count as offered.
  */
 export const resolveChoices = (
@@ -132,7 +130,7 @@ export const resolveChoices = (
 
 /**
  * Whether a one-click download must read the answer's options document
- * before it mints: a remembered extra column needs the frame's own columns,
+ * before it mints: a remembered extra column must be one the answer offers,
  * and a remembered format other than CSV may be one this answer cannot
  * render (Excel over its row limit). CSV always renders, and the bundle is a
  * deployment-wide capability, so the defaults mint straight away.
@@ -150,7 +148,7 @@ const ENRICHMENT_LABELS: Record<string, string> = {
 
 // What a role column is called when the answer has a word for its role.
 const AXIS_HEADINGS: Record<string, string> = {
-    origin: 'Donor',
+    origin: 'Provider',
     destination: 'Recipient',
 };
 
@@ -190,7 +188,7 @@ export type EnrichmentGroup = {
 
 /**
  * The offered extras grouped by the column they join onto, in wire order,
- * each headed by the role that column plays: Donor or Recipient for a flow's
+ * each headed by the role that column plays: Provider or Recipient for a flow's
  * role column (its coverage dimension's axis), the bound entity's type for
  * observationAbout ("Country"), and the column's own name otherwise.
  */

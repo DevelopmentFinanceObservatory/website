@@ -59,7 +59,6 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
             { created_at: '2026-10-02T09:00:00Z' },
             {},
         ],
-        trace: { resolved_stat_vars: [{ ref: 'dcid:ODA_GRANT' }, { ref: 'dcid:ODA_LOAN' }] },
     });
 
     assert.deepEqual(outcome, {
@@ -75,7 +74,6 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
                     variableText: 'OECD CRS, IMF WEO',
                     specId: 'spec_a1',
                     identity,
-                    resolvedStatVarDcids: ['ODA_GRANT', 'ODA_LOAN'],
                     operations: [],
                     contentVersion: 'cv_b2',
                 },
@@ -85,13 +83,12 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
     });
 });
 
-test('outcomeFromDocument opens a latest-data link live, seeded from the envelope trace', () => {
+test('outcomeFromDocument opens a latest-data link live', () => {
     const shared = sharedOf(
         outcomeFromDocument(
             { specId: 'spec_a1', contentVersion: null },
             {
                 definition: { spec_id: 'spec_a1', identity },
-                trace: { resolved_stat_vars: [{ ref: 'dcid:ODA_GRANT' }] },
             },
         ),
     );
@@ -99,28 +96,7 @@ test('outcomeFromDocument opens a latest-data link live, seeded from the envelop
     assert.equal(shared?.mode, 'live');
     assert.equal(shared?.refs[0]?.variableText, 'Dataset');
     assert.equal(shared?.refs[0]?.contentVersion, null);
-    assert.deepEqual(shared?.refs[0]?.resolvedStatVarDcids, ['ODA_GRANT']);
 });
-
-for (const trace of [
-    undefined,
-    null,
-    {},
-    { resolved_stat_vars: null },
-    { resolved_stat_vars: [] },
-]) {
-    test(`outcomeFromDocument posts no seed for trace ${JSON.stringify(trace)}`, () => {
-        const shared = sharedOf(
-            outcomeFromDocument(
-                { specId: 'spec_a1', contentVersion: 'cv_b2' },
-                { definition: { spec_id: 'spec_a1', identity }, trace },
-            ),
-        );
-
-        assert.ok(shared);
-        assert.equal(shared.refs[0]?.resolvedStatVarDcids, null);
-    });
-}
 
 test('outcomeFromDocument refuses a document without a definition identity', () => {
     const link = { specId: 'spec_a1', contentVersion: 'cv_b2' };

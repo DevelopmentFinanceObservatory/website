@@ -152,9 +152,9 @@ export function refineItems({
 }
 
 /** The dimension a Refine entry narrows, as the reader names it
- *  ("sector", "donor"). */
+ *  ("sector", "provider"). */
 export const refineItemName = (item: RefineItem): string => {
-    if (item.kind === 'entity') return item.role === 'origin' ? 'donor' : 'recipient';
+    if (item.kind === 'entity') return item.role === 'origin' ? 'provider' : 'recipient';
     if (item.kind === 'facet') return 'measurement method';
 
     return item.slot.key?.label ?? 'value';

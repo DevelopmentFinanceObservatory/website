@@ -22,7 +22,7 @@ export type SchemaVersion = number;
 /** The only three outcomes the envelope can carry. */
 export type ResolveStatus = 'definite' | 'candidates' | 'no_data';
 
-/** A directional flow endpoint (donor/recipient read-back). Mirrors the
+/** A directional flow endpoint (provider/recipient read-back). Mirrors the
  *  server's own `RoleAxis` name and values one-for-one (dfo-apis
  *  dfo_platform/roles.py:17, src/search/models/grammar.py:293). */
 export type RoleAxis = 'origin' | 'destination';
@@ -147,7 +147,7 @@ export interface SlotKey {
      * directly (no constraint property backs it).
      */
     property: GraphRef | null;
-    /** human label, e.g. "purpose", "donor" */
+    /** human label, e.g. "purpose", "provider" */
     label: string;
 }
 
@@ -234,6 +234,10 @@ export interface Shape {
     /** how many StatVars this shape's current bindings admit, narrowing as a
      *  slot binds and widening again as one is cleared */
     member_count: number;
+    /** Hash of the family's members, null when Search did not settle the
+     *  family. The members read is keyed by it, since membership can change
+     *  under the same spec_id. */
+    member_digest?: string | null;
     /**
      * Whether this shape's slots can be edited/refined via construct-and-confirm:
      * the engine builds sibling StatVar candidates for the edited slot and confirms
@@ -265,7 +269,7 @@ export interface ShapeUpstream {
 // StatVar / Entity
 // ---------------------------------------------------------------------------
 
-/** Earliest and latest confirmed dates across observed facets for a StatVar. */
+/** Earliest and latest confirmed dates across a Spec's served members. */
 export interface DateRange {
     /** earliest confirmed date, e.g. "2012" */
     start?: string | null;
@@ -274,46 +278,22 @@ export interface DateRange {
 }
 
 /**
- * One resolved StatVar under ResolvedStatVars.items — a flatter projection
- * than the server's own StatVar model (dfo-apis src/search/models/
- * statvar.py's StatVar, distinct from its ResolvedStatVar): `ref` is the
- * bare dcid string (label rides as a sibling field, not nested inside
- * `ref`), `shape_id` is dropped (it only ever duplicated Spec.shape.
- * shape_id), and the confirmed-at flag is `data_confirmed_at_destination`
- * (statvar.py's ResolvedStatVar; the wire never sends the nested-GraphRef
- * shape here).
- */
-export interface ResolvedStatVar {
-    /** the resolved StatVar's dcid — a bare string, not a GraphRef */
-    ref: string;
-    label?: string | null;
-    /** the slot members THIS StatVar realises, one per bound slot */
-    slot_values: { key: SlotKey; value: SlotValue }[];
-    /** earliest and latest confirmed dates across observed facets */
-    data_date_range?: DateRange | null;
-    /** true=confirmed at destination directly, false=via origin only, null=not checked */
-    data_confirmed_at_destination?: boolean | null;
-}
-
-/**
- * The resolved StatVar population behind a Spec (dfo-apis src/search/models/
- * statvar.py, spec.py:274). `items` caps at 2,000 on a definite part's Spec
- * and at 200 on a candidate Spec. `member_count` counts the members confirmed
- * to carry an observation at the resolved place, a narrower number than
- * Shape.member_count's bindings-admitted population, and it is the
- * authoritative size to show a user. `truncated` is true exactly when `items`
- * is a subset of it. `member_count_exact` is false when that count is itself
- * a floor: a shape the packaged code index does not carry is counted over a
- * capped recall sample, and a merge across places publishes the largest
- * member's count rather than a union it cannot compute. Read `items`, not
- * ResolutionTrace.resolved_stat_vars below, which the server caps at the
- * first 200 (`resolved_stat_vars_truncated`).
+ * The size of the StatVar population behind a Spec (dfo-apis src/search/
+ * models/statvar.py). `member_count` counts the measure family's members
+ * with data, and `member_count_exact` is false when that count is a floor.
+ * `served_count` counts the members this Spec serves, stated only once
+ * membership settled; null means the walk could not finish within its
+ * budget, so the served set is unverified. `data_date_range` spans the
+ * served members' data. The members themselves come from
+ * the Datasets members door (`fetchDefinitionMembers`).
  */
 export interface ResolvedStatVars {
-    items: ResolvedStatVar[];
     member_count: number;
     member_count_exact: boolean;
-    truncated: boolean;
+    served_count?: number | null;
+    /** the first and last dates across the served members' data; null when
+     *  membership is unsettled or no member reported a range */
+    data_date_range?: DateRange | null;
 }
 
 /** dfo-apis src/search/models/vocab.py:83 EntityRoleKey, the flat role
@@ -341,7 +321,7 @@ export interface ResolvedEntity {
 // ---------------------------------------------------------------------------
 
 export interface BreadthDim {
-    /** the dimension, e.g. "donors", "years", "methods", "sources" */
+    /** the dimension, e.g. "providers", "years", "methods", "sources" */
     label: string;
     count: number;
 }
@@ -388,34 +368,14 @@ export interface ResolvedQualifier {
     disposition: 'bound' | 'unbound' | 'no_vocabulary';
 }
 
-export type PipelineStepName = 'extract' | 'recall' | 'shape' | 'bind' | 'materialise' | 'answer';
-
-export interface PipelineStep {
-    step: PipelineStepName;
-    /** false for extract on the parsed / dataset_resubmit paths */
-    ran: boolean;
-    /** step latency, when measured */
-    ms?: number;
-}
-
 export interface ResolutionTrace {
-    /** the first 200 StatVars in stat_vars.items order */
-    resolved_stat_vars: GraphRef[];
-    /** true when resolved_stat_vars leaves out StatVars behind the spec */
-    resolved_stat_vars_truncated?: boolean;
     resolved_entities: GraphRef[];
     resolved_sources: ProvenanceRef[];
     slot_filters: ResolvedFilter[];
     query_qualifiers?: ResolvedQualifier[];
-    applied_window?: TimeWindow;
-    date_source?: 'query' | 'default' | 'coverage_clamp';
-    /** the six steps, in order, with skip/timing */
-    pipeline_trace: PipelineStep[];
-    /** SVs passing the relevance threshold before the grounding/confirm cap */
-    n_recalled?: number | null;
     /**
-     * The date window originally requested (query intent), independent of
-     * applied_window's coverage narrowing; absent when no date was requested.
+     * The date window originally requested (query intent); absent when no date
+     * was requested.
      * The literal string "latest" means the query explicitly asked for the
      * most-recent/current value — distinct from absent (no date signal at all).
      * spec_id is anchored on the identity's own requested_window (an
@@ -561,6 +521,19 @@ export interface SeriesEntityRef {
     label?: string | null;
 }
 
+/** One constraint of a series' StatVar: the property and the value the
+ *  StatVar holds on it. The wire carries no property label, so a client names
+ *  the property from the Spec's slots. */
+export interface SeriesAxisRef {
+    /** the constraint property's dcid, e.g. "crsPurpose" */
+    property: string;
+    /** the dcid of the value the StatVar holds on `property` */
+    ref: string;
+    /** display label for `ref`: its graph label, else the dcid's tail split
+     *  into lower-case words */
+    label: string;
+}
+
 /** One entity a converted series substituted with its recipe's fallback entity. */
 export interface SeriesConversionFallbackExample {
     entity: string;
@@ -591,6 +564,10 @@ export interface ObservationSeries {
     /** the role tuple: one observationAbout entry for a single-role series,
      *  origin and destination for a bilateral dev-finance series */
     entities: SeriesEntityRef[];
+    /** one entry per constraint of the StatVar, ordered by property dcid;
+     *  empty for a StatVar with no constraints. Absent from an API that
+     *  predates it, and from shares saved before it. */
+    axes?: SeriesAxisRef[];
     /** the full series when SpecObservations.truncated is false, else the latest points only */
     points: ObservationPoint[];
     /** the selected facet's in-window point count, before truncation */
@@ -661,6 +638,10 @@ export interface SpecObservations {
      *  fetched result (whether or not it found points) and on an engine that
      *  doesn't send this field yet. */
     omitted?: ObservationsOmission | null;
+    /** how the preview's series were picked when it was cut to its cap:
+     *  "ranked" (most recent and largest first) or "fixed"; absent/null when
+     *  it was not cut, and on an engine that doesn't send this field yet */
+    order?: 'ranked' | 'fixed' | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -696,9 +677,8 @@ export interface ResolvedFacet {
 /**
  * A Spec's hashed definition, minted by editing the elected Spec's identity
  * onto an alternative measure's axes. No stat_vars, no coverage, no trace.
- * Post as identity/base_identity with spec_id as base_spec_id and no
- * resolved_stat_var_dcids, since the API elects a family measure's
- * membership from the packaged code index and ignores a posted list.
+ * Post its identity as a dataset_resubmit identity entry; the API resolves
+ * the membership from the identity.
  */
 export interface SpecDefinition {
     schema_version: SchemaVersion;
@@ -743,13 +723,12 @@ export interface MeasureAxisValue {
 
 /**
  * Another StatVar from the smallest StatVarGroup the Spec's one StatVar
- * belongs to, with data at the Spec's places. Post `definition` as
- * identity/base_identity with `resolved_stat_var_dcids` as the seed.
- * Mirrors dfo-apis RelatedMeasure.
+ * belongs to, with data at the Spec's places. Post `definition.identity` as
+ * a dataset_resubmit identity entry. Mirrors dfo-apis RelatedMeasure.
  */
 export interface RelatedMeasure {
-    label: string;
-    resolved_stat_var_dcids: string[];
+    /** the sibling StatVar: its label names the row, its dcid the info icon */
+    stat_var: GraphRef;
     definition: SpecDefinition;
 }
 
@@ -808,13 +787,13 @@ export interface Spec {
      * non-empty taxonomy (omits when/source and empty slots). Rides on the response.
      */
     slot_options?: SlotOptions[];
-    /** the candidate set each bound directional entity was chosen from (dev-finance donor) */
+    /** the candidate set each bound directional entity was chosen from (dev-finance provider) */
     entity_options?: EntityOptions[];
     /** the candidate set each facet axis (provenance/measurementMethod/unit) was
      *  chosen from; empty on the SSE path until the trailing events merge in
      *  (see FacetOptions) */
     facet_options?: FacetOptions[];
-    /** resolved StatVar(s) inside the region; items.length >= 1 when grounded */
+    /** how many StatVars the Spec's family holds and serves */
     stat_vars: ResolvedStatVars;
     /** resolved entities the data is about; may be empty if "where" is unbound */
     entities: ResolvedEntity[];
@@ -844,8 +823,7 @@ export interface Spec {
      */
     observations?: SpecObservations | null;
     /**
-     * Echoed verbatim as a dataset_resubmit entry's base_identity on every
-     * edit. Null only for a test fixture built without a definition/resolved
+     * The identity a dataset_resubmit entry edits and posts back. Null only for a test fixture built without a definition/resolved
      * split.
      */
     identity?: SpecIdentity | null;
@@ -1019,14 +997,6 @@ export interface EntityGroup {
 
 /** Alias for `Spec.identity`'s type; `BaseIdentity` is the canonical declaration. */
 export type SpecIdentity = BaseIdentity;
-
-/** Slots carry no removal category of their own. Every shape-declared slot
- *  key is always present in `identity.slots`, so a slot's unbound state IS
- *  its removal signal. */
-export interface RemovedParts {
-    facets?: string[];
-    entities?: string[];
-}
 
 /**
  * Contract v1 wire Spec: `definition` (hashed identity) + `resolved` (everything
@@ -1235,12 +1205,9 @@ export interface NoData {
     alternate_match?: Spec | null;
     /**
      * The currencies a unit_not_resolved refusal offers, in the binder's order.
-     * Present only with that reason and when the binder has candidates, and
-     * then always with `unit_alternatives_truncated`.
+     * Present only with that reason and when the binder has candidates.
      */
     unit_alternatives?: UnitAlternative[];
-    /** true when the cap cut candidates from `unit_alternatives`; present exactly when it is */
-    unit_alternatives_truncated?: boolean;
 }
 
 /** A run-health signal. */
@@ -1259,7 +1226,9 @@ export interface Warning {
     spec_id?: string | null;
     /**
      * The counts and labels the message states. Three codes send it:
-     * observations_series_truncated {shown, total}, elected_shape_no_data
+     * observations_series_truncated {shown, total, order}, where order is
+     * "ranked" (most recent and largest first) or "fixed" and is absent
+     * from an API that predates it, elected_shape_no_data
      * {no_data, elected}, whose values are lists of labels, and
      * un_system_unavailable (UnSystemParams).
      */
@@ -1268,9 +1237,15 @@ export interface Warning {
 
 /** An `un_system_unavailable` warning's params (dfo-apis
  *  src/search/engine/region/un_system.py un_unavailable_warning): the place
- *  dcids the UN System Data Commons refused, and the StatVar dcids of the
- *  reads that failed. Each list is empty when the warning holds none. */
-export type UnSystemParams = { places?: string[]; variables?: string[] };
+ *  dcids the UN System Data Commons refused, the StatVar dcids of the reads
+ *  that failed, and those StatVars' labels in the same order, an empty
+ *  string where the graph holds none. Each list is empty when the warning
+ *  holds none. */
+export type UnSystemParams = {
+    places?: string[];
+    variables?: string[];
+    variable_labels?: string[];
+};
 
 /** Latency breakdown for the response. */
 export interface Timing {
@@ -1346,12 +1321,9 @@ export interface WireNoData {
     alternate_match?: WireSpec | null;
     /**
      * The currencies a unit_not_resolved refusal offers, in the binder's order.
-     * Present only with that reason and when the binder has candidates, and
-     * then always with `unit_alternatives_truncated`.
+     * Present only with that reason and when the binder has candidates.
      */
     unit_alternatives?: UnitAlternative[];
-    /** true when the cap cut candidates from `unit_alternatives`; present exactly when it is */
-    unit_alternatives_truncated?: boolean;
 }
 
 /** Outcome when the query itself can't be answered by this contract (e.g. an
@@ -1402,8 +1374,8 @@ export interface WirePart {
     warnings: Warning[];
     /** this part's own by_step timing; excludes the shared once-per-request extract step */
     timing_ms?: Timing | null;
-    /** only under response_options.include_sentence; a definite part stays null (the
-     *  confirmation sentence lives at spec.resolved.rendered_sentence instead) */
+    /** a definite part stays null (the confirmation sentence lives at
+     *  spec.resolved.rendered_sentence instead) */
     rendered_sentence?: string | null;
     sentence_plan?: SentenceToken[] | null;
     /** Null whenever this part was resolved from a posted identity/candidate
@@ -1438,8 +1410,8 @@ export interface Part {
     warnings: Warning[];
     /** this part's own by_step timing; excludes the shared once-per-request extract step */
     timing_ms?: Timing | null;
-    /** only under response_options.include_sentence; a definite part stays null (the
-     *  confirmation sentence lives at spec.rendered_sentence instead) */
+    /** a definite part stays null (the confirmation sentence lives at
+     *  spec.rendered_sentence instead) */
     rendered_sentence?: string | null;
     sentence_plan?: SentenceToken[] | null;
     restatement: ParsedPart | null;
@@ -1490,10 +1462,9 @@ export interface Resolution extends ResponseBody {
     /** one entry per variable asked, in query order; always >= 1 */
     parts: Part[];
     /**
-     * The envelope's own composed sentence over every part in `parts`, under
-     * response_options.include_sentence: one hero sentence rather than N
-     * per-part ones. A single-part response's plan equals that part's own
-     * plan. Null when sentence support is off. See SentenceToken.part_index
+     * The envelope's own composed sentence over every part in `parts`: one
+     * hero sentence rather than N per-part ones. A single-part response's
+     * plan equals that part's own plan. See SentenceToken.part_index
      * and `lib/search/sentencePlan.ts`'s tokenPart for how a multi-part
      * plan's tokens route to their part.
      */
@@ -1648,29 +1619,22 @@ export interface ParsedPart {
 // back, and the engine echoes them onto the rebuilt part.
 // ---------------------------------------------------------------------------
 
-/** A definite part's entry: the complete edited identity plus the base it
- *  was edited from — `identity`/`base_spec_id`/`base_identity`/`removed`/
- *  `resolved_stat_var_dcids` mirror `ResubmitIdentityPayload` field for
- *  field (dfo-apis src/search/models/request.py). Every entry carries
- *  `variable_text`: the engine nulls it otherwise and the composer would
- *  render a blank phrase. */
+/** A definite part's entry: the complete identity the part should resolve
+ *  to, edited or not. Mirrors `ResubmitIdentityPayload` (dfo-apis
+ *  src/search/models/request.py), which derives the membership from the
+ *  identity alone. Every entry carries `variable_text`: the engine nulls it
+ *  otherwise and the composer would render a blank phrase. */
 export interface DatasetIdentityEntry {
     entry_kind: 'identity';
     variable_text: string;
     identity: BaseIdentity;
-    base_spec_id?: string;
-    base_identity?: BaseIdentity;
-    removed?: RemovedParts;
-    resolved_stat_var_dcids?: string[];
     operations?: Operation[];
 }
 
-/** One competing identity inside a `candidates` entry: narrower than a full
- *  Spec, just the identity plus the graph state a standard shape's promote
- *  needs. Specs return in posted order. */
+/** One competing identity inside a `candidates` entry. Specs return in
+ *  posted order. */
 export interface DatasetCandidateIdentity {
     identity: BaseIdentity;
-    resolved_stat_var_dcids?: string[];
 }
 
 /** A candidates part's entry: `ordering`/`truncated` echoed verbatim from the
@@ -1727,14 +1691,8 @@ export interface DatasetResubmitInput {
 export type ResolveInput = RawTextInput | ParsedInput | DatasetResubmitInput;
 
 export interface ResolveOptions {
-    max_candidates?: number;
     coverage?: 'auto' | 'prefer_exact' | 'breadth_only' | 'none';
     place_as_constraint?: boolean;
-    /**
-     * When true (the default -- absent also means true), the engine returns
-     * rendered_sentence / sentence_plan inline. Set false to opt out.
-     */
-    include_sentence?: boolean;
     /** when true, each SlotOption.coverage carries an observation count */
     include_option_coverage?: boolean;
     /**

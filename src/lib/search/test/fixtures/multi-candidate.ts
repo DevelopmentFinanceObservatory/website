@@ -9,14 +9,18 @@
  * share of government expenditure.
  *
  * Trimmed for size; each body still validates against the API's models
- * (scripts/check-search-fixtures.mts). `stat_vars.items` and
- * `trace.resolved_stat_vars` keep two entries and are marked truncated
- * where that cut them, `slot_values` and `open_axis_facts[].values` keep
- * two, the specs' own `sentence_plan` is dropped (the envelope's stays),
- * `trace.pipeline_trace` and `trace.slot_filters` are empty, and timings
- * keep their totals. The server omits a `unit_conversion` currency's
+ * (scripts/check-search-fixtures.mts). `slot_values` and
+ * `open_axis_facts[].values` keep two, the specs' own `sentence_plan` is
+ * dropped (the envelope's stays), `trace.slot_filters` is empty, and
+ * timings keep their totals. The server omits a `unit_conversion` currency's
  * `current_years` when it is null, which its own model requires; this
  * file writes the null.
+ *
+ * The capture's StatVar lists are folded into the current wire: each
+ * `stat_vars` carries counts and a date range (`served_count` is the listed members'
+ * count, or `member_count` where the list was cut and exact, and
+ * `data_date_range` spans the listed members), each related measure its
+ * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
  */
 
 export const multiCandidate: unknown = {
@@ -467,60 +471,13 @@ export const multiCandidate: unknown = {
               "inapplicable_slots": [],
               "unresolved_slots": [],
               "stat_vars": {
-                "items": [
-                  {
-                    "ref": "Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_GrossDomesticProduction_Nominal",
-                    "label": "Percent of nominal GDP spent on education",
-                    "slot_values": [
-                      {
-                        "key": {
-                          "axis": "how",
-                          "property": {
-                            "dcid": "activitySource",
-                            "label": "activitySource"
-                          },
-                          "label": "activity source"
-                        },
-                        "value": {
-                          "ref": {
-                            "dcid": "ExpenditureActivity",
-                            "label": "ExpenditureActivity"
-                          },
-                          "value_kind": "enum_value"
-                        }
-                      },
-                      {
-                        "key": {
-                          "axis": "how",
-                          "property": {
-                            "dcid": "expenditureType",
-                            "label": "expenditureType"
-                          },
-                          "label": "expenditure type"
-                        },
-                        "value": {
-                          "ref": {
-                            "dcid": "EducationExpenditure",
-                            "label": "EducationExpenditure"
-                          },
-                          "value_kind": "enum_value"
-                        }
-                      }
-                    ],
-                    "constraint_properties": [
-                      "activitySource",
-                      "expenditureType",
-                      "expensor"
-                    ],
-                    "data_date_range": {
-                      "start": "1971",
-                      "end": "2024"
-                    }
-                  }
-                ],
                 "member_count": 1,
                 "member_count_exact": false,
-                "truncated": false
+                "served_count": 1,
+                "data_date_range": {
+                  "start": "1971",
+                  "end": "2024"
+                }
               },
               "entities": [
                 {
@@ -657,13 +614,6 @@ export const multiCandidate: unknown = {
               "facet_options": [],
               "rendered_sentence": "Kenya's percent of nominal GDP spent on education, 1971 to 2024. World Development Indicators.",
               "trace": {
-                "resolved_stat_vars": [
-                  {
-                    "dcid": "Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_GrossDomesticProduction_Nominal",
-                    "label": "Percent of nominal GDP spent on education"
-                  }
-                ],
-                "resolved_stat_vars_truncated": false,
                 "resolved_entities": [
                   {
                     "dcid": "country/KEN",
@@ -686,8 +636,6 @@ export const multiCandidate: unknown = {
                 ],
                 "slot_filters": [],
                 "query_qualifiers": [],
-                "pipeline_trace": [],
-                "n_recalled": 69,
                 "capability_version": "cap_cbe83b130f0e8d02",
                 "default_reading": {
                   "applied": true,
@@ -697,7 +645,6 @@ export const multiCandidate: unknown = {
               "confidence": "high",
               "available_at_place": true,
               "measure_label_axes": [],
-              "measure_label_named_values": [],
               "measure_axis_values": []
             }
           },
@@ -933,60 +880,13 @@ export const multiCandidate: unknown = {
               "inapplicable_slots": [],
               "unresolved_slots": [],
               "stat_vars": {
-                "items": [
-                  {
-                    "ref": "Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_Government",
-                    "label": "Percent of total government expenditure on education",
-                    "slot_values": [
-                      {
-                        "key": {
-                          "axis": "how",
-                          "property": {
-                            "dcid": "activitySource",
-                            "label": "activitySource"
-                          },
-                          "label": "activity source"
-                        },
-                        "value": {
-                          "ref": {
-                            "dcid": "ExpenditureActivity",
-                            "label": "ExpenditureActivity"
-                          },
-                          "value_kind": "enum_value"
-                        }
-                      },
-                      {
-                        "key": {
-                          "axis": "how",
-                          "property": {
-                            "dcid": "expenditureType",
-                            "label": "expenditureType"
-                          },
-                          "label": "expenditure type"
-                        },
-                        "value": {
-                          "ref": {
-                            "dcid": "EducationExpenditure",
-                            "label": "EducationExpenditure"
-                          },
-                          "value_kind": "enum_value"
-                        }
-                      }
-                    ],
-                    "constraint_properties": [
-                      "activitySource",
-                      "expenditureType",
-                      "expensor"
-                    ],
-                    "data_date_range": {
-                      "start": "1982",
-                      "end": "2025"
-                    }
-                  }
-                ],
                 "member_count": 1,
                 "member_count_exact": false,
-                "truncated": false
+                "served_count": 1,
+                "data_date_range": {
+                  "start": "1982",
+                  "end": "2025"
+                }
               },
               "entities": [
                 {
@@ -1123,13 +1023,6 @@ export const multiCandidate: unknown = {
               "facet_options": [],
               "rendered_sentence": "Kenya's percent of total government expenditure on education, 1982 to 2025. World Development Indicators.",
               "trace": {
-                "resolved_stat_vars": [
-                  {
-                    "dcid": "Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_Government",
-                    "label": "Percent of total government expenditure on education"
-                  }
-                ],
-                "resolved_stat_vars_truncated": false,
                 "resolved_entities": [
                   {
                     "dcid": "country/KEN",
@@ -1152,8 +1045,6 @@ export const multiCandidate: unknown = {
                 ],
                 "slot_filters": [],
                 "query_qualifiers": [],
-                "pipeline_trace": [],
-                "n_recalled": 69,
                 "capability_version": "cap_cbe83b130f0e8d02",
                 "default_reading": {
                   "applied": true,
@@ -1163,7 +1054,6 @@ export const multiCandidate: unknown = {
               "confidence": "high",
               "available_at_place": true,
               "measure_label_axes": [],
-              "measure_label_named_values": [],
               "measure_axis_values": []
             }
           }

@@ -35,7 +35,7 @@
     width: 100%;
 }
 
-// One entity column's extras under the role it plays (Donor, Recipient).
+// One entity column's extras under the role it plays (Provider, Recipient).
 .role {
     @include flex(column, flex-start, stretch);
 
