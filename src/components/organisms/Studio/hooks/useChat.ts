@@ -2,6 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+    endTurnActivity,
+    restoreActivity,
+    type ActivityEntry,
+    type SavedActivityEntry,
+} from '@/lib/studio/activity';
+import {
+    createStallWatch,
+    createStepLine,
+    createWorkingGrace,
+    IDLE,
+    preambleLine,
+    stoppedReply,
+    WORKING,
+} from '@/lib/studio/chatLine';
 import { clarifyFromFrame, type Clarify } from '@/lib/studio/clarify';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
@@ -9,6 +24,8 @@ import {
     fetchComponentRevision,
     runInterrupt,
     runTurn,
+    STOP_GRACE_MS,
+    type StreamHandlers,
 } from '@/lib/studio/studioClient';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type { PlanDecision, PlanStep, Seed, StudioFrame } from '@/lib/studio/wire';
@@ -21,31 +38,6 @@ export type ChatMessage =
 // A widget stamped with the send() turn it arrived in — the canvas keeps
 // only the latest turn's widgets plus whatever the user pinned.
 export type TurnWidget = Widget & { turn: number };
-
-// One tool the agent ran during a turn — the Activity view's log line.
-export type ActivityTool = {
-    id: string;
-    name: string;
-    // The tool's arguments, as sent (query, countries, indicators…).
-    args: unknown;
-    // The tool's own one-line result text (e.g. "10 indicator(s) found…").
-    summary?: string;
-    startedAt: number;
-    durationMs?: number;
-    // Set when the tool put a card on the canvas.
-    widgetId?: string;
-};
-
-// One turn's trace: the user's prompt, the agent's thinking (markdown, bold
-// section headers) and the tools it ran, in order.
-export type ActivityEntry = {
-    turn: number;
-    prompt: string;
-    startedAt: number;
-    endedAt?: number;
-    thoughts: string;
-    tools: ActivityTool[];
-};
 
 // A plan awaiting the user's approve/amend/reject (the harness's
 // `plan.proposed` pause).
@@ -85,8 +77,17 @@ export type ChatState = {
     // The Activity view's data — one entry per turn (an answered pause
     // continues the same entry).
     activity: ActivityEntry[];
-    // Non-null while a turn is streaming: the current human-readable status.
+    // The chat line, set while a turn streams: what the agent is doing (the
+    // latest running step's label, the preamble's first sentence, or the note
+    // of a resumed pause).
     status: string | null;
+    // The running step's `detail`, when the line shows a step that has one.
+    statusDetail: string | null;
+    // When `status` last changed to a different label (ms epoch).
+    statusSince: number | null;
+    // True after STALL_MS of silence on an open stream (no frame, no
+    // keep-alive).
+    stalled: boolean;
     thinking: boolean;
     clarify: Clarify | null;
     plan: PlanState | null;
@@ -98,9 +99,20 @@ export type ChatSnapshot = {
     sessionId: string | null;
     messages: ChatMessage[];
     widgets: TurnWidget[];
-    activity?: ActivityEntry[];
+    activity?: SavedActivityEntry[];
     turnCount: number;
 };
+
+const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
+
+// The state with the chat line set; `statusSince` moves only when the label
+// changes.
+const withLine = (prev: ChatState, status: string, statusDetail: string | null = null) => ({
+    ...prev,
+    status,
+    statusDetail,
+    statusSince: status === prev.status ? prev.statusSince : Date.now(),
+});
 
 // A conversation restored WITHOUT its server-side session (a fork of a
 // share, or a save whose session is gone) primes the next turn with a compact
@@ -145,8 +157,8 @@ export const useChat = (initial?: ChatSnapshot) => {
         messages: initial?.messages ?? [],
         widgets: initial?.widgets ?? [],
         queued: [],
-        activity: initial?.activity ?? [],
-        status: null,
+        activity: restoreActivity(initial?.activity),
+        ...NO_LINE,
         thinking: false,
         clarify: null,
         plan: null,
@@ -155,6 +167,8 @@ export const useChat = (initial?: ChatSnapshot) => {
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
     const abortRef = useRef<AbortController | null>(null);
+    // Stops the running stream's turn (set while a request runs).
+    const haltRef = useRef<(() => void) | null>(null);
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -198,12 +212,27 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, []);
 
     const stream = useCallback(
-        (
-            turn: number,
-            start: (handle: (frame: StudioFrame) => void, signal: AbortSignal) => Promise<void>,
-        ) => {
+        (turn: number, start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>) => {
             const controller = new AbortController();
             const generation = generationRef.current;
+            // Set by Stop. The stream is read to its end and its frames are
+            // ignored.
+            let stopped = false;
+            let stopGrace: ReturnType<typeof setTimeout> | null = null;
+            // Runs from the request's start until the stream ends or pauses.
+            const stall = createStallWatch((stalled) => {
+                if (generationRef.current === generation && !stopped) {
+                    setState((prev) => ({ ...prev, stalled }));
+                }
+            });
+
+            // The fall back to "Working", held back while a finished step may
+            // hand over to the next one.
+            const grace = createWorkingGrace(() => {
+                if (generationRef.current === generation && !stopped) {
+                    setState((prev) => withLine(prev, WORKING));
+                }
+            });
 
             const patchActivity = (fn: (entry: ActivityEntry) => ActivityEntry) =>
                 setState((prev) => ({
@@ -228,63 +257,77 @@ export const useChat = (initial?: ChatSnapshot) => {
                 });
 
             // Deltas BEFORE any step are the agent's preamble ("Checking the
-            // growth of …") — running commentary that belongs on the status
-            // line, not in the transcript. Deltas after the steps are the
-            // actual answer streaming in.
+            // growth of …"). The chat line shows its first sentence; the full
+            // text reaches the transcript with message.complete. Deltas after
+            // the steps are the answer streaming in.
             let sawStep = false;
             let preamble = '';
+            const stepLine = createStepLine();
 
             const handle = (frame: StudioFrame) => {
-                // A stream reset/hydrate walked away from must not write
-                // into the conversation that replaced it.
-                if (generationRef.current !== generation) {
+                // A stream that reset/hydrate walked away from, or that the
+                // user stopped, must not write into the conversation.
+                if (generationRef.current !== generation || stopped) {
                     return;
                 }
+
+                stall.beat();
 
                 switch (frame.event) {
                     case 'message.delta':
                         if (!sawStep) {
                             preamble += frame.text;
-                            const label = preamble.trim();
+                            const label = preambleLine(preamble);
 
                             if (label) {
-                                setState((prev) => ({ ...prev, status: label }));
+                                grace.cancel();
+                                setState((prev) => withLine(prev, label));
                             }
 
                             break;
                         }
 
-                        // Narration streaming = the run's closing beat.
+                        // Deltas after the steps are the answer.
+                        grace.cancel();
                         setState((prev) =>
                             prev.status === 'Writing the answer'
                                 ? prev
-                                : { ...prev, status: 'Writing the answer' },
+                                : withLine(prev, 'Writing the answer'),
                         );
                         patchBot((last) => ({ ...last, text: last.text + frame.text }));
                         break;
                     case 'message.complete':
                         // The authoritative text replaces the deltas. Pause
-                        // decisions ("Plan approved.") already had their beat
-                        // on the status line — they don't enter the record.
+                        // decisions ("Plan approved.") show on the status
+                        // line and do not enter the record.
                         patchBot((last) => ({ ...last, text: frame.text }));
                         break;
                     case 'activity.step': {
                         sawStep = true;
 
-                        // The real harness reports steps as they COMPLETE (it
-                        // rarely streams 'running'), so every step frame moves
-                        // the status line — the label is the human phrasing
-                        // ("Resolve the question…", "Fetch the data").
-                        setState((prev) => ({ ...prev, status: frame.label }));
+                        // Only running frames open a chat line. A step that
+                        // ends hands the line back to the step still running,
+                        // else keeps its label for a grace period and then
+                        // shows "Working". Complete and failed frames update
+                        // the Activity record.
+                        const line = stepLine(frame);
 
-                        // One Activity line per step_id: a later frame for the
-                        // same step closes/updates the line it opened.
+                        if (line === IDLE) {
+                            grace.idle();
+                        } else if (line) {
+                            grace.cancel();
+                            setState((prev) => withLine(prev, line.label, line.detail));
+                        }
+
+                        // One Activity line per step_id. A later frame for the
+                        // same step closes or updates the line it opened.
                         patchActivity((entry) => {
                             const existing = entry.tools.find((tool) => tool.id === frame.step_id);
                             const patch = {
                                 summary: frame.detail ?? undefined,
                                 durationMs: frame.duration_ms ?? undefined,
                                 widgetId: frame.produced?.component_id,
+                                state: frame.status,
                             };
 
                             if (!existing) {
@@ -390,10 +433,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                         break;
                     }
                     case 'plan.proposed':
+                        stall.stop();
+                        grace.cancel();
                         pendingInterruptRef.current = { interruptId: frame.interrupt_id };
                         setState((prev) => ({
                             ...prev,
-                            status: null,
+                            ...NO_LINE,
                             thinking: false,
                             plan: {
                                 title: frame.title,
@@ -412,6 +457,8 @@ export const useChat = (initial?: ChatSnapshot) => {
                     case 'elicitation.request': {
                         const clarify = clarifyFromFrame(frame);
 
+                        stall.stop();
+                        grace.cancel();
                         pendingInterruptRef.current = {
                             interruptId: clarify.interruptId,
                             options: clarify.options,
@@ -420,7 +467,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         };
                         setState((prev) => ({
                             ...prev,
-                            status: null,
+                            ...NO_LINE,
                             thinking: false,
                             clarify,
                         }));
@@ -441,6 +488,8 @@ export const useChat = (initial?: ChatSnapshot) => {
                         // server-side.
                         break;
                     case 'error':
+                        stall.stop();
+                        grace.cancel();
                         setState((prev) => {
                             const messages = prev.messages.slice();
                             const last = messages[messages.length - 1];
@@ -452,20 +501,57 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 };
                             }
 
-                            return { ...prev, messages, status: null, thinking: false };
+                            return {
+                                ...prev,
+                                messages,
+                                activity: endTurnActivity(prev.activity, turn, 'failed'),
+                                ...NO_LINE,
+                                thinking: false,
+                            };
                         });
                         break;
                     case 'done':
+                        stall.stop();
+                        grace.cancel();
                         setState((prev) => ({
                             ...prev,
-                            activity: prev.activity.map((entry) =>
-                                entry.turn === turn ? { ...entry, endedAt: Date.now() } : entry,
-                            ),
-                            status: null,
+                            activity: endTurnActivity(prev.activity, turn),
+                            ...NO_LINE,
                             thinking: false,
                         }));
                         break;
                 }
+            };
+
+            // Stop ends the turn on screen at once and keeps what arrived (an
+            // empty answer takes the preamble, else a note). The stream is
+            // read until the harness ends it, so the request counts as in
+            // flight, and queued sends wait, until the conversation is free.
+            const halt = () => {
+                if (stopped || generationRef.current !== generation) {
+                    return;
+                }
+
+                stopped = true;
+                stall.stop();
+                grace.cancel();
+                stopGrace = setTimeout(() => controller.abort(), STOP_GRACE_MS);
+                setState((prev) => {
+                    const messages = prev.messages.slice();
+                    const last = messages[messages.length - 1];
+
+                    if (last?.role === 'bot' && !last.text) {
+                        messages[messages.length - 1] = { ...last, text: stoppedReply(preamble) };
+                    }
+
+                    return {
+                        ...prev,
+                        messages,
+                        activity: endTurnActivity(prev.activity, turn, 'skipped'),
+                        ...NO_LINE,
+                        thinking: false,
+                    };
+                });
             };
 
             // Queue behind whatever is in flight. The controller is published
@@ -481,15 +567,39 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
 
                     abortRef.current = controller;
+                    haltRef.current = halt;
+                    stall.beat();
 
-                    return start(handle, controller.signal).catch((error: Error) => {
+                    return start(
+                        { onFrame: handle, onKeepAlive: stall.beat },
+                        controller.signal,
+                    ).catch((error: Error) => {
                         if (error.name !== 'AbortError' && generationRef.current === generation) {
                             failed = true;
-                            setState((prev) => ({ ...prev, status: null, thinking: false }));
+
+                            if (!stopped) {
+                                setState((prev) => ({
+                                    ...prev,
+                                    activity: endTurnActivity(prev.activity, turn, 'failed'),
+                                    ...NO_LINE,
+                                    thinking: false,
+                                }));
+                            }
                         }
                     });
                 })
                 .finally(() => {
+                    stall.stop();
+                    grace.cancel();
+
+                    if (stopGrace !== null) {
+                        clearTimeout(stopGrace);
+                    }
+
+                    if (haltRef.current === halt) {
+                        haltRef.current = null;
+                    }
+
                     if (generationRef.current !== generation) {
                         return;
                     }
@@ -543,13 +653,12 @@ export const useChat = (initial?: ChatSnapshot) => {
             pendingInterruptRef.current = null;
 
             setState((prev) => ({
-                ...prev,
+                ...withLine(prev, 'Resolving the question'),
                 messages: [...prev.messages, { role: 'user', text }, { role: 'bot', text: '' }],
                 activity: [
                     ...prev.activity,
-                    { turn, prompt: text, startedAt: Date.now(), thoughts: '', tools: [] },
+                    { turn, prompt: text, startedAt: Date.now(), tools: [] },
                 ],
-                status: 'Resolving the question',
                 thinking: true,
                 clarify: null,
                 plan: null,
@@ -579,8 +688,8 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             // A question handed over from search carries its seeds, the
             // datasets the user saw there, so the harness starts from them.
-            stream(turn, (handle, signal) =>
-                runTurn(conversation, recap ? `${recap}${text}` : text, handle, signal, {
+            stream(turn, (handlers, signal) =>
+                runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
                     ...(componentRef && { component_ref: componentRef }),
                     ...(seeds && { seed_spec: seeds }),
                 }),
@@ -630,10 +739,9 @@ export const useChat = (initial?: ChatSnapshot) => {
             pendingInterruptRef.current = null;
 
             setState((prev) => ({
-                ...prev,
-                // The decision shows as the live status beat; its permanent
+                // The decision shows on the status line, and its permanent
                 // record arrives with message.complete (the notes prefix).
-                status: note ? plainTextFromNote(note) : 'Thinking',
+                ...withLine(prev, note ? plainTextFromNote(note) : 'Thinking'),
                 thinking: true,
                 clarify: null,
                 plan: null,
@@ -643,8 +751,15 @@ export const useChat = (initial?: ChatSnapshot) => {
                 return;
             }
 
-            stream(turnCount.current, (handle, signal) =>
-                runInterrupt(conversation, pending.interruptId, decision, payload, handle, signal),
+            stream(turnCount.current, (handlers, signal) =>
+                runInterrupt(
+                    conversation,
+                    pending.interruptId,
+                    decision,
+                    payload,
+                    handlers,
+                    signal,
+                ),
             );
         },
         [stream],
@@ -707,6 +822,23 @@ export const useChat = (initial?: ChatSnapshot) => {
         [resume],
     );
 
+    // The Stop control: ask the harness to cancel and end the running turn
+    // (see `halt` in stream()). Requests queued behind it also wait for the
+    // cancel request to answer.
+    const stop = useCallback(() => {
+        const conversation = sessionRef.current;
+        const halt = haltRef.current;
+
+        if (!conversation || !halt) {
+            return;
+        }
+
+        const cancelled = cancelTurn(conversation);
+
+        chainRef.current = chainRef.current.then(() => cancelled);
+        halt();
+    }, []);
+
     const reset = useCallback(() => {
         // Ask the harness to stop (closing the fetch reaches it late, or
         // not at all, through the proxy), then leave the old request and
@@ -729,7 +861,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             widgets: [],
             queued: [],
             activity: [],
-            status: null,
+            ...NO_LINE,
             thinking: false,
             clarify: null,
             plan: null,
@@ -756,8 +888,8 @@ export const useChat = (initial?: ChatSnapshot) => {
             messages: saved.messages,
             widgets: saved.widgets,
             queued: [],
-            activity: saved.activity ?? [],
-            status: null,
+            activity: restoreActivity(saved.activity),
+            ...NO_LINE,
             thinking: false,
             clarify: null,
             plan: null,
@@ -780,6 +912,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         answerText,
         skipClarify,
         respondPlan,
+        stop,
         reset,
         hydrate,
         snapshot,

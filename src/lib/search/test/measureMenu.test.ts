@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    buildMeasureSwitchEntry,
     graphNodeDescription,
     measureAlternatives,
     measureDefinitionValues,
@@ -115,28 +114,6 @@ test('measureVarianceNotes covers crsTypeOfFlow too before its slot_options fram
     ]);
 });
 
-test("buildMeasureSwitchEntry posts the alternative's own definition as both identity and base_identity, never the current spec's", () => {
-    const alternative = northKoreaMeasureSpec.alternative_measures[0];
-    const entry = buildMeasureSwitchEntry('humanitarian aid', alternative);
-
-    assert.equal(entry.entry_kind, 'identity');
-    assert.equal(entry.variable_text, 'humanitarian aid');
-    assert.equal(entry.base_spec_id, alternative.definition.spec_id);
-    assert.notEqual(entry.base_spec_id, northKoreaMeasureSpec.spec_id);
-    assert.deepEqual(entry.identity, alternative.definition.identity);
-    assert.deepEqual(entry.base_identity, alternative.definition.identity);
-    assert.ok(!('resolved_stat_var_dcids' in entry));
-});
-
-test('buildMeasureSwitchEntry does the same for the second alternative (a different named-family shape)', () => {
-    const alternative = northKoreaMeasureSpec.alternative_measures[1];
-    const entry = buildMeasureSwitchEntry('humanitarian aid', alternative);
-
-    assert.equal(entry.base_spec_id, 'spec_36f44c45073c18070c8005f5354fbdcf');
-    assert.equal(entry.base_spec_id, alternative.definition.spec_id);
-    assert.ok(!('resolved_stat_var_dcids' in entry));
-});
-
 // Trimmed from dev API /api/graph/node/{dcid} answers. The StatVar with a
 // description is the node shape once the graph serves one.
 const graphNodes: [string, unknown, string | null][] = [
@@ -183,8 +160,10 @@ for (const [description, node, expected] of graphNodes) {
 // Inflation in Pakistan on the local API: the indicator's smallest group and
 // two of its five related measures.
 const currentAccount: RelatedMeasure = {
-    label: 'Current account balance as a proportion of GDP',
-    resolved_stat_var_dcids: ['sdg/BN_CAB_XOKA_GD_ZS'],
+    stat_var: {
+        dcid: 'sdg/BN_CAB_XOKA_GD_ZS',
+        label: 'Current account balance as a proportion of GDP',
+    },
     definition: {
         schema_version: 1,
         spec_id: 'spec_3af5925ed367064199de038fbc6114a8',
@@ -193,8 +172,7 @@ const currentAccount: RelatedMeasure = {
 };
 const reserves: RelatedMeasure = {
     ...currentAccount,
-    label: 'Total reserves in months of imports',
-    resolved_stat_var_dcids: ['sdg/FI_RES_TOTL_MO'],
+    stat_var: { dcid: 'sdg/FI_RES_TOTL_MO', label: 'Total reserves in months of imports' },
     definition: { ...currentAccount.definition, spec_id: 'spec_1a156f792cd0b0af6712427feebd5a1e' },
 };
 
@@ -209,22 +187,16 @@ test("relatedMeasures lists the related measures under their group's name", () =
     assert.equal(relatedMeasures({ related_measures: [] }).title, null);
 });
 
-test("measureSwitchEntry posts a related measure's definition with its StatVar as the seed, and an alternative's without one", () => {
-    const related = measureSwitchEntry('inflation', currentAccount);
+test("measureSwitchEntry posts the picked measure's own identity and nothing else", () => {
+    const measures = [...northKoreaMeasureSpec.alternative_measures.slice(0, 2), currentAccount];
 
-    assert.equal(related.entry_kind, 'identity');
-    assert.equal(related.variable_text, 'inflation');
-    assert.equal(related.base_spec_id, currentAccount.definition.spec_id);
-    assert.deepEqual(related.identity, currentAccount.definition.identity);
-    assert.deepEqual(related.base_identity, currentAccount.definition.identity);
-    assert.deepEqual(related.resolved_stat_var_dcids, ['sdg/BN_CAB_XOKA_GD_ZS']);
-
-    const alternative = measureSwitchEntry(
-        'humanitarian aid',
-        northKoreaMeasureSpec.alternative_measures[0],
-    );
-
-    assert.ok(!('resolved_stat_var_dcids' in alternative));
+    for (const measure of measures) {
+        assert.deepEqual(measureSwitchEntry('inflation', measure), {
+            entry_kind: 'identity',
+            variable_text: 'inflation',
+            identity: measure.definition.identity,
+        });
+    }
 });
 
 // Humanitarian aid from Germany on the local API: the elected measure and

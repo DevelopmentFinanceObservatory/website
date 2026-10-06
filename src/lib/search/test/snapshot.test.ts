@@ -4,7 +4,6 @@ import test from 'node:test';
 import { bindSnapshotParts, frozenRefSpecId, unreadableSpecIds } from '../frozenObservations.ts';
 import {
     captureSnapshot,
-    MAX_RESOLVED_STAT_VARS,
     parseDownloadPin,
     PIN_REFUSED,
     PIN_UNAVAILABLE,
@@ -202,7 +201,6 @@ const pinFrame = (fetchImpl: typeof fetch) =>
         specId: 'spec_crs',
         contentVersion: 'cv_abc',
         definition: { spec_id: 'spec_crs' },
-        resolvedStatVarDcids: ['dcid:ODA'],
         principal: 'site',
         pollDeadlineMs: 1_000,
         fetchImpl,
@@ -245,7 +243,6 @@ test('pinVersionFrame mints a version that lists no artifact with the download i
             kind: 'spec_id',
             spec_id: 'spec_crs',
             definition: { spec_id: 'spec_crs' },
-            resolved_stat_var_dcids: ['dcid:ODA'],
         },
     });
 });
@@ -268,20 +265,15 @@ const pinBody = (fields: Record<string, unknown>) =>
     JSON.stringify({ specId: 'spec_crs', contentVersion: 'cv_abc', ...fields });
 
 test('parseDownloadPin reads a download-pin body', () => {
-    assert.deepEqual(
-        parseDownloadPin(pinBody({ definition: { a: 1 }, resolvedStatVarDcids: ['ODA'] })),
-        {
-            specId: 'spec_crs',
-            contentVersion: 'cv_abc',
-            definition: { a: 1 },
-            resolvedStatVarDcids: ['ODA'],
-        },
-    );
+    assert.deepEqual(parseDownloadPin(pinBody({ definition: { a: 1 } })), {
+        specId: 'spec_crs',
+        contentVersion: 'cv_abc',
+        definition: { a: 1 },
+    });
     assert.deepEqual(parseDownloadPin(pinBody({})), {
         specId: 'spec_crs',
         contentVersion: 'cv_abc',
         definition: null,
-        resolvedStatVarDcids: undefined,
     });
 });
 
@@ -289,13 +281,6 @@ for (const [name, text] of [
     ['a non-JSON body', 'nope'],
     ['a malformed spec', pinBody({ specId: '../x' })],
     ['a definition that is not an object', pinBody({ definition: 'x' })],
-    ['StatVars that are not a list', pinBody({ resolvedStatVarDcids: 'ODA' })],
-    ['a StatVar that is not a string', pinBody({ resolvedStatVarDcids: ['ODA', 7] })],
-    ['an empty StatVar', pinBody({ resolvedStatVarDcids: [''] })],
-    [
-        'more StatVars than a resubmit takes',
-        pinBody({ resolvedStatVarDcids: Array(MAX_RESOLVED_STAT_VARS + 1).fill('ODA') }),
-    ],
 ] as const) {
     test(`parseDownloadPin refuses ${name}`, () => {
         assert.equal(parseDownloadPin(text), null);

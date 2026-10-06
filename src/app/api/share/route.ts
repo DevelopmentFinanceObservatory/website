@@ -4,29 +4,19 @@ import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth/session';
 import type { SavedConversation } from '@/lib/chat/history';
 import { createShare, ShareKind } from '@/lib/chat/shareStore';
-import {
-    createSearchShare,
-    isSearchSharePart,
-    type SearchShareMode,
-} from '@/lib/search/searchShare';
+import { createSearchShare } from '@/lib/search/searchShare';
+import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 
 const KINDS: ShareKind[] = ['conversation', 'canvas', 'card'];
-const MODES: SearchShareMode[] = ['live', 'snapshot'];
 
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
 // page is public, so an account is optional here (the share is simply
 // unowned without one).
 const shareSearch = async (body: any) => {
-    const parts = Array.isArray(body?.parts) ? body.parts : [];
-    const query = typeof body?.query === 'string' ? body.query.trim().slice(0, 500) : '';
+    const request = readSearchShareRequest(body);
 
-    if (
-        !MODES.includes(body?.mode) ||
-        !query ||
-        parts.length === 0 ||
-        !parts.every(isSearchSharePart)
-    ) {
+    if (!request) {
         return NextResponse.json({ error: 'bad_request' }, { status: 400 });
     }
 
@@ -34,7 +24,7 @@ const shareSearch = async (body: any) => {
 
     try {
         return NextResponse.json(
-            await createSearchShare(user?.id ?? null, body.mode, query, parts),
+            await createSearchShare(user?.id ?? null, request.mode, request.query, request.parts),
         );
     } catch (error) {
         // The platform refused the register/mint — say which, don't store a
@@ -42,8 +32,8 @@ const shareSearch = async (body: any) => {
         const { message, cause } = error as Error;
 
         console.error('share: search share capture failed', {
-            mode: body.mode,
-            specIds: parts.map((part: { specId: string }) => part.specId),
+            mode: request.mode,
+            specIds: request.parts.map((part) => part.specId),
             error: message,
             cause: cause instanceof Error ? cause.message : undefined,
         });

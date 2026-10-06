@@ -95,7 +95,7 @@ import {
     type RefineItem,
     type RefinePart,
 } from '@/lib/search/refineMenu';
-import { tokenAbout } from '@/lib/search/tokenAbout';
+import { singleStatVarSpec, tokenAbout } from '@/lib/search/tokenAbout';
 import { sharedOffer, unitConversion } from '@/lib/search/unitPicker';
 import {
     ambiguousEntityMenuTitle,
@@ -513,9 +513,9 @@ type SearchSentenceBodyProps = Pick<
 export type RefineOpen = { at: string | null };
 
 const openEntityLabel = (role: RoleAxis): string =>
-    role === 'origin' ? 'any donor' : 'any recipient';
+    role === 'origin' ? 'any provider' : 'any recipient';
 
-const entityRoleLabel = (role: RoleAxis): string => (role === 'origin' ? 'Donor' : 'Recipient');
+const entityRoleLabel = (role: RoleAxis): string => (role === 'origin' ? 'Provider' : 'Recipient');
 
 const entityMenuTitle = (role: RoleAxis): string => `Select ${entityRoleLabel(role)}`;
 
@@ -550,7 +550,7 @@ const tokenField = (token: SentenceToken): string => {
 /**
  * A real component (not a helper) so it can hold filter-text state. Ranked/
  * muted the same as every other option list in this file. Every row is a
- * toggle, the "Any donor"/"Any recipient" row first. Apply posts the whole
+ * toggle, the "Any provider"/"Any recipient" row first. Apply posts the whole
  * selected set as one identity edit, the empty set dropping the role.
  * currentDcids reseeds selected whenever the bound set changes underneath
  * the open popover.
@@ -686,7 +686,7 @@ const lowerFirst = (text: string): string =>
 // departure tokens are skipped, since the list reads `parts[].departures`. A
 // part-indexed what/how token routes its menu to that part's own spec; a
 // part-indexed where/when/source/role token routes to that same part's
-// slot, window, or donor menu; a shared where/when/source token (part_index
+// slot, window, or provider menu; a shared where/when/source token (part_index
 // null) routes to every definite part via onEditShared; an unresolved
 // part's own what-token renders as a marked phrase instead, its reason on
 // hover. A candidates part's summary folds into one (foldReadings), and its
@@ -780,6 +780,7 @@ export const SearchSentenceHeading = ({
         about: (
             <TokenAbout
                 about={tokenAbout(token, spec, refsStatedBesides(rawPlan, partCount, token))}
+                statVarSpec={token.axis === 'what' ? singleStatVarSpec(spec) : null}
             />
         ),
     });
@@ -882,7 +883,7 @@ export const SearchSentenceHeading = ({
     // A part-indexed token whose part has already resolved: the same
     // per-token switch the single-part page uses, scoped to that
     // part's own spec — covers what/how, and every qualifier axis
-    // (where/when/source/donor) that this token's part carries its own copy
+    // (where/when/source/provider) that this token's part carries its own copy
     // of rather than sharing.
     const renderSpecToken = (
         token: SentenceToken,
@@ -1166,7 +1167,7 @@ export const SearchSentenceHeading = ({
                         PlaceScopeEditor's own live `peers` fetch instead of
                         stacking the raw streamed list above a second,
                         separately-fetched one — see PlaceScopeEditor's own
-                        doc, editors.tsx. Both lead with the "Any donor"/
+                        doc, editors.tsx. Both lead with the "Any provider"/
                         "Any recipient" row, per-part only, kept out of the
                         shared/hoisted menu (see renderSharedToken). */}
                     {entityEntry.truncated ? (
@@ -1192,7 +1193,7 @@ export const SearchSentenceHeading = ({
             );
         }
 
-        // An open role ("from 81 donors") whose options never streamed: the
+        // An open role ("from 81 providers") whose options never streamed: the
         // role menu lists them as it opens.
         if (entityRole && !token.entity_refs?.length) {
             const label = token.text.trim() || openEntityLabel(entityRole);
@@ -1304,13 +1305,9 @@ export const SearchSentenceHeading = ({
                                         onSelect={() => onEditMeasure([{ partIndex, measure }])}
                                     >
                                         <OptionRow
-                                            info={
-                                                <GraphInfo
-                                                    dcid={measure.resolved_stat_var_dcids[0]}
-                                                />
-                                            }
+                                            info={<GraphInfo dcid={measure.stat_var.dcid} />}
                                         >
-                                            {measure.label}
+                                            {measure.stat_var.label}
                                         </OptionRow>
                                     </DropdownMenu.Item>
                                 ))}
@@ -2013,7 +2010,7 @@ export const SearchSentenceHeading = ({
     // The action naming the departure's ref when it is a slot ("Change
     // flow" on the measure token), else the token's own field.
     const tokenActionLabel = (token: SentenceToken, partIndex: number, ref: string): string => {
-        if (token.role === 'origin') return 'Show donors';
+        if (token.role === 'origin') return 'Show providers';
         if (token.role === 'destination') return 'Show recipients';
         if (token.axis === 'when') return 'Change years';
         if (token.axis === 'unit') return 'Change unit';
@@ -2428,7 +2425,7 @@ export const SearchSentenceBody = ({
                     inert={!whyOpen}
                 >
                     <div className={styles.accordionInner}>
-                        <WhyPanel parts={aboutParts} optionsBySpec={optionsBySpec} />
+                        <WhyPanel parts={aboutParts} open={whyOpen} optionsBySpec={optionsBySpec} />
                     </div>
                 </div>
             )}

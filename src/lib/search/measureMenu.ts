@@ -88,7 +88,7 @@ export function measureAlternatives(
 
 /** The alternatives the byline's unit token offers: the 'unit' entries,
  *  the same measure at another price basis. A pick posts
- *  `buildMeasureSwitchEntry`, the same resubmit as a measure switch. */
+ *  `measureSwitchEntry`, the same resubmit as a measure switch. */
 export function unitAlternatives(
     spec: Pick<MeasureMenuSpec, 'alternative_measures'>,
 ): SpecAlternativeMeasure[] {
@@ -166,47 +166,18 @@ export function measureVarianceNotes(
     });
 }
 
-/** Posts the alternative's own definition as both identity and base_identity
- *  so verify_base_identity self-verifies. No resolved_stat_var_dcids: the API elects a family
- *  measure's membership from the packaged code index and ignores a posted
- *  list. */
-export function buildMeasureSwitchEntry(
+/** The resubmit entry a pick in the measure menu posts: the alternative's
+ *  or related measure's own identity, from which the API resolves the
+ *  membership. */
+export function measureSwitchEntry(
     variableText: string,
-    alternative: Pick<SpecAlternativeMeasure, 'definition'>,
+    measure: Pick<SpecAlternativeMeasure | RelatedMeasure, 'definition'>,
 ): DatasetIdentityEntry {
     return {
         entry_kind: 'identity',
         variable_text: variableText,
-        identity: alternative.definition.identity,
-        base_spec_id: alternative.definition.spec_id,
-        base_identity: alternative.definition.identity,
+        identity: measure.definition.identity,
     };
-}
-
-/** A related measure's resubmit entry: its own definition as identity and
- *  base_identity, like an alternative, and its one StatVar as
- *  resolved_stat_var_dcids. A related measure has no family for the API to
- *  elect members from, so the posted StatVar is its membership. */
-export function buildRelatedMeasureEntry(
-    variableText: string,
-    related: RelatedMeasure,
-): DatasetIdentityEntry {
-    return {
-        ...buildMeasureSwitchEntry(variableText, related),
-        resolved_stat_var_dcids: related.resolved_stat_var_dcids,
-    };
-}
-
-/** The resubmit entry a pick in the measure menu posts: a related measure's
- *  (`buildRelatedMeasureEntry`) or an alternative's
- *  (`buildMeasureSwitchEntry`). */
-export function measureSwitchEntry(
-    variableText: string,
-    measure: SpecAlternativeMeasure | RelatedMeasure,
-): DatasetIdentityEntry {
-    return 'resolved_stat_var_dcids' in measure
-        ? buildRelatedMeasureEntry(variableText, measure)
-        : buildMeasureSwitchEntry(variableText, measure);
 }
 
 const axisValueKey = ({ axis, value }: MeasureAxisValue) => `${axis}=${value.dcid}`;

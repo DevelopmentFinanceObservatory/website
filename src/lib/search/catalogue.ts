@@ -39,8 +39,8 @@ export type CatalogueCounts = {
     aid: AidCounts;
 };
 
-/** What DFO holds at one country. For aid, `donors` counts the donors to the
- *  country and `recipients` the recipients of its own aid. */
+/** What DFO holds at one country. For aid, `donors` (the wire name) counts the
+ *  providers to the country and `recipients` the recipients of its own aid. */
 export type PlaceCounts = {
     publishers: number;
     variables: number;

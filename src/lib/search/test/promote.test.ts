@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { promoteFromSpec, withEntityEdit, withResolvedSlotEdit } from '../promote.ts';
-import type { BaseIdentity, Spec } from '../types.ts';
+import { withEntityEdit, withResolvedSlotEdit } from '../promote.ts';
+import type { BaseIdentity } from '../types.ts';
 
 const identity: BaseIdentity = {
     identity_version: 'spec1',
@@ -23,7 +23,7 @@ const whereSpec = {
 };
 
 test('an open destination selection writes identity.entities.destination for resubmit', () => {
-    const edit = withResolvedSlotEdit(
+    const edited = withResolvedSlotEdit(
         whereSpec,
         0,
         {
@@ -33,33 +33,33 @@ test('an open destination selection writes identity.entities.destination for res
         'destination',
     );
 
-    assert.deepEqual(edit.identity.entities, {
+    assert.deepEqual(edited.entities, {
         origin: ['country/FRA'],
         destination: ['country/KEN'],
     });
-    assert.equal('observationAbout' in edit.identity.entities, false);
+    assert.equal('observationAbout' in edited.entities, false);
 });
 
 test('a non-directional where selection still writes observationAbout', () => {
-    const edit = withResolvedSlotEdit(whereSpec, 0, {
+    const edited = withResolvedSlotEdit(whereSpec, 0, {
         kind: 'value',
         value: { value_kind: 'entity', ref: { dcid: 'country/GHA', label: 'Ghana' } },
     });
 
-    assert.deepEqual(edit.identity.entities, {
+    assert.deepEqual(edited.entities, {
         origin: ['country/FRA'],
         observationAbout: ['country/GHA'],
     });
 });
 
 test('withEntityEdit keeps the open-origin Add Criteria route on origin', () => {
-    const edit = withEntityEdit(identity, 'origin', ['country/USA']);
+    const edited = withEntityEdit(identity, 'origin', ['country/USA']);
 
-    assert.deepEqual(edit.identity.entities, { origin: ['country/USA'] });
+    assert.deepEqual(edited.entities, { origin: ['country/USA'] });
 });
 
 test("a multi-select Apply's set binding writes every dcid to the where slot's role", () => {
-    const edit = withResolvedSlotEdit(
+    const edited = withResolvedSlotEdit(
         whereSpec,
         0,
         {
@@ -72,52 +72,124 @@ test("a multi-select Apply's set binding writes every dcid to the where slot's r
         'destination',
     );
 
-    assert.deepEqual(edit.identity.entities, {
+    assert.deepEqual(edited.entities, {
         origin: ['country/FRA'],
         destination: ['country/KEN', 'country/ETH'],
     });
 });
 
-test('an unbound where binding drops a base-bound role, acknowledged in removed.entities', () => {
-    const edit = withResolvedSlotEdit(
+test('an unbound where binding drops the role from the posted identity', () => {
+    const edited = withResolvedSlotEdit(
         { ...whereSpec, identity: { ...identity, entities: { destination: ['country/KEN'] } } },
         0,
         { kind: 'unbound' },
         'destination',
     );
 
-    assert.equal('destination' in edit.identity.entities, false);
-    assert.deepEqual(edit.removed, { entities: ['destination'] });
+    assert.equal('destination' in edited.entities, false);
 });
 
-test('unbinding a role that was never bound in the base identity reports no removed entry', () => {
-    const edit = withResolvedSlotEdit(
-        { ...whereSpec, identity: { ...identity, entities: {} } },
-        0,
-        { kind: 'unbound' },
-        'destination',
-    );
-
-    assert.equal('destination' in edit.identity.entities, false);
-    assert.equal(edit.removed, undefined);
-});
-
-test('promoteFromSpec seeds resolved_stat_var_dcids from stat_vars.items, not the trace', () => {
-    const spec = {
-        stat_vars: {
-            items: [
-                { ref: 'sdg/FP_CPI_TOTL_ZG', slot_values: [] },
-                { ref: 'sdg/FP_CPI_TOTL', slot_values: [] },
-            ],
-            member_count: 2,
-            member_count_exact: true,
-            truncated: false,
+test('withEntityEdit binds a picked dcid, single- or multi-select alike', () => {
+    const cases: Array<{
+        description: string;
+        role: 'origin' | 'destination';
+        baseEntities: Record<string, string[]>;
+        dcids: string[];
+        expectedEntities: Record<string, string[]>;
+    }> = [
+        {
+            description: 'a single picked dcid',
+            role: 'origin',
+            baseEntities: {},
+            dcids: ['country/KEN'],
+            expectedEntities: { origin: ['country/KEN'] },
         },
-        resolution: { resolved_stat_vars: [{ dcid: 'Count_Person', label: 'Population' }] },
-    } as unknown as Spec;
+        {
+            description: 'a multi-select Apply set in one identity edit',
+            role: 'destination',
+            baseEntities: { destination: ['country/KEN'] },
+            dcids: ['country/KEN', 'country/ETH'],
+            expectedEntities: { destination: ['country/KEN', 'country/ETH'] },
+        },
+    ];
 
-    assert.deepEqual(promoteFromSpec(spec), {
-        resolved_stat_var_dcids: ['sdg/FP_CPI_TOTL_ZG', 'sdg/FP_CPI_TOTL'],
-    });
-    assert.deepEqual(promoteFromSpec({ ...spec, stat_vars: undefined } as unknown as Spec), {});
+    for (const { description, role, baseEntities, dcids, expectedEntities } of cases) {
+        const edited = withEntityEdit({ ...identity, entities: baseEntities }, role, dcids);
+
+        assert.deepEqual(edited.entities, expectedEntities, description);
+    }
+});
+
+test('an unbind edit -- dcid null or an empty Apply selection -- drops the role', () => {
+    const cases = [
+        { description: 'dcid null', selection: null },
+        { description: 'an empty Apply selection ([])', selection: [] },
+    ];
+
+    for (const { description, selection } of cases) {
+        const edited = withEntityEdit(identity, 'origin', selection);
+
+        assert.equal('origin' in edited.entities, false, description);
+    }
+});
+
+test("an edit that changes a grouped role's members drops that role's group and leaves the base identity grouped", () => {
+    const eu = { dcid: 'EuropeanUnion', label: 'European Union' };
+    const kenya = { dcid: 'country/KEN', label: 'Kenya' };
+    const cases = [
+        {
+            description: 'Any donor clears the role',
+            selection: null,
+            expectedGroups: { destination: kenya },
+        },
+        {
+            description: 'a single donor replaces the group',
+            selection: ['country/DEU'],
+            expectedGroups: { destination: kenya },
+        },
+        {
+            description: 'the same members re-applied',
+            selection: ['country/FRA', 'country/DEU'],
+            expectedGroups: { origin: eu, destination: kenya },
+        },
+        {
+            description: 'the same members in a new order',
+            selection: ['country/DEU', 'country/FRA'],
+            expectedGroups: { origin: eu, destination: kenya },
+        },
+        {
+            description: 'one member added',
+            selection: ['country/FRA', 'country/DEU', 'country/ITA'],
+            expectedGroups: { destination: kenya },
+        },
+        {
+            description: 'one member swapped for another',
+            selection: ['country/FRA', 'country/ITA'],
+            expectedGroups: { destination: kenya },
+        },
+        {
+            description: 'one member removed',
+            selection: ['country/FRA'],
+            expectedGroups: { destination: kenya },
+        },
+    ];
+
+    for (const { description, selection, expectedGroups } of cases) {
+        const baseIdentity = {
+            identity_version: 'spec1' as const,
+            shape: {},
+            slots: [],
+            entities: { origin: ['country/FRA', 'country/DEU'], destination: ['country/KEN'] },
+            requested_window: { kind: 'all' as const },
+            entity_groups: { origin: eu, destination: kenya },
+        };
+        const identity = withEntityEdit(baseIdentity, 'origin', selection);
+
+        assert.deepEqual(identity.entity_groups, expectedGroups, description);
+        assert.deepEqual(
+            baseIdentity.entity_groups,
+            { origin: eu, destination: kenya },
+            description,
+        );
+    }
 });

@@ -90,9 +90,8 @@ export const decodeSearchState = async <T = unknown>(text: string): Promise<T | 
 // `?s=` payload: the raw query plus every part's latest edit.
 // ---------------------------------------------------------------------------
 
-/** Self-contained: an identity entry's base_identity is hashed server-side,
- *  and a parsed entry's part carries every input the door needs, so a
- *  stored edit replays regardless of what the fresh query returns. Guards a
+/** Self-contained: an identity entry's identity and a parsed entry's part
+ *  carry every input the door needs, so a stored edit replays regardless of what the fresh query returns. Guards a
  *  stale replay: an edit only replays when the freshly-run query's part at
  *  this index still asks the same base variable it did when recorded.
  *  Otherwise it's skipped with a one-line note. */
@@ -122,12 +121,30 @@ export const encodePermalinkState = (state: PermalinkState): Promise<string> =>
 const isReplayableEditEntryKind = (kind: unknown): kind is PermalinkEdit['entry']['entry_kind'] =>
     kind === 'identity' || kind === 'parsed';
 
+/** An identity entry as the door takes it today. A link stored before the
+ *  door derived membership from the identity also carries the base it was
+ *  edited from and the StatVars it served, which the door refuses. */
+const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] => {
+    if (entry.entry_kind !== 'identity') return entry;
+
+    const { variable_text, identity, operations } = entry;
+
+    return {
+        entry_kind: 'identity',
+        variable_text,
+        identity,
+        ...(operations ? { operations } : {}),
+    };
+};
+
 export const decodePermalinkState = async (text: string): Promise<PermalinkState | null> => {
     const decoded = await decodeSearchState<PermalinkState>(text);
     if (!decoded) return null;
 
     const edits = Array.isArray(decoded.edits)
-        ? decoded.edits.filter((edit) => isReplayableEditEntryKind(edit?.entry?.entry_kind))
+        ? decoded.edits
+              .filter((edit) => isReplayableEditEntryKind(edit?.entry?.entry_kind))
+              .map((edit) => ({ ...edit, entry: replayableEntry(edit.entry) }))
         : [];
 
     return { ...decoded, edits };

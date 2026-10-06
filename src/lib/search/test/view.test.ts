@@ -284,12 +284,12 @@ test('coverageSentence names the scope of every count, with singular nouns for o
         {
             spec: { headline: latest(157, 34, 1), entities: nigeria, coverage: { dimensions: [] } },
             sentence:
-                '2024 is the latest year with data, with 157 values from 34 donors to Nigeria.',
+                '2024 is the latest year with data, with 157 values from 34 providers to Nigeria.',
         },
         {
             spec: { headline: latest(5, 4, 2), entities: [], coverage: dimensions(42) },
             sentence:
-                '2024 is the latest year with data, with 5 values from 4 donors for 2 of the 42 recipients that have data.',
+                '2024 is the latest year with data, with 5 values from 4 providers for 2 of the 42 recipients that have data.',
         },
         {
             spec: { headline: latest(1, 1, 1), entities: germany, coverage: dimensions(1) },
@@ -321,7 +321,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 coverage: { dimensions: [] },
             },
             sentence:
-                '2020 is the latest year with data in the years asked, with 157 values from 34 donors to Nigeria.',
+                '2020 is the latest year with data in the years asked, with 157 values from 34 providers to Nigeria.',
         },
     ];
 
@@ -348,17 +348,48 @@ test('seriesPreviewCaptions counts the series a truncated preview holds, labelle
         ['humanitarian aid: Showing 20 series, in no particular order'],
     );
     assert.deepEqual(seriesPreviewCaptions([{ ...part, warnings: [] }]), []);
-    assert.deepEqual(
-        seriesPreviewCaptions([
-            {
-                ...part,
-                warnings: [
-                    { code: 'observations_series_truncated', params: { shown: 20, total: 927 } },
-                ],
-            },
-        ]),
-        ['Showing 20 of 927 series, in no particular order'],
-    );
+    const cases: [Record<string, number | string>, string][] = [
+        [{ shown: 20, total: 927 }, 'Showing 20 of 927 series, in no particular order'],
+        [
+            { shown: 20, total: 927, order: 'fixed' },
+            'Showing 20 of 927 series, in no particular order',
+        ],
+        [
+            { shown: 20, total: 683, order: 'ranked' },
+            'Showing 20 of 683 series, most recent and largest first',
+        ],
+    ];
+
+    for (const [params, caption] of cases) {
+        assert.deepEqual(
+            seriesPreviewCaptions([
+                { ...part, warnings: [{ code: 'observations_series_truncated', params }] },
+            ]),
+            [caption],
+        );
+    }
+
+    // The observations' own order describes the rows shown, so it wins over a
+    // disagreeing warning.
+    const withOrder = (order: 'ranked' | 'fixed', warningOrder: string) => [
+        {
+            ...part,
+            spec: { observations: { series, order } },
+            warnings: [
+                {
+                    code: 'observations_series_truncated',
+                    params: { shown: 20, total: 683, order: warningOrder },
+                },
+            ],
+        },
+    ];
+
+    assert.deepEqual(seriesPreviewCaptions(withOrder('ranked', 'fixed')), [
+        'Showing 20 of 683 series, most recent and largest first',
+    ]);
+    assert.deepEqual(seriesPreviewCaptions(withOrder('fixed', 'ranked')), [
+        'Showing 20 of 683 series, in no particular order',
+    ]);
 });
 
 // --- downloadRowCount / detailRows ----------------------------------------
@@ -1643,7 +1674,7 @@ test("ambiguousEntityMenuTitle titles the menu by the ambiguous wording's role",
 
     // "ODA to Congo": Congo is the recipient.
     assert.equal(ambiguousEntityMenuTitle(part), 'Select Recipient');
-    assert.equal(ambiguousEntityMenuTitle(withRole('from')), 'Select Donor');
+    assert.equal(ambiguousEntityMenuTitle(withRole('from')), 'Select Provider');
     assert.equal(ambiguousEntityMenuTitle(withRole(null)), 'Select Place');
     assert.equal(ambiguousEntityMenuTitle(null), 'Select Place');
 });
@@ -1669,7 +1700,7 @@ test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offer
         },
     };
 
-    assert.equal(ambiguousEntityMenuTitle(bothAmbiguous), 'Select Donor or Recipient');
+    assert.equal(ambiguousEntityMenuTitle(bothAmbiguous), 'Select Provider or Recipient');
 });
 
 test('ambiguousEntityMenuTitle reads a restatement whose entities are null', () => {

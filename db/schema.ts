@@ -91,7 +91,6 @@ export const shareRef = pgTable(
         specId: text('spec_id').notNull(),
         identity: jsonb('identity').notNull(),
         variableText: text('variable_text'),
-        resolvedStatVarDcids: jsonb('resolved_stat_var_dcids'),
         contentVersion: text('content_version'),
         // Null for a live share and for snapshots stored before the column.
         artifactDigest: text('artifact_digest'),

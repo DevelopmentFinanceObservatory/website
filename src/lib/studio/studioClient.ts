@@ -1,11 +1,12 @@
 /**
  * Studio v1 transport: POST + SSE against the harness's `/api/studio/*`
- * routes, through our own Next proxy (same-origin; the proxy adds the
- * bearer). One frame per `data:` line; `:`-prefixed keep-alive comments are
- * skipped. A stream ends on `done`, on a pausing frame (`plan.proposed` /
- * `elicitation.request` — answer via `runInterrupt`) or on an `error`
- * frame; transport failures are surfaced as a synthetic `error` frame so
- * the UI has one failure path.
+ * routes, through our own Next proxy (same-origin, and the proxy adds the
+ * bearer). Each `data:` line is one frame. Each `:`-prefixed keep-alive
+ * comment goes to `onKeepAlive`, the page's sign that a quiet stream is still
+ * open. A stream ends on `done`, on a pausing frame (`plan.proposed` or
+ * `elicitation.request`, answered via `runInterrupt`) or on an `error` frame.
+ * Transport failures surface as a synthetic `error` frame, so the UI has one
+ * failure path.
  */
 
 import type {
@@ -19,6 +20,13 @@ import type {
     TurnRequest,
 } from './wire';
 
+/**
+ * How long the page waits on a stop: a cancelled stream may run on this long
+ * before the client closes it, and the cancel request is dropped after the
+ * same time. The harness ends a cancelled stream within about 5 s.
+ */
+export const STOP_GRACE_MS = 10_000;
+
 const transportError = (detail: string): StudioFrame => ({
     event: 'error',
     seq: -1,
@@ -29,10 +37,16 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
+/** What a stream reports to its caller. */
+export type StreamHandlers = {
+    onFrame: (frame: StudioFrame) => void;
+    onKeepAlive?: () => void;
+};
+
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
     body: TurnRequest | InterruptResponse,
-    onFrame: (frame: StudioFrame) => void,
+    { onFrame, onKeepAlive }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -78,7 +92,11 @@ const streamStudio = async (
 
     const flush = (chunk: string) => {
         for (const line of chunk.split('\n')) {
-            // Keep-alive comments (`: ka`) and blank lines carry no frame.
+            if (line.startsWith(':')) {
+                onKeepAlive?.();
+                continue;
+            }
+
             if (!line.startsWith('data:')) {
                 continue;
             }
@@ -123,7 +141,7 @@ const streamStudio = async (
 export const runTurn = (
     conversationId: string,
     message: string,
-    onFrame: (frame: StudioFrame) => void,
+    handlers: StreamHandlers,
     signal?: AbortSignal,
     extras?: Partial<Pick<TurnRequest, 'component_ref' | 'auto_add' | 'surface' | 'seed_spec'>>,
 ): Promise<void> =>
@@ -136,7 +154,7 @@ export const runTurn = (
             message,
             ...extras,
         },
-        onFrame,
+        handlers,
         signal,
     );
 
@@ -146,7 +164,7 @@ export const runInterrupt = (
     interruptId: string,
     decision: InterruptResponse['decision'],
     payload: string | undefined,
-    onFrame: (frame: StudioFrame) => void,
+    handlers: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> =>
     streamStudio(
@@ -159,7 +177,7 @@ export const runInterrupt = (
             decision,
             ...(payload !== undefined ? { payload } : {}),
         },
-        onFrame,
+        handlers,
         signal,
     );
 
@@ -190,8 +208,15 @@ export const mutateComposition = async (
     return (await res.json()) as CompositionManifest;
 };
 
-/** Stop the conversation's in-flight stream (the Stop button). */
-export const cancelTurn = async (conversationId: string): Promise<void> => {
+/**
+ * Stop the conversation's in-flight stream (the Stop button). Best-effort and
+ * bounded: it always settles, within `timeoutMs`, because queued turns wait
+ * on it.
+ */
+export const cancelTurn = async (
+    conversationId: string,
+    timeoutMs: number = STOP_GRACE_MS,
+): Promise<void> => {
     const body: CancelRequest = {
         kind: 'turn.cancel',
         schema_version: 1,
@@ -202,8 +227,10 @@ export const cancelTurn = async (conversationId: string): Promise<void> => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
     }).catch(() => {
-        // Cancel is best-effort; closing the stream also stops the turn.
+        // Cancel is best-effort (a timeout lands here too); closing the
+        // stream also stops the turn.
     });
 };
 

@@ -17,6 +17,9 @@ import {
     observationsOmissionText,
     observationsPendingText,
     PartResultRow,
+    PreviewColumn,
+    previewCellText,
+    previewColumns,
     resolveObservationsOmission,
 } from '@/lib/search/view';
 import { tableCaptionNotes } from '@/lib/search/resultNotes';
@@ -140,49 +143,36 @@ const SearchTable = ({
         );
     }
 
-    // Column labels (donor/place, sector, type) come from the FIRST definite
-    // part's own spec — a documented simplification when several parts are
-    // shown together, since the axes can differ across variables; the
-    // single-variable page reads its only part the same way, so its labels
-    // are unaffected.
-    const representative = parts[0]?.spec;
-    // spec.entities is the wire's ResolvedEntity[] unaltered: flattenSpec
-    // spreads resolved through without reshaping it. role is the flat
-    // EntityRoleKey string (dfo-apis src/search/models/vocab.py:83:
-    // "observationAbout" | "origin" | "destination").
-    const donorSide = (representative?.entities ?? []).some((e: any) => e?.role === 'origin');
-
-    // Column labels come from the engine's own slot-key labels when present
-    // (e.g. "flow type", "sector / purpose"), with design-language fallbacks.
-    const slotKeyLabel = (axis: string): string | null => {
-        const label = (representative?.slots ?? []).find((slot: any) => slot?.key?.axis === axis)
-            ?.key?.label;
-
-        return label ? label[0].toUpperCase() + label.slice(1) : null;
-    };
-
     // One unit across every row → it goes in the header; mixed → per cell.
     const units = new Set(rows.map((row) => row.unit).filter(Boolean));
     const sharedUnit = units.size === 1 ? [...units][0] : null;
 
-    const columns = [
-        ...(multi ? [{ key: 'variable' as const, label: 'Variable' }] : []),
-        { key: 'year' as const, label: 'Year' },
-        {
-            key: 'donor' as const,
-            label: donorSide ? 'Donor' : (slotKeyLabel('where') ?? 'Country'),
-        },
-        { key: 'sector' as const, label: slotKeyLabel('how') ?? 'Sector' },
-        { key: 'type' as const, label: slotKeyLabel('what') ?? 'Type' },
-        { key: 'method' as const, label: 'Method' },
-        { key: 'value' as const, label: sharedUnit ? `Value (${sharedUnit})` : 'Value' },
-    ].filter(
-        (column) =>
-            column.key === 'year' ||
-            column.key === 'value' ||
-            column.key === 'variable' ||
-            rows.some((row) => row[column.key] !== '—' && row[column.key] != null),
-    );
+    // Entity and axis columns over every part (previewColumns hides the ones
+    // the sentence already states); Method shows when some row states one.
+    const columns: PreviewColumn[] = [
+        ...(multi ? [{ key: 'variable', label: 'Variable' }] : []),
+        { key: 'year', label: 'Year' },
+        ...previewColumns(parts),
+        ...(rows.some((row) => row.method != null) ? [{ key: 'method', label: 'Method' }] : []),
+        { key: 'value', label: sharedUnit ? `Value (${sharedUnit})` : 'Value' },
+    ];
+
+    const cellText = (row: PartResultRow, key: string): string => {
+        switch (key) {
+            case 'variable':
+                return row.variable;
+            case 'year':
+                return row.year;
+            case 'method':
+                return methodCellText(row);
+            case 'value':
+                return `${formatValue(row.value)}${
+                    !sharedUnit && row.unit && row.value != null ? ` ${row.unit}` : ''
+                }`;
+            default:
+                return previewCellText(row, key);
+        }
+    };
 
     // ONE template shared by every row (per-row auto tracks are what staggered
     // the columns before): equal tracks, so however many columns survive the
@@ -202,13 +192,7 @@ const SearchTable = ({
                         data-col={col}
                         className={column.key === 'value' ? styles.usd : undefined}
                     >
-                        {column.key === 'value'
-                            ? `${formatValue(row.value)}${
-                                  !sharedUnit && row.unit && row.value != null ? ` ${row.unit}` : ''
-                              }`
-                            : column.key === 'method'
-                              ? methodCellText(row)
-                              : (row[column.key] ?? '—')}
+                        {cellText(row, column.key)}
                     </span>
                 ))}
             </div>

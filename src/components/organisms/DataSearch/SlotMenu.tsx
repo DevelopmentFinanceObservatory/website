@@ -359,7 +359,7 @@ export const NoFilterMatch = () => <p className={styles.slotNote}>No match — c
  *  toggling rows. `applyDisabled` is true once `selected` reads back the
  *  same as the bound set; a caller with its own extra Apply-disabling rule
  *  (PlaceEditor's requireSelection) ORs it in locally. `clear` empties the
- *  working selection, which an "Any donor"/"Any recipient" row stages. */
+ *  working selection, which an "Any provider"/"Any recipient" row stages. */
 export const useToggleSelection = (
     boundDcids: string[],
 ): {
@@ -384,7 +384,7 @@ export const useToggleSelection = (
     return { selected, toggle, clear, applyDisabled };
 };
 
-/** A multi-select role picker's "Any donor"/"Any recipient" row. It reads
+/** A multi-select role picker's "Any provider"/"Any recipient" row. It reads
  *  the staged selection, so it unticks as soon as a specific pick is staged
  *  and re-ticks once every pick is cleared. Clicking it clears the staged
  *  picks; Apply then posts the empty set, which drops the role. */

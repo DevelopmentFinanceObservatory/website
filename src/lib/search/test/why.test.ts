@@ -5,38 +5,39 @@ import type { Warning } from '../types.ts';
 import { buildWhySummary, scopeAssumptions } from '../view.ts';
 
 // Trimmed from dev API answers: inflation in Pakistan (one variable) and ODA
-// from Germany (1,626 variables, 200 on the wire, the recipient role open).
+// from Germany (1,626 variables, the recipient role open).
 const inflation = {
     stat_vars: {
-        items: [
-            {
-                ref: 'sdg/FP_CPI_TOTL_ZG',
-                label: 'Annual inflation, consumer prices',
-                data_date_range: { start: '2000', end: '2022' },
-            },
-        ],
         member_count: 1,
         member_count_exact: false,
-        truncated: false,
+        served_count: 1,
+        data_date_range: { start: '2000', end: '2022' },
     },
     shape: { label: 'Annual inflation, consumer prices' },
     entities: [{ ref: 'country/PAK', label: 'Pakistan', role: 'observationAbout' }],
     facets: { unit: { ref: 'SDG_PERCENT', label: 'Percentage' } },
     coverage: { kind: 'exact', observation_count: 23, dimensions: [] },
-    resolution: {
-        resolved_stat_vars: [{ dcid: 'sdg/FP_CPI_TOTL_ZG' }],
-        pipeline_trace: [{ step: 'extract', ran: true, ms: 1006 }],
-    },
+    resolution: {},
 };
 
-const odaItems = Array.from({ length: 200 }, (_, index) => ({
-    ref: `Amount_FinancialFlow_Gross_Disbursement_${index}`,
-    label: `Official development assistance gross disbursements ${index}`,
-    data_date_range: { start: '1992', end: '2009' },
-}));
+// The members door's answer for inflation, as definitionMembersReader
+// returns it: its one StatVar.
+const inflationMembers = {
+    ok: true as const,
+    members: [{ dcid: 'sdg/FP_CPI_TOTL_ZG', label: 'Annual inflation, consumer prices' }],
+};
+
+// The members door's answer for ODA from Germany: every served StatVar.
+const odaMembers = {
+    ok: true as const,
+    members: Array.from({ length: 1626 }, (_, index) => ({
+        dcid: `Amount_FinancialFlow_Gross_Disbursement_${index}`,
+        label: `Official development assistance gross disbursements ${index}`,
+    })),
+};
 
 const oda = {
-    stat_vars: { items: odaItems, member_count: 1626, member_count_exact: true, truncated: true },
+    stat_vars: { member_count: 1626, member_count_exact: true, served_count: 1626 },
     measure_label: 'gross disbursements (nominal)',
     shape: { label: 'gross disbursements (nominal, official development assistance)' },
     entities: [{ ref: 'country/DEU', label: 'Germany', role: 'origin' }],
@@ -50,10 +51,7 @@ const oda = {
             { label: 'variables', count: 1626 },
         ],
     },
-    resolution: {
-        // The full trace, which the panel ignores.
-        resolved_stat_vars: Array.from({ length: 1626 }, (_, index) => ({ dcid: `sv/${index}` })),
-    },
+    resolution: {},
 };
 
 const odaWarnings: Warning[] = [
@@ -67,7 +65,8 @@ const odaWarnings: Warning[] = [
 ];
 
 test('one variable: the Measure row carries its code and no Variables group appears', () => {
-    const summary = buildWhySummary(inflation, { warnings: [], variable_text: 'inflation' });
+    const part = { warnings: [], variable_text: 'inflation' };
+    const summary = buildWhySummary(inflation, part, inflationMembers);
 
     assert.deepEqual(summary.rows, [
         {
@@ -81,19 +80,22 @@ test('one variable: the Measure row carries its code and no Variables group appe
     ]);
     assert.equal(summary.variables, null);
     assert.deepEqual(scopeAssumptions(inflation, []), []);
+    // Until the members door answers, the row names the measure without a code.
+    assert.deepEqual(buildWhySummary(inflation, part).rows[0], {
+        label: 'Measure',
+        value: 'Annual inflation, consumer prices',
+    });
 });
 
-test('many variables: rows name the role scope and the list reads stat_vars, not the trace', () => {
-    const summary = buildWhySummary(oda, {
-        warnings: [...odaWarnings],
-        variable_text: 'official development assistance',
-    });
+test('many variables: rows name the role scope and the list reads the members door', () => {
+    const part = { warnings: [...odaWarnings], variable_text: 'official development assistance' };
+    const summary = buildWhySummary(oda, part, odaMembers);
 
     assert.deepEqual(summary.rows, [
         { label: 'Measure', value: 'Gross disbursements (nominal)' },
         { label: 'Unit', value: 'US Dollar' },
         { label: 'Years', value: 'Latest is 2024' },
-        { label: 'Donor', value: 'Germany' },
+        { label: 'Provider', value: 'Germany' },
         { label: 'Recipients', value: 'All 191 with data' },
     ]);
     // No time_window_defaulted on the wire: the headline's year_named says it.
@@ -102,12 +104,83 @@ test('many variables: rows name the role scope and the list reads stat_vars, not
         'No year was named, so the counts are for 2024, the latest year with data.',
     ]);
     assert.equal(summary.variables?.count, 1626);
-    assert.equal(summary.variables?.items.length, 200);
-    assert.equal(summary.variables?.items[0].dcid, 'Amount_FinancialFlow_Gross_Disbursement_0');
+    assert.equal(summary.variables?.members.state, 'listed');
+    assert.deepEqual(
+        summary.variables?.members.state === 'listed'
+            ? [summary.variables.members.items.length, summary.variables.members.items[0].dcid]
+            : null,
+        [1626, 'Amount_FinancialFlow_Gross_Disbursement_0'],
+    );
+    assert.deepEqual(buildWhySummary(oda, part).variables?.members, { state: 'loading' });
+    assert.deepEqual(buildWhySummary(oda, part, { ok: false }).variables?.members, {
+        state: 'failed',
+    });
     assert.equal(
         summary.variables?.summary,
         'All 1,626 variables are gross disbursements (nominal, official development assistance).',
     );
+});
+
+// Coverage counts the variables with data in the answer's rows; the resolved
+// membership is what the panel lists.
+test('the resolved membership chooses the layout over the coverage variables count', () => {
+    const part = { warnings: [], variable_text: 'official development assistance' };
+    const variables = (count: number) => ({
+        ...oda.coverage,
+        dimensions: [{ label: 'variables', count }],
+    });
+    const three = { ok: true as const, members: odaMembers.members.slice(0, 3) };
+    const one = { ok: true as const, members: odaMembers.members.slice(0, 1) };
+    const unsettled = { member_count: 3, member_count_exact: false, served_count: null };
+
+    // Coverage reports one variable, the members door lists three.
+    for (const stat_vars of [
+        unsettled,
+        { member_count: 3, member_count_exact: true, served_count: 3 },
+    ]) {
+        const summary = buildWhySummary({ ...oda, stat_vars, coverage: variables(1) }, part, three);
+
+        assert.equal(summary.variables?.count, 3);
+        assert.equal(summary.variables?.exact, true);
+        assert.deepEqual(summary.variables?.members, {
+            state: 'listed',
+            items: three.members,
+        });
+        assert.deepEqual(summary.rows[0], {
+            label: 'Measure',
+            value: 'Gross disbursements (nominal)',
+        });
+    }
+
+    // Coverage reports three, the members door lists one.
+    const single = buildWhySummary(
+        {
+            ...oda,
+            stat_vars: { member_count: 3, member_count_exact: true, served_count: 1 },
+            coverage: variables(3),
+        },
+        part,
+        one,
+    );
+
+    assert.equal(single.variables, null);
+    assert.deepEqual(single.rows[0], {
+        label: 'Measure',
+        value: 'Official development assistance gross disbursements 0',
+        code: 'Amount_FinancialFlow_Gross_Disbursement_0',
+    });
+    assert.equal(
+        single.family,
+        'This answer uses 1 of 3 gross disbursements (nominal, official development assistance) variables.',
+    );
+
+    // Membership unsettled and the members still being read: the family's
+    // floor fills the Variables group, whatever coverage counts.
+    const pending = buildWhySummary({ ...oda, stat_vars: unsettled, coverage: variables(1) }, part);
+
+    assert.equal(pending.variables?.count, 3);
+    assert.equal(pending.variables?.exact, false);
+    assert.deepEqual(pending.variables?.members, { state: 'loading' });
 });
 
 test('many variables: the breakdown counts the variables by each value of an axis they differ on -- humanitarian aid from Germany', () => {
@@ -117,7 +190,7 @@ test('many variables: the breakdown counts the variables by each value of an axi
     });
     const summary = buildWhySummary({
         ...oda,
-        stat_vars: { items: odaItems.slice(0, 39), member_count: 39, truncated: false },
+        stat_vars: { member_count: 39, member_count_exact: true, served_count: 39 },
         slots: [
             { key: { axis: 'how', property: { dcid: 'crsTypeOfFinance' }, label: 'instrument' } },
         ],
@@ -188,16 +261,10 @@ const singleOfFamily = [
         description: 'life expectancy in Ethiopia',
         spec: {
             stat_vars: {
-                items: [
-                    {
-                        ref: 'LifeExpectancy_Person',
-                        label: 'Life Expectancy',
-                        data_date_range: { start: '1960', end: '2023' },
-                    },
-                ],
                 member_count: 3,
                 member_count_exact: false,
-                truncated: true,
+                served_count: 1,
+                data_date_range: { start: '1960', end: '2023' },
             },
             shape: { label: 'Life Expectancy' },
             entities: [{ ref: 'country/ETH', label: 'Ethiopia', role: 'observationAbout' }],
@@ -212,6 +279,7 @@ const singleOfFamily = [
             },
             headline: null,
         },
+        member: { dcid: 'LifeExpectancy_Person', label: 'Life Expectancy' },
         rows: [
             { label: 'Measure', value: 'Life Expectancy', code: 'LifeExpectancy_Person' },
             { label: 'Unit', value: 'Year' },
@@ -224,16 +292,10 @@ const singleOfFamily = [
         description: 'GDP of Kenya',
         spec: {
             stat_vars: {
-                items: [
-                    {
-                        ref: 'Amount_EconomicActivity_GrossDomesticProduction_Nominal',
-                        label: 'Nominal gross domestic product',
-                        data_date_range: { start: '1960', end: '2024' },
-                    },
-                ],
                 member_count: 38,
                 member_count_exact: false,
-                truncated: true,
+                served_count: 1,
+                data_date_range: { start: '1960', end: '2024' },
             },
             shape: { label: 'Nominal gross domestic product' },
             entities: [{ ref: 'country/KEN', label: 'Kenya', role: 'observationAbout' }],
@@ -246,6 +308,10 @@ const singleOfFamily = [
                 ],
             },
             headline: null,
+        },
+        member: {
+            dcid: 'Amount_EconomicActivity_GrossDomesticProduction_Nominal',
+            label: 'Nominal gross domestic product',
         },
         rows: [
             {
@@ -261,8 +327,12 @@ const singleOfFamily = [
 ];
 
 test('one variable of a larger family: laid out as one variable, the family size in its own note', () => {
-    for (const { description, spec, rows, family } of singleOfFamily) {
-        const summary = buildWhySummary(spec, { warnings: [], variable_text: null });
+    for (const { description, spec, member, rows, family } of singleOfFamily) {
+        const summary = buildWhySummary(
+            spec,
+            { warnings: [], variable_text: null },
+            { ok: true, members: [member] },
+        );
 
         assert.deepEqual(summary.rows, rows, description);
         assert.equal(summary.variables, null, description);
@@ -275,12 +345,7 @@ test('each scope warning becomes one assumption sentence', () => {
         {
             description: 'no place named',
             spec: {
-                stat_vars: {
-                    items: [{ ref: 'LifeExpectancy_Person', label: 'Life expectancy' }],
-                    member_count: 3,
-                    member_count_exact: false,
-                    truncated: true,
-                },
+                stat_vars: { member_count: 3, member_count_exact: false, served_count: 1 },
                 shape: { label: 'Life Expectancy' },
                 entities: [],
                 coverage: {
@@ -302,12 +367,7 @@ test('each scope warning becomes one assumption sentence', () => {
             // narrowed to the countries with data.
             description: 'no place named, the answer narrowed to countries',
             spec: {
-                stat_vars: {
-                    items: [{ ref: 'Count_Person', label: 'Total population' }],
-                    member_count: 28,
-                    member_count_exact: false,
-                    truncated: true,
-                },
+                stat_vars: { member_count: 28, member_count_exact: false, served_count: 1 },
                 shape: { label: 'Total population' },
                 entities: [],
                 coverage: {
@@ -324,17 +384,17 @@ test('each scope warning becomes one assumption sentence', () => {
             assumptions: ['No place was named, so every country with data is included.'],
         },
         {
-            description: 'no donor named, the recipient bound',
+            description: 'no provider named, the recipient bound',
             spec: {
                 ...oda,
                 entities: [{ ref: 'country/KEN', label: 'Kenya', role: 'destination' }],
                 entity_options: [{ role: 'origin', options: [], truncated: true }],
-                coverage: { kind: 'breadth', dimensions: [] },
+                coverage: { kind: 'breadth', dimensions: [{ label: 'providers', count: 36 }] },
             },
             codes: ['role_scope_defaulted'],
-            row: { label: 'Donors', value: 'All with data' },
+            row: { label: 'Providers', value: 'All 36 with data' },
             assumptions: [
-                'No donor was named, so every donor with data to Kenya is included.',
+                'No provider was named, so every provider with data to Kenya is included.',
                 'No year was named, so the counts are for 2024, the latest year with data.',
             ],
         },
@@ -358,7 +418,7 @@ test('each scope warning becomes one assumption sentence', () => {
             description: 'a role warning with no open role on the spec keeps the API wording',
             spec: { ...oda, entity_options: [] },
             codes: ['role_scope_defaulted'],
-            row: { label: 'Donor', value: 'Germany' },
+            row: { label: 'Provider', value: 'Germany' },
             assumptions: [
                 'No recipient was named; the answer was resolved across the 191 recipients with data from Germany.',
                 'No year was named, so the counts are for 2024, the latest year with data.',

@@ -126,12 +126,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import {
-    promoteFromSpec,
-    withEntityEdit,
-    withFacetEdit,
-    withResolvedSlotEdit,
-} from '@/lib/search/promote';
+import { withEntityEdit, withFacetEdit, withResolvedSlotEdit } from '@/lib/search/promote';
 import type { PermalinkEdit, PermalinkState } from '@/lib/search/permalink';
 import { buildDatasetEntries, type DatasetEntriesOverride } from '@/lib/search/datasetEntries';
 import {
@@ -140,7 +135,6 @@ import {
     unreadableSpecIds,
     type SnapshotBinding,
 } from '@/lib/search/frozenObservations';
-import { entityEditForPick } from '@/lib/search/menuState';
 import { measureSwitchEntry, type MeasurePick } from '@/lib/search/measureMenu';
 import { buildReplayPlan, nextEditsByPart } from '@/lib/search/permalinkEdits';
 import {
@@ -882,19 +876,10 @@ export const useSearchRun = () => {
     );
 
     const identityOverrideEntry = useCallback(
-        (
-            partIndex: number,
-            fromSpec: any,
-            identity: BaseIdentity,
-            extra: object,
-        ): DatasetIdentityEntry => ({
+        (partIndex: number, identity: BaseIdentity): DatasetIdentityEntry => ({
             entry_kind: 'identity',
             variable_text: parts[partIndex]?.variableText ?? '',
             identity,
-            ...(fromSpec.identity
-                ? { base_spec_id: fromSpec.spec_id, base_identity: fromSpec.identity }
-                : {}),
-            ...extra,
         }),
         [parts],
     );
@@ -910,30 +895,20 @@ export const useSearchRun = () => {
             binding: any,
             entityRole: EntityRoleKey = 'observationAbout',
         ) => {
-            const { identity, removed } = withResolvedSlotEdit(
-                fromSpec,
-                slotIndex,
-                binding,
-                entityRole,
-            );
-            const entry = identityOverrideEntry(partIndex, fromSpec, identity, {
-                ...promoteFromSpec(fromSpec),
-                ...(removed ? { removed } : {}),
-            });
+            const identity = withResolvedSlotEdit(fromSpec, slotIndex, binding, entityRole);
+            const entry = identityOverrideEntry(partIndex, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
         [identityOverrideEntry, runDatasetEdit],
     );
 
-    // A null/empty dcids is the unbind row or an Apply with nothing checked:
-    // the door's check_edit_incomplete refuses a role dropped from the base
-    // identity unless removed.entities names it, so those extra fields come
-    // from entityEditForPick rather than promoteFromSpec alone.
+    // A null/empty dcids is the unbind row or an Apply with nothing checked,
+    // which drops the role from the identity.
     const editEntity = useCallback(
         (partIndex: number, fromSpec: any, role: RoleAxis, dcids: string[] | null) => {
-            const { identity, extra } = entityEditForPick(fromSpec, role, dcids);
-            const entry = identityOverrideEntry(partIndex, fromSpec, identity, extra);
+            const identity = withEntityEdit(fromSpec.identity as BaseIdentity, role, dcids);
+            const entry = identityOverrideEntry(partIndex, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -948,20 +923,14 @@ export const useSearchRun = () => {
                 ...(fromSpec.identity as BaseIdentity),
                 requested_window: window,
             };
-            const entry = identityOverrideEntry(
-                partIndex,
-                fromSpec,
-                identity,
-                promoteFromSpec(fromSpec),
-            );
+            const entry = identityOverrideEntry(partIndex, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
         [identityOverrideEntry, runDatasetEdit],
     );
 
-    // One part's facet-axis edit: binds the axis, or drops it and names the
-    // drop in `removed.facets` when the base had it bound.
+    // One part's facet-axis edit: binds the axis, or drops it.
     const facetOverride = useCallback(
         <A extends IdentityFacetAxis>(
             partIndex: number,
@@ -969,17 +938,9 @@ export const useSearchRun = () => {
             axis: A,
             binding: IdentityFacets[A] | null,
         ): DatasetEntriesOverride => {
-            const { identity, removed } = withFacetEdit(
-                fromSpec.identity as BaseIdentity,
-                axis,
-                binding,
-            );
-            const entry = identityOverrideEntry(partIndex, fromSpec, identity, {
-                ...promoteFromSpec(fromSpec),
-                ...(removed ? { removed } : {}),
-            });
+            const identity = withFacetEdit(fromSpec.identity as BaseIdentity, axis, binding);
 
-            return { index: partIndex, entry };
+            return { index: partIndex, entry: identityOverrideEntry(partIndex, identity) };
         },
         [identityOverrideEntry],
     );
@@ -998,17 +959,10 @@ export const useSearchRun = () => {
         [facetOverride, runDatasetEdit],
     );
 
-    // Candidate promote: post the candidate's own identity verbatim as both
-    // `identity` and `base_identity` (byte-for-byte, so the shapes trivially
-    // match).
+    // Candidate promote: post the candidate's own identity verbatim.
     const pickCandidate = useCallback(
         (partIndex: number, candidate: any) => {
-            const entry = identityOverrideEntry(
-                partIndex,
-                candidate,
-                candidate.identity,
-                promoteFromSpec(candidate),
-            );
+            const entry = identityOverrideEntry(partIndex, candidate.identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -1083,11 +1037,6 @@ export const useSearchRun = () => {
                 entry_kind: 'identity',
                 variable_text: ref.variableText ?? '',
                 identity: ref.identity as BaseIdentity,
-                base_spec_id: ref.specId,
-                base_identity: ref.identity as BaseIdentity,
-                ...(ref.resolvedStatVarDcids?.length
-                    ? { resolved_stat_var_dcids: ref.resolvedStatVarDcids }
-                    : {}),
                 ...(ref.operations.length ? { operations: ref.operations } : {}),
             }));
 
@@ -1173,7 +1122,7 @@ export const useSearchRun = () => {
     // the axis (that's what let it hoist), so rewrite it in every one of
     // their entries and post them all together in one `dataset_resubmit`. A
     // part that's candidates/no_data/unsupported/still loading has nothing
-    // of its own to edit yet and is left alone. `origin` (the donor) isn't a
+    // of its own to edit yet and is left alone. `origin` (the provider) isn't a
     // slot: it lives on the spec's entities, not `identity.slots`. It routes
     // to `withEntityEdit` on every definite part whose spec has one, instead
     // of the slot lookup below.
@@ -1186,8 +1135,7 @@ export const useSearchRun = () => {
                 return;
             }
 
-            // One override per part, so each drop carries its own
-            // `removed.facets`. Only a choice every bound part offers goes
+            // One override per part, each from its own identity. Only a choice every bound part offers goes
             // out (`sharedMethodServes`), the choices the shared menu lists.
             if (edit.axis === 'method') {
                 const bound = parts.filter(
@@ -1241,7 +1189,7 @@ export const useSearchRun = () => {
                 const spec = part.hydratedSpec;
 
                 if (edit.axis === 'entity') {
-                    return withEntityEdit(identity, edit.role, [edit.dcid]).identity;
+                    return withEntityEdit(identity, edit.role, [edit.dcid]);
                 }
                 if (edit.axis === 'when') {
                     return { ...identity, requested_window: edit.window };
@@ -1252,7 +1200,7 @@ export const useSearchRun = () => {
                     slotIndex,
                     edit.binding,
                     edit.axis === 'where' ? edit.entityRole : 'observationAbout',
-                ).identity;
+                );
             };
 
             runDatasetEdit({ rewriteIdentity }, touched);

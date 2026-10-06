@@ -11,7 +11,6 @@ import { useDatasetDownload } from './useDatasetDownload';
 
 import Button from '@/components/atoms/Button/Button';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
-import { promoteFromSpec } from '@/lib/search/promote';
 import { detailRows, downloadRowCount, formatCount } from '@/lib/search/view';
 
 import { SourceName } from './WhyPanel';
@@ -71,7 +70,6 @@ const SearchPanel = ({
     const download = useDatasetDownload({
         specId: spec?.spec_id,
         definition: spec?.definition,
-        resolvedStatVarDcids: spec ? promoteFromSpec(spec).resolved_stat_var_dcids : undefined,
         entities: spec?.entities,
     });
 

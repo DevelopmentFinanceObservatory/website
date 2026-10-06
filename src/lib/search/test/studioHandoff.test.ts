@@ -106,7 +106,7 @@ test('handoffSeeds skips a spec with no definition, which Studio would refuse', 
 test('unflattenSpec keeps the trace flattenSpec also reads as `resolution`', () => {
     const wire = structuredClone(wireSpecOf('definite-single'));
 
-    wire.resolved.trace = { resolved_stat_vars: [{ dcid: 'Count_Person' }] };
+    wire.resolved.trace = { resolved_entities: [{ dcid: 'country/KEN' }] };
 
     assert.deepEqual(unflattenSpec(flattenSpec(wire)), wire);
 });
@@ -219,7 +219,7 @@ test('handoffSeeds keeps two forecasts of one phrase that differ in target year'
     );
 });
 
-test('searchEventProps counts StatVars from stat_vars, not the capped trace list', () => {
+test('searchEventProps counts the served StatVars, else the family', () => {
     const [part] = hydratedParts('definite-single');
     const spec = part.hydratedSpec as any;
     const props = (stat_vars: unknown) =>
@@ -228,23 +228,16 @@ test('searchEventProps counts StatVars from stat_vars, not the capped trace list
             edited: false,
             kind: 'resolution',
             reason: null,
-            parts: [
-                {
-                    ...part,
-                    hydratedSpec: {
-                        ...spec,
-                        stat_vars,
-                        resolution: { ...spec.resolution, resolved_stat_vars: [] },
-                    },
-                },
-            ],
+            parts: [{ ...part, hydratedSpec: { ...spec, stat_vars } }],
         }).resolved[0];
 
-    assert.equal(props(spec.stat_vars).statVarCount, spec.stat_vars.items.length);
-    assert.ok(spec.stat_vars.items.length > 0);
-    // A truncated list counts the family, not the items it lists.
     assert.equal(
-        props({ items: spec.stat_vars.items, member_count: 486, truncated: true }).statVarCount,
+        props({ member_count: 486, member_count_exact: true, served_count: 12 }).statVarCount,
+        12,
+    );
+    // An unsettled membership counts the family.
+    assert.equal(
+        props({ member_count: 486, member_count_exact: true, served_count: null }).statVarCount,
         486,
     );
 });
@@ -277,16 +270,9 @@ test('searchEventProps fits the events cap on the largest answer the API can sen
                 entities: { ...spec.identity.entities, destination: members },
                 entity_groups: { destination: { dcid: 'grp/UN', label: 'United Nations members' } },
             },
-            stat_vars: {
-                items: Array.from({ length: 200 }, (_, at) => ({ ref: ref('Amount', at) })),
-                member_count: 486,
-                truncated: true,
-            },
+            stat_vars: { member_count: 486, member_count_exact: true, served_count: 486 },
             resolution: {
                 ...spec.resolution,
-                resolved_stat_vars: Array.from({ length: 200 }, (_, at) => ({
-                    dcid: ref('Amount', at),
-                })),
                 resolved_entities: Array.from({ length: 28 }, (_, at) => ({
                     dcid: `country/C${at}`,
                 })),

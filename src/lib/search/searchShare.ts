@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- the Datasets API bodies are read shallowly, like the rest of lib/search */
 import { asc, eq } from 'drizzle-orm';
 
 import { shortId } from '@/lib/chat/shareStore';
@@ -6,6 +5,8 @@ import { db } from '@/lib/db';
 import type { Operation } from '@/lib/search/types';
 import { searchApiBase } from '@/lib/searchApi';
 import { share, shareRef } from '../../../db/schema';
+import { registerDefinitions } from './registerDefinitions.ts';
+import type { SearchShareMode, SearchSharePart } from './searchShareRequest.ts';
 import { captureSnapshot } from './snapshot.ts';
 
 /**
@@ -13,8 +14,9 @@ import { captureSnapshot } from './snapshot.ts';
  * one `share_ref` row per part holds the dataset it resolved to, and the
  * data comes back from the Datasets API when the link opens.
  *
- *   live     — the definitions are registered (`POST /api/datasets/register`)
- *              and the link replays them through `dataset_resubmit`, so it
+ *   live     — each part's definition is registered, one
+ *              `POST /api/datasets/register` call per definition, and the
+ *              link replays them through `dataset_resubmit`, so it
  *              always shows today's data.
  *   snapshot — each part is minted with the default options, a CSV bundle
  *              (`POST /api/datasets`), and that artifact pinned
@@ -24,29 +26,11 @@ import { captureSnapshot } from './snapshot.ts';
  *              the working tier. See `captureSnapshot` in snapshot.ts.
  */
 
-export type SearchShareMode = 'live' | 'snapshot';
-
-/** One definite part of the result being shared, as the page holds it. */
-export type SearchSharePart = {
-    partIndex: number;
-    variableText: string | null;
-    specId: string;
-    identity: unknown;
-    resolvedStatVarDcids?: string[] | null;
-    // What the question asked of the part beyond its data; the replay
-    // carries them back.
-    operations: Operation[];
-    // The canonical definition from the resolve response — what register
-    // and mint take. Not stored: the identity is enough to replay.
-    definition: unknown;
-};
-
 export type SearchShareRef = {
     partIndex: number;
     variableText: string | null;
     specId: string;
     identity: unknown;
-    resolvedStatVarDcids: string[] | null;
     operations: Operation[];
     contentVersion: string | null;
     // The file a snapshot captured and pinned. Null for a live share, and
@@ -60,47 +44,6 @@ export type SearchShare = {
     query: string;
     createdAt: string;
     refs: SearchShareRef[];
-};
-
-const SPEC_SHAPE = /^spec_[a-z0-9]+$/;
-
-export const isSearchSharePart = (value: any): value is SearchSharePart =>
-    !!value &&
-    typeof value === 'object' &&
-    Number.isInteger(value.partIndex) &&
-    typeof value.specId === 'string' &&
-    SPEC_SHAPE.test(value.specId) &&
-    !!value.identity &&
-    typeof value.identity === 'object' &&
-    Array.isArray(value.operations) &&
-    !!value.definition &&
-    typeof value.definition === 'object';
-
-const post = async (path: string, body: unknown) => {
-    const res = await fetch(`${searchApiBase()}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        cache: 'no-store',
-    });
-    const json = await res.json().catch(() => null);
-
-    return { ok: res.ok, status: res.status, body: json as any };
-};
-
-// Registers every part's definition in one call (a single definition when
-// there's one part — the door takes exactly one of the two).
-const register = async (parts: SearchSharePart[]): Promise<void> => {
-    const { ok, status, body } = await post(
-        '/api/datasets/register',
-        parts.length === 1
-            ? { schema_version: 1, definition: parts[0]!.definition }
-            : { schema_version: 1, members: parts.map((part) => part.definition) },
-    );
-
-    if (!ok) {
-        throw new Error(body?.code ?? `register ${status}`);
-    }
 };
 
 // A capture runs inside a server request, so its poll gets a short
@@ -137,7 +80,10 @@ export const createSearchShare = async (
 
         distinct.forEach((part, index) => capturedBySpec.set(part.specId, results[index]!));
     } else {
-        await register(distinct);
+        await registerDefinitions({
+            base: searchApiBase(),
+            definitions: distinct.map((part) => part.definition),
+        });
     }
 
     const captured = ordered.map((part) => capturedBySpec.get(part.specId) ?? null);
@@ -159,7 +105,6 @@ export const createSearchShare = async (
                 specId: captured?.[index]?.specId ?? part.specId,
                 identity: part.identity,
                 variableText: part.variableText,
-                resolvedStatVarDcids: part.resolvedStatVarDcids ?? null,
                 operations: part.operations,
                 contentVersion: captured?.[index]?.contentVersion ?? null,
                 artifactDigest: captured?.[index]?.artifactDigest ?? null,
@@ -193,7 +138,6 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
             variableText: ref.variableText,
             specId: ref.specId,
             identity: ref.identity,
-            resolvedStatVarDcids: (ref.resolvedStatVarDcids as string[] | null) ?? null,
             operations: ref.operations as Operation[],
             contentVersion: ref.contentVersion,
             artifactDigest: ref.artifactDigest,

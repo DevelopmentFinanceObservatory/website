@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { latestDate, servedSpan, seriesReason, tokenAbout } from '../tokenAbout.ts';
+import {
+    latestDate,
+    servedSpan,
+    seriesReason,
+    singleStatVarSpec,
+    tokenAbout,
+} from '../tokenAbout.ts';
 import { priceBasis } from '../unitLabel.ts';
 import type { SentenceToken } from '../types.ts';
 
@@ -31,9 +37,10 @@ const grossOda = {
         { axis: 'measurementQualifier', value: { dcid: 'Nominal', label: 'nominal' } },
     ],
     stat_vars: {
-        items: [{ ref: 'a', data_date_range: { start: '1973', end: '2024' } }],
         member_count: 152,
-        truncated: true,
+        member_count_exact: true,
+        served_count: 152,
+        data_date_range: { start: '1973', end: '2024' },
     },
     coverage: { kind: 'breadth', has_data: true, dimensions: [{ label: 'variables', count: 152 }] },
     download: { rows: 4211, rows_exact: true },
@@ -83,6 +90,7 @@ test('the line counts the rows and the note names the axes the series vary on', 
                 undeclared_count: 0,
             },
         ],
+        stat_vars: { member_count: 279, member_count_exact: true, served_count: 279 },
         coverage: { dimensions: [{ label: 'variables', count: 279 }] },
         download: { rows: 1284, rows_exact: false },
     };
@@ -99,20 +107,18 @@ test('the line counts the rows and the note names the axes the series vary on', 
     assert.equal(seriesReason({}), null);
 });
 
-test("a measure serving one StatVar adds that StatVar's own definition", () => {
-    const about = tokenAbout(slot({ axis: 'what', text: 'inflation' }), {
-        stat_vars: {
-            items: [{ ref: 'sdg/FP_CPI_TOTL_ZG', label: 'Annual inflation, consumer prices' }],
-            member_count: 1,
-            truncated: false,
-        },
-    });
+test('a measure serving one StatVar reads it from the members door; several read nothing', () => {
+    const one = { spec_id: 'spec_1', stat_vars: { member_count: 3, served_count: 1 } };
+    const about = tokenAbout(slot({ axis: 'what', text: 'inflation' }), one);
 
-    assert.equal(about.title, 'Annual inflation, consumer prices');
-    assert.deepEqual(about.definitions, [{ label: null, dcid: 'sdg/FP_CPI_TOTL_ZG' }]);
+    assert.equal(singleStatVarSpec(one), one);
+    assert.equal(singleStatVarSpec(grossOda), null);
+    // The StatVar's definition joins once the door answers (TokenAbout).
+    assert.equal(about.title, 'Inflation');
+    assert.deepEqual(about.definitions, []);
 });
 
-// crs-006: the 27 European Union members as the donor role.
+// crs-006: the 27 European Union members as the provider role.
 test('a group names itself, counts its members and defines its graph node', () => {
     const members = ['country/AUT', 'country/BEL', 'country/BGR'];
     const about = tokenAbout(
@@ -135,22 +141,22 @@ test('a group names itself, counts its members and defines its graph node', () =
 test('an open role counts the members with data', () => {
     const about = tokenAbout(slot({ role: 'origin', text: '81 donors', binding_ref: 'origin:' }), {
         entities: [{ ref: 'country/BGD', role: 'destination' }],
-        coverage: { dimensions: [{ label: 'donors', count: 81 }] },
+        coverage: { dimensions: [{ label: 'providers', count: 81 }] },
     });
 
     assert.equal(about.title, '81 donors');
-    assert.deepEqual(about.facts, ['Every donor with data']);
+    assert.deepEqual(about.facts, ['Every provider with data']);
     assert.deepEqual(about.definitions, []);
 });
 
 test('an open role whose title states no count keeps the count in its fact', () => {
     const about = tokenAbout(slot({ role: 'origin', text: '', binding_ref: 'origin:' }), {
         entities: [{ ref: 'country/BGD', role: 'destination' }],
-        coverage: { dimensions: [{ label: 'donors', count: 1234 }] },
+        coverage: { dimensions: [{ label: 'providers', count: 1234 }] },
     });
 
-    assert.equal(about.title, 'Any donor');
-    assert.deepEqual(about.facts, ['Every donor with data: 1,234 donors']);
+    assert.equal(about.title, 'Any provider');
+    assert.deepEqual(about.facts, ['Every provider with data: 1,234 providers']);
 });
 
 test("one place names itself and its type, and a subject place reads the spec's entities", () => {
@@ -207,29 +213,17 @@ test('a period states the served span when it differs, and the latest date with 
     ]);
 });
 
-test('the served span and latest date fall back to the StatVars when nothing else says', () => {
-    const spec = {
-        stat_vars: {
-            items: [
-                { ref: 'a', data_date_range: { start: '1990', end: '2020' } },
-                { ref: 'b', data_date_range: { start: '1985-06', end: '2022-12' } },
-            ],
-        },
-    };
+test("the served span and latest date fall back to the StatVars' range when nothing else says", () => {
+    const spec = { stat_vars: { data_date_range: { start: '1985-06', end: '2022-12' } } };
 
     assert.equal(servedSpan(spec), '1985 to 2022');
     assert.equal(latestDate(spec), '2022-12');
 });
 
-test('the latest date reads the StatVar ranges past a preview that stops short', () => {
+test("the latest date reads the StatVars' range past a preview that stops short", () => {
     // Germany to Kenya: 486 series end in 2024, the 20 previewed end in 2023.
     const spec = {
-        stat_vars: {
-            items: [
-                { ref: 'a', data_date_range: { start: '1973', end: '2024' } },
-                { ref: 'b', data_date_range: { start: '1990', end: '2023' } },
-            ],
-        },
+        stat_vars: { data_date_range: { start: '1973', end: '2024' } },
         observations: { series: [{ points: [{ date: '2023', value: 5 }] }] },
     };
 

@@ -1,5 +1,4 @@
-/** Promote fields and identity-edit helpers for a `dataset_resubmit` identity
- *  entry. */
+/** Identity-edit helpers for a `dataset_resubmit` identity entry. */
 
 import type {
     BaseIdentity,
@@ -8,29 +7,8 @@ import type {
     IdentityFacetAxis,
     IdentityFacetRefBinding,
     IdentityFacets,
-    RemovedParts,
     Spec,
 } from './types';
-
-export interface PromoteFields {
-    // Harmless when the identity names a measure family: the API elects
-    // that family's membership from the packaged code index and ignores a
-    // posted list.
-    resolved_stat_var_dcids?: string[];
-}
-
-/** Derive the promote fields for a dataset_resubmit identity entry of `spec`:
- *  the sibling fields that ride alongside `identity`, not inside it. The
- *  dcids are the members `stat_vars.items` carries. The API ignores them when
- *  the packaged code index elects the identity's family. A standard
- *  (catch-all) shape has no such election, so for it the list is the
- *  membership. */
-export function promoteFromSpec(spec: Spec): PromoteFields {
-    const out: PromoteFields = {};
-    const svs = (spec.stat_vars?.items ?? []).map((item) => item.ref).filter(Boolean);
-    if (svs.length) out.resolved_stat_var_dcids = svs;
-    return out;
-}
 
 // ---------------------------------------------------------------------------
 // Resolved-binding → identity-binding adapters
@@ -91,16 +69,9 @@ function toIdentityFacetBinding(binding: unknown): IdentityFacetRefBinding | nul
 }
 
 // ---------------------------------------------------------------------------
-// Identity-edit helpers: each returns the next identity plus any `removed`
-// accounting the edit requires (identity_edit.check_edit_incomplete refuses
-// 422 if a base-bound facet axis / entity role arrives neither re-sent nor
-// named in `removed`).
+// Identity-edit helpers: each returns the next identity. The posted identity
+// is the whole definition, so a role or facet axis it leaves out is dropped.
 // ---------------------------------------------------------------------------
-
-export interface IdentityEdit {
-    identity: BaseIdentity;
-    removed?: RemovedParts;
-}
 
 /** Replace one what/how slot's binding, matched by property dcid. Every
  *  other slot rides through untouched, so shape-declared completeness
@@ -120,19 +91,15 @@ export function withSlotBinding(
 }
 
 /** Bind or drop one entity role (`observationAbout`/`origin`/`destination`).
- *  `dcids` null/empty drops the role entirely; dropping a role the base had
- *  bound is acknowledged in `removed.entities`, since a role absent from
- *  `identity.entities` reads as "not asked about" rather than "unbound".
- *  Changing the role's members drops its `entity_groups` entry, since the
+ *  `dcids` null/empty drops the role entirely. Changing the role's members drops its `entity_groups` entry, since the
  *  group named exactly those members and the API refuses a group whose role
  *  binds nothing. */
 export function withEntityEdit(
     identity: BaseIdentity,
     role: EntityRoleKey,
     dcids: string[] | null,
-): IdentityEdit {
+): BaseIdentity {
     const entities = { ...identity.entities };
-    const hadRole = role in entities;
     const bound = dcids && dcids.length > 0;
 
     if (bound) {
@@ -142,14 +109,11 @@ export function withEntityEdit(
     }
 
     return {
-        identity: {
-            ...identity,
-            entities,
-            ...(identity.entity_groups
-                ? { entity_groups: withoutChangedGroup(identity, role, entities[role]) }
-                : {}),
-        },
-        removed: !bound && hadRole ? { entities: [role] } : undefined,
+        ...identity,
+        entities,
+        ...(identity.entity_groups
+            ? { entity_groups: withoutChangedGroup(identity, role, entities[role]) }
+            : {}),
     };
 }
 
@@ -175,15 +139,13 @@ function withoutChangedGroup(
 }
 
 /** Bind or drop one facet axis (e.g. `provenance` for the source picker).
- *  `binding` null drops the axis from the sparse map; dropping an axis the
- *  base had bound is acknowledged in `removed.facets` (see the module doc). */
+ *  `binding` null drops the axis from the sparse map. */
 export function withFacetEdit<A extends IdentityFacetAxis>(
     identity: BaseIdentity,
     axis: A,
     binding: IdentityFacets[A] | null,
-): IdentityEdit {
+): BaseIdentity {
     const facets: IdentityFacets = { ...identity.facets };
-    const hadAxis = axis in facets;
 
     if (binding) {
         facets[axis] = binding;
@@ -191,10 +153,7 @@ export function withFacetEdit<A extends IdentityFacetAxis>(
         delete facets[axis];
     }
 
-    return {
-        identity: { ...identity, facets: Object.keys(facets).length ? facets : undefined },
-        removed: !binding && hadAxis ? { facets: [axis] } : undefined,
-    };
+    return { ...identity, facets: Object.keys(facets).length ? facets : undefined };
 }
 
 /**
@@ -210,7 +169,7 @@ export function withResolvedSlotEdit(
     slotIndex: number,
     binding: unknown,
     entityRole: EntityRoleKey = 'observationAbout',
-): IdentityEdit {
+): BaseIdentity {
     const identity = spec.identity as BaseIdentity;
     const slot = spec.slots[slotIndex];
     const axis = slot?.key?.axis;
@@ -222,11 +181,5 @@ export function withResolvedSlotEdit(
     if (axis === 'source') {
         return withFacetEdit(identity, 'provenance', toIdentityFacetBinding(binding));
     }
-    return {
-        identity: withSlotBinding(
-            identity,
-            slot?.key?.property?.dcid,
-            toIdentitySlotBinding(binding),
-        ),
-    };
+    return withSlotBinding(identity, slot?.key?.property?.dcid, toIdentitySlotBinding(binding));
 }

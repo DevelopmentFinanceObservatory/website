@@ -4,19 +4,23 @@
  * local server with observations on: query "Population of Kenya in 2020".
  *
  * A single-part `definite` answer: exactly one resolved StatVar
- * (`resolved.stat_vars.member_count === 1 === items.length`, `truncated:
- * false`), and a byline source token that states "source:".
+ * (`resolved.stat_vars.served_count === 1`), and a byline source token that
+ * states "source:".
  *
  * Trimmed for size; each body still validates against the API's models
- * (scripts/check-search-fixtures.mts). `stat_vars.items` and
- * `trace.resolved_stat_vars` keep two entries and are marked truncated
- * where that cut them, `slot_values` and `open_axis_facts[].values` keep
- * two, the specs' own `sentence_plan` is dropped (the envelope's stays),
- * `trace.pipeline_trace` and `trace.slot_filters` are empty, and timings
- * keep their totals. The server omits a `unit_conversion` currency's
+ * (scripts/check-search-fixtures.mts). `slot_values` and
+ * `open_axis_facts[].values` keep two, the specs' own `sentence_plan` is
+ * dropped (the envelope's stays), `trace.slot_filters` is empty, and
+ * timings keep their totals. The server omits a `unit_conversion` currency's
  * `current_years` when it is null, which its own model requires; this
  * file writes the null.
  * The spec's `observations` are dropped.
+ *
+ * The capture's StatVar lists are folded into the current wire: each
+ * `stat_vars` carries counts and a date range (`served_count` is the listed members'
+ * count, or `member_count` where the list was cut and exact, and
+ * `data_date_range` spans the listed members), each related measure its
+ * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
  */
 
 export const definiteSingle: unknown = {
@@ -382,21 +386,13 @@ export const definiteSingle: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Count_Person",
-                "label": "Total population",
-                "slot_values": [],
-                "constraint_properties": [],
-                "data_date_range": {
-                  "start": "2020",
-                  "end": "2020"
-                }
-              }
-            ],
             "member_count": 1,
             "member_count_exact": false,
-            "truncated": false
+            "served_count": 1,
+            "data_date_range": {
+              "start": "2020",
+              "end": "2020"
+            }
           },
           "entities": [
             {
@@ -518,13 +514,6 @@ export const definiteSingle: unknown = {
           "facet_options": [],
           "rendered_sentence": "Kenya's total population in 2020. World Development Indicators.",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Count_Person",
-                "label": "Total population"
-              }
-            ],
-            "resolved_stat_vars_truncated": false,
             "resolved_entities": [
               {
                 "dcid": "country/KEN",
@@ -547,13 +536,6 @@ export const definiteSingle: unknown = {
             ],
             "slot_filters": [],
             "query_qualifiers": [],
-            "applied_window": {
-              "start_year": 2020,
-              "end_year": 2020
-            },
-            "date_source": "query",
-            "pipeline_trace": [],
-            "n_recalled": 51,
             "requested_window": {
               "start_year": 2020,
               "end_year": 2020
@@ -567,7 +549,6 @@ export const definiteSingle: unknown = {
           "confidence": "high",
           "available_at_place": true,
           "measure_label_axes": [],
-          "measure_label_named_values": [],
           "measure_axis_values": [],
           "related_group": {
             "dcid": "dc/g/Demographics",
@@ -575,10 +556,10 @@ export const definiteSingle: unknown = {
           },
           "related_measures": [
             {
-              "label": "Rate of Population Growth",
-              "resolved_stat_var_dcids": [
-                "GrowthRate_Count_Person"
-              ],
+              "stat_var": {
+                "dcid": "GrowthRate_Count_Person",
+                "label": "Rate of Population Growth"
+              },
               "definition": {
                 "schema_version": 1,
                 "spec_id": "spec_c1dec554843efb3e7b51d23ed9edd644",
@@ -605,10 +586,10 @@ export const definiteSingle: unknown = {
               }
             },
             {
-              "label": "Life Expectancy",
-              "resolved_stat_var_dcids": [
-                "LifeExpectancy_Person"
-              ],
+              "stat_var": {
+                "dcid": "LifeExpectancy_Person",
+                "label": "Life Expectancy"
+              },
               "definition": {
                 "schema_version": 1,
                 "spec_id": "spec_fad6bc0156bb9e2474c4bf216c8803c9",

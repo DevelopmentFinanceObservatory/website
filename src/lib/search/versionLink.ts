@@ -7,9 +7,8 @@
  * reference built from a Datasets API document instead of the share table:
  * the version manifest (`GET /api/datasets/{spec}/{cv}`) or, for the latest
  * data, the write-free options envelope (`GET /api/datasets/{spec}/options`).
- * Both carry `definition {spec_id, identity}` and the stored
- * `trace.resolved_stat_vars`, whose refs seed the resubmit: `dataset_resubmit`
- * refuses an identity that names no measure family unless the seed is posted.
+ * Both carry `definition {spec_id, identity}`, and the resubmit posts the
+ * identity alone.
  *
  * This module has no DOM or path-alias dependency, so `node --test` imports
  * it directly.
@@ -54,7 +53,6 @@ export type VersionLinkDocument = {
         rendering?: { format?: string; bundle?: boolean };
     }[];
     citation?: { sources?: { label?: string }[] };
-    trace?: { resolved_stat_vars?: { ref?: string }[] | null } | null;
 };
 
 /** A stored file of the version, by its signed URL; `format` is 'zip' for
@@ -147,9 +145,6 @@ export const outcomeFromDocument = (
     const sources = (document.citation?.sources ?? [])
         .map((source) => source.label)
         .filter((label): label is string => !!label);
-    const resolvedStatVarDcids = (document.trace?.resolved_stat_vars ?? [])
-        .map((entry) => entry.ref?.replace(/^dcid:/, ''))
-        .filter((dcid): dcid is string => !!dcid);
 
     const shared: OpenedSearchShare = {
         id: specId,
@@ -165,7 +160,6 @@ export const outcomeFromDocument = (
                 variableText: sources.join(', ') || 'Dataset',
                 specId,
                 identity,
-                resolvedStatVarDcids: resolvedStatVarDcids.length ? resolvedStatVarDcids : null,
                 operations: [],
                 contentVersion: link.contentVersion,
             },

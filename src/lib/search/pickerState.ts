@@ -1,6 +1,6 @@
 /**
  * Pure decisions for the entity/place pickers: the shared filter-box
- * threshold (FILTER_VISIBLE_THRESHOLD), the donor/recipient seed+fetch merge
+ * threshold (FILTER_VISIBLE_THRESHOLD), the provider/recipient seed+fetch merge
  * (streamed entity_options folded with the live entityOptions fetch), and
  * the coverage-ranking gate (a spec whose coverage probe was capped or timed
  * out skips richest-first ranking rather than floating an alphabetical
@@ -140,7 +140,7 @@ export function dcidSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): b
 
 /** A multi-select Apply's label: the pending count only when it differs
  *  from the bound set, so a long list's scrolled-away Apply still says what
- *  pressing it will do. A staged empty set ("Any donor") reads plain Apply,
+ *  pressing it will do. A staged empty set ("Any provider") reads plain Apply,
  *  since a count of zero reads as nothing to apply. */
 export const multiSelectApplyLabel = (selectedCount: number, disabled: boolean): string =>
     disabled || selectedCount === 0 ? 'Apply' : `Apply (${selectedCount})`;
