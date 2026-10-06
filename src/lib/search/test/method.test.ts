@@ -285,7 +285,7 @@ test('methodPicker is null with nothing to switch to', () => {
     assert.equal(methodPicker(spec), null, 'no method options at all');
 });
 
-test('picking a method binds identity.facets.measurementMethod with nothing removed', () => {
+test('picking a method binds identity.facets.measurementMethod', () => {
     const spec = specOf(methodUnbound);
     const choice = methodPicker(spec)?.choices.find(
         (entry) => entry.key === 'MOSPIProvisionalEstimates',
@@ -294,13 +294,12 @@ test('picking a method binds identity.facets.measurementMethod with nothing remo
     assert.ok(choice);
     const edit = withFacetEdit(spec.identity as BaseIdentity, 'measurementMethod', choice.binding);
 
-    assert.deepEqual(edit.identity.facets, {
+    assert.deepEqual(edit.facets, {
         measurementMethod: { state: 'value', ref: 'MOSPIProvisionalEstimates' },
     });
-    assert.equal(edit.removed, undefined);
 });
 
-test('Any method on a bound axis drops the binding and names it in removed.facets', () => {
+test('Any method on a bound axis drops the binding', () => {
     const spec = specOf(methodBound);
     const anyMethod = methodPicker(spec)?.choices[0];
 
@@ -311,8 +310,7 @@ test('Any method on a bound axis drops the binding and names it in removed.facet
         anyMethod.binding,
     );
 
-    assert.equal(edit.identity.facets, undefined);
-    assert.deepEqual(edit.removed, { facets: ['measurementMethod'] });
+    assert.equal(edit.facets, undefined);
 });
 
 test('sourceSlotOptions still reads only the provenance axis', () => {
@@ -403,19 +401,18 @@ test('a repeated ref-less option is listed once', () => {
     );
 });
 
-test('picking No stated method posts a null method ref with nothing removed', () => {
+test('picking No stated method posts a null method ref', () => {
     const spec = noMethodSpec();
     const choice = methodPicker(spec)?.choices.find((entry) => entry.label === NO_METHOD_LABEL);
 
     assert.ok(choice);
     const edit = withFacetEdit(spec.identity as BaseIdentity, 'measurementMethod', choice.binding);
 
-    assert.deepEqual(edit.identity.facets, {
+    assert.deepEqual(edit.facets, {
         measurementMethod: { state: 'value', ref: null },
     });
-    assert.equal(edit.removed, undefined);
     assert.match(
-        JSON.stringify({ identity: edit.identity }),
+        JSON.stringify({ identity: edit }),
         /"measurementMethod":\{"state":"value","ref":null\}/,
         'the posted body carries ref: null',
     );
@@ -438,8 +435,7 @@ test('an echoed null method ref reads No stated method and checks only that choi
         picker.choices[0].binding,
     );
 
-    assert.equal(edit.identity.facets, undefined, 'Any method drops the null binding');
-    assert.deepEqual(edit.removed, { facets: ['measurementMethod'] });
+    assert.equal(edit.facets, undefined, 'Any method drops the null binding');
 });
 
 test('the Method column names a row without a method beside rows with one', () => {

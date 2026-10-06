@@ -8,6 +8,7 @@ import ChatMessage from './ChatMessage';
 import styles from './ChatPanel.module.scss';
 import ClarifyPicker from './ClarifyPicker';
 import PlanCard from './PlanCard';
+import StatusLine from './StatusLine';
 import type { CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
 import PromptForm from '../prompt/PromptForm';
@@ -80,7 +81,7 @@ const ChatPanel = ({
         if (el) {
             el.scrollTop = el.scrollHeight;
         }
-    }, [chat.messages, chat.queued, chat.status]);
+    }, [chat.messages, chat.queued, chat.status, chat.statusDetail]);
 
     const sendFollow = () => {
         if (!follow.trim()) {
@@ -136,8 +137,6 @@ const ChatPanel = ({
                                             (widget) => widget.turn === turn,
                                         )}
                                         turn={turn}
-                                        thinking={chat.thinking}
-                                        status={chat.status}
                                         titles={titles}
                                         views={views}
                                         onCanvas={onCanvas}
@@ -156,6 +155,17 @@ const ChatPanel = ({
                                 </Fragment>
                             );
                         })}
+                        {/* One mount for the whole turn, so the line keeps its
+                            counter and live region when the answer starts. */}
+                        {chat.thinking && (
+                            <StatusLine
+                                status={chat.status}
+                                detail={chat.statusDetail}
+                                since={chat.statusSince}
+                                stalled={chat.stalled}
+                                onStop={chat.stop}
+                            />
+                        )}
                         {chat.queued.map((item) => (
                             <div key={item.id} className={styles.queued}>
                                 <p className={classNames(styles.chatBubble, styles.queuedBubble)}>

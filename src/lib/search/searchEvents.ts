@@ -162,7 +162,6 @@ export function searchEventProps({
         .map((part) => part.hydratedSpec as any);
     const resolve = (rung: Rung) =>
         definite.map((spec) => {
-            const items: { ref: string }[] = spec.stat_vars?.items ?? [];
             const sources: string[] = (spec.resolution?.resolved_sources ?? []).map(
                 (source: { dcid: string }) => source.dcid,
             );
@@ -170,10 +169,8 @@ export function searchEventProps({
             const asked = askedFor(spec.identity);
             const counts = {
                 specId: spec.spec_id,
-                // A truncated list counts the family, not the items it lists.
-                statVarCount: spec.stat_vars?.truncated
-                    ? (spec.stat_vars.member_count ?? items.length)
-                    : items.length,
+                // The served members once settled, else the family's count.
+                statVarCount: spec.stat_vars?.served_count ?? spec.stat_vars?.member_count ?? 0,
                 entityCount: spec.resolution?.resolved_entities?.length ?? 0,
                 sourceCount: sources.length,
             };

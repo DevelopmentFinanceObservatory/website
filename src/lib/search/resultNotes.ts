@@ -100,19 +100,16 @@ export function downloadNote(
         : null;
 }
 
-type StatVarLabels = { stat_vars?: { items?: { ref: string; label?: string | null }[] } };
-
 /** The "Data not available" line for a part's failed UN reads, read from
- *  the `variables` param of its `un_system_unavailable` warnings (dfo-apis
- *  un_system.py un_unavailable_warning). The same warning's `places` param
- *  names places the UN refused, which the part states as an
- *  entity_unavailable departure, so those are left out. Each variable is
- *  named by the spec's StatVar label, and a variable with no label is
- *  counted, so no dcid reaches the reader. A warning with no params means
- *  the UN search itself was unavailable, which one site sentence states.
- *  Empty when no read failed. */
+ *  the `variables` and `variable_labels` params of its
+ *  `un_system_unavailable` warnings (dfo-apis un_system.py
+ *  un_unavailable_warning). The same warning's `places` param names places
+ *  the UN refused, which the part states as an entity_unavailable departure,
+ *  so those are left out. Each variable is named by its label, and a
+ *  variable with no label is counted, so no dcid reaches the reader. A
+ *  warning with no params means the UN search itself was unavailable, which
+ *  one site sentence states. Empty when no read failed. */
 export function unSystemFailedReads(
-    spec: StatVarLabels | null | undefined,
     warnings: readonly Pick<Warning, 'code' | 'params'>[] | null | undefined,
 ): string[] {
     const unavailable = (warnings ?? []).filter(
@@ -126,22 +123,26 @@ export function unSystemFailedReads(
         ];
     }
 
-    const variables = new Set(unavailable.flatMap((warning) => warning.params?.variables ?? []));
-
-    if (variables.size === 0) return [];
-
+    // Each variable's label, empty where the warning holds none.
     const labels = new Map(
-        (spec?.stat_vars?.items ?? []).flatMap((item) =>
-            item.label ? [[item.ref, item.label] as const] : [],
-        ),
+        unavailable.flatMap((warning) => {
+            const names = warning.params?.variable_labels ?? [];
+
+            return (warning.params?.variables ?? []).map(
+                (dcid, at) => [dcid, names[at] ?? ''] as const,
+            );
+        }),
     );
-    const named = [...new Set([...variables].flatMap((dcid) => labels.get(dcid) ?? []))];
-    const unnamed = [...variables].filter((dcid) => !labels.has(dcid)).length;
+
+    if (labels.size === 0) return [];
+
+    const named = [...new Set([...labels.values()].filter(Boolean))];
+    const unnamed = [...labels.values()].filter((label) => !label).length;
     const counted =
         unnamed === 0
             ? []
             : [`${unnamed} ${named.length > 0 ? 'other ' : ''}variable${unnamed === 1 ? '' : 's'}`];
-    const pronoun = variables.size === 1 ? 'it' : 'them';
+    const pronoun = labels.size === 1 ? 'it' : 'them';
 
     return [
         `The UN System Data Commons could not be read for ${andList([...named, ...counted])}, so the answer holds no UN data for ${pronoun}.`,
@@ -164,7 +165,7 @@ export type AboutAnswerNotes = {
 /** The notes "About this answer" shows for one definite part. It reads
  *  only the warnings `ABOUT_WARNING_CODES` names. */
 export function aboutAnswerNotes(
-    spec: MeasureMenuSpec & StatVarLabels,
+    spec: MeasureMenuSpec,
     warnings: readonly Warning[] | null | undefined,
     optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>,
 ): AboutAnswerNotes {
@@ -174,7 +175,7 @@ export function aboutAnswerNotes(
         coverage: coverageSentence(spec),
         assumptions: scopeAssumptions(spec, about),
         variance: measureVarianceNotes(spec, optionsBySpec),
-        unavailable: unSystemFailedReads(spec, about),
+        unavailable: unSystemFailedReads(about),
     };
 }
 

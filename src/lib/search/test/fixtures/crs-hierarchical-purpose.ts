@@ -11,18 +11,22 @@
  * entries: the current value plus a way up, no way down.
  *
  * Trimmed for size; each body still validates against the API's models
- * (scripts/check-search-fixtures.mts). `stat_vars.items` and
- * `trace.resolved_stat_vars` keep two entries and are marked truncated
- * where that cut them, `slot_values` and `open_axis_facts[].values` keep
- * two, the specs' own `sentence_plan` is dropped (the envelope's stays),
- * `trace.pipeline_trace` and `trace.slot_filters` are empty, and timings
- * keep their totals. The server omits a `unit_conversion` currency's
+ * (scripts/check-search-fixtures.mts). `slot_values` and
+ * `open_axis_facts[].values` keep two, the specs' own `sentence_plan` is
+ * dropped (the envelope's stays), `trace.slot_filters` is empty, and
+ * timings keep their totals. The server omits a `unit_conversion` currency's
  * `current_years` when it is null, which its own model requires; this
  * file writes the null.
  * Every `slot_options` entry but `crsPurpose` is removed, and the spec's
  * `observations` are dropped.
  * Option and alternative-measure counts (`served_rows`, `served_rows_exact`)
  * were read with the same requests.
+ *
+ * The capture's StatVar lists are folded into the current wire: each
+ * `stat_vars` carries counts and a date range (`served_count` is the listed members'
+ * count, or `member_count` where the list was cut and exact, and
+ * `data_date_range` spans the listed members), each related measure its
+ * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
  */
 
 export const crsHierarchicalPurpose: unknown = {
@@ -403,117 +407,13 @@ export const crsHierarchicalPurpose: unknown = {
           ],
           "unresolved_slots": [],
           "stat_vars": {
-            "items": [
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityB01_CRSPurposeCode12262_Nominal",
-                "label": "Official development assistance gross disbursements for malaria control (standard grant, core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsPurpose",
-                        "label": "CRS purpose"
-                      },
-                      "label": "sector"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSPurposeCode12262",
-                        "label": "malaria control"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsCooperationModality",
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2021",
-                  "end": "2021"
-                },
-                "data_confirmed_at_destination": true
-              },
-              {
-                "ref": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityB03_CRSPurposeCode12262_Nominal",
-                "label": "Official development assistance gross disbursements for malaria control (standard grant, contribution to specific-purpose programme and fund managed by an international organisation)",
-                "slot_values": [
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsPurpose",
-                        "label": "CRS purpose"
-                      },
-                      "label": "sector"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSPurposeCode12262",
-                        "label": "malaria control"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  },
-                  {
-                    "key": {
-                      "axis": "how",
-                      "property": {
-                        "dcid": "crsTypeOfFlow",
-                        "label": "CRS type of flow"
-                      },
-                      "label": "flow"
-                    },
-                    "value": {
-                      "ref": {
-                        "dcid": "CRSTypeOfFlow10",
-                        "label": "official development assistance"
-                      },
-                      "value_kind": "enum_value"
-                    }
-                  }
-                ],
-                "constraint_properties": [
-                  "crsCooperationModality",
-                  "crsPurpose",
-                  "crsTypeOfFinance",
-                  "crsTypeOfFlow",
-                  "financialFlowType",
-                  "nettingBasis"
-                ],
-                "data_date_range": {
-                  "start": "2015",
-                  "end": "2024"
-                },
-                "data_confirmed_at_destination": true
-              }
-            ],
             "member_count": 5,
             "member_count_exact": true,
-            "truncated": true
+            "served_count": 5,
+            "data_date_range": {
+              "start": "2015",
+              "end": "2024"
+            }
           },
           "entities": [
             {
@@ -635,17 +535,6 @@ export const crsHierarchicalPurpose: unknown = {
           "facet_options": [],
           "rendered_sentence": "Gross ODA disbursements to Kenya from 15 donors for malaria control, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
           "trace": {
-            "resolved_stat_vars": [
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityB01_CRSPurposeCode12262_Nominal",
-                "label": "Official development assistance gross disbursements for malaria control (standard grant, core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes)"
-              },
-              {
-                "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityB03_CRSPurposeCode12262_Nominal",
-                "label": "Official development assistance gross disbursements for malaria control (standard grant, contribution to specific-purpose programme and fund managed by an international organisation)"
-              }
-            ],
-            "resolved_stat_vars_truncated": true,
             "resolved_entities": [
               {
                 "dcid": "country/KEN",
@@ -691,18 +580,10 @@ export const crsHierarchicalPurpose: unknown = {
                 "disposition": "bound"
               }
             ],
-            "applied_window": {
-              "start_year": 2015,
-              "end_year": 2024
-            },
-            "date_source": "query",
-            "pipeline_trace": [],
-            "n_recalled": 52,
             "requested_window": {
               "start_year": 2015
             },
             "capability_version": "cap_cbe83b130f0e8d02",
-            "declaration_version": "29967a15833349bbe4446023f170f5b77b21aa45963894a1b589848c3196d623",
             "default_reading": {
               "applied": true,
               "removed_stat_vars": []
@@ -922,7 +803,6 @@ export const crsHierarchicalPurpose: unknown = {
             "financialFlowType",
             "nettingBasis"
           ],
-          "measure_label_named_values": [],
           "measure_axis_values": [
             {
               "axis": "populationType",

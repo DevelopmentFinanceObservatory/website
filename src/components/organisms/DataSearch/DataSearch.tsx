@@ -36,7 +36,6 @@ import {
 } from '@/lib/search/catalogue';
 import { decodePermalinkState, encodePermalinkState } from '@/lib/search/permalink';
 import { track } from '@/lib/events/client';
-import { promoteFromSpec } from '@/lib/search/promote';
 import {
     createSearchShare,
     fetchSearchShare,
@@ -322,7 +321,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                     // include_observations: without it the engine skips the
                     // materialise pass and coverage counts come back empty.
                     response_options: {
-                        include_sentence: true,
                         include_option_coverage: false,
                         include_observations: true,
                     },
@@ -725,7 +723,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                     variableText: part.variableText,
                     specId: spec.spec_id,
                     identity: spec.identity,
-                    resolvedStatVarDcids: promoteFromSpec(spec).resolved_stat_var_dcids ?? null,
                     operations: part.part?.operations ?? [],
                     definition: spec.definition,
                 };

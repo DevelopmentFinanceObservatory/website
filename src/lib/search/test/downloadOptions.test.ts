@@ -62,7 +62,7 @@ test('parseDownloadChoices keeps valid stored fields and defaults the rest', () 
     }
 });
 
-test('mintColumns posts only the remembered extras this answer offers, after its frame', () => {
+test('mintColumns posts only the remembered extras this answer offers, as tokens', () => {
     // observationAbout_iso3 came from another answer; financingRecipient_label
     // is unavailable here.
     const remembered = [
@@ -73,11 +73,6 @@ test('mintColumns posts only the remembered extras this answer offers, after its
     ];
 
     assert.deepEqual(mintColumns(remembered, flowOptions), [
-        'stat_var',
-        'financingProvider',
-        'financingRecipient',
-        'time_period',
-        'value',
         'financingProvider_iso3',
         'financingRecipient_iso3',
     ]);
@@ -121,7 +116,7 @@ test('enrichmentGroups heads each role column with the role the answer gives it'
     assert.deepEqual(
         groups.map((group) => [group.heading, group.entries.map((entry) => entry.token)]),
         [
-            ['Donor', ['financingProvider_iso3', 'financingProvider_type']],
+            ['Provider', ['financingProvider_iso3', 'financingProvider_type']],
             ['Recipient', ['financingRecipient_iso3']],
         ],
     );

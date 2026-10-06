@@ -15,7 +15,6 @@ const identity: DatasetResubmitEntry = {
         entities: { origin: ['country/FRA'] },
         requested_window: { kind: 'all' },
     },
-    base_spec_id: 'spec1',
 };
 
 const parsed: DatasetResubmitEntry = {
@@ -51,7 +50,6 @@ const yearEdit: DatasetResubmitEntry = {
         entities: {},
         requested_window: { kind: 'range', start_year: 2010 },
     },
-    base_spec_id: 'spec1',
 };
 
 const candidates: DatasetResubmitEntry = {

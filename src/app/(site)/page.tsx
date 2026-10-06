@@ -1,5 +1,4 @@
 import BuildTools from '@/components/organisms/BuildTools/BuildTools';
-import BuiltWith from '@/components/organisms/BuiltWith/BuiltWith';
 import CreateCanvas from '@/components/organisms/CreateCanvas/CreateCanvas';
 import DownloadDataset from '@/components/organisms/DownloadDataset/DownloadDataset';
 import Hero from '@/components/organisms/Hero/Hero';
@@ -29,7 +28,9 @@ const Home = async () => {
             <CreateCanvas />
             <DownloadDataset catalogue={catalogue} />
             <BuildTools />
-            <BuiltWith />
+            {/* "Get inspired by what others are building" is out until there
+                is real work to show: the component stays in
+                components/organisms/BuiltWith, ready to mount again. */}
         </main>
     );
 };

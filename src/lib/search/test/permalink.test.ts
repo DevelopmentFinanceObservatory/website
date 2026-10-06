@@ -17,7 +17,6 @@ const identityEdit: PermalinkEdit = {
             entities: { origin: ['country/FRA'] },
             requested_window: { kind: 'all' },
         },
-        base_spec_id: 'spec1',
     },
 };
 
@@ -47,7 +46,6 @@ const multiEntityEdit: PermalinkEdit = {
             entities: { origin: ['country/FRA'], destination: ['country/KEN', 'country/ETH'] },
             requested_window: { kind: 'all' },
         },
-        base_spec_id: 'spec1',
     },
 };
 
@@ -94,4 +92,25 @@ test('an unknown entry_kind is dropped, not decoded', async () => {
     const decoded = await decodePermalinkState(encoded);
 
     assert.deepEqual(decoded, { query: rawState.query, edits: [identityEdit] });
+});
+
+test('an identity edit stored with its base and StatVars decodes to the identity alone', async () => {
+    const stored = {
+        query: 'ODA disbursements',
+        edits: [
+            {
+                ...identityEdit,
+                entry: {
+                    ...identityEdit.entry,
+                    base_spec_id: 'spec_0f1e',
+                    base_identity: { identity_version: 'spec1' },
+                    removed: { entities: ['destination'] },
+                    resolved_stat_var_dcids: ['Count_Person'],
+                },
+            },
+        ],
+    };
+    const decoded = await decodePermalinkState(await encodeSearchState(stored));
+
+    assert.deepEqual(decoded, { query: stored.query, edits: [identityEdit] });
 });

@@ -4,6 +4,7 @@ import {
     applyDoneEvent,
     entityOptions,
     fetchDatasetOptions,
+    fetchDefinitionMembers,
     fetchVersionLink,
     flattenSpec,
     mergeLateWarnings,
@@ -14,7 +15,6 @@ import {
     resolveStream,
     type SearchEvent,
 } from '../searchClient.ts';
-import { promoteFromSpec } from '../promote.ts';
 import type { Warning } from '../types.ts';
 import { fixtures } from './fixtures/index.ts';
 import {
@@ -53,52 +53,59 @@ function wireSpec(statVars: unknown) {
     };
 }
 
-test('flattenSpec reads a well-formed stat_vars, with the label from the item and the count from member_count', () => {
+test('flattenSpec reads a well-formed stat_vars, with the counts as the wire sends them', () => {
     const flat = flattenSpec(
-        wireSpec({
-            items: [{ ref: 'dcid/GdpNominal', label: 'GDP (nominal)', slot_values: [] }],
-            // member_count deliberately differs from items.length, so a test that
-            // passed by reading items.length instead would be caught.
-            member_count: 42,
-            truncated: true,
-        }),
+        wireSpec({ member_count: 42, member_count_exact: true, served_count: 3 }),
     );
 
     assert.equal(statVarsUnreadable(flat), false);
-    assert.equal(primaryStatVarLabel(flat), 'GDP (nominal)');
     assert.equal(flat.stat_vars.member_count, 42);
+    assert.equal(flat.stat_vars.served_count, 3);
+    assert.equal(
+        statVarsUnreadable(
+            flattenSpec(
+                wireSpec({ member_count: 42, member_count_exact: false, served_count: null }),
+            ),
+        ),
+        false,
+        'a null served_count is an unsettled membership, not a broken shape',
+    );
 });
 
-test('flattenSpec flags a stat_vars missing member_count as unreadable', () => {
-    const flat = flattenSpec(
-        wireSpec({
-            items: [{ ref: 'dcid/GdpNominal', label: 'GDP (nominal)' }],
-            truncated: false,
-            // member_count omitted
-        }),
-    );
+for (const [name, statVars] of [
+    ['missing member_count', { member_count_exact: true, served_count: 1 }],
+    ['missing member_count_exact', { member_count: 1, served_count: 1 }],
+    [
+        'a served_count that is not a number',
+        { member_count: 1, member_count_exact: true, served_count: '1' },
+    ],
+    [
+        'a data_date_range that is not an object',
+        { member_count: 1, member_count_exact: true, served_count: 1, data_date_range: '2020' },
+    ],
+] as const) {
+    test(`flattenSpec flags a stat_vars ${name} as unreadable`, () => {
+        assert.equal(statVarsUnreadable(flattenSpec(wireSpec(statVars))), true);
+    });
+}
 
-    // statVarsUnreadable is the gate a caller checks first (see
-    // SearchCards.tsx): primaryStatVarLabel itself just reads items[0]
-    // regardless, so a well-formed items array with a missing member_count
-    // still names a label here — the caller is what must show the failure
-    // state instead of rendering it.
-    assert.equal(statVarsUnreadable(flat), true);
-    assert.equal(primaryStatVarLabel(flat), 'GDP (nominal)');
+test('primaryStatVarLabel names the measure, then the shape', () => {
+    const flat = flattenSpec(wireSpec({ member_count: 1, member_count_exact: true }));
+
+    assert.equal(primaryStatVarLabel(flat), 'Development finance');
+    assert.equal(primaryStatVarLabel({ ...flat, measure_label: 'GDP (nominal)' }), 'GDP (nominal)');
 });
 
 test('flattenSpec flags a flat pre-v1-shaped stat_vars array as unreadable', () => {
     const flat = flattenSpec(wireSpec(['dcid/GdpNominal', 'dcid/GdpPerCapita']));
 
     assert.equal(statVarsUnreadable(flat), true);
-    assert.equal(primaryStatVarLabel(flat), null);
 });
 
 test('flattenSpec flags a null stat_vars as unreadable', () => {
     const flat = flattenSpec(wireSpec(null));
 
     assert.equal(statVarsUnreadable(flat), true);
-    assert.equal(primaryStatVarLabel(flat), null);
 });
 
 test('flattenSpec flags a spec missing the definition/resolved split as unreadable, rather than passing it through as a flat pre-v1 body', () => {
@@ -133,7 +140,7 @@ test('entityOptions posts no resolved_stat_var_dcids and asks for include_covera
     assert.equal(sentBody.include_coverage, true);
 });
 
-test('fetchDatasetOptions posts the definition and resolved StatVars to the options door, and reads its output_options and coverage', async (t) => {
+test('fetchDatasetOptions posts the definition to the options door, and reads its output_options and coverage', async (t) => {
     const outputOptions = { formats: [{ name: 'csv', state: 'available' }] };
     const coverage = {
         dimensions: [{ label: 'financingRecipient', count: 4, axis: 'destination' }],
@@ -149,21 +156,67 @@ test('fetchDatasetOptions posts the definition and resolved StatVars to the opti
     );
     const definition = { schema_version: 1, spec_id: 'spec_1', identity: { shape_id: 'x' } };
 
-    const options = await fetchDatasetOptions({
-        spec_id: 'spec_1',
-        definition,
-        resolved_stat_var_dcids: ['sdg/FP_CPI_TOTL_ZG'],
-    });
+    const options = await fetchDatasetOptions({ spec_id: 'spec_1', definition });
 
     const [url, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
 
     assert.deepEqual(options, { output_options: outputOptions, coverage });
     assert.match(url, /\/api\/datasets\/spec_1\/options$/);
     assert.equal(init.method, 'POST');
-    assert.deepEqual(JSON.parse(String(init.body)), {
-        schema_version: 1,
-        definition,
-        resolved_stat_var_dcids: ['sdg/FP_CPI_TOTL_ZG'],
+    assert.deepEqual(JSON.parse(String(init.body)), { schema_version: 1, definition });
+});
+
+test('fetchDefinitionMembers posts the definition to the members door and reads the served members', async (t) => {
+    const members = [
+        {
+            ref: 'dcid:Count_Person_Female',
+            label: 'Female population',
+            roles: [],
+            constraints: { gender: 'Female' },
+        },
+        { ref: 'dcid:Count_Person_Male', label: null, roles: [], constraints: { gender: 'Male' } },
+    ];
+    const fetchMock = t.mock.method(
+        globalThis,
+        'fetch',
+        async () =>
+            new Response(
+                JSON.stringify({
+                    schema_version: 1,
+                    spec_id: 'spec_1',
+                    members,
+                    served_count: 2,
+                    family_member_count: 2,
+                    family_member_digest: 'sha256:ab',
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+    );
+    const definition = { schema_version: 1, spec_id: 'spec_1', identity: { shape_id: 'x' } };
+
+    const answer = await fetchDefinitionMembers({ spec_id: 'spec_1', definition });
+    const [url, init] = fetchMock.mock.calls[0].arguments as [string, RequestInit];
+
+    assert.match(url, /\/api\/datasets\/spec_1\/members$/);
+    assert.equal(init.method, 'POST');
+    assert.deepEqual(JSON.parse(String(init.body)), { schema_version: 1, definition });
+    assert.deepEqual(answer.members, members);
+    assert.equal(answer.served_count, 2);
+});
+
+test('fetchDefinitionMembers throws the door refusal with its code', async (t) => {
+    t.mock.method(
+        globalThis,
+        'fetch',
+        async () =>
+            new Response(JSON.stringify({ code: 'scope_too_broad', detail: 'too broad' }), {
+                status: 422,
+                headers: { 'content-type': 'application/problem+json' },
+            }),
+    );
+
+    await assert.rejects(fetchDefinitionMembers({ spec_id: 'spec_1' }), {
+        code: 'scope_too_broad',
     });
 });
 
@@ -375,11 +428,7 @@ test('flattenSpec reads a SlotOptions payload carrying truncated (post-drift-cor
                     source: 'seed',
                 },
             ],
-            stat_vars: {
-                items: [{ ref: 'dcid/GdpNominal', label: 'GDP (nominal)', slot_values: [] }],
-                member_count: 1,
-                truncated: false,
-            },
+            stat_vars: { member_count: 1, member_count_exact: true, served_count: 1 },
             entities: [],
             coverage: { kind: 'bare', has_data: true },
             trace: {},
@@ -968,9 +1017,8 @@ for (const name of ['catalogue-kenya', 'declined-out-of-scope'] as const) {
     });
 }
 
-test('mintDataset posts the dcids of the spec stat_vars items as resolved_stat_var_dcids', async (t) => {
+test('mintDataset posts the spec id and definition and no StatVar list', async (t) => {
     const spec = normalizeResponse(fixtures['definite-single']).parts[0].spec;
-    const traced = spec.stat_vars.items.map((item: { ref: string }) => item.ref);
     const fetchMock = t.mock.method(
         globalThis,
         'fetch',
@@ -981,17 +1029,16 @@ test('mintDataset posts the dcids of the spec stat_vars items as resolved_stat_v
             }),
     );
 
-    await mintDataset({
-        spec_id: spec.spec_id,
-        resolved_stat_var_dcids: promoteFromSpec(spec).resolved_stat_var_dcids,
-        format: 'csv',
-    });
+    await mintDataset({ spec_id: spec.spec_id, definition: spec.definition, format: 'csv' });
 
     const [, init] = fetchMock.mock.calls[0].arguments as [unknown, RequestInit];
     const sentBody = JSON.parse(String(init.body)) as { input: Record<string, unknown> };
 
-    assert.ok(traced.length > 0);
-    assert.deepEqual(sentBody.input.resolved_stat_var_dcids, traced);
+    assert.deepEqual(sentBody.input, {
+        kind: 'spec_id',
+        spec_id: spec.spec_id,
+        definition: spec.definition,
+    });
 });
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -1048,7 +1095,6 @@ test('pinDownloadedVersion posts the downloaded version to the site pin route an
         specId: 'spec_a1',
         contentVersion: 'cv_b2',
         definition: { spec_id: 'spec_a1' },
-        resolvedStatVarDcids: undefined,
     };
 
     assert.equal(pinDownloadedVersion(req), undefined);

@@ -68,36 +68,25 @@ const yearOf = (date: unknown): string | null =>
 const span = (start: string | null, end: string | null): string | null =>
     start && end ? (start === end ? start : `${start} to ${end}`) : null;
 
-/** The years the served data spans: the coverage window, else the earliest
- *  and latest dates the served StatVars report. */
+/** The years the served data spans: the coverage window, else the Spec's
+ *  `stat_vars.data_date_range` over its served StatVars. */
 export const servedSpan = (spec: any): string | null => {
     const covered = formatWindow(spec?.coverage?.window);
 
     if (covered) return covered;
 
-    const ranges = (spec?.stat_vars?.items ?? [])
-        .map((item: any) => item?.data_date_range)
-        .filter(Boolean);
-    const starts = ranges
-        .map((range: any) => yearOf(range.start))
-        .filter(Boolean)
-        .sort();
-    const ends = ranges
-        .map((range: any) => yearOf(range.end))
-        .filter(Boolean)
-        .sort();
+    const range = spec?.stat_vars?.data_date_range;
 
-    return span(starts[0] ?? null, ends.at(-1) ?? null);
+    return span(yearOf(range?.start), yearOf(range?.end));
 };
 
-/** The latest date with data: the newest of the served StatVars' range ends
- *  and the observation points that hold a value. The ranges span every
+/** The latest date with data: the newer of the served StatVars' range end
+ *  and the observation points that hold a value. The range spans every
  *  year; the points are a preview of a few series, so they only add a
- *  date when the ranges are missing or stop short of them. */
+ *  date when the range is missing or stops short of them. */
 export const latestDate = (spec: any): string | null => {
-    const ends: string[] = (spec?.stat_vars?.items ?? [])
-        .map((item: any) => item?.data_date_range?.end)
-        .filter(Boolean);
+    const end: unknown = spec?.stat_vars?.data_date_range?.end;
+    const ends: string[] = typeof end === 'string' && end ? [end] : [];
     const points: string[] = (spec?.observations?.series ?? []).flatMap((series: any) =>
         (series?.points ?? [])
             .filter((point: any) => point?.value != null)
@@ -122,14 +111,11 @@ export const seriesReason = (spec: any): string | null => {
     return `One series for each ${list}${axes.length > 1 ? ' combination' : ''}.`;
 };
 
-/** The one StatVar the answer serves, null when it serves several. */
-const singleStatVar = (spec: any): { dcid: string; label: string | null } | null => {
-    const items = spec?.stat_vars?.items ?? [];
-
-    return items.length === 1 && !spec?.stat_vars?.truncated && (servedSeriesCount(spec) ?? 1) === 1
-        ? { dcid: items[0].ref, label: items[0].label ?? null }
-        : null;
-};
+/** The Spec whose members a measure's About reads from the members door
+ *  (`useDefinitionMembers`) to define its one StatVar: the Spec itself when
+ *  the answer serves one StatVar, else null. */
+export const singleStatVarSpec = (spec: any): any =>
+    spec && servedSeriesCount(spec) === 1 ? spec : null;
 
 // A measure's About leaves out the axis values another visible token
 // states (`statedElsewhere`, refs such as "axis:measurementQualifier" the
@@ -139,7 +125,6 @@ const measureAbout = (
     spec: any,
     statedElsewhere: ReadonlySet<string>,
 ): TokenAboutModel => {
-    const statVar = singleStatVar(spec);
     const count = servedSeriesCount(spec);
     const facts = [
         specUnit(spec),
@@ -153,20 +138,20 @@ const measureAbout = (
             label: sentenceCase(entry.value.label ?? entry.value.dcid),
             dcid: entry.value.dcid,
         }));
-    const name = spec?.measure_label ?? statVar?.label ?? token.text;
+    const name = spec?.measure_label ?? token.text;
 
     return {
         kind: 'measure',
         title: sentenceCase(name.trim()),
         facts,
         notes: reason ? [reason] : [],
-        definitions: [...values, ...(statVar ? [{ label: null, dcid: statVar.dcid }] : [])],
+        definitions: values,
         sources: [],
     };
 };
 
 const ROLE_NOUNS: Record<EntityRoleKey, { one: string; many: string; dimensions: string[] }> = {
-    origin: { one: 'donor', many: 'donors', dimensions: ['donors'] },
+    origin: { one: 'provider', many: 'providers', dimensions: ['providers'] },
     destination: { one: 'recipient', many: 'recipients', dimensions: ['recipients'] },
     observationAbout: { one: 'place', many: 'places', dimensions: ['countries', 'places'] },
 };

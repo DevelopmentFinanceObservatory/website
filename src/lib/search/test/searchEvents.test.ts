@@ -6,11 +6,8 @@ import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
 import { searchEventProps } from '../searchEvents.ts';
 import type { HydratedPart } from '../types.ts';
 
-// "ODA from France to Kenya" against the dev API elects 308 CRS StatVars
-// with ids this long; "to all recipients" resolves some 200 places.
-const statVars = Array.from({ length: 308 }, (_, i) => ({
-    ref: `Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode${11110 + i}_Nominal`,
-}));
+// "ODA from France to Kenya" against the dev API elects 308 CRS StatVars;
+// "to all recipients" resolves some 200 places.
 const entities = Array.from({ length: 204 }, (_, i) => ({
     dcid: `country/C${String(i).padStart(2, '0')}`,
     label: `Country ${i}`,
@@ -39,8 +36,7 @@ const aidPart = {
             entities: { origin: ['country/FRA'] },
             requested_window: { kind: 'all' },
         },
-        // The server lists the first 200 members and counts the family.
-        stat_vars: { items: statVars.slice(0, 200), member_count: 308, truncated: true },
+        stat_vars: { member_count: 308, member_count_exact: true, served_count: 308 },
         resolution: {
             resolved_entities: entities,
             resolved_sources: [{ dcid: 'dc/base/OECD_CRS', label: 'OECD CRS' }],
