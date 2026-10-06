@@ -167,4 +167,14 @@ test('a stored share part replays its groups beside the identity, and no member 
         variable_text: '',
         identity,
     });
+
+    const [operation] = hydratedParts('definite-rank-operation')[0].part!.operations!;
+
+    assert.deepEqual(sharedRefEntry({ ...ref, operations: [operation] }), {
+        entry_kind: 'identity',
+        variable_text: 'aid',
+        identity,
+        entity_groups: groups,
+        operations: [operation],
+    });
 });
