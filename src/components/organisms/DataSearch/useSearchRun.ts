@@ -83,7 +83,8 @@
  * part's current entry with just this index rewritten. editMeasure posts
  * the alternative's or related measure's own definition as the new spec,
  * not the part's current one. Every entry carries its part's operations
- * (see datasetEntries.ts).
+ * and the named groups of the Spec its identity derives from (see
+ * datasetEntries.ts).
  * - `replay(state)`: runs `state.query`, then, right after its `response`
  *   event, builds one entries list from the fresh parts with every stored
  *   edit applied as an override at its own index (skipped with a note on
@@ -128,7 +129,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { withEntityEdit, withFacetEdit, withResolvedSlotEdit } from '@/lib/search/promote';
 import type { PermalinkEdit, PermalinkState } from '@/lib/search/permalink';
-import { buildDatasetEntries, type DatasetEntriesOverride } from '@/lib/search/datasetEntries';
+import {
+    buildDatasetEntries,
+    sharedRefEntry,
+    specEntityGroups,
+    type DatasetEntriesOverride,
+} from '@/lib/search/datasetEntries';
 import {
     bindSnapshotParts,
     frozenRefSpecId,
@@ -243,8 +249,9 @@ function hydrateDefiniteSpec(
 }
 
 /** A lightweight `HydratedPart[]` view straight off a fresh `Resolution`,
- *  with no trailing-events hydration (`buildDatasetEntries` only ever reads
- *  `identity`/`spec_id`, already flat on `normalizeResponse`'s output).
+ *  with no trailing-events hydration (`buildDatasetEntries` reads each
+ *  Spec's `identity` and `entity_groups`, already flat on
+ *  `normalizeResponse`'s output).
  *  `replay` uses this to build its entries list from the base run's just-
  *  landed response before React has re-rendered the hook's own `parts`. */
 function partsFromResponse(response: Resolution): HydratedPart[] {
@@ -876,10 +883,11 @@ export const useSearchRun = () => {
     );
 
     const identityOverrideEntry = useCallback(
-        (partIndex: number, identity: BaseIdentity): DatasetIdentityEntry => ({
+        (partIndex: number, fromSpec: any, identity: BaseIdentity): DatasetIdentityEntry => ({
             entry_kind: 'identity',
             variable_text: parts[partIndex]?.variableText ?? '',
             identity,
+            ...specEntityGroups(fromSpec),
         }),
         [parts],
     );
@@ -896,7 +904,7 @@ export const useSearchRun = () => {
             entityRole: EntityRoleKey = 'observationAbout',
         ) => {
             const identity = withResolvedSlotEdit(fromSpec, slotIndex, binding, entityRole);
-            const entry = identityOverrideEntry(partIndex, identity);
+            const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -908,7 +916,7 @@ export const useSearchRun = () => {
     const editEntity = useCallback(
         (partIndex: number, fromSpec: any, role: RoleAxis, dcids: string[] | null) => {
             const identity = withEntityEdit(fromSpec.identity as BaseIdentity, role, dcids);
-            const entry = identityOverrideEntry(partIndex, identity);
+            const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -923,7 +931,7 @@ export const useSearchRun = () => {
                 ...(fromSpec.identity as BaseIdentity),
                 requested_window: window,
             };
-            const entry = identityOverrideEntry(partIndex, identity);
+            const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -940,7 +948,10 @@ export const useSearchRun = () => {
         ): DatasetEntriesOverride => {
             const identity = withFacetEdit(fromSpec.identity as BaseIdentity, axis, binding);
 
-            return { index: partIndex, entry: identityOverrideEntry(partIndex, identity) };
+            return {
+                index: partIndex,
+                entry: identityOverrideEntry(partIndex, fromSpec, identity),
+            };
         },
         [identityOverrideEntry],
     );
@@ -962,7 +973,7 @@ export const useSearchRun = () => {
     // Candidate promote: post the candidate's own identity verbatim.
     const pickCandidate = useCallback(
         (partIndex: number, candidate: any) => {
-            const entry = identityOverrideEntry(partIndex, candidate.identity);
+            const entry = identityOverrideEntry(partIndex, candidate, candidate.identity);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex]);
         },
@@ -976,7 +987,11 @@ export const useSearchRun = () => {
             runDatasetEdit(
                 picks.map(({ partIndex, measure }) => ({
                     index: partIndex,
-                    entry: measureSwitchEntry(parts[partIndex]?.variableText ?? '', measure),
+                    entry: measureSwitchEntry(
+                        parts[partIndex]?.variableText ?? '',
+                        measure,
+                        parts[partIndex]?.hydratedSpec,
+                    ),
                 })),
                 picks.map(({ partIndex }) => partIndex),
             );
@@ -1033,12 +1048,7 @@ export const useSearchRun = () => {
     // dfo-apis and lays them over the live observations.
     const openShare = useCallback(
         (shared: OpenedSearchShare) => {
-            const entries: DatasetResubmitEntry[] = shared.refs.map((ref) => ({
-                entry_kind: 'identity',
-                variable_text: ref.variableText ?? '',
-                identity: ref.identity as BaseIdentity,
-                ...(ref.operations.length ? { operations: ref.operations } : {}),
-            }));
+            const entries: DatasetResubmitEntry[] = shared.refs.map(sharedRefEntry);
 
             // The replay's part `i` answers ref `i`. A snapshot reads its
             // frozen observations through that ref, whatever spec_id comes back.

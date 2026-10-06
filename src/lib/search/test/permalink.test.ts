@@ -17,6 +17,7 @@ const identityEdit: PermalinkEdit = {
             entities: { origin: ['country/FRA'] },
             requested_window: { kind: 'all' },
         },
+        entity_groups: { origin: { dcid: null, label: 'G7 countries' } },
     },
 };
 

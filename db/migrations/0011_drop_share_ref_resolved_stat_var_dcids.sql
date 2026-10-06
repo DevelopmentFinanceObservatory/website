@@ -1,0 +1,1 @@
+ALTER TABLE "share_ref" DROP COLUMN "resolved_stat_var_dcids";

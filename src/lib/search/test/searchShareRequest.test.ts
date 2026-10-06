@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { readSearchShareRequest, SEARCH_SHARE_MAX_PARTS } from '../searchShareRequest.ts';
+import { normalizeResponse } from '../searchClient.ts';
+import {
+    readSearchShareRequest,
+    SEARCH_SHARE_MAX_PARTS,
+    searchSharePart,
+} from '../searchShareRequest.ts';
+import type { HydratedPart } from '../types.ts';
+import { fixtures } from './fixtures/index.ts';
 
 const part = (partIndex: number) => ({
     partIndex,
@@ -31,6 +38,95 @@ for (const mode of ['live', 'snapshot']) {
         assert.equal(readSearchShareRequest(body(SEARCH_SHARE_MAX_PARTS + 1, mode)), null);
     });
 }
+
+test("a part reads with its Spec's groups, with null and with none, and an array of groups is refused", () => {
+    const withGroups = (entityGroups: unknown) => ({
+        ...body(1),
+        parts: [{ ...part(0), entityGroups }],
+    });
+    const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+
+    assert.deepEqual(readSearchShareRequest(withGroups(groups))?.parts[0].entityGroups, groups);
+    assert.equal(readSearchShareRequest(withGroups(null))?.parts[0].entityGroups, null);
+    assert.equal(readSearchShareRequest(body(1))?.parts.length, 1);
+    assert.equal(readSearchShareRequest(withGroups([groups])), null);
+    assert.equal(readSearchShareRequest(withGroups('EuropeanUnion')), null);
+});
+
+test("a part's groups hold role keys only, each a label of 1 to 120 characters and an optional dcid", () => {
+    const withGroups = (entityGroups: unknown) => ({
+        ...body(1),
+        parts: [{ ...part(0), entityGroups }],
+    });
+    const reads = (entityGroups: unknown) =>
+        readSearchShareRequest(withGroups(entityGroups)) !== null;
+
+    assert.equal(reads({ origin: { label: 'G7 countries' } }), true);
+    assert.equal(reads({ origin: { dcid: null, label: 'G7 countries' } }), true);
+    assert.equal(
+        reads({
+            observationAbout: { label: 'x'.repeat(120) },
+            origin: { dcid: 'd'.repeat(1024), label: 'EU' },
+            destination: { label: 'LDCs' },
+        }),
+        true,
+    );
+
+    assert.equal(reads({ donor: { label: 'G7 countries' } }), false);
+    assert.equal(reads({ origin: 'EuropeanUnion' }), false);
+    assert.equal(reads({ origin: null }), false);
+    assert.equal(reads({ origin: { dcid: 'EuropeanUnion' } }), false);
+    assert.equal(reads({ origin: { label: '' } }), false);
+    assert.equal(reads({ origin: { label: 27 } }), false);
+    assert.equal(reads({ origin: { label: 'x'.repeat(121) } }), false);
+    assert.equal(reads({ origin: { dcid: 27, label: 'EU' } }), false);
+    assert.equal(reads({ origin: { dcid: 'd'.repeat(1025), label: 'EU' } }), false);
+    assert.equal(reads({ origin: { label: 'EU', members: ['country/DEU'] } }), false);
+});
+
+test('a part whose identity holds entity_groups is refused', () => {
+    const withIdentity = (identity: unknown) => ({
+        ...body(1),
+        parts: [{ ...part(0), identity }],
+    });
+
+    assert.equal(readSearchShareRequest(withIdentity({ entities: {} }))?.parts.length, 1);
+    assert.equal(
+        readSearchShareRequest(withIdentity({ entity_groups: { origin: { label: 'EU' } } })),
+        null,
+    );
+    assert.equal(readSearchShareRequest(withIdentity({ entity_groups: null })), null);
+});
+
+test("a definite part shares its Spec's groups beside the identity, and null when it has none", () => {
+    const [response] = normalizeResponse(fixtures['definite-single']).parts;
+    const hydrated: HydratedPart = {
+        index: 0,
+        variableText: response.variable_text ?? null,
+        part: response,
+        hydratedSpec: response.spec!,
+        observationsPending: false,
+        phase: 'done',
+        editError: null,
+    };
+    const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const shared = searchSharePart({
+        ...hydrated,
+        hydratedSpec: { ...hydrated.hydratedSpec!, entity_groups: groups },
+    });
+
+    assert.deepEqual(shared.entityGroups, groups);
+    assert.equal(shared.identity, hydrated.hydratedSpec!.identity);
+    assert.equal(shared.specId, hydrated.hydratedSpec!.spec_id);
+    assert.equal(
+        searchSharePart({
+            ...hydrated,
+            hydratedSpec: { ...hydrated.hydratedSpec!, entity_groups: undefined },
+        }).entityGroups,
+        null,
+    );
+    assert.ok(readSearchShareRequest({ mode: 'live', query: 'aid', parts: [shared] }));
+});
 
 test('an unknown mode, an empty query or no parts is refused', () => {
     assert.equal(readSearchShareRequest(body(1, 'draft')), null);
