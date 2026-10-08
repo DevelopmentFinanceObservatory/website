@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import type { SavedConversation } from '@/lib/chat/history';
-import { createShare, ShareKind } from '@/lib/chat/shareStore';
+import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
+import { createShare, liveShareRefusalFor } from '@/lib/chat/shareStore';
+import { track } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
-
-const KINDS: ShareKind[] = ['conversation', 'canvas', 'card'];
 
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
@@ -42,14 +41,14 @@ const shareSearch = async (body: any) => {
     }
 };
 
-// POST /api/share { kind, conversation, cardId? } → { id, title }
-// A frozen copy of what the caller is looking at, under a short public id.
+// POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
+// A pruned copy of what the caller is looking at, under a short public id.
+// `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a
+// conversation. A request that names none stores a snapshot. A live share is
+// refused when its data cards cannot all be refreshed (`liveShareRefusal` in
+// src/lib/studio/liveShare), and the refusal names the cards in the way.
 export const POST = async (request: Request) => {
-    const body = (await request.json().catch(() => null)) as {
-        kind?: ShareKind;
-        cardId?: string;
-        conversation?: SavedConversation;
-    } | null;
+    const body = await request.json().catch(() => null);
 
     if (body?.kind === 'search') {
         return shareSearch(body);
@@ -61,20 +60,28 @@ export const POST = async (request: Request) => {
         return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    const saved = body?.conversation;
+    const read = readStudioShareRequest(body);
 
-    if (
-        !body?.kind ||
-        !KINDS.includes(body.kind) ||
-        !saved ||
-        typeof saved.id !== 'string' ||
-        !Array.isArray(saved.widgets) ||
-        (body.kind === 'card' && typeof body.cardId !== 'string')
-    ) {
-        return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+    if ('error' in read) {
+        return NextResponse.json(read, { status: 400 });
     }
 
-    const created = await createShare(user.id, body.kind, saved, body.cardId);
+    const refusal = read.mode === 'live' ? await liveShareRefusalFor(read) : null;
+
+    if (refusal) {
+        return NextResponse.json(refusal.body, { status: refusal.status });
+    }
+
+    const created = await createShare({ userId: user.id, ...read });
+
+    // Recorded after the response, so the link does not wait on analytics.
+    after(() =>
+        track(
+            'share.create',
+            shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
+            { userId: user.id },
+        ),
+    );
 
     return NextResponse.json(created);
 };

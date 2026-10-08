@@ -5,6 +5,11 @@
  * frame row behind a value the card shows, as CSV, Excel or Parquet, zipped
  * with its README, `CITATION.cff` and `datapackage.json` unless `bundle` is
  * false.
+ *
+ * A card of a live share is drawn on current data, which the stored revision
+ * does not hold. Its rows come from the share's own route,
+ * `GET /api/share/{id}/cards/{cardId}/data?format=&bundle=`, which serves the
+ * rows of the frame the card was last refreshed on.
  */
 
 import type { CardRef, Widget } from '../chat/widgets.ts';
@@ -20,12 +25,22 @@ export const cardRefOf = (widget: Widget): CardRef | null =>
 const componentDataPath = (componentId: string, revision: string | number): string =>
     `/api/presentation/components/${encodeURIComponent(componentId)}/revisions/${encodeURIComponent(String(revision))}/data`;
 
+/** A card of a live share, as its data route names it. */
+export type LiveCardAddress = { shareId: string; cardId: string };
+
+const dataQuery = ({ format, bundle }: CardDataOptions): string =>
+    String(new URLSearchParams({ format, bundle: String(bundle) }));
+
 /** The site's proxy URL for one revision's rows. */
-export const cardDataUrl = (ref: CardRef, { format, bundle }: CardDataOptions): string =>
-    `${componentDataPath(ref.component_id, ref.revision)}?${new URLSearchParams({
-        format,
-        bundle: String(bundle),
-    })}`;
+export const cardDataUrl = (ref: CardRef, options: CardDataOptions): string =>
+    `${componentDataPath(ref.component_id, ref.revision)}?${dataQuery(options)}`;
+
+/** The share route for a live card's refreshed rows. */
+export const liveCardDataUrl = (
+    { shareId, cardId }: LiveCardAddress,
+    options: CardDataOptions,
+): string =>
+    `/api/share/${encodeURIComponent(shareId)}/cards/${encodeURIComponent(cardId)}/data?${dataQuery(options)}`;
 
 /** The export route the proxy forwards to; `search` is the caller's query
  *  string, passed as it came. */
@@ -48,41 +63,93 @@ const REFUSALS: Record<string, string> = {
     request_invalid:
         "This card's data cannot be written as Excel. Download it as CSV or Parquet instead.",
     internal_error: 'The file did not match the card, so it was not served. Try again later.',
+    live_unavailable: 'Live data is unavailable for this link.',
+    backend_timeout: 'The data took too long to prepare. Try again.',
+    unauthorized: 'Live data is unavailable for this link.',
+    refresh_not_configured: 'Live data is unavailable for this link.',
 };
 
-/** The sentence shown when a card's download fails, by refusal code. */
-export const cardDownloadMessage = (code: string | null): string =>
-    (code && REFUSALS[code]) || 'Download unavailable right now. Try again.';
+/** The code of a live card's download that waits on a refresh in progress
+ *  (the share route's 503). */
+export const DOWNLOAD_PENDING = 'refresh_pending';
 
-/** A refused download, with the export route's machine-readable code. */
+/** The sentence shown when a card's download fails, by refusal code.
+ *  `retryAfterS` is the wait a `DOWNLOAD_PENDING` answer named. */
+export const cardDownloadMessage = (code: string | null, retryAfterS?: number | null): string => {
+    if (code === DOWNLOAD_PENDING) {
+        return retryAfterS
+            ? `Current data is still being prepared. Try again in ${retryAfterS} seconds.`
+            : 'Current data is still being prepared. Try again shortly.';
+    }
+
+    return (code && REFUSALS[code]) || 'Download unavailable right now. Try again.';
+};
+
+/** A refused download, with the route's machine-readable code and, for
+ *  `DOWNLOAD_PENDING`, the seconds the route asked the caller to wait. */
 export class CardDownloadError extends Error {
     readonly code: string | null;
 
-    constructor(code: string | null) {
-        super(cardDownloadMessage(code));
+    readonly retryAfterS: number | null;
+
+    constructor(code: string | null, retryAfterS: number | null = null) {
+        super(cardDownloadMessage(code, retryAfterS));
         this.name = 'CardDownloadError';
         this.code = code;
+        this.retryAfterS = retryAfterS;
     }
 }
 
 const extensionOf = ({ format, bundle }: CardDataOptions): string => (bundle ? 'zip' : format);
 
+const wholeSeconds = (value: unknown): number | null => {
+    const seconds = Number(value);
+
+    return value !== null && value !== '' && Number.isFinite(seconds) && seconds > 0
+        ? Math.ceil(seconds)
+        : null;
+};
+
+// The share route's answer when it serves no file is a 503 while a refresh
+// is in progress (the wait in `Retry-After` and the body's `retry_after_s`),
+// and otherwise the refusal's `code`, or `error` on its own 404.
+const liveRefusal = (res: Response, body: Record<string, unknown> | null): CardDownloadError => {
+    if (res.status === 503 && body?.['status'] === 'pending') {
+        return new CardDownloadError(
+            DOWNLOAD_PENDING,
+            wholeSeconds(res.headers.get('retry-after')) ?? wholeSeconds(body['retry_after_s']),
+        );
+    }
+
+    const code = body?.['code'] ?? body?.['error'];
+
+    return new CardDownloadError(typeof code === 'string' ? code : null);
+};
+
 /**
- * Fetch one revision's rows as a file. The file is read whole: a card is
- * capped at 24 series of 500 points or 2,000 table rows, so it is small.
- * Throws `CardDownloadError` on a refusal.
+ * Fetch a card's rows as a file: the rows of revision `ref`, or, when `live`
+ * names the card on a live share, the rows the share last refreshed it on.
+ * The file is read whole, since a card is capped at 24 series of 500 points
+ * or 2,000 table rows. Any answer but a served file throws
+ * `CardDownloadError`, so a refusal's body cannot be saved as the file.
  */
 export const fetchCardData = async (
     ref: CardRef,
     options: CardDataOptions,
-    signal?: AbortSignal,
+    { live, signal }: { live?: LiveCardAddress | null; signal?: AbortSignal } = {},
 ): Promise<{ blob: Blob; fileName: string }> => {
-    const res = await fetch(cardDataUrl(ref, options), { signal });
+    const res = await fetch(live ? liveCardDataUrl(live, options) : cardDataUrl(ref, options), {
+        signal,
+    });
 
     if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { code?: unknown } | null;
+        const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
 
-        throw new CardDownloadError(typeof body?.code === 'string' ? body.code : null);
+        if (live) {
+            throw liveRefusal(res, body);
+        }
+
+        throw new CardDownloadError(typeof body?.['code'] === 'string' ? body['code'] : null);
     }
 
     return {

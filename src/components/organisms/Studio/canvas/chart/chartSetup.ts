@@ -17,6 +17,7 @@ import type { CSSProperties } from 'react';
 import styles from '../cards/ChartCard.module.scss';
 
 import { formatAxis } from '@/lib/chat/widgets';
+import { tooltipValue, valueUnitOption } from '@/lib/studio/chartValue';
 import type { SeriesPair, ThemeDerived } from '@/lib/studio/theme';
 
 /**
@@ -202,7 +203,7 @@ const htmlTooltip = ({
                 point.datasetIndex,
             ) ?? ['#484842', '#5e5e52'];
             const label = String(point.dataset.label ?? '');
-            const value = formatAxis(point.parsed.y ?? 0);
+            const value = tooltipValue(chart, point.parsed);
 
             return `<span class="${styles.chartTipRow}"><span class="${styles.chartTipDot}" style="--series-dark:${dark};--series-light:${light}"></span><span class="${styles.chartTipLabel}">${escapeHtml(label)}</span><span class="${styles.chartTipValue}">${escapeHtml(value)}</span></span>`;
         })
@@ -230,12 +231,13 @@ const htmlTooltip = ({
 
 // Options are built per scale factor and theme — Chart.js draws in raw px,
 // so every font/padding rides the same fluid factor as the grid, and every
-// colour is the theme's resolved hex.
+// colour is the theme's resolved hex. The chart's unit sets how the value
+// axis and the tooltip write a number: "5.33%" for a percentage.
 export const buildChartOptions = (
     scale: number,
     autoSkip: boolean,
     theme: ThemeDerived,
-    horizontal = false,
+    { horizontal = false, unit }: { horizontal?: boolean; unit?: string } = {},
 ) => {
     // Small tick type on both axes — long names fit more text per line.
     const labelFont = { family: 'Outfit', size: Math.round(8 * scale), weight: 700 as const };
@@ -257,9 +259,10 @@ export const buildChartOptions = (
                   'touchstart',
                   'touchmove',
               ]) as (keyof HTMLElementEventMap)[],
-        // The HTML tooltip reads the palette off the options (it only gets
-        // the chart, not our closure).
+        // The HTML tooltip reads the palette and the unit off the options
+        // (it only gets the chart, not our closure).
         seriesPalette: theme.series,
+        ...valueUnitOption(unit),
         // Hover finds the nearest category slot, no need to touch the bar
         // itself — near-zero values stay hittable from the slot's full
         // width. The search runs ACROSS the slots, so it follows the index
@@ -312,7 +315,7 @@ export const buildChartOptions = (
                     font: labelFont,
                     // A touch of air between the values and the plot.
                     padding: Math.round(6 * scale),
-                    callback: (value: number | string) => formatAxis(Number(value)),
+                    callback: (value: number | string) => formatAxis(Number(value), unit),
                 },
             },
         },

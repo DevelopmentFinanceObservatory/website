@@ -1,12 +1,16 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import { common } from 'lowlight';
+import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 
+import { csvLanguage } from './csvLanguage';
 import styles from './Docs.module.scss';
+import DocsMermaid from './DocsMermaid';
 import DocsTabs from './DocsTabs';
 
-import { docsLink, docsSlug, type DocsPage } from '@/lib/docs/corpus';
+import { docsBundleLink, docsLink, docsSlug, type DocsPage } from '@/lib/docs/corpus';
 import { normaliseMkdocs } from '@/lib/docs/mkdocs';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- mdast / hast nodes, walked shallowly */
@@ -140,8 +144,37 @@ const heading = (Tag: 'h2' | 'h3' | 'h4') => {
     return Heading;
 };
 
+// What MkDocs gets from Pygments (QA-11). The corpus is python, bash, json,
+// yaml, toml, r and html — all in highlight.js's common set — plus `csv`,
+// which highlight.js has no grammar for, so we bring our own.
+//
+// `languages` REPLACES that common set rather than adding to it, so it is
+// spread back in: passing `csv` alone leaves python and the rest with a
+// grammar register that does not know them, and every sample goes plain.
+//
+// A fence with no language stays plain by design: `detect` is off rather
+// than guessing at console output. Token colours are ours, in
+// Docs.module.scss.
+// Typed off the prop rather than off `unified`: that package reaches us
+// through react-markdown, and a store with a strict node_modules layout
+// (pnpm — the client's) will not resolve what we have not declared.
+const rehypePlugins: ComponentProps<typeof ReactMarkdown>['rehypePlugins'] = [
+    [rehypeHighlight, { detect: false, languages: { ...common, csv: csvLanguage } }],
+];
+
+// The text of a `pre`'s code child, straight off the hast node. Mermaid has
+// no grammar, so its fence arrives as one untouched text node.
+const codeText = (node: any): string =>
+    (node?.children?.[0]?.children ?? []).map((child: any) => child.value ?? '').join('');
+
+const languageOf = (node: any): string =>
+    ((node?.children?.[0]?.properties?.className ?? []) as string[])
+        .find((name) => name.startsWith('language-'))
+        ?.slice('language-'.length) ?? '';
+
 /** One corpus page's markdown, rendered on the server: GFM tables, GitHub
- *  alerts, titled code blocks, anchored headings and site-relative links. */
+ *  alerts, highlighted and titled code blocks, anchored headings and
+ *  site-relative links. */
 const Markdown = ({ page, source }: { page: DocsPage; source: string }) => {
     // `docs-tabs` / `docs-tab` are our own element names (see remarkTabs);
     // the Components map only types the HTML ones, so the extras ride in on
@@ -151,6 +184,17 @@ const Markdown = ({ page, source }: { page: DocsPage; source: string }) => {
         h3: heading('h3'),
         h4: heading('h4'),
         a: ({ href = '', children }) => {
+            const bundle = docsBundleLink(page, href);
+
+            // A file to save, so no client navigation and no prefetch.
+            if (bundle) {
+                return (
+                    <a href={bundle} download>
+                        {children}
+                    </a>
+                );
+            }
+
             const to = docsLink(page, href);
 
             return /^https?:/.test(to) ? (
@@ -187,6 +231,11 @@ const Markdown = ({ page, source }: { page: DocsPage; source: string }) => {
         pre: ({ node, children }) => {
             const title = (node as any)?.children?.[0]?.data?.meta?.match(/title="([^"]+)"/)?.[1];
 
+            // A diagram, not a sample: it is drawn rather than printed.
+            if (languageOf(node) === 'mermaid') {
+                return <DocsMermaid source={codeText(node)} />;
+            }
+
             return (
                 <figure className={styles.code}>
                     {title && <figcaption className={styles.codeTitle}>{title}</figcaption>}
@@ -205,6 +254,7 @@ const Markdown = ({ page, source }: { page: DocsPage; source: string }) => {
         <div className={styles.prose}>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkCallouts, remarkTabs, remarkDropTitle]}
+                rehypePlugins={rehypePlugins}
                 components={components}
             >
                 {normaliseMkdocs(source)}

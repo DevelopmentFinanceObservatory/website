@@ -189,7 +189,13 @@ test("relatedMeasures lists the related measures under their group's name", () =
 
 test("measureSwitchEntry posts the picked measure's own identity with the groups of the Spec that offered it", () => {
     const measures = [...northKoreaMeasureSpec.alternative_measures.slice(0, 2), currentAccount];
-    const entity_groups = { observationAbout: { dcid: 'undata-geo/G00403000', label: 'Asia' } };
+    const entity_groups = {
+        observationAbout: {
+            dcid: 'undata-geo/G00403000',
+            label: 'Asia',
+            entity_type: 'UNGeoRegion',
+        },
+    };
 
     for (const measure of measures) {
         const entry = {

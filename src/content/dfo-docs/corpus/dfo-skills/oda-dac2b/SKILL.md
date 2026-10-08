@@ -2,13 +2,14 @@
 name: oda-dac2b
 description: >-
   Context for working with the OECD DAC2B table, other official flows (OOF) and officially supported export credits by donor and recipient. Covers its measures, why bilateral donors' figures sit at regional or income-group level while country detail comes from multilateral lenders, and the double-counting traps with donor and recipient aggregates and nested measures. Load once DAC2B has been chosen for an analysis, or when working with DAC2B figures. For choosing between DAC datasets, use oda-dataset-selection.
+license: CC-BY-4.0
 ---
 
 # DAC2B: other official flows by recipient
 
 Context for working with the OECD DAC2B table, other official flows (OOF) and officially supported export credits by donor and recipient.
 
-To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md).
+To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md). [Download this skill as a zip](../oda-dac2b.zip).
 
 ## What it is
 

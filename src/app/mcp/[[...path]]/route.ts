@@ -14,11 +14,12 @@ import { forward, forwardAsset, STUDIO_API_BASE } from '@/lib/proxy/forward';
 // The harness guards the server with its own MCP_API_TOKEN. When the proxy
 // holds it, it is attached on the caller's behalf (the site is the front
 // door). Otherwise the caller's own Authorization header goes through.
-// The caller is named in x-dfo-caller (src/lib/proxy/caller). No rate limit.
+// The caller is named in x-dfo-caller (src/lib/proxy/caller). Each address is
+// rate-limited (surface 'mcp' in src/lib/proxy/rateLimit).
 //
 // The exception is the theme stylesheet presentation-mcp's views load,
 // `/mcp/presentation/theme-<hash>.css`, which is fetched from the same path on
-// the harness, public and with its own cache headers.
+// the harness, public, with its own cache headers and no limit.
 const MCP_TOKEN = process.env.MCP_API_TOKEN;
 
 const THEME_FILE = /^theme-[0-9a-f]{1,64}\.css$/;
@@ -39,6 +40,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path?: st
     }
 
     return forward(req, {
+        surface: 'mcp',
         target: `${STUDIO_API_BASE}/mcp/${req.nextUrl.search}`,
         bearer: MCP_TOKEN,
         caller: requestCaller(req.headers),

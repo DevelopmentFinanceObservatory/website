@@ -71,7 +71,9 @@
     gap: rem(20);
 
     .cardTitle {
-        max-width: rem(188);
+        // Room to stay on one line on a card this wide (see SPAN_DEFAULT),
+        // while still stopping clear of the pin and the kebab.
+        max-width: rem(280);
     }
 }
 

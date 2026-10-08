@@ -19,22 +19,41 @@ export const MAX_COLS = 500;
 
 // Card footprints in cells: cards SPAWN at the default size, and the corner
 // grip can only take them between min and max.
+//
+// A stat card's height is budgeted, not guessed (QA-28). At rem(20) a cell,
+// its column needs: 32 padding, the title, the 20 gap under it, the number
+// at ~27, 6, the caption, then the 16 gap and the source line. The card
+// hides its overflow, and that source line was the piece falling off the
+// bottom.
+//
+// So the card is wide rather than tall (QA-25). The source name only has
+// `width - 122` to live on — the padding, the "Built with" mark that never
+// shrinks, and the icon column — and at 260px that was 138px a line, which
+// truncated most names. At 400px it is 278px: the longest name we carry
+// ("World Bank International Debt Statistics (IDS)") fits on one line, the
+// title stops wrapping too (see .cardStat .cardTitle), and the column comes
+// to ~162px, which is what nine cells (180) hold — the leftover gathers
+// above the source line, which is pinned to the bottom, so every cell of
+// slack shows up there as a hole.
+//
+// The grip starts there rather than lower: a card whose title and source
+// both wrap runs to ~190px and can be dragged taller.
 export const SPAN_DEFAULT: Record<Widget['kind'], { w: number; h: number }> = {
-    key_number: { w: 13, h: 8 },
+    key_number: { w: 20, h: 9 },
     chart: { w: 22, h: 14 },
     table: { w: 22, h: 14 },
     text: { w: 14, h: 4 },
 };
 
 export const SPAN_MIN: Record<Widget['kind'], { w: number; h: number }> = {
-    key_number: { w: 11, h: 7 },
+    key_number: { w: 18, h: 9 },
     chart: { w: 22, h: 13 },
     table: { w: 22, h: 13 },
     text: { w: 14, h: 3 },
 };
 
 export const SPAN_MAX: Record<Widget['kind'], { w: number; h: number }> = {
-    key_number: { w: 16, h: 11 },
+    key_number: { w: 26, h: 13 },
     chart: { w: 34, h: 21 },
     table: { w: 34, h: 21 },
     text: { w: 14, h: 60 },

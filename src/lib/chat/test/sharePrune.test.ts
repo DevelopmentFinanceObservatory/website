@@ -38,7 +38,7 @@ test('pruneForShare: a conversation share keeps the chat and the canvas', () => 
     assert.deepEqual(pruneForShare(saved, 'conversation'), { ...saved, sessionId: null });
 });
 
-test('pruneForShare: the owner snapshot is left untouched', () => {
+test("pruneForShare: the owner's saved conversation is left untouched", () => {
     pruneForShare(saved, 'conversation');
 
     assert.equal(saved.sessionId, 'harness-session-1');

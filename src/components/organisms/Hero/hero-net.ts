@@ -14,17 +14,25 @@ const DAMPING = 0.96;
 const DRIFT = 0.041;
 const RETURN_STRENGTH = 0.0008;
 
+/**
+ * The canvas is smaller than it was (QA-32 trimmed the hero panels), and the
+ * same forces over a shorter cursor path read as squares that barely move.
+ * The three knobs below are the motion: `cursorPullStrength` is how hard a
+ * passing cursor drags a square, `returnStrength` how insistently it goes
+ * home afterwards, `drift` the idle jitter. Raise the first and lower the
+ * second for more travel.
+ */
 export const HERO_NET = {
     nodeCount: 225,
     nodeSize: 180,
     clampToBounds: false,
     spawnPaddingRatio: 0.85,
     cursorCount: 3,
-    cursorSpeedMin: 0.7,
-    cursorSpeedMax: 1.7,
-    cursorPullStrength: 0.0025,
-    drift: 0.012,
-    returnStrength: 0.0012,
+    cursorSpeedMin: 0.9,
+    cursorSpeedMax: 2.1,
+    cursorPullStrength: 0.0042,
+    drift: 0.016,
+    returnStrength: 0.0008,
 } as const;
 
 interface NetConfig {

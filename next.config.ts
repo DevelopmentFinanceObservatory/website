@@ -24,6 +24,17 @@ const nextConfig: NextConfig = {
         return [
             { source: '/docs.md', destination: '/docs-md' },
             { source: '/docs/:path*.md', destination: '/docs-md/:path*' },
+            // The platform doors live under a version prefix: /api/v1/* is the
+            // address to publish and the one Cloudflare's rules match, and the
+            // unversioned path stays as an alias so nothing already written
+            // against it breaks. Only these four families move — the site's own
+            // endpoints (auth, events, share, …) are not a public API and keep
+            // sitting directly under /api.
+            { source: '/api/search/:path*', destination: '/api/v1/search/:path*' },
+            { source: '/api/datasets', destination: '/api/v1/datasets' },
+            { source: '/api/datasets/:path*', destination: '/api/v1/datasets/:path*' },
+            { source: '/api/graph/:path*', destination: '/api/v1/graph/:path*' },
+            { source: '/api/studio/:path*', destination: '/api/v1/studio/:path*' },
         ];
     },
     images: {

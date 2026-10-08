@@ -1,89 +1,136 @@
 ---
-description: Copy the DFO skills into Claude Code or another Agent Skills agent.
+description: Install the DFO skills in Claude, ChatGPT, Gemini, Codex or another assistant that reads Agent Skills.
 ---
 
 # Use skills in your own agent
 
-Copy the DFO skills into an agent you run to give it the DFO team's methods for ODA questions.
+Install the DFO skills in the assistant you already use, and it answers development-finance questions with the DFO team's methods. Claude and Codex install every DFO skill at once, as one plugin from the DFO marketplace. Every other assistant takes one skill at a time, as a zip file you download from this site.
 
-## In Claude Code
+## In DFO Studio
 
-Claude Code reads skills from two folders. Skills in `~/.claude/skills/` load in every session. Skills in `.claude/skills/` inside a project load only when you work in that project, and you can commit them so collaborators get them too.
+The DFO assistant in [DFO Studio](../get-started/use-studio.md) loads and uses the DFO skills automatically, so you have nothing to set up. [How the DFO assistant uses skills](what-a-skill-is.md#how-the-dfo-assistant-uses-skills) explains how it picks one.
 
-### Before you start
+## Before you start
 
-- Claude Code installed.
-- Read access to `ONEcampaign/dfo-skills` on GitHub. The repository is private, so this route works only for ONE staff.
+The marketplace is the GitHub repository `DevelopmentFinanceObservatory/skills`. Its one plugin, `dfo`, installs every DFO skill at once.
 
-### Steps
+A zip installs one skill. The zip steps below install `oda-measures`, the skill on how ODA is measured, which the check at the end uses. Repeat them for each skill you need.
 
-1. Clone the skills repository.
+The zip for a skill is on that skill's page in the Skills section of this site. Open the page, such as [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md), and choose "Download this skill as a zip". A skill page without that link is for a skill the DFO does not offer for install.
 
-   ```bash
-   git clone --depth 1 https://github.com/ONEcampaign/dfo-skills.git
-   ```
+## Steps
 
-1. Copy the skills into a skills folder.
+Follow the steps for your assistant.
 
-   :::tabs
+:::tabs
 
-   ::tab{label="For every session"}
+::tab{label="Claude"}
 
-   ```bash
-   mkdir -p ~/.claude/skills
-   rsync -a --exclude _template dfo-skills/skills/ ~/.claude/skills/
-   ```
+These steps cover Claude on the web, the Claude desktop app, and Cowork.
 
-   ::tab{label="For one project"}
+1. Open Customize, then Plugins.
+1. Click Add, then "Add marketplace".
+1. Enter `DevelopmentFinanceObservatory/skills` and confirm.
+1. In the DFO marketplace, install the `dfo` plugin.
+1. Start a new chat.
 
-   Run this from the project root:
+To install one skill on its own, download its zip, then open Customize, then Skills, click +, and choose "Upload a skill". Uploaded skills need code execution switched on in Claude's settings.
 
-   ```bash
-   mkdir -p .claude/skills
-   rsync -a --exclude _template path/to/dfo-skills/skills/ .claude/skills/
-   ```
+::tab{label="ChatGPT"}
 
-   :::
+Whether you can upload a skill depends on your ChatGPT plan, and in a ChatGPT workspace an admin has to allow skill uploads. If the upload option in step 3 is missing, one of those is the cause.
 
-   The `_template` directory holds the files for creating a new skill. Exclude it when copying skills. Copy a single skill by naming its directory without a trailing slash. On macOS, a trailing slash copies `SKILL.md` and `references/` directly into `skills/`.
+1. Open the [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md) page and choose "Download this skill as a zip".
+1. In ChatGPT, open Plugins, then Skills.
+1. Click Create, then "Upload from your computer", and pick `oda-measures.zip`.
+1. Wait for ChatGPT to finish scanning the skill.
+1. Start a new chat.
 
-   ```bash
-   cp -R dfo-skills/skills/oda-measures ~/.claude/skills/
-   ```
+::tab{label="Gemini"}
 
-1. Start a new Claude Code session.
+Gemini takes skills on a personal Google Account, for people aged 18 or over, with no Google AI subscription needed. Skills are unavailable on a work or school account.
 
-### Verify it worked
+1. Open the [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md) page and choose "Download this skill as a zip".
+1. In the Gemini app, open Settings, then Skills.
+1. Click Upload.
+1. Select `oda-measures.zip` and click Open.
+1. Review the skill, then click Create.
+1. Start a new chat.
 
-The skills folder holds one directory per skill, including `oda-measures`:
+::tab{label="Claude Code"}
+
+Run these two commands in a Claude Code session.
 
 ```
-…
-oda-measures
-policy-markers
-…
+/plugin marketplace add DevelopmentFinanceObservatory/skills
+/plugin install dfo@dfo
 ```
+
+Then start a new session. From a terminal, `claude plugin marketplace add DevelopmentFinanceObservatory/skills` and `claude plugin install dfo@dfo` do the same.
+
+::tab{label="Codex"}
+
+Run these two commands in a terminal.
 
 ```bash
-ls ~/.claude/skills
+codex plugin marketplace add DevelopmentFinanceObservatory/skills
+codex plugin add dfo@dfo
 ```
 
-Ask a question one of the skills covers, such as "Should I use grant equivalents or gross disbursements to compare Japan's and France's ODA effort?" Claude Code loads `oda-measures`, reads `references/flow-types.md` and `references/grants-loans-psi.md`, and recommends grant equivalents from 2018 onwards.
+Then start a new Codex session.
 
-### Keep the skills current
+::tab{label="Another agent"}
 
-Pull the repository, then sync the skills. `rsync` overwrites changed files and leaves your other skills alone.
+An agent that reads the Agent Skills format loads a skill from a folder on your computer.
+
+1. Open the [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md) page and choose "Download this skill as a zip".
+
+1. Unzip it into your agent's skills folder. Many agents, including Cursor, GitHub Copilot and Gemini CLI, read `~/.agents/skills/`. Run this from the folder that holds the download:
+
+   ```bash
+   mkdir -p ~/.agents/skills
+   unzip oda-measures.zip -d ~/.agents/skills
+   ```
+
+1. Start a new session.
+
+Check your agent's documentation if it reads a different folder. Keep the unzipped folder whole, because `SKILL.md` points to the files in `references/` by relative path.
+
+:::
+
+Every route installs a skill's `references/` files along with its `SKILL.md`.
+
+## Verify it worked
+
+Ask a question one of the skills covers, such as "Should I use grant equivalents or gross disbursements to compare Japan's and France's ODA effort?" An assistant that has loaded `oda-measures` recommends grant equivalents and says the comparison should start in 2018, when grant-equivalent figures begin.
+
+## Keep the skills current
+
+The DFO team revises skills as methods and datasets change. A marketplace install updates from the repository. A zip is a copy of the skill as it stood when you downloaded it.
+
+:::tabs
+
+::tab{label="Claude"}
+
+Open Customize, then Plugins, and update the DFO marketplace.
+
+::tab{label="Claude Code"}
+
+```
+/plugin marketplace update dfo
+```
+
+::tab{label="Codex"}
 
 ```bash
-git -C dfo-skills pull
-rsync -a --exclude _template dfo-skills/skills/ ~/.claude/skills/
+codex plugin marketplace upgrade
 ```
 
-Delete a skill's directory when dfo-skills removes it. `rsync` leaves the local copy in place.
+::tab{label="A zip"}
 
-### Other agents
+Download the zip again from the skill's page. In Claude, ChatGPT or Gemini, delete the old skill in the skills settings and upload the new zip. For a folder on your computer, delete the old skill folder and unzip the new one in its place.
 
-An agent that supports the Agent Skills format can read these directories. Copy each skill directory into its skills folder, keeping `SKILL.md` and `references/` together because `SKILL.md` points to its reference files by relative path.
+:::
 
 ## Next
 

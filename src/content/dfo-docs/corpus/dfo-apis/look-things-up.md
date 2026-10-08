@@ -4,7 +4,7 @@ description: Turn a place or donor name into a dcid, and read what the graph hol
 
 # Look things up
 
-The Graph API resolves names to dcids and returns the graph's record for each dcid. Use `POST /api/graph/resolve` to resolve names and `GET /api/graph/node/{dcid}` to read a node. Check a place before asking Search a question, or label the dcids in a dataset.
+The Graph API resolves names to dcids and returns the graph's record for each dcid. Use `POST /api/graph/resolve` to resolve names, `GET /api/graph/node/{dcid}` to read a node, and `POST /api/graph/nodes` to read up to 50 nodes at once. Check a place before asking Search a question, or label the dcids in a dataset.
 
 Every example sets the base URL first. See [Conventions](conventions.md) for access and limits.
 
@@ -99,7 +99,7 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
    | `shape`    | For                                  | Main fields                                                                                    |
    | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
    | `entity`   | Countries and other places           | `label`, `entity_type`, `contained_in`                                                         |
-   | `stat_var` | Statistical variables                | `label`, `roles`, `population_type`, `facets`, `sources`                                       |
+   | `stat_var` | Statistical variables                | `label`, `definition`, `description`, `roles`, `population_type`, `source_indicator_codes`, `facets`, `sources` |
    | `source`   | Data sources                         | `label`, `license`, `url`, `publisher`, `earliest_observation_date`, `latest_observation_date` |
    | `node`     | Everything else, including CRS codes | `label`, `types`, `properties`                                                                 |
 
@@ -163,8 +163,10 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
      "dcid": "Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityB01_CRSPurposeCode12220_Nominal",
      "label": "Official development assistance gross disbursements for basic health care (standard grant, core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes)",
      "definition": null,
+     "description": null,
      "roles": ["financingProvider", "financingRecipient"],
      "population_type": "FinancialFlow",
+     "source_indicator_codes": [],
      "facets": null,
      "processing_level": null,
      "sources": null
@@ -197,12 +199,51 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
 
    `facets` and `sources` are `null` for this StatVar. The manifest's `trace.facets` from a mint names the source and unit a dataset used.
 
+1. **Read many nodes at once.** `POST /api/graph/nodes` takes up to 50 dcids in `dcids` and reads them together. Each entry in `nodes` has the shape `GET /api/graph/node/{dcid}` returns, in request order. A dcid the graph lacks comes back as `{"shape": "not_held", "dcid": ...}`, where the single-node route answers `404`.
+
+   ```json
+   {"shape":"entity","dcid":"country/NGA","label":"Nigeria"}
+   {"shape":"node","dcid":"CRSPurposeCode12220","label":"basic health care (CRS Purpose)"}
+   {"shape":"not_held","dcid":"country/XYZ","label":null}
+   ```
+
+   :::tabs
+
+   ::tab{label="curl"}
+
+   ```bash
+   curl -s -X POST "$DFO_API/api/graph/nodes" \
+     -H "Content-Type: application/json" \
+     -d '{"dcids": ["country/NGA", "CRSPurposeCode12220", "country/XYZ"]}' \
+     | jq -c '.nodes[] | {shape, dcid, label}'
+   ```
+
+   ::tab{label="Python"}
+
+   ```python
+   import json
+   import os
+
+   import httpx
+
+   DFO_API = os.environ["DFO_API"]
+
+   dcids = ["country/NGA", "CRSPurposeCode12220", "country/XYZ"]
+   response = httpx.post(f"{DFO_API}/api/graph/nodes", json={"dcids": dcids}, timeout=60)
+   for node in response.raise_for_status().json()["nodes"]:
+       print(json.dumps({"shape": node["shape"], "dcid": node["dcid"], "label": node.get("label")}, separators=(",", ":")))
+   ```
+
+   :::
+
+   The node routes share a pool of four graph reads, so a fifth parallel `GET /api/graph/node/{dcid}` call is refused `503`. One batch takes one place in that pool.
+
 1. **Read about a source.** `GET /api/graph/sources` lists the sources this deployment documents, and `GET /api/graph/documentation/{dcid}` returns one source's documentation:
 
    ```json
    {
      "details": {
-       "name_of_source": "OECD Creditor Reporting System",
+       "name_of_source": "OECD Creditor Reporting System (CRS)",
        "publisher": "Organisation for Economic Co-operation and Development (OECD)"
      },
      "license": {
@@ -291,6 +332,8 @@ A `resolved` result carries a `dcid`, and `GET /api/graph/node/{dcid}` for that 
 - A `404 node_not_held` response means the dcid is well formed and this deployment's graph lacks a node for it. Check the spelling or resolve the name first.
 - A `404 not_found` response on the node route means the path did not match. The usual cause is a `dcid:` prefix.
 - A `400 request_invalid` response with `pointer: "/texts"` means the request needs a `texts` list of 25 names or fewer. Split a longer list into batches of 25.
+- A `400 request_invalid` response with `pointer: "/dcids"` means the request needs a `dcids` list of 50 dcids or fewer. Split a longer list into batches of 50.
+- A `503 service_unavailable` response on a node route means every graph read slot is busy. Send the dcids as one `POST /api/graph/nodes` batch, or retry.
 
 ## See also
 

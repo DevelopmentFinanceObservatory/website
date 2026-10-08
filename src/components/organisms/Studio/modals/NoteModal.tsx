@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import styles from './TextCardModal.module.scss';
 
+import { useOpenFocus } from './useOpenFocus';
+
 import Button from '@/components/atoms/Button/Button';
 import Modal from '@/components/molecules/Modal/Modal';
 
@@ -24,6 +26,7 @@ const NoteModal = ({
     onSubmit: (note: string) => void;
 }) => {
     const [note, setNote] = useState(initial ?? '');
+    const field = useOpenFocus<HTMLTextAreaElement>(open);
     const canSave = note.trim().length > 0;
 
     const submit = (event: React.FormEvent) => {
@@ -53,11 +56,11 @@ const NoteModal = ({
                 <label className={styles.field}>
                     <span className={styles.label}>Note</span>
                     <textarea
+                        ref={field}
                         className={styles.textarea}
                         value={note}
                         placeholder="Enter note…"
                         rows={4}
-                        autoFocus
                         onChange={(event) => setNote(event.target.value)}
                     />
                 </label>

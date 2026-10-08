@@ -23,6 +23,7 @@ import type {
 } from '../chat/widgets';
 import { comparison } from './comparison.ts';
 import {
+    asUnit,
     payloadChart,
     payloadFrameRef,
     payloadNoteText,
@@ -35,6 +36,7 @@ import {
     type PayloadStat,
     type PayloadTable,
     type PayloadUnit,
+    type StructuredUnit,
 } from './payload.ts';
 import { formatPeriod } from './period.ts';
 import {
@@ -45,50 +47,31 @@ import {
     unitWords,
     type StatValue,
 } from './statFace.ts';
-import type { ComponentCreated, ComponentRevised, FactSummary, Unit } from './wire';
+import type { ComponentCreated, ComponentRevised, FactSummary } from './wire';
 
-// "current USD, millions" from the fact summary's structured unit. The
-// renderer owns display text, and the wire ships parts.
-const unitLabel = (unit: Unit | null | undefined): string | undefined => {
-    if (!unit) {
-        return undefined;
-    }
-
-    const parts = [
-        unit.price_basis ?? undefined,
-        unit.currency ?? undefined,
-        unit.magnitude && unit.magnitude !== 'units' ? unit.magnitude : undefined,
-    ].filter(Boolean);
-
-    return parts.length ? parts.join(' ') : undefined;
-};
-
-// The fact summary's structured unit in the payload's shape.
-const factUnit = (unit: Unit | null | undefined): PayloadUnit | undefined =>
-    unit
-        ? {
-              currency: unit.currency,
-              magnitude: unit.magnitude,
-              prices: unit.price_basis,
-              base_year: unit.base_year,
-          }
-        : undefined;
-
-// A payload unit as text: a plain label as it stands, a currency amount as
-// "USD millions (constant 2023)".
-const payloadUnitText = (unit: PayloadUnit | undefined): string | undefined => {
-    if (unit === undefined || typeof unit === 'string') {
-        return unit;
-    }
-
+const structuredUnitText = (unit: StructuredUnit): string => {
     const amount = [
         unit.currency,
         unit.magnitude && unit.magnitude !== 'units' ? unit.magnitude : null,
     ].filter(Boolean);
     const basis = [unit.prices, unit.base_year].filter((part) => part != null).join(' ');
-    const text = [amount.join(' '), basis && `(${basis})`].filter(Boolean).join(' ');
 
-    return text || undefined;
+    return [amount.join(' '), basis && `(${basis})`].filter(Boolean).join(' ');
+};
+
+// A payload unit as text: a plain label as it stands, a currency amount as
+// "USD millions (constant 2023)", a composed unit as the info panel words it
+// ("US Dollar per Total population").
+const payloadUnitText = (unit: PayloadUnit | undefined): string | undefined => {
+    if (unit === undefined || typeof unit === 'string') {
+        return unit;
+    }
+
+    if ('numerator' in unit) {
+        return unitDescription(unit) ?? undefined;
+    }
+
+    return structuredUnitText(unit) || undefined;
 };
 
 // The payload names the card's own title. Attribution backstops.
@@ -185,7 +168,7 @@ const statData = (stat: PayloadStat): CardData => ({
 // The fact-summary sketch's values: each series' first and last over the window.
 const sketchData = (facts: FactSummary): CardData => {
     const periods = periodsOf(facts);
-    const unit = unitLabel(facts.unit) ?? null;
+    const unit = payloadUnitText(asUnit(facts.unit)) ?? null;
 
     return {
         columns: SERIES_COLUMNS,
@@ -341,7 +324,7 @@ const sketchStatFields = (facts: FactSummary): StatFields => {
     const series = facts.series[0];
     const value = series?.last ?? series?.first ?? null;
 
-    return value != null ? statFields({ value, unit: factUnit(facts.unit) }) : { value: '—' };
+    return value != null ? statFields({ value, unit: asUnit(facts.unit) }) : { value: '—' };
 };
 
 // --- Widgets ----------------------------------------------------------------
@@ -380,7 +363,7 @@ const chartWidget = (frame: ComponentCreated): ChartWidget | null => {
             id: frame.component_id,
             chartType: frame.type === 'bar_chart' ? 'bar' : 'line',
             title: titleOf(frame.payload, facts),
-            unit: unitLabel(facts.unit),
+            unit: payloadUnitText(asUnit(facts.unit)),
             ...plot,
             ref: refOf(frame),
             data: chart ? chartData(chart) : sketchData(facts),
@@ -433,6 +416,8 @@ const provenanceOf = (frame: ComponentCreated): PayloadProvenance => {
         sources,
         dataThrough: freshness?.data_through ?? null,
         lastRefreshed: freshness?.last_refreshed ?? null,
+        // Only the resolved payload states its warnings by kind.
+        leftOut: [],
     };
     const platform = payloadProvenance(frame.payload);
     const chosen =
@@ -442,6 +427,7 @@ const provenanceOf = (frame: ComponentCreated): PayloadProvenance => {
         ...chosen,
         dataThrough: chosen.dataThrough ?? own.dataThrough,
         lastRefreshed: chosen.lastRefreshed ?? own.lastRefreshed,
+        leftOut: platform?.leftOut ?? [],
     };
 };
 
@@ -458,10 +444,14 @@ const sourceWidget = (frame: ComponentCreated): TextWidget => ({
         .join('\n'),
 });
 
-/** The card's More Info payload: attribution, window and indicators from the
- *  fact summary; the citation, every source and freshness from provenance
- *  (the graph's own name for a source is fetched later, by the panel, by
- *  the source's dcid: its `ref` where it has one, else its id). */
+// The unit the More Info panel names, from the fact summary.
+const infoUnit = (facts: FactSummary): string | null => unitDescription(asUnit(facts.unit));
+
+/** The card's More Info payload: attribution, window, unit and indicators from
+ *  the fact summary; the citation, every source, freshness and what the data
+ *  leaves out from provenance (the graph's own name for a source is fetched
+ *  later, by the panel, by the source's dcid: its `ref` where it has one,
+ *  else its id). */
 const infoOf = (facts: FactSummary, provenance: PayloadProvenance): CardInfo => {
     const sources: CardSource[] = provenance.sources.map((source) => ({
         id: source.ref ?? source.id,
@@ -479,13 +469,14 @@ const infoOf = (facts: FactSummary, provenance: PayloadProvenance): CardInfo => 
         sourceCount: facts.attribution.source_count,
         indicatorCount: facts.attribution.indicator_count,
         years: facts.window ?? null,
-        unit: unitDescription(factUnit(facts.unit)),
+        unit: infoUnit(facts),
         indicators: facts.indicators ?? [],
         licence: first?.licence ?? null,
         dataThrough: provenance.dataThrough,
         lastRefreshed: provenance.lastRefreshed,
         citation: provenance.citation,
         sources,
+        ...(provenance.leftOut.length > 0 ? { leftOut: provenance.leftOut } : {}),
     };
 };
 
@@ -594,9 +585,14 @@ export const reviseWidget = (widget: Widget, frame: ComponentRevised): Widget =>
 
     return {
         ...redrawn,
+        ...(redrawn.kind === 'chart'
+            ? { unit: payloadUnitText(asUnit(frame.fact_summary.unit)) }
+            : {}),
         ref: refOf(frame),
         frame: payloadFrameRef(payload) ?? redrawn.frame,
         source: frame.fact_summary.attribution.label,
-        ...(provenance ? { info: infoOf(frame.fact_summary, provenance) } : {}),
+        ...(provenance
+            ? { info: infoOf(frame.fact_summary, provenance) }
+            : redrawn.info && { info: { ...redrawn.info, unit: infoUnit(frame.fact_summary) } }),
     };
 };

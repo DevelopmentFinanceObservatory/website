@@ -6,7 +6,7 @@ import { type RefObject, useRef, useState } from 'react';
 
 import styles from './StudioLanding.module.scss';
 import { usePanelsHeight } from './usePanelsHeight';
-import PromptForm from '../prompt/PromptForm';
+import PromptForm, { type PromptField } from '../prompt/PromptForm';
 
 import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
@@ -31,7 +31,7 @@ type StudioLandingProps = {
     onQueryChange: (value: string) => void;
     // Start a canvas from the prompt or a suggestion.
     onBegin: (text: string) => void;
-    inputRef: RefObject<HTMLInputElement | null>;
+    inputRef: RefObject<PromptField | null>;
     // The account's recent canvases (the three most recent are shown); null
     // for a guest — no switch, the suggestions alone.
     history: ConversationMeta[] | null;
@@ -90,6 +90,7 @@ const StudioLanding = ({
                     placeholder="Start with a question, topic, or idea..."
                     label="Start with a question, topic, or idea"
                     submitLabel="Start"
+                    grow
                     inputRef={inputRef}
                     data-reveal
                     style={revealIndex(3)}

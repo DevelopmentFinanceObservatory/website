@@ -4,18 +4,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { CanvasDocument } from './useCanvasDocument';
 import type { useChat } from './useChat';
+import { widgetTitle } from '../canvas/layout';
 
 import type { CardLayout, SavedConversation } from '@/lib/chat/history';
 import { pushConversation } from '@/lib/chat/historyClient';
-import type { ShareKind } from '@/lib/chat/shareStore';
+import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
+import { readShareAnswer, type ShareMint, sharedDataCards } from '@/lib/studio/shareDialog';
 
 type UseConversationSaveArgs = {
     chat: ReturnType<typeof useChat>;
     doc: CanvasDocument;
-    // A shared view is a frozen copy — nothing to save, nowhere to.
+    // A shared view is read-only, so there is nothing to save and nowhere to
+    // save it.
     readOnly: boolean;
     initialLayout?: CardLayout;
 };
+
+// No share was made, for a reason a second try may outlive.
+const SHARE_FAILED: ShareMint = { refusal: { code: 'failed' } };
 
 /**
  * The conversation as one saveable document (history save, share snapshot):
@@ -166,43 +172,45 @@ export const useConversationSave = ({
         [scheduleSave],
     );
 
-    // Share: mint a frozen public copy of what's on screen (the header's
-    // Share for the whole thing, a card's menu for one card).
+    // Share: a public copy of what's on screen (the header's Share for the
+    // whole thing, a card's menu for one card). A snapshot keeps the values
+    // it was made with. A live canvas or card redraws them when it opens.
     const { addShareMark } = doc;
     const createShare = useCallback(
-        async (kind: ShareKind, cardId?: string): Promise<string | null> => {
+        async (
+            kind: StudioShareKind,
+            cardId: string | undefined,
+            mode: ShareMode,
+        ): Promise<ShareMint> => {
             const saved = buildSnapshot();
 
             if (!saved) {
-                return null;
+                return SHARE_FAILED;
             }
+
+            const cards = sharedDataCards(saved, kind, cardId, widgetTitle);
 
             try {
                 const res = await fetch('/api/share', {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ kind, cardId, conversation: saved }),
+                    body: JSON.stringify({ kind, cardId, mode, conversation: saved }),
                 });
-
-                if (!res.ok) {
-                    return null;
-                }
-
-                const body = (await res.json()) as { id?: string };
+                const answer = readShareAnswer(res.ok, await res.json().catch(() => null));
 
                 // A Chat + Canvas share marks the transcript: everything
                 // after this point stays private (the link is a snapshot).
-                if (body.id && kind === 'conversation') {
+                if ('id' in answer && kind === 'conversation') {
                     addShareMark({
                         messageIndex: saved.messages.length,
-                        shareId: body.id,
+                        shareId: answer.id,
                         at: Date.now(),
                     });
                 }
 
-                return body.id ?? null;
+                return { ...answer, cards };
             } catch {
-                return null;
+                return SHARE_FAILED;
             }
         },
         [buildSnapshot, addShareMark],

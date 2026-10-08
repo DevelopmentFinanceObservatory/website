@@ -79,11 +79,15 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
                     Filters
                 </p>
                 <div data-reveal style={revealIndex(3)}>
+                    {/* One publisher at a time: a source belongs to exactly
+                        one group, so stacking chips widened the list where a
+                        filter is read as narrowing it (QA-15). */}
                     <FilterChips
                         groups={groups}
                         counts={counts}
                         selected={selected}
                         onChange={setSelected}
+                        mode="single"
                     />
                 </div>
             </PageHero>

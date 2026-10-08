@@ -102,6 +102,20 @@ test('applyRestatementEdit rewrites the subject entity (no role_text) when role 
     assert.deepEqual(edited?.entities, [{ text: 'Ethiopia' }]);
 });
 
+test('applyRestatementEdit keeps `members` on an entity it leaves alone and drops it from the edited one', () => {
+    const africa = { text: 'Africa', role_text: 'to', dcid: 'africa', members: true };
+    const kenya = { text: 'Kenya', role_text: 'from', members: true };
+    const part: ParsedPart = { variable_text: 'GDP', entities: [africa, kenya] };
+
+    const timeEdit = applyRestatementEdit(part, { field: 'time_text' }, 'since 2015');
+
+    assert.deepEqual(timeEdit?.entities, [africa, kenya]);
+
+    const entityEdit = applyRestatementEdit(part, { field: 'entity', role: 'destination' }, 'Asia');
+
+    assert.deepEqual(entityEdit?.entities, [{ text: 'Asia', role_text: 'to' }, kenya]);
+});
+
 test('applyRestatementEdit replaces every entity in the edited role, where one token renders them all', () => {
     const cases: [RoleAxis | null, ParsedPart['entities'], ParsedPart['entities']][] = [
         [

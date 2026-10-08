@@ -5,24 +5,35 @@ import Redis from 'ioredis';
 import { limiterBucket } from './caller';
 
 /**
- * Per-IP rate limit for the platform proxy's /api/* routes (src/lib/proxy/
- * forward; /mcp has none): a fixed window in Redis, shared by every
+ * Per-IP rate limit for the platform proxy's /api/* and /mcp routes
+ * (src/lib/proxy/forward): a fixed window in Redis, shared by every
  * instance. An IPv6 client is counted by its /64 (see limiterBucket). On
  * only when REDIS_URL is set. Without it every call passes, so a deployment
- * can run the proxy before its Redis exists. A Redis error fails open too:
- * the platform's own doors are the backstop, the limit is a courtesy.
+ * can run the proxy before its Redis exists. A Redis error fails open too,
+ * as does a Redis that does not answer within COMMAND_TIMEOUT_MS. The
+ * platform's own doors are the backstop, and the limit is a courtesy.
  *
  * The window and the allowance per surface are env-tunable:
  *   RATE_LIMIT_WINDOW_S   (default 60)
  *   RATE_LIMIT_API        calls per window per IP on /api/* (default 120)
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
+ *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
  */
 const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
+
+// A connected Redis that stops answering must not hold the request.
+const COMMAND_TIMEOUT_MS = 500;
 
 export const LIMITS = {
     api: Number(process.env.RATE_LIMIT_API) || 120,
     pin: Number(process.env.RATE_LIMIT_PIN) || 10,
+    // Above the /api default on purpose. Claude, ChatGPT and Gemini call from
+    // the vendor's own addresses, so one address can carry many users, and a
+    // 429 reaches such a user as a failed connection. 300 a minute is the
+    // refill of one harness instance's tool-call bucket (5 a second), which
+    // stays the ceiling on total spend.
+    mcp: Number(process.env.RATE_LIMIT_MCP) || 300,
 } as const;
 
 export type Surface = keyof typeof LIMITS;
@@ -39,7 +50,12 @@ const redis = (): Redis | null => {
     const url = process.env.REDIS_URL;
 
     globalForRedis.redis = url
-        ? new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false })
+        ? new Redis(url, {
+              lazyConnect: true,
+              maxRetriesPerRequest: 1,
+              enableOfflineQueue: false,
+              commandTimeout: COMMAND_TIMEOUT_MS,
+          })
         : null;
 
     return globalForRedis.redis;

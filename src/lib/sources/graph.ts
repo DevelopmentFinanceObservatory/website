@@ -66,7 +66,10 @@ export type SourceCatalogueEntry = {
     source: { ref: string; label: string };
     data_commons: DataCommonsRef;
     datasets: SourceDataset[];
-    exclusions: { ref: string; reason: 'superseded_by_dfo' }[];
+    exclusions: {
+        ref: string;
+        reason: 'superseded_by_dfo' | 'superseded_by_un_system';
+    }[];
 };
 
 export type SourceCard = {

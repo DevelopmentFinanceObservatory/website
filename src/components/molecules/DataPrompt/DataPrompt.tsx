@@ -13,6 +13,9 @@ export type DataPromptProps = {
     suggestionsHidden?: boolean;
     onSubmit?: (query: string) => void;
     onChange?: (query: string) => void;
+    // Take the caret on mount. Applied from an effect rather than the DOM
+    // attribute, so the decision can depend on the device without the server
+    // and the browser rendering different markup.
     autoFocus?: boolean;
     // Focus the input whenever it scrolls into view (homepage section).
     focusOnView?: boolean;
@@ -76,6 +79,15 @@ const DataPrompt = ({
         return () => observer.disconnect();
     }, [focusOnView]);
 
+    useEffect(() => {
+        if (autoFocus) {
+            inputRef.current?.focus({ preventScroll: true });
+        }
+        // Mount only: a later flip of the prop is a different prompt, which
+        // arrives through a remount (see DataSearch's promptEpoch).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const submit = (query: string) => {
         if (query.trim()) {
             onSubmit?.(query.trim());
@@ -118,7 +130,6 @@ const DataPrompt = ({
                             submit(value);
                         }
                     }}
-                    autoFocus={autoFocus}
                 />
             </form>
             <span className={styles.rule} aria-hidden="true" />
