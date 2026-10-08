@@ -4,21 +4,28 @@
  * period · change" ("US Dollar · constant 2023 prices · 2024 · +1.9% from
  * 2023").
  *
- * The unit arrives in one of three shapes. A string is the graph's label
+ * The unit arrives in one of four shapes. A string is the graph's label
  * ("US Dollar") or, where the graph names none, the raw ref ("USDollar",
  * "Percent"), which reads spaced as Search spaces it. A card saved before
  * the platform labelled units holds a currency ref ("CurrencyUSD"). A
  * structured unit names an ISO 4217 currency, its magnitude and its price
- * basis. Currency names come from Intl.
+ * basis. Currency names come from Intl. A composed unit is the unit of a
+ * quotient of two measures and reads "numerator per denominator", each part
+ * a string, a structured unit, or a StatVar named by its label ("US Dollar
+ * per Total population").
+ *
+ * A composed unit's magnitude and price basis sit in brackets beside the
+ * part they belong to ("Euro (constant 2020 prices) per Total population"),
+ * so each stays with its own part.
  *
  * The value is scaled by the unit's magnitude ("441.9 in millions" is
  * 441,900,000) before it is compacted once, so the face never says "M" and
- * "millions" together.
+ * "millions" together. A composed unit scales by its numerator's magnitude.
  */
 
 import type { KeyNumberWidget } from '../chat/widgets.ts';
 import { spaceCamel } from '../spaceCamel.ts';
-import type { PayloadChange, PayloadUnit } from './payload.ts';
+import type { PayloadChange, PayloadUnit, StructuredUnit, UnitPart } from './payload.ts';
 import { formatPeriod } from './period.ts';
 
 /** The raw headline a stat card is drawn from. A card sketched from an
@@ -40,9 +47,11 @@ export type StatFace = {
 };
 
 type UnitReading = {
-    // Words for the unit, or null for a percentage (its sign is the suffix)
-    // and for no unit.
+    // Words for the unit, a composed unit's numerator alone, or null for a
+    // percentage (its sign is the suffix) and for no unit.
     words: string | null;
+    // A composed unit's denominator; null for every other unit.
+    per: UnitReading | null;
     percent: boolean;
     // The magnitude in words ("millions"), null for none and for "units".
     magnitude: string | null;
@@ -50,7 +59,12 @@ type UnitReading = {
     scale: number;
 };
 
-const MAGNITUDES: Record<string, number> = { thousands: 1e3, millions: 1e6, billions: 1e9 };
+const MAGNITUDES: Record<string, number> = {
+    thousands: 1e3,
+    millions: 1e6,
+    billions: 1e9,
+    trillions: 1e12,
+};
 const PERCENT = /^(%|percent|percentage)$/i;
 const ISO_CURRENCY = /^[A-Z]{3}$/;
 // The platform's currency unit ref: "Currency" and an ISO 4217 code.
@@ -77,31 +91,102 @@ const priceBasis = (prices: string | null, baseYear: number | null): string | nu
         : `${prices} prices`;
 };
 
-const readUnit = (unit: PayloadUnit | null | undefined): UnitReading => {
-    if (unit == null) {
-        return { words: null, percent: false, magnitude: null, basis: null, scale: 1 };
-    }
+/** Whether a unit is a percentage: "Percent", "Percentage" or "%". */
+export const isPercentUnit = (unit: string | null | undefined): boolean =>
+    unit != null && PERCENT.test(unit);
 
-    if (typeof unit === 'string') {
-        const percent = PERCENT.test(unit);
-        return {
-            words: percent ? null : unitName(unit),
-            percent,
-            magnitude: null,
-            basis: null,
-            scale: 1,
-        };
-    }
+const NO_UNIT: UnitReading = {
+    words: null,
+    per: null,
+    percent: false,
+    magnitude: null,
+    basis: null,
+    scale: 1,
+};
 
+const readStructured = (unit: StructuredUnit): UnitReading => {
     const scale = (unit.magnitude && MAGNITUDES[unit.magnitude]) || 1;
 
     return {
+        ...NO_UNIT,
         words: unit.currency ? unitName(unit.currency) : null,
-        percent: false,
         magnitude: scale === 1 ? null : unit.magnitude,
         basis: priceBasis(unit.prices, unit.base_year),
         scale,
     };
+};
+
+// One side of a composed unit. A percentage is named here, since a rate
+// per something takes no per cent sign.
+const readPart = (part: UnitPart): UnitReading => {
+    if (typeof part === 'string') {
+        return { ...NO_UNIT, words: unitName(part) };
+    }
+
+    return 'stat_var' in part ? { ...NO_UNIT, words: part.label } : readStructured(part);
+};
+
+// A side of a composed unit: its words with what qualifies them ("Euro
+// (millions, constant 2020 prices)"), or the qualifiers alone where it names
+// no currency ("thousands"). Null when it states neither.
+const side = (words: string | null, qualifiers: (string | null)[]): string | null => {
+    const stated = qualifiers.filter(Boolean);
+
+    if (!words) {
+        return stated.join(', ') || null;
+    }
+
+    return stated.length ? `${words} (${stated.join(', ')})` : words;
+};
+
+// Whether a side of a composed unit names or qualifies anything.
+const qualified = ({ words, magnitude, basis }: UnitReading): boolean =>
+    Boolean(words ?? magnitude ?? basis);
+
+const readUnit = (unit: PayloadUnit | null | undefined): UnitReading => {
+    if (unit == null) {
+        return NO_UNIT;
+    }
+
+    if (typeof unit === 'string') {
+        const percent = isPercentUnit(unit);
+
+        return { ...NO_UNIT, words: percent ? null : unitName(unit), percent };
+    }
+
+    if (!('numerator' in unit)) {
+        return readStructured(unit);
+    }
+
+    const numerator = readPart(unit.numerator);
+    const per = readPart(unit.denominator);
+
+    // A side that states nothing leaves no unit to read, and no scale.
+    return qualified(numerator) && qualified(per) ? { ...numerator, per } : NO_UNIT;
+};
+
+// The unit's name and its qualifiers as the pieces a caption or a
+// description joins. A composed unit is one piece: each side's qualifiers
+// bracketed beside its name, or standing alone where the side names no
+// currency. With `brackets` off a named side keeps its name alone, which is
+// the unit in words.
+const unitPieces = (
+    name: string | null,
+    reading: UnitReading,
+    qualifiers: (string | null)[],
+    brackets = true,
+): (string | null)[] => {
+    const named = (words: string | null, own: (string | null)[]) =>
+        side(words, words && !brackets ? [] : own);
+
+    if (!reading.per) {
+        return [name, ...(brackets ? qualifiers : [])];
+    }
+
+    const numerator = named(name, qualifiers);
+    const denominator = named(reading.per.words, [reading.per.magnitude, reading.per.basis]);
+
+    return [numerator ? `${numerator} per ${denominator}` : `per ${denominator}`];
 };
 
 const oneDecimal = new Intl.NumberFormat('en-US', {
@@ -138,6 +223,9 @@ export const compact = (value: number, gap = ''): string => {
     return twoDecimals.format(value);
 };
 
+/** A percentage's number in full, up to two decimals ("5.33", "1,250"). */
+export const percentNumber = (value: number): string => twoDecimals.format(value);
+
 /** A table cell's number, its letter spaced: "37.0 K". */
 export const cellNumber = (value: number): string => compact(value, ' ');
 
@@ -158,7 +246,8 @@ const changeText = (
     period: string | undefined,
 ): string => {
     const [start, end] = basis.map(formatPeriod);
-    const from = period && end === formatPeriod(period) ? `from ${start}` : `from ${start} to ${end}`;
+    const from =
+        period && end === formatPeriod(period) ? `from ${start}` : `from ${start} to ${end}`;
     const size = Math.abs(value) * (derivation === 'percent_change' ? 1 : unit.scale);
     const amount =
         derivation === 'percent_change'
@@ -178,23 +267,27 @@ const changeText = (
 
 /** The unit as the More Info panel names it: its words, its magnitude and
  *  its price basis ("US Dollar, millions, constant 2023 prices"), since the
- *  card's chart, table and file hold the values unscaled. A percentage reads
- *  "Percent", and no unit gives null. */
+ *  card's chart, table and file hold the values unscaled. A composed unit
+ *  brackets them beside its numerator ("Euro (constant 2020 prices) per
+ *  Total population"). A percentage reads "Percent", and no unit gives
+ *  null. */
 export const unitDescription = (unit: PayloadUnit | null | undefined): string | null => {
     const reading = readUnit(unit);
-    const parts = [
-        reading.percent ? 'Percent' : reading.words,
+    const parts = unitPieces(reading.percent ? 'Percent' : reading.words, reading, [
         reading.magnitude,
         reading.basis,
-    ].filter(Boolean);
+    ]).filter(Boolean);
 
     return parts.length ? parts.join(', ') : null;
 };
 
-/** The unit in words for a caption or a chip: "US Dollar", "Person". A percentage
- *  and no unit give null. */
-export const unitWords = (unit: PayloadUnit | null | undefined): string | null =>
-    readUnit(unit).words;
+/** The unit in words for a caption or a chip: "US Dollar", "Person", "US
+ *  Dollar per Total population". A percentage and no unit give null. */
+export const unitWords = (unit: PayloadUnit | null | undefined): string | null => {
+    const reading = readUnit(unit);
+
+    return unitPieces(reading.words, reading, [reading.basis], false)[0] ?? null;
+};
 
 /** The number with its suffix as one string: "23.4M", "12.3%". */
 export const faceText = ({ amount, suffix }: StatFace): string => `${amount}${suffix}`;
@@ -204,11 +297,10 @@ export const statFace = ({ value, period, unit, change }: StatValue): StatFace =
     const scaled = value * reading.scale;
 
     return {
-        amount: typographicMinus(reading.percent ? twoDecimals.format(scaled) : compact(scaled)),
+        amount: typographicMinus(reading.percent ? percentNumber(scaled) : compact(scaled)),
         suffix: reading.percent ? '%' : '',
         caption: [
-            reading.words,
-            reading.basis,
+            ...unitPieces(reading.words, reading, [reading.basis]),
             period && formatPeriod(period),
             change && changeText(change, reading, period),
         ]

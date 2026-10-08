@@ -10,16 +10,19 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
- * must not reach a client). An /api/* call is rate-limited per IP (src/lib/
- * proxy/rateLimit, on only with REDIS_URL); /mcp has no limit. A call is
- * forwarded with its method, query, body, content headers and every mcp-*
- * header (src/lib/proxy/headers), and the upstream's response streamed back
- * untouched: SSE (search resolve, studio turns, MCP) and file downloads
- * both depend on nothing being buffered here.
+ * must not reach a client). An /api/* or /mcp call is rate-limited per IP
+ * (src/lib/proxy/rateLimit, on only with REDIS_URL). A call is forwarded
+ * with its method, query, body, content headers and every mcp-* header
+ * (src/lib/proxy/headers), and the upstream's response streamed back
+ * untouched: SSE (search resolve, studio turns, MCP) and file downloads both
+ * depend on nothing being buffered here.
  *
  * Upstreams:
- *   /api/search|datasets|graph/*   → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
- *   /api/studio/*                  → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
+ *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
+ *   /api/v1/studio/*                 → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
+ *
+ * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
+ * same handlers (next.config.ts), so both addresses answer alike.
  *   /mcp, /mcp/*                   → STUDIO_API_BASE/mcp/ (dfo-ai's combined
  *                                    MCP server), MCP_API_TOKEN, x-dfo-caller
  *   /mcp/presentation/theme-*.css  → STUDIO_API_BASE, no token (forwardAsset)

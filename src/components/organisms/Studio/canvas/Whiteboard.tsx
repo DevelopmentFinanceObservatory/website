@@ -1,12 +1,13 @@
 'use client';
 
 import classNames from 'classnames';
-import { type MutableRefObject, useEffect, useMemo, useRef } from 'react';
+import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import BeaconLayer from './BeaconLayer';
 import { computeBeacons } from './beacons';
 import CardBody from './cards/CardBody';
+import CardNote from './cards/CardNote';
 import type { CardExtras } from './cards/types';
 import {
     type CardView,
@@ -32,7 +33,15 @@ import { useIsPhone } from '@/hooks/useMediaQuery';
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { cardRefOf } from '@/lib/studio/cardDownload';
+import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
+
+// A card's note waits for the pointer to settle — crossing a sheet of cards
+// should not trail popups behind it — and then outlives the pointer leaving
+// by enough to cross the few px down to it, where its remove button is
+// (CardNote).
+const NOTE_INTENT_MS = 500;
+const NOTE_GRACE_MS = 150;
 
 export type WhiteboardProps = {
     widgets: Widget[];
@@ -82,6 +91,10 @@ export type WhiteboardProps = {
     // as the view resizes) instead of at its saved spot, and the sheet is a
     // still — no shockwaves.
     centerSingle?: boolean;
+    // A live share's canvas: each data card's refresh state, handed to the
+    // card with the share's id and creation time. Absent for a snapshot and
+    // in the owner's Studio.
+    live?: LiveCanvas;
 };
 
 /**
@@ -116,6 +129,7 @@ const Whiteboard = ({
     onDownload,
     readOnly = false,
     centerSingle = false,
+    live,
 }: WhiteboardProps) => {
     // Fluid cell: GRID_CELL scaled by the live root font-size. All cell↔px
     // math uses it; `f` scales the raw-px interaction constants (scroll
@@ -137,6 +151,57 @@ const Whiteboard = ({
         onLayoutChange,
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
+    // Which card the pointer is resting on — the whole card, not a tag in it,
+    // is what brings a user's note up (see CardNote). Leaving one is held for
+    // a moment: the note hangs a few px below the card, and the pointer has
+    // to cross that gap to reach the remove button inside it.
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const showNote = useRef(0);
+    const hideNote = useRef(0);
+    const holdHover = (id: string) => {
+        // Back on the card whose note is already up: keep it, and do not
+        // make the reader wait the intent out a second time.
+        if (hoveredId === id) {
+            window.clearTimeout(hideNote.current);
+
+            return;
+        }
+
+        window.clearTimeout(showNote.current);
+        showNote.current = window.setTimeout(() => setHoveredId(id), NOTE_INTENT_MS);
+    };
+    const releaseHover = (id: string) => {
+        window.clearTimeout(showNote.current);
+
+        // Left before its note ever came up, or left a different card: the
+        // pending hide belongs to whichever note is actually showing.
+        if (hoveredId !== id) {
+            return;
+        }
+
+        hideNote.current = window.setTimeout(
+            () => setHoveredId((current) => (current === id ? null : current)),
+            NOTE_GRACE_MS,
+        );
+    };
+
+    // A dropped card keeps the pointer that was dragging it, so nothing
+    // leaves and nothing re-enters — the note would simply reappear the
+    // instant the drag ended. The wait starts over instead.
+    const restartHover = (id: string) => {
+        window.clearTimeout(showNote.current);
+        window.clearTimeout(hideNote.current);
+        setHoveredId(null);
+        showNote.current = window.setTimeout(() => setHoveredId(id), NOTE_INTENT_MS);
+    };
+
+    useEffect(
+        () => () => {
+            window.clearTimeout(showNote.current);
+            window.clearTimeout(hideNote.current);
+        },
+        [],
+    );
     const dragging = useCardDrag({ boardRef, CELL, f, slots, setSlots, raise, widgetIds });
     const pan = usePan(boardRef);
     const { canvasRef: fxCanvasRef, spawnWave } = useShockwave({
@@ -368,6 +433,7 @@ const Whiteboard = ({
                     onView: (next) => onViewChange(widget.id, next),
                     onShare: onShare && !readOnly ? () => onShare(widget.id) : null,
                     readOnly,
+                    live: cardLiveOf(live, widget.id),
                 };
 
                 const focused = widget.id === focusedId && !isPhone;
@@ -412,20 +478,61 @@ const Whiteboard = ({
                     >
                         {/* The box carries the lift transform (tilt + scale),
                             so the grab bar and the resize grip ride along with
-                            the card instead of hanging off the static slot. */}
-                        <div className={styles.cardBox}>
-                            {/* Only a fading card has no grab bar — pinned ones
-                                still drag fine (pin = safe from INCOMING widgets,
-                                not from the user). */}
-                            {!isLeaving && !readOnly && (
-                                <span
-                                    className={styles.handle}
-                                    data-nowave=""
-                                    onPointerDown={dragging.startDrag(widget.id)}
-                                    onPointerMove={dragging.moveDrag}
-                                    onPointerUp={dragging.endDrag(true)}
-                                    onPointerCancel={dragging.endDrag(false)}
+                            the card instead of hanging off the static slot.
+
+                            It is also the grab area: the whole card moves,
+                            not just the bar, which was 72px wide and left
+                            readers hunting for it (QA-20). The hook spares
+                            the controls inside. Only a fading card cannot be
+                            dragged — pinned ones still can, since the pin
+                            guards against INCOMING widgets, not the user. */}
+                        <div
+                            className={styles.cardBox}
+                            // The cursor follows the handlers: a gallery card
+                            // or a fading one is not draggable, so it keeps the
+                            // board's own pan grab.
+                            data-draggable={!isLeaving && !readOnly ? '' : undefined}
+                            // The whole card is the note's hover target —
+                            // and only a card that has one listens, so
+                            // crossing the rest costs no renders.
+                            {...(extras.note && {
+                                onMouseEnter: () => holdHover(widget.id),
+                                onMouseLeave: () => releaseHover(widget.id),
+                            })}
+                            {...(!isLeaving &&
+                                !readOnly && {
+                                    onPointerDown: dragging.startDrag(widget.id),
+                                    onPointerMove: dragging.moveDrag,
+                                    onPointerUp: () => {
+                                        if (drag && extras.note) {
+                                            restartHover(widget.id);
+                                        }
+
+                                        dragging.endDrag(true)();
+                                    },
+                                    onPointerCancel: () => {
+                                        if (drag && extras.note) {
+                                            restartHover(widget.id);
+                                        }
+
+                                        dragging.endDrag(false)();
+                                    },
+                                })}
+                        >
+                            {/* A note shows while the pointer rests on the
+                                card, and never mid-drag — on any card, since
+                                a popup left standing while the sheet shifts
+                                under it points at nothing. */}
+                            {extras.note && !isLeaving && (
+                                <CardNote
+                                    note={extras.note}
+                                    open={hoveredId === widget.id && !drag}
+                                    width={slot.w * CELL}
+                                    onRemove={extras.onRemoveNote}
                                 />
+                            )}
+                            {!isLeaving && !readOnly && (
+                                <span className={styles.handle} data-nowave="" />
                             )}
                             {!isLeaving && !readOnly && !isText && (
                                 <span

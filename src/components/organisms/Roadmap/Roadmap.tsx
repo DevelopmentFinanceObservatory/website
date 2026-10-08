@@ -159,7 +159,7 @@ const Roadmap = () => {
 
                 {view === 'upcoming' && (
                     <div key={listKey}>
-                        <RequestBox />
+                        <RequestBox area={area} />
                         <UpcomingStages entries={upcoming} />
                     </div>
                 )}

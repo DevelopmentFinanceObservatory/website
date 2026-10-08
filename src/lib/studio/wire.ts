@@ -8,6 +8,8 @@
  * members and nothing else.
  */
 
+import type { PayloadUnit } from './payload.ts';
+
 // ---------------------------------------------------------------------------
 // Shared shapes
 // ---------------------------------------------------------------------------
@@ -51,13 +53,6 @@ export type Provenance = {
     citation: string;
     execution_ref?: string | null;
     refreshed_from?: number | null;
-};
-
-export type Unit = {
-    currency: string | null;
-    magnitude: 'units' | 'thousands' | 'millions' | 'billions' | null;
-    price_basis: 'current' | 'constant' | null;
-    base_year: number | null;
 };
 
 export type Indicator = { id: string; name: string; description: string };
@@ -136,7 +131,9 @@ export type FactSummary = {
     indicators: Indicator[];
     attribution: Attribution;
     window?: { start: string; end: string } | null;
-    unit?: Unit | null;
+    // The card's unit in the shapes its payload's `unit` takes. Read
+    // through payload.ts's `asUnit`.
+    unit?: PayloadUnit | null;
     series_truncated?: { showing: number; total: number } | null;
     countries?: string[] | null;
 };

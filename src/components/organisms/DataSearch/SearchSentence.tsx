@@ -110,13 +110,12 @@ import {
     optionCoverageLabel,
     optionLabel,
     optionMuted,
-    partitionLevelOptions,
+    levelMenu,
     placeEditorPickRoute,
     placeOptionsForSpec,
     slotOptionLabel,
     slotOptionsEntry,
     rankOptionsByCoverage,
-    rootGroups,
     rowsLabel,
     slotOffersChoice,
     sourceOptionLabel,
@@ -130,10 +129,10 @@ import {
 } from '@/lib/search/view';
 import type {
     EntityOptionsBySpec,
-    LevelPartition,
     MethodChoice,
     MethodPicker,
     PlaceOptionsBySpec,
+    RootGroup,
     SlotOptionsEntry,
 } from '@/lib/search/view';
 
@@ -229,21 +228,19 @@ const MethodChoices = ({
 
 /**
  * A level-scoped constraint slot's menu body (SlotOption.relation
- * populated, see isLevelScopedOptions). Unbound, or on a flat code system,
- * it lists the roots, and a root the wire sent children for opens a
- * submenu: the root itself first, then its children. Bound on a
- * hierarchy, it lists the bound value's one way up, the bound value itself
- * as the current pick, and its ways down. Rows keep the server's order and
- * show its row count.
+ * populated, see isLevelScopedOptions), shaped by the slot's binding (see
+ * levelMenu). Unbound, it lists the roots, and a root the wire sent
+ * children for opens a submenu: the root itself first, then its children.
+ * Bound, it lists the bound value's one way up, the bound value itself as
+ * the current pick, its ways down, and the other roots beside a bound root
+ * or a flat code system's value. A binding the server does not hold gets
+ * the unbound menu, so its children stay reachable in their roots'
+ * submenus. Rows keep the server's order and show its row count.
  * `onSelect` re-resolves through the same slot-edit door every other option
  * in this file uses, and a child pick comes back on the next response
  * already scoped to its own level.
  */
-const renderLevelOptions = (
-    slot: any,
-    partition: LevelPartition,
-    onSelect: (binding: any) => void,
-) => {
+const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) => void) => {
     const optionItem = (option: any, direction?: 'up' | 'down') => (
         <DropdownMenu.Item
             key={option?.value?.ref?.dcid ?? optionLabel(option)}
@@ -259,53 +256,45 @@ const renderLevelOptions = (
             </OptionRow>
         </DropdownMenu.Item>
     );
-
-    if (partition.roots.length > 0) {
-        const boundDcid = slot.binding?.value?.ref?.dcid;
-        const { current, rest } = splitCurrentPick(partition.roots, boundDcid);
-
-        return (
-            <>
-                {current && (
-                    <DropdownMenu.Item asChild onSelect={() => onSelect({ kind: 'unbound' })}>
-                        <OptionRow
-                            checked
-                            pinned
-                            meta={rowsLabel(current.served_rows, current.served_rows_exact)}
-                            info={optionInfo(current)}
-                        >
-                            {optionLabel(current)}
-                        </OptionRow>
-                    </DropdownMenu.Item>
-                )}
-                {rootGroups({ ...partition, roots: rest }).map(({ root, children }) =>
-                    children.length === 0 ? (
-                        optionItem(root)
-                    ) : (
-                        <OptionSubmenu
-                            key={root?.value?.ref?.dcid ?? optionLabel(root)}
-                            label={optionLabel(root)}
-                            meta={rowsLabel(root.served_rows, root.served_rows_exact)}
-                        >
-                            {optionItem(root)}
-                            {children.map((child) => optionItem(child))}
-                        </OptionSubmenu>
-                    ),
-                )}
-            </>
+    const rootItems = (groups: RootGroup[]) =>
+        groups.map(({ root, children }) =>
+            children.length === 0 ? (
+                optionItem(root)
+            ) : (
+                <OptionSubmenu
+                    key={root?.value?.ref?.dcid ?? optionLabel(root)}
+                    label={optionLabel(root)}
+                    meta={rowsLabel(root.served_rows, root.served_rows_exact)}
+                >
+                    {optionItem(root)}
+                    {children.map((child) => optionItem(child))}
+                </OptionSubmenu>
+            ),
         );
-    }
+    const menu = levelMenu(slot.binding, options);
+
+    if (menu.kind === 'unbound') return rootItems(menu.groups);
+
+    const { up, current, down, sideways } = menu;
 
     return (
         <>
-            {partition.parent && optionItem(partition.parent, 'up')}
+            {up && optionItem(up, 'up')}
             <DropdownMenu.Item asChild onSelect={() => onSelect({ kind: 'unbound' })}>
-                <OptionRow checked pinned info={optionInfo({ value: slot.binding?.value })}>
-                    {optionLabel({ value: slot.binding?.value })}
+                <OptionRow
+                    checked
+                    pinned
+                    meta={rowsLabel(current.served_rows, current.served_rows_exact)}
+                    info={optionInfo(current)}
+                >
+                    {optionLabel(current)}
                 </OptionRow>
             </DropdownMenu.Item>
-            {partition.children.map((option: any) => optionItem(option, 'down'))}
-            {partition.children.length === 0 && <LevelHint>most specific level</LevelHint>}
+            {down.map((option) => optionItem(option, 'down'))}
+            {rootItems(sideways)}
+            {down.length === 0 && sideways.length === 0 && (
+                <LevelHint>most specific level</LevelHint>
+            )}
         </>
     );
 };
@@ -324,7 +313,7 @@ const renderOptionMenu = (slot: any, entry: SlotOptionsEntry, onSelect: (binding
     return (
         <>
             {isLevelScopedOptions(options) ? (
-                renderLevelOptions(slot, partitionLevelOptions(options), onSelect)
+                renderLevelOptions(slot, options, onSelect)
             ) : (
                 <FlatOptionList slot={slot} options={options} onSelect={onSelect} />
             )}

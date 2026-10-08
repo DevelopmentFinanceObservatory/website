@@ -199,8 +199,14 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // A picked suggestion's text, injected into the remounted prompt.
     const [prefill, setPrefill] = useState('');
     // Set by Start New, so the remounted prompt takes focus and the reader
-    // can type at once. A first visit leaves the prompt unfocused.
-    const [focusPrompt, setFocusPrompt] = useState(false);
+    // can type at once — and true on arrival too, so typing works without a
+    // click (QA-12). Not on touch: there the caret summons the keyboard over
+    // half the screen before anyone has read where they landed. Read on the
+    // client only; the prompt focuses from an effect, so the server renders
+    // the same markup either way.
+    const [focusPrompt, setFocusPrompt] = useState(
+        () => typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches,
+    );
     // Re-scan reveals when the view swaps (idle ⇄ result) or the prompt is
     // remounted — swapped-in DOM nodes the initial observer never saw.
     const sectionRef = useReveal<HTMLElement>(12, [phase, promptEpoch]);
@@ -599,6 +605,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         track(searchEventName(props), props);
     }, [phase, answer, answerKind, answerReason, parts, query, edits.length]);
 
+    // Read, not watched: startNew's identity changes with reset(), and
+    // watching it would re-run the effect below on internal state.
+    const startNewRef = useRef<() => void>(() => {});
+
     const startNew = useCallback(() => {
         leaveShare();
         reset();
@@ -613,6 +623,35 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         setFocusPrompt(true);
         window.history.replaceState(null, '', '/data');
     }, [reset, leaveShare, clearPrompt]);
+
+    useEffect(() => {
+        startNewRef.current = startNew;
+    });
+
+    // Get Data in the header navigates to a bare /data, which empties the
+    // query string but leaves this component mounted — so the old result sat
+    // there under a clean URL with no obvious way out (QA-30). A query string
+    // going from something to nothing is that navigation, and the answer is
+    // the one Start New gives.
+    //
+    // The transition is what matters, not the emptiness: between submitting a
+    // query and the URL being rewritten there is a moment with a run in
+    // flight and no parameters yet, and reading that as "navigated away"
+    // would kill the search the reader just started. Our own writes that
+    // clear the URL all reset first, so `phase` is already idle by the time
+    // they are seen here.
+    const prevSearchRef = useRef(searchParams.toString());
+
+    useEffect(() => {
+        const search = searchParams.toString();
+        const left = prevSearchRef.current;
+
+        prevSearchRef.current = search;
+
+        if (search === '' && left !== '' && phase !== 'idle') {
+            startNewRef.current();
+        }
+    }, [searchParams, phase]);
 
     // Picking a card fills the prompt with its phrasing. The engine runs
     // only when the user submits it, and from a result screen this steps

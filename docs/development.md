@@ -21,6 +21,12 @@ without anything set; the Studio needs `STUDIO_TOKEN`, and accounts need
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 
+Live Studio shares need `LIVE_REFRESH_PRINCIPAL`, the credential dfo-apis
+and dfo-ai ask of a card refresh, set to the same value on all three. With
+it empty the Share dialog offers Snapshot only. A live card's refreshed
+answer stands for `LIVE_SHARE_WINDOW_S` seconds (default 300, at most 900)
+before the next viewer asks the back ends again.
+
 ## just
 
 The [justfile](../justfile) is the entry point for the commands below — it
@@ -90,6 +96,43 @@ follow-up migration instead.
 This reaches staging the same way. Every staging deploy runs a migration
 Job against the same image before the service rolls out to it.
 
+### Card reference backfill
+
+`scripts/backfill-card-refs.ts` gives Studio cards stored without a
+component reference their `ref` and `frame`, in `conversation.data` and
+`share.data`. A card needs both to be shared live. Cards saved before
+3 October 2026 have neither and hold their values as `csv`.
+
+```bash
+node scripts/backfill-card-refs.ts              # dry run: report only
+node scripts/backfill-card-refs.ts --validate   # counts and validation only
+node scripts/backfill-card-refs.ts --write      # write matched cards
+```
+
+It reads the database from `DATABASE_URL`, or from the `WEBSITE_DB_*`
+variables the runtime uses for Cloud SQL, and component revisions from
+`SEARCH_API_BASE`. Node does not load `.env.local`, so set them on the
+command line.
+
+A card's `id` is its component id. The script reads every revision of that
+component and takes the one revision that gives the card its title and its
+values exactly (`src/lib/studio/cardRefMatch.ts`). A card that no revision
+reproduces, or that more than one does, is left without `ref` and listed
+with the reason. Text cards, cards that have `ref`, and search shares are
+left as they are.
+
+Every run prints the shares by kind and mode, the data cards with no
+component reference, and the cards on a derived frame by week, for shares
+and for conversations. It then validates the match on the cards saved with
+their revision: it takes `ref` and `frame` off each, matches it, and reports
+how many it recovered correctly, wrongly, and not at all. `--write` is
+refused unless that run finds no wrong match over at least 300 cards, which
+puts the wrong-match rate below 1% at 95% confidence.
+`--override-validation` writes anyway.
+
+A write changes one row per transaction and only the matched cards in it.
+Running it again writes nothing.
+
 ## Scripts
 
 | Script                  | What it does                                     |
@@ -116,7 +159,7 @@ Job against the same image before the service rolls out to it.
 - **Components** — atomic design: `src/components/atoms|molecules|organisms/Name/Name.tsx` + `Name.module.scss`.
 - **Buttons** — always use the `Button` atom (`src/components/atoms/Button`); add new variants there instead of styling buttons ad hoc. When a button has an icon, the icon renders in its own wrapper segment 1px next to the label (icon itself 20×20) — pass `icon="name"`; icon-only buttons get `aria-label`. Hover plays a one-shot swap (arrow flies out in its own direction, a copy rides in; label words roll up with a stagger) driven by the `.swapping` class from JS — timings live only in `Button.tsx` (`SWAP_MS`, `WORD_STAGGER_MS`, `HOVER_INTENT_MS`) and reach the SCSS via `--swap-duration`/`--word-stagger`. To make a whole card trigger its button's hover, put `data-button-zone` on the card — the button listens there instead of on itself. Hover styles are gated behind `@media (hover: hover)` so touch screens don't get stuck hover states.
 - **Animations** — one system, don't hand-roll:
-  - _Reveals_ (`src/styles/_reveal.scss` + `useReveal` hook): attach `useReveal()` once per section (returns the section ref), mark elements with `data-reveal` (rise+fade+subtle scale), `data-reveal="text"` (no scale — always use for text), `data-reveal-group` (card-style unit: container + inner cascade) or `data-reveal-group="trigger"` (shared trigger, container static). Stagger via `style={revealIndex(n)}`; global pace in `$reveal-stagger`. Elements trigger individually, reset when leaving the viewport, and animate out quickly. The observer toggles the `data-revealed` **attribute** (never a class — React rewrites `className` wholesale on re-render and would wipe it).
-  - _Text fill on scroll_: `SectionHeading` (label + h2, one continuous progression, per-section colors via `--section-label-color`/`--section-heading-color`) or the `TextFill` atom for any other text (`--text-fill-color`). Both are driven by `useFillProgress`, which lerps the displayed progress toward the scroll target so the fill trails the scroll smoothly; the scrub window lives in `utils/scroll.ts#travelProgress`.
-  - _Parallax / scroll work_: `useScrollFrame(callback)` (rAF-throttled scroll+resize; pass `null` to disable), progress formulas in `utils/scroll.ts` (`centeredProgress`, `travelProgress`, `enterProgress`), `usePrefersReducedMotion()` for gating, `useInView(ref)` for visibility flags. The header hides on scroll down and returns on scroll up (direction tracking in `Header.tsx`, same scroll frame as its theme probe).
+    - _Reveals_ (`src/styles/_reveal.scss` + `useReveal` hook): attach `useReveal()` once per section (returns the section ref), mark elements with `data-reveal` (rise+fade+subtle scale), `data-reveal="text"` (no scale — always use for text), `data-reveal-group` (card-style unit: container + inner cascade) or `data-reveal-group="trigger"` (shared trigger, container static). Stagger via `style={revealIndex(n)}`; global pace in `$reveal-stagger`. Elements trigger individually, reset when leaving the viewport, and animate out quickly. The observer toggles the `data-revealed` **attribute** (never a class — React rewrites `className` wholesale on re-render and would wipe it).
+    - _Text fill on scroll_: `SectionHeading` (label + h2, one continuous progression, per-section colors via `--section-label-color`/`--section-heading-color`) or the `TextFill` atom for any other text (`--text-fill-color`). Both are driven by `useFillProgress`, which lerps the displayed progress toward the scroll target so the fill trails the scroll smoothly; the scrub window lives in `utils/scroll.ts#travelProgress`.
+    - _Parallax / scroll work_: `useScrollFrame(callback)` (rAF-throttled scroll+resize; pass `null` to disable), progress formulas in `utils/scroll.ts` (`centeredProgress`, `travelProgress`, `enterProgress`), `usePrefersReducedMotion()` for gating, `useInView(ref)` for visibility flags. The header hides on scroll down and returns on scroll up (direction tracking in `Header.tsx`, same scroll frame as its theme probe).
 - **Safe areas** — the viewport is `viewport-fit: cover`; the page paints under the notch / home-indicator bands and the fixed pieces (header, footer, Studio, drawers) pad by `env(safe-area-inset-*)` themselves.

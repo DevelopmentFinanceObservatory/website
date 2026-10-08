@@ -35,6 +35,13 @@ import {
  * preview); otherwise the landing hint slides to the nearest spot the card
  * genuinely fits.
  */
+/**
+ * Everything inside a card that owns its own press: a drag started here
+ * would swallow the click. `data-no-drag` is the opt-out for anything the
+ * selector cannot name, such as a region meant to be text-selected.
+ */
+const INTERACTIVE = 'button, a, input, textarea, select, [role="menuitem"], [data-no-drag]';
+
 const FOLLOW = 0.18;
 const TILT_PER_VELOCITY = 0.75;
 const TILT_MAX = 12;
@@ -189,20 +196,27 @@ export const useCardDrag = ({
     };
 
     const startDrag = (id: string) => (event: React.PointerEvent<HTMLElement>) => {
+        // The whole card is the grab area, so the controls inside it have to
+        // be spared: a press on one of these is a press on the control, not
+        // the start of a drag. The resize grip stops propagation itself.
+        if ((event.target as HTMLElement).closest(INTERACTIVE)) {
+            return;
+        }
+
         event.preventDefault();
-        // The grab bar moves the CARD — don't let the board see this and pan.
+        // The card moves — don't let the board see this and pan instead.
         event.stopPropagation();
         event.currentTarget.setPointerCapture(event.pointerId);
 
         const scroller = scrollerOf(boardRef);
-        // The pivot is the exact point being held (the handle floats above
-        // the card, so y comes out slightly negative — hanging from a string).
-        const slotRect = event.currentTarget.parentElement?.getBoundingClientRect();
+        // The pivot is the exact point being held, measured against the card
+        // the pointer came down on.
+        const slotRect = event.currentTarget.getBoundingClientRect();
 
         setGrab({
             id,
-            x: slotRect ? event.clientX - slotRect.left : 0,
-            y: slotRect ? event.clientY - slotRect.top : 0,
+            x: event.clientX - slotRect.left,
+            y: event.clientY - slotRect.top,
         });
 
         startRef.current = {

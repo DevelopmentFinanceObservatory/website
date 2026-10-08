@@ -158,6 +158,27 @@
     letter-spacing: -0.01em;
 }
 
+// What a live card's data leaves out, as a label over one sentence per gap.
+.leftOut {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    padding-block: rem(4) rem(10);
+}
+
+.leftOutList {
+    @include flex(column, flex-start, stretch);
+    @include font-size(13px, 1.4);
+
+    gap: rem(6);
+    padding: 0;
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    list-style: none;
+}
+
 // The citation: its label over the text, which wraps, with Copy beside it.
 .citation {
     @include flex(column, flex-start, stretch);

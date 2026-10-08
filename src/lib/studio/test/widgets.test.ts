@@ -9,13 +9,20 @@ import test from 'node:test';
 import {
     chartFromTable,
     type ChartWidget,
+    formatAxis,
     type KeyNumberWidget,
+    sourceLine,
     type TableWidget,
     type TextWidget,
 } from '../../chat/widgets.ts';
 import { keyNumberFace } from '../statFace.ts';
 import { reviseWidget, widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated, ComponentType, FactSummary } from '../wire.ts';
+import {
+    composedUnit,
+    envelopeComposedUnit,
+    envelopeComposedUnitTable,
+} from './fixtures/envelope-composed-unit.ts';
 import { envelopeCreated, envelopeCreatedFrameProvenance } from './fixtures/envelope-created.ts';
 import { oldCreated } from './fixtures/old-created.ts';
 
@@ -359,6 +366,11 @@ test('data: a table has its payload rows unrounded, and a revision rebuilds them
     assert.deepEqual(revised.ref, { component_id: 'cmp_test', revision: 2 });
 });
 
+const eurosPerPerson = {
+    numerator: { currency: 'EUR', prices: 'constant', base_year: 2020 },
+    denominator: { stat_var: 'dcid:Count_Person', label: 'Total population' },
+};
+
 test("a table names each row's unit when units mix, and charts with it when the unit is constant", () => {
     const columns = [
         { key: 'stat_var', label: 'Indicator' },
@@ -377,18 +389,36 @@ test("a table names each row's unit when units mix, and charts with it when the 
     const dollars = { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 };
     const mixed = asTable(
         widgetFromComponent(
-            frame('table', tableOf([row('ODA', dollars), row('Share of GNI', 'percent')])),
+            frame(
+                'table',
+                tableOf([
+                    row('ODA', dollars),
+                    row('Share of GNI', 'percent'),
+                    row('ODA per person', composedUnit),
+                    row('ODA per person, euros', eurosPerPerson),
+                    row('Unreadable', { numerator: 'USDollar' }),
+                ]),
+            ),
         ),
     );
+    const unitTexts = [
+        'USD millions (constant 2023)',
+        'percent',
+        'US Dollar per Total population',
+        'Euro (constant 2020 prices) per Total population',
+    ];
 
     assert.deepEqual(
         mixed.data?.rows.map((cells) => cells.at(-1)),
-        ['USD millions (constant 2023)', 'percent'],
+        [...unitTexts, null],
     );
     assert.deepEqual(mixed.columns, ['Indicator', 'Period', 'Unit', 'Value']);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
+        ['ODA per person', '2023', 'US Dollar per Total population', '5'],
+        ['ODA per person, euros', '2023', 'Euro (constant 2020 prices) per Total population', '5'],
+        ['Unreadable', '2023', '—', '5'],
     ]);
 
     const constant = asTable(
@@ -397,7 +427,187 @@ test("a table names each row's unit when units mix, and charts with it when the 
 
     assert.deepEqual(constant.columns, ['Indicator', 'Period', 'Value']);
     assert.equal(chartFromTable(constant)?.unit, 'USD');
+
+    const perPerson = asTable(
+        widgetFromComponent(
+            frame('table', tableOf([row('ODA', composedUnit), row('Grants', composedUnit)])),
+        ),
+    );
+
+    assert.deepEqual(perPerson.columns, ['Indicator', 'Period', 'Value']);
+    assert.equal(chartFromTable(perPerson)?.unit, 'US Dollar per Total population');
+
+    const inMillions = {
+        numerator: { currency: 'EUR', magnitude: 'millions', prices: null, base_year: null },
+        denominator: composedUnit.denominator,
+    };
+    const scaled = asTable(
+        widgetFromComponent(
+            frame('table', tableOf([row('ODA', inMillions), row('Grants', inMillions)])),
+        ),
+    );
+
+    assert.equal(chartFromTable(scaled)?.unit, 'Euro (millions) per Total population');
 });
+
+// A stat card and its fact summary carry the same unit.
+const statWithUnit = (unit: unknown, payload: Record<string, unknown> = statCard({ unit })) => {
+    const created = frame('stat_card', payload);
+
+    return asStat(
+        widgetFromComponent({
+            ...created,
+            fact_summary: { ...facts, unit: unit as FactSummary['unit'] },
+        }),
+    );
+};
+
+test('stat card: a composed unit reads on the face, in the data and in More Info', () => {
+    const widget = statWithUnit(composedUnit, envelopeComposedUnit);
+
+    assert.equal(widget.unit, 'US Dollar per Total population');
+    assert.deepEqual(keyNumberFace(widget), {
+        amount: '3.34',
+        suffix: '',
+        caption: 'US Dollar per Total population · 2024',
+    });
+    assert.deepEqual(widget.data?.rows, [
+        [
+            'Malaria grant disbursements to Ethiopia per person',
+            '2024',
+            3.34,
+            'US Dollar per Total population',
+        ],
+    ]);
+    assert.equal(widget.info?.unit, 'US Dollar per Total population');
+
+    const euros = statWithUnit(eurosPerPerson);
+
+    assert.equal(
+        keyNumberFace(euros).caption,
+        'Euro (constant 2020 prices) per Total population · 2024 · +1.9% from 2023',
+    );
+    assert.equal(euros.data?.rows[0]?.at(-1), 'Euro (constant 2020 prices) per Total population');
+    assert.equal(euros.info?.unit, 'Euro (constant 2020 prices) per Total population');
+});
+
+// What a stat card shows that depends on its unit.
+const statView = (widget: KeyNumberWidget) => ({
+    value: widget.value,
+    unit: widget.unit,
+    stat: widget.stat,
+    face: keyNumberFace(widget),
+    data: widget.data,
+    info: widget.info?.unit,
+});
+
+// A revision takes the unit of its own frame: each view matches a card created
+// with that unit.
+test('stat card: a revision to another unit reads as a card created with it', () => {
+    for (const [from, to] of [
+        [undefined, eurosPerPerson],
+        [eurosPerPerson, composedUnit],
+        [composedUnit, 'USD'],
+        [composedUnit, null],
+    ]) {
+        const drawn = statWithUnit(from);
+        const revised = asStat(
+            reviseWidget(drawn, {
+                ...revisedFrame(2, {
+                    ...statCard({ unit: to }),
+                    provenance: envelopeCreated.provenance,
+                }),
+                fact_summary: { ...facts, unit: to as FactSummary['unit'] },
+            }),
+        );
+
+        assert.deepEqual(statView(revised), statView(statWithUnit(to)));
+
+        // Without provenance in the payload the panel keeps what it held and
+        // still names the revised unit.
+        const bare = asStat(
+            reviseWidget(drawn, {
+                ...revisedFrame(2, statCard({ unit: to })),
+                fact_summary: { ...facts, unit: to as FactSummary['unit'] },
+            }),
+        );
+
+        assert.equal(bare.info?.unit, statWithUnit(to).info?.unit);
+        assert.deepEqual({ ...bare.info, unit: null }, { ...drawn.info, unit: null });
+    }
+});
+
+test('table: a revision to another unit reads as a table created with it', () => {
+    const tableWith = (unit: unknown) => ({
+        ...envelopeComposedUnitTable,
+        component: {
+            ...envelopeComposedUnitTable.component,
+            rows: envelopeComposedUnitTable.component.rows.map((row) => ({ ...row, unit })),
+        },
+    });
+    const view = (widget: TableWidget) => ({
+        columns: widget.columns,
+        rows: widget.rows,
+        data: widget.data,
+        info: widget.info?.unit,
+    });
+    const created = (payload: Record<string, unknown>, unit: unknown) =>
+        asTable(
+            widgetFromComponent({
+                ...frame('table', payload),
+                fact_summary: { ...facts, unit: unit as FactSummary['unit'] },
+            }),
+        );
+
+    for (const [from, to] of [
+        ['USD', composedUnit],
+        [composedUnit, eurosPerPerson],
+        [eurosPerPerson, 'USD'],
+    ]) {
+        const revised = asTable(
+            reviseWidget(created(tableWith(from), from), {
+                ...revisedFrame(2, tableWith(to)),
+                fact_summary: { ...facts, unit: to as FactSummary['unit'] },
+            }),
+        );
+
+        assert.deepEqual(view(revised), view(created(tableWith(to), to)));
+
+        const bare = asTable(
+            reviseWidget(created(tableWith(from), from), {
+                ...revisedFrame(2, { ...tableWith(to), provenance: null }),
+                fact_summary: { ...facts, unit: to as FactSummary['unit'] },
+            }),
+        );
+
+        assert.equal(bare.info?.unit, created(tableWith(to), to).info?.unit);
+    }
+
+    // The catalogue's own table fixture.
+    const fixture = created(envelopeComposedUnitTable, composedUnit);
+
+    assert.equal(
+        fixture.data?.rows[0]?.at(-1),
+        'US Dollar (constant 2023 prices) per Total population',
+    );
+});
+
+const INFO_UNITS: [string, unknown, string | null][] = [
+    ['a label', 'USDollar', 'US Dollar'],
+    [
+        'a structured unit',
+        { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 },
+        'US Dollar, millions, constant 2023 prices',
+    ],
+    ['a malformed composed unit', { numerator: 'USDollar', denominator: null }, null],
+    ['none', null, null],
+];
+
+for (const [name, unit, expected] of INFO_UNITS) {
+    test(`More Info: the fact summary's unit, ${name}`, () => {
+        assert.equal(statWithUnit(unit).info?.unit, expected);
+    });
+}
 
 const statCard = (component: Record<string, unknown> = {}) =>
     envelope({
@@ -504,6 +714,26 @@ test('a revision redraws from its payload', () => {
     assert.deepEqual(revised.ref, { component_id: 'cmp_test', revision: 2 });
 });
 
+test('a revised chart takes its unit from the revised frame', () => {
+    const drawn = asChart(
+        widgetFromComponent({
+            ...frame('bar_chart', entityBarChart),
+            fact_summary: { ...facts, unit: 'USD' },
+        }),
+    );
+
+    assert.equal(drawn.unit, 'USD');
+
+    const revised = asChart(
+        reviseWidget(drawn, {
+            ...revisedFrame(2, entityBarChart),
+            fact_summary: { ...facts, unit: eurosPerPerson as FactSummary['unit'] },
+        }),
+    );
+
+    assert.equal(revised.unit, 'Euro (constant 2020 prices) per Total population');
+});
+
 test('a revision without a payload keeps the title, drawing, values and ref it holds', () => {
     const drawn = asChart(widgetFromComponent(frame('bar_chart', entityBarChart)));
     // A fact summary whose first series label would read as a title.
@@ -574,6 +804,32 @@ test('More Info: the citation and every source, licence normalised', () => {
         { id: 'src_dc', name: 'dc/base/X', licence: null, url: null, retrieved: null },
     ]);
     assert.deepEqual([info?.sourceId, info?.licence], [SOURCE, 'CC BY 4.0']);
+    assert.equal(sourceLine(info!), 'OECD CRS; World Bank WDI; dc/base/X');
+});
+
+test('a share card: its Percent unit puts "%" on the value axis, and it names both sources', () => {
+    const created = {
+        ...frame('line_chart', entityBarChart),
+        fact_summary: {
+            ...facts,
+            unit: 'Percent',
+            attribution: {
+                label: 'World Bank IDS; World Development Indicators · 1 indicator(s)',
+                source_count: 2,
+                indicator_count: 1,
+            },
+        },
+    };
+
+    created.provenance.sources = [
+        { id: 'provenance/WorldBankInternationalDebtStatistics', name: 'World Bank IDS' },
+        { id: 'dc/base/WorldDevelopmentIndicators', name: 'World Development Indicators' },
+    ].map((source) => ({ ...source, licence: 'CC BY 4.0' }));
+
+    const chart = asChart(widgetFromComponent(created));
+
+    assert.equal(formatAxis(5.333, chart.unit), '5.33%');
+    assert.equal(sourceLine(chart.info!), 'World Bank IDS; World Development Indicators');
 });
 
 const CRS_DCID = 'dc/base/OECD_CRS';

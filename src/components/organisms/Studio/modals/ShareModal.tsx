@@ -4,13 +4,14 @@ import classNames from 'classnames';
 import { useEffect, useRef, useState } from 'react';
 
 import { useCopied } from '../hooks/useCopied';
+import { browserLiveDeps } from '../hooks/useLiveCards';
 import styles from './ShareModal.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
-import type { ShareKind } from '@/lib/chat/shareStore';
+import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import type { CardRef } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
 import { DATASET_FORMATS, type DatasetFormat } from '@/lib/search/searchClient';
@@ -20,14 +21,29 @@ import {
     cardDownloadMessage,
     fetchCardData,
 } from '@/lib/studio/cardDownload';
+import {
+    checkingText,
+    openShareLink,
+    type ShareLink,
+    type ShareLinkDeps,
+    shareLinkKey,
+    shareModeFor,
+    snapshotShare,
+    uncheckedText,
+    withdrawalText,
+} from '@/lib/studio/shareDialog';
 
 /**
  * The Share dialog. Two scopes:
  *   whole  — the header's Share: Chat + Canvas / Canvas (link + embed) / Data
  *   card   — a card's menu: Link / Embed of that one card
- * Links are minted lazily per tab (POST /api/share → frozen snapshot) and
- * cached for the dialog's lifetime. Data offers each card's rows as a file
- * from the export route (src/lib/studio/cardDownload).
+ * A canvas or a card is shared as Live Data (the default) or as a Snapshot
+ * when `offerLive` is set; Chat + Canvas is always a snapshot, and so is
+ * every share when it is not. Links are made lazily, one per tab and mode
+ * (`openShareLink` in src/lib/studio/shareDialog), and kept for the dialog's
+ * lifetime. A live link is shown once every data card it holds has been
+ * checked, and withdrawn when one cannot refresh. Data offers each card's
+ * stored rows as a file from the export route (src/lib/studio/cardDownload).
  */
 
 export type ShareScope = { kind: 'whole' } | { kind: 'card'; id: string; title: string };
@@ -42,8 +58,11 @@ type ShareModalProps = {
     // The conversation's title (embed <iframe title>).
     title: string;
     data: ShareDatum[];
-    // Mints (or returns the cached) share id for a kind; null on failure.
-    createShare: (kind: ShareKind, cardId?: string) => Promise<string | null>;
+    // Whether this scope can be shared live, which needs a site that can
+    // refresh cards and a canvas, or a card, that draws data. Off, the dialog
+    // has no mode choice and every link is a snapshot.
+    offerLive: boolean;
+    createShare: ShareLinkDeps['createShare'];
 };
 
 const WHOLE_TABS = [
@@ -57,14 +76,34 @@ const CARD_TABS = [
     { id: 'embed', label: 'Embed' },
 ] as const;
 
+const MODE_TABS = [
+    { id: 'live', label: 'Live Data' },
+    { id: 'snapshot', label: 'Snapshot' },
+] as const;
+
 const COPY = {
     conversation:
         'Shares the full conversation and every chart it produced, including the canvas, exactly as it is right now. It opens read-only; whatever you do here afterwards stays with you.',
-    canvas: 'Shares the canvas as it looks right now — every card, its layout and your theme — without the conversation. Read-only, frozen at this moment.',
-    card: 'Shares this one card, read-only, as it looks right now.',
+    conversationOnly:
+        'Chat + Canvas is always a snapshot, because the conversation quotes its numbers.',
+    canvas: {
+        live: 'Shares the canvas without the conversation: every card, its layout and your theme. Read-only. Each data card shows the latest data whenever the link opens, and your titles, notes and text stay as written.',
+        snapshot:
+            'Shares the canvas as it looks right now — every card, its layout and your theme — without the conversation. Read-only, frozen at this moment.',
+    },
+    card: {
+        live: 'Shares this one card, read-only. It shows the latest data whenever the link opens.',
+        snapshot: 'Shares this one card, read-only, as it looks right now.',
+    },
     embed: 'Drops the read-only canvas into any page. It follows the theme it was shared with.',
-    embedCard: 'Drops this card, read-only, into any page.',
+    embedCard: {
+        live: 'Drops this card, read-only, into any page. It shows the latest data whenever the page loads.',
+        snapshot: 'Drops this card, read-only, into any page.',
+    },
     data: 'The rows behind these cards, one file per card, with their sources and citation unless you untick it.',
+    toSnapshot:
+        'To stop live updates, make this link a snapshot. Everyone who has the link then sees the numbers as they were when you made it. This cannot be undone.',
+    nowSnapshot: 'This link is now a snapshot. It shows the numbers as they were when you made it.',
 };
 
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -116,10 +155,12 @@ const CopyBox = ({
     value,
     code,
     pending,
+    pendingText = 'Creating link…',
 }: {
     value: string;
     code?: boolean;
     pending?: boolean;
+    pendingText?: string;
 }) => {
     const { copied, copy } = useCopied();
 
@@ -127,7 +168,7 @@ const CopyBox = ({
         <div
             className={classNames(styles.box, code && styles.boxCode, pending && styles.boxPending)}
         >
-            <span className={styles.boxText}>{pending ? 'Creating link…' : value}</span>
+            <span className={styles.boxText}>{pending ? pendingText : value}</span>
             <button
                 type="button"
                 className={classNames(styles.copy, copied && styles.copied)}
@@ -141,18 +182,30 @@ const CopyBox = ({
     );
 };
 
-const ShareModal = ({ open, onOpenChange, scope, title, data, createShare }: ShareModalProps) => {
+const ShareModal = ({
+    open,
+    onOpenChange,
+    scope,
+    title,
+    data,
+    offerLive,
+    createShare,
+}: ShareModalProps) => {
     const [tab, setTab] = useState<string>(scope.kind === 'whole' ? 'conversation' : 'link');
-    // Minted ids by kind (+card id) — one link per kind per opening.
-    const [ids, setIds] = useState<Record<string, string>>({});
-    const [failed, setFailed] = useState(false);
+    const [mode, setMode] = useState<ShareMode>('live');
+    // The links of this opening, by kind, card, and mode (`shareLinkKey`).
+    // A key with no entry is being made.
+    const [links, setLinks] = useState<Record<string, ShareLink>>({});
+    // A live link's switch to a snapshot, by key. The value is 'busy' while
+    // it runs and 'failed' when it fails.
+    const [switching, setSwitching] = useState<Record<string, 'busy' | 'failed'>>({});
     // The Data tab's file choice, shared by every card's Download.
     const [format, setFormat] = useState<DatasetFormat>('csv');
     const [bundle, setBundle] = useState(true);
 
     // Which share kind the current tab needs (Data needs none).
     const cardId = scope.kind === 'card' ? scope.id : undefined;
-    const kind: ShareKind | null =
+    const kind: StudioShareKind | null =
         scope.kind === 'card'
             ? 'card'
             : tab === 'conversation'
@@ -160,40 +213,88 @@ const ShareModal = ({ open, onOpenChange, scope, title, data, createShare }: Sha
               : tab === 'canvas'
                 ? 'canvas'
                 : null;
-    const key = kind ? `${kind}:${cardId ?? ''}` : null;
-    const id = key ? ids[key] : undefined;
+    const { choice: hasMode, mode: linkMode } = shareModeFor(offerLive, kind, mode);
+    const key = kind ? shareLinkKey(kind, cardId, linkMode) : null;
+    const link = key ? links[key] : undefined;
+    const id = link?.status === 'ready' ? link.id : undefined;
+    const failed = link?.status === 'failed';
+    const withdrawal = link?.status === 'withdrawn' ? link.withdrawal : null;
 
-    // Keys whose mint is in flight (a ref: no render churn, no double POST).
+    // Keys whose link is being made (a ref: no render churn, no double POST).
     const requestedRef = useRef<Set<string>>(new Set());
 
-    // Mint the link for the active tab once the dialog is open.
+    // Make the link for the active tab and mode once the dialog is open.
     useEffect(() => {
-        if (!open || !key || !kind || key in ids || requestedRef.current.has(key)) {
+        if (!open || !key || !kind || key in links || requestedRef.current.has(key)) {
             return;
         }
 
         requestedRef.current.add(key);
-        createShare(kind, cardId).then((created) => {
-            requestedRef.current.delete(key);
+        void openShareLink(
+            { createShare, live: browserLiveDeps },
+            { kind, cardId, mode: linkMode },
+            (next) => setLinks((prev) => ({ ...prev, [key]: next })),
+        ).finally(() => requestedRef.current.delete(key));
+    }, [open, key, kind, cardId, linkMode, links, createShare]);
 
-            if (created) {
-                setIds((prev) => ({ ...prev, [key]: created }));
-            } else {
-                setFailed(true);
-            }
-        });
-    }, [open, key, kind, cardId, ids, createShare]);
+    // A link that failed is made again on "Try again" and on coming back to
+    // its tab or mode.
+    const retryFailed = () =>
+        setLinks((prev) =>
+            Object.fromEntries(
+                Object.entries(prev).filter(([, other]) => other.status !== 'failed'),
+            ),
+        );
 
     const switchTab = (next: string) => {
         setTab(next);
-        setFailed(false);
+        retryFailed();
+    };
+
+    const switchMode = (next: ShareMode) => {
+        setMode(next);
+        retryFailed();
+    };
+
+    const makeSnapshot = async () => {
+        if (!key || !id) {
+            return;
+        }
+
+        setSwitching((prev) => ({ ...prev, [key]: 'busy' }));
+
+        if (await snapshotShare(browserLiveDeps.fetch, id)) {
+            setLinks((prev) => ({
+                ...prev,
+                [key]: { status: 'ready', id, mode: 'snapshot', unchecked: 0 },
+            }));
+        } else {
+            setSwitching((prev) => ({ ...prev, [key]: 'failed' }));
+        }
     };
 
     const tabs = scope.kind === 'whole' ? WHOLE_TABS : CARD_TABS;
     const embedTitle = scope.kind === 'card' ? scope.title : title;
-    const pending = !!key && !id;
+    const checking = link?.status === 'checking';
+    const pending = !!key && (!link || checking);
     const showLink = scope.kind === 'whole' ? tab !== 'data' : tab === 'link';
     const showEmbed = scope.kind === 'whole' ? tab === 'canvas' : tab === 'embed';
+    // A live link made a snapshot keeps its tab and reads as a snapshot.
+    const shownMode: ShareMode = link?.status === 'ready' ? link.mode : linkMode;
+    const canSwitch = hasMode && link?.status === 'ready' && link.mode === 'live';
+    const switchState = key ? switching[key] : undefined;
+    const status = !hasMode
+        ? null
+        : checking
+          ? checkingText(link.checked, link.total)
+          : withdrawal
+            ? withdrawalText(withdrawal, scope.kind === 'card')
+            : link?.status === 'ready'
+              ? linkMode === 'live' && link.mode === 'snapshot'
+                  ? COPY.nowSnapshot
+                  : uncheckedText(link.unchecked)
+              : null;
+    const pendingText = checking ? 'Checking cards…' : undefined;
 
     return (
         <Modal open={open} onOpenChange={onOpenChange} title="Share" fit>
@@ -238,24 +339,65 @@ const ShareModal = ({ open, onOpenChange, scope, title, data, createShare }: Sha
                     </>
                 ) : (
                     <>
+                        {hasMode && (
+                            <div className={styles.tabs}>
+                                <SegmentedTabs
+                                    tabs={MODE_TABS}
+                                    value={mode}
+                                    onChange={(next) => switchMode(next as ShareMode)}
+                                />
+                            </div>
+                        )}
                         <p className={styles.copyText}>
                             {scope.kind === 'card'
                                 ? tab === 'embed'
-                                    ? COPY.embedCard
-                                    : COPY.card
+                                    ? COPY.embedCard[shownMode]
+                                    : COPY.card[shownMode]
                                 : tab === 'canvas'
-                                  ? COPY.canvas
+                                  ? COPY.canvas[shownMode]
                                   : COPY.conversation}
                         </p>
-                        {failed && (
-                            <p className={styles.error} role="alert">
-                                Couldn&apos;t create the link — try again.
+                        {offerLive && kind === 'conversation' && (
+                            <p className={styles.note}>{COPY.conversationOnly}</p>
+                        )}
+                        {/* Always present where a link can be live, so a
+                            screen reader hears each line as it arrives. */}
+                        {hasMode && (
+                            <p className={styles.status} role="status">
+                                {status}
                             </p>
                         )}
-                        {showLink && (
-                            <CopyBox value={id ? shareUrl(id) : ''} pending={pending && !failed} />
+                        {failed && (
+                            <>
+                                <p className={styles.error} role="alert">
+                                    Couldn&apos;t create the link — try again.
+                                </p>
+                                <div className={styles.actions}>
+                                    <Button variant="bordered" small onClick={retryFailed}>
+                                        Try again
+                                    </Button>
+                                </div>
+                            </>
                         )}
-                        {showEmbed && (
+                        {withdrawal && (
+                            <div className={styles.actions}>
+                                <Button
+                                    variant="bordered"
+                                    small
+                                    onClick={() => switchMode('snapshot')}
+                                >
+                                    Share a snapshot instead
+                                </Button>
+                            </div>
+                        )}
+                        {showLink && !withdrawal && (
+                            <CopyBox
+                                value={id ? shareUrl(id) : ''}
+                                pending={pending && !failed}
+                                pendingText={pendingText}
+                            />
+                        )}
+                        {showEmbed && !withdrawal && (
                             <>
                                 {scope.kind === 'whole' && (
                                     <>
@@ -271,7 +413,31 @@ const ShareModal = ({ open, onOpenChange, scope, title, data, createShare }: Sha
                                     value={id ? embedSnippet(id, embedTitle) : ''}
                                     code
                                     pending={pending && !failed}
+                                    pendingText={pendingText}
                                 />
+                            </>
+                        )}
+                        {canSwitch && (
+                            <>
+                                <hr className={styles.rule} />
+                                <p className={styles.copyText}>{COPY.toSnapshot}</p>
+                                {switchState === 'failed' && (
+                                    <p className={styles.error} role="alert">
+                                        Couldn&apos;t switch the link. Try again.
+                                    </p>
+                                )}
+                                <div className={styles.actions}>
+                                    <Button
+                                        variant="bordered"
+                                        small
+                                        onClick={makeSnapshot}
+                                        disabled={switchState === 'busy'}
+                                    >
+                                        {switchState === 'busy'
+                                            ? 'Switching…'
+                                            : 'Make this link a snapshot'}
+                                    </Button>
+                                </div>
                             </>
                         )}
                     </>

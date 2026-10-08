@@ -37,7 +37,7 @@ You should see:
   "kind": "resolution",
   "status": "definite",
   "spec_id": "spec_774d6c001a6250aa67ca676ab067895e",
-  "sentence": "Gross disbursements (nominal) for basic health care for official development assistance for standard grant to Nigeria from Germany, according to oecd creditor reporting system. In 2024, the latest year with data, there are 3 observations across 3 series, covering 1 donors and 1 recipients. No year was named."
+  "sentence": "Germany's gross ODA disbursements to Nigeria for basic health care, 1995 to 2024. Current US dollars · OECD Creditor Reporting System (CRS)."
 }
 ```
 
@@ -46,13 +46,13 @@ Run this to get it:
 ```bash
 curl -s -X POST "$DFO_API/api/search/resolve" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"kind": "raw_text", "query": "Germany ODA disbursements to Nigeria for basic health care"}}' \
+  -d '{"input": {"kind": "raw_text", "query": "German aid disbursements to Nigeria for basic health care"}}' \
   > resolve.json
 
 jq '{kind} + (.parts[0] | {status, spec_id: .spec.spec_id, sentence: .spec.resolved.rendered_sentence})' resolve.json
 ```
 
-`resolution` means the question asked for data, so the answer carries `parts`. A question about what the DFO holds answers `catalogue`, and an off-topic one `declined`, and neither carries `parts`; [Resolve a question](resolve-a-question.md) shows how to branch on `kind`. `definite` means the DFO found one reading of the question. The sentence is that reading in words, so check it says what you meant. Here it matched "basic health care" to CRS purpose code 12220 and "ODA" to official development assistance.
+`resolution` means the question asked for data, so the answer carries `parts`. A question about what the DFO holds answers `catalogue`, and an off-topic one `declined`, and neither carries `parts`; [Resolve a question](resolve-a-question.md) shows how to branch on `kind`. `definite` means the DFO found one reading of the question. The sentence is that reading in words, so check it says what you meant. Here it matched "basic health care" to CRS purpose code 12220 and read "aid" as official development assistance.
 
 ## Step 2: mint a dataset
 
@@ -68,7 +68,8 @@ You should see:
     {
       "rendering": {
         "format": "parquet",
-        "bundle": true
+        "bundle": true,
+        "rendition": "v2-…"
       },
       "media_type": "application/zip",
       "bytes": 11590
@@ -98,28 +99,32 @@ curl -s -X POST "$DFO_API/api/datasets" \
 jq '{content_version, rows: .coverage.rows, artifacts: [.artifacts[] | {rendering, media_type, bytes}]}' manifest.json
 ```
 
-The response is a manifest. `content_version` names this exact result, so the pair `spec_774d…` and `cv_e7f6…` names these 30 rows. The first artifact is the bundle: a zip holding your Parquet file with its citation and licence files. The second is a one-row-per-series summary, which you won't need here.
+The response is a manifest. `content_version` names this exact result, so the pair `spec_774d…` and `cv_e7f6…` names these 30 rows. The first artifact is the bundle: a zip holding your Parquet file with a README, the codes behind every code column, the sources and their licences, and the citation. The second is a one-row-per-series summary, which you won't need here.
 
 ## Step 3: download the Parquet file
 
-Each artifact carries a signed `url` that expires after 15 minutes. Select the bundle by its `rendering`, then download and unzip it.
+Each artifact carries a signed `url` that expires after 15 minutes. Select the first bundle whose `rendering` has `bundle` true and the `format` you asked for, then download and unzip it. `-OJ` saves the file under the name the download carries.
 
 ```bash
-curl -s -o bundle.zip "$(jq -r '.artifacts[] | select(.rendering == {"format": "parquet", "bundle": true}) | .url' manifest.json)"
-unzip bundle.zip
+curl -s -OJ "$(jq -r 'first(.artifacts[] | select(.rendering.bundle == true and .rendering.format == "parquet")) | .url' manifest.json)"
+unzip dfo_*_parquet_*.zip
 ```
 
 You should see:
 
 ```text
-Archive:  bundle.zip
- extracting: data/data.parquet
+Archive:  dfo_oecd-creditor-reporting-system_2026-09-28_parquet_e7f6ed.zip
+ extracting: data/oecd-creditor-reporting-system.parquet
  extracting: CITATION.cff
  extracting: README.md
+ extracting: SOURCES.md
+ extracting: data/codes.csv
  extracting: datapackage.json
 ```
 
-`data/data.parquet` is the dataset. `CITATION.cff` and `README.md` tell you how to cite it, and `datapackage.json` describes every column.
+The zip is named `dfo_<sources>_<date first prepared>_<format>_<version>.zip`. The version is the first six characters of the `content_version` after `cv_`.
+
+`data/oecd-creditor-reporting-system.parquet` is the dataset. `README.md` is the place to start. It says what the data is, explains every column, and shows how to cite it and how to get it again. `data/codes.csv` gives the plain name of each code, such as `country/DEU` for Germany. `SOURCES.md` names each source, its licence and each step the DFO applied. `CITATION.cff` is the citation in a format reference managers read, and `datapackage.json` describes every column for software.
 
 ## Step 4: do the same in Python
 
@@ -139,6 +144,7 @@ Save the script as `quickstart.py`.
 
 ```python title="quickstart.py"
 import io
+import json
 import os
 import time
 import zipfile
@@ -150,7 +156,7 @@ DFO_API = os.environ["DFO_API"]
 client = httpx.Client(base_url=DFO_API, timeout=120)
 
 # 1. Resolve the question into a spec.
-question = "Germany ODA disbursements to Nigeria for basic health care"
+question = "German aid disbursements to Nigeria for basic health care"
 resolved = client.post("/api/search/resolve", json={"input": {"kind": "raw_text", "query": question}})
 answer = resolved.raise_for_status().json()
 if answer["kind"] != "resolution":  # a catalogue or declined answer carries no parts
@@ -176,9 +182,10 @@ if "operation" in body:  # over the sync budget: 202 Accepted, poll until done
 manifest = body
 
 # 3. Download the bundle and read its Parquet file.
-bundle = next(a for a in manifest["artifacts"] if a["rendering"] == {"format": "parquet", "bundle": True})
+bundle = next(a for a in manifest["artifacts"] if a["rendering"].get("bundle") is True and a["rendering"]["format"] == "parquet")
 archive = zipfile.ZipFile(io.BytesIO(httpx.get(bundle["url"]).raise_for_status().content))
-df = pd.read_parquet(io.BytesIO(archive.read("data/data.parquet")))
+data_path = json.loads(archive.read("datapackage.json"))["resources"][0]["path"]
+df = pd.read_parquet(io.BytesIO(archive.read(data_path)))
 
 print(spec["spec_id"], manifest["content_version"], df.shape)
 print(df[["time_period", "financingProvider", "financingRecipient", "value", "unit"]].tail(3))

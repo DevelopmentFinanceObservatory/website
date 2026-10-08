@@ -76,7 +76,6 @@ const TableCard = ({ widget, ...extras }: { widget: TableWidget } & CardExtras) 
             </div>
             <CardChrome
                 source={widget.source}
-                note={extras.note}
                 info={widget.info}
                 onInfo={extras.onInfo}
             />

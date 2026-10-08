@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import manifestJson from '@/content/dfo-docs/manifest.json';
 
+import { bundleLinks, corpusTarget } from './links.ts';
 import { docsHref } from './nav';
 
 /**
@@ -18,6 +19,8 @@ export type DocsPage = {
     kind: 'page' | 'skill' | 'external';
     description?: string;
     corpus_path?: string;
+    // The skill's zip in the corpus, for a skill that ships one.
+    bundle_path?: string;
     url?: string;
 };
 
@@ -64,19 +67,22 @@ export const docsMarkdown = (page: DocsPage): string =>
           )
         : '';
 
+/** The site URL of the skill zip a link in `page`'s markdown points at, when
+ *  it points at one the manifest records. */
+export const docsBundleLink = bundleLinks(DOCS_PAGES);
+
 /** A link as written in `page`'s markdown, pointed at the site: a relative
  *  `.md` link becomes that page's /docs URL (anchor kept); anything else
  *  stays as it is. */
 export const docsLink = (page: DocsPage, href: string): string => {
     const match = href.match(/^([^:#?]+\.md)(#.*)?$/);
+    const file = match ? corpusTarget(page, match[1]!) : undefined;
 
-    if (!match || !page.corpus_path) {
+    if (!match || file === undefined) {
         return href;
     }
 
-    const target = byCorpusPath.get(
-        path.posix.normalize(path.posix.join(path.posix.dirname(page.corpus_path), match[1]!)),
-    );
+    const target = byCorpusPath.get(file);
 
     return target ? `${docsHref(target.path)}${match[2] ?? ''}` : href;
 };

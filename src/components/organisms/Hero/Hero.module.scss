@@ -123,8 +123,15 @@ $hero-text-stagger: 0.09s;
     flex-shrink: 0;
     align-items: flex-end;
     justify-content: flex-start;
-    width: rem(1126);
-    height: rem(524);
+
+    // The telescope is smaller than the design's first pass: it sat over the
+    // middle of the map, leaving only the empty north on screen. Trimmed on
+    // both axes so the band the site is about stays visible past it (QA-32).
+    // Each layer peeks out by the same amount on both open sides: this one by
+    // 34 past .inner, .inner by 36 past .core. Change a height and the width
+    // follows, or the telescope reads lopsided.
+    width: rem(780);
+    height: rem(430);
     background-color: var(--color-hero-wrapper);
 }
 
@@ -134,8 +141,8 @@ $hero-text-stagger: 0.09s;
     flex-shrink: 0;
     align-items: flex-end;
     justify-content: flex-start;
-    width: rem(901);
-    height: rem(484);
+    width: rem(746);
+    height: rem(396);
     overflow: hidden;
 }
 
@@ -173,7 +180,7 @@ $hero-text-stagger: 0.09s;
     flex-shrink: 0;
     justify-content: flex-end;
     width: rem(710);
-    height: rem(399);
+    height: rem(360);
     padding: 0 rem(15) rem(10) rem(10);
     background-color: var(--color-hero-core);
 }

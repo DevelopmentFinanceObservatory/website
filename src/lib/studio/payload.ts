@@ -69,18 +69,40 @@ export const payloadNoteText = (payload: UnknownRecord | null | undefined): stri
     return typeof topText === 'string' && topText ? topText : undefined;
 };
 
-/** A resolved unit: a plain label (`"Year"`), or a currency amount with
- *  its price basis and, for constant prices, the base year. */
-export type PayloadUnit =
-    | string
-    | {
-          currency: string | null;
-          magnitude: string | null;
-          prices: string | null;
-          base_year: number | null;
-      };
+/** A currency amount: its ISO 4217 code, its magnitude, its price basis
+ *  and, for constant prices, the base year. */
+export type StructuredUnit = {
+    currency: string | null;
+    magnitude: string | null;
+    prices: string | null;
+    base_year: number | null;
+};
 
-const asUnit = (value: unknown): PayloadUnit | undefined => {
+/** A measure that declares no unit, standing as one side of a composed
+ *  unit: its StatVar ref and the graph's name for it. */
+export type CountedStatVar = { stat_var: string; label: string };
+
+/** One side of a composed unit. */
+export type UnitPart = string | StructuredUnit | CountedStatVar;
+
+/** A resolved unit: a plain label (`"Year"`), a currency amount, or the
+ *  unit of a quotient of two measures (US Dollar per Total population). */
+export type PayloadUnit = string | StructuredUnit | { numerator: UnitPart; denominator: UnitPart };
+
+const asStructuredUnit = (record: UnknownRecord): StructuredUnit => {
+    const baseYear = record['base_year'];
+
+    return {
+        currency: nonBlank(record['currency']) ?? null,
+        magnitude: nonBlank(record['magnitude']) ?? null,
+        prices: nonBlank(record['prices']) ?? null,
+        base_year: typeof baseYear === 'number' ? baseYear : null,
+    };
+};
+
+// A part names something: a label, a StatVar with its label, or a structured
+// unit, read as the top-level unit reads it.
+const asUnitPart = (value: unknown): UnitPart | undefined => {
     if (typeof value === 'string') {
         return nonBlank(value);
     }
@@ -91,14 +113,40 @@ const asUnit = (value: unknown): PayloadUnit | undefined => {
         return undefined;
     }
 
-    const baseYear = record['base_year'];
+    if ('stat_var' in record) {
+        const statVar = nonBlank(record['stat_var']);
+        const label = nonBlank(record['label']);
 
-    return {
-        currency: nonBlank(record['currency']) ?? null,
-        magnitude: nonBlank(record['magnitude']) ?? null,
-        prices: nonBlank(record['prices']) ?? null,
-        base_year: typeof baseYear === 'number' ? baseYear : null,
-    };
+        return statVar && label ? { stat_var: statVar, label } : undefined;
+    }
+
+    // A composed unit does not nest.
+    return 'numerator' in record || 'denominator' in record ? undefined : asStructuredUnit(record);
+};
+
+/** A card's unit, from the payload or the fact summary. An object naming a
+ *  numerator or a denominator is a composed unit, and is no unit when
+ *  either part is malformed. Any other object reads as a currency amount,
+ *  its unrecognised members null. */
+export const asUnit = (value: unknown): PayloadUnit | undefined => {
+    if (typeof value === 'string') {
+        return nonBlank(value);
+    }
+
+    const record = asRecord(value);
+
+    if (!record) {
+        return undefined;
+    }
+
+    if ('numerator' in record || 'denominator' in record) {
+        const numerator = asUnitPart(record['numerator']);
+        const denominator = asUnitPart(record['denominator']);
+
+        return numerator && denominator ? { numerator, denominator } : undefined;
+    }
+
+    return asStructuredUnit(record);
 };
 
 /** One plotted point: `value` is null where the platform marked the period
@@ -290,12 +338,14 @@ export const payloadStat = (payload: UnknownRecord | null | undefined): PayloadS
 };
 
 /** What the envelope's provenance cites: the citation line, every source,
- *  and how fresh the data is. */
+ *  how fresh the data is, and what the card's data leaves out (the `detail`
+ *  of each `coverage_gap` warning, in the platform's words). */
 export type PayloadProvenance = {
     citation: string | null;
     sources: Source[];
     dataThrough: string | null;
     lastRefreshed: string | null;
+    leftOut: string[];
 };
 
 const asSource = (value: unknown): Source | undefined => {
@@ -329,11 +379,17 @@ export const payloadProvenance = (
     }
 
     const freshness = asRecord(provenance['freshness']);
+    const warnings = provenance['warnings'];
 
     return {
         citation: nonBlank(provenance['citation']) ?? null,
         sources: sources.map(asSource).filter((source) => source !== undefined),
         dataThrough: nonBlank(freshness?.['data_through']) ?? null,
         lastRefreshed: nonBlank(freshness?.['last_refreshed']) ?? null,
+        leftOut: (Array.isArray(warnings) ? warnings : [])
+            .map(asRecord)
+            .filter((warning) => warning?.['kind'] === 'coverage_gap')
+            .map((warning) => nonBlank(warning?.['detail']))
+            .filter((detail) => detail !== undefined),
     };
 };

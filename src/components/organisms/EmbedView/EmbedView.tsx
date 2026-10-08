@@ -8,16 +8,21 @@ import styles from './EmbedView.module.scss';
 import CardBody from '@/components/organisms/Studio/canvas/cards/CardBody';
 import type { CardExtras } from '@/components/organisms/Studio/canvas/cards/types';
 import { resolveCardView, widgetTitle } from '@/components/organisms/Studio/canvas/layout';
+import LiveNote from '@/components/organisms/Studio/canvas/LiveNote';
 import Whiteboard from '@/components/organisms/Studio/canvas/Whiteboard';
+import { useLiveCards } from '@/components/organisms/Studio/hooks/useLiveCards';
 import CardInfoPanel from '@/components/organisms/Studio/modals/CardInfoPanel';
 import { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
 import type { SavedConversation } from '@/lib/chat/history';
-import type { ShareKind } from '@/lib/chat/sharePrune';
 import type { Widget } from '@/lib/chat/widgets';
+import {
+    cardLiveOf,
+    isLiveCanvas,
+    type LiveCanvas,
+    type SharedView,
+} from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
-
-export type EmbedKind = Exclude<ShareKind, 'search'>;
 
 const noop = () => undefined;
 
@@ -28,11 +33,13 @@ const SingleCard = ({
     saved,
     theme,
     onCardInfo,
+    live,
 }: {
     widget: Widget;
     saved: SavedConversation;
     theme: ThemeDerived;
     onCardInfo: (id: string) => void;
+    live: LiveCanvas | undefined;
 }) => {
     // Chart.js px ride the same fluid factor as on the whiteboard.
     const scale = useGridCell() / GRID_CELL;
@@ -56,6 +63,7 @@ const SingleCard = ({
         onView: noop,
         onShare: null,
         readOnly: true,
+        live: cardLiveOf(live, widget.id),
     };
 
     return (
@@ -79,26 +87,31 @@ const SingleCard = ({
  * share is that one card filling the frame; a canvas or conversation share
  * is the whiteboard alone, read-only, every card laid out as saved (panning
  * and card tooltips work; nothing can be changed). Either way a card's
- * source line opens its More Info panel.
+ * source line opens its More Info panel. A live share's data cards arrive
+ * held and are filled here from the refresh route (see useLiveCards), and
+ * the frame says once that its data is live and when its text was written,
+ * on a strip under the sheet or the one card.
  */
-const EmbedView = ({ kind, saved }: { kind: EmbedKind; saved: SavedConversation }) => {
+const EmbedView = ({ shared }: { shared: SharedView }) => {
+    const { kind, saved } = shared;
     const theme = deriveTheme(saved.theme ?? DEFAULT_THEME);
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const [infoCardId, setInfoCardId] = useState<string | null>(null);
-    const widgets = [
+    const { widgets, live } = useLiveCards(shared, [
         ...saved.widgets.filter((widget) => !saved.removedIds.includes(widget.id)),
         ...(saved.textCards ?? []).filter((card) => !saved.removedIds.includes(card.id)),
-    ];
+    ]);
     const infoWidget = widgets.find((widget) => widget.id === infoCardId) ?? null;
     const single = kind === 'card' ? widgets[0] : undefined;
+    const noted = isLiveCanvas(live);
 
     return (
         <div
-            className={
-                kind === 'card'
-                    ? classNames(styles.single, single?.kind === 'text' && styles.singleText)
-                    : styles.sheet
-            }
+            className={classNames(
+                kind === 'card' ? styles.single : styles.sheet,
+                kind === 'card' && single?.kind === 'text' && styles.singleText,
+                noted && styles.live,
+            )}
             style={themeVars(theme) as React.CSSProperties}
         >
             {kind === 'card' ? (
@@ -108,6 +121,7 @@ const EmbedView = ({ kind, saved }: { kind: EmbedKind; saved: SavedConversation 
                         saved={saved}
                         theme={theme}
                         onCardInfo={setInfoCardId}
+                        live={live}
                     />
                 )
             ) : (
@@ -131,14 +145,18 @@ const EmbedView = ({ kind, saved }: { kind: EmbedKind; saved: SavedConversation 
                     onCardInfo={setInfoCardId}
                     focusedId={infoCardId}
                     readOnly
+                    live={live}
                 />
             )}
+
+            {noted && <LiveNote live={live} className={styles.noteStrip} />}
 
             <CardInfoPanel
                 info={infoWidget?.info ?? null}
                 widget={infoWidget}
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
+                liveShareId={live?.shareId}
             />
         </div>
     );

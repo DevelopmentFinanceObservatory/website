@@ -149,7 +149,7 @@ test('unSystemFailedReads is empty when the warning names only refused places', 
 
 test('tableCaptionNotes counts the preview and states the other caption codes once per part, labelled by part', () => {
     const clamp: Warning = {
-        code: 'child_places_clamped',
+        code: 'variables_clamped',
         severity: 'warn',
         message: 'only the first 50 child places were read',
     };

@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-02T16:54:50Z",
-  "generator_commit": "67347a1e21db53717e646660adb2b22a9f755753",
+  "generated_at": "2026-10-07T20:31:31Z",
+  "generator_commit": "56255a7667ba658498465422cbb5c0f1d9418b96",
   "nav": [
     {
       "id": "hub",
@@ -164,124 +164,221 @@
               "kind": "page"
             },
             {
-              "id": "group:skills/dfo-skills/oda-channels",
-              "title": "oda-channels",
+              "id": "group:skills/dfo-skills/sources",
+              "title": "Sources",
               "kind": "group",
-              "page_id": "dfo-skills/oda-channels",
               "children": [
                 {
-                  "id": "dfo-skills/oda-channels/references/bilateral-multilateral",
-                  "title": "Bilateral and multilateral ODA",
+                  "id": "dfo-skills/oda-dac1",
+                  "title": "oda-dac1",
                   "kind": "page"
                 },
                 {
-                  "id": "dfo-skills/oda-channels/references/sector-imputations",
-                  "title": "Sector imputations for multilateral aid",
+                  "id": "dfo-skills/oda-dac2a",
+                  "title": "oda-dac2a",
+                  "kind": "page"
+                },
+                {
+                  "id": "dfo-skills/oda-dac2b",
+                  "title": "oda-dac2b",
+                  "kind": "page"
+                },
+                {
+                  "id": "dfo-skills/oda-crs",
+                  "title": "oda-crs",
+                  "kind": "page"
+                },
+                {
+                  "id": "dfo-skills/oda-imputed-multilateral-sectors",
+                  "title": "oda-imputed-multilateral-sectors",
+                  "kind": "page"
+                },
+                {
+                  "id": "group:skills/dfo-skills/sources/debt-ids",
+                  "title": "debt-ids",
+                  "kind": "group",
+                  "page_id": "dfo-skills/debt-ids",
+                  "children": [
+                    {
+                      "id": "dfo-skills/debt-ids/references/series-codes",
+                      "title": "IDS series codes",
+                      "kind": "page"
+                    }
+                  ]
+                },
+                {
+                  "id": "dfo-skills/imf-weo",
+                  "title": "imf-weo",
                   "kind": "page"
                 }
               ]
             },
             {
-              "id": "group:skills/dfo-skills/oda-concepts",
-              "title": "oda-concepts",
+              "id": "group:skills/dfo-skills/domains",
+              "title": "Domains",
               "kind": "group",
-              "page_id": "dfo-skills/oda-concepts",
               "children": [
                 {
-                  "id": "dfo-skills/oda-concepts/references/core-oda",
-                  "title": "Core ODA",
-                  "kind": "page"
+                  "id": "group:skills/dfo-skills/domains/development-assistance",
+                  "title": "Development assistance",
+                  "kind": "group",
+                  "children": [
+                    {
+                      "id": "dfo-skills/oda-dataset-selection",
+                      "title": "oda-dataset-selection",
+                      "kind": "page"
+                    },
+                    {
+                      "id": "group:skills/dfo-skills/domains/development-assistance/oda-concepts",
+                      "title": "oda-concepts",
+                      "kind": "group",
+                      "page_id": "dfo-skills/oda-concepts",
+                      "children": [
+                        {
+                          "id": "dfo-skills/oda-concepts/references/core-oda",
+                          "title": "Core ODA",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-concepts/references/donor-groupings",
+                          "title": "Donor groupings",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-concepts/references/key-indicators",
+                          "title": "Key indicators",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-concepts/references/sector-groupings",
+                          "title": "Sector groupings",
+                          "kind": "page"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "group:skills/dfo-skills/domains/development-assistance/oda-measures",
+                      "title": "oda-measures",
+                      "kind": "group",
+                      "page_id": "dfo-skills/oda-measures",
+                      "children": [
+                        {
+                          "id": "dfo-skills/oda-measures/references/flow-types",
+                          "title": "Flow types",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-measures/references/grants-loans-psi",
+                          "title": "Grants, loans, and private sector instruments",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-measures/references/price-basis",
+                          "title": "Price basis",
+                          "kind": "page"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "group:skills/dfo-skills/domains/development-assistance/oda-channels",
+                      "title": "oda-channels",
+                      "kind": "group",
+                      "page_id": "dfo-skills/oda-channels",
+                      "children": [
+                        {
+                          "id": "dfo-skills/oda-channels/references/bilateral-multilateral",
+                          "title": "Bilateral and multilateral ODA",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-channels/references/sector-imputations",
+                          "title": "Sector imputations for multilateral aid",
+                          "kind": "page"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "group:skills/dfo-skills/domains/development-assistance/oda-policy-markers",
+                      "title": "oda-policy-markers",
+                      "kind": "group",
+                      "page_id": "dfo-skills/oda-policy-markers",
+                      "children": [
+                        {
+                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
+                          "title": "Reporting commitments vs. disbursements",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-general",
+                          "title": "Policy markers",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-scoring",
+                          "title": "Policy marker scoring",
+                          "kind": "page"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
-                  "id": "dfo-skills/oda-concepts/references/donor-groupings",
-                  "title": "Donor groupings",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/oda-concepts/references/key-indicators",
-                  "title": "Key indicators",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/oda-concepts/references/sector-groupings",
-                  "title": "Sector groupings",
-                  "kind": "page"
-                }
-              ]
-            },
-            {
-              "id": "dfo-skills/oda-crs",
-              "title": "oda-crs",
-              "kind": "page"
-            },
-            {
-              "id": "dfo-skills/oda-dac1",
-              "title": "oda-dac1",
-              "kind": "page"
-            },
-            {
-              "id": "dfo-skills/oda-dac2a",
-              "title": "oda-dac2a",
-              "kind": "page"
-            },
-            {
-              "id": "dfo-skills/oda-dac2b",
-              "title": "oda-dac2b",
-              "kind": "page"
-            },
-            {
-              "id": "dfo-skills/oda-dataset-selection",
-              "title": "oda-dataset-selection",
-              "kind": "page"
-            },
-            {
-              "id": "dfo-skills/oda-imputed-multilateral-sectors",
-              "title": "oda-imputed-multilateral-sectors",
-              "kind": "page"
-            },
-            {
-              "id": "group:skills/dfo-skills/oda-measures",
-              "title": "oda-measures",
-              "kind": "group",
-              "page_id": "dfo-skills/oda-measures",
-              "children": [
-                {
-                  "id": "dfo-skills/oda-measures/references/flow-types",
-                  "title": "Flow types",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/oda-measures/references/grants-loans-psi",
-                  "title": "Grants, loans, and private sector instruments",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/oda-measures/references/price-basis",
-                  "title": "Price basis",
-                  "kind": "page"
-                }
-              ]
-            },
-            {
-              "id": "group:skills/dfo-skills/policy-markers",
-              "title": "policy-markers",
-              "kind": "group",
-              "page_id": "dfo-skills/policy-markers",
-              "children": [
-                {
-                  "id": "dfo-skills/policy-markers/references/policy-marker-commitments-vs-disbursements",
-                  "title": "Reporting commitments vs. disbursements",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/policy-markers/references/policy-marker-general",
-                  "title": "Policy markers",
-                  "kind": "page"
-                },
-                {
-                  "id": "dfo-skills/policy-markers/references/policy-marker-scoring",
-                  "title": "Policy marker scoring",
-                  "kind": "page"
+                  "id": "group:skills/dfo-skills/domains/sovereign-debt",
+                  "title": "Sovereign debt",
+                  "kind": "group",
+                  "children": [
+                    {
+                      "id": "group:skills/dfo-skills/domains/sovereign-debt/debt-concepts",
+                      "title": "debt-concepts",
+                      "kind": "group",
+                      "page_id": "dfo-skills/debt-concepts",
+                      "children": [
+                        {
+                          "id": "dfo-skills/debt-concepts/references/creditors",
+                          "title": "Creditors",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/debt-concepts/references/domestic-debt",
+                          "title": "Domestic debt",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/debt-concepts/references/relief-and-restructuring",
+                          "title": "Relief and restructuring",
+                          "kind": "page"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "dfo-skills/debt-profile",
+                      "title": "debt-profile",
+                      "kind": "page"
+                    },
+                    {
+                      "id": "group:skills/dfo-skills/domains/sovereign-debt/debt-sustainability",
+                      "title": "debt-sustainability",
+                      "kind": "group",
+                      "page_id": "dfo-skills/debt-sustainability",
+                      "children": [
+                        {
+                          "id": "dfo-skills/debt-sustainability/references/lic-dsa-list",
+                          "title": "LIC DSA list",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/debt-sustainability/references/lic-dsf",
+                          "title": "The LIC-DSF",
+                          "kind": "page"
+                        },
+                        {
+                          "id": "dfo-skills/debt-sustainability/references/mac-srdsf",
+                          "title": "The MAC-SRDSF",
+                          "kind": "page"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -630,7 +727,7 @@
       "path": "get-started/use-studio",
       "title": "Use DFO Studio",
       "kind": "page",
-      "description": "Ask DFO Studio one question, approve its research plan, read the chart it draws on the canvas, and pin the card you want to keep.",
+      "description": "Ask DFO Studio a question, approve its plan, and pin a chart to your canvas.",
       "source_repo": "ONEcampaign/dfo-docs",
       "source_path": "content/hub/get-started/use-studio.md",
       "corpus_path": "corpus/hub/get-started/use-studio.md"
@@ -640,7 +737,7 @@
       "path": "build/share",
       "title": "Share live data or a snapshot",
       "kind": "page",
-      "description": "Share /data results through live links that rerun the query, snapshots that preserve their numbers, and links to Studio canvases or cards.",
+      "description": "Share /data results and Studio canvases or cards as live links that show current data, or as snapshots that keep the numbers they had when you made the link.",
       "source_repo": "ONEcampaign/dfo-docs",
       "source_path": "content/hub/build/share.md",
       "corpus_path": "corpus/hub/build/share.md"
@@ -670,7 +767,7 @@
       "path": "data/where-the-numbers-come-from",
       "title": "Where the numbers come from",
       "kind": "page",
-      "description": "How each DFO figure traces back to its source file, what the DFO changes as it loads the data into the knowledge graph, and how to check a figure against its source.",
+      "description": "How each DFO figure traces back to its source, what the DFO changes as it loads the data into the knowledge graph, and how to check a figure against its source.",
       "source_repo": "ONEcampaign/dfo-docs",
       "source_path": "content/hub/data/where-the-numbers-come-from.md",
       "corpus_path": "corpus/hub/data/where-the-numbers-come-from.md"
@@ -710,7 +807,7 @@
       "path": "data/bundle",
       "title": "The data bundle",
       "kind": "page",
-      "description": "The files in a DFO dataset download, what each one holds, and the call inside it that reproduces the dataset.",
+      "description": "The files in a DFO dataset download, what each one holds, and how to get the same dataset again.",
       "source_repo": "ONEcampaign/dfo-docs",
       "source_path": "content/hub/data/bundle.md",
       "corpus_path": "corpus/hub/data/bundle.md"
@@ -750,7 +847,7 @@
       "path": "skills/use-in-your-agent",
       "title": "Use skills in your own agent",
       "kind": "page",
-      "description": "Copy the DFO skills into Claude Code or another Agent Skills agent.",
+      "description": "Install the DFO skills in Claude, ChatGPT, Gemini, Codex or another assistant that reads Agent Skills.",
       "source_repo": "ONEcampaign/dfo-docs",
       "source_path": "content/hub/skills/use-in-your-agent.md",
       "corpus_path": "corpus/hub/skills/use-in-your-agent.md"
@@ -1361,8 +1458,8 @@
       "description": "Turn a plain-English question into a DFO dataset and read it as Parquet, first with curl and then in Python.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/quickstart.md",
-      "source_commit": "13c1798d3eba96bc98d5e333b2b805953afef5a5",
-      "last_modified": "2026-10-02T14:28:01Z",
+      "source_commit": "1aa1994d9a2882821aaa2e483b9f395e594ea6fe",
+      "last_modified": "2026-10-06T08:32:19Z",
       "corpus_path": "corpus/dfo-apis/quickstart.md"
     },
     {
@@ -1373,8 +1470,8 @@
       "description": "This page lists the shared base URL, request limits, RFC 9457 error shape, error codes, schema_version, and x-dfo-trace-id header for the DFO APIs.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/conventions.md",
-      "source_commit": "13c1798d3eba96bc98d5e333b2b805953afef5a5",
-      "last_modified": "2026-10-02T14:27:59Z",
+      "source_commit": "1aa1994d9a2882821aaa2e483b9f395e594ea6fe",
+      "last_modified": "2026-10-06T11:12:05Z",
       "corpus_path": "corpus/dfo-apis/conventions.md"
     },
     {
@@ -1385,8 +1482,8 @@
       "description": "Send a plain-English question to the Search API and read back the spec, the confirmation sentence, the observations, or the reason nothing matched.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/resolve-a-question.md",
-      "source_commit": "13c1798d3eba96bc98d5e333b2b805953afef5a5",
-      "last_modified": "2026-10-02T14:28:01Z",
+      "source_commit": "1aa1994d9a2882821aaa2e483b9f395e594ea6fe",
+      "last_modified": "2026-10-04T20:34:03Z",
       "corpus_path": "corpus/dfo-apis/resolve-a-question.md"
     },
     {
@@ -1397,8 +1494,8 @@
       "description": "Mint a spec into CSV, Excel or Parquet with the Datasets API, poll requests that run in the background, fetch a snapshot again, and see how the DFO picks a source for each series.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/get-a-dataset.md",
-      "source_commit": "13c1798d3eba96bc98d5e333b2b805953afef5a5",
-      "last_modified": "2026-10-02T14:28:01Z",
+      "source_commit": "1aa1994d9a2882821aaa2e483b9f395e594ea6fe",
+      "last_modified": "2026-10-06T10:41:29Z",
       "corpus_path": "corpus/dfo-apis/get-a-dataset.md"
     },
     {
@@ -1409,8 +1506,8 @@
       "description": "Turn a place or donor name into a dcid, and read what the graph holds about a country, a CRS code, a StatVar or a source, with the Graph API.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/look-things-up.md",
-      "source_commit": "13c1798d3eba96bc98d5e333b2b805953afef5a5",
-      "last_modified": "2026-09-29T16:13:15Z",
+      "source_commit": "1aa1994d9a2882821aaa2e483b9f395e594ea6fe",
+      "last_modified": "2026-10-03T18:30:35Z",
       "corpus_path": "corpus/dfo-apis/look-things-up.md"
     },
     {
@@ -1418,11 +1515,11 @@
       "path": "mcp/connect",
       "title": "Connect",
       "kind": "page",
-      "description": "Add the DFO MCP server to Claude, ChatGPT, Codex or Gemini CLI and check the connection with one question.",
+      "description": "Add the DFO MCP server to Claude, ChatGPT, Gemini, Claude Code, Codex or Gemini CLI and check the connection with one question.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/connect.md",
-      "source_commit": "99078bb06281875c26ec3ecea3f2b8cfc1fb5918",
-      "last_modified": "2026-10-01T08:25:18Z",
+      "source_commit": "28544a111799610717c0380df6aa90acf4312938",
+      "last_modified": "2026-10-07T14:18:16Z",
       "corpus_path": "corpus/dfo-ai/connect.md"
     },
     {
@@ -1433,8 +1530,8 @@
       "description": "How a question to the DFO MCP server becomes a cited answer, and the limits and refusals that bound it.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/what-you-can-ask.md",
-      "source_commit": "99078bb06281875c26ec3ecea3f2b8cfc1fb5918",
-      "last_modified": "2026-10-01T08:25:18Z",
+      "source_commit": "28544a111799610717c0380df6aa90acf4312938",
+      "last_modified": "2026-10-07T14:18:16Z",
       "corpus_path": "corpus/dfo-ai/what-you-can-ask.md"
     },
     {
@@ -1444,44 +1541,125 @@
       "kind": "skill",
       "description": "Context for answering questions about the Development Finance Observatory itself: what it is, who builds and funds it, what data it holds and from which sources, how answers are sourced and cited, how often data updates, privacy, and where to get help. Load when a user asks about the DFO or this assistant.",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/dfo-faq/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-02T16:39:38Z",
+      "source_path": "internal/skills/dfo-faq/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
       "corpus_path": "corpus/dfo-skills/dfo-faq/SKILL.md"
     },
     {
-      "id": "dfo-skills/oda-channels",
-      "path": "skills/oda-channels",
-      "title": "oda-channels",
+      "id": "dfo-skills/oda-dac1",
+      "path": "skills/oda-dac1",
+      "title": "oda-dac1",
       "kind": "skill",
-      "description": "Context for how ODA is channelled from donors to recipients. Covers the OECD distinction between bilateral and multilateral ODA, earmarked (bi-multi) funding through multilaterals, the OECD List of ODA-eligible international organisations, channel of delivery codes, multilateral outflows, and how a donor's core multilateral contributions are attributed to sectors through imputations.",
+      "description": "Context for working with the OECD DAC1 table, the donor-level totals of ODA, OOF, export credits and private flows by aid type. Covers who reports, the flow types (grant equivalent, net and gross disbursements, commitments) and price bases, what the ODA total includes (in-donor costs and core multilateral contributions), private sector instruments, ODA/GNI, and the double-counting traps with donor aggregates, EU Institutions, nested aid-type lines and memo items. Load once DAC1 has been chosen for an analysis, or when working with DAC1 figures. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-channels/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T13:52:49Z",
-      "corpus_path": "corpus/dfo-skills/oda-channels/SKILL.md"
+      "source_path": "skills/oda-dac1/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-dac1/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-dac1.zip"
     },
     {
-      "id": "dfo-skills/oda-channels/references/bilateral-multilateral",
-      "path": "skills/oda-channels/references/bilateral-multilateral",
-      "title": "Bilateral and multilateral ODA",
-      "kind": "page",
+      "id": "dfo-skills/oda-dac2a",
+      "path": "skills/oda-dac2a",
+      "title": "oda-dac2a",
+      "kind": "skill",
+      "description": "Context for working with the OECD DAC2A table, ODA disbursements by donor and recipient country or region. Covers its measures, multilateral agencies reporting as donors and appearing as recipients, how its totals reconcile with DAC1, the OECD's imputed multilateral ODA by recipient, and the double-counting traps with donor and recipient aggregates, EU aggregates and imputed figures. Load once DAC2A has been chosen for an analysis, or when working with DAC2A figures. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-channels/references/bilateral-multilateral.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T13:52:49Z",
-      "corpus_path": "corpus/dfo-skills/oda-channels/references/bilateral-multilateral.md"
+      "source_path": "skills/oda-dac2a/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-dac2a/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-dac2a.zip"
     },
     {
-      "id": "dfo-skills/oda-channels/references/sector-imputations",
-      "path": "skills/oda-channels/references/sector-imputations",
-      "title": "Sector imputations for multilateral aid",
+      "id": "dfo-skills/oda-dac2b",
+      "path": "skills/oda-dac2b",
+      "title": "oda-dac2b",
+      "kind": "skill",
+      "description": "Context for working with the OECD DAC2B table, other official flows (OOF) and officially supported export credits by donor and recipient. Covers its measures, why bilateral donors' figures sit at regional or income-group level while country detail comes from multilateral lenders, and the double-counting traps with donor and recipient aggregates and nested measures. Load once DAC2B has been chosen for an analysis, or when working with DAC2B figures. For choosing between DAC datasets, use oda-dataset-selection.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-dac2b/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-dac2b/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-dac2b.zip"
+    },
+    {
+      "id": "dfo-skills/oda-crs",
+      "path": "skills/oda-crs",
+      "title": "oda-crs",
+      "kind": "skill",
+      "description": "Context for working with the OECD Creditor Reporting System (CRS), the activity-level dataset of ODA, OOF, private sector instruments and private philanthropy reported by bilateral providers, multilateral organisations and foundations. Covers its attributes, coverage by year and against DAC1, the flow categories and bilateral/multilateral flags, the April 2026 core contribution records and their treatment in the DFO, and the double-counting traps with multilateral outflows, foundation funding and regional buckets. Load once the CRS has been chosen for an analysis, or when working with CRS records. For choosing between DAC datasets, use oda-dataset-selection.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-crs/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-crs/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-crs.zip"
+    },
+    {
+      "id": "dfo-skills/oda-imputed-multilateral-sectors",
+      "path": "skills/oda-imputed-multilateral-sectors",
+      "title": "oda-imputed-multilateral-sectors",
+      "kind": "skill",
+      "description": "Context for working with ONE's imputed multilateral sectors dataset, which estimates how much of each provider's core (unearmarked) contributions to multilateral organisations reached each sector and recipient. Covers how the estimate is built from Multisystem core contributions and multilaterals' CRS spending, its dimensions and price basis, how it relates to the OECD's imputed multilateral ODA and the discontinued OECD sectoral method, how contributions with borrowed or no shares are published, and the double-counting traps when combining it with bilateral CRS data or multilateral outflows. Load once this dataset has been chosen for an analysis, or when working with its figures. For choosing between datasets, use oda-dataset-selection.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-imputed-multilateral-sectors/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-imputed-multilateral-sectors/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-imputed-multilateral-sectors.zip"
+    },
+    {
+      "id": "dfo-skills/debt-ids",
+      "path": "skills/debt-ids",
+      "title": "debt-ids",
+      "kind": "skill",
+      "description": "Context for working with the World Bank's International Debt Statistics (IDS), the external debt of low- and middle-income countries as reported by the borrowers. Covers its sources, the debt stocks, flows, debt service, net flows and net transfers it reports and how they relate, the creditor and borrower breakdowns, the DFO's version of the data, the conversion to US dollars, projections, revisions and underreporting, how IDS differs from creditor-side data such as the CRS, and how its series codes are built. Load once IDS has been chosen for an analysis, or when working with IDS figures.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-ids/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/debt-ids/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/debt-ids.zip"
+    },
+    {
+      "id": "dfo-skills/debt-ids/references/series-codes",
+      "path": "skills/debt-ids/references/series-codes",
+      "title": "IDS series codes",
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-channels/references/sector-imputations.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T13:52:49Z",
-      "corpus_path": "corpus/dfo-skills/oda-channels/references/sector-imputations.md"
+      "source_path": "skills/debt-ids/references/series-codes.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-02T11:11:50Z",
+      "corpus_path": "corpus/dfo-skills/debt-ids/references/series-codes.md"
+    },
+    {
+      "id": "dfo-skills/imf-weo",
+      "path": "skills/imf-weo",
+      "title": "imf-weo",
+      "kind": "skill",
+      "description": "Context for working with the IMF World Economic Outlook (WEO) database, the IMF staff's annual macroeconomic estimates and projections for 197 economies. Covers which years are actual and which are projections, which currencies and units can be compared or summed across countries, fiscal-year reporters and level breaks, how IMF country groups are built, countries with suspended data, and how the DFO's version of the data is shaped. Load once WEO has been chosen for an analysis, or when working with WEO figures.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/imf-weo/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/imf-weo/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/imf-weo.zip"
+    },
+    {
+      "id": "dfo-skills/oda-dataset-selection",
+      "path": "skills/oda-dataset-selection",
+      "title": "oda-dataset-selection",
+      "kind": "skill",
+      "description": "Context for choosing the dataset that answers an ODA or development finance question. Summarises what each dataset covers, which breakdowns each supports, and how their totals relate.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-dataset-selection/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-dataset-selection/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-dataset-selection.zip"
     },
     {
       "id": "dfo-skills/oda-concepts",
@@ -1491,9 +1669,10 @@
       "description": "Core definitions, measures and classifications in ODA analysis. Covers the 0.7% ODA/GNI target and how ODA/GNI is calculated, the grant equivalent methodology and its 2018 break in comparability, Core ODA and the items it excludes (in-donor refugee costs, imputed student costs, debt relief), donor groupings (DAC members, DAC associates, non-DAC donors and EU Institutions, with the double-counting risk EU Institutions bring), ONE's sector groupings by CRS purpose code, and indicators of donor prioritisation such as sector shares and the bilateral/multilateral split.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T13:52:49Z",
-      "corpus_path": "corpus/dfo-skills/oda-concepts/SKILL.md"
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-concepts/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-concepts.zip"
     },
     {
       "id": "dfo-skills/oda-concepts/references/core-oda",
@@ -1502,7 +1681,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/core-oda.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T13:52:49Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/core-oda.md"
     },
@@ -1513,7 +1692,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/donor-groupings.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T13:52:49Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/donor-groupings.md"
     },
@@ -1524,7 +1703,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/key-indicators.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T13:52:49Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/key-indicators.md"
     },
@@ -1535,81 +1714,9 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/sector-groupings.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T14:24:10Z",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T09:48:19Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/sector-groupings.md"
-    },
-    {
-      "id": "dfo-skills/oda-crs",
-      "path": "skills/oda-crs",
-      "title": "oda-crs",
-      "kind": "skill",
-      "description": "Context for working with the OECD Creditor Reporting System (CRS), the activity-level dataset of ODA, OOF, private sector instruments and private philanthropy reported by bilateral providers, multilateral organisations and foundations. Covers its attributes, coverage by year and against DAC1, the flow categories and bilateral/multilateral flags, the April 2026 core contribution records and their treatment in the DFO, and the double-counting traps with multilateral outflows, foundation funding and regional buckets. Load once the CRS has been chosen for an analysis, or when working with CRS records. For choosing between DAC datasets, use oda-dataset-selection.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-crs/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T09:59:15Z",
-      "corpus_path": "corpus/dfo-skills/oda-crs/SKILL.md"
-    },
-    {
-      "id": "dfo-skills/oda-dac1",
-      "path": "skills/oda-dac1",
-      "title": "oda-dac1",
-      "kind": "skill",
-      "description": "Context for working with the OECD DAC1 table, the donor-level totals of ODA, OOF, export credits and private flows by aid type. Covers who reports, the flow types (grant equivalent, net and gross disbursements, commitments) and price bases, what the ODA total includes (in-donor costs and core multilateral contributions), private sector instruments, ODA/GNI, and the double-counting traps with donor aggregates, EU Institutions, nested aid-type lines and memo items. Load once DAC1 has been chosen for an analysis, or when working with DAC1 figures. For choosing between DAC datasets, use oda-dataset-selection.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-dac1/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-30T11:08:34Z",
-      "corpus_path": "corpus/dfo-skills/oda-dac1/SKILL.md"
-    },
-    {
-      "id": "dfo-skills/oda-dac2a",
-      "path": "skills/oda-dac2a",
-      "title": "oda-dac2a",
-      "kind": "skill",
-      "description": "Context for working with the OECD DAC2A table, ODA disbursements by donor and recipient country or region. Covers its measures, multilateral agencies reporting as donors and appearing as recipients, how its totals reconcile with DAC1, the OECD's imputed multilateral ODA by recipient, and the double-counting traps with donor and recipient aggregates, EU aggregates and imputed figures. Load once DAC2A has been chosen for an analysis, or when working with DAC2A figures. For choosing between DAC datasets, use oda-dataset-selection.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-dac2a/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-30T11:08:34Z",
-      "corpus_path": "corpus/dfo-skills/oda-dac2a/SKILL.md"
-    },
-    {
-      "id": "dfo-skills/oda-dac2b",
-      "path": "skills/oda-dac2b",
-      "title": "oda-dac2b",
-      "kind": "skill",
-      "description": "Context for working with the OECD DAC2B table, other official flows (OOF) and officially supported export credits by donor and recipient. Covers its measures, why bilateral donors' figures sit at regional or income-group level while country detail comes from multilateral lenders, and the double-counting traps with donor and recipient aggregates and nested measures. Load once DAC2B has been chosen for an analysis, or when working with DAC2B figures. For choosing between DAC datasets, use oda-dataset-selection.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-dac2b/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T09:45:05Z",
-      "corpus_path": "corpus/dfo-skills/oda-dac2b/SKILL.md"
-    },
-    {
-      "id": "dfo-skills/oda-dataset-selection",
-      "path": "skills/oda-dataset-selection",
-      "title": "oda-dataset-selection",
-      "kind": "skill",
-      "description": "Context for choosing the dataset that answers an ODA or development finance question. Summarises what each dataset covers, which breakdowns each supports, and how their totals relate.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-dataset-selection/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T10:09:43Z",
-      "corpus_path": "corpus/dfo-skills/oda-dataset-selection/SKILL.md"
-    },
-    {
-      "id": "dfo-skills/oda-imputed-multilateral-sectors",
-      "path": "skills/oda-imputed-multilateral-sectors",
-      "title": "oda-imputed-multilateral-sectors",
-      "kind": "skill",
-      "description": "Context for working with ONE's imputed multilateral sectors dataset, which estimates how much of each provider's core (unearmarked) contributions to multilateral organisations reached each sector and recipient. Covers how the estimate is built from Multisystem core contributions and multilaterals' CRS spending, its dimensions and price basis, how it relates to the OECD's imputed multilateral ODA and the discontinued OECD sectoral method, how contributions with borrowed or no shares are published, and the double-counting traps when combining it with bilateral CRS data or multilateral outflows. Load once this dataset has been chosen for an analysis, or when working with its figures. For choosing between datasets, use oda-dataset-selection.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-imputed-multilateral-sectors/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T09:59:15Z",
-      "corpus_path": "corpus/dfo-skills/oda-imputed-multilateral-sectors/SKILL.md"
     },
     {
       "id": "dfo-skills/oda-measures",
@@ -1619,9 +1726,10 @@
       "description": "How the OECD DAC measures and reports ODA. Covers the flow types (gross disbursements, net disbursements, grant equivalents and commitments) and which questions each fits, current and constant prices, DAC deflators and base years, and the 2018 switch to the grant-equivalent headline. Also covers how grants, concessional loans and private sector instruments (PSI) qualify as ODA and are counted, including grant elements, discount rates, additionality, the institutional and instrument approaches, PSI transition arrangements and the policy debate on loan and PSI measurement. Relevant to choosing a measure, comparing ODA across donors or years, explaining what an ODA figure represents, and assessing how a financing instrument counts in ODA.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-10-01T13:52:49Z",
-      "corpus_path": "corpus/dfo-skills/oda-measures/SKILL.md"
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-measures/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-measures.zip"
     },
     {
       "id": "dfo-skills/oda-measures/references/flow-types",
@@ -1630,7 +1738,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/flow-types.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T13:52:49Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/flow-types.md"
     },
@@ -1641,7 +1749,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/grants-loans-psi.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T14:06:45Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/grants-loans-psi.md"
     },
@@ -1652,54 +1760,195 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/price-basis.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
       "last_modified": "2026-10-01T13:52:49Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/price-basis.md"
     },
     {
-      "id": "dfo-skills/policy-markers",
-      "path": "skills/policy-markers",
-      "title": "policy-markers",
+      "id": "dfo-skills/oda-channels",
+      "path": "skills/oda-channels",
+      "title": "oda-channels",
+      "kind": "skill",
+      "description": "Context for how ODA is channelled from donors to recipients. Covers the OECD distinction between bilateral and multilateral ODA, earmarked (bi-multi) funding through multilaterals, the OECD List of ODA-eligible international organisations, channel of delivery codes, multilateral outflows, and how a donor's core multilateral contributions are attributed to sectors through imputations.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-channels/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-channels/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-channels.zip"
+    },
+    {
+      "id": "dfo-skills/oda-channels/references/bilateral-multilateral",
+      "path": "skills/oda-channels/references/bilateral-multilateral",
+      "title": "Bilateral and multilateral ODA",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-channels/references/bilateral-multilateral.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-01T13:52:49Z",
+      "corpus_path": "corpus/dfo-skills/oda-channels/references/bilateral-multilateral.md"
+    },
+    {
+      "id": "dfo-skills/oda-channels/references/sector-imputations",
+      "path": "skills/oda-channels/references/sector-imputations",
+      "title": "Sector imputations for multilateral aid",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/oda-channels/references/sector-imputations.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-01T13:52:49Z",
+      "corpus_path": "corpus/dfo-skills/oda-channels/references/sector-imputations.md"
+    },
+    {
+      "id": "dfo-skills/oda-policy-markers",
+      "path": "skills/oda-policy-markers",
+      "title": "oda-policy-markers",
       "kind": "skill",
       "description": "Covers OECD DAC policy markers used to classify bilateral ODA in the Creditor Reporting System (CRS). Use when the user asks what a policy marker is, which markers exist, how to score an activity, how to interpret gender or climate marker data, or how to analyse ODA by policy objective. Also use when the user asks whether policy marker analysis is appropriate for a given question.",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/policy-markers/SKILL.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-28T12:30:09Z",
-      "corpus_path": "corpus/dfo-skills/policy-markers/SKILL.md"
+      "source_path": "skills/oda-policy-markers/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/oda-policy-markers/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/oda-policy-markers.zip"
     },
     {
-      "id": "dfo-skills/policy-markers/references/policy-marker-commitments-vs-disbursements",
-      "path": "skills/policy-markers/references/policy-marker-commitments-vs-disbursements",
+      "id": "dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
+      "path": "skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
       "title": "Reporting commitments vs. disbursements",
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/policy-markers/references/policy-marker-commitments-vs-disbursements.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-28T12:30:09Z",
-      "corpus_path": "corpus/dfo-skills/policy-markers/references/policy-marker-commitments-vs-disbursements.md"
+      "source_path": "skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T12:14:43Z",
+      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements.md"
     },
     {
-      "id": "dfo-skills/policy-markers/references/policy-marker-general",
-      "path": "skills/policy-markers/references/policy-marker-general",
+      "id": "dfo-skills/oda-policy-markers/references/policy-marker-general",
+      "path": "skills/oda-policy-markers/references/policy-marker-general",
       "title": "Policy markers",
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/policy-markers/references/policy-marker-general.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-28T12:30:09Z",
-      "corpus_path": "corpus/dfo-skills/policy-markers/references/policy-marker-general.md"
+      "source_path": "skills/oda-policy-markers/references/policy-marker-general.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T12:14:43Z",
+      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-general.md"
     },
     {
-      "id": "dfo-skills/policy-markers/references/policy-marker-scoring",
-      "path": "skills/policy-markers/references/policy-marker-scoring",
+      "id": "dfo-skills/oda-policy-markers/references/policy-marker-scoring",
+      "path": "skills/oda-policy-markers/references/policy-marker-scoring",
       "title": "Policy marker scoring",
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/policy-markers/references/policy-marker-scoring.md",
-      "source_commit": "10475084f7af7a66b2071b04a95f70505d56129c",
-      "last_modified": "2026-09-28T12:30:09Z",
-      "corpus_path": "corpus/dfo-skills/policy-markers/references/policy-marker-scoring.md"
+      "source_path": "skills/oda-policy-markers/references/policy-marker-scoring.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T12:14:43Z",
+      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-scoring.md"
+    },
+    {
+      "id": "dfo-skills/debt-concepts",
+      "path": "skills/debt-concepts",
+      "title": "debt-concepts",
+      "kind": "skill",
+      "description": "Core concepts in sovereign debt analysis, domestic and external, that hold across data sources. Covers external against domestic debt and the three ways of drawing the line between them, where domestic public debt figures come from and what sets domestic debt apart, which parts of the public sector a debt figure covers, face value against present value, the choices that make two figures for \"external public debt\" or \"debt service\" differ (IMF credit, creditor groups, Chinese lenders, regional definitions, denominators) and the choices ONE's published analysis makes, concessionality under the World Bank, OECD and IMF definitions, and how debt relief appears in aid data and in debt data. Load for any question about a country's public, external or domestic debt, its creditors, debt service or debt relief, alongside the skill for the data source in use.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-concepts/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/debt-concepts/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/debt-concepts.zip"
+    },
+    {
+      "id": "dfo-skills/debt-concepts/references/creditors",
+      "path": "skills/debt-concepts/references/creditors",
+      "title": "Creditors",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-concepts/references/creditors.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T13:21:18Z",
+      "corpus_path": "corpus/dfo-skills/debt-concepts/references/creditors.md"
+    },
+    {
+      "id": "dfo-skills/debt-concepts/references/domestic-debt",
+      "path": "skills/debt-concepts/references/domestic-debt",
+      "title": "Domestic debt",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-concepts/references/domestic-debt.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T11:21:42Z",
+      "corpus_path": "corpus/dfo-skills/debt-concepts/references/domestic-debt.md"
+    },
+    {
+      "id": "dfo-skills/debt-concepts/references/relief-and-restructuring",
+      "path": "skills/debt-concepts/references/relief-and-restructuring",
+      "title": "Relief and restructuring",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-concepts/references/relief-and-restructuring.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T09:30:21Z",
+      "corpus_path": "corpus/dfo-skills/debt-concepts/references/relief-and-restructuring.md"
+    },
+    {
+      "id": "dfo-skills/debt-profile",
+      "path": "skills/debt-profile",
+      "title": "debt-profile",
+      "kind": "skill",
+      "description": "Context for describing a country's external debt: how much it owes and how that has changed, who borrowed, which creditors hold the debt, its cost and terms, debt service against exports and revenue, upcoming payments, debt flows, arrears and reserves, and comparisons with peers. Covers which measure answers each part, the traps in each, and what an external-only profile leaves out. Load for questions about a country's debt situation, how much it owes and to whom, how expensive its debt is, or what it pays each year. Questions about whether the debt is sustainable or at risk need the debt-sustainability skill as well.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-profile/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/debt-profile/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/debt-profile.zip"
+    },
+    {
+      "id": "dfo-skills/debt-sustainability",
+      "path": "skills/debt-sustainability",
+      "title": "debt-sustainability",
+      "kind": "skill",
+      "description": "Context on how the IMF and World Bank assess whether a country's public debt is sustainable, and how far public data can approximate their assessments. Covers debt sustainability analyses (DSAs), which of the two frameworks applies to a country (the joint framework for low-income countries, LIC-DSF, or the IMF's framework for market-access countries, MAC-SRDSF), risk ratings against sustainability judgements, solvency against liquidity, the indicators and thresholds each framework uses, and why indicators built from debt and macroeconomic data differ from a DSA's. Carries the IMF's list of LIC DSAs with each country's latest risk of external debt distress. Load for questions about whether a country's debt is sustainable, its risk of debt distress or sovereign stress, which countries are at high risk or in debt distress, default risk, DSA ratings, debt thresholds or the debt sustainability frameworks.",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-sustainability/SKILL.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-07T13:23:02Z",
+      "corpus_path": "corpus/dfo-skills/debt-sustainability/SKILL.md",
+      "bundle_path": "corpus/dfo-skills/debt-sustainability.zip"
+    },
+    {
+      "id": "dfo-skills/debt-sustainability/references/lic-dsa-list",
+      "path": "skills/debt-sustainability/references/lic-dsa-list",
+      "title": "LIC DSA list",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-sustainability/references/lic-dsa-list.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T12:35:35Z",
+      "corpus_path": "corpus/dfo-skills/debt-sustainability/references/lic-dsa-list.md"
+    },
+    {
+      "id": "dfo-skills/debt-sustainability/references/lic-dsf",
+      "path": "skills/debt-sustainability/references/lic-dsf",
+      "title": "The LIC-DSF",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-sustainability/references/lic-dsf.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T12:35:35Z",
+      "corpus_path": "corpus/dfo-skills/debt-sustainability/references/lic-dsf.md"
+    },
+    {
+      "id": "dfo-skills/debt-sustainability/references/mac-srdsf",
+      "path": "skills/debt-sustainability/references/mac-srdsf",
+      "title": "The MAC-SRDSF",
+      "kind": "page",
+      "source_repo": "ONEcampaign/dfo-skills",
+      "source_path": "skills/debt-sustainability/references/mac-srdsf.md",
+      "source_commit": "c136e0cfcdbd4b81fb4e42756309e99aacc18060",
+      "last_modified": "2026-10-06T12:35:35Z",
+      "corpus_path": "corpus/dfo-skills/debt-sustainability/references/mac-srdsf.md"
     },
     {
       "id": "pydeflate",

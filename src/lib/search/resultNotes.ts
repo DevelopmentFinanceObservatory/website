@@ -36,9 +36,6 @@ const asSentence = (message: string): string => {
  *  view.ts's seriesPreviewCaptions; the rest read as the API wrote them. */
 export const CAPTION_WARNING_CODES: ReadonlySet<string> = new Set([
     'observations_series_truncated',
-    'multi_recipient_truncated',
-    'child_places_clamped',
-    'standard_probe_places_clamped',
     'variables_clamped',
     'observations_scope_partial',
 ]);

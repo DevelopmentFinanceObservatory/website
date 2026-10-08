@@ -36,27 +36,34 @@ const ENTITY_ROLE_KEYS: string[] = [
     'destination',
 ] satisfies EntityRoleKey[];
 
-// Search's own bounds on an `EntityGroup`: a label of 1 to 120 code points
-// and a dcid of at most 1024 characters.
+// Search's own bounds on an `EntityGroup`: a label of 1 to 120 code points,
+// and a dcid and an entity type of at most 1024 characters each.
 const GROUP_LABEL_MAX_LENGTH = 120;
 const GROUP_DCID_MAX_LENGTH = 1024;
+const GROUP_ENTITY_TYPE_MAX_LENGTH = 1024;
 
 const isPlainObject = (value: any): boolean =>
     !!value && typeof value === 'object' && !Array.isArray(value);
 
 const isEntityGroup = (value: any): value is EntityGroup =>
     isPlainObject(value) &&
-    Object.keys(value).every((member) => member === 'dcid' || member === 'label') &&
+    Object.keys(value).every(
+        (member) => member === 'dcid' || member === 'label' || member === 'entity_type',
+    ) &&
     typeof value.label === 'string' &&
     value.label.length > 0 &&
     // A label within the bound spans at most two UTF-16 units per code point.
     value.label.length <= GROUP_LABEL_MAX_LENGTH * 2 &&
     [...value.label].length <= GROUP_LABEL_MAX_LENGTH &&
     (value.dcid == null ||
-        (typeof value.dcid === 'string' && value.dcid.length <= GROUP_DCID_MAX_LENGTH));
+        (typeof value.dcid === 'string' && value.dcid.length <= GROUP_DCID_MAX_LENGTH)) &&
+    (value.entity_type == null ||
+        (typeof value.entity_type === 'string' &&
+            value.entity_type.length <= GROUP_ENTITY_TYPE_MAX_LENGTH));
 
 /** A part's groups as Search takes them beside an identity: one group per
- *  role key at most, each holding a label and an optional dcid only. */
+ *  role key at most, each holding a label, an optional dcid and an optional
+ *  entity type only. */
 const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
     isPlainObject(value) &&
     Object.entries(value).every(

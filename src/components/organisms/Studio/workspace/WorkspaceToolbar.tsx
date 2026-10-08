@@ -54,6 +54,9 @@ type WorkspaceToolbarProps = {
     onCustomize: () => void;
     // Absent for a guest (a share needs an account).
     onShare?: () => void;
+    // A live share's caption (see LiveNote), placed after the title or alone
+    // in the phone's tools row, which a canvas or card share leaves empty.
+    note?: React.ReactNode;
 };
 
 /**
@@ -79,6 +82,7 @@ const WorkspaceToolbar = ({
     onNewChat,
     onCustomize,
     onShare,
+    note,
 }: WorkspaceToolbarProps) => {
     if (phone) {
         const view = chatCollapsed ? 'canvas' : chatTab;
@@ -105,6 +109,7 @@ const WorkspaceToolbar = ({
                             }}
                         />
                     )}
+                    {note}
                     {!readOnly && <MoreMenu items={items} />}
                 </div>
                 {/* The filters ride a strip over the sheet's top edge — only
@@ -165,6 +170,7 @@ const WorkspaceToolbar = ({
                         <Icon name="edit-title" />
                     </button>
                 )}
+                {note && <span className={styles.titleNote}>{note}</span>}
             </p>
             {cardTabs && (
                 <div className={styles.cardTabs}>

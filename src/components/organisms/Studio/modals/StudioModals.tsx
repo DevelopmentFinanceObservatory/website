@@ -9,8 +9,9 @@ import type { StudioModalsState } from './useStudioModals';
 import { widgetTitle } from '../canvas/layout';
 import type { CanvasDocument } from '../hooks/useCanvasDocument';
 
-import type { ShareKind } from '@/lib/chat/shareStore';
 import type { Widget } from '@/lib/chat/widgets';
+import { isLiveDataCard } from '@/lib/studio/liveCards';
+import type { ShareLinkDeps } from '@/lib/studio/shareDialog';
 
 type StudioModalsProps = {
     modals: StudioModalsState;
@@ -21,7 +22,10 @@ type StudioModalsProps = {
     title: string;
     firstPrompt: string;
     shareData: ShareDatum[];
-    createShare: (kind: ShareKind, cardId?: string) => Promise<string | null>;
+    // The site can refresh a live share's cards, and the canvas holds a
+    // data card a share of it would carry.
+    liveSharing: boolean;
+    createShare: ShareLinkDeps['createShare'];
 };
 
 /**
@@ -37,6 +41,7 @@ const StudioModals = ({
     title,
     firstPrompt,
     shareData,
+    liveSharing,
     createShare,
 }: StudioModalsProps) => {
     const { seq } = modals;
@@ -46,6 +51,14 @@ const StudioModals = ({
     const editingTitleWidget = modals.cardTitle.editingId
         ? visibleWidgets.find((widget) => widget.id === modals.cardTitle.editingId)
         : undefined;
+    // A share is offered live when it would hold a card that draws data. For
+    // the whole canvas that is any data card on it, and for one card that
+    // card itself.
+    const { scope } = modals.share;
+    const sharesData =
+        scope.kind === 'whole'
+            ? visibleWidgets.some(isLiveDataCard)
+            : visibleWidgets.some((widget) => widget.id === scope.id && isLiveDataCard(widget));
 
     return (
         <>
@@ -122,6 +135,7 @@ const StudioModals = ({
                 scope={modals.share.scope}
                 title={title}
                 data={shareData}
+                offerLive={liveSharing && sharesData}
                 createShare={createShare}
             />
         </>

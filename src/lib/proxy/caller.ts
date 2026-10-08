@@ -94,7 +94,7 @@ export const limiterKeyFor = (
         return () => {
             if (!logged) {
                 logged = true;
-                log(`${hops.problem}; rate-limiting /api by an unknown client address`);
+                log(`${hops.problem}; rate-limiting /api and /mcp by an unknown client address`);
             }
 
             return LOCAL_ADDRESS;

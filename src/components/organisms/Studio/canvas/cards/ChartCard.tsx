@@ -38,7 +38,11 @@ const ChartCard = ({
     const options = useMemo(
         // Every category keeps its label; only a truly dense axis (long year
         // runs) falls back to skipping.
-        () => buildChartOptions(scale, widget.categories.length > 14, theme, widget.horizontal),
+        () =>
+            buildChartOptions(scale, widget.categories.length > 14, theme, {
+                horizontal: widget.horizontal,
+                unit: widget.unit,
+            }),
         [widget, scale, theme],
     );
     const barData = useMemo(
@@ -150,7 +154,6 @@ const ChartCard = ({
             </div>
             <CardChrome
                 source={widget.source}
-                note={extras.note}
                 info={widget.info}
                 onInfo={extras.onInfo}
             />

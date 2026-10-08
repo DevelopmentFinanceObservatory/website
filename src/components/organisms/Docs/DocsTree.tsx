@@ -25,9 +25,13 @@ const NodeLink = ({ id, title, currentId }: { id: string; title: string; current
             {title} ↗
         </a>
     ) : (
+        // No jump to the top of the document: that lands above the banner,
+        // far from the text. DocsScroll puts the reader at the start of the
+        // page they picked instead.
         <Link
             href={docsHref(page.path)}
             className={styles.itemLink}
+            scroll={false}
             aria-current={id === currentId ? 'page' : undefined}
         >
             {title}

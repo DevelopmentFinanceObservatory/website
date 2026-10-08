@@ -14,7 +14,7 @@ The browser stores `visitor_id` only after the visitor accepts "DFO usage statis
 | `search.empty` | a search that answered nothing: no part resolved, or the question was declined | same shape, `resolved` empty — the data-gap signal |
 | `search.studio_handoff` | a click on a Studio action on a search answer | same shape, plus `seeds` (the seeds handed to Studio, 0 when none could be stored) |
 | `studio.prompt` | a prompt sent in the Studio | `turn`, `intent` (`new` / `follow_up` / `edit`), `length`, `guest` |
-| `studio.card` | a card the harness put on the canvas | `kind`, `turn`, `source`, `indicators` (DCIDs), `years`, `unit` (in words with its magnitude and price basis, `US Dollar, millions, constant 2023 prices`; null when the card states none), `guest` |
+| `studio.card` | a card the harness put on the canvas | `kind`, `turn`, `source`, `indicators` (DCIDs), `years`, `unit` (in words with its magnitude and price basis, `US Dollar, millions, constant 2023 prices`; a composed unit as its numerator and denominator either side of "per", each part's magnitude and price basis in brackets beside it, `US Dollar per Total population` or `Euro (constant 2020 prices) per Total population`; a percentage as `Percent`; null when the card states none), `guest` |
 | `studio.session_end` | New Chat, or the page is left | `turns`, `cards`, `pins`, `guest` |
 | `auth.signin` | a provider callback ended in a session | `provider` |
 | `guest.wall_hit` | a guest used up the free prompts | `prompts` |

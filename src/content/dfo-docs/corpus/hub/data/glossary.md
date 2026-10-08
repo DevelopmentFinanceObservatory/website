@@ -4,7 +4,7 @@ description: Short definitions of the DFO's own terms, from bundle to Wikibase, 
 
 # Glossary
 
-This glossary defines terms used by the DFO, in alphabetical order. The [ontology](ontology.md) defines development finance terms such as ODA and grant equivalent, and the skills explain how to use them.
+This glossary defines terms used by the DFO, in alphabetical order. The [ontology](ontology.md) defines development finance terms such as ODA and grant equivalent. The skills pages explain how to use them.
 
 ## Artifact digest
 
@@ -12,15 +12,11 @@ The SHA-256 of one downloadable file, written `sha256:` and 64 hex characters. O
 
 ## Bundle
 
-The zip a download comes in by default: the data file plus `datapackage.json`, `CITATION.cff` and a README. See [The data bundle](bundle.md).
+The zip a download comes in by default: a README, the data file, a table of code names, `SOURCES.md`, `CITATION.cff` and `datapackage.json`. See [The data bundle](bundle.md).
 
 ## Classification
 
 A coded list a source uses to describe its data, such as CRS purpose codes or finance types. Each code is a node in the knowledge graph, for example `CRSPurposeCode12220` for basic health care. See [The development finance ontology](ontology.md#source-codes).
-
-## Collection
-
-A set of specs registered together under one `col_` id. A collection downloads as one bundle with a data file per member. See [The data bundle](bundle.md#collections).
 
 ## `content_version`
 
@@ -60,7 +56,7 @@ The graph that holds every source the DFO ingests, with provenance on every obse
 
 ## Live link
 
-A share link that re-runs its query each time it opens, so it shows the latest data. The alternative is a snapshot link. See [Share live data or a snapshot](../build/share.md).
+A share link that shows the latest data each time it opens. A search link re-runs its query, and a Studio link redraws its data cards. The alternative is a snapshot link. See [Share live data or a snapshot](../build/share.md).
 
 ## Observation
 

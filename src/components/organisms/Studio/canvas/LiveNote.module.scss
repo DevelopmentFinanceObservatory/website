@@ -1,0 +1,25 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// A caption in the site's own colours, whatever theme the canvas wears,
+// a step quieter than anything it sits beside.
+.note {
+    @include flex(row, flex-start, center);
+    @include font-size(12px, 1.3);
+
+    display: inline-flex;
+    gap: rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+.dot {
+    flex-shrink: 0;
+    width: rem(6);
+    height: rem(6);
+    background-color: var(--color-mint-dark);
+    border-radius: 50%;
+}

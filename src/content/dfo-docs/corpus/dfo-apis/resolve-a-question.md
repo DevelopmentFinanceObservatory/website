@@ -4,7 +4,7 @@ description: Send a plain-English question to the Search API and read back the s
 
 # Resolve a question
 
-`POST /api/search/resolve` turns a question such as "Germany ODA disbursements to Nigeria for basic health care" into a spec that records its StatVars, entities and codes under a `spec_id`. Read values from the response or pass the spec to the Datasets API to mint a file.
+`POST /api/search/resolve` turns a question such as "German aid disbursements to Nigeria for basic health care" into a spec that records its StatVars, entities and codes under a `spec_id`. Read values from the response or pass the spec to the Datasets API to mint a file.
 
 Every example sets the base URL first. See [Conventions](conventions.md) for access and limits.
 
@@ -19,14 +19,14 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
    ```json
    {
      "status": "definite",
-     "variable_text": "ODA disbursements for basic health care",
+     "variable_text": "aid disbursements for basic health care",
      "spec_id": "spec_774d6c001a6250aa67ca676ab067895e",
      "entities": {
        "destination": ["country/NGA"],
        "origin": ["country/DEU"]
      },
      "purpose": "CRSPurposeCode12220",
-     "members": 23,
+     "members": 21,
      "confidence": "high",
      "warnings": []
    }
@@ -39,7 +39,7 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
    ```bash
    curl -s -X POST "$DFO_API/api/search/resolve" \
      -H "Content-Type: application/json" \
-     -d '{"input": {"kind": "raw_text", "query": "Germany ODA disbursements to Nigeria for basic health care"}}' \
+     -d '{"input": {"kind": "raw_text", "query": "German aid disbursements to Nigeria for basic health care"}}' \
      | jq '.parts[] | {status, variable_text,
                        spec_id: .spec.spec_id,
                        entities: .spec.definition.identity.entities,
@@ -61,7 +61,7 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
 
    response = httpx.post(
        f"{DFO_API}/api/search/resolve",
-       json={"input": {"kind": "raw_text", "query": "Germany ODA disbursements to Nigeria for basic health care"}},
+       json={"input": {"kind": "raw_text", "query": "German aid disbursements to Nigeria for basic health care"}},
        timeout=60,
    )
    for part in response.raise_for_status().json()["parts"]:
@@ -82,7 +82,7 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
 
    :::
 
-   The answer is a `resolution`, with one entry in `parts` per variable the question names, up to six. This question names one. Germany took the `origin` role, Nigeria the `destination` role, and "basic health care" became CRS purpose code 12220. `members` counts the StatVars the spec covers: 23, because the question left codes such as cooperation modality open.
+   The answer is a `resolution`, with one entry in `parts` per variable the question names, up to six. This question names one. Germany took the `origin` role, Nigeria the `destination` role, and "basic health care" became CRS purpose code 12220. `members` counts the StatVars the spec covers: 21, because the question left codes such as cooperation modality open.
 
 1. **Check the answer's `kind`.** Every answer arrives with HTTP `200` as one of three kinds, and only a `resolution` carries `parts`:
 
@@ -191,11 +191,11 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
 1. **Get the values.** Set `response_options.include_observations` to `true` to include observations in `spec.resolved.observations`. Each definite spec then carries the full series when it is small and the latest points otherwise.
 
    ```text
-   definite ODA disbursements for basic health care
+   definite aid disbursements for basic health care
    spec_774d6c001a6250aa67ca676ab067895e
-   Gross disbursements (nominal; US dollar) for basic health care for official development assistance for standard grant to Nigeria from Germany, according to oecd creditor reporting system. In 2024, the latest year with data, there are 3 observations across 3 series, covering 1 donors and 1 recipients. No year was named.
-   Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode12220_Nominal {'date': '2009', 'value': 224200.0}
-   Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityD02_CRSPurposeCode12220_Nominal {'date': '2024', 'value': 53800.0}
+   Germany's gross ODA disbursements to Nigeria for basic health care, 1995 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).
+   Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSPurposeCode12220_Nominal {'date': '2009', 'value': 224204.0}
+   Amount_FinancialFlow_Gross_Disbursement_CRSTypeOfFlow10_CRSTypeOfFinance110_CRSCooperationModalityD02_CRSPurposeCode12220_Nominal {'date': '2024', 'value': 53798.0}
    ```
 
    ```python
@@ -208,7 +208,7 @@ export DFO_API=https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app
    response = httpx.post(
        f"{DFO_API}/api/search/resolve",
        json={
-           "input": {"kind": "raw_text", "query": "Germany ODA disbursements to Nigeria for basic health care"},
+           "input": {"kind": "raw_text", "query": "German aid disbursements to Nigeria for basic health care"},
            "response_options": {"include_observations": True},
        },
        timeout=60,

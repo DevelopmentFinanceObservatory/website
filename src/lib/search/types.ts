@@ -87,8 +87,9 @@ export type SlotOptionsSource = 'observed' | 'seed';
 /**
  * Where a level-scoped SlotOption sits relative to its slot's bound value:
  * "child"/"parent" narrow or widen one step in a hierarchical code system's
- * taxonomy. "root" is a classification root, whether because the slot is
- * unbound or because its code system is flat. Mirrors the server's
+ * taxonomy. "root" is a classification root: every root of an unbound
+ * slot, every other root beside a bound root, or any value of a flat code
+ * system, so it does not tell bound from unbound. Mirrors the server's
  * SlotOptionRelation (dfo-apis src/search/models/vocab.py) one-for-one.
  */
 export type SlotOptionRelation = 'child' | 'parent' | 'root';
@@ -991,6 +992,9 @@ export interface EntityGroup {
     /** the group's graph node; null when the graph holds none */
     dcid: string | null;
     label: string;
+    /** the graph type of the group's node (`Continent`, `UNGeoRegion`);
+     *  null or absent when the group has no node */
+    entity_type?: string | null;
 }
 
 /** Alias for `Spec.identity`'s type; `BaseIdentity` is the canonical declaration. */
@@ -1587,6 +1591,8 @@ export interface ParsedPartEntity {
     /** a pinned graph node for `text`: name resolution is skipped and the
      *  dcid confirmed against the graph instead */
     dcid?: string | null;
+    /** true when the entity names a group whose member places fill the role */
+    members?: boolean | null;
 }
 
 /**
