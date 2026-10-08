@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
     bigint,
+    boolean,
     check,
     index,
     integer,
@@ -45,9 +46,9 @@ export const conversation = pgTable(
 export type ConversationRow = typeof conversation.$inferSelect;
 
 /**
- * A public share: a frozen copy of a conversation (or its canvas, or one
- * card) under a short id — what /s/<id> and /embed/<id> render. Read-only by
- * construction: it's a snapshot, the owner's conversation keeps evolving.
+ * A public share: a pruned copy of a conversation (or its canvas, or one
+ * card) under a short id, which /s/<id> and /embed/<id> render. The copy is
+ * fixed at creation while the owner's conversation keeps evolving.
  */
 export const share = pgTable(
     'share',
@@ -59,8 +60,13 @@ export const share = pgTable(
         // What the link shows: 'conversation' (chat + canvas), 'canvas',
         // 'card', or 'search' (a search result).
         kind: text('kind').notNull(),
-        // Search only: 'live' re-runs the stored definitions on every open,
-        // 'snapshot' serves the bytes captured when the link was made.
+        // 'live' or 'snapshot'. A live search share re-runs the stored
+        // definitions on every open, and a snapshot serves the bytes captured
+        // when the link was made. A live canvas or card share redraws its data
+        // cards on current data, and a snapshot shows the stored copy. Null
+        // reads as live for kind 'search' (`searchShareMode`) and as snapshot
+        // for the other kinds (`isLiveStudioShare`), both in
+        // src/lib/chat/shareMode.ts.
         mode: text('mode'),
         conversationId: text('conversation_id'),
         cardId: text('card_id'),
@@ -104,6 +110,42 @@ export const shareRef = pgTable(
 );
 
 export type ShareRefRow = typeof shareRef.$inferSelect;
+
+/**
+ * One row per data card of a live canvas or card share: the last answer of
+ * the card's refresh (src/lib/studio/liveShareResults.ts) and the lease that
+ * lets one request at a time ask the back end for a new one. `status` is
+ * 'current', 'redrawn', 'pending', or 'error', and null while the first
+ * refresh is in flight. `card` is the card a 'current' or 'redrawn' answer
+ * drew, and `frame` the frame a 'redrawn' card was drawn on, which the
+ * card's download exports. Requests answer from the row until
+ * `fresh_until`. After it, the request that moves `lease_until` into the
+ * future calls the back end and the others keep answering from the row.
+ */
+export const shareCardResult = pgTable(
+    'share_card_result',
+    {
+        shareId: text('share_id')
+            .notNull()
+            .references(() => share.id, { onDelete: 'cascade' }),
+        cardId: text('card_id').notNull(),
+        status: text('status'),
+        card: jsonb('card'),
+        frame: jsonb('frame'),
+        // The machine-readable reason of an 'error' answer.
+        code: text('code'),
+        // Whether the back end said asking again might succeed, for an 'error' answer.
+        retryable: boolean('retryable'),
+        // The wait a 'pending' answer asks of the viewer.
+        retryAfterS: integer('retry_after_s'),
+        checkedAt: timestamp('checked_at', { withTimezone: true }),
+        freshUntil: timestamp('fresh_until', { withTimezone: true }),
+        leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    },
+    (table) => [primaryKey({ columns: [table.shareId, table.cardId] })],
+);
+
+export type ShareCardResultRow = typeof shareCardResult.$inferSelect;
 
 /**
  * One row per (user, roadmap entry) vote: the "Under consideration" items

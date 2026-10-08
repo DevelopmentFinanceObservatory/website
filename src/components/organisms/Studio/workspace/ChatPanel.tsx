@@ -74,14 +74,16 @@ const ChatPanel = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     const [follow, setFollow] = useState('');
 
-    // Keep the transcript pinned to the latest turn as it streams.
+    // Keep the transcript pinned to the latest turn as it streams — and as
+    // the input grows under it (QA-26), which takes the room out of this
+    // box while the browser holds its scrollTop.
     useEffect(() => {
         const el = scrollRef.current;
 
         if (el) {
             el.scrollTop = el.scrollHeight;
         }
-    }, [chat.messages, chat.queued, chat.status, chat.statusDetail]);
+    }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
     const sendFollow = () => {
         if (!follow.trim()) {
@@ -230,6 +232,7 @@ const ChatPanel = ({
                                     )}
                                     <PromptForm
                                         variant="chat"
+                                        grow
                                         value={follow}
                                         onChange={setFollow}
                                         onSubmit={sendFollow}

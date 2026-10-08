@@ -6,10 +6,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { KeyNumberWidget } from '../../chat/widgets.ts';
-import type { PayloadChange, PayloadUnit } from '../payload.ts';
-import { compact, keyNumberFace, statFace, unitDescription, type StatFace } from '../statFace.ts';
+import type { PayloadChange, PayloadUnit, StructuredUnit } from '../payload.ts';
+import {
+    compact,
+    keyNumberFace,
+    statFace,
+    unitDescription,
+    unitWords,
+    type StatFace,
+} from '../statFace.ts';
+import { composedUnit } from './fixtures/envelope-composed-unit.ts';
 
-const dollars = (fields: Partial<Exclude<PayloadUnit, string>> = {}): PayloadUnit => ({
+const population = { stat_var: 'dcid:Count_Person', label: 'Total population' };
+const euros = { currency: 'EUR', magnitude: null, prices: 'constant', base_year: 2020 };
+const NO_AMOUNT: StructuredUnit = {
+    currency: null,
+    magnitude: null,
+    prices: null,
+    base_year: null,
+};
+const eurosPerPerson: PayloadUnit = { numerator: euros, denominator: population };
+
+const dollars = (fields: Partial<StructuredUnit> = {}): StructuredUnit => ({
     currency: 'USD',
     magnitude: null,
     prices: 'current',
@@ -130,6 +148,85 @@ const CASES: [string, PayloadUnit | undefined, number, PayloadChange | undefined
         { amount: '23.7M', suffix: '', caption: 'Person · 2024 · +50% from 2020 to 2021' },
     ],
     ['no unit', undefined, 64_000, undefined, { amount: '64.0K', suffix: '', caption: '2024' }],
+    [
+        'a saved structured unit with every member null reads as no unit',
+        dollars({ currency: null, prices: null }),
+        64_000,
+        undefined,
+        { amount: '64.0K', suffix: '', caption: '2024' },
+    ],
+    [
+        'composed: a raw ref over a StatVar named by its label',
+        { numerator: 'USDollar', denominator: population },
+        58.31,
+        undefined,
+        { amount: '58.31', suffix: '', caption: 'US Dollar per Total population · 2024' },
+    ],
+    [
+        'composed: the numerator keeps its price basis beside it',
+        eurosPerPerson,
+        58.31,
+        rise,
+        {
+            amount: '58.31',
+            suffix: '',
+            caption: 'Euro (constant 2020 prices) per Total population · 2024 · +1.9% from 2023',
+        },
+    ],
+    [
+        'composed: the numerator magnitude scales the value and a difference',
+        { numerator: dollars({ magnitude: 'thousands' }), denominator: 'Person' },
+        2.5,
+        { derivation: 'difference', basis: ['2023', '2024'], value: 0.5 },
+        {
+            amount: '2.5K',
+            suffix: '',
+            caption: 'US Dollar (current prices) per Person · 2024 · +500 from 2023',
+        },
+    ],
+    [
+        'trillions scale the value',
+        dollars({ magnitude: 'trillions' }),
+        2.5,
+        undefined,
+        { amount: '2.5T', suffix: '', caption: 'US Dollar · current prices · 2024' },
+    ],
+    [
+        'composed: a numerator in trillions scales the value',
+        { numerator: dollars({ magnitude: 'trillions' }), denominator: population },
+        2.5,
+        undefined,
+        {
+            amount: '2.5T',
+            suffix: '',
+            caption: 'US Dollar (current prices) per Total population · 2024',
+        },
+    ],
+    [
+        'composed: a numerator that names no currency scales the value and reads as its qualifiers',
+        { numerator: { ...NO_AMOUNT, magnitude: 'thousands' }, denominator: population },
+        2.5,
+        undefined,
+        { amount: '2.5K', suffix: '', caption: 'per Total population · 2024' },
+    ],
+    [
+        'composed: a side that states nothing leaves no unit and no scale',
+        { numerator: { ...NO_AMOUNT, magnitude: 'thousands' }, denominator: NO_AMOUNT },
+        2.5,
+        undefined,
+        { amount: '2.5', suffix: '', caption: '2024' },
+    ],
+    [
+        'composed: a denominator keeps its own price basis, and a percentage is named',
+        { numerator: 'Percent', denominator: dollars({ prices: 'constant', base_year: 2023 }) },
+        0.32,
+        undefined,
+        {
+            amount: '0.32',
+            suffix: '',
+            caption: 'Percent per US Dollar (constant 2023 prices) · 2024',
+        },
+    ],
 ];
 
 for (const [name, unit, value, change, expected] of CASES) {
@@ -163,11 +260,78 @@ const DESCRIPTIONS: [string, PayloadUnit | null, string | null][] = [
     ['raw ref', 'USDollar', 'US Dollar'],
     ['percent', 'Percent', 'Percent'],
     ['none', null, null],
+    ['composed', composedUnit, 'US Dollar per Total population'],
+    [
+        'composed with a numerator price basis',
+        eurosPerPerson,
+        'Euro (constant 2020 prices) per Total population',
+    ],
+    [
+        'composed keeps the numerator magnitude, since the values stay unscaled',
+        { numerator: dollars({ magnitude: 'millions' }), denominator: population },
+        'US Dollar (millions, current prices) per Total population',
+    ],
+    [
+        'composed with a numerator that names no currency reads as its qualifiers',
+        { numerator: dollars({ currency: null, magnitude: 'thousands' }), denominator: population },
+        'thousands, current prices per Total population',
+    ],
+    [
+        'composed with a denominator that names no currency',
+        { numerator: 'USDollar', denominator: { ...NO_AMOUNT, magnitude: 'thousands' } },
+        'US Dollar per thousands',
+    ],
+    [
+        'composed with a part that states nothing',
+        { numerator: NO_AMOUNT, denominator: population },
+        null,
+    ],
+    [
+        'composed in trillions',
+        { numerator: dollars({ magnitude: 'trillions' }), denominator: population },
+        'US Dollar (trillions, current prices) per Total population',
+    ],
+    ['trillions', dollars({ magnitude: 'trillions' }), 'US Dollar, trillions, current prices'],
 ];
 
 for (const [name, unit, expected] of DESCRIPTIONS) {
     test(`unitDescription: ${name}`, () => {
         assert.equal(unitDescription(unit), expected);
+    });
+}
+
+const WORDS: [string, PayloadUnit, string | null][] = [
+    ['composed', composedUnit, 'US Dollar per Total population'],
+    ['composed drops the numerator brackets', eurosPerPerson, 'Euro per Total population'],
+    [
+        'composed drops the denominator brackets too',
+        { numerator: 'Euro', denominator: dollars({ magnitude: 'millions' }) },
+        'Euro per US Dollar',
+    ],
+    [
+        'composed with a denominator that names no currency',
+        { numerator: 'USDollar', denominator: { ...NO_AMOUNT, magnitude: 'thousands' } },
+        'US Dollar per thousands',
+    ],
+    [
+        'composed with a numerator that names no currency',
+        { numerator: { ...NO_AMOUNT, magnitude: 'thousands' }, denominator: population },
+        'per Total population',
+    ],
+    [
+        'composed with neither side naming a currency',
+        {
+            numerator: { ...NO_AMOUNT, magnitude: 'thousands' },
+            denominator: { ...NO_AMOUNT, prices: 'constant', base_year: 2020 },
+        },
+        'per constant 2020 prices',
+    ],
+    ['structured, qualifiers left to the face', dollars({ magnitude: 'millions' }), 'US Dollar'],
+];
+
+for (const [name, unit, expected] of WORDS) {
+    test(`unitWords: ${name}`, () => {
+        assert.equal(unitWords(unit), expected);
     });
 }
 

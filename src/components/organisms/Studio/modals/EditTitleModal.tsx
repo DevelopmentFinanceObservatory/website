@@ -4,6 +4,8 @@ import { useState } from 'react';
 
 import styles from './TextCardModal.module.scss';
 
+import { useOpenFocus } from './useOpenFocus';
+
 import Button from '@/components/atoms/Button/Button';
 import Modal from '@/components/molecules/Modal/Modal';
 
@@ -28,6 +30,7 @@ const EditTitleModal = ({
     onSubmit: (title: string) => void;
 }) => {
     const [title, setTitle] = useState(current);
+    const field = useOpenFocus<HTMLTextAreaElement>(open);
     const canSave = title.trim().length > 0;
 
     const submit = (event: React.FormEvent) => {
@@ -60,11 +63,11 @@ const EditTitleModal = ({
                         no horizontal scroll); Enter saves, Shift+Enter is a
                         newline-free no-op — titles are single-line. */}
                     <textarea
+                        ref={field}
                         className={styles.titleArea}
                         value={title}
                         placeholder="Enter title…"
                         rows={2}
-                        autoFocus
                         onChange={(event) => setTitle(event.target.value.replace(/\n/g, ' '))}
                         onKeyDown={(event) => {
                             if (event.key === 'Enter') {

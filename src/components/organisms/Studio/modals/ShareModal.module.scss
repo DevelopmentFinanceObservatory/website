@@ -26,6 +26,37 @@
     letter-spacing: -0.01em;
 }
 
+// The reason Chat + Canvas has no mode choice, quieter than the copy above
+// it.
+.note {
+    @include font-size(12px, 1.35);
+
+    font-family: var(--font-outfit);
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+// A live link's progress, and why there is none. The element stays in the
+// page while it is empty, taking no room, so its first line is announced.
+.status {
+    @include font-size(13px, 1.35);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+
+    &:empty {
+        // The dialog's own gap, taken back.
+        margin-top: rem(-16);
+    }
+}
+
+// A button on its own row, at its own width.
+.actions {
+    @include flex(row, flex-start, center);
+}
+
 .error {
     @include font-size(12px, 1.3);
 

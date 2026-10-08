@@ -19,6 +19,7 @@ import {
     entityOptionsEntry,
     entitySlotBindingForRefs,
     isLevelScopedOptions,
+    levelMenu,
     mergeEntityOptionsEntry,
     mergePlaceOptionsEntry,
     mergeSlotOptionsEntry,
@@ -1778,6 +1779,127 @@ test('rootGroups reads a root whose one child serves the same rows as that child
             ['expert and other technical assistance', 125, 2],
             ['scholarship and student cost in donor country', 36, 2],
             ['development awareness', 1, 0],
+        ],
+    );
+});
+
+// --- levelMenu ---------------------------------------------------------
+
+const valueBinding = (dcid: string) => ({
+    kind: 'value',
+    value: { value_kind: 'taxonomy', ref: { dcid, label: dcid } },
+});
+
+const dcids = (options: { value: { ref: { dcid: string } } }[]) =>
+    options.map((option) => option.value.ref.dcid);
+
+const boundMenu = (binding: unknown, options: unknown[]) => {
+    const menu = levelMenu(binding, options);
+
+    assert.equal(menu.kind, 'bound');
+
+    return menu as Extract<ReturnType<typeof levelMenu>, { kind: 'bound' }>;
+};
+
+test('levelMenu groups an unbound slot, or one bound to a set, by root', () => {
+    const options = [
+        levelOption('CRSPurposeCode100', 'root'),
+        levelOption('CRSPurposeCode110', 'child', 'CRSPurposeCode100'),
+        levelOption('CRSPurposeCode200', 'root'),
+    ];
+
+    for (const binding of [{ kind: 'unbound' }, { kind: 'set', values: [] }, undefined]) {
+        const menu = levelMenu(binding, options);
+
+        assert.equal(menu.kind, 'unbound');
+        assert.deepEqual(
+            menu.kind === 'unbound' &&
+                menu.groups.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+            [
+                ['CRSPurposeCode100', ['CRSPurposeCode110']],
+                ['CRSPurposeCode200', []],
+            ],
+        );
+    }
+});
+
+test('levelMenu puts a bound non-root between its parent and its children', () => {
+    const menu = boundMenu(valueBinding('CRSPurposeCode120'), [
+        levelOption('CRSPurposeCode122', 'child', 'CRSPurposeCode120'),
+        levelOption('CRSPurposeCode121', 'child', 'CRSPurposeCode120'),
+        levelOption('CRSPurposeCode100', 'parent'),
+    ]);
+
+    assert.equal(menu.up?.value.ref.dcid, 'CRSPurposeCode100');
+    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode120');
+    assert.deepEqual(dcids(menu.down), ['CRSPurposeCode122', 'CRSPurposeCode121']);
+    assert.deepEqual(menu.sideways, []);
+});
+
+test('levelMenu keeps a bound root as the current pick, its children down and the other roots beside it', () => {
+    const menu = boundMenu(valueBinding('CRSPurposeCode100'), [
+        levelOption('CRSPurposeCode110', 'child', 'CRSPurposeCode100'),
+        levelOption('CRSPurposeCode120', 'child', 'CRSPurposeCode100'),
+        levelOption('CRSPurposeCode200', 'root'),
+        levelOption('CRSPurposeCode300', 'root'),
+    ]);
+
+    assert.equal(menu.up, null);
+    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode100');
+    assert.deepEqual(dcids(menu.down), ['CRSPurposeCode110', 'CRSPurposeCode120']);
+    assert.deepEqual(
+        menu.sideways.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+        [
+            ['CRSPurposeCode200', []],
+            ['CRSPurposeCode300', []],
+        ],
+    );
+});
+
+test('levelMenu keeps a childless bound root as the current pick beside the other roots', () => {
+    const menu = boundMenu(valueBinding('DAC2aAidType216'), [
+        levelOption('DAC2aAidType206', 'root'),
+        levelOption('DAC2aAidType207', 'root'),
+    ]);
+
+    assert.equal(menu.current.value.ref.dcid, 'DAC2aAidType216');
+    assert.deepEqual(menu.down, []);
+    assert.deepEqual(
+        menu.sideways.map(({ root }) => root.value.ref.dcid),
+        ['DAC2aAidType206', 'DAC2aAidType207'],
+    );
+});
+
+test("levelMenu takes a flat code system's bound value from the list, with its row count", () => {
+    const menu = boundMenu(valueBinding('crsTypeOfFlow/12'), [
+        { ...levelOption('crsTypeOfFlow/11', 'root'), served_rows: 40 },
+        { ...levelOption('crsTypeOfFlow/12', 'root'), served_rows: 7 },
+    ]);
+
+    assert.equal(menu.current.served_rows, 7);
+    assert.deepEqual(
+        menu.sideways.map(({ root }) => root.value.ref.dcid),
+        ['crsTypeOfFlow/11'],
+    );
+});
+
+test('levelMenu keeps every child reachable under its root for a binding the code index does not hold', () => {
+    // The code index menus a dcid it does not hold as unbound: roots with
+    // their own children, none of which sit under the bound value.
+    const menu = boundMenu(valueBinding('CRSPurposeCode999'), [
+        levelOption('CRSPurposeCode100', 'root'),
+        levelOption('CRSPurposeCode110', 'child', 'CRSPurposeCode100'),
+        levelOption('CRSPurposeCode200', 'root'),
+        levelOption('CRSPurposeCode210', 'child', 'CRSPurposeCode200'),
+    ]);
+
+    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode999');
+    assert.deepEqual(menu.down, []);
+    assert.deepEqual(
+        menu.sideways.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+        [
+            ['CRSPurposeCode100', ['CRSPurposeCode110']],
+            ['CRSPurposeCode200', ['CRSPurposeCode210']],
         ],
     );
 });

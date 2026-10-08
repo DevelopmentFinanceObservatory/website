@@ -26,7 +26,9 @@ test("a share_ref row keeps a part's groups beside its identity", async (t) => {
 
     const db = drizzle(database.runtimePool());
     const identity = { identity_version: 'spec1', entities: { origin: ['country/DEU'] } };
-    const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const groups = {
+        origin: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+    };
 
     await db.insert(share).values({
         id: 'srch0001',

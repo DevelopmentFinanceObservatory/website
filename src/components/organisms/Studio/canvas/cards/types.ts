@@ -1,5 +1,7 @@
 import type { CardView } from '../layout';
 
+import type { CardLive } from '@/lib/studio/liveCards';
+
 // Everything a card renders besides its widget: its on-canvas state and the
 // actions the pin + kebab expose. Assembled per slot by the Whiteboard.
 export type CardExtras = {
@@ -33,4 +35,8 @@ export type CardExtras = {
     onShare: (() => void) | null;
     // A shared/embedded sheet: no pin, no menu, no drag or resize.
     readOnly?: boolean;
+    // A data card of a live share: the share's id and creation time, and
+    // whether this card is loading, drawn on current data, or failed (with
+    // the code). Absent on a text card and on every card of a snapshot.
+    live?: CardLive;
 };

@@ -1,4 +1,5 @@
 import styles from './Docs.module.scss';
+import DocsScroll from './DocsScroll';
 import DocsTree from './DocsTree';
 import Markdown from './Markdown';
 
@@ -12,16 +13,21 @@ import { DOCS_NAV, docsHref, docsMarkdown, docsTrail, type DocsPage } from '@/li
  * rendered markdown (or, for a package documented elsewhere, a card that
  * links out). A raw copy of every page sits beside it at <url>.md.
  */
+// What DocsScroll aims at when the reader picks another page.
+const CONTENT_ID = 'docs-content';
+
 const Docs = ({ page }: { page: DocsPage }) => (
     <section className={styles.section}>
         <PageHero tone="light" boxMinHeight={140}>
             <h1 className={styles.title}>Documentation</h1>
         </PageHero>
 
+        <DocsScroll target={CONTENT_ID} />
+
         <div className={styles.body}>
             <DocsTree nav={DOCS_NAV} currentId={page.id} />
 
-            <article className={styles.content}>
+            <article id={CONTENT_ID} className={styles.content}>
                 {docsTrail(page.id).length > 0 && (
                     <p className={styles.crumbs}>{docsTrail(page.id).join(' / ')}</p>
                 )}

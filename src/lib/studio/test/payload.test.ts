@@ -6,7 +6,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { payloadFrameRef, payloadNoteText, payloadProvenance, payloadTitle } from '../payload.ts';
+import {
+    asUnit,
+    payloadFrameRef,
+    payloadNoteText,
+    payloadProvenance,
+    payloadStat,
+    payloadTitle,
+} from '../payload.ts';
+import { composedUnit, envelopeComposedUnit } from './fixtures/envelope-composed-unit.ts';
 import { envelopeCreated } from './fixtures/envelope-created.ts';
 import { envelopeRevised } from './fixtures/envelope-revised.ts';
 import { noteNarration } from './fixtures/note-narration.ts';
@@ -118,4 +126,67 @@ test('payloadProvenance: reads a source ref beside its minted id, null when abse
     assert.deepEqual(read([{ ...source, ref: 'dc/base/WorldDevelopmentIndicators' }]), [
         [source.id, 'dc/base/WorldDevelopmentIndicators'],
     ]);
+});
+
+const population = { stat_var: 'dcid:Count_Person', label: 'Total population' };
+const euros = { currency: 'EUR', prices: 'constant', base_year: 2020 };
+const NO_AMOUNT = { currency: null, magnitude: null, prices: null, base_year: null };
+
+const UNITS: [string, unknown, unknown][] = [
+    ['a label', 'USDollar', 'USDollar'],
+    ['a blank string', '  ', undefined],
+    ['null', null, undefined],
+    ['a structured unit without a magnitude', euros, { ...euros, magnitude: null }],
+    ['a saved structured unit with every member null', NO_AMOUNT, NO_AMOUNT],
+    ['an object it does not recognise', { symbol: '$' }, NO_AMOUNT],
+    ['composed: a label over a StatVar', composedUnit, composedUnit],
+    [
+        'composed: a structured numerator',
+        { numerator: euros, denominator: population },
+        { numerator: { ...euros, magnitude: null }, denominator: population },
+    ],
+    ['composed without a denominator', { numerator: 'USDollar' }, undefined],
+    ['composed with a null part', { numerator: null, denominator: population }, undefined],
+    ['composed with a blank part', { numerator: ' ', denominator: population }, undefined],
+    [
+        'composed with a composed part',
+        { numerator: composedUnit, denominator: population },
+        undefined,
+    ],
+    [
+        'composed with a StatVar part that has no label',
+        { numerator: 'USDollar', denominator: { stat_var: 'dcid:Count_Person' } },
+        undefined,
+    ],
+    [
+        'composed: a structured numerator that names no currency keeps its magnitude',
+        { numerator: { magnitude: 'thousands' }, denominator: population },
+        { numerator: { ...NO_AMOUNT, magnitude: 'thousands' }, denominator: population },
+    ],
+];
+
+for (const [name, raw, expected] of UNITS) {
+    test(`asUnit: ${name}`, () => {
+        assert.deepEqual(asUnit(raw), expected);
+    });
+}
+
+test('payloadStat: a composed unit arrives whole, and a malformed one leaves the card without a unit', () => {
+    assert.deepEqual(payloadStat(envelopeComposedUnit), {
+        value: 3.34,
+        label: 'Malaria grant disbursements to Ethiopia per person',
+        period: '2024',
+        unit: composedUnit,
+    });
+
+    const malformed = {
+        ...envelopeComposedUnit,
+        component: { ...envelopeComposedUnit.component, unit: { numerator: 'USDollar' } },
+    };
+
+    assert.deepEqual(payloadStat(malformed), {
+        value: 3.34,
+        label: 'Malaria grant disbursements to Ethiopia per person',
+        period: '2024',
+    });
 });

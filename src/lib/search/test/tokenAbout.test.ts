@@ -8,8 +8,10 @@ import {
     singleStatVarSpec,
     tokenAbout,
 } from '../tokenAbout.ts';
+import { normalizeResponse } from '../searchClient.ts';
 import { priceBasis } from '../unitLabel.ts';
 import type { SentenceToken } from '../types.ts';
+import { fixtures } from './fixtures/index.ts';
 
 const slot = (fields: Partial<SentenceToken>): SentenceToken => ({
     kind: 'slot',
@@ -136,6 +138,75 @@ test('a group names itself, counts its members and defines its graph node', () =
     assert.equal(about.title, 'European Union');
     assert.deepEqual(about.facts, ['Group of 3 members (country)']);
     assert.deepEqual(about.notes, ['Austria, Belgium, Bulgaria']);
+});
+
+test('a continent or UN subregion group counts the countries and territories it holds', () => {
+    const entities = [
+        { ref: 'country/KEN', label: 'Kenya', entity_type: 'Country' },
+        { ref: 'country/UGA', label: 'Uganda', entity_type: 'Country' },
+    ].map((entity) => ({ ...entity, role: 'observationAbout' }));
+
+    for (const entity_type of ['Continent', 'UNGeoRegion']) {
+        const about = tokenAbout(
+            slot({
+                axis: 'where',
+                text: 'Africa',
+                entity_refs: entities.map((entity) => entity.ref),
+            }),
+            {
+                entities,
+                entity_groups: {
+                    observationAbout: { dcid: 'africa', label: 'Africa', entity_type },
+                },
+            },
+        );
+
+        assert.equal(about.title, 'Africa');
+        assert.deepEqual(about.facts, ['2 countries and territories']);
+        assert.deepEqual(about.notes, ['Kenya, Uganda']);
+        assert.deepEqual(about.definitions, [{ label: null, dcid: 'africa' }]);
+    }
+
+    const single = tokenAbout(
+        slot({ axis: 'where', text: 'Kenya', entity_refs: ['country/KEN'] }),
+        {
+            entities: entities.slice(0, 1),
+            entity_groups: {
+                observationAbout: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+            },
+        },
+    );
+
+    assert.deepEqual(single.facts, ['1 country or territory']);
+});
+
+test('the served Africa region reads as its countries and territories', () => {
+    const body = fixtures['region-group'] as { sentence_plan: SentenceToken[] };
+    const token = body.sentence_plan.find((candidate) => candidate.axis === 'where');
+    const [{ spec }] = normalizeResponse(body).parts;
+    assert.ok(token);
+
+    const about = tokenAbout(token, spec);
+
+    assert.equal(token.text, 'the 59 countries and territories in Africa');
+    assert.equal(about.title, 'Africa');
+    assert.deepEqual(about.facts, ['59 countries and territories']);
+    assert.deepEqual(about.definitions, [{ label: null, dcid: 'africa' }]);
+});
+
+test('a group whose node is neither a continent nor a UN subregion keeps the group wording', () => {
+    const about = tokenAbout(
+        slot({ role: 'origin', text: 'G7', entity_refs: ['country/CAN', 'country/FRA'] }),
+        {
+            entities: [
+                { ref: 'country/CAN', label: 'Canada', entity_type: 'Country', role: 'origin' },
+                { ref: 'country/FRA', label: 'France', entity_type: 'Country', role: 'origin' },
+            ],
+            entity_groups: { origin: { dcid: 'G7', label: 'G7', entity_type: 'CountryGroup' } },
+        },
+    );
+
+    assert.deepEqual(about.facts, ['Group of 2 members (country)']);
 });
 
 test('an open role counts the members with data', () => {

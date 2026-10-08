@@ -3,10 +3,10 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { after } from 'next/server';
 
-import EmbedView, { type EmbedKind } from '@/components/organisms/EmbedView/EmbedView';
-import type { SavedConversation } from '@/lib/chat/history';
+import EmbedView from '@/components/organisms/EmbedView/EmbedView';
 import { getShare } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/track';
+import { sharedViewOf } from '@/lib/studio/liveCards';
 
 type EmbedPageProps = { params: Promise<{ id: string }> };
 
@@ -28,7 +28,8 @@ const refererHost = (referer: string | null): string | null =>
     URL.parse(referer ?? '')?.hostname || null;
 
 // The iframe view of a share: just the read-only sheet, or the one card,
-// edge to edge. A search share has no sheet to embed.
+// edge to edge. A search share has no sheet to embed. A live share's data
+// cards leave the server held and are filled in the browser (sharedViewOf).
 const EmbedPage = async ({ params }: EmbedPageProps) => {
     const { id } = await params;
     const row = await getShare(id);
@@ -43,7 +44,7 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
     const host = refererHost((await headers()).get('referer'));
     after(() => track('embed.view', { shareId: id, kind: row.kind, host }));
 
-    return <EmbedView kind={row.kind as EmbedKind} saved={row.data as SavedConversation} />;
+    return <EmbedView shared={sharedViewOf(row)} />;
 };
 
 export default EmbedPage;

@@ -110,6 +110,14 @@
     }
 }
 
+// A live share's caption after the title keeps its own type and its whole
+// width, and the title elides first.
+.titleNote {
+    display: flex;
+    flex-shrink: 0;
+    margin-left: rem(6);
+}
+
 // The card-type pills at the far right of the row.
 .cardTabs {
     flex-shrink: 0;

@@ -277,6 +277,89 @@
         border: 1px solid var(--color-net-mid);
         border-radius: rem(6);
     }
+
+    // Syntax colours for rehype-highlight (QA-11). highlight.js emits global
+    // `hljs-*` class names, hence :global, and we deliberately do NOT ship
+    // its stylesheet — that would bring a foreign theme's background and
+    // palette onto the page. Four groups off the house palette is all the
+    // corpus needs: anything finer reads as confetti at 13px. On white,
+    // plum is 10:1, mint 4.9:1 and indigo 5.1:1 — all past AA for body text,
+    // which matters more here than fidelity to any editor theme. Anything
+    // left unlisted (punctuation, a function's parameters) keeps the base
+    // colour, which is the point.
+    :global(.hljs-comment),
+    :global(.hljs-quote) {
+        font-style: italic;
+        color: var(--color-stone);
+    }
+
+    // Keywords and the lines that behave like them: a shebang, a Python
+    // decorator, a YAML document marker.
+    :global(.hljs-keyword),
+    :global(.hljs-selector-tag),
+    :global(.hljs-section),
+    :global(.hljs-meta),
+    :global(.hljs-doctag) {
+        color: #662d6e;
+    }
+
+    :global(.hljs-string),
+    :global(.hljs-regexp),
+    :global(.hljs-symbol),
+    :global(.hljs-bullet),
+    :global(.hljs-addition) {
+        color: var(--color-mint-dark);
+    }
+
+    // Names and values: numbers, True/None, built-ins, function and class
+    // names, `$VAR` in bash, and the keys of a JSON or YAML object — which
+    // is why a key and its string value do not share a colour.
+    :global(.hljs-number),
+    :global(.hljs-literal),
+    /* stylelint-disable-next-line selector-class-pattern -- highlight.js names it */
+    :global(.hljs-built_in),
+    :global(.hljs-title),
+    :global(.hljs-name),
+    :global(.hljs-type),
+    :global(.hljs-attr),
+    :global(.hljs-attribute),
+    :global(.hljs-variable),
+    :global(.hljs-template-variable) {
+        color: #6467de;
+    }
+
+    :global(.hljs-deletion) {
+        color: var(--color-red);
+    }
+
+    // Separators: the markup's `<` and `/>`, a CSV's commas, a JSON's
+    // braces. Structure, not content, so they step back a shade.
+    :global(.hljs-tag),
+    :global(.hljs-punctuation) {
+        color: var(--color-stone);
+    }
+
+    :global(.hljs-emphasis) {
+        font-style: italic;
+    }
+
+    :global(.hljs-strong) {
+        font-weight: 700;
+    }
+}
+
+// A drawn `mermaid` fence (see DocsMermaid). The SVG carries its own
+// colours from the house palette; this only gives it the page's margins and
+// lets a wide diagram scroll rather than squeeze.
+.diagram {
+    margin: rem(20) 0;
+    overflow-x: auto;
+    text-align: center;
+
+    svg {
+        max-width: 100%;
+        height: auto;
+    }
 }
 
 .codeTitle {

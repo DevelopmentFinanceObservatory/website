@@ -45,15 +45,19 @@ test("a part reads with its Spec's groups, with null and with none, and an array
         parts: [{ ...part(0), entityGroups }],
     });
     const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const region = {
+        observationAbout: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+    };
 
     assert.deepEqual(readSearchShareRequest(withGroups(groups))?.parts[0].entityGroups, groups);
+    assert.deepEqual(readSearchShareRequest(withGroups(region))?.parts[0].entityGroups, region);
     assert.equal(readSearchShareRequest(withGroups(null))?.parts[0].entityGroups, null);
     assert.equal(readSearchShareRequest(body(1))?.parts.length, 1);
     assert.equal(readSearchShareRequest(withGroups([groups])), null);
     assert.equal(readSearchShareRequest(withGroups('EuropeanUnion')), null);
 });
 
-test("a part's groups hold role keys only, each a label of 1 to 120 characters and an optional dcid", () => {
+test("a part's groups hold role keys only, each a label of 1 to 120 characters, an optional dcid and an optional entity type", () => {
     const withGroups = (entityGroups: unknown) => ({
         ...body(1),
         parts: [{ ...part(0), entityGroups }],
@@ -63,10 +67,12 @@ test("a part's groups hold role keys only, each a label of 1 to 120 characters a
 
     assert.equal(reads({ origin: { label: 'G7 countries' } }), true);
     assert.equal(reads({ origin: { dcid: null, label: 'G7 countries' } }), true);
+    assert.equal(reads({ origin: { label: 'Africa', entity_type: 'Continent' } }), true);
+    assert.equal(reads({ origin: { label: 'G7 countries', entity_type: null } }), true);
     assert.equal(
         reads({
             observationAbout: { label: 'x'.repeat(120) },
-            origin: { dcid: 'd'.repeat(1024), label: 'EU' },
+            origin: { dcid: 'd'.repeat(1024), label: 'EU', entity_type: 't'.repeat(1024) },
             destination: { label: 'LDCs' },
         }),
         true,
@@ -81,6 +87,8 @@ test("a part's groups hold role keys only, each a label of 1 to 120 characters a
     assert.equal(reads({ origin: { label: 'x'.repeat(121) } }), false);
     assert.equal(reads({ origin: { dcid: 27, label: 'EU' } }), false);
     assert.equal(reads({ origin: { dcid: 'd'.repeat(1025), label: 'EU' } }), false);
+    assert.equal(reads({ origin: { label: 'EU', entity_type: 27 } }), false);
+    assert.equal(reads({ origin: { label: 'EU', entity_type: 't'.repeat(1025) } }), false);
     assert.equal(reads({ origin: { label: 'EU', members: ['country/DEU'] } }), false);
 });
 

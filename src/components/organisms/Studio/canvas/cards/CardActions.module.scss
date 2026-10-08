@@ -22,6 +22,22 @@
     height: auto;
 }
 
+.noteMark .noteMarkIcon {
+    width: rem(13);
+    height: auto;
+}
+
+// Not a button: it reports a note, it does not open one. It reads as a
+// label beside the controls rather than a third one, so it is smaller than
+// the pin and keeps its distance — the 1px the pin and kebab share is the
+// gap of a pair, and this is not part of that pair.
+.noteMark {
+    @include flex(row, center, center);
+
+    margin-right: rem(5);
+    pointer-events: none;
+}
+
 .pinBtn {
     @include flex(row, center, center);
 
@@ -131,6 +147,19 @@
     flex-shrink: 0;
     width: rem(16);
     height: auto;
+}
+
+// Two things set the info glyph apart from the rest of the set, both from
+// its viewBox: it is 8.18 units where the others are 20, and like them it
+// strokes at the default 1 unit. At a shared rem(16) box that unit is 1.96px
+// against their 0.8px, and the drawing fills its box where theirs sit in
+// their own air. So the glyph is scaled down inside a full-width box — narrowing the box
+// itself would pull it off the column the row packs against — and the stroke
+// is set back to the 0.8px the others draw at (0.62 units through the same
+// scale).
+.cardMenuRow .cardMenuIconTight {
+    scale: 0.66;
+    stroke-width: 0.62;
 }
 
 // DM Mono carries extra space above its cap height — nudge the labels up so

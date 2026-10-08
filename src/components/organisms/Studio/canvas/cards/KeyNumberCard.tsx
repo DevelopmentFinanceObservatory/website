@@ -26,7 +26,6 @@ const KeyNumberCard = ({ widget, ...extras }: { widget: KeyNumberWidget } & Card
             </div>
             <CardChrome
                 source={widget.source}
-                note={extras.note}
                 info={widget.info}
                 onInfo={extras.onInfo}
             />

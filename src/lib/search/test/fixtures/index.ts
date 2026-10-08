@@ -26,6 +26,7 @@ import { definiteExplainEdited, definiteExplainOperation } from './definite-expl
 import { entityAmbiguous } from './entity-ambiguous.ts';
 import { twoPartAmbiguous } from './two-part-ambiguous.ts';
 import { worldBankAmbiguous } from './world-bank-ambiguous.ts';
+import { regionGroup } from './region-group.ts';
 import {
     servedAid,
     servedAidSector,
@@ -54,6 +55,7 @@ export type FixtureName =
     | 'definite-rank-operation'
     | 'definite-explain-operation'
     | 'definite-explain-edited'
+    | 'region-group'
     | 'entity-ambiguous'
     | 'two-part-ambiguous'
     | 'world-bank-ambiguous'
@@ -81,6 +83,7 @@ export const fixtures: Record<FixtureName, unknown> = {
     'definite-rank-operation': definiteRankOperation,
     'definite-explain-operation': definiteExplainOperation,
     'definite-explain-edited': definiteExplainEdited,
+    'region-group': regionGroup,
     'entity-ambiguous': entityAmbiguous,
     'two-part-ambiguous': twoPartAmbiguous,
     'world-bank-ambiguous': worldBankAmbiguous,
@@ -111,6 +114,7 @@ export const specFixtureNames: FixtureName[] = [
     'method-bound',
     'definite-explain-operation',
     'definite-explain-edited',
+    'region-group',
     'served-aid',
     'served-aid-sector',
     'served-debt',
@@ -139,4 +143,5 @@ export {
     entityAmbiguous,
     twoPartAmbiguous,
     worldBankAmbiguous,
+    regionGroup,
 };

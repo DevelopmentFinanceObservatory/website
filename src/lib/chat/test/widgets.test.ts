@@ -9,7 +9,9 @@ import {
     type CardData,
     chartFromTable,
     type ChartWidget,
+    type CardInfo,
     formatAxis,
+    sourceLine,
     tableFromChart,
     type TableWidget,
 } from '../widgets.ts';
@@ -133,4 +135,60 @@ test('formatAxis and tableFromChart compact a number, rolling up at a letter bou
         ['2023', '37.0 K'],
         ['2024', '1.0 M'],
     ]);
+});
+
+test('formatAxis writes a percentage with its sign, two decimals at most and no letter', () => {
+    const cases: [number, string | undefined, string][] = [
+        [5.333, 'Percent', '5.33%'],
+        [2, '%', '2%'],
+        [0.762, 'percentage', '0.76%'],
+        [1_250, 'Percent', '1,250%'],
+        [-1.5, 'Percent', '-1.5%'],
+        [5.333, 'US Dollar', '5.33'],
+        [37_000, 'Percent of GDP', '37.0K'],
+        [37_000, undefined, '37.0K'],
+    ];
+
+    for (const [value, unit, text] of cases) {
+        assert.equal(formatAxis(value, unit), text, `${value} ${unit}`);
+    }
+});
+
+const info = (sources: string[], sourceName: string | null = sources[0] ?? null): CardInfo => ({
+    label: 'IDS; WDI · 2 indicator(s)',
+    sourceId: null,
+    sourceName,
+    sourceCount: sources.length,
+    indicatorCount: 2,
+    years: null,
+    unit: null,
+    indicators: [],
+    licence: null,
+    dataThrough: null,
+    lastRefreshed: null,
+    sources: sources.map((name) => ({
+        id: name,
+        name,
+        licence: null,
+        url: null,
+        retrieved: null,
+    })),
+});
+
+test('sourceLine names every source a card cites, each once, else its one source or label', () => {
+    const cases: [CardInfo, string][] = [
+        [
+            info(['World Bank IDS', 'World Development Indicators']),
+            'World Bank IDS; World Development Indicators',
+        ],
+        [info(['World Bank IDS', 'World Bank IDS']), 'World Bank IDS'],
+        [info(['World Bank IDS']), 'World Bank IDS'],
+        [info([]), 'IDS; WDI · 2 indicator(s)'],
+        // A card saved before its sources were kept names the one it held.
+        [{ ...info([], 'World Bank IDS'), sources: undefined }, 'World Bank IDS'],
+    ];
+
+    for (const [card, line] of cases) {
+        assert.equal(sourceLine(card), line);
+    }
 });

@@ -1,5 +1,5 @@
 ---
-name: policy-markers
+name: oda-policy-markers
 description: >-
   Covers OECD DAC policy markers used to classify bilateral ODA in the
   Creditor Reporting System (CRS). Use when the user asks what a policy marker
@@ -7,13 +7,14 @@ description: >-
   or climate marker data, or how to analyse ODA by policy objective. Also use
   when the user asks whether policy marker analysis is appropriate for a given
   question.
+license: CC-BY-4.0
 ---
 
-# policy-markers
+# oda-policy-markers
 
 Covers OECD DAC policy markers used to classify bilateral ODA in the Creditor Reporting System (CRS).
 
-To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md).
+To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md). [Download this skill as a zip](../oda-policy-markers.zip).
 
 ## Overview
 

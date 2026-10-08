@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import Studio from '@/components/organisms/Studio/Studio';
-import type { SavedConversation } from '@/lib/chat/history';
-import { getShare, ShareKind } from '@/lib/chat/shareStore';
+import { getShare } from '@/lib/chat/shareStore';
+import { sharedViewOf } from '@/lib/studio/liveCards';
 
 type SharePageProps = { params: Promise<{ id: string }> };
 
@@ -20,8 +20,9 @@ export const generateMetadata = async ({ params }: SharePageProps): Promise<Meta
     };
 };
 
-// A public share: the Studio, read-only, on the frozen copy. No account
-// needed to look; "Continue in Studio" forks it into the viewer's own.
+// A public share: the Studio, read-only, on the stored copy. No account
+// needed to look. A live share's data cards leave the server held and are
+// filled in the browser on current data (sharedViewOf).
 const SharePage = async ({ params }: SharePageProps) => {
     const { id } = await params;
     const row = await getShare(id);
@@ -36,15 +37,7 @@ const SharePage = async ({ params }: SharePageProps) => {
         redirect(`/data?share=${row.id}`);
     }
 
-    return (
-        <Studio
-            shared={{
-                id: row.id,
-                kind: row.kind as ShareKind,
-                saved: row.data as SavedConversation,
-            }}
-        />
-    );
+    return <Studio shared={sharedViewOf(row)} />;
 };
 
 export default SharePage;

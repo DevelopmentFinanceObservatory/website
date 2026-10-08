@@ -1,0 +1,81 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "shared" as *;
+
+// What Radix measures: the card's own box, and nothing a pointer can reach —
+// the hover is handled on the card itself (see Whiteboard).
+.anchor {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+// A panel in the card's own clothes — white face, hairline, same corner —
+// rather than the sage popup the chrome bar's tags wear. It belongs to the
+// card it names, and squares up to it: the card's own width, under the card,
+// so the two read as one block. A long note scrolls rather than running the
+// panel down the window.
+.note {
+    @include flex(column, flex-start, stretch);
+    @include popup-motion;
+
+    z-index: $z-header;
+    gap: rem(8);
+    width: var(--card-w);
+    max-height: rem(220);
+    padding: rem(16);
+    overflow: hidden auto;
+    color: var(--th-text, var(--color-charcoal));
+    background-color: var(--th-card, var(--color-white));
+    border: 1px solid var(--th-line, var(--color-net-light));
+    border-radius: rem(6);
+}
+
+// The caption the chrome bar used to carry as a tag, with the one action
+// that belongs beside it.
+.noteHead {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+    flex-shrink: 0;
+}
+
+.noteLabel {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.noteRemove {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    padding: 0;
+    color: var(--th-muted, var(--color-stone));
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 0.6;
+    }
+}
+
+.noteRemove .noteRemoveIcon {
+    width: rem(14);
+    height: auto;
+}
+
+// A note keeps the line breaks it was typed with.
+.noteBody {
+    @include font-size(10px, 1.4);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

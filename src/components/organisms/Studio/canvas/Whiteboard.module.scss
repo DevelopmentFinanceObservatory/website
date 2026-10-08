@@ -131,8 +131,12 @@
 
     // (The lifted card's sage tint lives in Card.module.scss, off the
     // slot's data-dragging.)
+    .cardBox,
     .handle {
         cursor: grabbing;
+    }
+
+    .handle {
         opacity: 1;
     }
 }
@@ -218,6 +222,14 @@
     transition:
         rotate 0.5s cubic-bezier(0.22, 1, 0.36, 1),
         scale 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+// The whole card is the grab area, so it answers for the cursor instead of
+// inheriting the board's pan grab, and a finger drag moves the card rather
+// than scrolling the sheet out from under it.
+.cardBox[data-draggable] {
+    cursor: grab;
+    touch-action: none;
 }
 
 // No hover on touch: the grab bar and the grip stay visible.

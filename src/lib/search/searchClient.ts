@@ -616,6 +616,7 @@ function detailText(body: any, status: number): string {
 /** One `issues[]` entry on a refusal: what the engine objected to, and —
  *  where it can — what would have been valid instead. */
 export type ApiIssue = {
+    code?: string | null;
     axis?: string | null;
     pointer?: string | null;
     detail?: string | null;

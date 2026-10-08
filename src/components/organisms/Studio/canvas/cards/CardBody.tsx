@@ -1,5 +1,6 @@
 import ChartCard from './ChartCard';
 import KeyNumberCard from './KeyNumberCard';
+import LivePlaceholder from './LivePlaceholder';
 import TableCard from './TableCard';
 import TextCard from './TextCard';
 import type { CardExtras } from './types';
@@ -37,6 +38,12 @@ const CardBody = ({
     onFit,
     extras,
 }: CardBodyProps) => {
+    // A live share's data card holds nothing to draw until its refresh
+    // answers.
+    if (extras.live && extras.live.state.status !== 'ready') {
+        return <LivePlaceholder title={extras.title} kind={widget.kind} live={extras.live} />;
+    }
+
     if (widget.kind === 'key_number') {
         return <KeyNumberCard widget={widget} {...extras} />;
     }

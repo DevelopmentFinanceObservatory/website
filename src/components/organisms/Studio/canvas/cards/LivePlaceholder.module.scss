@@ -1,0 +1,116 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// A live share's card while its data loads shows the outline of what will
+// be drawn, in the card's own line colour, with a light band sweeping across
+// (the chat status line's sweep, at its pace).
+.bone {
+    display: block;
+    flex-shrink: 0;
+    background-color: var(--th-line, var(--color-net-light));
+    background-image: linear-gradient(
+        90deg,
+        transparent 40%,
+        var(--th-card, var(--color-white)) 50%,
+        transparent 60%
+    );
+    background-size: 250% 100%;
+    border-radius: rem(3);
+    animation: bone-sweep 2.2s linear infinite;
+}
+
+.boneTitle {
+    width: 45%;
+    max-width: rem(180);
+    height: rem(12);
+}
+
+// Where the stat card's number sits.
+.boneNumber {
+    width: rem(96);
+    height: rem(26);
+}
+
+// Where a chart's plot or a table's rows sit, filling all the room the card
+// has.
+.boneBody {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+// The line where the source will be, at the card's foot.
+.status {
+    @include font-size(12px, 1.3);
+
+    flex-shrink: 0;
+    margin-top: auto;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+}
+
+@keyframes bone-sweep {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bone {
+        background-image: none;
+        animation: none;
+    }
+}
+
+// A card whose refresh failed has an empty, dashed face with one sentence,
+// so it reads as a card that was not drawn.
+.failed {
+    border-style: dashed;
+}
+
+.failure {
+    @include flex(column, flex-start, flex-start);
+
+    gap: rem(10);
+    margin-block: auto;
+}
+
+.failureText {
+    @include font-size(13px, 1.35);
+
+    max-width: rem(260);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-text, var(--color-charcoal));
+    letter-spacing: -0.01em;
+}
+
+// The chat status line's Stop pill, on the card's own colours.
+.retry {
+    @include font-size(11px, 1);
+
+    padding: rem(5) rem(11);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--th-muted, var(--color-stone));
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--th-muted, var(--color-sage-light));
+    border-radius: rem(14);
+    transition: color 0.25s ease;
+
+    &:hover:not(:disabled),
+    &:focus-visible:not(:disabled) {
+        color: var(--th-text, var(--color-charcoal));
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+}

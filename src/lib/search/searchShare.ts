@@ -1,5 +1,6 @@
 import { asc, eq } from 'drizzle-orm';
 
+import { searchShareMode } from '@/lib/chat/shareMode';
 import { shortId } from '@/lib/chat/shareStore';
 import { db } from '@/lib/db';
 import type { EntityGroup, Operation } from '@/lib/search/types';
@@ -132,7 +133,7 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
 
     return {
         id: row.id,
-        mode: row.mode === 'snapshot' ? 'snapshot' : 'live',
+        mode: searchShareMode(row.mode),
         query: (row.data as { query?: string })?.query ?? row.title,
         createdAt: row.createdAt.toISOString(),
         refs: refs.map((ref) => ({
