@@ -2,12 +2,15 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { event } from '../../../db/schema';
+import { posthogConfigured, sendEventToPosthog } from './posthog';
 
 /**
  * Usage events (the analytics in DFO Overview → Data access → "Events to
- * record"), stored in our own `event` table — first-party, no cookies, no
- * third party, no prompt text. The browser posts its events through
- * /api/events (see ./client); the server records its own directly.
+ * record"), stored in our own `event` table and, when POSTHOG_KEY and
+ * POSTHOG_HOST are set, forwarded server-side to PostHog (EU cloud): no
+ * cookies, no browser-side analytics script, no prompt text. The browser
+ * posts its events through /api/events (see ./client); the server records
+ * its own directly.
  *
  * Every name the site emits, so a typo can't fork the data:
  * - search.query      an answered search (spec ids, measures and filters, places,
@@ -21,6 +24,7 @@ import { event } from '../../../db/schema';
  * - guest.wall_hit    a guest ran out of free prompts
  * - feedback.submit   a feedback sent (kind)
  * - embed.view        an embed loaded in an iframe (share id, kind, host site)
+ * - share.create      a Studio share link made (share id, kind, mode)
  */
 export const EVENT_NAMES = [
     'search.query',
@@ -33,13 +37,14 @@ export const EVENT_NAMES = [
     'guest.wall_hit',
     'feedback.submit',
     'embed.view',
+    'share.create',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
 
 export type EventProps = Record<string, unknown>;
 
-type Who = {
+export type Who = {
     userId?: string | null;
     visitorId?: string | null;
     page?: string | null;
@@ -47,7 +52,8 @@ type Who = {
 
 /**
  * Record one event. Fire-and-forget: analytics never cost a request, so a
- * failed insert is logged and swallowed.
+ * failed insert or forward is logged and swallowed, and each sink fails
+ * independently of the other.
  */
 export const track = async (name: EventName, props: EventProps = {}, who: Who = {}) => {
     try {
@@ -60,5 +66,13 @@ export const track = async (name: EventName, props: EventProps = {}, who: Who = 
         });
     } catch (error) {
         console.warn('event not recorded', name, error);
+    }
+
+    if (posthogConfigured()) {
+        try {
+            await sendEventToPosthog(name, props, who);
+        } catch (error) {
+            console.warn('event not forwarded to PostHog', name, error);
+        }
     }
 };

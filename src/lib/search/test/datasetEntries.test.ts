@@ -109,7 +109,9 @@ test('buildDatasetEntries leaves operations off a part that has none', () => {
 });
 
 test("an identity entry and each candidate post their own Spec's groups beside the identity", () => {
-    const eu = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const eu = {
+        origin: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+    };
     const g7 = { origin: { dcid: null, label: 'G7 countries' } };
     const [definite] = hydratedParts('definite-single');
     const [candidates] = hydratedParts('multi-candidate');
@@ -153,7 +155,9 @@ test("an identity entry and each candidate post their own Spec's groups beside t
 
 test('a stored share part replays its groups beside the identity, and no member when it has none', () => {
     const identity = hydratedParts('definite-single')[0].hydratedSpec!.identity;
-    const groups = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
+    const groups = {
+        origin: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+    };
     const ref = { variableText: 'aid', identity, entityGroups: groups, operations: [] };
 
     assert.deepEqual(sharedRefEntry(ref), {

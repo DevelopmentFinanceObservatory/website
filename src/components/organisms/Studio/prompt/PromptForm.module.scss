@@ -17,6 +17,21 @@
     border-radius: rem(10);
 }
 
+// A growing field: the bar keeps its resting height as a floor and the
+// textarea inside sets the rest. Both stay centred on each other, so at one
+// line the bar is indistinguishable from the plain input it replaced — the
+// field is half the submit's height, and aligning either to an edge would
+// leave them visibly off each other.
+.promptGrow {
+    height: auto;
+    min-height: rem(48);
+
+    .promptInput {
+        resize: none;
+        overflow-y: auto;
+    }
+}
+
 // Text sits rem(10) from the border (the container's own padding) and the
 // flex gap keeps it clear of the submit button on the right.
 .promptInput {

@@ -9,6 +9,7 @@ import styles from './CardInfoPanel.module.scss';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import type { CardInfo, CardSource, Widget } from '@/lib/chat/widgets';
+import { leftOutOf } from '@/lib/studio/liveCards';
 import { formatWindow } from '@/lib/studio/period';
 
 type SourceDoc = { name: string | null; description: string | null; url: string | null };
@@ -109,20 +110,25 @@ const SourceEntry = ({ source, open }: { source: CardSource; open: boolean }) =>
  * the data is, then Download Data, then each indicator with its id and
  * description. Everything comes from the card's frame; a field the platform
  * didn't fill isn't shown. A card saved before its sources were recorded
- * shows the one source it kept.
+ * shows the one source it kept. The panel also lists what the card's data
+ * leaves out, each gap in full. On a live share (`liveShareId`) Download Data
+ * serves the refreshed rows.
  */
 const CardInfoPanel = ({
     info,
     widget,
     open,
     onOpenChange,
+    liveShareId,
 }: {
     info: CardInfo | null;
     // The card itself, for Download Data.
     widget: Widget | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    liveShareId?: string;
 }) => {
+    const leftOut = leftOutOf(info);
     const sources: CardSource[] =
         info?.sources ??
         (info?.sourceId && info.sourceName
@@ -190,7 +196,18 @@ const CardInfoPanel = ({
                         )}
                     </dl>
 
-                    {widget && <CardDownload widget={widget} />}
+                    {leftOut.length > 0 && (
+                        <div className={styles.leftOut} data-left-out="">
+                            <p className={styles.fieldLabel}>Left out</p>
+                            <ul className={styles.leftOutList}>
+                                {leftOut.map((detail) => (
+                                    <li key={detail}>{detail}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {widget && <CardDownload widget={widget} liveShareId={liveShareId} />}
 
                     {info.indicators.map((indicator, index) => (
                         <details key={indicator.id} className={styles.indicator} open={index === 0}>

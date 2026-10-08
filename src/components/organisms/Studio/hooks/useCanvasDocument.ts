@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import type { CardView } from '../canvas/layout';
 import type { TurnWidget } from './useChat';
 
+import { canvasWidgetsOf } from '@/lib/chat/canvas';
 import type { SavedConversation, ShareMark } from '@/lib/chat/history';
 import type { TextWidget, Widget } from '@/lib/chat/widgets';
 import { DEFAULT_THEME, type StudioTheme } from '@/lib/studio/theme';
@@ -81,13 +82,6 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setConversationTitle(saved.title);
         setShareMarks(saved.shareMarks ?? []);
     }, []);
-
-    // The ids still on grace at `latestTurn` — an older stamp is a set the
-    // next turn already replaced.
-    const graceAt = useCallback(
-        (latestTurn: number): string[] => (grace.turn === latestTurn ? grace.ids : []),
-        [grace],
-    );
 
     // Unpinning puts the card on grace for the turn on screen (see above);
     // pinning takes it off.
@@ -178,21 +172,18 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
-    // The canvas shows the latest turn's widgets plus everything pinned or on
-    // grace — unpinned cards from older turns are gone (the sheet fades them
-    // out) — and the user's text cards; removed cards never.
+    // What the canvas shows, through the same rule a share's live checks use.
     const visibleWidgets = useCallback(
-        (chatWidgets: TurnWidget[], latestTurn: number): Widget[] => [
-            ...chatWidgets.filter(
-                (widget) =>
-                    !removedIds.includes(widget.id) &&
-                    (widget.turn === latestTurn ||
-                        pinnedIds.includes(widget.id) ||
-                        graceAt(latestTurn).includes(widget.id)),
-            ),
-            ...textCards.filter((card) => !removedIds.includes(card.id)),
-        ],
-        [removedIds, pinnedIds, graceAt, textCards],
+        (chatWidgets: TurnWidget[]): Widget[] =>
+            canvasWidgetsOf({
+                widgets: chatWidgets,
+                pinnedIds,
+                removedIds,
+                graceIds: grace.ids,
+                graceTurn: grace.turn,
+                textCards,
+            }),
+        [pinnedIds, removedIds, grace, textCards],
     );
 
     return {

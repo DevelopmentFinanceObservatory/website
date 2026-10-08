@@ -5,13 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { effectiveKind, widgetTitle } from './canvas/layout';
+import LiveNote from './canvas/LiveNote';
 import Whiteboard from './canvas/Whiteboard';
 import { useCanvasDocument } from './hooks/useCanvasDocument';
 import { useChat } from './hooks/useChat';
 import { useConversationSave } from './hooks/useConversationSave';
 import { useLandingHistory } from './hooks/useLandingHistory';
+import { useLiveCards } from './hooks/useLiveCards';
 import GuestWall, { GUEST_LIMIT } from './GuestWall';
 import StudioLanding from './landing/StudioLanding';
+import { type PromptField } from './prompt/PromptForm';
 import type { ShareDatum } from './modals/ShareModal';
 import CardDownload from './modals/CardDownload';
 import CardInfoPanel from './modals/CardInfoPanel';
@@ -30,6 +33,7 @@ import { useGridCell } from '@/hooks/useGridCell';
 import { useGridFills } from '@/hooks/useGridFills';
 import { useIsPhone } from '@/hooks/useMediaQuery';
 import { useReveal } from '@/hooks/useReveal';
+import { latestTurnOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
@@ -49,10 +53,18 @@ const STAGE_OUT_MS = 560;
 type Mode = 'start' | 'leaving' | 'workspace';
 
 export type StudioProps = {
-    // A public share (/s/<id>): the Studio opens straight on the frozen
+    // A public share (/s/<id>): the Studio opens straight on the stored
     // conversation, read-only — no input, no card actions, no saving, no
-    // way back and no account: logo, title, filters and the sheet.
-    shared?: { id: string; kind: ShareKind; saved: SavedConversation };
+    // way back and no account: logo, title, filters and the sheet. A `live`
+    // share's data cards arrive held and are filled from the refresh route
+    // (see useLiveCards); `createdAt` is when the share was made.
+    shared?: {
+        id: string;
+        kind: ShareKind;
+        saved: SavedConversation;
+        live?: boolean;
+        createdAt?: string;
+    };
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
     // from history, a fresh fork).
     openId?: string;
@@ -62,6 +74,9 @@ export type StudioProps = {
     // A gallery item: the same read-only sheet, plus the one action a
     // curated session exists for — carrying it on in your own Studio.
     continuable?: boolean;
+    // The site can refresh a live share's cards (`liveSharingAvailable`,
+    // read on the server), so the Share dialog offers Live Data.
+    liveSharing?: boolean;
 };
 
 // The guest's prompt count lives in the browser only — a limit, not a lock.
@@ -89,7 +104,13 @@ const subscribeGuest = (listener: () => void) => {
  * saving and the modals; the pieces live in ./landing, ./workspace,
  * ./canvas, ./modals and ./hooks.
  */
-const Studio = ({ shared, openId, guest = false, continuable = false }: StudioProps) => {
+const Studio = ({
+    shared,
+    openId,
+    guest = false,
+    continuable = false,
+    liveSharing = false,
+}: StudioProps) => {
     const sharedSaved = shared?.saved;
 
     const readOnly = !!shared;
@@ -112,7 +133,8 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
         rows: 54,
         active: mode === 'start',
     });
-    const inputRef = useRef<HTMLInputElement>(null);
+    // The landing's opener is a growing textarea; the type covers both.
+    const inputRef = useRef<PromptField>(null);
     const [query, setQuery] = useState(sharedSaved?.title ?? '');
     const [chatTab, setChatTab] = useState<ChatTab>('chat');
     const [cardsTab, setCardsTab] = useState('all');
@@ -352,9 +374,15 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
         router.push(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     };
 
-    const latestTurn = chat.widgets.reduce((max, widget) => Math.max(max, widget.turn), 0);
+    const latestTurn = latestTurnOf(chat.widgets);
 
-    const visibleWidgets = doc.visibleWidgets(chat.widgets, latestTurn);
+    // A live share's canvas: its data cards drawn on current data as each
+    // refresh answers, and their states. A snapshot's and the owner's own
+    // widgets pass through untouched.
+    const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
+        shared,
+        doc.visibleWidgets(chat.widgets),
+    );
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {
         const widget = visibleWidgets.find((other) => other.id === id);
@@ -536,6 +564,7 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
                         onDownload={setDownloadCardId}
                         readOnly={readOnly}
                         centerSingle={shared?.kind === 'card'}
+                        live={liveCanvas}
                     />
                 </div>
             )}
@@ -545,6 +574,7 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
                 widget={infoWidget}
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
+                liveShareId={liveCanvas?.shareId}
             />
 
             <Modal
@@ -553,7 +583,13 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
                 title="Download Data"
                 fit
             >
-                {downloadWidget && <CardDownload widget={downloadWidget} details />}
+                {downloadWidget && (
+                    <CardDownload
+                        widget={downloadWidget}
+                        details
+                        liveShareId={liveCanvas?.shareId}
+                    />
+                )}
             </Modal>
 
             {inWorkspace && !readOnly && (
@@ -564,6 +600,7 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
+                    liveSharing={liveSharing}
                     createShare={save.createShare}
                 />
             )}
@@ -658,6 +695,7 @@ const Studio = ({ shared, openId, guest = false, continuable = false }: StudioPr
                         onNewChat={startNew}
                         onCustomize={() => modals.customize.setOpen((prev) => !prev)}
                         onShare={account ? () => modals.share.show({ kind: 'whole' }) : undefined}
+                        note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
                     />
                     <ChatPanel
                         editTarget={editTarget}

@@ -6,13 +6,66 @@
 // Pinned to the card's bottom and NEVER crushed or clipped — the content
 // above it is what gives way.
 .chrome {
-    @include flex(row, space-between, center);
+    @include flex(row, space-between, flex-end);
 
-    // Air between the source line and "Built with" — the line clips before
-    // it ever reaches the mark.
+    // Air between the source line and "Built with". The source may run to a
+    // second line (see .sourceLabel); the mark stays on the last one.
     gap: rem(10);
     flex-shrink: 0;
     margin-top: auto;
+}
+
+// A live card that leaves something out stacks that line over the bar and
+// pins both to the card's bottom, as the bar is pinned alone.
+.foot {
+    @include flex(column, flex-start, stretch);
+
+    flex-shrink: 0;
+    gap: rem(8);
+    min-width: 0;
+    margin-top: auto;
+
+    .chrome {
+        margin-top: 0;
+    }
+}
+
+.leftOut {
+    @include flex(row, flex-start, baseline);
+    @include font-size(12px, 1.3);
+
+    gap: rem(6);
+    min-width: 0;
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-muted, var(--color-stone));
+    text-align: left;
+    letter-spacing: -0.01em;
+    background: none;
+    border: 0;
+}
+
+button.leftOut {
+    cursor: help;
+    transition: color 0.2s ease;
+
+    &:hover {
+        color: var(--th-text, var(--color-charcoal));
+    }
+}
+
+// One line. The sentence clips with an ellipsis and the count stays whole.
+.leftOutLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.leftOutMore {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .chromeTags {
@@ -20,14 +73,6 @@
 
     gap: rem(6);
     min-width: 0;
-}
-
-.chromeDot {
-    @include font-size(12px, 1.3);
-
-    font-family: var(--font-outfit);
-    font-weight: 300;
-    color: var(--th-muted, var(--color-gray-1600));
 }
 
 .source {
@@ -52,12 +97,48 @@
     }
 }
 
-// The attribution line is one line: it clips with an ellipsis rather than
-// pushing "Built with" off the card.
+// The attribution line opens More Info, so it has to read as a control and
+// not as the caption it sits among: a pointer rather than the hover-popup
+// tags' help cursor, and an underline on hover (QA-21).
+.sourceAction {
+    // A wrapping label puts the icon beside the first line, not in the
+    // middle of the block; the offset centres it optically on that line.
+    align-items: flex-start;
+    cursor: pointer;
+
+    .sourceIcon {
+        margin-top: rem(3);
+    }
+
+    &:hover .sourceLabel {
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+    }
+}
+
+// Sources are the point of a card, so the name wraps rather than being cut
+// at the first thing that does not fit (QA-25): on the narrowest card the
+// line has room for about twenty characters, and a source name is routinely
+// twice that.
 .sourceLabel {
+    min-width: 0;
+    text-align: left;
+}
+
+// The name takes the width it needs, up to two lines, then an ellipsis — a
+// bar that grows without end would eat the card instead.
+.sourceName {
+    display: -webkit-box;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+// The count always starts its own line, under the name rather than trailing
+// off its last word — on its own line the separator dot has nothing to
+// separate, so it is gone.
+.sourceCount {
+    display: block;
 }
 
 .sourceIcon {
@@ -67,16 +148,9 @@
     height: rem(10);
 }
 
-// The note glyph sits on the 20-grid with natural padding (info's viewBox is
-// cropped to the ink) — a touch larger so both read the same size.
-.sourceIcon.noteIcon {
-    width: rem(15);
-    height: rem(15);
-    margin-block: rem(-3);
-}
-
 // The tag's content — the same shell as the kebab card menu (sage panel,
-// mono type, pop-in/out on data-state, no shadow).
+// mono type, pop-in/out on data-state, no shadow). The card's note wears a
+// different face on purpose: it belongs to the card, not to this bar.
 .sourceMenu {
     @include font-size(10px, 1.4);
     @include popup-motion;
@@ -89,8 +163,7 @@
     color: var(--th-text, var(--color-charcoal));
     letter-spacing: -0.02em;
 
-    // Long sources / notes wrap instead of running off; user notes keep
-    // their line breaks.
+    // Long sources wrap instead of running off.
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     background-color: var(--th-popup, var(--color-popup));

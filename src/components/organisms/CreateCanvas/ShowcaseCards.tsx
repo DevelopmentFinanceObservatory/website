@@ -144,7 +144,11 @@ const findSpot = (
     // distance from the other cards instead, anywhere roomy enough (within
     // 60% of the best, a band wide enough to reach past the corners) —
     // then luck.
-    const small = span.w * span.h < (SPAN_DEFAULT.chart.w * SPAN_DEFAULT.chart.h) / 2;
+    // A stat is the small card; a chart and a table are the big ones. Read
+    // off the footprints rather than named, so it follows a re-budget — but
+    // not halved: the stat is wide now (SPAN_DEFAULT), not far off a chart's
+    // area.
+    const small = span.w * span.h < SPAN_DEFAULT.chart.w * SPAN_DEFAULT.chart.h;
     const pick = small
         ? (() => {
               const closest = Math.min(...pool.map((spot) => spot.near));

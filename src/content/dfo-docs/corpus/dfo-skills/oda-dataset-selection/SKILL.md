@@ -2,13 +2,14 @@
 name: oda-dataset-selection
 description: >-
   Context for choosing the dataset that answers an ODA or development finance question. Summarises what each dataset covers, which breakdowns each supports, and how their totals relate.
+license: CC-BY-4.0
 ---
 
 # Choosing an ODA dataset
 
 Context for choosing the dataset that answers an ODA or development finance question.
 
-To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md).
+To load this skill in your own agent, see [Use skills in your own agent](../../hub/skills/use-in-your-agent.md). [Download this skill as a zip](../oda-dataset-selection.zip).
 
 ## What each dataset answers
 

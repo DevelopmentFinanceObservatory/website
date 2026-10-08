@@ -8,6 +8,15 @@ import type { CardExtras } from './types';
 
 import Icon, { type IconProps } from '@/components/atoms/Icon/Icon';
 
+// A card carrying a user's note says so here, beside the pin. It is a mark,
+// not a control: the words come up on hovering the card (CardNote) and the
+// menu below edits them.
+const NoteMark = () => (
+    <span className={styles.noteMark} aria-hidden="true">
+        <Icon name="note" className={styles.noteMarkIcon} />
+    </span>
+);
+
 const PinButton = ({ pinned, onPin }: Pick<CardExtras, 'pinned' | 'onPin'>) => (
     <button
         type="button"
@@ -21,8 +30,8 @@ const PinButton = ({ pinned, onPin }: Pick<CardExtras, 'pinned' | 'onPin'>) => (
 );
 
 // The ⋮ card menu, riding the house Radix popup like the search slot menus.
-// Every row is wired: pin/unpin, Download Data, share (link/embed of
-// this card), a prefilled chat follow-up, title edit, live view switching
+// Every row is wired: More Info, pin/unpin, Download Data, share (link/embed
+// of this card), a prefilled chat follow-up, title edit, live view switching
 // and remove. (Reorder from the mock has no API behind it — not shown.)
 const CardMenu = ({
     pinned,
@@ -31,6 +40,7 @@ const CardMenu = ({
     onPin,
     onRemove,
     onAsk,
+    onInfo,
     onDownload,
     onShare,
     onEdit,
@@ -56,6 +66,14 @@ const CardMenu = ({
                 onCloseAutoFocus={(event) => event.preventDefault()}
             >
                 <div className={styles.cardMenuSection}>
+                    {/* First, and in the menu at all: the attribution line
+                        was the only way in, and it reads as a caption rather
+                        than a control (QA-21). */}
+                    {onInfo && (
+                        <MenuRow icon="info" onSelect={onInfo}>
+                            More Info
+                        </MenuRow>
+                    )}
                     <MenuRow icon="pin" onSelect={onPin}>
                         {pinned ? 'Unpin from Canvas' : 'Pin to Canvas'}
                     </MenuRow>
@@ -131,16 +149,24 @@ const MenuRow = ({
             type="button"
             className={classNames(styles.cardMenuRow, danger && styles.cardMenuDanger)}
         >
-            <Icon name={icon} className={styles.cardMenuIcon} />
+            <Icon
+                name={icon}
+                className={classNames(
+                    styles.cardMenuIcon,
+                    icon === 'info' && styles.cardMenuIconTight,
+                )}
+            />
             <span className={styles.cardMenuLabel}>{children}</span>
         </button>
     </DropdownMenu.Item>
 );
 
-// Pin + kebab, 1px apart, top-right of every card (none on a read-only sheet).
+// Pin + kebab, 1px apart, top-right of every card (none on a read-only
+// sheet), with the note mark ahead of them when there is a note to mark.
 const CardActions = (extras: CardExtras) =>
     extras.readOnly ? null : (
         <div className={styles.cardActions}>
+            {extras.note && <NoteMark />}
             <PinButton pinned={extras.pinned} onPin={extras.onPin} />
             <CardMenu {...extras} />
         </div>

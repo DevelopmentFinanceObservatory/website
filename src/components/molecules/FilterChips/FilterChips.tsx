@@ -10,9 +10,14 @@ type FilterChipsProps<Id extends string> = {
     groups: readonly FilterChipGroup<Id>[];
     // Per-group counts for the corner square.
     counts: Partial<Record<Id, number>>;
-    // The selection (several at once); empty = All.
+    // The selection; empty = All.
     selected: readonly Id[];
     onChange: (next: Id[]) => void;
+    // 'single': a pick replaces the selection rather than adding to it, and
+    // picking the active chip again goes back to All. For a set of groups a
+    // card can only belong to one of, where stacking chips widens the list
+    // instead of narrowing it and reads as broken (QA-15).
+    mode?: 'multi' | 'single';
     // How "All" reads: the light chip (Sources) or the dark one (Roadmap).
     allTone?: 'light' | 'dark';
     // Between chips: rem(6) (Sources) or 2px (Roadmap).
@@ -22,20 +27,30 @@ type FilterChipsProps<Id extends string> = {
 
 /**
  * The group filter chips: mono label on the group's colour, the count as a
- * tiny dark square riding the top-right corner, "All" first. Multi-select —
- * unselected chips sit back at 60%.
+ * tiny dark square riding the top-right corner, "All" first. Multi-select by
+ * default, see `mode` — unselected chips sit back at 60%.
  */
 const FilterChips = <Id extends string>({
     groups,
     counts,
     selected,
     onChange,
+    mode = 'multi',
     allTone = 'light',
     gap = 'normal',
     className,
 }: FilterChipsProps<Id>) => {
-    const toggle = (id: Id) =>
-        onChange(selected.includes(id) ? selected.filter((g) => g !== id) : [...selected, id]);
+    const toggle = (id: Id) => {
+        const on = selected.includes(id);
+
+        if (mode === 'single') {
+            onChange(on ? [] : [id]);
+
+            return;
+        }
+
+        onChange(on ? selected.filter((g) => g !== id) : [...selected, id]);
+    };
 
     return (
         <div className={classNames(styles.chips, gap === 'tight' && styles.chipsTight, className)}>

@@ -6,7 +6,7 @@ description: How a question to the DFO MCP server becomes a cited answer, and th
 
 Connect a client as described in [Connect](connect.md).
 
-The DFO MCP server answers questions about any series it holds for a country, subregion or continent. You can compare, rank or aggregate the results. Every answer carries the dataset's source and a frame reference that names the exact data used. The server refuses requests over 250,000 rows and tells the model why and how to retry.
+The DFO MCP server answers questions about any series it holds for a country, subregion or continent. You can compare, rank, aggregate or divide the results. Every answer carries the dataset's source and a frame reference that names the exact data used. The server refuses requests over 250,000 rows and tells the model why and how to retry.
 
 ## One question, start to finish
 
@@ -62,7 +62,13 @@ Kenya's series is available in international dollars and US dollars. The server 
 
 `compare` accepts two frame references, or one frame reference and two entities. It compares values over the periods both sides cover. To answer "How does Kenya's debt service compare to its climate finance receipts?", run `search` with two parts, call `get_data` once per part, then call `compare` with both frame references.
 
-The analysis tools operate on frame references. `aggregate` groups and reduces, `growth` measures change across a window, `rank` orders entities, `share_of` gives one entity's share of another, `filter` keeps matching rows, and `join` combines two frames.
+The analysis tools operate on frame references. `aggregate` groups and reduces, `growth` measures change across a window, `rank` orders entities, `share_of` gives one entity's share of another in one unit, `quotient_of` divides one measure by another in any two units, `sum_of` adds series, `filter` keeps matching rows, and `join` combines two frames.
+
+## Dividing one measure by another
+
+`quotient_of` divides one series by another at each period both report, whatever their units, and states the result in the unit the two compose. To answer "What was Kenya's debt service per head of population?", run `search` with two parts, one for debt service and one for population, call `get_data` once per part, then call `quotient_of` with both frame references. The population frame declares no unit, so the result's unit names it by its StatVar: `CurrencyUSD` per `Count_Person`.
+
+To get one figure per entity, such as aid per head for each of several recipients, set `numerator_by` to the numerator's role column and `denominator_by` to the column the population frame holds the same entities on. A period only one side reports is left out and recorded, and so is a key with no counterpart or a period where the denominator is zero. The call refuses when no period is shared, when no key pairs, or when every matched period has a zero denominator. `share_of` divides a part by its whole in one unit and refuses two sides in different units.
 
 ## Skills
 
@@ -75,10 +81,10 @@ A frame holds at most 250,000 rows. `get_data` returns `over_ceiling` for a larg
 A refusal arrives as a tool result marked as an error. Its text explains the problem and what to do. Structured content carries a `code`, a `retry_mode` and a `fix`. A Studio session asked for French inflation from 2015 to 2024, although the series ended in 2022. The `growth` call returned:
 
 ```text
-growth_gap_year: {'entity_key': {}, 'gap_years': ['2023', '2024'], 'longest_gap_free_window': ['2015', '2022']}
+growth_gap_year: {'window_start': '2015', 'window_end': '2024', 'entity_count': 1, 'missing_start': 0, 'missing_end': 1, 'suggested_window': ['2015', '2022'], 'suggested_window_entities': 1}
 ```
 
-The fix gives 2015 to 2022 as the longest gap-free window.
+Growth reads each series' value in the first and last year of the window, and this series has no 2024 value. The fix suggests 2015 to 2022, a window the series has values at both ends of.
 
 The `retry_mode` tells the model what to do next:
 
@@ -94,7 +100,7 @@ The refusals a reader meets most often:
 - A large retrieval, such as aid from every donor to one country, can take dfo-apis longer than one call allows. `get_data` then returns `operation_still_processing`. The same call made again picks up the same background operation while the data's coverage is unchanged.
 - A mid-size retrieval that dfo-apis runs synchronously, rather than moving to that background path, can still outrun this server's 45-second answer window. `get_data` then returns `service_unavailable`, naming the retrieval as still running upstream and suggesting a narrower scope, such as fewer entities or a shorter window, which finishes faster.
 - `compare` requires a common year and the same unit on both sides. It returns `comparison_periods_disjoint` when periods do not overlap and `cross_frame_unit_mismatch` when units differ.
-- `growth` returns `growth_gap_year` when a window has missing years, as above.
+- `growth` returns `growth_gap_year` when no series has values in both the first and last year of the window, as above. A series missing only one of those years is left out of the result and listed as excluded, and missing years between them never refuse.
 - The server returns `capability_unavailable` with `do_not_retry` for a feature this deployment has disabled.
 
 The ordinary `search` results `no_data` and `unsupported` can resemble refusals. `no_data` means the DFO holds nothing for that part of the question and may suggest nearby series. `unsupported` means the question is outside the DFO's scope and gives the reason.
@@ -103,5 +109,5 @@ A single `search` call takes up to six parts, one per measured variable, and `de
 
 ## Next
 
-- [Connect](connect.md) shows how to add the server to Claude, ChatGPT, Codex or Gemini CLI.
+- [Connect](connect.md) shows how to add the server to Claude, ChatGPT, Gemini, Claude Code, Codex or Gemini CLI.
 - The Tools reference lists every argument, error code and retry mode.

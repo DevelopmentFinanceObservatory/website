@@ -61,6 +61,46 @@ export type GalleryItem =
 
 export const GALLERY_ITEMS = items as GalleryItem[];
 
+/**
+ * The tile's picture and the words on its button, by what the item opens as
+ * (QA-13) — every tile used to carry the same canvas miniature and no
+ * button at all. Neither is a screenshot of the item itself: these are the
+ * three shapes a reader lands in, so the tile says what clicking will give
+ * them rather than what the data happens to say.
+ */
+export const GALLERY_COVERS: Record<
+    GalleryKind,
+    { src: string; width: number; height: number; action: string }
+> = {
+    // A search on /data, not Studio at all.
+    dataset: {
+        src: '/images/gallery/cover-search.png',
+        width: 1244,
+        height: 564,
+        action: 'Open Search',
+    },
+    // A chat beside the canvas: the session carries the questions that built it.
+    conversation: {
+        src: '/images/gallery/cover-chart-chat.png',
+        width: 1152,
+        height: 676,
+        action: 'Open Chat',
+    },
+    canvas: {
+        src: '/images/gallery/cover-chart.png',
+        width: 1276,
+        height: 628,
+        action: 'Open Canvas',
+    },
+    // A single card still opens on a canvas of its own.
+    card: {
+        src: '/images/gallery/cover-chart.png',
+        width: 1276,
+        height: 628,
+        action: 'Open Canvas',
+    },
+};
+
 export const galleryItem = (slug: string): GalleryItem | undefined =>
     GALLERY_ITEMS.find((item) => item.slug === slug);
 

@@ -135,7 +135,13 @@ The app defines the definitive contract once it exists. Known so far:
 | `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by dfo-infra                                   |
 | `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; dfo-infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                             |
 | `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by dfo-infra                                                              |
-| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` rate limit and the `/mcp` caller digest; default 0 (Cloud Run's); +1 per load balancer |
+| `REDIS_URL`                           | Redis behind the per-address rate limits on `/api` and `/mcp`; unset, both are off and startup logs a warning                                                               |
+| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                    |
+| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                         |
+| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                             |
+| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                        |
+| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                           |
+| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
 | `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by dfo-infra                                                                                                           |
 | `WEBSITE_DB_USER`                     | Runtime IAM database user; set by dfo-infra                                                                                                                                 |
 | `WEBSITE_DB_NAME`                     | Database name; set by dfo-infra                                                                                                                                             |
@@ -156,8 +162,8 @@ request body), and returns `content-type`, `content-disposition`,
 is set by the proxy only when `MCP_API_TOKEN` is set; otherwise the client's
 own `authorization` header goes through to the harness. A malformed
 `TRUSTED_PROXY_HOPS` stops a production server at startup. If one reaches a
-running process (in dev), `/mcp` sends no caller and `/api` rate-limits every
-client under one shared address, each with one error logged.
+running process (in dev), `/mcp` sends no caller and `/api` and `/mcp` rate-limit
+every client under one shared address, each with one error logged.
 
 ## Repo-side prerequisites
 

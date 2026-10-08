@@ -47,6 +47,10 @@ export type TokenAboutModel = {
     sources: AboutSource[];
 };
 
+// A group whose node is a continent or UN subregion holds the countries and
+// territories inside it, so its members are named as places.
+const REGION_GROUP_TYPES: ReadonlySet<string> = new Set(['Continent', 'UNGeoRegion']);
+
 const sentenceCase = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 // "AdministrativeArea1" → "Administrative area 1".
@@ -204,12 +208,15 @@ const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
     const typeFact = types.length > 0 ? types.join(', ') : null;
 
     if (group) {
+        const count = formatCount(dcids.length);
+        const fact = REGION_GROUP_TYPES.has(group.entity_type)
+            ? `${count} ${dcids.length === 1 ? 'country or territory' : 'countries and territories'}`
+            : `Group of ${count} ${dcids.length === 1 ? 'member' : 'members'}${typeFact ? ` (${typeFact.toLowerCase()})` : ''}`;
+
         return {
             kind: 'entity',
             title: group.label,
-            facts: [
-                `Group of ${formatCount(dcids.length)} ${dcids.length === 1 ? 'member' : 'members'}${typeFact ? ` (${typeFact.toLowerCase()})` : ''}`,
-            ],
+            facts: [fact],
             notes: [listNames(names)],
             definitions: group.dcid ? [{ label: null, dcid: group.dcid }] : [],
             sources: [],

@@ -36,6 +36,8 @@ Cite a Studio card in the same form. Use its title as the dataset title, the sou
 
 Each source's licence governs its data. Find it on the source's page on [Sources](/data/sources), under "License & Updates". The [CRS page](/data/sources/provenance/OECDCreditorReportingSystem), for example, links to the [OECD Terms and Conditions](https://www.oecd.org/en/about/terms-conditions.html).
 
+A bundle carries each source's licence in `SOURCES.md` and `datapackage.json`.
+
 ONE Data's Python packages, such as [oda_reader](https://github.com/ONEcampaign/oda_reader) and [imf-reader](https://github.com/ONEcampaign/imf-reader), state their licences in their GitHub repositories.
 
 ## Next

@@ -3,7 +3,13 @@
  * (an agent's component, or the user's own text card).
  */
 
-import { cellNumber, compact, type StatValue } from '../studio/statFace.ts';
+import {
+    cellNumber,
+    compact,
+    isPercentUnit,
+    percentNumber,
+    type StatValue,
+} from '../studio/statFace.ts';
 
 /** One source a card cites, as the platform names it. */
 export type CardSource = {
@@ -20,7 +26,7 @@ export type CardSource = {
  * attribution line, the window, the indicators behind the card, the
  * citation and every source it came from, all read straight off the component
  * frame. `citation` and `sources` are absent on a card saved before they
- * were recorded.
+ * were recorded, and `leftOut` on a card whose data leaves nothing out.
  */
 export type CardInfo = {
     // The frame's own one-line attribution ("WorldDevelopmentIndicators · 1 indicator(s)").
@@ -39,6 +45,11 @@ export type CardInfo = {
     lastRefreshed: string | null;
     citation?: string | null;
     sources?: CardSource[];
+    // What the card's data leaves out, one sentence per gap in the platform's
+    // words, such as the series a rolling period holds no value for or a
+    // scope the frame covers less than. A live share's card and its More Info
+    // show it.
+    leftOut?: string[];
 };
 
 /** The component revision a Studio card draws. Download Data and a share
@@ -129,8 +140,19 @@ export type Widget = KeyNumberWidget | ChartWidget | TableWidget | TextWidget;
 // category labels drop them.
 const shortLabel = (label: string): string => label.replace(/\s*\(.*?\)/g, '').trim() || label;
 
-// Axis tick abbreviation for charts.
-export const formatAxis = (value: number): string => compact(value);
+/** A chart's value-axis tick and tooltip number in the chart's unit: a
+ *  percentage with a % sign ("5.33%"), any other value compacted ("37.0K"). */
+export const formatAxis = (value: number, unit?: string): string =>
+    isPercentUnit(unit) ? `${percentNumber(value)}%` : compact(value);
+
+/** The card's source line: every source's name joined by "; " when the card
+ *  cites more than one ("World Bank IDS; World Development Indicators"), else
+ *  the one source's name, else the frame's attribution label. */
+export const sourceLine = (info: CardInfo): string => {
+    const names = [...new Set(info.sources?.map((source) => source.name))];
+
+    return names.length > 1 ? names.join('; ') : (info.sourceName ?? info.label);
+};
 
 /**
  * View conversions for the card-type switcher. Both directions run on data

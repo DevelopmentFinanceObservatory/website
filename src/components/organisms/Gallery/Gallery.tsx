@@ -7,6 +7,7 @@ import Link from 'next/link';
 import styles from './Gallery.module.scss';
 import GalleryFilter from './GalleryFilter';
 import {
+    GALLERY_COVERS,
     GALLERY_ITEMS,
     GALLERY_REGIONS,
     GALLERY_SOURCES,
@@ -16,6 +17,7 @@ import {
 
 import PageFade from '@/components/molecules/PageFade/PageFade';
 import PageHero from '@/components/molecules/PageHero/PageHero';
+import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useUrlParam } from '@/hooks/useUrlParam';
@@ -130,25 +132,56 @@ const Gallery = () => {
                 className={styles.grid}
                 key={[types.join(), regions.join(), sources.join(), query].join('|')}
             >
-                {visible.map((item, index) => (
-                    <li key={item.slug} className={styles.card} style={revealIndex(index)}>
-                        <Link href={galleryHref(item)} className={styles.cardLink}>
-                            {/* One shared canvas miniature (design handoff) until
-                                real per-canvas thumbnails exist. */}
-                            <span className={styles.cover}>
-                                <Image
-                                    src="/images/gallery/canvas-preview.png"
-                                    alt=""
-                                    width={660}
-                                    height={376}
-                                    className={styles.coverImage}
-                                />
-                            </span>
-                            <h2 className={styles.cardTitle}>{item.title}</h2>
-                            <p className={styles.cardText}>{item.description}</p>
-                        </Link>
-                    </li>
-                ))}
+                {visible.map((item, index) => {
+                    const { action, ...cover } = GALLERY_COVERS[item.kind];
+
+                    return (
+                        // The zone is the tile: hovering anywhere on it flies
+                        // the button's arrow (see the Button atom).
+                        <li
+                            key={item.slug}
+                            className={styles.card}
+                            style={revealIndex(index)}
+                            data-button-zone
+                        >
+                            <Link href={galleryHref(item)} className={styles.cardLink}>
+                                <span className={styles.cover}>
+                                    <Image
+                                        {...cover}
+                                        alt=""
+                                        // The tile is a third of the grid on
+                                        // desktop and the whole width below
+                                        // it. Without this Next sizes the
+                                        // srcset off the `width` above — the
+                                        // asset's own size, not the box it
+                                        // lands in — and picks a variant far
+                                        // too small for it.
+                                        sizes="(max-width: 1024px) 100vw, 33vw"
+                                        className={styles.coverImage}
+                                    />
+                                </span>
+                                <h2 className={styles.cardTitle}>{item.title}</h2>
+                                <p className={styles.cardText}>{item.description}</p>
+                            </Link>
+                            {/* Beside the link rather than inside it — an
+                                anchor cannot hold another one. It says what
+                                the tile opens as; the tile itself is the
+                                link, so this one is kept out of the tab
+                                order and out of the accessibility tree
+                                rather than read out twice. */}
+                            <Button
+                                href={galleryHref(item)}
+                                variant="dark"
+                                icon="arrow-up-right"
+                                className={styles.cardAction}
+                                tabIndex={-1}
+                                aria-hidden
+                            >
+                                {action}
+                            </Button>
+                        </li>
+                    );
+                })}
                 {visible.length === 0 && (
                     <li className={styles.empty}>No canvases match — clear a filter or two.</li>
                 )}

@@ -685,11 +685,11 @@ export const isLevelScopedOptions = (options: any[]): boolean =>
 /**
  * A level-scoped slot's options split by relation: `parent` is the one way
  * up (absent at a classification root), `children` are the ways down
- * (server-ordered richest first), and `roots` are shown instead of
- * parent/children when the slot is unbound or its code system is flat
+ * (server-ordered richest first), and `roots` are the classification roots
  * (`SlotOptionRelation`, dfo-apis src/search/models/vocab.py: "child" |
- * "parent" | "root"). The code index's level_scoped_options only emits the
- * bound value's neighbours, so `member_count` is only ever set on a
+ * "parent" | "root"). The code index's level_scoped_options sends roots for
+ * an unbound slot, for a bound root (every root but the bound one), and for
+ * every value of a flat code system. `member_count` is only ever set on a
  * parent, child, or root option.
  */
 export type LevelPartition = {
@@ -747,6 +747,47 @@ export const rootGroups = (partition: LevelPartition): RootGroup[] => {
             ? { root: only, children: [] }
             : { root, children };
     });
+};
+
+/**
+ * A level-scoped slot's menu, decided by the slot's binding. Unbound (or
+ * bound to a set, which the server menus as unbound), it is the roots with
+ * their children (rootGroups). Bound to one value, it is that value as the
+ * current pick between its way up (`up`, absent at a root), its ways down
+ * (`down`, the children whose `parent` names the bound value), and the
+ * other roots (`sideways`, grouped like an unbound menu). A bound root and
+ * a flat code system's value come with other roots and no children for
+ * them, so each group is a lone root. A binding the code index does not
+ * hold comes back as the unbound menu, whose children all sit under other
+ * roots and stay reachable there. `current` is the bound value's own
+ * option when the wire lists it (a flat code system does, with its row
+ * count), else the bare binding. Every list keeps the server's order.
+ */
+export type LevelMenu =
+    | { kind: 'unbound'; groups: RootGroup[] }
+    | { kind: 'bound'; up: any | null; current: any; down: any[]; sideways: RootGroup[] };
+
+export const levelMenu = (binding: any, options: any[]): LevelMenu => {
+    const partition = partitionLevelOptions(options);
+    const boundValue = binding?.kind === 'value' ? binding.value : null;
+    const boundDcid: string | undefined = boundValue?.ref?.dcid;
+
+    if (!boundDcid) return { kind: 'unbound', groups: rootGroups(partition) };
+
+    const { current, rest } = splitCurrentPick(partition.roots, boundDcid);
+    const isDown = (child: any) => child?.parent === boundDcid;
+
+    return {
+        kind: 'bound',
+        up: partition.parent,
+        current: current ?? { value: boundValue },
+        down: partition.children.filter(isDown),
+        sideways: rootGroups({
+            ...partition,
+            roots: rest,
+            children: partition.children.filter((child) => !isDown(child)),
+        }),
+    };
 };
 
 /** One slot's option set as `useSearchRun`'s trailing `slot_options` events
