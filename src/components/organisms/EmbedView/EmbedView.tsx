@@ -55,6 +55,7 @@ const SingleCard = ({
         onAsk: noop,
         onInfo: isText ? null : () => onCardInfo(widget.id),
         onDownload: null,
+        onDownloadImage: null,
         onEdit: noop,
         editLabel: isText ? 'Edit Card' : 'Edit Title',
         note: isText ? undefined : saved.notes?.[widget.id],

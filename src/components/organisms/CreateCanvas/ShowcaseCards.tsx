@@ -53,6 +53,7 @@ const extras = (title: string, view: CardExtras['view']): CardExtras => ({
     onRemove: NOOP,
     onAsk: NOOP,
     onDownload: null,
+    onDownloadImage: null,
     onEdit: NOOP,
     editLabel: '',
     // Set (to nothing) so the chrome shows the attribution line, not the tag.

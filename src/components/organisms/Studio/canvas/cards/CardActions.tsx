@@ -42,6 +42,7 @@ const CardMenu = ({
     onAsk,
     onInfo,
     onDownload,
+    onDownloadImage,
     onShare,
     onEdit,
     editLabel,
@@ -80,6 +81,11 @@ const CardMenu = ({
                     {onDownload && (
                         <MenuRow icon="download" onSelect={onDownload}>
                             Download Data
+                        </MenuRow>
+                    )}
+                    {onDownloadImage && (
+                        <MenuRow icon="download" onSelect={onDownloadImage}>
+                            Download Image
                         </MenuRow>
                     )}
                     {onShare && (
@@ -165,7 +171,9 @@ const MenuRow = ({
 // sheet), with the note mark ahead of them when there is a note to mark.
 const CardActions = (extras: CardExtras) =>
     extras.readOnly ? null : (
-        <div className={styles.cardActions}>
+        // Out of the card's own picture (lib/studio/cardImage): the pin and
+        // the menu belong to the canvas, not to the card's content.
+        <div className={styles.cardActions} data-no-export="">
             {extras.note && <NoteMark />}
             <PinButton pinned={extras.pinned} onPin={extras.onPin} />
             <CardMenu {...extras} />
