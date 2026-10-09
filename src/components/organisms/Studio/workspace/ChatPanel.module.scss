@@ -590,13 +590,17 @@
     }
 }
 
+// The AI disclaimer under the input. Stone, not gray-1400: the pale gray
+// came to 1.92:1 on the panel's white, well under the 4.5:1 AA asks of text
+// this size (QA-46). Stone is 6.56:1 and is what the rest of the site uses
+// for secondary text, so the line still reads as an aside.
 .chatNote {
     @include font-size(8px, 1.3);
 
     margin-top: rem(11);
     font-family: var(--font-outfit);
     font-weight: 300;
-    color: var(--color-gray-1400);
+    color: var(--color-stone);
     letter-spacing: -0.01em;
 }
 
