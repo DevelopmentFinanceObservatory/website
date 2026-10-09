@@ -13,6 +13,7 @@ import CardHead from './CardHead';
 import type { CardExtras } from './types';
 
 import type { ChartWidget } from '@/lib/chat/widgets';
+import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { ThemeDerived } from '@/lib/studio/theme';
 
 // A bar or line chart (Chart.js) with a clickable legend; `scale` is the
@@ -110,6 +111,11 @@ const ChartCard = ({
         [widget, scale, hiddenSeries, theme],
     );
 
+    // Long names (WHO, UN) repeat the whole query in every series: the
+    // legend shows what distinguishes them, the full name stays a hover
+    // away (QA-57).
+    const names = useMemo(() => legendLabels(widget.series.map((s) => s.label)), [widget]);
+
     // A lone "Value" is the table->chart converter's placeholder, and a
     // transposed comparison's one series is the period already in the title:
     // neither earns a legend.
@@ -128,6 +134,7 @@ const ChartCard = ({
                         <li key={s.label}>
                             <button
                                 type="button"
+                                title={s.label}
                                 className={classNames(
                                     styles.legendItem,
                                     hiddenSeries.includes(index) && styles.legendOff,
@@ -138,7 +145,7 @@ const ChartCard = ({
                                     className={styles.legendDot}
                                     style={seriesVars(theme.series, index)}
                                 />
-                                {s.label}
+                                <span className={styles.legendName}>{names[index]}</span>
                             </button>
                         </li>
                     ))}
@@ -152,11 +159,7 @@ const ChartCard = ({
                     <Bar data={barData} options={options} />
                 )}
             </div>
-            <CardChrome
-                source={widget.source}
-                info={widget.info}
-                onInfo={extras.onInfo}
-            />
+            <CardChrome source={widget.source} info={widget.info} onInfo={extras.onInfo} />
         </article>
     );
 };

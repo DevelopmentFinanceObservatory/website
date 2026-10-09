@@ -37,6 +37,7 @@ import { latestTurnOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
+import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import type { Seed } from '@/lib/studio/wire';
@@ -262,6 +263,31 @@ const Studio = ({
         readOnly: !account,
         initialLayout: sharedSaved?.layout,
     });
+    const { buildSnapshot } = save;
+
+    // A guest leaving the page — most often for the sign-in the wall points
+    // at — takes the canvas with them: the snapshot waits in this tab, and
+    // the restore below puts it back once there is an account to save it to
+    // (QA-58). Hooked to the leaving itself rather than to the wall's
+    // button, so the header's sign-in and every other way out are covered
+    // the same: the cleanup catches a route change inside the app (the
+    // wall's own `router.push`, which fires no page event), `pagehide` the
+    // load that leaves the site.
+    useEffect(() => {
+        if (!guest) {
+            return;
+        }
+
+        const stash = () => stashGuestSession(() => window.sessionStorage, buildSnapshot());
+
+        window.addEventListener('pagehide', stash);
+
+        return () => {
+            window.removeEventListener('pagehide', stash);
+            stash();
+        };
+    }, [guest, buildSnapshot]);
+
     const modals = useStudioModals();
     const derivedTheme = deriveTheme(doc.theme);
     // On a phone the chat and the sheet take turns (one pill switches them).
@@ -319,6 +345,41 @@ const Studio = ({
         chat.hydrate(saved);
         enterWorkspace();
     };
+
+    // The other half of QA-58: signed in, with a guest canvas waiting in
+    // this tab, Studio reopens it instead of the empty landing. Saving is on
+    // now, so hydrating it is also what writes it to history. Deferred by a
+    // tick for the same reason the `?q=` handover below is — see its note.
+    const restored = useRef(false);
+
+    useEffect(() => {
+        if (!account || openId || shared || handover) {
+            return;
+        }
+
+        const handle = window.setTimeout(() => {
+            // Claimed inside the timer, not before it: development mounts,
+            // cleans up and mounts again, and a flag set on the way in
+            // would have the second pass skip the restore the first one
+            // never got to run.
+            if (restored.current) {
+                return;
+            }
+
+            restored.current = true;
+
+            const saved = takeGuestSession(() => window.sessionStorage);
+
+            if (saved) {
+                openSaved(saved);
+            }
+        }, 0);
+
+        return () => window.clearTimeout(handle);
+        // `openSaved` is rebuilt every render; the ref is what makes this
+        // run once.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [account, openId, shared, handover]);
 
     const landingHistory = useLandingHistory({
         onLanding: mode === 'start' && account,
