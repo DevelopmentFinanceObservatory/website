@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './DataSearch.module.scss';
 import ReadingCards from './ReadingCards';
 import SearchAnswer from './SearchAnswer';
+import SearchHint from './SearchHint';
 import SearchCards from './SearchCards';
 import SearchPanel from './SearchPanel';
 import SearchShareModal from './SearchShareModal';
@@ -1003,6 +1004,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                         ? 'Your Query'
                                         : 'Your Dataset'}
                                 </p>
+
+                                {/* Only where there is something to tap:
+                                    a resolved part is what puts the
+                                    editable tokens in the heading. */}
+                                {definiteParts.length > 0 && <SearchHint />}
 
                                 <SearchSentenceHeading
                                     response={response}

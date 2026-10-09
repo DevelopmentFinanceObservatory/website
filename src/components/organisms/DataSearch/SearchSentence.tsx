@@ -31,7 +31,6 @@ import {
     useToggleSelection,
 } from './SlotMenu';
 import { GraphInfo, MeasureInfo, SourceInfo } from './GraphInfo';
-import SearchHint from './SearchHint';
 import { TokenAbout } from './TokenAbout';
 import { UnitPicker } from './UnitPicker';
 import WhyPanel from './WhyPanel';
@@ -2378,13 +2377,6 @@ export const SearchSentenceBody = ({
                     {part.editError}
                 </p>
             ))}
-
-            {/* Only where there is something to tap. NOT `refine`: that list
-                is the bindings no visible token states, so a sentence whose
-                values are all on show — the very case the hint is for —
-                leaves it empty. A resolved part is what puts the editable
-                tokens in the heading. */}
-            {definiteParts.length > 0 && <SearchHint />}
 
             <div className={styles.actions}>
                 <RefineMenu

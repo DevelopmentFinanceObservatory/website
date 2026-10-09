@@ -28,8 +28,9 @@ const remember = (): void => {
 };
 
 /**
- * The one-time nudge toward the sentence above: its values are editable, and
- * nothing but an underline says so.
+ * The one-time nudge toward the sentence below: its values are editable, and
+ * nothing but an underline says so. A tooltip over the heading rather than a
+ * line under it — the design asks for the bubble to point at what it means.
  *
  * Doing the thing is the dismissal — there is no close button, because a
  * hint that has been acted on has nothing left to say. It watches for a tap
@@ -69,7 +70,11 @@ const SearchHint = () => {
         return null;
     }
 
-    return <p className={styles.hintLine}>Tap the underlined values to refine your results</p>;
+    return (
+        <p className={styles.hint}>
+            <span className={styles.hintBubble}>Tap underlined values to refine your results</span>
+        </p>
+    );
 };
 
 export default SearchHint;
