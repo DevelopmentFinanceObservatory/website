@@ -5,12 +5,19 @@
 .legend {
     @include flex(row, flex-start, center);
 
+    flex-shrink: 0;
     flex-wrap: wrap;
     gap: rem(10);
     list-style: none;
 
+    // Two entries to a row at most, and never narrower than this: a name
+    // runs out in an ellipsis rather than over three lines, so the legend's
+    // height follows the number of series and not the length of their names
+    // (QA-57). The full name is in each entry's `title`.
     li {
         display: flex;
+        min-width: rem(120);
+        max-width: 50%;
     }
 }
 
@@ -26,10 +33,17 @@
     font-weight: 400;
     color: inherit;
     letter-spacing: -0.01em;
+    min-width: 0;
     cursor: pointer;
     background: none;
     border: 0;
     transition: opacity 0.2s ease;
+}
+
+.legendName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .legendOff {
@@ -53,6 +67,10 @@
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
+
+    // Chart.js keeps the canvas at its last size for a frame after the box
+    // shrinks; without this a squeezed plot paints over the chrome below.
+    overflow: hidden;
 }
 
 // The chart tooltip (Chart.js external → HTML, see chart/chartSetup): the
