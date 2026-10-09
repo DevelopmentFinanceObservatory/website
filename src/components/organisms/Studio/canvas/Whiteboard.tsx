@@ -33,15 +33,18 @@ import { useIsPhone } from '@/hooks/useMediaQuery';
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
 import { cardRefOf } from '@/lib/studio/cardDownload';
+import { cardImageName, cardNode, downloadCardImage } from '@/lib/studio/cardImage';
 import { cardLiveOf, type LiveCanvas } from '@/lib/studio/liveCards';
 import { type ThemeDerived, themeVars } from '@/lib/studio/theme';
 
-// A card's note waits for the pointer to settle — crossing a sheet of cards
-// should not trail popups behind it — and then outlives the pointer leaving
-// by enough to cross the few px down to it, where its remove button is
-// (CardNote).
-const NOTE_INTENT_MS = 500;
+// A card's note outlives the pointer leaving by enough to cross the few px
+// down to it, where its remove button is (CardNote).
 const NOTE_GRACE_MS = 150;
+// And it stays down this long after a card is dropped, then comes back by
+// itself. The drag ends under the pointer: nothing leaves, nothing
+// re-enters, and the pointer may not move again at all, so the note has to
+// be put back rather than wait to be asked for.
+const NOTE_DROP_MS = 400;
 
 export type WhiteboardProps = {
     widgets: Widget[];
@@ -152,29 +155,23 @@ const Whiteboard = ({
     });
     const widgetIds = useMemo(() => new Set(widgets.map((widget) => widget.id)), [widgets]);
     // Which card the pointer is resting on — the whole card, not a tag in it,
-    // is what brings a user's note up (see CardNote). Leaving one is held for
-    // a moment: the note hangs a few px below the card, and the pointer has
-    // to cross that gap to reach the remove button inside it.
+    // is what brings a user's note up (see CardNote), and it comes up at
+    // once. Leaving is what is held for a moment: the note hangs a few px
+    // below the card, and the pointer has to cross that gap to reach the
+    // remove button inside it.
     const [hoveredId, setHoveredId] = useState<string | null>(null);
-    const showNote = useRef(0);
     const hideNote = useRef(0);
+    const afterDrop = useRef(0);
+
     const holdHover = (id: string) => {
-        // Back on the card whose note is already up: keep it, and do not
-        // make the reader wait the intent out a second time.
-        if (hoveredId === id) {
-            window.clearTimeout(hideNote.current);
-
-            return;
-        }
-
-        window.clearTimeout(showNote.current);
-        showNote.current = window.setTimeout(() => setHoveredId(id), NOTE_INTENT_MS);
+        window.clearTimeout(hideNote.current);
+        setHoveredId(id);
     };
     const releaseHover = (id: string) => {
-        window.clearTimeout(showNote.current);
+        // The pointer left: a note queued by a drop is no longer wanted.
+        window.clearTimeout(afterDrop.current);
 
-        // Left before its note ever came up, or left a different card: the
-        // pending hide belongs to whichever note is actually showing.
+        // The pending hide belongs to whichever note is actually showing.
         if (hoveredId !== id) {
             return;
         }
@@ -184,24 +181,36 @@ const Whiteboard = ({
             NOTE_GRACE_MS,
         );
     };
-
-    // A dropped card keeps the pointer that was dragging it, so nothing
-    // leaves and nothing re-enters — the note would simply reappear the
-    // instant the drag ended. The wait starts over instead.
-    const restartHover = (id: string) => {
-        window.clearTimeout(showNote.current);
+    // Take the note down for the drop, then put it back where it was: the
+    // card is still under the pointer, and no event is coming to say so.
+    const settleHover = (id: string) => {
         window.clearTimeout(hideNote.current);
+        window.clearTimeout(afterDrop.current);
         setHoveredId(null);
-        showNote.current = window.setTimeout(() => setHoveredId(id), NOTE_INTENT_MS);
+        afterDrop.current = window.setTimeout(() => setHoveredId(id), NOTE_DROP_MS);
     };
 
     useEffect(
         () => () => {
-            window.clearTimeout(showNote.current);
             window.clearTimeout(hideNote.current);
+            window.clearTimeout(afterDrop.current);
         },
         [],
     );
+
+    // Download Image. The card is found in the document rather than held in
+    // a ref: the menu that asks for it is rendered inside the very card
+    // being photographed, and the sheet already labels each slot with its
+    // widget id.
+    const saveCardImage = (id: string, title: string) => {
+        const node = cardNode(id);
+
+        if (!node) {
+            return;
+        }
+
+        void downloadCardImage(node, cardImageName(title));
+    };
     const dragging = useCardDrag({ boardRef, CELL, f, slots, setSlots, raise, widgetIds });
     const pan = usePan(boardRef);
     const { canvasRef: fxCanvasRef, spawnWave } = useShockwave({
@@ -425,6 +434,11 @@ const Whiteboard = ({
                     onInfo: isText ? null : () => onCardInfo(widget.id),
                     onDownload:
                         onDownload && cardRefOf(widget) ? () => onDownload(widget.id) : null,
+                    // Every kind of card photographs the same way, a text
+                    // card included — it is the card's own face, not its
+                    // data, so there is nothing to have or lack.
+                    onDownloadImage:
+                        isLeaving || readOnly ? null : () => saveCardImage(widget.id, title),
                     onEdit: isText ? () => onEditText(widget.id) : () => onEditTitle(widget.id),
                     editLabel: isText ? 'Edit Card' : 'Edit Title',
                     note: isText ? undefined : notes[widget.id],
@@ -461,6 +475,7 @@ const Whiteboard = ({
                         )}
                         // The card's own module reads these (lift tint, inert
                         // when filtered out).
+                        data-card-id={widget.id}
                         data-dragging={isDragged ? '' : undefined}
                         data-dimmed={dimmed ? '' : undefined}
                         style={
@@ -505,14 +520,14 @@ const Whiteboard = ({
                                     onPointerMove: dragging.moveDrag,
                                     onPointerUp: () => {
                                         if (drag && extras.note) {
-                                            restartHover(widget.id);
+                                            settleHover(widget.id);
                                         }
 
                                         dragging.endDrag(true)();
                                     },
                                     onPointerCancel: () => {
                                         if (drag && extras.note) {
-                                            restartHover(widget.id);
+                                            settleHover(widget.id);
                                         }
 
                                         dragging.endDrag(false)();
