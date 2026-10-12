@@ -29,6 +29,7 @@ import {
 } from '@/lib/studio/clarify';
 import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
 import { plainTextFromNote } from '@/lib/studio/note';
+import { withAnswer } from '@/lib/studio/transcript';
 import {
     cancelTurn,
     fetchComponentRevision,
@@ -51,9 +52,11 @@ import { uuid } from '@/lib/uuid';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 
 // A user message sent from a card's "Ask follow up" keeps that card's title,
-// so the transcript shows what the question was about.
+// so the transcript shows what the question was about. `answer` marks the
+// user's answer to a paused turn (a clarify choice or text, a plan
+// amendment): shown like any user message, but part of the turn it answers.
 export type ChatMessage =
-    | { role: 'user'; text: string; card?: { title: string } }
+    | { role: 'user'; text: string; card?: { title: string }; answer?: true }
     | { role: 'bot'; text: string; followups?: string[] };
 
 // A widget stamped with the send() turn it arrived in — the canvas keeps
@@ -849,18 +852,21 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, []);
 
     // Continue a paused turn on /interrupt — shared by clarify answers, the
-    // skip button and the plan actions.
+    // skip button and the plan actions. `answer` is what the user chose or
+    // wrote, which enters the transcript.
     const resume = useCallback(
-        (reply: ClarifyReply, note: string | null) => {
+        (reply: ClarifyReply, note: string | null, answer?: string) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
 
             pendingInterruptRef.current = null;
 
             setState((prev) => ({
-                // The decision shows on the status line, and its permanent
-                // record arrives with message.complete (the notes prefix).
+                // The decision shows on the status line; the user's answer
+                // also stays in the transcript, once (a repeated click finds
+                // no pause left to answer).
                 ...withLine(prev, note ? plainTextFromNote(note) : 'Thinking'),
+                messages: answer && pending ? withAnswer(prev.messages, answer) : prev.messages,
                 thinking: true,
                 clarify: null,
                 plan: null,
@@ -879,7 +885,8 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     // Answer every question of the pending clarify at once, keyed by
     // question id. The reply takes the frame's shape (`answers`, or a legacy
-    // frame's `payload`); the note names the chosen labels and typed text.
+    // frame's `payload`); the note and the transcript name the chosen labels
+    // and typed text.
     const answerClarify = useCallback(
         (answers: ClarifyAnswers) => {
             const clarify = pendingInterruptRef.current?.clarify;
@@ -888,7 +895,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                 return;
             }
 
-            resume(clarifyReply(clarify, answers), `_${clarifyNote(clarify, answers)}_`);
+            const answer = clarifyNote(clarify, answers);
+
+            resume(clarifyReply(clarify, answers), `_${answer}_`, answer);
         },
         [resume],
     );
@@ -922,7 +931,11 @@ export const useChat = (initial?: ChatSnapshot) => {
                       ? '_Plan rejected._'
                       : `_Change requested: ${payload ?? ''}_`;
 
-            resume({ decision, ...(decision === 'amend' ? { payload } : {}) }, note);
+            resume(
+                { decision, ...(decision === 'amend' ? { payload } : {}) },
+                note,
+                decision === 'amend' ? payload : undefined,
+            );
         },
         [resume],
     );

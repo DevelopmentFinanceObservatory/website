@@ -16,6 +16,7 @@ import PromptForm from '../prompt/PromptForm';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
+import { isPrompt, shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
 
@@ -110,7 +111,7 @@ const ChatPanel = ({
 
     // A Chat + Canvas share point sits after message `index`?
     const sharedAfter = (index: number) =>
-        !readOnly && shareMarks.some((mark) => mark.messageIndex === index + 1);
+        !readOnly && shareMarks.some((mark) => shareMarkAfter(chat.messages, mark) === index);
 
     return (
         <div
@@ -128,11 +129,9 @@ const ChatPanel = ({
                     <div ref={scrollRef} className={styles.chatScroll}>
                         {chat.messages.map((message, index) => {
                             // The turn this bot message answers = the number
-                            // of user messages before it (send() numbers
-                            // turns the same way).
-                            const turn = chat.messages
-                                .slice(0, index)
-                                .filter((other) => other.role === 'user').length;
+                            // of prompts before it (send() numbers turns the
+                            // same way).
+                            const turn = chat.messages.slice(0, index).filter(isPrompt).length;
 
                             return (
                                 <Fragment key={index}>

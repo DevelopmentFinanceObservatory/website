@@ -51,11 +51,19 @@ export type SavedConversation = {
     titles?: Record<string, string>;
     // User notes on data cards (menu → Add Note), by widget id.
     notes?: Record<string, string>;
-    // Where the transcript was shared (Chat + Canvas): everything from
-    // `messageIndex` on is only in the owner's copy — the chat shows a
-    // "beyond this point" marker there. A share is a snapshot; nothing after
-    // it ever reaches the link.
+    // Where the transcript was shared (Chat + Canvas): what came after the
+    // share is only in the owner's copy — the chat shows a "beyond this
+    // point" marker there (see shareMarkAfter). A share is a snapshot;
+    // nothing after it ever reaches the link.
     shareMarks?: ShareMark[];
 };
 
-export type ShareMark = { messageIndex: number; shareId: string; at: number };
+export type ShareMark = {
+    messageIndex: number;
+    shareId: string;
+    at: number;
+    // User messages (prompts and answers) the share held — where the marker
+    // goes (see shareMarkAfter). Optional: marks from before this didn't
+    // have it.
+    userMessages?: number;
+};
