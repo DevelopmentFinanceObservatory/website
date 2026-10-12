@@ -13,6 +13,8 @@
  * at most once an hour however many people open it.
  */
 
+import { cache } from 'react';
+
 import { originLine } from '../dataCommons.ts';
 import { searchApiBase } from '../searchApi.ts';
 import type { DataCommonsRef } from '../search/types.ts';
@@ -290,8 +292,11 @@ const documentationPath = (dcid: string): string | null => {
 };
 
 /** One source's documentation, for the detail page; null when the graph
- *  holds no such source or the dcid is not a well-formed path. */
-export const loadSourceDoc = async (dcid: string): Promise<SourceDoc | null> => {
+ *  holds no such source or the dcid is not a well-formed path. Memoised per
+ *  server request, so the page and its generateMetadata share one read. The
+ *  fetch data cache stores only a 200 answer, so without this a 404 or a
+ *  failure is read twice. */
+export const loadSourceDoc = cache(async (dcid: string): Promise<SourceDoc | null> => {
     const path = documentationPath(dcid);
 
     if (!path) {
@@ -304,4 +309,4 @@ export const loadSourceDoc = async (dcid: string): Promise<SourceDoc | null> => 
 
     // The API may omit `document_errors`; `SourceDoc` keeps it required.
     return doc && { ...doc, document_errors: doc.document_errors ?? [] };
-};
+});

@@ -31,12 +31,7 @@
     z-index: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none;
-
-    path {
-        fill: none;
-        stroke: var(--color-stone);
-    }
+    color: var(--color-stone);
 }
 
 .dfoWatermark {
@@ -175,12 +170,12 @@
     }
 }
 
-.trf {
-    display: block;
-    width: rem(81);
-    height: auto;
-    margin-bottom: rem(30);
-    color: var(--color-bg);
+// The column takes its width from its content (`.left` never shrinks), so
+// the attribution has to carry the same cap the CTA above it does — a line
+// of this length would otherwise widen the whole footer and run off the
+// page.
+.attribution {
+    max-width: rem(510);
 }
 
 .attributionText {

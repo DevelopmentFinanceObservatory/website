@@ -4,9 +4,9 @@ import { downloadAllowance, readVersionFile } from '@/lib/search/storedFile';
 import { SPEC_SHAPE, VERSION_SHAPE } from '@/lib/search/versionLink';
 
 // GET /api/version-download/<spec>/<cv> → 302 to the version's stored file.
-// The manifest signs its file URLs for minutes, so a page that links to
-// one goes dead; this route reads the manifest at click time and redirects
-// to a fresh URL for the file `storedDownload` picks (readVersionFile). 404
+// A bundle prints this path, which does not change; the route reads the
+// manifest at click time and redirects to the stable link of the file
+// `storedDownload` picks (readVersionFile). 404
 // when the API serves no such version or the version lists no file to
 // offer; 429 past the `api` allowance.
 export const GET = async (

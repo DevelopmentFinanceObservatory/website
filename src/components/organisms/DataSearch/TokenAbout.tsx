@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -9,6 +8,7 @@ import { useDefinitionMembers, useNodeDescriptions, useSideNote, useSourceDocs }
 import { stopMenuFieldTypeahead } from './SlotMenu';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import type { MemberSpec } from '@/lib/search/definitionMembers';
 import type { TokenAboutModel } from '@/lib/search/tokenAbout';
 
@@ -101,18 +101,16 @@ export const TokenAbout = ({
                     </span>
                 ))}
                 {links.map((source) => (
-                    // The dcid carries slashes, so the route is a catch-all
-                    // and the id goes in unescaped (as the Sources cards link
-                    // it). A menu field, so the panel's arrow keys reach it.
-                    <Link
+                    // A menu field, so the panel's arrow keys reach it.
+                    <SourceLink
                         key={source.dcid}
-                        href={`/data/sources/${source.dcid}`}
+                        dcid={source.dcid}
                         className={styles.tokenAboutLink}
                         data-menu-field="field"
                     >
                         {namedSources ? `About ${source.label}` : 'About this source'}
                         <Icon name="arrow-small" />
-                    </Link>
+                    </SourceLink>
                 ))}
                 {entries.length > 0 && (
                     <button

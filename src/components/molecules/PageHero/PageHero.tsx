@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import styles from './PageHero.module.scss';
 
-import WorldMap from '@/assets/svg/world-map.svg';
+import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
 export type PageHeroProps = {
     // Dark: the charcoal ground with a stone box (Sources, Roadmap). Light:
@@ -41,11 +41,7 @@ const PageHero = ({
         className={classNames(styles.hero, tone === 'dark' ? styles.dark : styles.light, className)}
         data-nav-dark={tone === 'dark' ? 'true' : undefined}
     >
-        <WorldMap
-            className={styles.mapBg}
-            preserveAspectRatio="xMidYMid slice"
-            aria-hidden="true"
-        />
+        <WorldMap className={styles.mapBg} />
         {/* One reveal trigger for everything in the box: it sits at the foot
             of a screen-tall hero on phones, where its lowest rows would never
             enter the reveal band on their own. */}

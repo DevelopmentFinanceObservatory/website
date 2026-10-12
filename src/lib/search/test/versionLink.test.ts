@@ -108,14 +108,23 @@ test('outcomeFromDocument refuses a document without a definition identity', () 
 
 const pinned = { identity_version: 'spec1', shape: { kind: 'stat_var' } };
 const stored = [
-    { url: 'https://gcs/stats', rendering: { statistics: 'series' } },
-    { url: 'https://gcs/frame.csv', rendering: { format: 'csv', bundle: false } },
+    { url: '/api/datasets/spec_a1/cv_b2/files/sha256:s0', rendering: { statistics: 'series' } },
     {
-        url: 'https://gcs/bundle.zip',
+        url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
+        rendering: { format: 'csv', bundle: false },
+    },
+    {
+        url: '/api/datasets/spec_a1/cv_b2/files/sha256:b1',
         artifact_digest: 'sha256:b1',
         rendering: { format: 'csv', bundle: true },
     },
 ];
+const frame = {
+    url: '/api/datasets/spec_a1/cv_b2/files/sha256:fr',
+    artifact_digest: 'sha256:fr',
+    media_type: 'application/vnd.apache.parquet',
+    rendering: { format: 'frame' },
+};
 
 test('outcomeFromDocument offers a pinned-StatVar version as its stored bundle', () => {
     assert.deepEqual(
@@ -150,6 +159,11 @@ for (const [name, link, artifacts] of [
         { specId: 'spec_a1', contentVersion: 'cv_b2' },
         stored.slice(0, 1),
     ],
+    [
+        'a version with only the canonical frame and statistics',
+        { specId: 'spec_a1', contentVersion: 'cv_b2' },
+        [frame, stored[0]],
+    ],
 ] as const) {
     test(`outcomeFromDocument offers no download for a pinned-StatVar ${name}`, () => {
         assert.deepEqual(
@@ -162,16 +176,25 @@ for (const [name, link, artifacts] of [
     });
 }
 
-test('storedDownload picks the bundle, else the first data file, by its signed URL', () => {
+test('storedDownload picks the bundle, else the first data file, by its stable link', () => {
     assert.deepEqual(storedDownload({ artifacts: stored }), {
-        url: 'https://gcs/bundle.zip',
+        url: '/api/datasets/spec_a1/cv_b2/files/sha256:b1',
         format: 'zip',
         digest: 'sha256:b1',
     });
     assert.deepEqual(storedDownload({ artifacts: stored.slice(0, 2) }), {
-        url: 'https://gcs/frame.csv',
+        url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
         format: 'csv',
         digest: null,
     });
     assert.equal(storedDownload({ artifacts: stored.slice(0, 1) }), null);
+});
+
+test('storedDownload skips the canonical frame', () => {
+    assert.equal(storedDownload({ artifacts: [frame, stored[0]] }), null);
+    assert.deepEqual(storedDownload({ artifacts: [stored[1], frame, stored[0]] }), {
+        url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
+        format: 'csv',
+        digest: null,
+    });
 });

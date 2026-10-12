@@ -1,25 +1,86 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-07T20:31:19Z",
-  "generator_commit": "56255a7667ba658498465422cbb5c0f1d9418b96",
+  "generated_at": "2026-10-11T12:09:01Z",
+  "generator_commit": "2de23fcd7f2351a5eb2aeea6993abb8716959f1a",
   "track": "ai-tools",
   "categories": [
     {
-      "id": "assistants",
-      "label": "Placeholder: Assistants"
+      "id": "analysis",
+      "label": "Analysis"
     },
     {
-      "id": "automation",
-      "label": "Placeholder: Automation"
+      "id": "methods",
+      "label": "Methods"
+    },
+    {
+      "id": "models-access",
+      "label": "Models and access"
     }
   ],
   "entries": [
     {
-      "id": "placeholder-under-consideration",
-      "title": "Placeholder: Under-Consideration Entry",
-      "description": "This is a placeholder showing the under-consideration status with a category from this track's own vocabulary, and it carries no commitment. It exists only so a reader can see an unscheduled entry in this track.",
+      "id": "faster-reliable-answers",
+      "title": "Faster and more reliable answers",
+      "description": "Reduce the time Studio takes to find data and complete an analysis. Improve how it asks for clarification and handles failed steps.",
       "categories": [
-        "assistants"
+        "analysis"
+      ],
+      "status": "planned",
+      "expected": "2026-Q4"
+    },
+    {
+      "id": "saved-reproducible-analyses",
+      "title": "Saved reproducible analyses",
+      "description": "Save and download an analysis with its method, data versions, and calculations, then rerun it or use it as the starting point for further work.",
+      "categories": [
+        "analysis"
+      ],
+      "status": "under-consideration"
+    },
+    {
+      "id": "more-analytical-operations",
+      "title": "More analytical operations",
+      "description": "Add new analytical operations to support a wider range of development finance questions.",
+      "categories": [
+        "analysis"
+      ],
+      "status": "planned",
+      "expected": "2026-Q4"
+    },
+    {
+      "id": "more-development-finance-methods",
+      "title": "More development finance methods",
+      "description": "Apply additional documented approaches to aid, debt, and health-financing questions, with assumptions, source guidance, and methodological choices available for review.",
+      "categories": [
+        "analysis",
+        "methods"
+      ],
+      "status": "under-consideration"
+    },
+    {
+      "id": "more-model-provider-options",
+      "title": "More model and provider options",
+      "description": "Support additional AI models and inference providers for DFO analysis.",
+      "categories": [
+        "models-access"
+      ],
+      "status": "under-consideration"
+    },
+    {
+      "id": "adjustable-analysis-depth",
+      "title": "Adjustable analysis depth",
+      "description": "Choose a quick answer or a more thorough analysis for a complex question, with the effect on response time explained before starting.",
+      "categories": [
+        "analysis"
+      ],
+      "status": "under-consideration"
+    },
+    {
+      "id": "account-usage-limits",
+      "title": "Account usage",
+      "description": "See the AI usage available to your account and how much has been used.",
+      "categories": [
+        "models-access"
       ],
       "status": "under-consideration"
     }

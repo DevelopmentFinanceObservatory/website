@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-
 import styles from './Sources.module.scss';
 import { SOURCE_SWATCHES } from './sourcesData';
 
+import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import FilterChips from '@/components/molecules/FilterChips/FilterChips';
 import PageFade from '@/components/molecules/PageFade/PageFade';
 import PageHero from '@/components/molecules/PageHero/PageHero';
@@ -95,11 +94,9 @@ const Sources = ({ sources }: { sources: SourceCard[] }) => {
             <ul className={styles.grid} key={selected.join(',') || 'all'}>
                 {visible.map((source, index) => (
                     <li key={source.id} className={styles.card} style={revealIndex(index)}>
-                        {/* The whole card opens the source's page. The dcid
-                            carries slashes, so the route is a catch-all and
-                            the id goes in unescaped. */}
-                        <Link
-                            href={`/data/sources/${source.id}`}
+                        {/* The whole card opens the source's page. */}
+                        <SourceLink
+                            dcid={source.id}
                             className={styles.cardLink}
                             aria-label={source.title}
                         />

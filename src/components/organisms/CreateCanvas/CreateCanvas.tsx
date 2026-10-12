@@ -166,7 +166,7 @@ const CreateCanvas = () => {
             <SectionHeading
                 id="create-canvas-title"
                 label="Create a Canvas"
-                title="Turn development finance data into visualizations that inform and inspire"
+                title="Work with AI agents on an interactive canvas to go from questions to insights without weeks of data processing."
                 className={styles.headingBlock}
             />
             <div ref={boxRef} className={styles.canvas} data-reveal style={revealIndex(3)}>

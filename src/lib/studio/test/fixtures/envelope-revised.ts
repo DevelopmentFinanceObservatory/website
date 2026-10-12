@@ -1,7 +1,7 @@
 /**
- * A `component.revised` `payload`, trimmed from dfo-ai's recorded
- * `docs/transcripts/studio_transcript_edit.jsonl` (line_chart,
- * cmp_01M3KK8SJ4D1C7YY65AMKTZCR0 revision 2), in the platform's resolved
+ * A `component.revised` `payload`, trimmed from dfo-ai's recorded transcript
+ * https://github.com/ONEcampaign/dfo-ai/blob/32abd086fc9135fd3e9bd04298e0b68fbfad13cf/docs/transcripts/studio_transcript_edit.jsonl
+ * (line_chart, cmp_01M3KK8SJ4D1C7YY65AMKTZCR0 revision 2), in the platform's resolved
  * revision envelope shape.
  */
 export const envelopeRevised = {

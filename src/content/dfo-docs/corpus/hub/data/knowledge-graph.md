@@ -82,11 +82,11 @@ curl -s "$DFO_API/api/graph/node/Amount_FinancialFlow_Gross_Disbursement_CRSType
   jq '{dcid, label, roles, population_type}'
 ```
 
-The observation supplies the donor, recipient and year, and the StatVar carries the modality. So a question that leaves modality open, such as "ODA standard grants for basic health care from France to Togo", matches several StatVars: one for each modality France used, plus one for records with no modality.
+The observation supplies the donor, recipient, and year, and the StatVar carries the modality. So a question that leaves modality open, such as "ODA standard grants for basic health care from France to Togo", matches several StatVars: one for each modality France used, plus one for records with no modality.
 
 ## The observation
 
-An observation is one number: a StatVar, its entities in their roles, a date, a value and a unit. The 2008 observation appears in a download as this row, shown here without its label and conversion columns.
+An observation is one number: a StatVar, its entities in their roles, a date, a value, and a unit. The 2008 observation appears in a download as this row, shown here without its label and conversion columns.
 
 | `stat_var`                                                                                                                               | `financingProvider` | `financingRecipient` | `time_period` | `value`   | `unit`        | `provenance`                             |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------- | ------------- | --------- | ------------- | ---------------------------------------- |
@@ -104,7 +104,7 @@ A dataset spec names the same entities by flow axis, with the provider as `origi
 
 The same number can exist in more than one edition, reported by a different source, in a different unit, or measured by a different method. Each edition is a facet. A facet has three axes: `provenance`, `unit` and `measurementMethod`. The 2008 row above has one facet, provenance `provenance/OECDCreditorReportingSystem` in `CurrencyUSD`.
 
-A provenance node records who published the data and on what terms. The CRS one names the OECD (`dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd`) as publisher, the OECD terms and conditions as its licence, and the date of its last refresh. Where two facets cover the same observation, the Datasets API picks one by a default policy.
+A provenance node records who published the data and on what terms. The CRS provenance node names the OECD (`dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd`) as publisher, the OECD terms and conditions as its licence, and the date of its last refresh. Where two facets cover the same observation, the Datasets API picks one by a default policy.
 
 ## Who builds what
 
@@ -114,5 +114,5 @@ The concepts those pipelines use, such as the class `FinancialFlow`, the propert
 
 ## Next
 
-- [The development finance ontology](ontology.md) shows where `FinancialFlow`, `crsPurpose` and the other concepts on this page are defined.
-- [Versions and snapshots](versions.md) explains how a question about these observations becomes a `spec_id`, and a download a `content_version`.
+- [The development finance ontology](ontology.md) shows where `FinancialFlow`, `crsPurpose`, and the other concepts on this page are defined.
+- [Versions and snapshots](versions.md) explains how a question about these observations becomes a `spec_id`, and how a download becomes a `content_version`.

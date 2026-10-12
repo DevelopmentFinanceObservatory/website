@@ -5,8 +5,11 @@
  * A request carries its content headers and every `mcp-*` header (the MCP
  * transport defines mcp-method, mcp-name, mcp-session-id and
  * mcp-protocol-version, and validates the first two against the body). A
- * response carries its content headers, www-authenticate and every `mcp-*`
- * header. Matching by prefix means a protocol header added later needs no
+ * response carries its content headers, location (a redirect, as the
+ * Datasets API's file links answer), cache-control (the `no-store` on such a
+ * redirect to a signed URL, which forward.ts's default `no-cache` would
+ * weaken), retry-after (on a busy refusal), www-authenticate and every
+ * `mcp-*` header. Matching by prefix means a protocol header added later needs no
  * change here. Authorization and x-dfo-caller are set by forward.ts.
  */
 const MCP_PREFIX = 'mcp-';
@@ -20,6 +23,9 @@ const RESPONSE_HEADERS = [
     'content-type',
     'content-disposition',
     'content-length',
+    'location',
+    'cache-control',
+    'retry-after',
     'www-authenticate',
 ];
 

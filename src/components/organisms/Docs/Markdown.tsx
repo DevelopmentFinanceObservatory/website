@@ -10,6 +10,7 @@ import styles from './Docs.module.scss';
 import DocsMermaid from './DocsMermaid';
 import DocsTabs from './DocsTabs';
 
+import { isSourcePageHref } from '@/components/atoms/SourceLink/SourceLink';
 import { docsBundleLink, docsLink, docsSlug, type DocsPage } from '@/lib/docs/corpus';
 import { normaliseMkdocs } from '@/lib/docs/mkdocs';
 
@@ -202,7 +203,10 @@ const Markdown = ({ page, source }: { page: DocsPage; source: string }) => {
                     {children}
                 </a>
             ) : (
-                <Link href={to}>{children}</Link>
+                // A source's page has no prefetch; see SourceLink.
+                <Link href={to} prefetch={isSourcePageHref(to) ? false : undefined}>
+                    {children}
+                </Link>
             );
         },
         'docs-tabs': ({ children }: { children?: ReactNode }) => <DocsTabs>{children}</DocsTabs>,
