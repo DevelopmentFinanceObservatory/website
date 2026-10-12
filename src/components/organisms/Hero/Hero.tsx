@@ -9,7 +9,7 @@ import { startHeroNet } from './hero-net';
 import Icon from '@/components/atoms/Icon/Icon';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import LogoSignature from '@/assets/svg/logo-signature.svg';
-import WorldMap from '@/assets/svg/world-map.svg';
+import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
 // The Get Started arrow plays the Button atom's swap on hover: the same
 // intent window, flight time and play-to-the-end behaviour (Button.tsx has

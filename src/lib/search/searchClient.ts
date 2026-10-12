@@ -15,6 +15,7 @@
  * API schema). Keep this layer in sync as the contract evolves.
  */
 
+import { datasetsFetch } from './datasetsFetch.ts';
 import { pollOperation } from './operationPoll.ts';
 import type { OperationProgress } from './operationPoll';
 import { parsePlaceCatalogue, type PlaceCatalogue } from './catalogue.ts';
@@ -741,9 +742,11 @@ export async function entityOptions(
 // Datasets API (POST /api/datasets, own contract, verified 2026-08-18): mints a
 // downloadable dataset for a spec — csv / xlsx / parquet, optionally bundled
 // with datapackage.json + CITATION.cff + README — and answers with a manifest
-// whose `artifacts[]` carry signed URLs (15 minutes). The browser is sent to
-// the URL; the bytes never pass through our server. A spec the registry has
-// not seen yet is minted from its canonical `definition` (the sidecar).
+// whose `artifacts[]` carry a root-relative stable link (`url`) that never
+// expires. A GET on it (`artifactHref`) answers 302 to a storage URL signed
+// for 5 minutes, so the bytes never pass through our server. A spec the
+// registry has not seen yet is minted from its canonical `definition` (the
+// sidecar).
 // ---------------------------------------------------------------------------
 
 export type DatasetFormat = 'csv' | 'xlsx' | 'parquet';
@@ -761,12 +764,15 @@ export const DATASET_FORMATS: readonly { id: DatasetFormat; label: string }[] = 
 
 export type DatasetArtifact = {
     url: string;
-    url_expires_at?: string;
     media_type?: string;
     bytes?: number;
     role?: string;
     filename?: string;
 } & Record<string, any>;
+
+/** The address a browser or fetch uses for an artifact's `url`, which is
+ *  root-relative (`/api/datasets/{spec}/{cv}/files/{digest}`). */
+export const artifactHref = (url: string, base: string = SEARCH_BASE): string => `${base}${url}`;
 
 // A request whose estimate exceeds the Datasets API's sync budget answers
 // `202` with an operation envelope instead of a manifest (dormant until
@@ -794,7 +800,7 @@ export async function mintDataset(
      *  synchronous 200). */
     onProgress?: (progress: OperationProgress) => void,
 ): Promise<{ artifacts: DatasetArtifact[]; manifest: any }> {
-    const res = await fetch(`${SEARCH_BASE}/api/datasets`, {
+    const res = await datasetsFetch(`${SEARCH_BASE}/api/datasets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -829,7 +835,7 @@ export async function mintDataset(
  *  enrichment columns (ISO codes etc.) the reshape step can populate. */
 export async function fetchDatasetCapabilities(signal?: AbortSignal): Promise<any | null> {
     try {
-        const res = await fetch(`${SEARCH_BASE}/api/datasets/capabilities`, { signal });
+        const res = await datasetsFetch(`${SEARCH_BASE}/api/datasets/capabilities`, { signal });
 
         return res.ok ? await res.json() : null;
     } catch {
@@ -922,13 +928,13 @@ export async function fetchDatasetOptions(
 
     try {
         const res = req.definition
-            ? await fetch(url, {
+            ? await datasetsFetch(url, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ schema_version: 1, definition: req.definition }),
                   signal,
               })
-            : await fetch(url, { signal });
+            : await datasetsFetch(url, { signal });
 
         if (!res.ok) {
             return null;
@@ -975,7 +981,7 @@ export async function fetchDefinitionMembers(
     req: { spec_id: string; definition?: any },
     signal?: AbortSignal,
 ): Promise<DefinitionMembers> {
-    const res = await fetch(
+    const res = await datasetsFetch(
         `${SEARCH_BASE}/api/datasets/${encodeURIComponent(req.spec_id)}/members`,
         {
             method: 'POST',
@@ -1234,7 +1240,7 @@ export async function fetchVersionLink(
         : `${SEARCH_BASE}/api/datasets/${spec}/options`;
 
     try {
-        const res = await fetch(url, { signal });
+        const res = await datasetsFetch(url, { signal });
 
         if (res.status === 404 || res.status === 410) {
             return { kind: 'gone' };
@@ -1282,7 +1288,7 @@ export async function fetchSnapshotObservations(
     contentVersion: string,
 ): Promise<SpecObservations | null> {
     try {
-        const res = await fetch(
+        const res = await datasetsFetch(
             `/api/datasets/${encodeURIComponent(specId)}/${encodeURIComponent(contentVersion)}/observations`,
         );
 

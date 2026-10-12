@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import Link from 'next/link';
 
 import styles from './Docs.module.scss';
+import { DocsDisclosure } from './DocsDisclosure';
 
 import { docsHref, docsPageById, type DocsNavNode } from '@/lib/docs/corpus';
 
@@ -74,19 +75,16 @@ const Nodes = ({ nodes, currentId }: { nodes: DocsNavNode[]; currentId: string }
 );
 
 /**
- * The docs navigation, walked straight from the manifest's nav tree: the
- * sticky column on desktop and tablet; on a phone the same tree folds into
- * one "Contents" disclosure above the page.
+ * The docs navigation, walked straight from the manifest's nav tree and
+ * rendered once as a "Contents" disclosure. The wrapper holds it open as
+ * the sticky column on desktop and tablet, and leaves it folded above the page
+ * on a phone.
  */
 const DocsTree = ({ nav, currentId }: { nav: DocsNavNode[]; currentId: string }) => (
     <nav className={styles.nav} aria-label="Documentation">
-        <div className={styles.treeColumn}>
+        <DocsDisclosure>
             <Nodes nodes={nav} currentId={currentId} />
-        </div>
-        <details className={styles.treePhone}>
-            <summary className={styles.treePhoneSummary}>Contents</summary>
-            <Nodes nodes={nav} currentId={currentId} />
-        </details>
+        </DocsDisclosure>
     </nav>
 );
 

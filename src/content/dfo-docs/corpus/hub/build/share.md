@@ -11,20 +11,20 @@ There are two kinds of links:
 
 Search results on [`/data`](/data) can be shared either way, and so can a canvas and a card in Studio.
 
-Use a live link for something a team checks regularly, such as a monthly dashboard. Use a snapshot when the numbers need to match a briefing, report or other fixed document.
+Use a live link for something a team checks regularly, such as a monthly dashboard. Use a snapshot when the numbers need to match a briefing, report, or other static document.
 
 ## Before you start
 
-You need a result on `/data` (see [Get data](../get-started/get-data.md)) or a Studio canvas (see [Use DFO Studio](../get-started/use-studio.md)). Anyone can share a search result without signing in. Sharing from Studio requires a signed-in account, and the Share button only appears once you're signed in.
+You need a result on `/data` (see [Get data](../get-started/get-data.md)) or a DFO Studio canvas (see [Use DFO Studio](../get-started/use-studio.md)). Sharing from DFO Studio requires a signed-in account, and the Share button only appears once you're signed in. Anyone can share a `/data` search result without signing in.
 
 ## Share a search result
 
-1. Run a search on [`/data`](/data), for example "CRS disbursements to Nigeria for health".
+1. Run a search on [`/data`](/data); for example, "CRS disbursements to Nigeria for health".
 1. Select **Share**. For a single dataset, the share panel opens next to the table. For several datasets, it opens as a dialog.
 1. Choose **Live Data** (the default) or **Snapshot**.
 1. Once the link appears in place of "Creating link…", select the copy button.
 
-Links take the form `/s/<id>`, where `<id>` is 8 characters. Opening one loads [`/data`](/data) with the original query sentence and results table.
+Opening a link loads [`/data`](/data) with the original query sentence and results table.
 
 - **A live link** stores your question. `/data` fetches the latest data each time the link is opened.
 - **A snapshot link** stores the captured rows, so `/data` returns those exact rows.
@@ -32,7 +32,7 @@ Links take the form `/s/<id>`, where `<id>` is 8 characters. Opening one loads [
 To see how the Datasets API identifies live queries and snapshots, see [Versions and snapshots](../data/versions.md).
 
 > [!WARNING]
-> Cite a snapshot link in a report, in the form [Cite and licence](../about/cite-and-licence.md) gives. A reader who opens a live link next year sees the latest figures, which may differ from your report.
+> Cite a snapshot link in a report, in the form [Cite and licence](../about/cite-and-licence.md) provides. A reader who opens a live link next year will see the latest figures, which may differ from your report.
 
 ## Share from Studio
 
@@ -87,12 +87,12 @@ Open the link in a private or incognito window:
 
 If a snapshot can't be created, the error message suggests sharing a live link instead.
 
-| Message                                                                                                      | Cause                                                                                                                              | Fix                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| "This result is too large to capture as a snapshot…"                                                         | The Datasets API caps the size of each response. The cap is on response size, not row count, so the number of rows allowed varies. | Narrow the search (fewer countries, a shorter time range or a more specific measure) or share a live link. |
-| "This result describes a family of series rather than specific ones…"                                        | The query matches a group of series, not specific data, so there's nothing to capture.                                             | Choose a more specific measure in the query sentence, or share a live link.                                |
-| "The data platform can't capture this result right now." / "The data platform couldn't capture this result." | The data platform couldn't create the snapshot.                                                                                    | Share a live link, or download the data and send the file.                                                 |
-| "Couldn't create the link — try again."                                                                      | Link creation failed.                                                                                                              | Try again.                                                                                                 |
+| Message                                                                                                      | Cause                                                                                  | Fix                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| "This result is too large to capture as a snapshot…"                                                         | The Datasets API caps the size of each response.                                       | Narrow the search (fewer countries, a shorter time range or a more specific measure) or share a live link. |
+| "This result describes a family of series rather than specific ones…"                                        | The query matches a group of series, not specific data, so there's nothing to capture. | Choose a more specific measure in the query sentence, or share a live link.                                |
+| "The data platform can't capture this result right now." / "The data platform couldn't capture this result." | The data platform couldn't create the snapshot.                                        | Share a live link, or download the data and send the file.                                                 |
+| "Couldn't create the link — try again."                                                                      | Link creation failed.                                                                  | Try again.                                                                                                 |
 
 Studio can decline a live link while it checks the cards. Select **Share a snapshot instead** to make a snapshot of the same canvas or card. The dialog says why:
 
@@ -104,6 +104,6 @@ A live link can stand with a card the dialog could not check. The dialog then sa
 
 ## Next
 
-- [Cite and licence](../about/cite-and-licence.md): how to cite a snapshot link.
-- [Versions and snapshots](../data/versions.md): the IDs behind live and snapshot links, for fetching exact rows in code.
-- [Embed a chart](embed.md): put a Studio canvas or card on your own website.
+- [Cite and licence](../about/cite-and-licence.md): How to cite a snapshot link.
+- [Versions and snapshots](../data/versions.md): The IDs behind live and snapshot links, for fetching exact rows in code.
+- [Embed a chart](embed.md): Put a Studio canvas or card on your own website.

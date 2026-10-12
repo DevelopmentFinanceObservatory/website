@@ -30,9 +30,10 @@
  * `node --test` imports it directly.
  */
 
+import { datasetsFetch } from './datasetsFetch.ts';
 import { DEFAULT_DOWNLOAD_CHOICES } from './downloadOptions.ts';
 import { OPERATION_DEADLINE, pollOperation, type OperationEnvelope } from './operationPoll.ts';
-import { DATASET_FORMATS } from './searchClient.ts';
+import { artifactHref, DATASET_FORMATS } from './searchClient.ts';
 import type { SearchShare } from './searchShare';
 import { MINT_DEFAULT_RENDERING, renderingArtifact, type FileRendering } from './snapshot.ts';
 import {
@@ -218,7 +219,7 @@ const withUrl = (manifest: { artifacts?: ListedFile[] } | null) =>
 
 /**
  * The listed file made with exactly `rendering` and no reshape, by its
- * signed URL and digest, or null. A version manifest, and the manifest of a
+ * stable link and digest, or null. A version manifest, and the manifest of a
  * finished operation, list every rendering stored for the version, so the
  * first bundle they list can be an xlsx or a column-enriched one.
  */
@@ -360,7 +361,7 @@ type LiveDownload = {
 
 /**
  * Reads a live share's definition door and answers with the file it lists:
- * 302 to the signed URL, after `pin`. A 202 sends a browser to the preparing
+ * 302 to the file's stable link, after `pin`. A 202 sends a browser to the preparing
  * page (303) and holds any other client while the route polls the operation
  * for up to OPERATION_WAIT_MS; past that, 503 with `Retry-After`, and a
  * retry finds the stored file. Each read holds a slot of `gate`, and a full
@@ -377,7 +378,7 @@ export const serveLiveDownload = async ({
     gate,
     pin,
     signal,
-    fetchImpl = fetch,
+    fetchImpl = datasetsFetch,
     waitMs = OPERATION_WAIT_MS,
     sleep,
     now,
@@ -456,7 +457,7 @@ export const serveLiveDownload = async ({
 
                 await pin({ manifest, specId: target.specId, digest: file.digest });
 
-                return { kind: 'redirect', status: 302, location: file.url };
+                return { kind: 'redirect', status: 302, location: artifactHref(file.url) };
             }
         }
 
@@ -549,7 +550,7 @@ const awaitOperation = async ({
 
     await pin({ manifest, specId: target.specId, digest: file.digest });
 
-    return { kind: 'redirect', status: 302, location: file.url };
+    return { kind: 'redirect', status: 302, location: artifactHref(file.url) };
 };
 
 /** The answer to a definition door response that carried no file. */

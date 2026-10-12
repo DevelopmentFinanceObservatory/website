@@ -6,7 +6,7 @@ import styles from './NotFound.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
-import WorldMap from '@/assets/svg/world-map.svg';
+import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
 /**
  * The 404: the light hero, page-tall — the map lines, the pale box with a
@@ -18,11 +18,7 @@ const NotFound = () => {
 
     return (
         <section ref={sectionRef} className={styles.section}>
-            <WorldMap
-                className={styles.mapBg}
-                preserveAspectRatio="xMidYMid slice"
-                aria-hidden="true"
-            />
+            <WorldMap className={styles.mapBg} />
             <div className={styles.box}>
                 <p className={styles.code} data-reveal="text">
                     404

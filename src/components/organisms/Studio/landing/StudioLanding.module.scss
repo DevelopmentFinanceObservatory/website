@@ -16,11 +16,25 @@
     margin-inline: auto;
     padding: rem(24) var(--page-gutter, rem(32)) rem(16);
     text-align: center;
+
+    // The section is a fixed 100dvh with its overflow hidden (the workspace's
+    // chat scrolls inside it), so a landing taller than the window used to
+    // lose its bottom — the prompt included — with nothing to scroll
+    // (QA-101). It scrolls here instead. `safe` centring, because a centred
+    // flex column that overflows pushes its first child past the top edge,
+    // out of reach of the scroll.
+    justify-content: safe center;
+    overflow-y: auto;
 }
 
 .eyebrow {
     @include font-size(14px, 1.3);
 
+    // The caps below read off the height. The root font is 1.25vw, so a
+    // short window — a 13" laptop, or any window zoomed in — scales the
+    // copy UP as the room runs out, which is how the landing came to
+    // overflow (QA-101).
+    font-size: min(#{rem(14)}, 2.4dvh);
     margin-bottom: min(#{rem(20)}, 2dvh);
     font-family: var(--font-dm-mono);
     font-weight: 400;
@@ -30,6 +44,7 @@
 .title {
     @include font-size(60px, 1.2);
 
+    font-size: min(#{rem(60)}, 8.5dvh);
     margin-bottom: min(#{rem(30)}, 3dvh);
     font-family: var(--font-outfit);
     font-weight: 800;
@@ -39,6 +54,7 @@
 .lead {
     @include font-size(17px, 1.3);
 
+    font-size: min(#{rem(17)}, 2.7dvh);
     margin-bottom: min(#{rem(60)}, 5.5dvh);
     font-family: var(--font-outfit);
     font-weight: 300;

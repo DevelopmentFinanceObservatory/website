@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import Link from 'next/link';
-import { type RefObject, useRef, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 
 import styles from './StudioLanding.module.scss';
 import { usePanelsHeight } from './usePanelsHeight';
@@ -63,6 +63,14 @@ const StudioLanding = ({
     const tryPanelRef = useRef<HTMLDivElement>(null);
     const historyPanelRef = useRef<HTMLDivElement>(null);
     const panelsHeight = usePanelsHeight([tryPanelRef, historyPanelRef]);
+
+    // The landing mounts on a fresh Studio and again on "New chat", so the
+    // caret waits in the prompt either way and typing can start at once.
+    useEffect(() => {
+        inputRef.current?.focus({ preventScroll: true });
+        // Mount only, as DataPrompt's autoFocus.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className={classNames(styles.stage, leaving && styles.stageOut)}>
