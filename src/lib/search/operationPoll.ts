@@ -20,6 +20,8 @@
  * a done poll needs no principal header, unlike the `pin` call next to it).
  */
 
+import { datasetsFetch } from './datasetsFetch.ts';
+
 export type OperationStatus = 'pending' | 'running' | 'done' | 'failed';
 
 export type OperationProgress = {
@@ -53,7 +55,8 @@ export const OPERATION_DEADLINE = 'operation_deadline';
 const MIN_RETRY_AFTER_MS = 250;
 
 export type PollOperationOptions = {
-    /** Defaults to the global `fetch`, called with the envelope's own
+    /** Defaults to `datasetsFetch` (the global `fetch`, repeating a
+     *  refusal the API marks retryable), called with the envelope's own
      *  relative `poll` path verbatim — override to resolve a base URL
      *  and/or attach headers (see module docstring). */
     fetchImpl?: PollFetch;
@@ -80,7 +83,7 @@ export type PollOperationOptions = {
     signal?: AbortSignal;
 };
 
-const defaultFetch: PollFetch = (url, signal) => fetch(url, { cache: 'no-store', signal });
+const defaultFetch: PollFetch = (url, signal) => datasetsFetch(url, { cache: 'no-store', signal });
 const defaultSleep = (ms: number): Promise<void> =>
     new Promise((resolve) => {
         setTimeout(resolve, ms);

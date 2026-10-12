@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import styles from './DataSearch.module.scss';
@@ -9,6 +8,7 @@ import { sourceDoc, useDefinitionMembers } from './GraphInfo';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
+import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
 import type { Warning } from '@/lib/search/types';
 import {
@@ -46,13 +46,11 @@ export const SourceName = ({ dcid, label }: { dcid: string; label: string }) => 
         return <span>{label}</span>;
     }
 
-    // The dcid carries slashes, so the route is a catch-all and the id goes
-    // in unescaped (as the Sources cards link it).
     return (
-        <Link href={`/data/sources/${dcid}`} className={styles.whyLink}>
+        <SourceLink dcid={dcid} className={styles.whyLink}>
             {label}
             <Icon name="arrow-small" />
-        </Link>
+        </SourceLink>
     );
 };
 

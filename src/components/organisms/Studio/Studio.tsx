@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { effectiveKind, widgetTitle } from './canvas/layout';
+import { effectiveKind, LEAVE_MS, widgetTitle } from './canvas/layout';
 import LiveNote from './canvas/LiveNote';
 import Whiteboard from './canvas/Whiteboard';
 import { useCanvasDocument } from './hooks/useCanvasDocument';
@@ -250,6 +250,13 @@ const Studio = ({
     }, [walled, guestUsed]);
 
     const doc = useCanvasDocument(sharedSaved);
+
+    // Cards the agent took off the canvas leave it as a card-menu Remove does.
+    const { agentRemovals, takeAgentRemoved } = conversation;
+
+    useEffect(() => {
+        takeAgentRemoved().forEach(doc.removeWidget);
+    }, [agentRemovals, takeAgentRemoved, doc.removeWidget]);
     const pinCount = doc.pinnedIds.length;
     const cardCount = conversation.widgets.length;
 
@@ -444,6 +451,28 @@ const Studio = ({
         shared,
         doc.visibleWidgets(chat.widgets),
     );
+    // The harness cards off screen that the user did not remove: a new turn
+    // hid them. Reported once their fade-out has finished.
+    const hiddenKey = chat.widgets
+        .filter(
+            (widget) =>
+                !visibleWidgets.some((other) => other.id === widget.id) &&
+                !doc.removedIds.includes(widget.id),
+        )
+        .map((widget) => widget.id)
+        .join(' ');
+    const { reportHidden, canvasVersion } = conversation;
+
+    useEffect(() => {
+        if (!hiddenKey) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => reportHidden(hiddenKey.split(' ')), LEAVE_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [hiddenKey, canvasVersion, reportHidden]);
+
     const isOnCanvas = (id: string) => visibleWidgets.some((widget) => widget.id === id);
     const cardTitleOf = (id: string): string => {
         const widget = visibleWidgets.find((other) => other.id === id);
@@ -457,6 +486,29 @@ const Studio = ({
         const widget = chat.widgets.find((other) => other.id === id);
 
         doc.addWidget(id, !!widget && widget.turn !== latestTurn, latestTurn);
+
+        if (widget) {
+            chat.syncCanvas([{ op: 'add', component_id: id }]);
+        }
+    };
+
+    // The card menu's Remove and Pin. A harness card's edit goes to the
+    // harness too; a text card lives only here.
+    const removeCard = (id: string) => {
+        doc.removeWidget(id);
+
+        if (chat.widgets.some((widget) => widget.id === id)) {
+            chat.syncCanvas([{ op: 'remove', component_id: id }]);
+        }
+    };
+    const togglePin = (id: string) => {
+        const pinning = !doc.pinnedIds.includes(id);
+
+        doc.togglePin(id, latestTurn);
+
+        if (chat.widgets.some((widget) => widget.id === id)) {
+            chat.syncCanvas([{ op: pinning ? 'pin' : 'unpin', component_id: id }]);
+        }
     };
 
     // Studio opens on the handed-over question instead of a blank canvas.
@@ -595,8 +647,8 @@ const Studio = ({
                         widgets={visibleWidgets}
                         filter={activeCardsTab}
                         pinnedIds={doc.pinnedIds}
-                        onTogglePin={(id) => doc.togglePin(id, latestTurn)}
-                        onRemove={doc.removeWidget}
+                        onTogglePin={togglePin}
+                        onRemove={removeCard}
                         onAskFollowUp={askFollowUp}
                         onCardInfo={setInfoCardId}
                         focusedId={infoCardId}
@@ -775,7 +827,7 @@ const Studio = ({
                         onCanvas={isOnCanvas}
                         onGo={flyToCard}
                         onAdd={addWidget}
-                        onRemove={doc.removeWidget}
+                        onRemove={removeCard}
                     />
                 </div>
             )}

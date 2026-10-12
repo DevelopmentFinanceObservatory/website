@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import styles from './PreparingDownload.module.scss';
 
 import { pollOperation, type OperationProgress } from '@/lib/search/operationPoll';
-import { pinDownloadedVersion } from '@/lib/search/searchClient';
+import { artifactHref, pinDownloadedVersion } from '@/lib/search/searchClient';
 import { renderedFile } from '@/lib/search/shareDownload';
 import type { FileRendering } from '@/lib/search/snapshot';
 import type { VersionLinkDocument } from '@/lib/search/versionLink';
@@ -72,8 +72,10 @@ const PreparingDownload = ({
                     });
                 }
 
-                setStage({ kind: 'started', url: file.url });
-                window.location.assign(file.url);
+                const href = artifactHref(file.url);
+
+                setStage({ kind: 'started', url: href });
+                window.location.assign(href);
             } catch (error) {
                 if (controller.signal.aborted) {
                     return;

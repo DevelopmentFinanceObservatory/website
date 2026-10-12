@@ -49,6 +49,10 @@ const DEFAULT_SERIES: SeriesPair[] = [
     ['#bb6fdc', '#cf94e8'],
     ['#662d6e', '#7f4487'],
     ['#463138', '#5e474f'],
+    // Seventh and eighth (QA-84): the hues the six leave open — teal and
+    // gold — so eight lines never share a colour.
+    ['#2a9d8f', '#35c5b4'],
+    ['#c9a227', '#dbb848'],
 ];
 
 export const THEME_PRESETS: ThemePreset[] = [
@@ -79,6 +83,10 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#5c5c5c', '#757575'],
             ['#a9a9a9', '#bdbdbd'],
             ['#404040', '#585858'],
+            // A monochrome theme has only lightness to space eight series
+            // out with: these two fill its widest gaps.
+            ['#737373', '#8d8d8d'],
+            ['#e0e0e0', '#ebebeb'],
         ],
         swatches: ['#a3a3a3', '#d9d9d9', '#6b6b6b', '#1c1b1a', '#f4f4f4'],
     },
@@ -93,6 +101,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#c98a6b', '#d9a68d'],
             ['#7fa78a', '#9dbfa6'],
             ['#b58fc9', '#c9adda'],
+            ['#d99f9f', '#e7c4c4'],
+            ['#a8b86b', '#bcc98d'],
         ],
         swatches: ['#2a2a30', '#1e1e22', '#d8d5c8', '#e6d3a3', '#111114'],
     },
@@ -107,6 +117,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#2f6f9f', '#4d8bb8'],
             ['#b3d9ea', '#c9e5f1'],
             ['#59616a', '#767e88'],
+            ['#3fb8a0', '#61c9b4'],
+            ['#d99a3f', '#e1b06a'],
         ],
         swatches: ['#1d2a36', '#b3d9ea', '#1a3550', '#4fc3f7', '#eaf3f8'],
     },
@@ -121,6 +133,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#c8d9b0', '#d8e5c6'],
             ['#6b8e4e', '#86a76a'],
             ['#4a7c59', '#659374'],
+            ['#a8683f', '#c18259'],
+            ['#c9a227', '#dbb848'],
         ],
         swatches: ['#2c5f2d', '#c8d9b0', '#4a7c59', '#1f3a1f', '#eef3e8'],
     },
@@ -135,6 +149,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#14224a', '#2b3a63'],
             ['#7c8fd8', '#98a8e2'],
             ['#c8d3f6', '#d8e0f8'],
+            ['#d9a23f', '#e1b76a'],
+            ['#2f9e8f', '#3bc5b2'],
         ],
         swatches: ['#2b4fd8', '#c8d3f6', '#4d7cf6', '#14224a', '#eceff8'],
     },
@@ -229,29 +245,36 @@ const hslToHex = (h: number, sat: number, l: number): string => {
     return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
 };
 
-// A six-series palette spun off one accent: the accent itself first, then
-// shades stepping around the hue wheel and through lightness so neighbours
-// stay distinguishable. Each series' lighter partner is the weave's second
-// square.
+// An eight-series palette spun off one accent: the accent itself first,
+// then shades stepping around the hue wheel and through lightness so
+// neighbours stay distinguishable. Eight, because that is the most lines a
+// chart draws and none of them may share a colour (QA-84). Each series'
+// lighter partner is the weave's second square.
 export const paletteFromAccent = (accent: string): SeriesPair[] => {
     const [h, sat, l] = hexToHsl(accent);
-    const s1 = Math.max(0.12, sat);
-    const steps: [number, number][] = [
-        [0, 0],
-        [30, 0.14],
-        [-30, -0.12],
-        [60, 0.06],
-        [-60, -0.22],
-        [90, 0.18],
+    // The derived seven carry their own floors. The accent's own shade is
+    // whatever the user picked — black, grey, anything — and stepping the
+    // hue of a colour with no saturation, or lightening one that is nearly
+    // black, used to give seven shades of the same thing (QA-84).
+    const spread = Math.min(0.9, Math.max(0.42, sat));
+    // Away from the ends, where lightness has nowhere left to move.
+    const anchor = Math.min(0.62, Math.max(0.36, l));
+    // Hue all the way round in even steps, lightness riding a short cycle
+    // on top, so neighbours differ in both.
+    const lift = [0, 0.12, -0.08, 0.06, -0.12, 0.1, -0.04];
+
+    return [
+        [accent, hslToHex(h, sat, Math.min(0.92, l + 0.1))],
+        ...lift.map((dl, index): SeriesPair => {
+            const hue = h + (index + 1) * 45;
+            const light = Math.min(0.78, Math.max(0.3, anchor + dl));
+
+            return [
+                hslToHex(hue, spread, light),
+                hslToHex(hue, spread, Math.min(0.92, light + 0.1)),
+            ];
+        }),
     ];
-
-    return steps.map(([dh, dl]) => {
-        const light = Math.min(0.85, Math.max(0.15, l + dl));
-        const base = hslToHex(h + dh, s1, light);
-        const lighter = hslToHex(h + dh, s1, Math.min(0.92, light + 0.1));
-
-        return [base, lighter];
-    });
 };
 
 export const isDark = (hex: string): boolean => {

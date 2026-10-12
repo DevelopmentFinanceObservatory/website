@@ -15,8 +15,8 @@ const Home = async () => {
     return (
         <main>
             <Hero
-                lines={['Development Finance', 'Data Simplified.']}
-                phoneLines={['Development', 'Finance Data', 'Simplified.']}
+                lines={['Development Finance', 'Data. Simplified.']}
+                phoneLines={['Development', 'Finance Data.', 'Simplified.']}
                 scrollLabel="Get Started"
                 scrollHref="#content"
                 description="The DFO integrates aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source."

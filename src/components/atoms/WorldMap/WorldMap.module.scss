@@ -1,0 +1,9 @@
+// A box at the drawing's own ratio shows all of it. A caller that sets both
+// width and height gets the drawing covering the box, cropped about the
+// centre.
+.map {
+    aspect-ratio: 1280 / 826;
+    pointer-events: none;
+    background-color: currentColor;
+    mask: url("../../../assets/masks/world-map.svg") center / cover no-repeat;
+}

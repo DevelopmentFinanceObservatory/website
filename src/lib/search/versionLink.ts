@@ -55,11 +55,8 @@ export type VersionLinkDocument = {
     citation?: { sources?: { label?: string }[] };
 };
 
-/** A stored file of the version, by its signed URL; `format` is 'zip' for
- *  the bundle. */
-/** A version's stored file, by the site route that redirects to a freshly
- *  signed URL for it, so the link never expires; `format` is 'zip' for the
- *  bundle. */
+/** A version's stored file, by the site route that redirects to its stable
+ *  link; `format` is 'zip' for the bundle. */
 export type VersionDownload = { href: string; format: string };
 
 export type VersionLinkOutcome =
@@ -80,17 +77,23 @@ type StoredFile = {
     rendering: { format: string; bundle?: boolean };
 };
 
+/** The canonical frame a version manifest lists: the API's internal storage
+ *  form, which the site offers in no download format. */
+export const isCanonicalFrame = (artifact: { rendering?: { format?: string } }): boolean =>
+    artifact.rendering?.format === 'frame';
+
 /**
- * The version's file to offer, by its signed URL, with its digest for a pin:
+ * The version's file to offer, by its stable link, with its digest for a pin:
  * the bundle, else its first data file. A statistics rendering carries no
- * format and is never offered. `/api/version-download` and `/s/<id>/download`
- * redirect to it.
+ * format and the canonical frame is no download format, so neither is ever
+ * offered. `/api/version-download` and `/s/<id>/download` redirect to it.
  */
 export const storedDownload = (document: {
     artifacts?: VersionLinkDocument['artifacts'];
 }): { url: string; format: string; digest: string | null } | null => {
     const files = (document.artifacts ?? []).filter(
-        (artifact): artifact is StoredFile => !!artifact.url && !!artifact.rendering?.format,
+        (artifact): artifact is StoredFile =>
+            !!artifact.url && !!artifact.rendering?.format && !isCanonicalFrame(artifact),
     );
     const bundle = files.find((artifact) => artifact.rendering.bundle);
     const file = bundle ?? files[0];

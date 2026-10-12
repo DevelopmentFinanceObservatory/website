@@ -4,14 +4,16 @@ import type { NextRequest } from 'next/server';
 
 import { clientIp } from '@/lib/proxy/forward';
 import { hit, rateHeaders } from '@/lib/proxy/rateLimit';
+import { datasetsFetch } from '@/lib/search/datasetsFetch';
+import { artifactHref } from '@/lib/search/searchClient';
 import { storedDownload, type VersionLinkDocument } from '@/lib/search/versionLink';
 import { searchApiBase } from '@/lib/searchApi';
 
 /**
  * The server half of the site's download redirects (server only):
  * `/api/version-download/<spec>/<cv>` and `/s/<id>/download`. Each reads a
- * Datasets API manifest at click time and redirects to a freshly signed URL
- * for the file it lists, so a link to it never expires.
+ * Datasets API manifest at click time and redirects to the stable link of
+ * the file it lists, which the API answers with a freshly signed URL.
  */
 
 // A manifest read, bounded as lib/search/snapshot bounds its door reads.
@@ -52,7 +54,7 @@ export const readVersionFile = async ({
     contentVersion: string;
     pick?: (manifest: VersionLinkDocument) => { url: string } | null;
 }): Promise<{ url: string } | { status: 404 | 502; message: string }> => {
-    const res = await fetch(`${searchApiBase()}/api/datasets/${specId}/${contentVersion}`, {
+    const res = await datasetsFetch(`${searchApiBase()}/api/datasets/${specId}/${contentVersion}`, {
         cache: 'no-store',
         signal: AbortSignal.timeout(VERSION_READ_TIMEOUT_MS),
     }).catch(() => null);
@@ -77,5 +79,7 @@ export const readVersionFile = async ({
 
     const file = pick(manifest);
 
-    return file ? { url: file.url } : { status: 404, message: 'No stored file for this version' };
+    return file
+        ? { url: artifactHref(file.url) }
+        : { status: 404, message: 'No stored file for this version' };
 };

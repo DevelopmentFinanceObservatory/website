@@ -46,7 +46,10 @@ const nextConfig: NextConfig = {
     turbopack: {
         root: __dirname,
         rules: {
+            // src/assets/masks/ is left out so a stylesheet url() there stays a
+            // hashed, immutable asset. Every other .svg imports as a component.
             '*.svg': {
+                condition: { not: { path: /^src\/assets\/masks\// } },
                 loaders: ['@svgr/webpack'],
                 as: '*.js',
             },

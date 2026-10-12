@@ -13,6 +13,7 @@ import {
 } from '@/lib/search/downloadOptions';
 import type { OperationProgress } from '@/lib/search/operationPoll';
 import {
+    artifactHref,
     type DatasetFormat,
     type DatasetOptionsDocument,
     fetchDatasetOptions,
@@ -305,7 +306,7 @@ export const useDatasetDownload = ({ specId, definition, entities }: DatasetDown
                 });
             }
 
-            window.location.assign(artifact.url);
+            window.location.assign(artifactHref(artifact.url));
         } catch (caught) {
             if (controller.signal.aborted) {
                 return;

@@ -13,6 +13,7 @@
  * `/api/download-pin` pins a downloaded version through it.
  */
 
+import { datasetsFetch } from './datasetsFetch.ts';
 import { pollOperation, type OperationEnvelope } from './operationPoll.ts';
 import { SPEC_SHAPE, VERSION_SHAPE } from './versionLink.ts';
 
@@ -120,7 +121,7 @@ export const pinArtifact = async ({
     contentVersion,
     artifactDigest,
     principal,
-    fetchImpl = fetch,
+    fetchImpl = datasetsFetch,
 }: PinOptions): Promise<void> => {
     const pinned = await poster(base, fetchImpl)(
         `/api/datasets/${specId}/${contentVersion}/pin`,
@@ -164,7 +165,7 @@ export const captureSnapshot = async ({
     expectedContentVersion,
     principal,
     pollDeadlineMs,
-    fetchImpl = fetch,
+    fetchImpl = datasetsFetch,
 }: CaptureOptions): Promise<{ specId: string; contentVersion: string; artifactDigest: string }> => {
     // dfo-apis refuses every pin without the principal: fail before minting.
     if (!principal) {
@@ -254,7 +255,7 @@ export const pinVersionFrame = async ({
     contentVersion,
     ...capture
 }: FramePinOptions): Promise<'already_pinned' | 'pinned' | 'minted'> => {
-    const { base, specId, principal, fetchImpl = fetch } = capture;
+    const { base, specId, principal, fetchImpl = datasetsFetch } = capture;
     const res = await fetchImpl(`${base}/api/datasets/${specId}/${contentVersion}`, {
         cache: 'no-store',
         signal: AbortSignal.timeout(DOOR_TIMEOUT_MS),
