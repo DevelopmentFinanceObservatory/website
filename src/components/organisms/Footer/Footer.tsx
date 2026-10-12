@@ -16,15 +16,15 @@ import { enterProgress } from '@/utils/scroll';
 import { showPrivacySettings } from '@/lib/consent';
 import { DOCS_MENU } from '@/lib/docs/nav';
 import Logo from '@/assets/svg/logo.svg';
-import TrfLogo from '@/assets/svg/trf-logo.svg';
-import WorldMap from '@/assets/svg/world-map.svg';
+import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
 // The Data column mirrors the header's Data dropdown exactly — same
 // entries, same order (Coverage is left out of both until it's built).
 const columns = [
     { title: 'Insights', links: ['Chat', 'Gallery', 'Publications'] },
     { title: 'Data', links: ['Sources', 'Roadmap', 'Get Data'] },
-    { title: 'Docs', links: [...DOCS_MENU.map((entry) => entry.label), 'Status'] },
+    // Status is hidden for launch — see src/app/(site)/docs/status/page.tsx.
+    { title: 'Docs', links: DOCS_MENU.map((entry) => entry.label) },
     { title: 'About', links: ['About DFO', 'Contact us'] },
 ];
 
@@ -43,7 +43,6 @@ const FOOTER_ROUTES: Record<string, string> = {
     Roadmap: '/data/roadmap',
     'Get Data': '/data',
     ...Object.fromEntries(DOCS_MENU.map((entry) => [entry.label, entry.href])),
-    Status: '/docs/status',
 };
 
 const Footer = () => {
@@ -78,11 +77,7 @@ const Footer = () => {
         >
             {/* Covers the whole footer at its natural ratio — whatever
                 doesn't fit bleeds off the crop (never squashed). */}
-            <WorldMap
-                className={styles.mapBg}
-                preserveAspectRatio="xMidYMid slice"
-                aria-hidden="true"
-            />
+            <WorldMap className={styles.mapBg} />
             {/* Two stacked copies: the one underneath carries the stroke,
                 the one on top only the fills — its letters cover every
                 stroke segment that falls inside the wordmark, so the line
@@ -109,16 +104,9 @@ const Footer = () => {
                     </Button>
                 </div>
                 <div className={styles.attribution} data-reveal-group="trigger">
-                    <TrfLogo
-                        className={styles.trf}
-                        aria-label="The Rockefeller Foundation"
-                        data-reveal
-                        style={revealIndex(0)}
-                    />
-                    <p className={styles.attributionText} data-reveal="text" style={revealIndex(1)}>
-                        The Development Finance Observatory is an initiative by ONE Data,
-                        <br />
-                        with support from{' '}
+                    <p className={styles.attributionText} data-reveal="text" style={revealIndex(0)}>
+                        The Development Finance Observatory is an initiative by ONE Data. It was
+                        built with support from{' '}
                         <a
                             href="https://www.rockefellerfoundation.org/"
                             target="_blank"
@@ -126,10 +114,15 @@ const Footer = () => {
                         >
                             The Rockefeller Foundation
                         </a>{' '}
-                        and{' '}
+                        via its public charity, RF Catalytic Capital, and{' '}
                         <a href="https://www.google.org/" target="_blank" rel="noopener noreferrer">
                             Google.org
                         </a>
+                        , and with technical support from{' '}
+                        <a href="https://datacommons.org" target="_blank" rel="noopener noreferrer">
+                            Google Data Commons
+                        </a>
+                        .
                     </p>
                 </div>
             </div>

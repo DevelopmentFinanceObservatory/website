@@ -121,3 +121,27 @@ test('pick: copies only the named headers that have a value', () => {
 
     assert.deepEqual([...into], [['accept', 'a']]);
 });
+
+test("clientResponseHeaders: carries a redirect's Location and no-store over the default, and drops its cookies", () => {
+    const out = clientResponseHeaders(
+        new Headers({
+            location: 'https://storage.googleapis.com/bucket/object?X-Goog-Signature=abc',
+            'cache-control': 'no-store',
+            'set-cookie': 'a=b',
+        }),
+        new Headers({ 'Cache-Control': 'no-cache' }),
+    );
+
+    assert.deepEqual(Object.fromEntries(out), {
+        'cache-control': 'no-store',
+        location: 'https://storage.googleapis.com/bucket/object?X-Goog-Signature=abc',
+    });
+});
+
+test('clientResponseHeaders: carries the Retry-After of a busy refusal', () => {
+    const out = clientResponseHeaders(
+        new Headers({ 'content-type': 'application/problem+json', 'retry-after': '5' }),
+    );
+
+    assert.equal(out.get('retry-after'), '5');
+});

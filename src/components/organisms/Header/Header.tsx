@@ -54,8 +54,9 @@ const navItems: {
         label: 'Docs',
         href: '/docs',
         section: '/docs',
-        // The corpus's own sections (dfo-docs nav), then the site's Status.
-        menu: [...DOCS_MENU, { label: 'Status', href: '/docs/status' }],
+        // The corpus's own sections (dfo-docs nav). Status is hidden for
+        // launch — see src/app/(site)/docs/status/page.tsx.
+        menu: DOCS_MENU,
     },
 ];
 

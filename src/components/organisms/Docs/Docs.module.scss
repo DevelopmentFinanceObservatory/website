@@ -100,9 +100,19 @@
 
 // --- Nav tree ---------------------------------------------------------------
 
-.treeColumn {
+// One tree for every width. On a phone it is a "Contents" disclosure
+// above the page. From tablet up the wrapper opens the disclosure as the
+// scrolling column and hides its summary. Without JavaScript the summary
+// stays available at every width.
+.tree {
     max-height: calc(100svh - #{rem(140)});
     overflow-y: auto;
+}
+
+@include breakpoint(not-phone) {
+    .tree[data-column] > .treeSummary {
+        display: none;
+    }
 }
 
 // A nested group sits on the same hairline rhythm, one step in.
@@ -119,11 +129,7 @@
     }
 }
 
-.treePhone {
-    display: none;
-}
-
-.treePhoneSummary {
+.treeSummary {
     @include font-size(14px, 1.1);
 
     padding: rem(12) rem(14);
@@ -510,11 +516,8 @@
         @include font-size(30px, 0.95);
     }
 
-    .treeColumn {
-        display: none;
-    }
-
-    .treePhone {
-        display: block;
+    .tree {
+        max-height: none;
+        overflow-y: visible;
     }
 }

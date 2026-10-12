@@ -27,7 +27,7 @@ type Reply = (status: number, text: string, headers?: Record<string, string>) =>
 type Redirect = (status: 302 | 303, location: string) => Response;
 
 // GET /s/<id>/download[?part=&format=&bundle=] → 302 to the file of one
-// dataset behind a search share, at a freshly signed URL; selectShareDownload
+// dataset behind a search share, at its stable link; selectShareDownload
 // (lib/search/shareDownload) says which part and which door. A live share
 // reads the definition door and gets the latest data, pinned like a download
 // from the search page (pinVersionOnce). serveLiveDownload decides the

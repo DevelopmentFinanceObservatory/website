@@ -1,8 +1,9 @@
 /**
  * A `component.created` `payload` in the older `{stored_intent}` shape,
- * trimmed from dfo-ai's recorded `docs/transcripts/studio_transcript_plan.jsonl`
- * (line_chart, cmp_01M16ZY81TEGN056T0EFSYVZ89). It has no envelope. A
- * harness without the resolved revision sends this shape.
+ * trimmed from dfo-ai's recorded transcript
+ * https://github.com/ONEcampaign/dfo-ai/blob/32abd086fc9135fd3e9bd04298e0b68fbfad13cf/docs/transcripts/studio_transcript_plan.jsonl
+ * (line_chart, cmp_01M16ZY81TEGN056T0EFSYVZ89). It has no envelope. A harness without the
+ * resolved revision sends this shape.
  */
 export const oldCreated = {
     component_id: 'cmp_01M16ZY81TEGN056T0EFSYVZ89',

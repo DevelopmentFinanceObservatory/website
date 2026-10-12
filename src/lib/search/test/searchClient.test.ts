@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     applyDoneEvent,
+    artifactHref,
     entityOptions,
     fetchDatasetOptions,
     fetchDefinitionMembers,
@@ -838,6 +839,25 @@ test('mintDataset returns the artifacts/manifest of a synchronous 200 unchanged'
     assert.equal(manifest.content_version, 'cv_sync');
 });
 
+test('mintDataset repeats a mint the Datasets API refused as busy and retryable', async (t) => {
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
+        fetchMock.mock.callCount() === 0
+            ? new Response(JSON.stringify({ code: 'service_unavailable', retryable: true }), {
+                  status: 503,
+                  headers: { 'content-type': 'application/problem+json', 'retry-after': '0' },
+              })
+            : new Response(JSON.stringify({ content_version: 'cv_sync', artifacts: [] }), {
+                  status: 200,
+                  headers: { 'content-type': 'application/json' },
+              }),
+    );
+
+    const { manifest } = await mintDataset({ spec_id: 'spec_1', format: 'csv' });
+
+    assert.equal(manifest.content_version, 'cv_sync');
+    assert.equal(fetchMock.mock.callCount(), 2);
+});
+
 test("mintDataset polls an over-budget mint's 202 through to the done manifest, reporting progress along the way", async (t) => {
     const responses = [
         new Response(
@@ -1110,4 +1130,11 @@ test('pinDownloadedVersion posts the downloaded version to the site pin route an
         contentVersion: 'cv_b2',
         definition: { spec_id: 'spec_a1' },
     });
+});
+
+test('artifactHref prefixes the Datasets API origin onto a root-relative artifact link', () => {
+    const url = '/api/datasets/spec_a1/cv_b2/files/sha256:abc';
+
+    assert.equal(artifactHref(url), url);
+    assert.equal(artifactHref(url, 'https://apis.example.org'), `https://apis.example.org${url}`);
 });

@@ -38,14 +38,16 @@
     translate: 0 0;
     scale: 1.08;
     transform-origin: 50% 35%;
-    transition: opacity 0.4s $ease-in,
+    transition:
+        opacity 0.4s $ease-in,
         scale 0.4s $ease-in;
 }
 
 .hero[data-revealed] .decor {
     translate: 0 0;
     scale: 1;
-    transition: opacity 0.9s $ease-out,
+    transition:
+        opacity 0.9s $ease-out,
         scale 1.6s $ease-out;
 }
 
@@ -59,12 +61,7 @@
     left: 0;
     width: rem(1280);
     height: auto;
-    pointer-events: none;
-
-    path {
-        fill: none;
-        stroke: var(--color-beige);
-    }
+    color: var(--color-beige);
 }
 
 // The hero enters like the live site: the map first, then the boxes in
@@ -215,7 +212,8 @@ $hero-text-stagger: 0.09s;
     opacity: 1;
     translate: 0 100%;
     clip-path: inset(-0.2em 0 100% 0);
-    transition: translate 0.3s $ease-in,
+    transition:
+        translate 0.3s $ease-in,
         clip-path 0.3s $ease-in;
 }
 
@@ -224,7 +222,8 @@ $hero-text-stagger: 0.09s;
     opacity: 1;
     translate: 0 0;
     clip-path: inset(-0.2em 0 -0.2em 0);
-    transition: translate 0.8s $ease-out,
+    transition:
+        translate 0.8s $ease-out,
         clip-path 0.8s $ease-out;
 }
 
@@ -393,13 +392,15 @@ $hero-text-stagger: 0.09s;
 .signature[data-reveal] {
     translate: 0 rem(28);
     scale: 1;
-    transition: opacity 0.3s $ease-in,
+    transition:
+        opacity 0.3s $ease-in,
         translate 0.3s $ease-in;
 }
 
 .hero[data-revealed] .signature {
     translate: 0 0;
-    transition: opacity 0.9s $ease-out calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger),
+    transition:
+        opacity 0.9s $ease-out calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger),
         translate 0.9s $ease-out calc(#{$hero-wait} + var(--i, 0) * $reveal-stagger);
 }
 

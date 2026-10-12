@@ -17,18 +17,28 @@ import {
     stoppedReply,
     WORKING,
 } from '@/lib/studio/chatLine';
+import { createCanvasEdits } from '@/lib/studio/canvasEdits';
 import { clarifyFromFrame, type Clarify } from '@/lib/studio/clarify';
+import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
     cancelTurn,
     fetchComponentRevision,
+    mutateComposition,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
     type StreamHandlers,
 } from '@/lib/studio/studioClient';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
-import type { PlanDecision, PlanStep, Seed, StudioFrame } from '@/lib/studio/wire';
+import type {
+    CompositionManifest,
+    MutationOperation,
+    PlanDecision,
+    PlanStep,
+    Seed,
+    StudioFrame,
+} from '@/lib/studio/wire';
 import { uuid } from '@/lib/uuid';
 import type { Widget } from '@/lib/chat/widgets';
 
@@ -101,6 +111,13 @@ export type ChatSnapshot = {
     widgets: TurnWidget[];
     activity?: SavedActivityEntry[];
     turnCount: number;
+    // The harness canvas this conversation last saw (see useChat's
+    // canvasRef). Optional: saves from before this didn't have it.
+    canvas?: CanvasBaseline | null;
+    pinnedIds?: string[];
+    removedIds?: string[];
+    graceIds?: string[];
+    graceTurn?: number;
 };
 
 const NO_LINE = { status: null, statusDetail: null, statusSince: null, stalled: false } as const;
@@ -203,6 +220,94 @@ export const useChat = (initial?: ChatSnapshot) => {
     // has to address both (the contract rejects a stale revision), and the
     // number only ever arrives on the frames, never on the widget.
     const revisionsRef = useRef(new Map<string, number>());
+    // The harness's latest canvas manifest as this page saw it, to tell
+    // which cards a newer one took off (the agent removing cards). Saved
+    // with the conversation, so a reopened one keeps it.
+    const canvasRef = useRef<CanvasBaseline | null>(restoreCanvas(initial));
+    // Cards the agent took off, queued until the canvas takes them, so two
+    // manifests in one batch both count.
+    const agentRemovedRef = useRef<string[]>([]);
+    const [agentRemovals, setAgentRemovals] = useState(0);
+    // Every manifest goes through here: stream frames, `done`, and the
+    // responses to the user's own edits. A late, older one is ignored.
+    // Cards this page reported as hidden (see reportHidden), until a
+    // manifest has them back on the canvas.
+    const hiddenSentRef = useRef(new Set<string>());
+    const [canvasVersion, setCanvasVersion] = useState(0);
+    const canvasEditsRef = useRef<ReturnType<typeof createCanvasEdits> | null>(null);
+    const applyManifest = useCallback((manifest: CompositionManifest) => {
+        const taken = takeManifest(canvasRef.current, manifest);
+
+        if (!taken) {
+            return;
+        }
+
+        canvasRef.current = taken.baseline;
+        taken.baseline.ids.forEach((id) => hiddenSentRef.current.delete(id));
+        setCanvasVersion((version) => version + 1);
+
+        const removed = taken.removed.filter((id) => !canvasEditsRef.current?.isOwnRemoval(id));
+
+        if (removed.length > 0) {
+            agentRemovedRef.current.push(...removed);
+            setAgentRemovals((count) => count + 1);
+        }
+    }, []);
+    const takeAgentRemoved = useCallback(() => agentRemovedRef.current.splice(0), []);
+    // A canvas edit the user made (Remove, Pin, Add), sent to the harness so
+    // the canvas the agent reads matches this one. Nothing to send before
+    // the conversation has a session.
+    // Edits go one after another, so a Remove then an Add land in order; a
+    // response for a conversation since left is dropped.
+    const syncCanvas = useCallback(
+        (operations: MutationOperation[]) => {
+            const session = sessionRef.current;
+
+            if (!session) {
+                return;
+            }
+
+            canvasEditsRef.current ??= createCanvasEdits({
+                mutate: mutateComposition,
+                onManifest: applyManifest,
+                onFailure: (failedOperations, error) => {
+                    failedOperations.forEach((op) => {
+                        if (
+                            op.op === 'remove' &&
+                            !canvasEditsRef.current?.isOwnRemoval(op.component_id)
+                        ) {
+                            hiddenSentRef.current.delete(op.component_id);
+                        }
+                    });
+                    console.warn(
+                        'Studio: this canvas edit did not reach the harness',
+                        failedOperations,
+                        error,
+                    );
+                },
+            });
+            void canvasEditsRef.current.enqueue(session, operations);
+        },
+        [applyManifest],
+    );
+    // Cards a new turn hid on screen (unpinned, from an earlier turn) leave
+    // the harness canvas too, so the agent knows they are hidden; Add in
+    // the chat brings one back. Each is sent once, and only while the
+    // harness canvas still holds it.
+    const reportHidden = useCallback(
+        (hidden: readonly string[]) => {
+            const onCanvas = new Set(canvasRef.current?.ids ?? []);
+            const fresh = hidden.filter((id) => onCanvas.has(id) && !hiddenSentRef.current.has(id));
+
+            if (!sessionRef.current || fresh.length === 0) {
+                return;
+            }
+
+            fresh.forEach((id) => hiddenSentRef.current.add(id));
+            syncCanvas(fresh.map((id) => ({ op: 'remove', component_id: id })));
+        },
+        [syncCanvas],
+    );
     // Swap one widget in place, wherever it sits in the list.
     const patchWidget = useCallback((id: string, fn: (widget: TurnWidget) => TurnWidget) => {
         setState((prev) => ({
@@ -483,9 +588,9 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         break;
                     case 'composition.updated':
-                        // The whiteboard keeps its own layout for now; the
-                        // manifest becomes interesting once canvas state moves
-                        // server-side.
+                        // The whiteboard keeps its own layout; a manifest only
+                        // says which cards the harness took off the canvas.
+                        applyManifest(frame.manifest);
                         break;
                     case 'error':
                         stall.stop();
@@ -513,6 +618,11 @@ export const useChat = (initial?: ChatSnapshot) => {
                     case 'done':
                         stall.stop();
                         grace.cancel();
+
+                        if (frame.composition) {
+                            applyManifest(frame.composition);
+                        }
+
                         setState((prev) => ({
                             ...prev,
                             activity: endTurnActivity(prev.activity, turn),
@@ -614,7 +724,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                 });
         },
-        [patchWidget],
+        [applyManifest, patchWidget],
     );
 
     const send = useCallback(
@@ -853,6 +963,10 @@ export const useChat = (initial?: ChatSnapshot) => {
         inFlightRef.current = 0;
         queueRef.current = [];
         sessionRef.current = null;
+        canvasRef.current = null;
+        agentRemovedRef.current = [];
+        hiddenSentRef.current.clear();
+        canvasEditsRef.current?.reset();
         turnCount.current = 0;
         pendingInterruptRef.current = null;
         recapRef.current = null;
@@ -882,6 +996,10 @@ export const useChat = (initial?: ChatSnapshot) => {
         queueRef.current = [];
         pendingInterruptRef.current = null;
         sessionRef.current = saved.sessionId;
+        canvasRef.current = restoreCanvas(saved);
+        agentRemovedRef.current = [];
+        hiddenSentRef.current.clear();
+        canvasEditsRef.current?.reset();
         recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
         turnCount.current = saved.turnCount;
         setState({
@@ -900,12 +1018,18 @@ export const useChat = (initial?: ChatSnapshot) => {
         () => ({
             sessionId: sessionRef.current,
             turnCount: turnCount.current,
+            canvas: canvasRef.current,
         }),
         [],
     );
 
     return {
         ...state,
+        agentRemovals,
+        takeAgentRemoved,
+        syncCanvas,
+        reportHidden,
+        canvasVersion,
         send,
         unqueue,
         chooseOption,

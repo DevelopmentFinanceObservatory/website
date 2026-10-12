@@ -13,6 +13,7 @@ import CardHead from './CardHead';
 import type { CardExtras } from './types';
 
 import type { ChartWidget } from '@/lib/chat/widgets';
+import { chartAlt } from '@/lib/studio/chartAlt';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { ThemeDerived } from '@/lib/studio/theme';
 
@@ -111,6 +112,11 @@ const ChartCard = ({
         [widget, scale, hiddenSeries, theme],
     );
 
+    // What a screen reader is told the canvas shows: Chart.js marks it
+    // role="img" and leaves it unnamed, and the card's title is a separate
+    // paragraph it never reaches (QA-87).
+    const alt = useMemo(() => chartAlt(widget, !!line), [widget, line]);
+
     // Long names (WHO, UN) repeat the whole query in every series: the
     // legend shows what distinguishes them, the full name stays a hover
     // away (QA-57).
@@ -135,6 +141,12 @@ const ChartCard = ({
                             <button
                                 type="button"
                                 title={s.label}
+                                // A toggle, so its state is announced: off
+                                // means the series has left the plot.
+                                aria-pressed={!hiddenSeries.includes(index)}
+                                aria-label={`${s.label} — ${
+                                    hiddenSeries.includes(index) ? 'show' : 'hide'
+                                } this series`}
                                 className={classNames(
                                     styles.legendItem,
                                     hiddenSeries.includes(index) && styles.legendOff,
@@ -154,9 +166,9 @@ const ChartCard = ({
 
             <div className={styles.plot}>
                 {line ? (
-                    <Line data={lineData} options={options} />
+                    <Line data={lineData} options={options} role="img" aria-label={alt} />
                 ) : (
-                    <Bar data={barData} options={options} />
+                    <Bar data={barData} options={options} role="img" aria-label={alt} />
                 )}
             </div>
             <CardChrome source={widget.source} info={widget.info} onInfo={extras.onInfo} />

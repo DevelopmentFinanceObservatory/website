@@ -2,6 +2,7 @@ import type { CardView } from '@/components/organisms/Studio/canvas/layout';
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
 import type { TextWidget } from '@/lib/chat/widgets';
 import type { ActivityEntry } from '@/lib/studio/activity';
+import type { CanvasBaseline } from '@/lib/studio/composition';
 import type { StudioTheme } from '@/lib/studio/theme';
 
 /**
@@ -25,6 +26,9 @@ export type SavedConversation = {
     // The Activity trace (steps per turn).
     activity?: ActivityEntry[];
     turnCount: number;
+    // The harness canvas the conversation last saw (useChat's canvasRef).
+    // Optional: saves from before this didn't have it.
+    canvas?: CanvasBaseline | null;
     pinnedIds: string[];
     removedIds: string[];
     // Unpinned cards from older turns that are still on the canvas (see
