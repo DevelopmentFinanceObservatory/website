@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { flattenPartsRows, previewCellText, previewColumns } from '../view.ts';
+import { flattenPartsRows, markedTotalColumns, previewCellText, previewColumns } from '../view.ts';
 import { kenyaHealthPart } from './fixtures/kenya-health-series.ts';
 
 type TablePart = { variableText: string | null; spec: any };
@@ -47,7 +47,7 @@ test('previewColumns shows a constant column the Spec leaves open', () => {
     const part = kenya();
 
     part.spec.entities = [];
-    part.spec.slots.find((slot: any) => slot.key.property?.dcid === 'crsTypeOfFlow').binding = {
+    part.spec.slots.find((slot: any) => slot.key.property?.ref === 'crsTypeOfFlow').binding = {
         kind: 'unbound',
     };
 
@@ -68,7 +68,7 @@ test('previewColumns orders axes by the Spec slot order, then property dcid', ()
     const part = kenya();
     const slots = part.spec.slots;
     const instrument = slots.findIndex(
-        (slot: any) => slot.key.property?.dcid === 'crsTypeOfFinance',
+        (slot: any) => slot.key.property?.ref === 'crsTypeOfFinance',
     );
 
     // Instrument comes first. Modality loses its slot, so it follows the
@@ -77,7 +77,7 @@ test('previewColumns orders axes by the Spec slot order, then property dcid', ()
         slots[instrument],
         ...slots.filter(
             (slot: any, index: number) =>
-                index !== instrument && slot.key.property?.dcid !== 'crsCooperationModality',
+                index !== instrument && slot.key.property?.ref !== 'crsCooperationModality',
         ),
     ];
 
@@ -104,7 +104,7 @@ test('previewColumns takes the union over parts, each column headed from a part 
 
     // The first part has no slot for instrument. The second names it.
     health.spec.slots = health.spec.slots.filter(
-        (slot: any) => slot.key.property?.dcid !== 'crsTypeOfFinance',
+        (slot: any) => slot.key.property?.ref !== 'crsTypeOfFinance',
     );
 
     const uganda: TablePart = {
@@ -114,13 +114,13 @@ test('previewColumns takes the union over parts, each column headed from a part 
                 {
                     key: {
                         axis: 'how',
-                        property: { dcid: 'crsTypeOfFinance' },
+                        property: { ref: 'crsTypeOfFinance' },
                         label: 'instrument',
                     },
                     binding: { kind: 'unbound' },
                 },
                 {
-                    key: { axis: 'how', property: { dcid: 'crsChannel' }, label: 'channel' },
+                    key: { axis: 'how', property: { ref: 'crsChannel' }, label: 'channel' },
                     binding: { kind: 'unbound' },
                 },
                 { key: { axis: 'where', label: 'country' }, binding: { kind: 'unbound' } },
@@ -243,7 +243,7 @@ const oneSector = (bind: (binding: any) => any, entities: any[] = []): TablePart
         Object.assign(sector(series), shown);
     }
 
-    const slot = part.spec.slots.find((slot: any) => slot.key.property?.dcid === 'crsPurpose');
+    const slot = part.spec.slots.find((slot: any) => slot.key.property?.ref === 'crsPurpose');
 
     slot.binding = bind(slot.binding);
     part.spec.entities.push(...entities);
@@ -252,11 +252,11 @@ const oneSector = (bind: (binding: any) => any, entities: any[] = []): TablePart
 };
 
 const policy = {
-    ref: { dcid: 'CRSPurposeCode12110', label: 'health policy' },
+    ref: { ref: 'CRSPurposeCode12110', label: 'health policy' },
     value_kind: 'enum_value',
 };
 const clinics = {
-    ref: { dcid: 'CRSPurposeCode12220', label: 'basic health care' },
+    ref: { ref: 'CRSPurposeCode12220', label: 'basic health care' },
     value_kind: 'enum_value',
 };
 
@@ -295,3 +295,62 @@ for (const { description, part, key, shows } of [
         assert.equal(keys.includes(key), shows);
     });
 }
+
+// A copy of the Kenya part whose origin entities carry the given party kinds,
+// one per leading series (refs distinct per series).
+const withOriginKinds = (kinds: (string | null)[]): TablePart => {
+    const part = kenya();
+
+    kinds.forEach((kind, index) => {
+        const origin = part.spec.observations.series[index].entities.find(
+            (entity: any) => entity.role === 'origin',
+        );
+
+        Object.assign(origin, { ref: `org/${index}`, label: `Donor ${index}`, party_kind: kind });
+    });
+    part.spec.observations.series = part.spec.observations.series.slice(0, kinds.length);
+
+    return part;
+};
+
+const originCells = (parts: TablePart[]): string[] => {
+    const marked = markedTotalColumns(parts);
+
+    return flattenPartsRows(parts).map((row) => previewCellText(row, 'entity:origin', marked));
+};
+
+test('a total is marked only where the table holds two or more parties on its role', () => {
+    const several = originCells([withOriginKinds(['party', 'party', 'total'])]);
+
+    assert.ok(several.includes('Donor 2 (total)'));
+    assert.ok(several.includes('Donor 0') && several.includes('Donor 1'));
+    assert.ok(
+        originCells([withOriginKinds(['party', 'residual', 'total'])]).includes('Donor 2 (total)'),
+    );
+    assert.ok(!several.some((text) => /\(total\)/.test(text) && !text.startsWith('Donor 2')));
+
+    for (const kinds of [
+        ['party', 'total'],
+        ['residual', 'total'],
+        [null, null, 'total'],
+        ['party', 'party', 'residual'],
+    ]) {
+        const parts = [withOriginKinds(kinds)];
+
+        assert.equal(markedTotalColumns(parts).size, 0, kinds.join());
+        assert.ok(!originCells(parts).some((text) => text.endsWith('(total)')), kinds.join());
+    }
+});
+
+test('parties are counted across parts, and marking leaves the other roles alone', () => {
+    const first = withOriginKinds(['party', 'total']);
+    const second = withOriginKinds(['party']);
+
+    second.spec.observations.series[0].entities.find(
+        (entity: any) => entity.role === 'origin',
+    ).ref = 'org/other';
+
+    assert.deepEqual([...markedTotalColumns([first])], []);
+    assert.deepEqual([...markedTotalColumns([first, second])], ['entity:origin']);
+    assert.ok(!originCells([first, second]).includes('Kenya (total)'));
+});

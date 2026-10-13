@@ -17,6 +17,14 @@ import { cache } from 'react';
 
 import { originLine } from '../dataCommons.ts';
 import { searchApiBase } from '../searchApi.ts';
+import type {
+    DatasetEntry,
+    DocumentErrorEntry,
+    SourceCatalogue,
+    SourceCatalogueEntry,
+    SourceDocumentation,
+    VersionHistoryEntry,
+} from '../graph/wire.ts';
 import type { DataCommonsRef } from '../search/types.ts';
 
 import { httpOnly } from './url.ts';
@@ -43,36 +51,10 @@ export type SourceChip = {
 
 /** One Dataset in a catalogue entry, with the facts its card shows. A
  *  provenance with no Dataset forms its own row, keyed and labelled by
- *  itself. The facts are display labels, the same values the documentation
- *  door serves for the Dataset, and null where the graph has none (always on
- *  a UN System Data Commons row). */
-export type SourceDataset = {
-    ref: string;
-    label: string;
-    description: string | null;
-    /** `SourceDoc.license.type` */
-    license_type: string | null;
-    /** `SourceDoc.license.update_cadence` */
-    update_cadence: string | null;
-    /** `SourceDoc.scope_and_units.years_covered` */
-    years_covered: string | null;
-    /** the publisher's own page, `SourceDoc.details.source_url` */
-    source_url: string | null;
-    provenances: { ref: string; label: string }[];
-};
+ *  itself. */
+export type SourceDataset = DatasetEntry;
 
-/** One `GET /api/graph/sources` entry: a publisher (the graph's Source node,
- *  or a UN agency provenance), its Data Commons, the Datasets admitted under
- *  it, and the provenances left out. */
-export type SourceCatalogueEntry = {
-    source: { ref: string; label: string };
-    data_commons: DataCommonsRef;
-    datasets: SourceDataset[];
-    exclusions: {
-        ref: string;
-        reason: 'superseded_by_dfo' | 'superseded_by_un_system';
-    }[];
-};
+export type { SourceCatalogueEntry };
 
 export type SourceCard = {
     /** the Dataset's dcid (a provenance's, for one with no Dataset), which
@@ -100,76 +82,23 @@ export type SourceCard = {
 };
 
 /** Keep a Changelog's six kinds; the door serves only these. */
-export type ChangeKind = 'added' | 'changed' | 'deprecated' | 'removed' | 'fixed' | 'security';
+export type ChangeKind = VersionHistoryEntry['changes'][number]['kind'];
 
 /** One release: its title and date, and its changes, each a kind and a
  *  Markdown note. */
-export type SourceRelease = {
-    /** YYYY-MM-DD */
-    date: string;
-    title: string;
-    changes: { kind: ChangeKind; note: string }[];
-};
+export type SourceRelease = VersionHistoryEntry;
 
 /** A member of the document the platform could not read: which one, the
  *  line in the stored text when it has one, and why. The page shows one
  *  notice when any exist and does not render the entries. */
-export type DocumentError = {
-    member: 'transformation_log' | 'version_history' | 'methodology.description' | 'data_notes';
-    line: number | null;
-    reason: string;
-};
+export type DocumentError = DocumentErrorEntry;
 
 /** The documentation door's answer: ten members, every one always present
  *  (absent data is null / [], never ""), plus `gaps` naming what is empty.
  *  `methodology.description`, each of `data_notes`, each step's
  *  `description` and each change's `note` are CommonMark Markdown; every
  *  other string is plain text. */
-export type SourceDoc = {
-    details: {
-        name_of_source: string | null;
-        publisher: string | null;
-        /** the origin registry's publisher, null unless the catalogue admits
-         *  every documented provenance and they share one */
-        source: { ref: string; label: string } | null;
-        /** the Data Commons serving the documented provenances, on the same rule */
-        data_commons: DataCommonsRef | null;
-        description: string | null;
-        source_url: string | null;
-        /** where the data is downloaded from: a file, an API call or a portal page, depending on the source */
-        source_data_url: string | null;
-        citation: string | null;
-    };
-    license: {
-        type: string | null;
-        /** the licence text on the publisher's site */
-        url: string | null;
-        update_cadence: string | null;
-        last_update: string | null;
-        next_expected_update: string | null;
-    };
-    scope_and_units: {
-        countries: string[];
-        years_covered: string | null;
-        granularity: string | null;
-        /** sorted ISO 4217 codes; [] when the source names none */
-        currencies: string[];
-    };
-    methodology: { description: string | null };
-    data_notes: string[];
-    usage: {
-        api_access: { documentation_url?: string | null; code?: string | null } | null;
-        python: { documentation_url?: string | null; code?: string | null } | null;
-    };
-    /** one card per step: its short name and what it changed */
-    transformation_log: { transformation: string; description: string }[];
-    /** one timeline entry per release, newest first */
-    version_history: SourceRelease[];
-    /** dotted paths of everything the platform knows it has no data for */
-    gaps: string[];
-    /** what the platform could not read out of the stored document */
-    document_errors: DocumentError[];
-};
+export type SourceDoc = SourceDocumentation;
 
 // Chart coordinates carry a `dcid:` prefix the path can't take (a colon).
 const cleanDcid = (dcid: string): string => dcid.replace(/^dcid:/, '');
@@ -267,9 +196,7 @@ export const toCard = (entry: SourceCatalogueEntry, dataset: SourceDataset): Sou
 /** Every Dataset the platform publishes, as cards, in the catalogue's order.
  *  Safe to call from a server component. */
 export const loadSources = async (): Promise<SourceCard[]> => {
-    const catalogue = await readGraph<{ sources?: SourceCatalogueEntry[] }>('sources', {
-        retries: 1,
-    });
+    const catalogue = await readGraph<SourceCatalogue>('sources', { retries: 1 });
 
     return (catalogue?.sources ?? []).flatMap((entry) =>
         entry.datasets.map((dataset) => toCard(entry, dataset)),
@@ -303,10 +230,9 @@ export const loadSourceDoc = cache(async (dcid: string): Promise<SourceDoc | nul
         return null;
     }
 
-    const doc = await readGraph<
-        Omit<SourceDoc, 'document_errors'> & Partial<Pick<SourceDoc, 'document_errors'>>
-    >(path);
+    // `document_errors` is the one member an older or rolled-back API (or a
+    // cached answer from before it existed) leaves out; the page reads its length.
+    const doc = await readGraph<Omit<SourceDoc, 'document_errors'> & Partial<SourceDoc>>(path);
 
-    // The API may omit `document_errors`; `SourceDoc` keeps it required.
     return doc && { ...doc, document_errors: doc.document_errors ?? [] };
 });

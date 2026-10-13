@@ -120,7 +120,7 @@ const SearchPanel = ({
                 </p>
             )}
             <div className={styles.countRow}>
-                <p className={styles.countLabel}>{count != null && 'Rows in your file'}</p>
+                <p className={styles.countLabel}>{count != null && 'Rows in your data'}</p>
                 <Button
                     variant="plain"
                     icon="chevron-down"
@@ -139,7 +139,7 @@ const SearchPanel = ({
                                 <dt>{row.label}</dt>
                                 <dd>
                                     {row.source ? (
-                                        <SourceName dcid={row.source} label={row.value} />
+                                        <SourceName source={row.source} label={row.value} />
                                     ) : (
                                         row.value
                                     )}

@@ -35,7 +35,7 @@ function congoPick(part: HydratedPart, dcid: string): DatasetParsedEntry {
     const restatement = part.part?.restatement;
     const candidate = part.part?.no_data?.ambiguous_entities
         ?.find((group) => group.text === 'Congo')
-        ?.candidates.find((option) => option.dcid === dcid);
+        ?.candidates.find((option) => option.ref === dcid);
 
     assert.ok(restatement && candidate);
 
@@ -110,9 +110,9 @@ test('buildDatasetEntries leaves operations off a part that has none', () => {
 
 test("an identity entry and each candidate post their own Spec's groups beside the identity", () => {
     const eu = {
-        origin: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+        origin: { ref: 'africa', label: 'Africa', entity_type: 'Continent' },
     };
-    const g7 = { origin: { dcid: null, label: 'G7 countries' } };
+    const g7 = { origin: { ref: null, label: 'G7 countries' } };
     const [definite] = hydratedParts('definite-single');
     const [candidates] = hydratedParts('multi-candidate');
     const [first, ...others] = candidates.part!.candidates!.specs;
@@ -156,7 +156,7 @@ test("an identity entry and each candidate post their own Spec's groups beside t
 test('a stored share part replays its groups beside the identity, and no member when it has none', () => {
     const identity = hydratedParts('definite-single')[0].hydratedSpec!.identity;
     const groups = {
-        origin: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+        origin: { ref: 'africa', label: 'Africa', entity_type: 'Continent' },
     };
     const ref = { variableText: 'aid', identity, entityGroups: groups, operations: [] };
 

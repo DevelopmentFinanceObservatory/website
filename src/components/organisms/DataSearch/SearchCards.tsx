@@ -125,7 +125,7 @@ const SearchCards = ({
                         {groups.flatMap((group: any) =>
                             group.candidates.map((candidate: any, index: number) => (
                                 <button
-                                    key={`${group.text}:${candidate.dcid}`}
+                                    key={`${group.text}:${candidate.ref}`}
                                     type="button"
                                     className={styles.card}
                                     style={{ '--i': index } as React.CSSProperties}

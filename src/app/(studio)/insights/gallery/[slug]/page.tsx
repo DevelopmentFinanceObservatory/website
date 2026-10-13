@@ -37,9 +37,11 @@ export const generateMetadata = async ({ params }: GalleryItemPageProps): Promis
 /**
  * One gallery item: the curated session, opened in the Studio read-only.
  * There is no input — the only action is carrying the session on in your
- * own Studio, which forks it into your account. A dataset item redirects to
- * its saved search, `/data?share=<sharedFrom>`, the page `/s/<id>` sends a
- * search share to.
+ * own Studio, which forks it into your account. A live item opens the
+ * copied layout and refreshes each data card through the prod share it came
+ * from, `/api/share/<sharedFrom>/cards/<cardId>/refresh`, so its share id
+ * is `sharedFrom`. A dataset item redirects to its saved search,
+ * `/data?share=<sharedFrom>`, the page `/s/<id>` sends a search share to.
  */
 const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
     const item = galleryItem((await params).slug);
@@ -58,7 +60,14 @@ const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
             {/* `continuable` (the "Continue this session" button) stays off:
                 a fork starts a fresh harness conversation with no context,
                 so the button promised more than it could deliver. */}
-            <Studio shared={{ id: item.slug, kind: item.kind, saved: gallerySession(item.slug) }} />
+            <Studio
+                shared={{
+                    id: item.live ? item.sharedFrom : item.slug,
+                    kind: item.kind,
+                    saved: gallerySession(item.slug),
+                    live: item.live,
+                }}
+            />
         </Suspense>
     );
 };

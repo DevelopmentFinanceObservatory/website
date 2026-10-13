@@ -12,7 +12,7 @@ export const catalogueKenya: unknown = {
   "kind": "catalogue",
   "scope": {
     "place": {
-      "dcid": "country/KEN",
+      "ref": "country/KEN",
       "label": "Kenya"
     }
   },

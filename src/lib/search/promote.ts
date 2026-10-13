@@ -18,15 +18,15 @@ import type {
 // `{kind:'value', value:{ref, value_kind}}` — Spec.slots[i].binding), because
 // that's what slot_options entries and the currently-bound value carry. The
 // identity core's own binding shape is `{state, ref}` (bare dcid), not
-// `{kind, value:{ref:{dcid,label}}}` — these adapters bridge the two without
+// `{kind, value:{ref:{ref,label}}}` — these adapters bridge the two without
 // asking the editors to know about the identity wire shape at all.
 
 /** The bound dcid a resolved binding carries, or null when it binds nothing
  *  (unbound, or a shape this adapter doesn't recognise). */
 function resolvedBindingDcid(binding: unknown): string | null {
-    const b = binding as { kind?: string; value?: { ref?: { dcid?: string } } } | null | undefined;
+    const b = binding as { kind?: string; value?: { ref?: { ref?: string } } } | null | undefined;
     if (!b || b.kind === 'unbound') return null;
-    return b.value?.ref?.dcid ?? null;
+    return b.value?.ref?.ref ?? null;
 }
 
 /** One dcid for value, every member's for set. None for unbound/absent or
@@ -35,8 +35,8 @@ function resolvedBindingDcids(binding: unknown): string[] {
     const b = binding as
         | {
               kind?: string;
-              value?: { ref?: { dcid?: string } };
-              values?: { ref?: { dcid?: string } }[];
+              value?: { ref?: { ref?: string } };
+              values?: { ref?: { ref?: string } }[];
           }
         | null
         | undefined;
@@ -45,11 +45,11 @@ function resolvedBindingDcids(binding: unknown): string[] {
 
     if (b.kind === 'set') {
         return (b.values ?? [])
-            .map((value) => value?.ref?.dcid)
+            .map((value) => value?.ref?.ref)
             .filter((dcid): dcid is string => !!dcid);
     }
 
-    return b.value?.ref?.dcid ? [b.value.ref.dcid] : [];
+    return b.value?.ref?.ref ? [b.value.ref.ref] : [];
 }
 
 /** Convert a resolved what/how slot binding to its identity-slot form. Every
@@ -152,5 +152,5 @@ export function withResolvedSlotEdit(
     if (axis === 'source') {
         return withFacetEdit(identity, 'provenance', toIdentityFacetBinding(binding));
     }
-    return withSlotBinding(identity, slot?.key?.property?.dcid, toIdentitySlotBinding(binding));
+    return withSlotBinding(identity, slot?.key?.property?.ref, toIdentitySlotBinding(binding));
 }

@@ -38,6 +38,7 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
+import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import type { Seed } from '@/lib/studio/wire';
@@ -78,6 +79,9 @@ export type StudioProps = {
     // The site can refresh a live share's cards (`liveSharingAvailable`,
     // read on the server), so the Share dialog offers Live Data.
     liveSharing?: boolean;
+    // The landing's example prompts for this visit (pickExamples, drawn by
+    // the page). A share has no landing and passes none.
+    examples?: readonly string[];
 };
 
 // The guest's prompt count lives in the browser only — a limit, not a lock.
@@ -111,6 +115,7 @@ const Studio = ({
     guest = false,
     continuable = false,
     liveSharing = false,
+    examples = [],
 }: StudioProps) => {
     const sharedSaved = shared?.saved;
 
@@ -206,11 +211,12 @@ const Studio = ({
             }
 
             trackedCards.current.add(widget.id);
+            const source = widget.info?.sourceId;
+
             track('studio.card', {
                 kind: widget.kind,
                 turn: widget.turn,
-                source: widget.info?.sourceId ?? widget.source ?? null,
-                indicators: widget.info?.indicators.map((indicator) => indicator.id) ?? [],
+                ...(source ? { source } : {}),
                 years: widget.info?.years ?? null,
                 unit: widget.info?.unit ?? null,
                 guest,
@@ -250,6 +256,10 @@ const Studio = ({
     }, [walled, guestUsed]);
 
     const doc = useCanvasDocument(sharedSaved);
+
+    useEffect(() => {
+        logRefusedDescriptions(sharedSaved?.widgets ?? []);
+    }, [sharedSaved]);
 
     // Cards the agent took off the canvas leave it as a card-menu Remove does.
     const { agentRemovals, takeAgentRemoved } = conversation;
@@ -346,6 +356,7 @@ const Studio = ({
     const openSaved = (saved: SavedConversation) => {
         window.history.replaceState(null, '', `/studio/${saved.id}`);
         saved.widgets.forEach((widget) => trackedCards.current.add(widget.id));
+        logRefusedDescriptions(saved.widgets);
         save.track(saved.id, saved.layout);
         doc.load(saved);
         setQuery(saved.title);
@@ -688,6 +699,10 @@ const Studio = ({
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 liveShareId={liveCanvas?.shareId}
+                // A share row's `live` is set either way (sharedViewOf). A
+                // gallery canvas leaves it unset and has no share link.
+                snapshot={shared?.live === false ? shared : undefined}
+                canShare={account}
             />
 
             <Modal
@@ -771,6 +786,7 @@ const Studio = ({
                     query={query}
                     onQueryChange={setQuery}
                     onBegin={begin}
+                    examples={examples}
                     inputRef={inputRef}
                     history={account ? landingHistory.history : null}
                     openingId={landingHistory.openingId}

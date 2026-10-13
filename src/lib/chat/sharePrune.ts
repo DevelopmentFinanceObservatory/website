@@ -18,12 +18,13 @@ export const pruneForShare = (
     cardId?: string,
 ): SavedConversation => {
     if (kind === 'conversation') {
-        return { ...saved, sessionId: null };
+        return { ...saved, sessionId: null, componentRefs: [] };
     }
 
     const base: SavedConversation = {
         ...saved,
         sessionId: null,
+        componentRefs: [],
         messages: [],
         activity: [],
     };
@@ -60,4 +61,7 @@ export const pruneForShare = (
 export const shareForViewer = <Row extends { kind: string; data: unknown }>(row: Row): Row =>
     row.kind === 'search'
         ? row
-        : { ...row, data: { ...(row.data as SavedConversation), sessionId: null } };
+        : {
+              ...row,
+              data: { ...(row.data as SavedConversation), sessionId: null, componentRefs: [] },
+          };

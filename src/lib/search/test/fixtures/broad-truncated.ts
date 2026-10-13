@@ -23,6 +23,11 @@
  * count, or `member_count` where the list was cut and exact, and
  * `data_date_range` spans the listed members), each related measure its
  * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
+ *
+ * Each `headline.recent_years` was added later: its first entry restates the
+ * headline's own counts, and the two years before it come from the same
+ * identity resubmitted (`dataset_resubmit`) to the dev API at commit
+ * 0f4b6e04e on 2026-10-12, whose headline matched this one.
  */
 
 export const broadTruncated: unknown = {
@@ -156,19 +161,19 @@ export const broadTruncated: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal",
             "label": "gross disbursements (official development assistance)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -176,7 +181,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -184,7 +189,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -192,7 +197,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -200,7 +205,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -208,7 +213,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -216,7 +221,7 @@ export const broadTruncated: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -249,7 +254,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -263,7 +268,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -277,7 +282,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -291,7 +296,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -300,7 +305,7 @@ export const broadTruncated: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   },
                   "value_kind": "enum_value"
@@ -312,7 +317,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -321,7 +326,7 @@ export const broadTruncated: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   },
                   "value_kind": "enum_value"
@@ -333,7 +338,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -342,7 +347,7 @@ export const broadTruncated: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Gross",
+                    "ref": "Gross",
                     "label": "gross"
                   },
                   "value_kind": "enum_value"
@@ -359,7 +364,7 @@ export const broadTruncated: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -451,7 +456,36 @@ export const broadTruncated: unknown = {
             "role_counts": {
               "financingProvider": 75,
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 1852,
+                "series": 1852,
+                "role_counts": {
+                  "financingProvider": 75,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 1748,
+                "series": 1748,
+                "role_counts": {
+                  "financingProvider": 76,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 1709,
+                "series": 1709,
+                "role_counts": {
+                  "financingProvider": 74,
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 15640,
@@ -492,7 +526,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -501,7 +535,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA",
+                      "ref": "CRSCooperationModalityA",
                       "label": "budget support"
                     },
                     "value_kind": "enum_value"
@@ -514,7 +548,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA02",
+                      "ref": "CRSCooperationModalityA02",
                       "label": "sector budget support"
                     },
                     "value_kind": "enum_value"
@@ -528,7 +562,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA01",
+                      "ref": "CRSCooperationModalityA01",
                       "label": "general budget support"
                     },
                     "value_kind": "enum_value"
@@ -542,7 +576,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB",
+                      "ref": "CRSCooperationModalityB",
                       "label": "core contribution and pooled programme and fund"
                     },
                     "value_kind": "enum_value"
@@ -555,7 +589,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB03",
+                      "ref": "CRSCooperationModalityB03",
                       "label": "contribution to specific-purpose programme and fund managed by an international organisation"
                     },
                     "value_kind": "enum_value"
@@ -569,7 +603,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB01",
+                      "ref": "CRSCooperationModalityB01",
                       "label": "core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes"
                     },
                     "value_kind": "enum_value"
@@ -583,7 +617,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB04",
+                      "ref": "CRSCooperationModalityB04",
                       "label": "basket fund and pooled funding"
                     },
                     "value_kind": "enum_value"
@@ -597,7 +631,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC",
+                      "ref": "CRSCooperationModalityC",
                       "label": "project-type intervention (group)"
                     },
                     "value_kind": "enum_value"
@@ -610,7 +644,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC01",
+                      "ref": "CRSCooperationModalityC01",
                       "label": "project-type intervention"
                     },
                     "value_kind": "enum_value"
@@ -624,7 +658,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD",
+                      "ref": "CRSCooperationModalityD",
                       "label": "expert and other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -637,7 +671,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD02",
+                      "ref": "CRSCooperationModalityD02",
                       "label": "other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -651,7 +685,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD01",
+                      "ref": "CRSCooperationModalityD01",
                       "label": "donor country personnel"
                     },
                     "value_kind": "enum_value"
@@ -665,7 +699,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE",
+                      "ref": "CRSCooperationModalityE",
                       "label": "scholarship and student cost in donor country"
                     },
                     "value_kind": "enum_value"
@@ -678,7 +712,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE01",
+                      "ref": "CRSCooperationModalityE01",
                       "label": "scholarship and training in donor country"
                     },
                     "value_kind": "enum_value"
@@ -692,7 +726,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE02",
+                      "ref": "CRSCooperationModalityE02",
                       "label": "imputed student cost"
                     },
                     "value_kind": "enum_value"
@@ -706,7 +740,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityF",
+                      "ref": "CRSCooperationModalityF",
                       "label": "debt relief (group)"
                     },
                     "value_kind": "enum_value"
@@ -719,7 +753,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityF01",
+                      "ref": "CRSCooperationModalityF01",
                       "label": "debt relief"
                     },
                     "value_kind": "enum_value"
@@ -733,7 +767,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityG",
+                      "ref": "CRSCooperationModalityG",
                       "label": "other administrative cost (group)"
                     },
                     "value_kind": "enum_value"
@@ -746,7 +780,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityG01",
+                      "ref": "CRSCooperationModalityG01",
                       "label": "other administrative cost"
                     },
                     "value_kind": "enum_value"
@@ -760,7 +794,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityH",
+                      "ref": "CRSCooperationModalityH",
                       "label": "other in-donor expenditure"
                     },
                     "value_kind": "enum_value"
@@ -773,7 +807,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityH01",
+                      "ref": "CRSCooperationModalityH01",
                       "label": "development awareness"
                     },
                     "value_kind": "enum_value"
@@ -787,7 +821,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityH02",
+                      "ref": "CRSCooperationModalityH02",
                       "label": "refugee and asylum seeker in donor country"
                     },
                     "value_kind": "enum_value"
@@ -806,7 +840,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -815,7 +849,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode998",
+                      "ref": "CRSPurposeCode998",
                       "label": "unallocated and unspecified"
                     },
                     "value_kind": "enum_value"
@@ -828,7 +862,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99810",
+                      "ref": "CRSPurposeCode99810",
                       "label": "sectors not specified"
                     },
                     "value_kind": "enum_value"
@@ -842,7 +876,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99820",
+                      "ref": "CRSPurposeCode99820",
                       "label": "non-sector allocable promotion of development awareness"
                     },
                     "value_kind": "enum_value"
@@ -856,7 +890,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode600",
+                      "ref": "CRSPurposeCode600",
                       "label": "action relating to debt"
                     },
                     "value_kind": "enum_value"
@@ -869,7 +903,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode60020",
+                      "ref": "CRSPurposeCode60020",
                       "label": "debt forgiveness"
                     },
                     "value_kind": "enum_value"
@@ -883,7 +917,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode60040",
+                      "ref": "CRSPurposeCode60040",
                       "label": "rescheduling and refinancing"
                     },
                     "value_kind": "enum_value"
@@ -897,7 +931,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode60062",
+                      "ref": "CRSPurposeCode60062",
                       "label": "other debt swap"
                     },
                     "value_kind": "enum_value"
@@ -911,7 +945,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode100",
+                      "ref": "CRSPurposeCode100",
                       "label": "social infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -924,7 +958,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode140",
+                      "ref": "CRSPurposeCode140",
                       "label": "water supply and sanitation"
                     },
                     "value_kind": "enum_value"
@@ -938,7 +972,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode110",
+                      "ref": "CRSPurposeCode110",
                       "label": "education"
                     },
                     "value_kind": "enum_value"
@@ -952,7 +986,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode160",
+                      "ref": "CRSPurposeCode160",
                       "label": "other social infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -966,7 +1000,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode120",
+                      "ref": "CRSPurposeCode120",
                       "label": "health"
                     },
                     "value_kind": "enum_value"
@@ -980,7 +1014,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode130",
+                      "ref": "CRSPurposeCode130",
                       "label": "population policy, programme, and reproductive health"
                     },
                     "value_kind": "enum_value"
@@ -994,7 +1028,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode150",
+                      "ref": "CRSPurposeCode150",
                       "label": "government and civil society"
                     },
                     "value_kind": "enum_value"
@@ -1008,7 +1042,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode200",
+                      "ref": "CRSPurposeCode200",
                       "label": "economic infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -1021,7 +1055,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode240",
+                      "ref": "CRSPurposeCode240",
                       "label": "banking and financial services"
                     },
                     "value_kind": "enum_value"
@@ -1035,7 +1069,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode220",
+                      "ref": "CRSPurposeCode220",
                       "label": "communication system and technology"
                     },
                     "value_kind": "enum_value"
@@ -1049,7 +1083,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode250",
+                      "ref": "CRSPurposeCode250",
                       "label": "business environment and governance"
                     },
                     "value_kind": "enum_value"
@@ -1063,7 +1097,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode210",
+                      "ref": "CRSPurposeCode210",
                       "label": "transport and storage"
                     },
                     "value_kind": "enum_value"
@@ -1077,7 +1111,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode230",
+                      "ref": "CRSPurposeCode230",
                       "label": "energy"
                     },
                     "value_kind": "enum_value"
@@ -1091,7 +1125,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode300",
+                      "ref": "CRSPurposeCode300",
                       "label": "productive sector"
                     },
                     "value_kind": "enum_value"
@@ -1104,7 +1138,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode310",
+                      "ref": "CRSPurposeCode310",
                       "label": "agriculture, forestry and fishing"
                     },
                     "value_kind": "enum_value"
@@ -1118,7 +1152,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode320",
+                      "ref": "CRSPurposeCode320",
                       "label": "industry, mining and construction"
                     },
                     "value_kind": "enum_value"
@@ -1132,7 +1166,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode332",
+                      "ref": "CRSPurposeCode332",
                       "label": "tourism"
                     },
                     "value_kind": "enum_value"
@@ -1146,7 +1180,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode331",
+                      "ref": "CRSPurposeCode331",
                       "label": "trade policies and regulations"
                     },
                     "value_kind": "enum_value"
@@ -1160,7 +1194,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode400",
+                      "ref": "CRSPurposeCode400",
                       "label": "multisector"
                     },
                     "value_kind": "enum_value"
@@ -1173,7 +1207,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode430",
+                      "ref": "CRSPurposeCode430",
                       "label": "other multisector"
                     },
                     "value_kind": "enum_value"
@@ -1187,7 +1221,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode410",
+                      "ref": "CRSPurposeCode410",
                       "label": "general environment protection"
                     },
                     "value_kind": "enum_value"
@@ -1201,7 +1235,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode500",
+                      "ref": "CRSPurposeCode500",
                       "label": "commodity aid and general programme assistance"
                     },
                     "value_kind": "enum_value"
@@ -1214,7 +1248,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode510",
+                      "ref": "CRSPurposeCode510",
                       "label": "budget support"
                     },
                     "value_kind": "enum_value"
@@ -1228,7 +1262,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode520",
+                      "ref": "CRSPurposeCode520",
                       "label": "food assistance"
                     },
                     "value_kind": "enum_value"
@@ -1242,7 +1276,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode530",
+                      "ref": "CRSPurposeCode530",
                       "label": "other commodity assistance"
                     },
                     "value_kind": "enum_value"
@@ -1256,7 +1290,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode700",
+                      "ref": "CRSPurposeCode700",
                       "label": "humanitarian aid"
                     },
                     "value_kind": "enum_value"
@@ -1269,7 +1303,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode720",
+                      "ref": "CRSPurposeCode720",
                       "label": "emergency response"
                     },
                     "value_kind": "enum_value"
@@ -1283,7 +1317,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode730",
+                      "ref": "CRSPurposeCode730",
                       "label": "reconstruction and rehabilitation"
                     },
                     "value_kind": "enum_value"
@@ -1297,7 +1331,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode740",
+                      "ref": "CRSPurposeCode740",
                       "label": "disaster preparedness"
                     },
                     "value_kind": "enum_value"
@@ -1311,7 +1345,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode910",
+                      "ref": "CRSPurposeCode910",
                       "label": "administrative costs of donors"
                     },
                     "value_kind": "enum_value"
@@ -1324,7 +1358,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode91010",
+                      "ref": "CRSPurposeCode91010",
                       "label": "non-sector allocable administrative costs"
                     },
                     "value_kind": "enum_value"
@@ -1338,7 +1372,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode930",
+                      "ref": "CRSPurposeCode930",
                       "label": "support for refugees and asylum seekers in donor countries"
                     },
                     "value_kind": "enum_value"
@@ -1351,7 +1385,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode93010",
+                      "ref": "CRSPurposeCode93010",
                       "label": "general support for refugees and asylum seekers in donor countries"
                     },
                     "value_kind": "enum_value"
@@ -1370,7 +1404,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -1379,7 +1413,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance100",
+                      "ref": "CRSTypeOfFinance100",
                       "label": "grant"
                     },
                     "value_kind": "enum_value"
@@ -1392,7 +1426,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance110",
+                      "ref": "CRSTypeOfFinance110",
                       "label": "standard grant"
                     },
                     "value_kind": "enum_value"
@@ -1406,7 +1440,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance210",
+                      "ref": "CRSTypeOfFinance210",
                       "label": "interest subsidy"
                     },
                     "value_kind": "enum_value"
@@ -1420,7 +1454,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance420",
+                      "ref": "CRSTypeOfFinance420",
                       "label": "debt instrument"
                     },
                     "value_kind": "enum_value"
@@ -1433,7 +1467,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance421",
+                      "ref": "CRSTypeOfFinance421",
                       "label": "standard loan"
                     },
                     "value_kind": "enum_value"
@@ -1447,7 +1481,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance422",
+                      "ref": "CRSTypeOfFinance422",
                       "label": "reimbursable grant"
                     },
                     "value_kind": "enum_value"
@@ -1461,7 +1495,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance500",
+                      "ref": "CRSTypeOfFinance500",
                       "label": "equity and share in collective investment vehicle"
                     },
                     "value_kind": "enum_value"
@@ -1474,7 +1508,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance510",
+                      "ref": "CRSTypeOfFinance510",
                       "label": "common equity"
                     },
                     "value_kind": "enum_value"
@@ -1488,7 +1522,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance520",
+                      "ref": "CRSTypeOfFinance520",
                       "label": "share in collective investment vehicle"
                     },
                     "value_kind": "enum_value"
@@ -1502,7 +1536,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance600",
+                      "ref": "CRSTypeOfFinance600",
                       "label": "debt relief"
                     },
                     "value_kind": "enum_value"
@@ -1515,7 +1549,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance610",
+                      "ref": "CRSTypeOfFinance610",
                       "label": "debt forgiveness of official development assistance claim on principal"
                     },
                     "value_kind": "enum_value"
@@ -1529,7 +1563,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance611",
+                      "ref": "CRSTypeOfFinance611",
                       "label": "debt forgiveness of official development assistance claim on interest"
                     },
                     "value_kind": "enum_value"
@@ -1543,7 +1577,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance620",
+                      "ref": "CRSTypeOfFinance620",
                       "label": "debt rescheduling of official development assistance claim on principal"
                     },
                     "value_kind": "enum_value"
@@ -1557,7 +1591,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance621",
+                      "ref": "CRSTypeOfFinance621",
                       "label": "debt rescheduling of official development assistance claim on interest"
                     },
                     "value_kind": "enum_value"
@@ -1576,7 +1610,7 @@ export const broadTruncated: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -1585,7 +1619,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow10",
+                      "ref": "CRSTypeOfFlow10",
                       "label": "official development assistance"
                     },
                     "value_kind": "enum_value"
@@ -1598,7 +1632,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow21",
+                      "ref": "CRSTypeOfFlow21",
                       "label": "non-export credit official flow"
                     },
                     "value_kind": "enum_value"
@@ -1611,7 +1645,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow30",
+                      "ref": "CRSTypeOfFlow30",
                       "label": "private development finance"
                     },
                     "value_kind": "enum_value"
@@ -1624,7 +1658,7 @@ export const broadTruncated: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow60",
+                      "ref": "CRSTypeOfFlow60",
                       "label": "private sector instrument"
                     },
                     "value_kind": "enum_value"
@@ -1652,13 +1686,13 @@ export const broadTruncated: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/OECDCreditorReportingSystem",
+                "ref": "provenance/OECDCreditorReportingSystem",
                 "label": "OECD Creditor Reporting System (CRS)",
                 "source": {
                   "ref": "dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd",
@@ -1676,7 +1710,7 @@ export const broadTruncated: unknown = {
                 "text": "ODA",
                 "named": [
                   {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   }
                 ],
@@ -1767,35 +1801,35 @@ export const broadTruncated: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialFlow",
+                    "ref": "FinancialFlow",
                     "label": "financial flow"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialFlowType",
                   "value": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   }
                 },
                 {
                   "axis": "nettingBasis",
                   "value": {
-                    "dcid": "Net",
+                    "ref": "Net",
                     "label": "net"
                   }
                 }
@@ -1867,28 +1901,28 @@ export const broadTruncated: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialObligation",
+                    "ref": "FinancialObligation",
                     "label": "financial obligation"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialObligationType",
                   "value": {
-                    "dcid": "Commitment",
+                    "ref": "Commitment",
                     "label": "commitment"
                   }
                 }
@@ -1909,35 +1943,35 @@ export const broadTruncated: unknown = {
             {
               "axis": "populationType",
               "value": {
-                "dcid": "FinancialFlow",
+                "ref": "FinancialFlow",
                 "label": "financial flow"
               }
             },
             {
               "axis": "measuredProperty",
               "value": {
-                "dcid": "amount",
+                "ref": "amount",
                 "label": "amount"
               }
             },
             {
               "axis": "measurementQualifier",
               "value": {
-                "dcid": "Nominal",
+                "ref": "Nominal",
                 "label": "nominal"
               }
             },
             {
               "axis": "financialFlowType",
               "value": {
-                "dcid": "Disbursement",
+                "ref": "Disbursement",
                 "label": "disbursement"
               }
             },
             {
               "axis": "nettingBasis",
               "value": {
-                "dcid": "Gross",
+                "ref": "Gross",
                 "label": "gross"
               }
             }
@@ -1951,14 +1985,14 @@ export const broadTruncated: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode16010",
+                    "ref": "CRSPurposeCode16010",
                     "label": "social protection"
                   },
                   "count": 12
                 },
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode43030",
+                    "ref": "CRSPurposeCode43030",
                     "label": "urban development and management"
                   },
                   "count": 12
@@ -1973,14 +2007,14 @@ export const broadTruncated: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance110",
+                    "ref": "CRSTypeOfFinance110",
                     "label": "standard grant"
                   },
                   "count": 892
                 },
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance421",
+                    "ref": "CRSTypeOfFinance421",
                     "label": "standard loan"
                   },
                   "count": 169
@@ -1995,14 +2029,14 @@ export const broadTruncated: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityC01",
+                    "ref": "CRSCooperationModalityC01",
                     "label": "project-type intervention"
                   },
                   "count": 354
                 },
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityD02",
+                    "ref": "CRSCooperationModalityD02",
                     "label": "other technical assistance"
                   },
                   "count": 151

@@ -1,9 +1,12 @@
 import { canvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare, type StudioShareKind } from '../chat/shareMode.ts';
-import type { Widget } from '../chat/widgets.ts';
+import type { CardInfo, Widget } from '../chat/widgets.ts';
+import { shortDateText } from '../sources/updateDates.ts';
 import type { LiveCard } from './liveBackend.ts';
-import { payloadProvenance } from './payload.ts';
+import type { Description } from './description.ts';
+import { cardDescription } from './infoPanel.ts';
+import { describedBy, payloadDescription, payloadProvenance } from './payload.ts';
 import { reviseWidget } from './widgets.ts';
 import type { FactSummary } from './wire.ts';
 
@@ -162,12 +165,7 @@ export const liveNote = (createdAt: string | undefined): string => {
     const written = createdAt ? new Date(createdAt) : null;
 
     return written && !Number.isNaN(written.getTime())
-        ? `Live data · titles and notes written ${written.toLocaleDateString('en-GB', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              timeZone: 'UTC',
-          })}`
+        ? `Live data · titles and notes written ${shortDateText(written)}`
         : 'Live data';
 };
 
@@ -478,13 +476,15 @@ export const refreshLiveCards = async (
 // attribution is built from the envelope's sources and the summary's
 // StatVars. The summary's `unit` text is one of the shapes the Studio
 // summary's `unit` takes, so it passes through as dfo-apis gave it.
-const factsOf = ({
-    component_id,
-    revision,
-    payload,
-    fact_summary: facts,
-}: LiveCard): FactSummary => {
-    const sources = payloadProvenance(payload)?.sources ?? [];
+const factsOf = (
+    { component_id, revision, payload, fact_summary: facts }: LiveCard,
+    description: Description | undefined,
+): FactSummary => {
+    // A described card names its sources in its description; its
+    // provenance holds lineage only.
+    const sources = description
+        ? description.sources.map(({ label }) => label)
+        : (payloadProvenance(payload)?.sources ?? []).map(({ name }) => name);
     const indicators = new Set(
         facts.series.map(({ coordinates }) => coordinates['stat_var']).filter(Boolean),
     );
@@ -493,9 +493,8 @@ const factsOf = ({
         component_id,
         revision,
         series: facts.series.map(({ id, label, point_count }) => ({ id, label, point_count })),
-        indicators: [],
         attribution: {
-            label: sources.map(({ name }) => name).join(', '),
+            label: sources.join(', '),
             source_count: sources.length,
             indicator_count: indicators.size,
         },
@@ -514,15 +513,20 @@ export const widgetFromLiveCard = (held: Widget, card: LiveCard): Widget | null 
     try {
         // The route's card is a component revision without the stream's
         // envelope fields, which `reviseWidget` does not read.
-        const drawn = reviseWidget(held, {
-            event: 'component.revised',
-            seq: 0,
-            changed: [],
-            component_id: card.component_id,
-            revision: card.revision,
-            payload: card.payload,
-            fact_summary: factsOf(card),
-        });
+        const read = payloadDescription(card.payload);
+        const drawn = reviseWidget(
+            held,
+            {
+                event: 'component.revised',
+                seq: 0,
+                changed: [],
+                component_id: card.component_id,
+                revision: card.revision,
+                payload: card.payload,
+                fact_summary: factsOf(card, describedBy(read)),
+            },
+            read,
+        );
 
         return drawn.kind !== 'text' && drawn.data ? drawn : null;
     } catch {
@@ -531,10 +535,20 @@ export const widgetFromLiveCard = (held: Widget, card: LiveCard): Widget | null 
     }
 };
 
-/** What a card's data leaves out, one sentence per gap, wherever the card is
- *  shown: the owner's Studio, a snapshot, an embed, or a live share. */
-export const leftOutOf = (info: { leftOut?: string[] } | null | undefined): string[] =>
-    info?.leftOut ?? [];
+/** What a card's data leaves out, one sentence each, wherever the card is
+ *  shown: the owner's Studio, a snapshot, an embed, or a live share. A
+ *  described card reads the sentences of its coverage gaps, and its other
+ *  caveats stay in More Info. A legacy card reads the coverage gaps its
+ *  provenance warned of. */
+export const leftOutOf = (
+    info: Pick<CardInfo, 'leftOut' | 'description'> | null | undefined,
+): string[] => {
+    const description = info && cardDescription(info);
+
+    return description
+        ? description.caveats.filter(({ kind }) => kind === 'coverage_gap').map(({ text }) => text)
+        : (info?.leftOut ?? []);
+};
 
 /** A data card of a live canvas: every card but the user's text cards and
  *  the agent's notes. */

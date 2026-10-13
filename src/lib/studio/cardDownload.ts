@@ -22,6 +22,32 @@ export type CardDataOptions = { format: DatasetFormat; bundle: boolean };
 export const cardRefOf = (widget: Widget): CardRef | null =>
     (widget.kind !== 'text' && widget.ref) || null;
 
+/** component_id → the revision each card draws: what a card-scoped turn
+ *  addresses after a saved conversation is reopened. */
+export const cardRevisions = (widgets: Widget[]): Map<string, number> =>
+    new Map(
+        widgets.flatMap((widget) => {
+            const ref = cardRefOf(widget);
+
+            return ref ? [[ref.component_id, ref.revision] as const] : [];
+        }),
+    );
+
+/** Restore only the refs known to the saved session. Legacy saves use their cards. */
+export const restoreCardRevisions = (saved?: {
+    sessionId: string | null;
+    widgets: Widget[];
+    componentRefs?: CardRef[];
+}): Map<string, number> => {
+    if (!saved?.sessionId) {
+        return new Map();
+    }
+
+    return saved.componentRefs
+        ? new Map(saved.componentRefs.map((ref) => [ref.component_id, ref.revision]))
+        : cardRevisions(saved.widgets);
+};
+
 const componentDataPath = (componentId: string, revision: string | number): string =>
     `/api/presentation/components/${encodeURIComponent(componentId)}/revisions/${encodeURIComponent(String(revision))}/data`;
 

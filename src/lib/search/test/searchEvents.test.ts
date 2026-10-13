@@ -9,7 +9,7 @@ import type { HydratedPart } from '../types.ts';
 // "ODA from France to Kenya" against the dev API elects 308 CRS StatVars;
 // "to all recipients" resolves some 200 places.
 const entities = Array.from({ length: 204 }, (_, i) => ({
-    dcid: `country/C${String(i).padStart(2, '0')}`,
+    ref: `country/C${String(i).padStart(2, '0')}`,
     label: `Country ${i}`,
 }));
 
@@ -39,7 +39,7 @@ const aidPart = {
         stat_vars: { member_count: 308, member_count_exact: true, served_count: 308 },
         resolution: {
             resolved_entities: entities,
-            resolved_sources: [{ dcid: 'dc/base/OECD_CRS', label: 'OECD CRS' }],
+            resolved_sources: [{ ref: 'dc/base/OECD_CRS', label: 'OECD CRS' }],
         },
     },
 } as unknown as HydratedPart;
@@ -101,7 +101,7 @@ const withSources = (part: HydratedPart, count: number, length = 10): HydratedPa
             resolution: {
                 ...spec.resolution,
                 resolved_sources: Array.from({ length: count }, (_, at) => ({
-                    dcid: `provenance/${String(at).padStart(length, 's')}`,
+                    ref: `provenance/${String(at).padStart(length, 's')}`,
                 })),
             },
         },
@@ -154,7 +154,7 @@ test('a group question records the group, three members and the exact count', ()
                     ],
                     entities: { origin: ['country/FRA'], destination: members },
                 },
-                entity_groups: { destination: { dcid: 'grp/UN', label: 'UN members' } },
+                entity_groups: { destination: { ref: 'grp/UN', label: 'UN members' } },
             },
         } as HydratedPart,
     ]).resolved;

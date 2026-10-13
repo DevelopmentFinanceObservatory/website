@@ -163,11 +163,21 @@ button.leftOut {
     color: var(--th-text, var(--color-charcoal));
     letter-spacing: -0.02em;
 
-    // Long sources wrap instead of running off.
+    // Long sources wrap, and a card citing many
+    // scrolls within the room Radix finds beside the tag.
+    max-height: var(--radix-popover-content-available-height);
+    overflow-y: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     background-color: var(--th-popup, var(--color-popup));
     border-radius: rem(4);
+
+    // Pinning focuses the popup, so a keyboard user sees where the arrow keys
+    // scroll.
+    &:focus-visible {
+        outline: 1px solid var(--th-text, var(--color-charcoal));
+        outline-offset: 2px;
+    }
 }
 
 .builtWith {

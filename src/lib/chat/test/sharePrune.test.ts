@@ -11,6 +11,7 @@ import { pruneForShare, shareForViewer, type ShareKind } from '../sharePrune.ts'
 const saved: SavedConversation = {
     id: 'conv-1',
     sessionId: 'harness-session-1',
+    componentRefs: [{ component_id: 'private-card', revision: 3 }],
     title: 'Aid to Kenya',
     updatedAt: 1,
     messages: [
@@ -29,19 +30,27 @@ const saved: SavedConversation = {
 const kinds: ShareKind[] = ['conversation', 'canvas', 'card', 'search'];
 
 for (const kind of kinds) {
-    test(`pruneForShare: a ${kind} share carries no sessionId`, () => {
-        assert.equal(pruneForShare(saved, kind, 'note-1').sessionId, null);
+    test(`pruneForShare: a ${kind} share clears the session and its owned refs`, () => {
+        const shared = pruneForShare(saved, kind, 'note-1');
+
+        assert.equal(shared.sessionId, null);
+        assert.deepEqual(shared.componentRefs, []);
     });
 }
 
 test('pruneForShare: a conversation share keeps the chat and the canvas', () => {
-    assert.deepEqual(pruneForShare(saved, 'conversation'), { ...saved, sessionId: null });
+    assert.deepEqual(pruneForShare(saved, 'conversation'), {
+        ...saved,
+        sessionId: null,
+        componentRefs: [],
+    });
 });
 
 test("pruneForShare: the owner's saved conversation is left untouched", () => {
     pruneForShare(saved, 'conversation');
 
     assert.equal(saved.sessionId, 'harness-session-1');
+    assert.deepEqual(saved.componentRefs, [{ component_id: 'private-card', revision: 3 }]);
 });
 
 test('pruneForShare: a canvas share drops the transcript', () => {
@@ -64,13 +73,18 @@ test('shareForViewer: a stored conversation, canvas or card share reaches a view
         const row = {
             id: 'abcd1234',
             kind,
-            data: { sessionId: 'harness-1', title: 'Chat', turnCount: 2 },
+            data: {
+                sessionId: 'harness-1',
+                componentRefs: saved.componentRefs,
+                title: 'Chat',
+                turnCount: 2,
+            },
         };
 
         assert.deepEqual(shareForViewer(row), {
             id: 'abcd1234',
             kind,
-            data: { sessionId: null, title: 'Chat', turnCount: 2 },
+            data: { sessionId: null, componentRefs: [], title: 'Chat', turnCount: 2 },
         });
         assert.equal(row.data.sessionId, 'harness-1');
     }

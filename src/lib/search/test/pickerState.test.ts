@@ -9,6 +9,7 @@ import {
     mergeEntitySeedWithFetch,
     multiSelectApplyLabel,
     optionCoverageRankingBlocked,
+    optionFilterCount,
     shouldShowOptionFilter,
     toEntityOption,
     toggleDcid,
@@ -33,7 +34,7 @@ test('filterOptionsByQuery matches case-insensitively against the caller label',
 });
 
 test('entityOptionDcid reads the nested SlotOption shape and the flat EntityOption shape', () => {
-    assert.equal(entityOptionDcid({ value: { ref: { dcid: 'country/KEN' } } }), 'country/KEN');
+    assert.equal(entityOptionDcid({ value: { ref: { ref: 'country/KEN' } } }), 'country/KEN');
     assert.equal(entityOptionDcid({ dcid: 'country/ETH', label: 'Ethiopia' }), 'country/ETH');
     assert.equal(entityOptionDcid({}), undefined);
 });
@@ -41,7 +42,7 @@ test('entityOptionDcid reads the nested SlotOption shape and the flat EntityOpti
 test('toEntityOption normalizes either shape, dropping an option with no dcid or label', () => {
     assert.deepEqual(
         toEntityOption({
-            value: { ref: { dcid: 'country/KEN', label: 'Kenya' } },
+            value: { ref: { ref: 'country/KEN', label: 'Kenya' } },
             coverage: { kind: 'bare', has_data: true },
         }),
         { dcid: 'country/KEN', label: 'Kenya', coverage: { kind: 'bare', has_data: true } },
@@ -51,12 +52,12 @@ test('toEntityOption normalizes either shape, dropping an option with no dcid or
         label: 'Ethiopia',
         coverage: undefined,
     });
-    assert.equal(toEntityOption({ value: { ref: { dcid: 'country/KEN' } } }), null);
+    assert.equal(toEntityOption({ value: { ref: { ref: 'country/KEN' } } }), null);
     assert.equal(toEntityOption({ label: 'No dcid' }), null);
 });
 
 test('mergeEntitySeedWithFetch renders the normalized seed alone while the fetch is in flight', () => {
-    const seed = [{ value: { ref: { dcid: 'country/KEN', label: 'Kenya' } } }];
+    const seed = [{ value: { ref: { ref: 'country/KEN', label: 'Kenya' } } }];
 
     assert.deepEqual(mergeEntitySeedWithFetch(seed, null), [
         { dcid: 'country/KEN', label: 'Kenya', coverage: undefined },
@@ -65,8 +66,8 @@ test('mergeEntitySeedWithFetch renders the normalized seed alone while the fetch
 
 test('mergeEntitySeedWithFetch prefers the fetched entry for a shared dcid, dedupes it once, and appends seed-only extras', () => {
     const seed = [
-        { value: { ref: { dcid: 'country/KEN', label: 'Kenya (stale)' } } },
-        { value: { ref: { dcid: 'country/ETH', label: 'Ethiopia' } } },
+        { value: { ref: { ref: 'country/KEN', label: 'Kenya (stale)' } } },
+        { value: { ref: { ref: 'country/ETH', label: 'Ethiopia' } } },
     ];
     const fetched: EntityOption[] = [
         { dcid: 'country/KEN', label: 'Kenya', coverage: { kind: 'bare', has_data: true } },
@@ -142,4 +143,10 @@ test('multiSelectApplyLabel counts a pending selection and drops the count for A
     assert.equal(multiSelectApplyLabel(3, false), 'Apply (3)');
     assert.equal(multiSelectApplyLabel(3, true), 'Apply');
     assert.equal(multiSelectApplyLabel(0, false), 'Apply');
+});
+
+test('optionFilterCount names the shown share of the list, or the total while nothing is hidden', () => {
+    assert.equal(optionFilterCount(12, 216), '12 of 216 listed');
+    assert.equal(optionFilterCount(0, 1450), '0 of 1,450 listed');
+    assert.equal(optionFilterCount(216, 216), '216 listed');
 });

@@ -22,8 +22,8 @@ export const gdpOfCongoNoData: NoData = {
         {
             text: 'Congo',
             candidates: [
-                { dcid: 'country/COD', label: 'Congo [DRC]', kind: 'country' },
-                { dcid: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
+                { ref: 'country/COD', label: 'Congo [DRC]', kind: 'country' },
+                { ref: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
             ],
         },
     ],
@@ -42,8 +42,8 @@ export const odaToCongoNoData: NoData = {
         {
             text: 'Congo',
             candidates: [
-                { dcid: 'country/COD', label: 'Congo [DRC]', kind: 'country' },
-                { dcid: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
+                { ref: 'country/COD', label: 'Congo [DRC]', kind: 'country' },
+                { ref: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
             ],
         },
     ],

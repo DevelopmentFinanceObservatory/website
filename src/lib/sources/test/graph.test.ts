@@ -265,7 +265,7 @@ test('loadSourceDoc throws when the request itself fails', async (t) => {
     });
 });
 
-test('loadSourceDoc strips a dcid: prefix and fills a missing document_errors', async (t) => {
+test('loadSourceDoc strips a dcid: prefix', async (t) => {
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
         json({ details: { name_of_source: 'IDS' }, gaps: [] }),
     );
@@ -276,7 +276,17 @@ test('loadSourceDoc strips a dcid: prefix and fills a missing document_errors', 
         String(fetchMock.mock.calls[0].arguments[0]),
         /\/api\/graph\/documentation\/dc\/d\/WorldBank_InternationalDebtStatistics$/,
     );
-    assert.deepEqual(doc?.document_errors, []);
+    assert.deepEqual(doc, { details: { name_of_source: 'IDS' }, gaps: [], document_errors: [] });
+});
+
+test('loadSourceDoc gives a document that omits document_errors an empty list and keeps a served one', async (t) => {
+    const served = [{ member: 'data_notes', line: 3, reason: 'empty_section' }];
+    const bodies = [{ gaps: [] }, { gaps: [], document_errors: served }];
+
+    t.mock.method(globalThis, 'fetch', async () => json(bodies.shift()));
+
+    assert.deepEqual((await loadSourceDoc('dc/d/A'))?.document_errors, []);
+    assert.deepEqual((await loadSourceDoc('dc/d/B'))?.document_errors, served);
 });
 
 test('loadSourceDoc keeps the slashes of a real dcid and encodes each segment', async (t) => {

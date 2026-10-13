@@ -293,19 +293,19 @@ export const multiCandidate: unknown = {
                 "shape_id": "economicactivity_amount_measuredvalue_per_amount_economicactivity_grossdomesticproduction_nominal",
                 "label": "Percent of nominal GDP spent on education",
                 "population_type": {
-                  "dcid": "EconomicActivity",
+                  "ref": "EconomicActivity",
                   "label": "EconomicActivity"
                 },
                 "measured_property": {
-                  "dcid": "amount",
+                  "ref": "amount",
                   "label": "amount"
                 },
                 "stat_type": {
-                  "dcid": "measuredValue",
+                  "ref": "measuredValue",
                   "label": "measuredValue"
                 },
                 "measurement_denominator": {
-                  "dcid": "Amount_EconomicActivity_GrossDomesticProduction_Nominal",
+                  "ref": "Amount_EconomicActivity_GrossDomesticProduction_Nominal",
                   "label": "Nominal gross domestic product"
                 },
                 "measurement_denominator_unresolved": false,
@@ -313,7 +313,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -321,7 +321,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -329,7 +329,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -371,7 +371,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -380,7 +380,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "ExpenditureActivity",
+                        "ref": "ExpenditureActivity",
                         "label": "ExpenditureActivity"
                       },
                       "value_kind": "enum_value"
@@ -392,7 +392,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -401,7 +401,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "EducationExpenditure",
+                        "ref": "EducationExpenditure",
                         "label": "EducationExpenditure"
                       },
                       "value_kind": "enum_value"
@@ -413,7 +413,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -422,7 +422,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "Government",
+                        "ref": "Government",
                         "label": "Government"
                       },
                       "value_kind": "enum_value"
@@ -439,7 +439,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "country/KEN",
+                        "ref": "country/KEN",
                         "label": "Kenya"
                       },
                       "value_kind": "entity"
@@ -544,7 +544,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -553,7 +553,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "ExpenditureActivity",
+                          "ref": "ExpenditureActivity",
                           "label": "ExpenditureActivity"
                         },
                         "value_kind": "enum_value"
@@ -567,7 +567,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -576,7 +576,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "EducationExpenditure",
+                          "ref": "EducationExpenditure",
                           "label": "EducationExpenditure"
                         },
                         "value_kind": "enum_value"
@@ -590,7 +590,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -599,7 +599,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "Government",
+                          "ref": "Government",
                           "label": "Government"
                         },
                         "value_kind": "enum_value"
@@ -616,13 +616,13 @@ export const multiCandidate: unknown = {
               "trace": {
                 "resolved_entities": [
                   {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   }
                 ],
                 "resolved_sources": [
                   {
-                    "dcid": "dc/base/WorldDevelopmentIndicators",
+                    "ref": "dc/base/WorldDevelopmentIndicators",
                     "label": "World Development Indicators",
                     "source": {
                       "ref": "dc/s/WorldBank",
@@ -702,19 +702,19 @@ export const multiCandidate: unknown = {
                 "shape_id": "economicactivity_amount_measuredvalue_per_amount_economicactivity_expenditureactivity_government",
                 "label": "Percent of total government expenditure on education",
                 "population_type": {
-                  "dcid": "EconomicActivity",
+                  "ref": "EconomicActivity",
                   "label": "EconomicActivity"
                 },
                 "measured_property": {
-                  "dcid": "amount",
+                  "ref": "amount",
                   "label": "amount"
                 },
                 "stat_type": {
-                  "dcid": "measuredValue",
+                  "ref": "measuredValue",
                   "label": "measuredValue"
                 },
                 "measurement_denominator": {
-                  "dcid": "Amount_EconomicActivity_ExpenditureActivity_Government",
+                  "ref": "Amount_EconomicActivity_ExpenditureActivity_Government",
                   "label": "Amount Of Economic Activity: Expenditure Activity, Government"
                 },
                 "measurement_denominator_unresolved": false,
@@ -722,7 +722,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -730,7 +730,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -738,7 +738,7 @@ export const multiCandidate: unknown = {
                   {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -780,7 +780,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -789,7 +789,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "ExpenditureActivity",
+                        "ref": "ExpenditureActivity",
                         "label": "ExpenditureActivity"
                       },
                       "value_kind": "enum_value"
@@ -801,7 +801,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -810,7 +810,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "EducationExpenditure",
+                        "ref": "EducationExpenditure",
                         "label": "EducationExpenditure"
                       },
                       "value_kind": "enum_value"
@@ -822,7 +822,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -831,7 +831,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "Government",
+                        "ref": "Government",
                         "label": "Government"
                       },
                       "value_kind": "enum_value"
@@ -848,7 +848,7 @@ export const multiCandidate: unknown = {
                     "kind": "value",
                     "value": {
                       "ref": {
-                        "dcid": "country/KEN",
+                        "ref": "country/KEN",
                         "label": "Kenya"
                       },
                       "value_kind": "entity"
@@ -953,7 +953,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "activitySource",
+                      "ref": "activitySource",
                       "label": "activitySource"
                     },
                     "label": "activity source"
@@ -962,7 +962,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "ExpenditureActivity",
+                          "ref": "ExpenditureActivity",
                           "label": "ExpenditureActivity"
                         },
                         "value_kind": "enum_value"
@@ -976,7 +976,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expenditureType",
+                      "ref": "expenditureType",
                       "label": "expenditureType"
                     },
                     "label": "expenditure type"
@@ -985,7 +985,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "EducationExpenditure",
+                          "ref": "EducationExpenditure",
                           "label": "EducationExpenditure"
                         },
                         "value_kind": "enum_value"
@@ -999,7 +999,7 @@ export const multiCandidate: unknown = {
                   "key": {
                     "axis": "how",
                     "property": {
-                      "dcid": "expensor",
+                      "ref": "expensor",
                       "label": "expensor"
                     },
                     "label": "expensor"
@@ -1008,7 +1008,7 @@ export const multiCandidate: unknown = {
                     {
                       "value": {
                         "ref": {
-                          "dcid": "Government",
+                          "ref": "Government",
                           "label": "Government"
                         },
                         "value_kind": "enum_value"
@@ -1025,13 +1025,13 @@ export const multiCandidate: unknown = {
               "trace": {
                 "resolved_entities": [
                   {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   }
                 ],
                 "resolved_sources": [
                   {
-                    "dcid": "dc/base/WorldDevelopmentIndicators",
+                    "ref": "dc/base/WorldDevelopmentIndicators",
                     "label": "World Development Indicators",
                     "source": {
                       "ref": "dc/s/WorldBank",

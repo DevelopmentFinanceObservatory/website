@@ -12,6 +12,7 @@ import {
     flattenPartsRows,
     formatCount,
     formatValue,
+    markedTotalColumns,
     methodCellText,
     observationCount,
     observationsOmissionText,
@@ -157,6 +158,8 @@ const SearchTable = ({
         { key: 'value', label: sharedUnit ? `Value (${sharedUnit})` : 'Value' },
     ];
 
+    const marked = markedTotalColumns(parts);
+
     const cellText = (row: PartResultRow, key: string): string => {
         switch (key) {
             case 'variable':
@@ -170,7 +173,7 @@ const SearchTable = ({
                     !sharedUnit && row.unit && row.value != null ? ` ${row.unit}` : ''
                 }`;
             default:
-                return previewCellText(row, key);
+                return previewCellText(row, key, marked);
         }
     };
 

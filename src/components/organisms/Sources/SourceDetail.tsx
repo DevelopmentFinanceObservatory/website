@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import styles from './SourceDetail.module.scss';
 import { originLine } from '@/lib/dataCommons';
 import type { ChangeKind, SourceDoc, SourceRelease } from '@/lib/sources/graph';
+import { nextReleaseText, sourceDateText } from '@/lib/sources/updateDates';
 import { httpOnly } from '@/lib/sources/url';
 
 import Button from '@/components/atoms/Button/Button';
@@ -118,8 +119,10 @@ const Rows = ({ rows }: { rows: Row[] }) => (
  * Overview = two-column sections; Transformation Log = numbered cards;
  * Version History = a dated timeline. Placeholder copy (see sourcesData).
  * The tab lives in the URL (?tab=log) — shareable, survives a reload.
+ * `now` is the request time as an ISO string, read on the server, so the
+ * overdue mark on the next release hydrates as it rendered.
  */
-const SourceDetail = ({ dcid, doc }: { dcid: string; doc: SourceDoc }) => {
+const SourceDetail = ({ dcid, doc, now }: { dcid: string; doc: SourceDoc; now: string }) => {
     const sectionRef = useReveal<HTMLElement>();
     const [urlTab, setTab] = useUrlParam<Tab>('tab', parseTab, (t) =>
         t === 'overview' ? null : t,
@@ -156,8 +159,16 @@ const SourceDetail = ({ dcid, doc }: { dcid: string; doc: SourceDoc }) => {
             href: licenseHref,
         },
         { label: 'Update Cadence', value: license.update_cadence },
-        { label: 'Last Update', value: license.last_update },
-        { label: 'Next Expected Update', value: license.next_expected_update },
+        {
+            label: 'Downloaded by DFO',
+            value: license.last_update && sourceDateText(license.last_update),
+        },
+        {
+            label: 'Next release expected',
+            value:
+                license.next_expected_update &&
+                nextReleaseText(license.next_expected_update, new Date(now)),
+        },
     ].filter((row): row is Row => !!row.value);
     const scopeRows = [
         { label: 'Countries', value: scope.countries.length ? scope.countries.join(', ') : null },

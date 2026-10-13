@@ -1,0 +1,121 @@
+{
+  "id": "hiv-eastern-africa",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "HIV in Eastern Africa",
+  "views": {},
+  "canvas": {
+    "ids": [
+      "cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1",
+      "cmp_01M4RBRR2XE6TRP8HTAZH3WQNH"
+    ],
+    "revision": 13,
+    "compositionId": "cps_8708e2631bc24943"
+  },
+  "layout": {
+    "cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    },
+    "cmp_01M4RBRR2XE6TRP8HTAZH3WQNH": {
+      "h": 14,
+      "w": 22,
+      "col": 23,
+      "row": 0
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "kind": "chart",
+      "id": "cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1",
+      "turn": 1,
+      "chartType": "line",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1"
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "cmp_01M4RBJ96X0F8CQANA1W9MGJ11",
+      "turn": 2,
+      "chartType": "bar",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RBJ96X0F8CQANA1W9MGJ11"
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "cmp_01M4RBM7CP9QP8QRE6NKR4QZJA",
+      "turn": 3,
+      "chartType": "bar",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RBM7CP9QP8QRE6NKR4QZJA"
+      }
+    },
+    {
+      "kind": "table",
+      "id": "cmp_01M4RBM7JGR6QP00S8CA7KAC3Q",
+      "turn": 3,
+      "title": "",
+      "columns": [],
+      "rows": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RBM7JGR6QP00S8CA7KAC3Q"
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "cmp_01M4RBRR2XE6TRP8HTAZH3WQNH",
+      "turn": 4,
+      "chartType": "bar",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RBRR2XE6TRP8HTAZH3WQNH"
+      }
+    }
+  ],
+  "activity": [],
+  "graceIds": [
+    "cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1"
+  ],
+  "messages": [],
+  "graceTurn": 4,
+  "pinnedIds": [],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 4,
+  "updatedAt": 1791819051035,
+  "removedIds": [
+    "cmp_01M4RBM7CP9QP8QRE6NKR4QZJA",
+    "cmp_01M4RBM7JGR6QP00S8CA7KAC3Q"
+  ],
+  "shareMarks": [
+    {
+      "at": 1791819050241,
+      "shareId": "CNmN2l6V",
+      "messageIndex": 8
+    }
+  ]
+}

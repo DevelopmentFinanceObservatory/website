@@ -127,19 +127,19 @@ export const methodUnbound: unknown = {
             "shape_id": "economicactivity_amount_measuredvalue_realvalue",
             "label": "Amount Of Economic Activity (Real Value): Gross Value Added",
             "population_type": {
-              "dcid": "EconomicActivity",
+              "ref": "EconomicActivity",
               "label": "EconomicActivity"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "RealValue",
+              "ref": "RealValue",
               "label": "RealValue"
             },
             "measurement_denominator_unresolved": false,
@@ -147,7 +147,7 @@ export const methodUnbound: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -155,7 +155,7 @@ export const methodUnbound: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "isic",
+                  "ref": "isic",
                   "label": "isic"
                 },
                 "label": "isic"
@@ -163,7 +163,7 @@ export const methodUnbound: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "naics",
+                  "ref": "naics",
                   "label": "naics"
                 },
                 "label": "naics"
@@ -195,7 +195,7 @@ export const methodUnbound: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -204,7 +204,7 @@ export const methodUnbound: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "GrossValueAdded",
+                    "ref": "GrossValueAdded",
                     "label": "GrossValueAdded"
                   },
                   "value_kind": "enum_value"
@@ -216,7 +216,7 @@ export const methodUnbound: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "isic",
+                  "ref": "isic",
                   "label": "isic"
                 },
                 "label": "isic"
@@ -230,7 +230,7 @@ export const methodUnbound: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "naics",
+                  "ref": "naics",
                   "label": "naics"
                 },
                 "label": "naics"
@@ -249,7 +249,7 @@ export const methodUnbound: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/IND",
+                    "ref": "country/IND",
                     "label": "India"
                   },
                   "value_kind": "entity"
@@ -386,7 +386,7 @@ export const methodUnbound: unknown = {
                 "total_obs": 14,
                 "source_refs": [
                   {
-                    "dcid": "dc/base/India_RBIStateDomesticProduct_AggCountry",
+                    "ref": "dc/base/India_RBIStateDomesticProduct_AggCountry",
                     "label": "Database on Indian Economy",
                     "source": {
                       "ref": "dc/s/ReserveBankOfIndia",
@@ -430,7 +430,7 @@ export const methodUnbound: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -439,7 +439,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "GrossValueAdded",
+                      "ref": "GrossValueAdded",
                       "label": "GrossValueAdded"
                     },
                     "value_kind": "enum_value"
@@ -480,7 +480,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "dc/base/India_NationalAccountsStatistics",
+                      "ref": "dc/base/India_NationalAccountsStatistics",
                       "label": "India National Accounts Statistics"
                     },
                     "value_kind": "source"
@@ -489,7 +489,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "dc/base/India_RBIStateDomesticProduct_AggCountry",
+                      "ref": "dc/base/India_RBIStateDomesticProduct_AggCountry",
                       "label": "Database on Indian Economy"
                     },
                     "value_kind": "source"
@@ -498,7 +498,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "dc/base/India_RBIStateDomesticProduct_StatVarAgg_AggCountry",
+                      "ref": "dc/base/India_RBIStateDomesticProduct_StatVarAgg_AggCountry",
                       "label": "Database on Indian Economy"
                     },
                     "value_kind": "source"
@@ -514,7 +514,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CurrentPrice_WithBaseYear2011_12",
+                      "ref": "CurrentPrice_WithBaseYear2011_12",
                       "label": "Current Price With Base Year as 2011 - 12"
                     },
                     "value_kind": "enum_value"
@@ -523,7 +523,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "MOSPIFirstAdvanceEstimates",
+                      "ref": "MOSPIFirstAdvanceEstimates",
                       "label": "MOSPI First Advance Estimates"
                     },
                     "value_kind": "enum_value"
@@ -532,7 +532,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "MOSPIProvisionalEstimates",
+                      "ref": "MOSPIProvisionalEstimates",
                       "label": "MOSPI Provisional Estimates"
                     },
                     "value_kind": "enum_value"
@@ -541,7 +541,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "MOSPISecondRevisedEstimates",
+                      "ref": "MOSPISecondRevisedEstimates",
                       "label": "MOSPI Second Revised Estimates"
                     },
                     "value_kind": "enum_value"
@@ -550,7 +550,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "MOSPISecondAdvanceEstimates",
+                      "ref": "MOSPISecondAdvanceEstimates",
                       "label": "MOSPI Second Advance Estimates"
                     },
                     "value_kind": "enum_value"
@@ -559,7 +559,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "MOSPIThirdRevisedEstimates",
+                      "ref": "MOSPIThirdRevisedEstimates",
                       "label": "MOSPI Third Revised Estimates"
                     },
                     "value_kind": "enum_value"
@@ -568,7 +568,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CurrentPrice_WithBaseYear2004_05",
+                      "ref": "CurrentPrice_WithBaseYear2004_05",
                       "label": "Current Price With Base Year as 2004 - 05"
                     },
                     "value_kind": "enum_value"
@@ -584,7 +584,7 @@ export const methodUnbound: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "INR",
+                      "ref": "INR",
                       "label": "INR"
                     },
                     "value_kind": "enum_value"
@@ -599,13 +599,13 @@ export const methodUnbound: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/IND",
+                "ref": "country/IND",
                 "label": "India"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/India_RBIStateDomesticProduct_AggCountry",
+                "ref": "dc/base/India_RBIStateDomesticProduct_AggCountry",
                 "label": "Database on Indian Economy",
                 "source": {
                   "ref": "dc/s/ReserveBankOfIndia",
@@ -636,13 +636,13 @@ export const methodUnbound: unknown = {
           "measure_label_axes": [],
           "measure_axis_values": [],
           "related_group": {
-            "dcid": "dc/g/EconomicActivity_ActivitySource-GrossValueAdded",
+            "ref": "dc/g/EconomicActivity_ActivitySource-GrossValueAdded",
             "label": "Economic Activity With Activity Source = Gross Value Added"
           },
           "related_measures": [
             {
               "stat_var": {
-                "dcid": "Nominal_Amount_EconomicActivity_GrossValueAdded",
+                "ref": "Nominal_Amount_EconomicActivity_GrossValueAdded",
                 "label": "Gross value added at constant prices"
               },
               "definition": {
