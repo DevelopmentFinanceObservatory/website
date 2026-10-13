@@ -58,6 +58,7 @@ export const useCardDownload = (
         toggleBundle: () => setBundle((prev) => !prev),
         enrichmentGroups: [],
         enrichment: [],
+        totalsNote: null,
         toggleEnrichment: () => {},
         downloading,
         progress: null,

@@ -130,7 +130,7 @@ const askedFor = (
                 return [
                     role,
                     {
-                        group: group ? { dcid: group.dcid, label: group.label } : null,
+                        group: group ? { dcid: group.ref, label: group.label } : null,
                         sample: sample(members),
                         count: members.length,
                     },
@@ -167,7 +167,7 @@ export function searchEventProps({
     const resolve = (rung: Rung) =>
         definite.map((spec) => {
             const sources: string[] = (spec.resolution?.resolved_sources ?? []).map(
-                (source: { dcid: string }) => source.dcid,
+                (source: { ref: string }) => source.ref,
             );
 
             const asked = askedFor(spec.identity, spec.entity_groups);

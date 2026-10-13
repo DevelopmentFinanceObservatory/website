@@ -11,6 +11,7 @@
  */
 
 import { keyRef } from './searchClient.ts';
+import { capitalise } from '../capitalise.ts';
 import type { EntityRoleKey, SentenceToken, UnitConversion } from './types.ts';
 import { priceBasis } from './unitLabel.ts';
 import type { PriceBasis } from './unitLabel.ts';
@@ -51,11 +52,9 @@ export type TokenAboutModel = {
 // territories inside it, so its members are named as places.
 const REGION_GROUP_TYPES: ReadonlySet<string> = new Set(['Continent', 'UNGeoRegion']);
 
-const sentenceCase = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
-
 // "AdministrativeArea1" → "Administrative area 1".
 const typeWords = (type: string): string =>
-    sentenceCase(
+    capitalise(
         type
             .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
             .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
@@ -137,16 +136,16 @@ const measureAbout = (
     ].filter((fact): fact is string => !!fact);
     const reason = count != null && count > 1 ? seriesReason(spec) : null;
     const values: AboutDefinition[] = (spec?.measure_axis_values ?? [])
-        .filter((entry: any) => entry?.value?.dcid && !statedElsewhere.has(`axis:${entry.axis}`))
+        .filter((entry: any) => entry?.value?.ref && !statedElsewhere.has(`axis:${entry.axis}`))
         .map((entry: any) => ({
-            label: sentenceCase(entry.value.label ?? entry.value.dcid),
-            dcid: entry.value.dcid,
+            label: capitalise(entry.value.label ?? entry.value.ref),
+            dcid: entry.value.ref,
         }));
     const name = spec?.measure_label ?? token.text;
 
     return {
         kind: 'measure',
-        title: sentenceCase(name.trim()),
+        title: capitalise(name.trim()),
         facts,
         notes: reason ? [reason] : [],
         definitions: values,
@@ -218,7 +217,7 @@ const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
             title: group.label,
             facts: [fact],
             notes: [listNames(names)],
-            definitions: group.dcid ? [{ label: null, dcid: group.dcid }] : [],
+            definitions: group.ref ? [{ label: null, dcid: group.ref }] : [],
             sources: [],
         };
     }
@@ -273,16 +272,16 @@ const codeAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
             : binding?.kind === 'set'
               ? (binding.values ?? []).map((value: any) => value?.ref)
               : [];
-    const codes = refs.filter((ref) => typeof ref?.dcid === 'string');
+    const codes = refs.filter((ref) => typeof ref?.ref === 'string');
 
     return {
         kind: 'code',
         title: token.text.trim(),
-        facts: slot?.key?.label ? [sentenceCase(slot.key.label)] : [],
+        facts: slot?.key?.label ? [capitalise(slot.key.label)] : [],
         notes: [],
         definitions: codes.map((ref) => ({
-            label: codes.length > 1 ? (ref.label ?? ref.dcid) : null,
-            dcid: ref.dcid,
+            label: codes.length > 1 ? (ref.label ?? ref.ref) : null,
+            dcid: ref.ref,
         })),
         sources: [],
     };
@@ -337,8 +336,8 @@ const unitAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
 
     return {
         kind: 'unit',
-        title: sentenceCase(token.text.trim()),
-        facts: code ? [name === code ? code : `${sentenceCase(name ?? code)} (${code})`] : [],
+        title: capitalise(token.text.trim()),
+        facts: code ? [name === code ? code : `${capitalise(name ?? code)} (${code})`] : [],
         notes: [...(basis ? [priceBasisWords(basis)] : []), ...conversionTables(spec)],
         definitions: typeof unit?.ref === 'string' ? [{ label: null, dcid: unit.ref }] : [],
         sources: [],
@@ -356,19 +355,19 @@ const sourceRefs = (spec: any): any[] => {
               ? (binding.values ?? []).map((value: any) => value?.ref)
               : [];
     const resolved: any[] = spec?.resolution?.resolved_sources ?? [];
-    const refs = bound.filter((ref: any) => ref?.dcid);
+    const refs = bound.filter((ref: any) => ref?.ref);
 
     // A bound ref carries no publisher, so take the resolved one's when it
     // names the same provenance.
     return refs.length > 0
-        ? refs.map((ref: any) => resolved.find((r) => r?.dcid === ref.dcid) ?? ref)
+        ? refs.map((ref: any) => resolved.find((r) => r?.ref === ref.ref) ?? ref)
         : resolved;
 };
 
 const sourceAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
     const sources: AboutSource[] = sourceRefs(spec).map((ref) => ({
-        dcid: ref.dcid,
-        label: ref.label ?? ref.dcid,
+        dcid: ref.ref,
+        label: ref.label ?? ref.ref,
         origin: provenanceOrigin(ref),
     }));
 

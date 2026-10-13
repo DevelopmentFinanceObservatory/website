@@ -145,6 +145,6 @@ export function buildAmbiguousPickPart(
     if (index === -1) return null;
 
     const updated = entities.slice();
-    updated[index] = { ...updated[index], text: candidate.label, dcid: candidate.dcid };
+    updated[index] = { ...updated[index], text: candidate.label, dcid: candidate.ref };
     return { ...restatement, entities: updated };
 }

@@ -15,10 +15,13 @@
  * the catalogue has no page for the source) and a batch's `not_held` entry
  * are cached as null. A read that still fails also resolves to null but
  * leaves the cache, so the next menu open asks again. A failed batch leaves
- * the cache for every node it asked for.
+ * the cache for every node it asked for, and an entry that is neither a node
+ * nor a `not_held` entry leaves it for its own node.
  *
  * This module has no DOM dependency, so `node --test` can import it directly.
  */
+
+import type { GraphNode, NodeEntry, NodesRequest } from '../graph/wire.ts';
 
 export type GraphResponse = { ok: boolean; status: number; json: () => Promise<unknown> };
 export type GraphRequest = { method: 'POST'; headers: Record<string, string>; body: string };
@@ -54,8 +57,20 @@ export type GraphReader = {
     /** A node's body from the batch door, null when the graph does not
      *  hold it or the read failed. Reads asked for in the same tick share
      *  one request. */
-    readNode: (dcid: string) => Promise<unknown>;
+    readNode: (dcid: string) => Promise<GraphNode | null>;
 };
+
+/** A batch entry as the node it holds: null for a `not_held` entry, the node
+ *  for an entry with a `kind`. Throws for anything else, which the declared
+ *  type does not rule out of a served body. */
+function nodeOf(entry: NodeEntry | undefined): GraphNode | null {
+    if (entry && typeof entry === 'object') {
+        if ('status' in entry && entry.status === 'not_held') return null;
+        if ('kind' in entry && typeof entry.kind === 'string') return entry;
+    }
+
+    throw new Error('graph batch answered an entry that is neither a node nor not_held');
+}
 
 export function graphReader({
     fetchImpl,
@@ -115,7 +130,7 @@ export function graphReader({
         }
     };
 
-    const remember = (url: string, pending: Promise<unknown>) => {
+    const remember = <T>(url: string, pending: Promise<T>): Promise<T | null> => {
         const held = pending.catch(() => {
             cache.delete(url);
 
@@ -138,17 +153,17 @@ export function graphReader({
     // Node reads asked for in the same tick wait here and go out together,
     // so the rows of a menu that mount in one render share one request.
     let queued: string[] = [];
-    const settle = new Map<string, (node: Promise<unknown>) => void>();
+    const settle = new Map<string, (node: Promise<GraphNode | null>) => void>();
 
     const askBatch = (chunk: string[]) => {
-        const body = JSON.stringify({ dcids: chunk });
+        const body = JSON.stringify({ dcids: chunk } satisfies NodesRequest);
         const nodes = load(() =>
             fetchImpl(NODES_URL, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body,
             }),
-        ).then((answer): unknown[] => {
+        ).then((answer): NodeEntry[] => {
             const list = (answer as { nodes?: unknown } | null)?.nodes;
 
             // Index-aligned with the dcids asked for, or the whole batch fails.
@@ -156,20 +171,14 @@ export function graphReader({
                 throw new Error('graph batch answered no node list for its dcids');
             }
 
-            return list;
+            return list as NodeEntry[];
         });
 
         chunk.forEach((dcid, index) => {
             const resolve = settle.get(dcid);
 
             settle.delete(dcid);
-            resolve?.(
-                nodes.then((list) => {
-                    const node = list[index] as { shape?: unknown } | null;
-
-                    return node?.shape === 'not_held' ? null : node;
-                }),
-            );
+            resolve?.(nodes.then((list) => nodeOf(list[index])));
         });
     };
 
@@ -183,16 +192,16 @@ export function graphReader({
         }
     };
 
-    const readNode = (dcid: string): Promise<unknown> => {
+    const readNode = (dcid: string): Promise<GraphNode | null> => {
         const key = nodeKey(dcid);
-        const held = cache.get(key);
+        const held = cache.get(key) as Promise<GraphNode | null> | undefined;
 
         if (held) return held;
 
         if (queued.length === 0) queueMicrotask(flush);
         queued.push(dcid);
 
-        return remember(key, new Promise<unknown>((resolve) => settle.set(dcid, resolve)));
+        return remember(key, new Promise<GraphNode | null>((resolve) => settle.set(dcid, resolve)));
     };
 
     return { read, readNode };

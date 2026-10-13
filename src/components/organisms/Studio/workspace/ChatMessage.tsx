@@ -48,7 +48,14 @@ const ChatMessage = ({
     readOnly,
 }: ChatMessageProps) => {
     if (message.role === 'user') {
-        return <p className={styles.chatBubble}>{message.text}</p>;
+        return (
+            <p className={styles.chatBubble}>
+                {message.card && (
+                    <span className={styles.chatBubbleCard}>About “{message.card.title}”</span>
+                )}
+                {message.text}
+            </p>
+        );
     }
 
     // An empty bot turn shows nothing. The live line renders below the
@@ -67,9 +74,7 @@ const ChatMessage = ({
             )}
             {/* Rate the answer (and copy it): a shared sheet is somebody
                 else's conversation, so it reads without the actions. */}
-            {message.text && !readOnly && (
-                <MessageFeedback text={message.text} id={String(turn)} />
-            )}
+            {message.text && !readOnly && <MessageFeedback text={message.text} id={String(turn)} />}
             {/* The cards this turn put on the whiteboard, with their on-canvas
                 state (a share lists them without the actions). */}
             <WidgetChips

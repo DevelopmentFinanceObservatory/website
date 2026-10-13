@@ -188,19 +188,19 @@ export const regionGroup: unknown = {
             "shape_id": "economicactivity_amount_measuredvalue_per_count_person",
             "label": "Healthcare expenditure per person",
             "population_type": {
-              "dcid": "EconomicActivity",
+              "ref": "EconomicActivity",
               "label": "EconomicActivity"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_denominator": {
-              "dcid": "Count_Person",
+              "ref": "Count_Person",
               "label": "Total population"
             },
             "measurement_denominator_unresolved": false,
@@ -208,7 +208,7 @@ export const regionGroup: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -216,7 +216,7 @@ export const regionGroup: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -259,7 +259,7 @@ export const regionGroup: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -268,7 +268,7 @@ export const regionGroup: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "ExpenditureActivity",
+                    "ref": "ExpenditureActivity",
                     "label": "ExpenditureActivity"
                   },
                   "value_kind": "enum_value"
@@ -280,7 +280,7 @@ export const regionGroup: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -289,7 +289,7 @@ export const regionGroup: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "HealthcareExpenditure",
+                    "ref": "HealthcareExpenditure",
                     "label": "HealthcareExpenditure"
                   },
                   "value_kind": "enum_value"
@@ -307,413 +307,413 @@ export const regionGroup: unknown = {
                 "values": [
                   {
                     "ref": {
-                      "dcid": "country/AGO",
+                      "ref": "country/AGO",
                       "label": "Angola"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ATF",
+                      "ref": "country/ATF",
                       "label": "French Southern Territories"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/BDI",
+                      "ref": "country/BDI",
                       "label": "Burundi"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/BEN",
+                      "ref": "country/BEN",
                       "label": "Benin"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/BFA",
+                      "ref": "country/BFA",
                       "label": "Burkina Faso"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/BWA",
+                      "ref": "country/BWA",
                       "label": "Botswana"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/CAF",
+                      "ref": "country/CAF",
                       "label": "Central African Republic"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/CIV",
+                      "ref": "country/CIV",
                       "label": "Ivory Coast"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/CMR",
+                      "ref": "country/CMR",
                       "label": "Cameroon"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/COD",
+                      "ref": "country/COD",
                       "label": "Democratic Republic of the Congo"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/COG",
+                      "ref": "country/COG",
                       "label": "Republic of the Congo"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/COM",
+                      "ref": "country/COM",
                       "label": "Comoros"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/CPV",
+                      "ref": "country/CPV",
                       "label": "Cape Verde"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/DJI",
+                      "ref": "country/DJI",
                       "label": "Djibouti"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/DZA",
+                      "ref": "country/DZA",
                       "label": "Algeria"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/EGY",
+                      "ref": "country/EGY",
                       "label": "Egypt"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ERI",
+                      "ref": "country/ERI",
                       "label": "Eritrea"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ESH",
+                      "ref": "country/ESH",
                       "label": "Western Sahara"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ETH",
+                      "ref": "country/ETH",
                       "label": "Ethiopia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GAB",
+                      "ref": "country/GAB",
                       "label": "Gabon"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GHA",
+                      "ref": "country/GHA",
                       "label": "Ghana"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GIN",
+                      "ref": "country/GIN",
                       "label": "Guinea"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GMB",
+                      "ref": "country/GMB",
                       "label": "The Gambia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GNB",
+                      "ref": "country/GNB",
                       "label": "Guinea-Bissau"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/GNQ",
+                      "ref": "country/GNQ",
                       "label": "Equatorial Guinea"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/KEN",
+                      "ref": "country/KEN",
                       "label": "Kenya"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/LBR",
+                      "ref": "country/LBR",
                       "label": "Liberia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/LBY",
+                      "ref": "country/LBY",
                       "label": "Libya"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/LSO",
+                      "ref": "country/LSO",
                       "label": "Lesotho"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MAR",
+                      "ref": "country/MAR",
                       "label": "Morocco"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MDG",
+                      "ref": "country/MDG",
                       "label": "Madagascar"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MLI",
+                      "ref": "country/MLI",
                       "label": "Mali"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MOZ",
+                      "ref": "country/MOZ",
                       "label": "Mozambique"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MRT",
+                      "ref": "country/MRT",
                       "label": "Mauritania"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MUS",
+                      "ref": "country/MUS",
                       "label": "Mauritius"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MWI",
+                      "ref": "country/MWI",
                       "label": "Malawi"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/MYT",
+                      "ref": "country/MYT",
                       "label": "Mayotte"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/NAM",
+                      "ref": "country/NAM",
                       "label": "Namibia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/NER",
+                      "ref": "country/NER",
                       "label": "Niger"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/NGA",
+                      "ref": "country/NGA",
                       "label": "Nigeria"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/REU",
+                      "ref": "country/REU",
                       "label": "Réunion"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/RWA",
+                      "ref": "country/RWA",
                       "label": "Rwanda"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SDN",
+                      "ref": "country/SDN",
                       "label": "Sudan"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SEN",
+                      "ref": "country/SEN",
                       "label": "Senegal"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SHN",
+                      "ref": "country/SHN",
                       "label": "Saint Helena, Ascension and Tristan da Cunha"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SLE",
+                      "ref": "country/SLE",
                       "label": "Sierra Leone"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SOM",
+                      "ref": "country/SOM",
                       "label": "Somalia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SSD",
+                      "ref": "country/SSD",
                       "label": "South Sudan"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/STP",
+                      "ref": "country/STP",
                       "label": "São Tomé and Príncipe"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SWZ",
+                      "ref": "country/SWZ",
                       "label": "Swaziland"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/SYC",
+                      "ref": "country/SYC",
                       "label": "Seychelles"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/TCD",
+                      "ref": "country/TCD",
                       "label": "Chad"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/TGO",
+                      "ref": "country/TGO",
                       "label": "Togo"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/TUN",
+                      "ref": "country/TUN",
                       "label": "Tunisia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/TZA",
+                      "ref": "country/TZA",
                       "label": "Tanzania"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/UGA",
+                      "ref": "country/UGA",
                       "label": "Uganda"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ZAF",
+                      "ref": "country/ZAF",
                       "label": "South Africa"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ZMB",
+                      "ref": "country/ZMB",
                       "label": "Zambia"
                     },
                     "value_kind": "entity"
                   },
                   {
                     "ref": {
-                      "dcid": "country/ZWE",
+                      "ref": "country/ZWE",
                       "label": "Zimbabwe"
                     },
                     "value_kind": "entity"
@@ -1112,7 +1112,7 @@ export const regionGroup: unknown = {
           ],
           "entity_groups": {
             "observationAbout": {
-              "dcid": "africa",
+              "ref": "africa",
               "label": "Africa",
               "entity_type": "Continent"
             }
@@ -1174,7 +1174,7 @@ export const regionGroup: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -1183,7 +1183,7 @@ export const regionGroup: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "ExpenditureActivity",
+                      "ref": "ExpenditureActivity",
                       "label": "ExpenditureActivity"
                     },
                     "value_kind": "enum_value"
@@ -1197,7 +1197,7 @@ export const regionGroup: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -1206,7 +1206,7 @@ export const regionGroup: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "HealthcareExpenditure",
+                      "ref": "HealthcareExpenditure",
                       "label": "HealthcareExpenditure"
                     },
                     "value_kind": "enum_value"
@@ -1225,7 +1225,7 @@ export const regionGroup: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "dc/base/WorldDevelopmentIndicators",
+                      "ref": "dc/base/WorldDevelopmentIndicators",
                       "label": "World Development Indicators"
                     },
                     "value_kind": "source"
@@ -1241,7 +1241,7 @@ export const regionGroup: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "InternationalDollar",
+                      "ref": "InternationalDollar",
                       "label": "InternationalDollar"
                     },
                     "value_kind": "enum_value"
@@ -1250,7 +1250,7 @@ export const regionGroup: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "USDollar",
+                      "ref": "USDollar",
                       "label": "USDollar"
                     },
                     "value_kind": "enum_value"
@@ -1265,245 +1265,245 @@ export const regionGroup: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/AGO",
+                "ref": "country/AGO",
                 "label": "Angola"
               },
               {
-                "dcid": "country/ATF",
+                "ref": "country/ATF",
                 "label": "French Southern Territories"
               },
               {
-                "dcid": "country/BDI",
+                "ref": "country/BDI",
                 "label": "Burundi"
               },
               {
-                "dcid": "country/BEN",
+                "ref": "country/BEN",
                 "label": "Benin"
               },
               {
-                "dcid": "country/BFA",
+                "ref": "country/BFA",
                 "label": "Burkina Faso"
               },
               {
-                "dcid": "country/BWA",
+                "ref": "country/BWA",
                 "label": "Botswana"
               },
               {
-                "dcid": "country/CAF",
+                "ref": "country/CAF",
                 "label": "Central African Republic"
               },
               {
-                "dcid": "country/CIV",
+                "ref": "country/CIV",
                 "label": "Ivory Coast"
               },
               {
-                "dcid": "country/CMR",
+                "ref": "country/CMR",
                 "label": "Cameroon"
               },
               {
-                "dcid": "country/COD",
+                "ref": "country/COD",
                 "label": "Democratic Republic of the Congo"
               },
               {
-                "dcid": "country/COG",
+                "ref": "country/COG",
                 "label": "Republic of the Congo"
               },
               {
-                "dcid": "country/COM",
+                "ref": "country/COM",
                 "label": "Comoros"
               },
               {
-                "dcid": "country/CPV",
+                "ref": "country/CPV",
                 "label": "Cape Verde"
               },
               {
-                "dcid": "country/DJI",
+                "ref": "country/DJI",
                 "label": "Djibouti"
               },
               {
-                "dcid": "country/DZA",
+                "ref": "country/DZA",
                 "label": "Algeria"
               },
               {
-                "dcid": "country/EGY",
+                "ref": "country/EGY",
                 "label": "Egypt"
               },
               {
-                "dcid": "country/ERI",
+                "ref": "country/ERI",
                 "label": "Eritrea"
               },
               {
-                "dcid": "country/ESH",
+                "ref": "country/ESH",
                 "label": "Western Sahara"
               },
               {
-                "dcid": "country/ETH",
+                "ref": "country/ETH",
                 "label": "Ethiopia"
               },
               {
-                "dcid": "country/GAB",
+                "ref": "country/GAB",
                 "label": "Gabon"
               },
               {
-                "dcid": "country/GHA",
+                "ref": "country/GHA",
                 "label": "Ghana"
               },
               {
-                "dcid": "country/GIN",
+                "ref": "country/GIN",
                 "label": "Guinea"
               },
               {
-                "dcid": "country/GMB",
+                "ref": "country/GMB",
                 "label": "The Gambia"
               },
               {
-                "dcid": "country/GNB",
+                "ref": "country/GNB",
                 "label": "Guinea-Bissau"
               },
               {
-                "dcid": "country/GNQ",
+                "ref": "country/GNQ",
                 "label": "Equatorial Guinea"
               },
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               },
               {
-                "dcid": "country/LBR",
+                "ref": "country/LBR",
                 "label": "Liberia"
               },
               {
-                "dcid": "country/LBY",
+                "ref": "country/LBY",
                 "label": "Libya"
               },
               {
-                "dcid": "country/LSO",
+                "ref": "country/LSO",
                 "label": "Lesotho"
               },
               {
-                "dcid": "country/MAR",
+                "ref": "country/MAR",
                 "label": "Morocco"
               },
               {
-                "dcid": "country/MDG",
+                "ref": "country/MDG",
                 "label": "Madagascar"
               },
               {
-                "dcid": "country/MLI",
+                "ref": "country/MLI",
                 "label": "Mali"
               },
               {
-                "dcid": "country/MOZ",
+                "ref": "country/MOZ",
                 "label": "Mozambique"
               },
               {
-                "dcid": "country/MRT",
+                "ref": "country/MRT",
                 "label": "Mauritania"
               },
               {
-                "dcid": "country/MUS",
+                "ref": "country/MUS",
                 "label": "Mauritius"
               },
               {
-                "dcid": "country/MWI",
+                "ref": "country/MWI",
                 "label": "Malawi"
               },
               {
-                "dcid": "country/MYT",
+                "ref": "country/MYT",
                 "label": "Mayotte"
               },
               {
-                "dcid": "country/NAM",
+                "ref": "country/NAM",
                 "label": "Namibia"
               },
               {
-                "dcid": "country/NER",
+                "ref": "country/NER",
                 "label": "Niger"
               },
               {
-                "dcid": "country/NGA",
+                "ref": "country/NGA",
                 "label": "Nigeria"
               },
               {
-                "dcid": "country/REU",
+                "ref": "country/REU",
                 "label": "Réunion"
               },
               {
-                "dcid": "country/RWA",
+                "ref": "country/RWA",
                 "label": "Rwanda"
               },
               {
-                "dcid": "country/SDN",
+                "ref": "country/SDN",
                 "label": "Sudan"
               },
               {
-                "dcid": "country/SEN",
+                "ref": "country/SEN",
                 "label": "Senegal"
               },
               {
-                "dcid": "country/SHN",
+                "ref": "country/SHN",
                 "label": "Saint Helena, Ascension and Tristan da Cunha"
               },
               {
-                "dcid": "country/SLE",
+                "ref": "country/SLE",
                 "label": "Sierra Leone"
               },
               {
-                "dcid": "country/SOM",
+                "ref": "country/SOM",
                 "label": "Somalia"
               },
               {
-                "dcid": "country/SSD",
+                "ref": "country/SSD",
                 "label": "South Sudan"
               },
               {
-                "dcid": "country/STP",
+                "ref": "country/STP",
                 "label": "São Tomé and Príncipe"
               },
               {
-                "dcid": "country/SWZ",
+                "ref": "country/SWZ",
                 "label": "Swaziland"
               },
               {
-                "dcid": "country/SYC",
+                "ref": "country/SYC",
                 "label": "Seychelles"
               },
               {
-                "dcid": "country/TCD",
+                "ref": "country/TCD",
                 "label": "Chad"
               },
               {
-                "dcid": "country/TGO",
+                "ref": "country/TGO",
                 "label": "Togo"
               },
               {
-                "dcid": "country/TUN",
+                "ref": "country/TUN",
                 "label": "Tunisia"
               },
               {
-                "dcid": "country/TZA",
+                "ref": "country/TZA",
                 "label": "Tanzania"
               },
               {
-                "dcid": "country/UGA",
+                "ref": "country/UGA",
                 "label": "Uganda"
               },
               {
-                "dcid": "country/ZAF",
+                "ref": "country/ZAF",
                 "label": "South Africa"
               },
               {
-                "dcid": "country/ZMB",
+                "ref": "country/ZMB",
                 "label": "Zambia"
               },
               {
-                "dcid": "country/ZWE",
+                "ref": "country/ZWE",
                 "label": "Zimbabwe"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/WorldDevelopmentIndicators",
+                "ref": "dc/base/WorldDevelopmentIndicators",
                 "label": "World Development Indicators",
                 "source": {
                   "ref": "dc/s/WorldBank",

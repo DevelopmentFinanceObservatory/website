@@ -35,7 +35,6 @@ const facts: FactSummary = {
         { id: 's_a', label: 'United States', point_count: 1, first: 60_000, last: 64_000 },
         { id: 's_b', label: 'Germany', point_count: 1, first: 30_000, last: 37_000 },
     ],
-    indicators: [],
     attribution: { label: 'OECD CRS · 1 indicator(s)', source_count: 1, indicator_count: 1 },
     window: { start: '2015', end: '2023' },
 };
@@ -805,6 +804,18 @@ test('More Info: the citation and every source, licence normalised', () => {
     ]);
     assert.deepEqual([info?.sourceId, info?.licence], [SOURCE, 'CC BY 4.0']);
     assert.equal(sourceLine(info!), 'OECD CRS; World Bank WDI; dc/base/X');
+});
+
+test('More Info: a new card carries no indicators, even from a fact summary that lists them', () => {
+    const created = frame('line_chart', entityBarChart);
+    const indicator = { id: 'dcid:Amount_Debt', name: 'Debt', description: 'Debt stocks.' };
+
+    created.fact_summary = { ...facts, indicators: [indicator] } as FactSummary;
+
+    const { info } = asChart(widgetFromComponent(created));
+
+    assert.ok(info);
+    assert.equal('indicators' in info, false);
 });
 
 test('a share card: its Percent unit puts "%" on the value axis, and it names both sources', () => {

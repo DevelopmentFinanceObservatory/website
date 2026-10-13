@@ -104,7 +104,7 @@ const StartingPoint = ({
     onRun: (text: string) => void;
     onStartNew: () => void;
 }) => {
-    const { placeCatalogue, pending } = usePlaceCatalogue(place?.dcid ?? null);
+    const { placeCatalogue, pending } = usePlaceCatalogue(place?.ref ?? null);
     const examples = (place ? placeCatalogue : catalogue)?.examples ?? [];
 
     return (
@@ -247,7 +247,7 @@ const SearchAnswer = ({
     return (
         <OutOfScope
             catalogue={catalogue}
-            place={place?.dcid ?? null}
+            place={place?.ref ?? null}
             onRun={onRun}
             onStartNew={onStartNew}
             onShowCatalogue={onShowCatalogue}

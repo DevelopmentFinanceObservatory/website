@@ -55,8 +55,6 @@ export type Provenance = {
     refreshed_from?: number | null;
 };
 
-export type Indicator = { id: string; name: string; description: string };
-
 export type Attribution = {
     label: string;
     source_count: number;
@@ -128,7 +126,6 @@ export type FactSummary = {
     component_id: string;
     revision: number;
     series: FactSeries[];
-    indicators: Indicator[];
     attribution: Attribution;
     window?: { start: string; end: string } | null;
     // The card's unit in the shapes its payload's `unit` takes. Read

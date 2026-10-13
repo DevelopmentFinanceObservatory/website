@@ -10,6 +10,7 @@
  */
 
 import type { DatasetEntriesOverride } from './datasetEntries.ts';
+import { capitalise } from '../capitalise.ts';
 import { withFacetEdit } from './promote.ts';
 import { currencyName } from './tokenAbout.ts';
 import { priceBasis } from './unitLabel.ts';
@@ -137,8 +138,6 @@ export const sharedOffer = (offers: UnitConversion[]): UnitConversion | null => 
 
     return currencies.length > 0 ? { ...first, currencies, role_currencies: roleCurrencies } : null;
 };
-
-const capitalise = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 const possessive = (name: string): string => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 

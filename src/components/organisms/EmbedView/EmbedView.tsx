@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import styles from './EmbedView.module.scss';
 
@@ -16,12 +16,8 @@ import { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
-import {
-    cardLiveOf,
-    isLiveCanvas,
-    type LiveCanvas,
-    type SharedView,
-} from '@/lib/studio/liveCards';
+import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
+import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
 
 const noop = () => undefined;
@@ -95,6 +91,11 @@ const SingleCard = ({
  */
 const EmbedView = ({ shared }: { shared: SharedView }) => {
     const { kind, saved } = shared;
+
+    useEffect(() => {
+        logRefusedDescriptions(saved.widgets);
+    }, [saved]);
+
     const theme = deriveTheme(saved.theme ?? DEFAULT_THEME);
     const flyToCardRef = useRef<((id: string) => void) | null>(null);
     const [infoCardId, setInfoCardId] = useState<string | null>(null);
@@ -158,6 +159,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 liveShareId={live?.shareId}
+                snapshot={shared.live ? undefined : shared}
             />
         </div>
     );

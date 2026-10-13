@@ -9,6 +9,7 @@ import {
     AnySelectionRow,
     MultiSelectApplyButton,
     NoFilterMatch,
+    OptionFilterBar,
     OptionFilterInput,
     OptionRow,
     stopMenuFieldTypeahead,
@@ -589,23 +590,34 @@ export const PlaceEditor = ({
             {/* The menu's one input: it filters the rows and feeds the
                 Search row. Rendered in every phase, since a failed lookup is
                 when typing a place by hand matters most. */}
-            <input
-                className={styles.slotInput}
-                data-menu-field="filter"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                onKeyDown={(event) => {
-                    stopMenuFieldTypeahead(event);
+            <OptionFilterBar
+                count={
+                    state.phase === 'loaded' && unfilteredGroups.length > 0
+                        ? {
+                              shown: filteredGroups.flatMap((group) => group.options).length,
+                              total: unfilteredGroups.flatMap((group) => group.options).length,
+                          }
+                        : null
+                }
+            >
+                <input
+                    className={styles.slotInput}
+                    data-menu-field="filter"
+                    value={filter}
+                    onChange={(event) => setFilter(event.target.value)}
+                    onKeyDown={(event) => {
+                        stopMenuFieldTypeahead(event);
 
-                    if (event.key === 'Enter' && showSearchRow) {
-                        event.preventDefault();
-                        onPick(filter);
-                    }
-                }}
-                placeholder="Filter or type a place…"
-                aria-label="Filter or type a place"
-                autoComplete="off"
-            />
+                        if (event.key === 'Enter' && showSearchRow) {
+                            event.preventDefault();
+                            onPick(filter);
+                        }
+                    }}
+                    placeholder="Filter or type a place…"
+                    aria-label="Filter or type a place"
+                    autoComplete="off"
+                />
+            </OptionFilterBar>
             {hasIdentity && state.phase === 'loading' && (
                 <p className={styles.slotNote}>Checking places with data…</p>
             )}
@@ -939,11 +951,13 @@ export const PlaceScopeEditor = ({
             {state.phase === 'loaded' && (state.options.length > 0 || state.truncated) && (
                 <>
                     {showFilter && (
-                        <OptionFilterInput
-                            value={filter}
-                            onChange={setFilter}
-                            label={`Filter listed ${placeRoleLabel(role)}`}
-                        />
+                        <OptionFilterBar count={{ shown: shown.length, total: ranked.length }}>
+                            <OptionFilterInput
+                                value={filter}
+                                onChange={setFilter}
+                                label={`Filter listed ${placeRoleLabel(role)}`}
+                            />
+                        </OptionFilterBar>
                     )}
                     {/* Every currently-bound option, split out above (see
                         `current`'s own doc above), shown once, ahead of the

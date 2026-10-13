@@ -162,7 +162,6 @@ const info = (sources: string[], sourceName: string | null = sources[0] ?? null)
     indicatorCount: 2,
     years: null,
     unit: null,
-    indicators: [],
     licence: null,
     dataThrough: null,
     lastRefreshed: null,

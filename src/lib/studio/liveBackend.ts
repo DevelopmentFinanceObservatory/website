@@ -24,6 +24,7 @@
  * No database or path-alias dependency, so `node --test` imports it directly.
  */
 
+import { asRecord } from '../asRecord.ts';
 import type { CardRef, FrameRef } from '../chat/widgets.ts';
 import { searchApiBase } from '../searchApi.ts';
 import type { CardDataOptions } from './cardDownload.ts';
@@ -139,11 +140,6 @@ export const liveBackendFrom = (env: Env, fetcher: typeof fetch): LiveBackend | 
           }
         : null;
 };
-
-const asRecord = (value: unknown): UnknownRecord | undefined =>
-    value !== null && typeof value === 'object' && !Array.isArray(value)
-        ? (value as UnknownRecord)
-        : undefined;
 
 const asFrameRef = (value: unknown): FrameRef | null => {
     const record = asRecord(value);

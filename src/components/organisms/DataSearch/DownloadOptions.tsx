@@ -84,6 +84,7 @@ const DownloadOptions = ({
                             onChange={(id) => state.setFormat(id as DatasetFormat)}
                         />
                     </div>
+                    {state.totalsNote && <p className={styles.note}>{state.totalsNote}</p>}
                 </section>
             )}
             {state.bundleOffered && (

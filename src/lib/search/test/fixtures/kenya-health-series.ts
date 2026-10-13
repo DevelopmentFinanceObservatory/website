@@ -26,7 +26,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'crsCooperationModality',
+                        ref: 'crsCooperationModality',
                         label: 'CRS cooperation modality',
                     },
                     label: 'modality',
@@ -40,7 +40,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'crsPurpose',
+                        ref: 'crsPurpose',
                         label: 'CRS purpose',
                     },
                     label: 'sector',
@@ -49,7 +49,7 @@ export const kenyaHealthPart = {
                     kind: 'value',
                     value: {
                         ref: {
-                            dcid: 'CRSPurposeCode120',
+                            ref: 'CRSPurposeCode120',
                             label: 'health',
                         },
                         value_kind: 'enum_value',
@@ -61,7 +61,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'crsTypeOfFinance',
+                        ref: 'crsTypeOfFinance',
                         label: 'CRS type of finance',
                     },
                     label: 'instrument',
@@ -75,7 +75,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'crsTypeOfFlow',
+                        ref: 'crsTypeOfFlow',
                         label: 'CRS type of flow',
                     },
                     label: 'flow',
@@ -84,7 +84,7 @@ export const kenyaHealthPart = {
                     kind: 'value',
                     value: {
                         ref: {
-                            dcid: 'CRSTypeOfFlow10',
+                            ref: 'CRSTypeOfFlow10',
                             label: 'official development assistance',
                         },
                         value_kind: 'enum_value',
@@ -96,7 +96,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'financialFlowType',
+                        ref: 'financialFlowType',
                         label: 'financial flow type',
                     },
                     label: 'financial flow type',
@@ -105,7 +105,7 @@ export const kenyaHealthPart = {
                     kind: 'value',
                     value: {
                         ref: {
-                            dcid: 'Disbursement',
+                            ref: 'Disbursement',
                             label: 'disbursement',
                         },
                         value_kind: 'enum_value',
@@ -117,7 +117,7 @@ export const kenyaHealthPart = {
                 key: {
                     axis: 'how',
                     property: {
-                        dcid: 'nettingBasis',
+                        ref: 'nettingBasis',
                         label: 'netting basis',
                     },
                     label: 'netting basis',
@@ -126,7 +126,7 @@ export const kenyaHealthPart = {
                     kind: 'value',
                     value: {
                         ref: {
-                            dcid: 'Gross',
+                            ref: 'Gross',
                             label: 'gross',
                         },
                         value_kind: 'enum_value',
@@ -143,7 +143,7 @@ export const kenyaHealthPart = {
                     kind: 'value',
                     value: {
                         ref: {
-                            dcid: 'country/KEN',
+                            ref: 'country/KEN',
                             label: 'Kenya',
                         },
                         value_kind: 'entity',
@@ -230,7 +230,7 @@ export const kenyaHealthPart = {
                     total_obs: 1,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -341,7 +341,7 @@ export const kenyaHealthPart = {
                     total_obs: 9,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -452,7 +452,7 @@ export const kenyaHealthPart = {
                     total_obs: 9,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -531,7 +531,7 @@ export const kenyaHealthPart = {
                     total_obs: 1,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -614,7 +614,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -697,7 +697,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -780,7 +780,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -871,7 +871,7 @@ export const kenyaHealthPart = {
                     total_obs: 4,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -970,7 +970,7 @@ export const kenyaHealthPart = {
                     total_obs: 6,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1057,7 +1057,7 @@ export const kenyaHealthPart = {
                     total_obs: 3,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1136,7 +1136,7 @@ export const kenyaHealthPart = {
                     total_obs: 1,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1219,7 +1219,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1314,7 +1314,7 @@ export const kenyaHealthPart = {
                     total_obs: 5,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1425,7 +1425,7 @@ export const kenyaHealthPart = {
                     total_obs: 9,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1544,7 +1544,7 @@ export const kenyaHealthPart = {
                     total_obs: 11,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1667,7 +1667,7 @@ export const kenyaHealthPart = {
                     total_obs: 12,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1750,7 +1750,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1829,7 +1829,7 @@ export const kenyaHealthPart = {
                     total_obs: 1,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1908,7 +1908,7 @@ export const kenyaHealthPart = {
                     total_obs: 1,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -1991,7 +1991,7 @@ export const kenyaHealthPart = {
                     total_obs: 2,
                     source_refs: [
                         {
-                            dcid: 'provenance/OECDCreditorReportingSystem',
+                            ref: 'provenance/OECDCreditorReportingSystem',
                             label: 'OECD Creditor Reporting System (CRS)',
                             source: {
                                 ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import styles from './DataSearch.module.scss';
 import { OptionFilterInput } from './SlotMenu';
-import { sourceDoc, useDefinitionMembers } from './GraphInfo';
+import { useDefinitionMembers } from './GraphInfo';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
@@ -23,31 +23,22 @@ import {
 // The variables listed before "Show all".
 const FIRST_VARIABLES = 10;
 
-// A source's name, linked to its page once the documentation door answers
-// for it. A source the catalogue excludes has no page and stays plain text.
-export const SourceName = ({ dcid, label }: { dcid: string; label: string }) => {
-    const [hasPage, setHasPage] = useState(false);
-
-    useEffect(() => {
-        let active = true;
-
-        sourceDoc(dcid).then((doc) => {
-            if (active) {
-                setHasPage(doc != null);
-            }
-        });
-
-        return () => {
-            active = false;
-        };
-    }, [dcid]);
-
-    if (!hasPage) {
+// A source's name, linked to its page when the answer names the source's
+// document, as the card panel links a described source. A source without
+// one stays plain text.
+export const SourceName = ({
+    source,
+    label,
+}: {
+    source: { ref: string; documentation?: string | null };
+    label: string;
+}) => {
+    if (!source.documentation) {
         return <span>{label}</span>;
     }
 
     return (
-        <SourceLink dcid={dcid} className={styles.whyLink}>
+        <SourceLink dcid={source.ref} className={styles.whyLink}>
             {label}
             <Icon name="arrow-small" />
         </SourceLink>
@@ -216,8 +207,8 @@ const AboutSection = ({
                     {summary.sources.length === 1 ? 'Source' : 'Sources'}
                 </p>
                 {summary.sources.map((source) => (
-                    <p key={source.dcid} className={styles.whyRef}>
-                        <SourceName dcid={source.dcid} label={source.label} />
+                    <p key={source.ref} className={styles.whyRef}>
+                        <SourceName source={source} label={source.label} />
                         {source.origin && <span className={styles.whyOrigin}>{source.origin}</span>}
                         {source.licence && (
                             <span className={styles.whyOrigin}>Licence: {source.licence}</span>

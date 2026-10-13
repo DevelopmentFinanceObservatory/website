@@ -1,6 +1,6 @@
 import type { CardView } from '@/components/organisms/Studio/canvas/layout';
 import type { ChatMessage, TurnWidget } from '@/components/organisms/Studio/hooks/useChat';
-import type { TextWidget } from '@/lib/chat/widgets';
+import type { CardRef, TextWidget } from '@/lib/chat/widgets';
 import type { ActivityEntry } from '@/lib/studio/activity';
 import type { CanvasBaseline } from '@/lib/studio/composition';
 import type { StudioTheme } from '@/lib/studio/theme';
@@ -19,6 +19,8 @@ export type SavedConversation = {
     // The agent's conversation id — restored so follow-ups keep the
     // server-side context while that conversation is still alive.
     sessionId: string | null;
+    // Refs known to this session; inherited cards in a shared copy are excluded.
+    componentRefs?: CardRef[];
     title: string;
     updatedAt: number;
     messages: ChatMessage[];

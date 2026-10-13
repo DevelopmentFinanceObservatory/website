@@ -2,11 +2,12 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import classNames from 'classnames';
-import { ReactNode, useRef } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 
 import styles from './Modal.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { PopupContainer } from '@/components/molecules/HoverPopup/popupContainer';
 
 export type ModalProps = {
     open: boolean;
@@ -53,6 +54,8 @@ const Modal = ({
     // close. Radix returns focus to a Dialog.Trigger, and these dialogs open
     // from plain buttons, so without this focus falls to the page body.
     const openerRef = useRef<HTMLElement | null>(null);
+    // The dialog's content, where a HoverPopup inside it renders its popup.
+    const [content, setContent] = useState<HTMLDivElement | null>(null);
 
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -60,6 +63,7 @@ const Modal = ({
                 {/* The dim covers everything; clicking it closes the dialog. */}
                 <Dialog.Overlay className={styles.overlay} />
                 <Dialog.Content
+                    ref={setContent}
                     className={classNames(
                         styles.modal,
                         placement === 'panel' ? styles.panel : styles.center,
@@ -88,10 +92,12 @@ const Modal = ({
                             </Dialog.Close>
                         </div>
                     </header>
-                    <div className={classNames(styles.body, !!footer && styles.bodyFooted)}>
-                        {children}
-                    </div>
-                    {footer && <footer className={styles.foot}>{footer}</footer>}
+                    <PopupContainer value={content}>
+                        <div className={classNames(styles.body, !!footer && styles.bodyFooted)}>
+                            {children}
+                        </div>
+                        {footer && <footer className={styles.foot}>{footer}</footer>}
+                    </PopupContainer>
                 </Dialog.Content>
             </Dialog.Portal>
         </Dialog.Root>

@@ -62,6 +62,14 @@ test('handoffSeeds hands over the wire spec and the operations of a definite par
     ]);
 });
 
+test("handoffSeeds hands over a Spec's groups with their node under `ref`, the keys Studio's seed accepts", () => {
+    const [seed] = handoffSeeds(hydratedParts('region-group'));
+
+    assert.deepEqual((seed?.spec.resolved as any).entity_groups, {
+        observationAbout: { ref: 'africa', label: 'Africa', entity_type: 'Continent' },
+    });
+});
+
 test('handoffSeeds skips a part that is not definite', () => {
     const seeds = handoffSeeds(hydratedParts('two-part-ambiguous'));
 
@@ -106,7 +114,7 @@ test('handoffSeeds skips a spec with no definition, which Studio would refuse', 
 test('unflattenSpec keeps the trace flattenSpec also reads as `resolution`', () => {
     const wire = structuredClone(wireSpecOf('definite-single'));
 
-    wire.resolved.trace = { resolved_entities: [{ dcid: 'country/KEN' }] };
+    wire.resolved.trace = { resolved_entities: [{ ref: 'country/KEN' }] };
 
     assert.deepEqual(unflattenSpec(flattenSpec(wire)), wire);
 });
@@ -269,15 +277,15 @@ test('searchEventProps fits the events cap on the largest answer the API can sen
                 })),
                 entities: { ...spec.identity.entities, destination: members },
             },
-            entity_groups: { destination: { dcid: 'grp/UN', label: 'United Nations members' } },
+            entity_groups: { destination: { ref: 'grp/UN', label: 'United Nations members' } },
             stat_vars: { member_count: 486, member_count_exact: true, served_count: 486 },
             resolution: {
                 ...spec.resolution,
                 resolved_entities: Array.from({ length: 28 }, (_, at) => ({
-                    dcid: `country/C${at}`,
+                    ref: `country/C${at}`,
                 })),
                 resolved_sources: Array.from({ length: 10 }, (_, at) => ({
-                    dcid: ref('provenance/Source', at),
+                    ref: ref('provenance/Source', at),
                 })),
             },
         },
