@@ -1,0 +1,66 @@
+{
+  "id": "sudan-humanitarian-aid-per-idp",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "Humanitarian aid to Sudan per internally displaced person",
+  "views": {},
+  "canvas": {
+    "ids": [
+      "cmp_01M4R69BAF1F0P3DPX21F5ZVGX",
+      "cmp_01M4R69BJHMV39VDRVR3X5SP27"
+    ],
+    "revision": 7,
+    "compositionId": "cps_9c5dbd6cdaac4599"
+  },
+  "layout": {
+    "cmp_01M4R69BAF1F0P3DPX21F5ZVGX": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "kind": "chart",
+      "id": "cmp_01M4R69BAF1F0P3DPX21F5ZVGX",
+      "turn": 1,
+      "chartType": "line",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R69BAF1F0P3DPX21F5ZVGX"
+      }
+    }
+  ],
+  "activity": [],
+  "graceIds": [],
+  "messages": [],
+  "graceTurn": 0,
+  "pinnedIds": [
+    "cmp_01M4R69BAF1F0P3DPX21F5ZVGX"
+  ],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 1,
+  "updatedAt": 1791817176963,
+  "removedIds": [],
+  "shareMarks": [
+    {
+      "at": 1791815312873,
+      "shareId": "8pXcMyNO",
+      "messageIndex": 6
+    },
+    {
+      "at": 1791816081126,
+      "shareId": "6aL0zg24",
+      "messageIndex": 6
+    }
+  ]
+}

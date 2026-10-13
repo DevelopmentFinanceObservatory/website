@@ -5,10 +5,12 @@
  *  codes named here and shows no other warning code. Also collapses duplicate "Open Studio" hand-off panels to one, and
  *  writes per-part step progress text. */
 
+import { capitalise } from '../capitalise.ts';
 import { measureVarianceNotes, type MeasureMenuSpec } from './measureMenu.ts';
 import { offersAmbiguousPicker } from './parsedEdit.ts';
 import {
     coverageSentence,
+    markedTotalColumns,
     noDataCallout,
     scopeAssumptions,
     seriesPreviewCaptions,
@@ -26,7 +28,7 @@ const asSentence = (message: string): string => {
         return '';
     }
 
-    const capitalised = text[0].toUpperCase() + text.slice(1);
+    const capitalised = capitalise(text);
 
     return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 };
@@ -59,10 +61,16 @@ type CaptionPart = {
     warnings?: Pick<Warning, 'code' | 'message' | 'params'>[];
 };
 
+/** The line that says what a marked total row is, shown with the rows
+ *  `markedTotalColumns` marks. */
+export const TOTALS_NOTE =
+    'Rows marked total already include other rows of the table, so do not add them to the rest.';
+
 /** The table caption's lines for the parts the table shows: the
  *  series-preview count (seriesPreviewCaptions) and every other caption
  *  code's message, each once per part, labelled by variable text when the
- *  table holds more than one part. */
+ *  table holds more than one part, then the do-not-sum line when the table
+ *  marks totals. */
 export function tableCaptionNotes(parts: CaptionPart[]): string[] {
     const lines = new Set(seriesPreviewCaptions(parts));
 
@@ -81,6 +89,10 @@ export function tableCaptionNotes(parts: CaptionPart[]): string[] {
 
             if (text) lines.add(`${label}${text}`);
         }
+    }
+
+    if (markedTotalColumns(parts).size > 0) {
+        lines.add(TOTALS_NOTE);
     }
 
     return [...lines];

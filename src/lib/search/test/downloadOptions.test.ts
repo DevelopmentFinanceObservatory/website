@@ -10,6 +10,7 @@ import {
     mintColumns,
     parseDownloadChoices,
     resolveChoices,
+    totalsNote,
 } from '../downloadOptions.ts';
 import type { DatasetEnrichment, DatasetOutputOptions } from '../searchClient.ts';
 
@@ -155,4 +156,72 @@ test('enrichment rows read their field in words and a partial one its coverage',
         '118 of 132',
     );
     assert.equal(coverageNote(enrichment('a', 'iso3')), null);
+});
+
+test('the extras list leaves out a column the long layout already writes', () => {
+    const options: DatasetOutputOptions = {
+        enrichments: [
+            enrichment('financingRecipient', 'party_kind'),
+            enrichment('financingRecipient', 'iso3'),
+        ],
+        long_layout_defaults: ['financingRecipient_label', 'financingRecipient_party_kind'],
+    };
+
+    assert.deepEqual(
+        enrichmentGroups({ options, dimensions: flowDimensions }).flatMap((group) =>
+            group.entries.map((entry) => entry.token),
+        ),
+        ['financingRecipient_iso3'],
+    );
+    assert.deepEqual(
+        mintColumns(['financingRecipient_party_kind', 'financingRecipient_iso3'], options),
+        ['financingRecipient_iso3'],
+    );
+    // An API that predates the field offers everything it lists.
+    assert.equal(
+        enrichmentGroups({ options: { ...options, long_layout_defaults: undefined } })[0]?.entries
+            .length,
+        2,
+    );
+});
+
+test.describe('totalsNote says where the totals of the roles in long_layout_totals go', () => {
+    const base = { dimensions: flowDimensions, bundleOffered: true };
+    const withTotals: DatasetOutputOptions = { long_layout_totals: ['financingRecipient'] };
+    const cases: [string, Parameters<typeof totalsNote>[0], RegExp | null][] = [
+        [
+            'a bundle',
+            { ...base, options: withTotals, format: 'csv', bundle: true },
+            /^Any recipient totals.*second CSV file in the download/,
+        ],
+        [
+            'an Excel file',
+            { ...base, options: withTotals, format: 'xlsx', bundle: true },
+            /^Any recipient totals.*second sheet/,
+        ],
+        [
+            'a bare CSV',
+            { ...base, options: withTotals, format: 'csv', bundle: false },
+            /^Any recipient totals.*left out of the file.*Tick README/,
+        ],
+        ['Parquet', { ...base, options: withTotals, format: 'parquet', bundle: true }, null],
+        [
+            'no role set apart',
+            { ...base, options: { long_layout_totals: [] }, format: 'csv', bundle: true },
+            null,
+        ],
+        ['an older API', { ...base, options: {}, format: 'csv', bundle: true }, null],
+    ];
+
+    for (const [name, input, expected] of cases) {
+        test(name, () => {
+            const note = totalsNote(input);
+
+            if (expected) {
+                assert.match(note ?? '', expected);
+            } else {
+                assert.equal(note, null);
+            }
+        });
+    }
 });

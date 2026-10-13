@@ -18,15 +18,17 @@ const BASE = { id: 'base', label: 'Data Commons by Google' } as const;
 const UN = { id: 'un_system', label: 'UN System Data Commons' } as const;
 
 const wdi: ProvenanceRef = {
-    dcid: 'dc/base/WorldDevelopmentIndicators',
+    ref: 'dc/base/WorldDevelopmentIndicators',
     label: 'World Development Indicators',
+    documentation: '/api/graph/documentation/dc/base/WorldDevelopmentIndicators',
     source: { ref: 'dc/s/WorldBank', label: 'World Bank' },
     data_commons: BASE,
 };
 
 const crs: ProvenanceRef = {
-    dcid: 'provenance/OECDCreditorReportingSystem',
+    ref: 'provenance/OECDCreditorReportingSystem',
     label: 'OECD Creditor Reporting System',
+    documentation: '/api/graph/documentation/provenance/OECDCreditorReportingSystem',
     source: {
         ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
         label: 'Organisation for Economic Co-operation and Development (OECD)',
@@ -35,8 +37,9 @@ const crs: ProvenanceRef = {
 };
 
 const sdg: ProvenanceRef = {
-    dcid: 'undata/p/SDG',
+    ref: 'undata/p/SDG',
     label: 'SDG Global Database',
+    documentation: '/api/graph/documentation/undata/p/SDG',
     source: { ref: 'undata/p/SDG', label: 'SDG Global Database' },
     data_commons: UN,
 };
@@ -52,7 +55,7 @@ test('provenanceOrigin credits upstream data via its Data Commons and DFO data w
 });
 
 test('provenanceOrigin is null for a provenance the origin catalogue does not list', () => {
-    assert.equal(provenanceOrigin({ dcid: 'dc/base/Unlisted', label: 'dc/base/Unlisted' }), null);
+    assert.equal(provenanceOrigin({ ref: 'dc/base/Unlisted', label: 'dc/base/Unlisted' }), null);
     assert.equal(provenanceOrigin(undefined), null);
 });
 
@@ -98,8 +101,9 @@ test('shapeOrigin lists the upstream Data Commons, and stays silent when DFO hol
 });
 
 const unicef: ProvenanceRef = {
-    dcid: 'undata/p/UNICEF',
+    ref: 'undata/p/UNICEF',
     label: "United Nations Children's Fund (UNICEF)",
+    documentation: '/api/graph/documentation/undata/p/UNICEF',
     source: { ref: 'undata/p/UNICEF', label: "United Nations Children's Fund (UNICEF)" },
     data_commons: UN,
 };
@@ -136,7 +140,7 @@ test('specOrigin drops the publisher that the sentence already names as its reso
 });
 
 test('specOrigin drops the publisher that the bound source slot names', () => {
-    const value = { value_kind: 'source', ref: { dcid: unicef.dcid, label: unicef.label } };
+    const value = { value_kind: 'source', ref: { ref: unicef.ref, label: unicef.label } };
 
     assert.equal(
         specOrigin(sentenced(unicef, { binding: { kind: 'value', value } })),
@@ -145,7 +149,7 @@ test('specOrigin drops the publisher that the bound source slot names', () => {
     assert.equal(
         specOrigin(
             sentenced(unicef, {
-                binding: { kind: 'set', values: [value, { ref: { dcid: 'undata/p/FAO' } }] },
+                binding: { kind: 'set', values: [value, { ref: { ref: 'undata/p/FAO' } }] },
             }),
         ),
         'via UN System Data Commons',
@@ -176,7 +180,7 @@ test('sourceOrigin finds a picker option by dcid in the trace, the resolved face
         facets: {
             provenance: {
                 basis: 'fallback',
-                ref: wdi.dcid,
+                ref: wdi.ref,
                 label: wdi.label,
                 source: wdi.source,
                 data_commons: wdi.data_commons,
@@ -186,22 +190,28 @@ test('sourceOrigin finds a picker option by dcid in the trace, the resolved face
     };
 
     assert.equal(
-        sourceOrigin(spec, crs.dcid),
+        sourceOrigin(spec, crs.ref),
         'Organisation for Economic Co-operation and Development (OECD)',
     );
-    assert.equal(sourceOrigin(spec, wdi.dcid), 'World Bank via Data Commons by Google');
-    assert.equal(sourceOrigin(spec, sdg.dcid), 'via UN System Data Commons');
+    assert.equal(sourceOrigin(spec, wdi.ref), 'World Bank via Data Commons by Google');
+    assert.equal(sourceOrigin(spec, sdg.ref), 'via UN System Data Commons');
     assert.equal(sourceOrigin(spec, 'dc/base/Other'), null);
 });
 
-test('the why summary notes each resolved source with its origin', () => {
-    const summary = buildWhySummary({ resolution: { resolved_sources: [wdi, crs] } });
+test('the why summary notes each resolved source with its origin and the route of its document', () => {
+    const unlinked = { ref: 'dc/base/Unlisted', label: 'dc/base/Unlisted' };
+    const summary = buildWhySummary({ resolution: { resolved_sources: [wdi, crs, unlinked] } });
 
     assert.deepEqual(
-        summary.sources.map((source) => [source.dcid, source.origin]),
+        summary.sources.map((source) => [source.ref, source.origin, source.documentation]),
         [
-            [wdi.dcid, 'World Bank via Data Commons by Google'],
-            [crs.dcid, 'Organisation for Economic Co-operation and Development (OECD)'],
+            [wdi.ref, 'World Bank via Data Commons by Google', wdi.documentation],
+            [
+                crs.ref,
+                'Organisation for Economic Co-operation and Development (OECD)',
+                crs.documentation,
+            ],
+            [unlinked.ref, null, null],
         ],
     );
 });
@@ -218,7 +228,7 @@ test('flattenRows reads the row entity and unit from the series role tuple and f
                     total_obs: 1,
                     source_refs: [wdi],
                     facet: {
-                        provenance: { ref: wdi.dcid, label: wdi.label, source: wdi.source },
+                        provenance: { ref: wdi.ref, label: wdi.label, source: wdi.source },
                         unit: { ref: 'Percent', label: 'Percent' },
                     },
                 },

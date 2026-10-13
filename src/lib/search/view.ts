@@ -6,6 +6,7 @@
  */
 
 import { originLine, viaLabel } from '../dataCommons.ts';
+import { capitalise } from '../capitalise.ts';
 import { spaceCamel } from '../spaceCamel.ts';
 import type { MemberRef, MembersRead } from './definitionMembers.ts';
 import { coverageRichness, coverageState, partitionOptions } from './optionCoverage.ts';
@@ -26,6 +27,7 @@ import type {
     ObservationsOmissionReason,
     ParsedPart,
     Part,
+    PartyKind,
     PlaceOptionsScope,
     RoleAxis,
     SentenceToken,
@@ -59,7 +61,7 @@ export const cardText = (spec: any, fallbackText?: string | null): string | unde
     sentenceOf(spec)?.rendered_sentence ?? fallbackText ?? undefined;
 
 /** One facet axis's observed choices off `spec.facet_options`, deduped by
- *  dcid, in the engine's own rank order (in-window observation count). An
+ *  ref, in the engine's own rank order (in-window observation count). An
  *  option with no ref (measurementMethod and unit only) stands for the
  *  facets that declare no value on the axis, and is kept once. */
 const facetAxisOptions = (spec: any, axis: string): any[] => {
@@ -72,11 +74,11 @@ const facetAxisOptions = (spec: any, axis: string): any[] => {
             (entry.options ?? []).forEach((option: any) => {
                 const value = option?.value;
 
-                if (!value || (value.ref && !value.ref.dcid)) {
+                if (!value || (value.ref && !value.ref.ref)) {
                     return;
                 }
 
-                const ref: string | null = value.ref?.dcid ?? null;
+                const ref: string | null = value.ref?.ref ?? null;
 
                 if (seen.has(ref)) {
                     return;
@@ -118,7 +120,7 @@ export const sourceOptionLabel = (option: any): string =>
  *  (a ProvenanceRef, a series' facet.provenance, resolved.facets.provenance,
  *  a ShapeUpstream). */
 export const provenanceOrigin = (provenance: any): string | null =>
-    originLine(provenance?.dcid ?? provenance?.ref, provenance?.source, provenance?.data_commons);
+    originLine(provenance?.ref, provenance?.source, provenance?.data_commons);
 
 /** A candidate's origin before any series is read, from its shape: the one
  *  upstream source when there is one, else the Data Commons holding its
@@ -160,7 +162,7 @@ const sentenceSourceRefs = (spec: any): string[] => {
               ? binding.values.map((value: any) => value?.ref)
               : (spec?.resolution?.resolved_sources ?? []);
 
-    return refs.map((ref) => ref?.dcid).filter(Boolean);
+    return refs.map((ref) => ref?.ref).filter(Boolean);
 };
 
 /** The origin beside a title built from the spec's own sentence (a
@@ -189,8 +191,7 @@ export const sourceOrigin = (spec: any, dcid: string): string | null => {
         ...(spec?.observations?.series ?? []).flatMap((series: any) => series?.source_refs ?? []),
     ];
 
-    // resolved.facets.provenance names its dcid `ref`, and the others `dcid`.
-    return provenanceOrigin(refs.find((ref) => (ref?.dcid ?? ref?.ref) === dcid));
+    return provenanceOrigin(refs.find((ref) => ref?.ref === dcid));
 };
 
 /** The dynamic fields emitted by a trailing entity_options SSE event. `source`
@@ -247,11 +248,11 @@ export const sharedEntityOptions = (
 
     const [first, ...rest] = completeEntries;
     const options = first.options.filter((option: any) => {
-        const dcid = option?.value?.ref?.dcid;
+        const dcid = option?.value?.ref?.ref;
         return (
             dcid &&
             rest.every((entry) =>
-                entry.options.some((other: any) => other?.value?.ref?.dcid === dcid),
+                entry.options.some((other: any) => other?.value?.ref?.ref === dcid),
             )
         );
     });
@@ -303,12 +304,12 @@ export const anchorDcid = (token: SentenceToken, spec: any): string | undefined 
     const binding = (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === 'where')?.binding;
 
     if (binding?.kind === 'value' && binding.value?.value_kind === 'entity') {
-        return binding.value?.ref?.dcid;
+        return binding.value?.ref?.ref;
     }
 
     if (binding?.kind === 'set') {
         return (binding.values ?? []).find((value: any) => value?.value_kind === 'entity')?.ref
-            ?.dcid;
+            ?.ref;
     }
 
     return undefined;
@@ -330,7 +331,7 @@ export const entitySlotBindingForRefs = (refs: { dcid: string; label: string }[]
 
     const values = refs.map((ref) => ({
         value_kind: 'entity',
-        ref: { dcid: ref.dcid, label: ref.label },
+        ref: { ref: ref.dcid, label: ref.label },
     }));
 
     return refs.length === 1 ? { kind: 'value', value: values[0] } : { kind: 'set', values };
@@ -734,7 +735,7 @@ export const rootGroups = (partition: LevelPartition): RootGroup[] => {
     }
 
     return partition.roots.map((root) => {
-        const dcid: string | undefined = root?.value?.ref?.dcid;
+        const dcid: string | undefined = root?.value?.ref?.ref;
         const children = dcid ? (byParent.get(dcid) ?? []) : [];
         const [only] = children;
 
@@ -770,7 +771,7 @@ export type LevelMenu =
 export const levelMenu = (binding: any, options: any[]): LevelMenu => {
     const partition = partitionLevelOptions(options);
     const boundValue = binding?.kind === 'value' ? binding.value : null;
-    const boundDcid: string | undefined = boundValue?.ref?.dcid;
+    const boundDcid: string | undefined = boundValue?.ref?.ref;
 
     if (!boundDcid) return { kind: 'unbound', groups: rootGroups(partition) };
 
@@ -845,9 +846,9 @@ export const rowsLabel = (
 const slotBoundDcids = (slot: any): string[] => {
     const binding = slot?.binding;
 
-    if (binding?.kind === 'value') return [binding.value?.ref?.dcid].filter(Boolean);
+    if (binding?.kind === 'value') return [binding.value?.ref?.ref].filter(Boolean);
     if (binding?.kind === 'set') {
-        return (binding.values ?? []).map((value: any) => value?.ref?.dcid).filter(Boolean);
+        return (binding.values ?? []).map((value: any) => value?.ref?.ref).filter(Boolean);
     }
 
     return [];
@@ -888,7 +889,7 @@ export const servedSeriesCount = (spec: any): number | null =>
  *  that serves every row, narrows nothing. */
 export const slotOffersChoice = (slot: any, entry: SlotOptionsEntry, spec: any): boolean => {
     const bound = new Set(slotBoundDcids(slot));
-    const binds = (option: any) => bound.has(option?.value?.ref?.dcid);
+    const binds = (option: any) => bound.has(option?.value?.ref?.ref);
 
     if (bound.size > 0 && !entry.options.every(binds)) return true;
     if (bound.size === 1) return false;
@@ -917,7 +918,7 @@ export const optionMuted = (option: any): boolean =>
  * nothing in it was ever probed (optionCoverage.partitionOptions' own
  * no-op rule). `boundDcid` is matched via `entityOptionDcid` (pickerState.ts)
  * so this works whether `options` carries the engine's nested SlotOption
- * shape (`value.ref.dcid`) or PlaceScopeEditor's flat EntityOption shape
+ * shape (`value.ref.ref`) or PlaceScopeEditor's flat EntityOption shape
  * (`dcid`).
  */
 export const rankOptionsByCoverage = (options: any[], boundDcid?: string | null): any[] => {
@@ -1027,8 +1028,11 @@ export type WhySummary = {
     /** `licence` is set when the answer serves one source, the only case
      *  the API names a licence for */
     sources: {
-        dcid: string;
+        ref: string;
         label: string;
+        /** the Graph API route of the source's document, null when the
+         *  answer names none */
+        documentation: string | null;
         origin: string | null;
         licence: string | null;
     }[];
@@ -1202,7 +1206,7 @@ export const scopeAssumptions = (spec: any, warnings?: readonly Warning[] | null
             const message = warnings?.find((w) => w?.code === 'role_scope_defaulted')?.message;
 
             if (message) {
-                assumptions.push(sentenceCase(message));
+                assumptions.push(capitalise(message));
             }
         }
     }
@@ -1232,7 +1236,7 @@ const variablesBreakdown = (spec: any): WhyBreakdown[] =>
         .map((fact: any) => ({
             title: `By ${axisLabel(spec, fact.property)}`,
             values: fact.values.slice(0, BREAKDOWN_VALUES).map((entry: any) => ({
-                label: sentenceCase(entry.value?.label ?? entry.value?.dcid ?? ''),
+                label: capitalise(entry.value?.label ?? entry.value?.ref ?? ''),
                 count: entry.count,
             })),
             more: Math.max(fact.values.length - BREAKDOWN_VALUES, 0),
@@ -1305,14 +1309,14 @@ const whyChoices = (spec: any): WhyChoice[] => {
     });
     const slots = (spec.resolution?.slot_filters ?? []).flatMap((filter: any) => {
         const value = (filter?.refs ?? [])
-            .map((ref: any) => ref?.label ?? ref?.dcid)
+            .map((ref: any) => ref?.label ?? ref?.ref)
             .filter(Boolean)
             .join(', ');
 
         return filter?.provenance === 'declared_default' && value
             ? [
                   {
-                      label: sentenceCase(filter.key?.label ?? filter.key?.axis ?? 'Value'),
+                      label: capitalise(filter.key?.label ?? filter.key?.axis ?? 'Value'),
                       value,
                       reason: CHOICE_REASONS.declared_default,
                   },
@@ -1363,7 +1367,7 @@ export const buildWhySummary = (
         ? (member.label ?? member.dcid)
         : (spec.measure_label ?? spec.shape?.label ?? part?.variable_text ?? null);
     const measure: WhyMeasure = {
-        name: name ? sentenceCase(name) : null,
+        name: name ? capitalise(name) : null,
         code: member?.dcid ?? null,
         unit: unitText(spec),
         years: yearsText(spec),
@@ -1431,8 +1435,9 @@ export const buildWhySummary = (
         family: count > 0 ? familyNote(count, statVars, spec.shape?.label) : null,
         variables,
         sources: sources.map((ref: any) => ({
-            dcid: ref.dcid,
-            label: ref.label ?? ref.dcid,
+            ref: ref.ref,
+            label: ref.label ?? ref.ref,
+            documentation: ref.documentation ?? null,
             origin: provenanceOrigin(ref),
             licence: sources.length === 1 ? licenceText(spec) : null,
         })),
@@ -1562,6 +1567,9 @@ export const seriesPreviewCaptions = (
 export type ResultRow = {
     year: string;
     cells: Record<string, string>;
+    // The party kind of each entity column's value, keyed like `cells`, for
+    // the entities the API lists a kind for.
+    kinds: Record<string, PartyKind>;
     value: number | null;
     // The series' unit (facet), display-ready — null when the facet has none.
     unit: string | null;
@@ -1583,7 +1591,7 @@ const UNIT_SYMBOLS: Record<string, string> = {
 };
 
 export const formatUnit = (unit: any): string | null => {
-    const ref: string | null = unit?.ref ?? unit?.dcid ?? null;
+    const ref: string | null = unit?.ref ?? null;
     const label: string | null = unit?.label ?? null;
 
     if (!ref && !label) {
@@ -1597,9 +1605,6 @@ export const formatUnit = (unit: any): string | null => {
     return spaceCamel(label ?? ref ?? '');
 };
 
-// "estimated" → "Estimated"; the rest keeps the graph's casing ("MOSPI …").
-const sentenceCase = (raw: string): string => raw.charAt(0).toUpperCase() + raw.slice(1);
-
 /** A measurement method's display text: the graph label, else the dcid's
  *  last path segment ("dcAggregate/Census" → "Census"), de-camel-cased and
  *  in sentence case. A label equal to the dcid is the graph's fallback for
@@ -1610,7 +1615,7 @@ export const formatMethod = (method: any): string | null => {
     const label: string | null = method?.label !== method?.ref ? (method?.label ?? null) : null;
     const raw: string | null = label ?? method?.ref?.split('/').at(-1) ?? null;
 
-    return raw ? sentenceCase(spaceCamel(raw)) : null;
+    return raw ? capitalise(spaceCamel(raw)) : null;
 };
 
 /** The spec-level unit (resolved.facets.unit), when the engine resolved one:
@@ -1640,7 +1645,7 @@ export const openAxisFactLabel = (property: string): string => {
 /** A constraint property's name for a reader: its slot's label
  *  ("instrument"), else `openAxisFactLabel`. */
 export const axisLabel = (spec: any, property: string): string =>
-    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.dcid === property)?.key?.label ??
+    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.ref === property)?.key?.label ??
     openAxisFactLabel(property);
 
 // The cell of a row whose part has no such column.
@@ -1656,18 +1661,18 @@ const slotOnAxis = (spec: any, axis: string): any =>
     (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === axis);
 
 const slotOnProperty = (spec: any, property: string): any =>
-    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.dcid === property);
+    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.ref === property);
 
 // The one value ref a slot binds, null for an unbound slot or a set.
 const boundRef = (slot: any): string | null =>
-    slot?.binding?.kind === 'value' ? (slot.binding.value?.ref?.dcid ?? null) : null;
+    slot?.binding?.kind === 'value' ? (slot.binding.value?.ref?.ref ?? null) : null;
 
 // Provider and Recipient head their role's column. A single-role series'
 // entity takes the where slot's own label ("Place").
 const roleHeading = (spec: any, role: string): string =>
     role === 'origin' || role === 'destination'
         ? ROLE_WORDS[role].one
-        : sentenceCase(slotOnAxis(spec, 'where')?.key?.label ?? ROLE_WORDS.observationAbout.one);
+        : capitalise(slotOnAxis(spec, 'where')?.key?.label ?? ROLE_WORDS.observationAbout.one);
 
 // A column one part offers. `bound` is the one ref the part's Spec binds it
 // to, so rows that all carry that ref restate the sentence. `named` says
@@ -1729,7 +1734,7 @@ const seriesCells = (s: any, spec: any, axes: boolean): Record<string, string> =
     }
 
     for (const axis of s?.axes ?? []) {
-        cells[axisKey(axis.property)] = sentenceCase(axis.label);
+        cells[axisKey(axis.property)] = capitalise(axis.label);
     }
 
     return cells;
@@ -1773,7 +1778,7 @@ const partColumns = (spec: any): PartColumn[] => {
 
                 return {
                     key: `slot:${axis}`,
-                    label: label ? sentenceCase(label) : fallback,
+                    label: label ? capitalise(label) : fallback,
                     bound: null,
                     named: Boolean(label),
                 };
@@ -1792,7 +1797,7 @@ const partColumns = (spec: any): PartColumn[] => {
     };
     const slotIndex = (property: string): number => {
         const index = (spec?.slots ?? []).findIndex(
-            (slot: any) => slot?.key?.property?.dcid === property,
+            (slot: any) => slot?.key?.property?.ref === property,
         );
 
         return index === -1 ? Infinity : index;
@@ -1813,7 +1818,7 @@ const partColumns = (spec: any): PartColumn[] => {
 
             return {
                 key: axisKey(property),
-                label: sentenceCase(axisLabel(spec, property)),
+                label: capitalise(axisLabel(spec, property)),
                 bound: boundRef(slot),
                 named: Boolean(slot),
             };
@@ -1882,8 +1887,67 @@ export const previewColumns = (parts: { spec: any }[]): PreviewColumn[] => {
         .map(({ key, label }) => ({ key, label }));
 };
 
-/** A row's text in an entity or axis column, "—" where its part has none. */
-export const previewCellText = (row: ResultRow, key: string): string => row.cells[key] ?? NO_CELL;
+// A series' party kind per entity column.
+const seriesKinds = (s: any): Record<string, PartyKind> => {
+    const kinds: Record<string, PartyKind> = {};
+
+    for (const entity of s?.entities ?? []) {
+        if (entity?.party_kind) {
+            kinds[entityKey(entity.role)] = entity.party_kind;
+        }
+    }
+
+    return kinds;
+};
+
+/**
+ * The entity columns whose total rows the table marks are those that hold two
+ * or more parties (a residual counts as one, since the server keeps it with
+ * the parties and a sum down the column still includes it) and at least one
+ * total, across the rows of every part. A total beside a single party is
+ * summed with nothing, so it stays unmarked.
+ */
+export const markedTotalColumns = (parts: { spec: any }[]): ReadonlySet<string> => {
+    const parties = new Map<string, Set<string>>();
+    const totals = new Set<string>();
+
+    for (const { spec } of parts) {
+        for (const s of spec?.observations?.series ?? []) {
+            if ((s?.points ?? []).length === 0) {
+                continue;
+            }
+
+            for (const entity of s?.entities ?? []) {
+                const key = entityKey(entity.role);
+
+                if (entity?.party_kind === 'total') {
+                    totals.add(key);
+                } else if (entity?.party_kind === 'party' || entity?.party_kind === 'residual') {
+                    parties.set(key, (parties.get(key) ?? new Set()).add(entity.ref));
+                }
+            }
+        }
+    }
+
+    return new Set([...totals].filter((key) => (parties.get(key)?.size ?? 0) >= 2));
+};
+
+export const TOTAL_ROW_MARK = 'total';
+
+/** A row's text in an entity or axis column, "—" where its part has none.
+ *  In a column from `markedTotalColumns`, a total's text carries
+ *  `TOTAL_ROW_MARK`. */
+export const previewCellText = (
+    row: ResultRow,
+    key: string,
+    marked?: ReadonlySet<string>,
+): string => {
+    const text = row.cells[key] ?? NO_CELL;
+
+    return text !== NO_CELL && marked?.has(key) && row.kinds[key] === 'total'
+        ? `${text} (${TOTAL_ROW_MARK})`
+        : text;
+};
 
 // The unit a series' own points carry. The series facet names the currency
 // alone, so the price basis joins it only on a converted series (its
@@ -1901,10 +1965,12 @@ export const flattenRows = (spec: any): ResultRow[] => {
 
     const rows: ResultRow[] = series.flatMap((s: any) => {
         const cells = seriesCells(s, spec, axes);
+        const kinds = seriesKinds(s);
 
         return (s?.points ?? []).map((point: any) => ({
             year: String(point?.date ?? '—'),
             cells,
+            kinds,
             value: typeof point?.value === 'number' ? point.value : null,
             unit: seriesUnit(s, spec),
             method: formatMethod(s?.facet?.measurementMethod),
@@ -2001,7 +2067,7 @@ export const methodPicker = (spec: any): MethodPicker | null => {
     const boundRefs: (string | null)[] =
         bound?.state === 'set' ? bound.refs : bound && 'ref' in bound ? [bound.ref] : [];
     const served = servedMethod(spec);
-    const optionRef = (option: any): string | null => option.value.ref?.dcid ?? null;
+    const optionRef = (option: any): string | null => option.value.ref?.ref ?? null;
 
     if (boundRefs.length === 0 && options.length === 1 && served.ref === optionRef(options[0])) {
         return null;
@@ -2471,9 +2537,10 @@ export const coverageSummary = (spec: any): string => {
     return spec?.coverage?.has_data ? 'Has data' : 'No data';
 };
 
-/** The right panel's big number: the rows in a download of the spec's
- *  default file (`resolved.download.rows`), `upTo` when the count is an
- *  upper bound. Null when the API could not count them without
+/** The right panel's big number: the rows the spec's series serve
+ *  (`resolved.download.rows`), total rows included, so it can exceed the
+ *  main table of a long CSV or Excel download, which sets totals apart.
+ *  `upTo` when the count is an upper bound. Null when the API could not count them without
  *  understating, or sent no download facts (a merged answer). */
 export const downloadRowCount = (spec: any): { rows: number; upTo: boolean } | null => {
     const download = spec?.download;
@@ -2517,7 +2584,13 @@ const detailYears = (download: any): string | null => {
 
 /** One row of the panel's Details list. `source` names the provenance whose
  *  page the value links to. */
-export type DetailRow = { label: string; value: string; source?: string };
+export type DetailRow = {
+    label: string;
+    value: string;
+    /** the one source the answer serves; its page is linked when the answer
+     *  names its document */
+    source?: { ref: string; documentation: string | null };
+};
 
 /** The panel's Details rows, describing the file a download writes: its
  *  years, series, unit and licence from `resolved.download` (years and
@@ -2552,11 +2625,14 @@ export const detailRows = (spec: any, fileBytes: number | null = null): DetailRo
 
     if (licence) {
         const sources = spec?.resolution?.resolved_sources ?? [];
+        const [source] = sources;
 
         rows.push({
             label: 'Licence',
             value: licence,
-            ...(sources.length === 1 && sources[0]?.dcid ? { source: sources[0].dcid } : {}),
+            ...(sources.length === 1 && source?.ref
+                ? { source: { ref: source.ref, documentation: source.documentation ?? null } }
+                : {}),
         });
     }
 

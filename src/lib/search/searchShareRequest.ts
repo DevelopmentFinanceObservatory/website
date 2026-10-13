@@ -37,10 +37,12 @@ const ENTITY_ROLE_KEYS: string[] = [
 ] satisfies EntityRoleKey[];
 
 // Search's own bounds on an `EntityGroup`: a label of 1 to 120 code points,
-// and a dcid and an entity type of at most 1024 characters each.
+// and a ref, an entity type and a total of at most 1024 characters each.
 const GROUP_LABEL_MAX_LENGTH = 120;
-const GROUP_DCID_MAX_LENGTH = 1024;
-const GROUP_ENTITY_TYPE_MAX_LENGTH = 1024;
+const GROUP_IDENTIFIER_MAX_LENGTH = 1024;
+
+const isGroupIdentifier = (value: unknown): boolean =>
+    value == null || (typeof value === 'string' && value.length <= GROUP_IDENTIFIER_MAX_LENGTH);
 
 const isPlainObject = (value: any): boolean =>
     !!value && typeof value === 'object' && !Array.isArray(value);
@@ -48,22 +50,24 @@ const isPlainObject = (value: any): boolean =>
 const isEntityGroup = (value: any): value is EntityGroup =>
     isPlainObject(value) &&
     Object.keys(value).every(
-        (member) => member === 'dcid' || member === 'label' || member === 'entity_type',
+        (member) =>
+            member === 'ref' ||
+            member === 'label' ||
+            member === 'entity_type' ||
+            member === 'total',
     ) &&
     typeof value.label === 'string' &&
     value.label.length > 0 &&
     // A label within the bound spans at most two UTF-16 units per code point.
     value.label.length <= GROUP_LABEL_MAX_LENGTH * 2 &&
     [...value.label].length <= GROUP_LABEL_MAX_LENGTH &&
-    (value.dcid == null ||
-        (typeof value.dcid === 'string' && value.dcid.length <= GROUP_DCID_MAX_LENGTH)) &&
-    (value.entity_type == null ||
-        (typeof value.entity_type === 'string' &&
-            value.entity_type.length <= GROUP_ENTITY_TYPE_MAX_LENGTH));
+    isGroupIdentifier(value.ref) &&
+    isGroupIdentifier(value.entity_type) &&
+    isGroupIdentifier(value.total);
 
 /** A part's groups as Search takes them beside an identity: one group per
- *  role key at most, each holding a label, an optional dcid and an optional
- *  entity type only. */
+ *  role key at most, each holding a label and an optional ref, entity type
+ *  and total only. */
 const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
     isPlainObject(value) &&
     Object.entries(value).every(

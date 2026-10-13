@@ -559,6 +559,32 @@ span.slotMarked {
     border-radius: rem(4);
 }
 
+// A list's filter box and its count (OptionFilterBar), pinned to the top of
+// .slotMenuBody's scroll area so the filter stays in reach down a long list.
+// The background matches the menu so scrolling rows don't show through, and
+// the shadow paints the body's top padding, which a browser may leave open
+// above the pinned bar.
+.optionFilter {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: rem(4);
+    padding-bottom: rem(4);
+    background-color: var(--color-yellow-800);
+    box-shadow: 0 rem(-10) 0 var(--color-yellow-800);
+}
+
+.optionFilterCount {
+    @include font-size(10px, 1.4);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+}
+
 // Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
 // provider/recipient rows) doesn't scroll Apply out of reach; background
 // matches the menu so a scrolling row underneath doesn't show through.
@@ -1502,22 +1528,20 @@ span.slotMarked {
     color: var(--color-sage);
 }
 
-// The country list inside the default-scope place picker: capped and
-// scrollable (216 rows), under its filter box.
+// The country list inside the default-scope place picker (216 rows), under
+// its filter box. It scrolls with .slotMenuBody, so the menu has one
+// scroller.
 .placeList {
     display: flex;
     flex-direction: column;
     gap: rem(2);
 
-    // Bled through the body's side padding (the scroll clips children, so
-    // the rows can't overhang it themselves) at the panel's fixed measure:
+    // Bled through the body's side padding at the panel's fixed measure:
     // rem(300) with, and rem(280) without, the padding — the same width the
     // loading note reserves, so the menu never jumps.
     width: rem(300);
-    max-height: rem(280);
     margin-top: rem(6);
     margin-inline: rem(-10);
-    overflow-y: auto;
 
     // The rows fill the already-bled list instead of overhanging it again.
     .slotOption {

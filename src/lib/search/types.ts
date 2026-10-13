@@ -94,10 +94,19 @@ export type SlotOptionsSource = 'observed' | 'seed';
  */
 export type SlotOptionRelation = 'child' | 'parent' | 'root';
 
-/** A {dcid, label} pair. Every identifier in the contract is a GraphRef. */
+/**
+ * What one party of a flow is beside the other parties on its side: a
+ * `party` holds figures of its own, a `total` holds other parties' figures
+ * ("Africa, Total"), so a sum across the role that counts it counts its
+ * members twice, and a `residual` holds figures no other party holds. Mirrors
+ * PartyKind (dfo-apis src/search/models/vocab.py) one-for-one.
+ */
+export type PartyKind = 'party' | 'total' | 'residual';
+
+/** A {ref, label} pair. Every identifier in the contract is a GraphRef. */
 export interface GraphRef {
-    /** the graph identifier */
-    dcid: string;
+    /** the graph identifier, a dcid */
+    ref: string;
     /** plain-language display name, read from the graph */
     label: string;
 }
@@ -130,6 +139,9 @@ export interface DataCommonsRef {
 export interface ProvenanceRef extends GraphRef {
     source?: SourceRef | null;
     data_commons?: DataCommonsRef | null;
+    /** the Graph API route of the provenance's document,
+     *  `/api/graph/documentation/{dcid}` */
+    documentation: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -434,11 +446,17 @@ export interface SlotOption {
     /** false when served_rows is an upper bound; null exactly when
      *  served_rows is null */
     served_rows_exact?: boolean | null;
+    /**
+     * On an origin or destination entity option, what the party is beside the
+     * others on its side, as the code index lists it. Absent for a party the
+     * index does not list, and on every other option.
+     */
+    party_kind?: PartyKind | null;
 }
 
 /**
  * The full candidate set one slot was bound against. `key` joins to the matching
- * `Spec.slots` entry on axis + property.dcid (see SlotKey ref form "axis:dcid").
+ * `Spec.slots` entry on axis + property.ref (see SlotKey ref form "axis:dcid").
  */
 export interface SlotOptions {
     key: SlotKey;
@@ -497,15 +515,18 @@ export interface ObservationPoint {
     value: number | null;
 }
 
-/** One axis's value on a single series' selected observation facet. `source`
- *  and `data_commons` ride the provenance axis only, and are absent for a
- *  provenance the origin catalogue does not list. */
+/** One axis's value on a single series' selected observation facet.
+ *  `source`, `data_commons` and `documentation` ride the provenance axis
+ *  only; the first two are absent for a provenance the origin catalogue does
+ *  not list. */
 export interface SeriesFacetRef {
     ref: string;
     /** best-effort display label, null when unresolved */
     label?: string | null;
     source?: SourceRef | null;
     data_commons?: DataCommonsRef | null;
+    /** the Graph API route of the provenance's document */
+    documentation?: string | null;
 }
 
 /** A series' StatVar: its dcid and the row's own distinguishing label. */
@@ -520,6 +541,11 @@ export interface SeriesEntityRef {
     ref: string;
     /** best-effort display label, null when unresolved */
     label?: string | null;
+    /** on an origin or destination entity, what the party is beside the
+     *  others on its side, as the code index lists it. Absent for a party
+     *  the index does not list, on observationAbout, and from an API that
+     *  predates it. */
+    party_kind?: PartyKind | null;
 }
 
 /** One constraint of a series' StatVar: the property and the value the
@@ -656,9 +682,9 @@ export type FacetBasis = 'bound' | 'declared_default' | 'fallback';
 /**
  * One facet axis's resolved value on a Spec (dfo-apis src/search/models/
  * spec.py ResolvedFacet). Exactly one of `ref` and `selection` is present:
- * `ref` (with `label`, and on the provenance axis `source` and
- * `data_commons`) when one value served every carried series, `selection`
- * when the series differ.
+ * `ref` (with `label`, and on the provenance axis `source`, `data_commons`
+ * and `documentation`) when one value served every carried series,
+ * `selection` when the series differ.
  */
 export interface ResolvedFacet {
     basis: FacetBasis;
@@ -666,6 +692,8 @@ export interface ResolvedFacet {
     label?: string | null;
     source?: SourceRef | null;
     data_commons?: DataCommonsRef | null;
+    /** provenance axis only: the Graph API route of the provenance's document */
+    documentation?: string | null;
     selection?: 'per_series' | null;
     /** unit axis only, alongside `ref`: the ISO 4217 code ("USD", "KES") of
      *  the currency `ref` is denominated in; absent when `ref` is no
@@ -739,7 +767,12 @@ export interface RelatedMeasure {
  * DownloadFacts.
  */
 export interface DownloadFacts {
-    /** one row per series and date. Null when the count could understate. */
+    /** the rows the definition's series serve, one per series and date, totals
+     *  included. A long-layout CSV or XLSX keeps the rows where a role in the
+     *  options document's `long_layout_totals` holds a total out of its main
+     *  table, so that table can hold fewer. Null when the count could
+     *  understate, as when a served member is missing from the coverage
+     *  artifact. */
     rows?: number | null;
     /** false when rows is an upper bound, or null */
     rows_exact: boolean;
@@ -897,7 +930,7 @@ export interface UnitConversion {
  * (`Spec.slots[i].binding`, `{kind, value}`) that `lib/search/searchClient.ts`'s
  * Slot/Binding mirror types describe. `state` (not `kind`) is the
  * discriminator; `ref`/`refs` carry bare dcid strings, never a full
- * `{dcid,label}` GraphRef.
+ * `{ref,label}` GraphRef.
  *
  * What each state denotes: `value` denotes the bound code and every code
  * under it via the code system's declared hierarchy — the code alone where
@@ -930,7 +963,7 @@ export type IdentityCurrencyRole = { role: EntityRoleKey };
  *  facet binding's `request` form. */
 export interface IdentityUnitRequest {
     /** an ISO 4217 code, or the currency of the one entity a role names */
-    currency: string | { role: 'origin' | 'destination' };
+    currency: string | { role: EntityRoleKey };
     prices: 'current' | 'constant';
     /** required exactly when prices === 'constant' */
     base_year?: number;
@@ -946,14 +979,24 @@ export type IdentityFacetRefBinding =
  *  value on the axis. The engine echoes the null back. */
 export type IdentityNullableFacetBinding = IdentityFacetRefBinding | { state: 'value'; ref: null };
 
+/** A unit bound to the national currency of each entity a role names: the
+ *  facets whose unit is that entity's own currency, served as published. */
+export interface IdentityNationalCurrencyBinding {
+    state: 'value';
+    national_currency: { role: EntityRoleKey };
+}
+
 /** The sparse facet map over the identity core's three axes. Every facet
  *  carries a provenance, so `provenance` takes declared refs only;
  *  `measurementMethod` and `unit` also take a null ref, and `unit` alone
- *  takes the request form. */
+ *  takes the request and national-currency forms. */
 export interface IdentityFacets {
     provenance?: IdentityFacetRefBinding;
     measurementMethod?: IdentityNullableFacetBinding;
-    unit?: IdentityNullableFacetBinding | { state: 'value'; request: IdentityUnitRequest };
+    unit?:
+        | IdentityNullableFacetBinding
+        | { state: 'value'; request: IdentityUnitRequest }
+        | IdentityNationalCurrencyBinding;
 }
 
 export type IdentityFacetAxis = keyof IdentityFacets;
@@ -986,15 +1029,19 @@ export interface BaseIdentity {
 
 /** A named group whose members fill one entity role ("European Union").
  *  The members are the role's dcids in `BaseIdentity.entities`. With a
- *  `dcid`, the API takes the label from the graph. Mirrors dfo-apis
+ *  `ref`, the API takes the label from the graph. Mirrors dfo-apis
  *  EntityGroup. */
 export interface EntityGroup {
     /** the group's graph node; null when the graph holds none */
-    dcid: string | null;
+    ref: string | null;
     label: string;
     /** the graph type of the group's node (`Continent`, `UNGeoRegion`);
      *  null or absent when the group has no node */
     entity_type?: string | null;
+    /** the party the dataset publishes as the group's total, which the role
+     *  binds in place of the members (`DACAfrica` for Africa); null or
+     *  absent when the role binds the members */
+    total?: string | null;
 }
 
 /** Alias for `Spec.identity`'s type; `BaseIdentity` is the canonical declaration. */
@@ -1147,7 +1194,7 @@ export interface CandidateSet {
 /** One graph node an ambiguous wording could name (dfo-apis
  *  src/search/models/outcomes.py AmbiguousEntityCandidate). */
 export interface AmbiguousEntityCandidate {
-    dcid: string;
+    ref: string;
     label: string;
     /** country, continent, subregion, continental_union, organisation,
      *  aggregate, place_other, or other */
@@ -1749,7 +1796,7 @@ export interface EntityOptionsWireRequest {
 
 /** One candidate entity confirmed to have data, with a resolved display label. */
 export interface EntityOptionsWireValue {
-    ref: { dcid: string; label: string };
+    ref: GraphRef;
     value_kind: 'entity';
 }
 
@@ -1757,7 +1804,14 @@ export interface EntityOptionsWireValue {
 export interface EntityOptionsWireResponse {
     options: {
         /** candidate entities confirmed to have data, in candidate order */
-        items: Array<{ value: EntityOptionsWireValue; coverage?: Coverage | null }>;
+        items: Array<{
+            value: EntityOptionsWireValue;
+            coverage?: Coverage | null;
+            /** on an origin or destination entity option, what the party is
+             *  beside the others on its side, as the code index lists it.
+             *  Absent for a party the index does not list. */
+            party_kind?: PartyKind | null;
+        }>;
         /**
          * true when items is only a subset of the full candidate set (the
          * endpoint's own cap), false when items is the complete candidate

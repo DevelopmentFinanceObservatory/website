@@ -57,12 +57,12 @@ export const entityAmbiguous: unknown = {
             "text": "Congo",
             "candidates": [
               {
-                "dcid": "country/COD",
+                "ref": "country/COD",
                 "label": "Congo [DRC]",
                 "kind": "country"
               },
               {
-                "dcid": "country/COG",
+                "ref": "country/COG",
                 "label": "Congo [Republic]",
                 "kind": "country"
               }

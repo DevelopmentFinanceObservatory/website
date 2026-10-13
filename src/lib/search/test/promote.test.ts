@@ -28,7 +28,7 @@ test('an open destination selection writes identity.entities.destination for res
         0,
         {
             kind: 'value',
-            value: { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
+            value: { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
         },
         'destination',
     );
@@ -43,7 +43,7 @@ test('an open destination selection writes identity.entities.destination for res
 test('a non-directional where selection still writes observationAbout', () => {
     const edited = withResolvedSlotEdit(whereSpec, 0, {
         kind: 'value',
-        value: { value_kind: 'entity', ref: { dcid: 'country/GHA', label: 'Ghana' } },
+        value: { value_kind: 'entity', ref: { ref: 'country/GHA', label: 'Ghana' } },
     });
 
     assert.deepEqual(edited.entities, {
@@ -65,8 +65,8 @@ test("a multi-select Apply's set binding writes every dcid to the where slot's r
         {
             kind: 'set',
             values: [
-                { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
-                { value_kind: 'entity', ref: { dcid: 'country/ETH', label: 'Ethiopia' } },
+                { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
+                { value_kind: 'entity', ref: { ref: 'country/ETH', label: 'Ethiopia' } },
             ],
         },
         'destination',

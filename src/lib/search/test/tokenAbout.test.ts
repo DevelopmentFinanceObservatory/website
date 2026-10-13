@@ -21,7 +21,7 @@ const slot = (fields: Partial<SentenceToken>): SentenceToken => ({
 });
 
 const crsProvenance = {
-    dcid: 'provenance/OECDCreditorReportingSystem',
+    ref: 'provenance/OECDCreditorReportingSystem',
     label: 'OECD Creditor Reporting System (CRS)',
     source: {
         ref: 'dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd',
@@ -34,9 +34,9 @@ const crsProvenance = {
 const grossOda = {
     measure_label: 'gross ODA disbursements',
     measure_axis_values: [
-        { axis: 'nettingBasis', value: { dcid: 'Gross', label: 'gross' } },
-        { axis: 'crsTypeOfFlow', value: { dcid: 'ODA', label: 'ODA' } },
-        { axis: 'measurementQualifier', value: { dcid: 'Nominal', label: 'nominal' } },
+        { axis: 'nettingBasis', value: { ref: 'Gross', label: 'gross' } },
+        { axis: 'crsTypeOfFlow', value: { ref: 'ODA', label: 'ODA' } },
+        { axis: 'measurementQualifier', value: { ref: 'Nominal', label: 'nominal' } },
     ],
     stat_vars: {
         member_count: 152,
@@ -78,8 +78,8 @@ test('a measure states its unit, span and download rows, and defines the axis va
 test('the line counts the rows and the note names the axes the series vary on', () => {
     const spec = {
         slots: [
-            { key: { axis: 'how', property: { dcid: 'crsPurpose' }, label: 'sector' } },
-            { key: { axis: 'how', property: { dcid: 'crsTypeOfFinance' }, label: 'instrument' } },
+            { key: { axis: 'how', property: { ref: 'crsPurpose' }, label: 'sector' } },
+            { key: { axis: 'how', property: { ref: 'crsTypeOfFinance' }, label: 'instrument' } },
         ],
         open_axis_facts: [
             { property: 'crsPurpose', varies: true, distinct_count: 98, undeclared_count: 0 },
@@ -131,7 +131,7 @@ test('a group names itself, counts its members and defines its graph node', () =
                 { ref: 'country/BEL', label: 'Belgium', entity_type: 'Country', role: 'origin' },
                 { ref: 'country/BGR', label: 'Bulgaria', entity_type: 'Country', role: 'origin' },
             ],
-            entity_groups: { origin: { dcid: 'EuropeanUnion', label: 'European Union' } },
+            entity_groups: { origin: { ref: 'EuropeanUnion', label: 'European Union' } },
         },
     );
 
@@ -156,7 +156,7 @@ test('a continent or UN subregion group counts the countries and territories it 
             {
                 entities,
                 entity_groups: {
-                    observationAbout: { dcid: 'africa', label: 'Africa', entity_type },
+                    observationAbout: { ref: 'africa', label: 'Africa', entity_type },
                 },
             },
         );
@@ -172,7 +172,7 @@ test('a continent or UN subregion group counts the countries and territories it 
         {
             entities: entities.slice(0, 1),
             entity_groups: {
-                observationAbout: { dcid: 'africa', label: 'Africa', entity_type: 'Continent' },
+                observationAbout: { ref: 'africa', label: 'Africa', entity_type: 'Continent' },
             },
         },
     );
@@ -202,7 +202,7 @@ test('a group whose node is neither a continent nor a UN subregion keeps the gro
                 { ref: 'country/CAN', label: 'Canada', entity_type: 'Country', role: 'origin' },
                 { ref: 'country/FRA', label: 'France', entity_type: 'Country', role: 'origin' },
             ],
-            entity_groups: { origin: { dcid: 'G7', label: 'G7', entity_type: 'CountryGroup' } },
+            entity_groups: { origin: { ref: 'G7', label: 'G7', entity_type: 'CountryGroup' } },
         },
     );
 
@@ -303,7 +303,7 @@ test("the latest date reads the StatVars' range past a preview that stops short"
 
 test('a how code defines its bound value, labelling each when there are several', () => {
     const purpose = {
-        key: { axis: 'how', property: { dcid: 'crsPurpose' }, label: 'purpose' },
+        key: { axis: 'how', property: { ref: 'crsPurpose' }, label: 'purpose' },
     };
     const one = tokenAbout(
         slot({ axis: 'how', text: 'for malaria control', binding_ref: 'how:crsPurpose' }),
@@ -313,7 +313,7 @@ test('a how code defines its bound value, labelling each when there are several'
                     ...purpose,
                     binding: {
                         kind: 'value',
-                        value: { ref: { dcid: 'crs/12262', label: 'Malaria control' } },
+                        value: { ref: { ref: 'crs/12262', label: 'Malaria control' } },
                     },
                 },
             ],
@@ -333,8 +333,8 @@ test('a how code defines its bound value, labelling each when there are several'
                     binding: {
                         kind: 'set',
                         values: [
-                            { ref: { dcid: 'crs/121', label: 'Health, general' } },
-                            { ref: { dcid: 'crs/122', label: 'Basic health' } },
+                            { ref: { ref: 'crs/121', label: 'Health, general' } },
+                            { ref: { ref: 'crs/122', label: 'Basic health' } },
                         ],
                     },
                 },
@@ -432,7 +432,7 @@ test('a source names each provenance with its publisher, taking it from the reso
                     key: { axis: 'source' },
                     binding: {
                         kind: 'value',
-                        value: { ref: { dcid: crsProvenance.dcid, label: 'CRS' } },
+                        value: { ref: { ref: crsProvenance.ref, label: 'CRS' } },
                     },
                 },
             ],
@@ -441,7 +441,7 @@ test('a source names each provenance with its publisher, taking it from the reso
 
     assert.equal(about.kind, 'source');
     assert.equal(about.sources.length, 1);
-    assert.equal(about.sources[0].dcid, crsProvenance.dcid);
+    assert.equal(about.sources[0].dcid, crsProvenance.ref);
     assert.equal(about.sources[0].label, crsProvenance.label);
     assert.match(about.sources[0].origin ?? '', /Organisation for Economic Co-operation/);
 });

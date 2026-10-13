@@ -14,6 +14,8 @@ import {
     cardDownloadMessage,
     DOWNLOAD_PENDING,
     cardRefOf,
+    cardRevisions,
+    restoreCardRevisions,
     componentDataTarget,
     fetchCardData,
 } from '../cardDownload.ts';
@@ -43,6 +45,53 @@ test('cardRefOf: a text card, or a card saved without a revision, has none', () 
 
     assert.equal(cardRefOf(text), null);
     assert.equal(cardRefOf(unsaved), null);
+});
+
+test('cardRevisions: maps each data card to the revision it draws, skipping text cards', () => {
+    const text: TextWidget = { kind: 'text', id: 't1', title: 'Note', body: '' };
+    const unsaved = { ...chart('spec_19e7'), id: 'cmp_old', ref: undefined, frame: undefined };
+
+    assert.deepEqual(
+        cardRevisions([chart('spec_19e7'), text, unsaved]),
+        new Map([['cmp_9f8e', 3]]),
+    );
+});
+
+test('restoreCardRevisions: legacy saves retain the exact revisions of all data cards', () => {
+    const second = {
+        ...chart('spec_other'),
+        id: 'cmp_second',
+        ref: { component_id: 'cmp_second', revision: 7 },
+    };
+
+    assert.deepEqual(
+        restoreCardRevisions({ sessionId: 'session', widgets: [chart('spec_19e7'), second] }),
+        new Map([
+            ['cmp_9f8e', 3],
+            ['cmp_second', 7],
+        ]),
+    );
+});
+
+test('restoreCardRevisions: a shared copy has no addressable cards, even with saved refs', () => {
+    assert.deepEqual(restoreCardRevisions(), new Map());
+    assert.deepEqual(
+        restoreCardRevisions({
+            sessionId: null,
+            widgets: [chart('spec_19e7')],
+            componentRefs: [REF],
+        }),
+        new Map(),
+    );
+});
+
+test('restoreCardRevisions: a saved fork addresses only cards issued in its own session', () => {
+    const own = { component_id: 'cmp_own', revision: 2 };
+    const widgets = [chart('spec_19e7'), { ...chart('spec_own'), id: own.component_id, ref: own }];
+    const saved = JSON.parse(JSON.stringify({ sessionId: 'fork', widgets, componentRefs: [own] }));
+
+    assert.deepEqual(restoreCardRevisions(saved), new Map([[own.component_id, 2]]));
+    assert.deepEqual(restoreCardRevisions({ ...saved, componentRefs: [] }), new Map());
 });
 
 test('cardDataUrl: names the revision in the path and the file in the query', () => {
@@ -167,7 +216,8 @@ for (const [name, response, code, retryAfterS] of [
     ],
     [
         'a refresh in progress, the wait in the body alone',
-        () => new Response(JSON.stringify({ status: 'pending', retry_after_s: 6 }), { status: 503 }),
+        () =>
+            new Response(JSON.stringify({ status: 'pending', retry_after_s: 6 }), { status: 503 }),
         DOWNLOAD_PENDING,
         6,
     ],
@@ -228,8 +278,12 @@ test('fetchCardData: off a live share, a 503 or an `error` key is not read as th
 });
 
 test('cardDownloadMessage: a stalled export and a switched-off site each say what happened', () => {
-    const messages = ['backend_timeout', 'live_unavailable', 'unauthorized', 'refresh_not_configured']
-        .map((code) => cardDownloadMessage(code));
+    const messages = [
+        'backend_timeout',
+        'live_unavailable',
+        'unauthorized',
+        'refresh_not_configured',
+    ].map((code) => cardDownloadMessage(code));
 
     assert.ok(messages.every((message) => message !== cardDownloadMessage(null)));
     assert.match(messages[0]!, /took too long/);

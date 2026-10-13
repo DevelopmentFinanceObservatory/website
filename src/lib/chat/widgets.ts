@@ -13,8 +13,9 @@ import {
 
 /** One source a card cites, as the platform names it. */
 export type CardSource = {
-    // The source's id, which the graph's own documentation is looked up by.
-    id: string;
+    // The source's id, which the graph's own documentation is looked up by;
+    // null for a computed version's input whose id is unknown.
+    id: string | null;
     name: string;
     licence: string | null;
     url: string | null;
@@ -23,14 +24,15 @@ export type CardSource = {
 
 /**
  * What the card's chrome shows and its More Info panel unfolds: the
- * attribution line, the window, the indicators behind the card, the
- * citation and every source it came from, all read straight off the component
- * frame. `citation` and `sources` are absent on a card saved before they
- * were recorded, and `leftOut` on a card whose data leaves nothing out.
+ * attribution line, the window, the citation and every source it came from,
+ * all read straight off the component frame. `citation` and `sources` are
+ * absent on a card saved before they were recorded, and `leftOut` on a card
+ * whose data leaves nothing out.
  */
 export type CardInfo = {
     // The frame's own one-line attribution ("WorldDevelopmentIndicators · 1 indicator(s)").
     label: string;
+    // The first source with a known id.
     sourceId: string | null;
     sourceName: string | null;
     sourceCount: number;
@@ -39,7 +41,9 @@ export type CardInfo = {
     // The unit in words with its magnitude and price basis ("US Dollar, millions,
     // constant 2023 prices").
     unit: string | null;
-    indicators: { id: string; name: string; description: string }[];
+    // The indicators behind the card, present only on a card saved with them.
+    // The legacy More Info lists them one by one.
+    indicators?: { id: string; name: string; description: string }[];
     licence: string | null;
     dataThrough: string | null;
     lastRefreshed: string | null;
@@ -50,6 +54,11 @@ export type CardInfo = {
     // scope the frame covers less than. A live share's card and its More Info
     // show it.
     leftOut?: string[];
+    // The card's stored description, which More Info renders with no request.
+    // Absent on a card issued without one and on one saved before it existed,
+    // whose More Info renders the fields above. A saved card holds whatever
+    // JSON was saved, so readers take it through `cardDescription`.
+    description?: unknown;
 };
 
 /** The component revision a Studio card draws. Download Data and a share

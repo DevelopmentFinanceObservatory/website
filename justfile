@@ -172,6 +172,19 @@ test:
 build:
     pnpm build
 
+# src/lib/graph/test/wire.test.ts fails until the committed types match the
+# snapshot; the diff of this regeneration is the review artifact.
+#
+# Rewrite src/lib/graph/schema.d.ts from the Graph API schema snapshot
+graph-types:
+    pnpm graph:types
+
+# Reads `GET /api/graph/schema` from the given dfo-apis, dev by default.
+#
+# Refresh the Graph API schema snapshot from a deployed dfo-apis, then the types
+graph-schema url="https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app":
+    pnpm graph:schema {{url}}
+
 # Everything ci.yml runs, in CI's order. Green here means green there.
 check: lint typecheck test build
 

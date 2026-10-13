@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
+import { pickExamples } from '@/lib/studio/examples';
 import { liveSharingAvailable } from '@/lib/studio/liveShare';
 
 export const metadata: Metadata = {
@@ -14,7 +15,14 @@ const StudioConversationPage = async ({ params }: { params: Promise<{ id: string
     const { id } = await params;
     const session = await getSession();
 
-    return <Studio openId={id} guest={!session} liveSharing={liveSharingAvailable()} />;
+    return (
+        <Studio
+            openId={id}
+            guest={!session}
+            liveSharing={liveSharingAvailable()}
+            examples={pickExamples()}
+        />
+    );
 };
 
 export default StudioConversationPage;

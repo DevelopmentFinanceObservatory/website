@@ -103,10 +103,18 @@ test('graphReader caches a 404 as null', async () => {
     assert.deepEqual(calls, ['n']);
 });
 
+// A node entry as the batch door serves one, trimmed to what the reader reads.
+const held = (ref: string) => ({ ref, kind: 'other' });
+
 // A fetch that answers the batch door from a list of outcomes in turn (a
 // status, or an Error for a failed request), holding each dcid's node except
-// those in `notHeld`. It records the dcids each batch asked for.
-const batchDoor = (outcomes: (number | Error)[], notHeld: string[] = []) => {
+// those in `notHeld`, and answering `entry` for a dcid it names. It records the
+// dcids each batch asked for.
+const batchDoor = (
+    outcomes: (number | Error)[],
+    notHeld: string[] = [],
+    entry: Record<string, unknown> = {},
+) => {
     const calls: { url: string; dcids: string[] }[] = [];
     const fetchImpl = async (url: string, init?: GraphRequest) => {
         const { dcids } = JSON.parse(init!.body) as { dcids: string[] };
@@ -118,7 +126,11 @@ const batchDoor = (outcomes: (number | Error)[], notHeld: string[] = []) => {
 
         return response(next, {
             nodes: dcids.map((dcid) =>
-                notHeld.includes(dcid) ? { dcid, shape: 'not_held' } : { dcid, shape: 'property' },
+                dcid in entry
+                    ? entry[dcid]
+                    : notHeld.includes(dcid)
+                      ? { ref: dcid, status: 'not_held' }
+                      : held(dcid),
             ),
         });
     };
@@ -133,14 +145,22 @@ test('node reads asked for in the same tick share one request', async () => {
     const nodes = await Promise.all(['a', 'b', 'c', 'a'].map((dcid) => readNode(dcid)));
 
     // not_held is cached as null, like a 404.
-    assert.deepEqual(nodes, [
-        { dcid: 'a', shape: 'property' },
-        null,
-        { dcid: 'c', shape: 'property' },
-        { dcid: 'a', shape: 'property' },
-    ]);
+    assert.deepEqual(nodes, [held('a'), null, held('c'), held('a')]);
     assert.equal(await readNode('b'), null);
     assert.deepEqual(calls, [{ url: '/api/graph/nodes', dcids: ['a', 'b', 'c'] }]);
+});
+
+test('an entry that is neither a node nor not_held reads as null and leaves the cache', async () => {
+    // An entry with `shape: 'not_held'` and neither `status` nor `kind`.
+    const { calls, fetchImpl } = batchDoor([200, 200], [], { b: { dcid: 'b', shape: 'not_held' } });
+    const { readNode } = graphReader({ fetchImpl, sleep: noSleep });
+
+    assert.deepEqual(await Promise.all([readNode('a'), readNode('b')]), [held('a'), null]);
+    assert.equal(await readNode('b'), null);
+    assert.deepEqual(
+        calls.map((call) => call.dcids),
+        [['a', 'b'], ['b']],
+    );
 });
 
 test('reads asked for in one tick split into batches of MAX_NODE_BATCH', async () => {
@@ -179,10 +199,7 @@ test('a failed batch leaves the cache for every node in it, so the next open ask
 
     assert.deepEqual(await open(), [null, null]);
     assert.deepEqual(await open(), [null, null]);
-    assert.deepEqual(await open(), [
-        { dcid: 'a', shape: 'property' },
-        { dcid: 'b', shape: 'property' },
-    ]);
+    assert.deepEqual(await open(), [held('a'), held('b')]);
     assert.deepEqual(
         calls.map((call) => call.dcids),
         [

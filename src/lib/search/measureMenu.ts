@@ -3,6 +3,8 @@
  *  identity entry a pick posts, and the note lines a varying open axis with
  *  no menu contributes. */
 
+import type { GraphNode } from '../graph/wire.ts';
+
 import { specEntityGroups } from './datasetEntries.ts';
 import { keyRef } from './searchClient.ts';
 import { priceBasis } from './unitLabel.ts';
@@ -157,7 +159,7 @@ export function measureVarianceNotes(
     return (spec.open_axis_facts ?? []).flatMap((fact) => {
         if (!fact.varies) return [];
 
-        const slot = slots.find((s) => s.key.property?.dcid === fact.property);
+        const slot = slots.find((s) => s.key.property?.ref === fact.property);
         const pickable =
             slot != null &&
             slotOptionsEntry(optionsBySpec, spec.spec_id, keyRef(slot.key)).options.length > 0;
@@ -184,7 +186,7 @@ export function measureSwitchEntry(
     };
 }
 
-const axisValueKey = ({ axis, value }: MeasureAxisValue) => `${axis}=${value.dcid}`;
+const axisValueKey = ({ axis, value }: MeasureAxisValue) => `${axis}=${value.ref}`;
 
 /** The values a measure row's info icon defines: those of the row's own
  *  `measure_axis_values` that some other row in the menu does not share
@@ -202,24 +204,11 @@ export function measureDefinitionValues(
     return (distinct.length > 0 ? distinct : own).map(({ value }) => value);
 }
 
-/** A graph node's own definition, from `GET /api/graph/node/{dcid}`: a
- *  StatVar node's `description`, else a generic node's first
- *  `properties.description` value. Null when the node has neither, which
- *  hides the info icon. */
-export function graphNodeDescription(node: unknown): string | null {
-    if (!node || typeof node !== 'object') return null;
-
-    const { description, properties } = node as {
-        description?: unknown;
-        properties?: { description?: unknown };
-    };
-
-    if (typeof description === 'string' && description.trim()) return description;
-
-    const values = properties?.description;
-    const first = Array.isArray(values) ? values[0] : null;
-
-    return typeof first === 'string' && first.trim() ? first : null;
+/** A graph node's own prose, from the batch door: its `description`. Null
+ *  when the graph holds no node or the node has no description, which hides
+ *  the info icon. */
+export function graphNodeDescription(node: GraphNode | null): string | null {
+    return node?.description?.trim() ? node.description : null;
 }
 
 /** The measures related to a measure token with no alternatives: the
@@ -231,7 +220,7 @@ export function relatedMeasures(spec: Pick<Spec, 'related_group' | 'related_meas
     measures: RelatedMeasure[];
 } {
     const measures = spec.related_measures ?? [];
-    const group = spec.related_group?.label ?? spec.related_group?.dcid ?? null;
+    const group = spec.related_group?.label ?? spec.related_group?.ref ?? null;
 
     return {
         title:

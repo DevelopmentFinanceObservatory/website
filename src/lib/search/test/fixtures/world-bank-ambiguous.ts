@@ -74,12 +74,12 @@ export const worldBankAmbiguous: unknown = {
             "text": "World Bank",
             "candidates": [
               {
-                "dcid": "InternationalBankForReconstructionAndDevelopment",
+                "ref": "InternationalBankForReconstructionAndDevelopment",
                 "label": "International Bank for Reconstruction and Development",
                 "kind": "organisation"
               },
               {
-                "dcid": "InternationalDevelopmentAssociation",
+                "ref": "InternationalDevelopmentAssociation",
                 "label": "International Development Association",
                 "kind": "organisation"
               }

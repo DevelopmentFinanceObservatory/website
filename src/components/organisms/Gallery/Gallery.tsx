@@ -40,7 +40,8 @@ const serializeQuery = (value: string) => (value.trim() ? value : null);
  * as-is or to fork. The dark hero (title, count, lead, the three filter
  * dropdowns, the search box), then the canvas tiles on the light ground,
  * three to a row — each cover a miniature of the canvas it stands for.
- * Entries are placeholders until the DFO team curates the real set.
+ * An item matches a region or source filter when any of its regions or
+ * sources is selected.
  */
 const Gallery = () => {
     const sectionRef = useReveal<HTMLElement>();
@@ -54,11 +55,11 @@ const Gallery = () => {
             return false;
         }
 
-        if (regions.length && !regions.includes(item.region)) {
+        if (regions.length && !item.regions.some((region) => regions.includes(region))) {
             return false;
         }
 
-        if (sources.length && !sources.includes(item.source)) {
+        if (sources.length && !item.sources.some((source) => sources.includes(source))) {
             return false;
         }
 

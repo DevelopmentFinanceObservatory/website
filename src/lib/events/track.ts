@@ -18,7 +18,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - search.empty      a search the graph couldn't answer (the reasons)
  * - search.studio_handoff  a Studio action on a search answer
  * - studio.prompt     a prompt sent in the Studio (turn, intent — not the text)
- * - studio.card       a card the harness put on the canvas (kind, indicators…)
+ * - studio.card       a card the harness put on the canvas (kind, source, years, unit)
  * - studio.session_end  a Studio session left (turns, cards, pins)
  * - auth.signin       a sign-in (provider)
  * - guest.wall_hit    a guest ran out of free prompts

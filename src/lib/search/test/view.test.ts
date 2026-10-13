@@ -59,7 +59,7 @@ test('entity_options reducer preserves the SSE truncation flag for a destination
             {
                 value: {
                     value_kind: 'entity',
-                    ref: { dcid: 'country/KEN', label: 'Kenya' },
+                    ref: { ref: 'country/KEN', label: 'Kenya' },
                 },
             },
         ],
@@ -94,7 +94,7 @@ test('openEntityEntry preserves a truncated count-only destination for its lazy 
 
 test('sharedEntityOptions exposes only recipients every touched part can accept', () => {
     const option = (dcid: string, label: string) => ({
-        value: { value_kind: 'entity' as const, ref: { dcid, label } },
+        value: { value_kind: 'entity' as const, ref: { ref: dcid, label } },
     });
     const entries = {
         first: [
@@ -132,7 +132,7 @@ test('sharedEntityOptions does not use a representative list when a touched part
                     {
                         value: {
                             value_kind: 'entity' as const,
-                            ref: { dcid: 'country/FRA', label: 'France' },
+                            ref: { ref: 'country/FRA', label: 'France' },
                         },
                     },
                 ],
@@ -409,14 +409,15 @@ const odaPanelSpec = {
     resolution: {
         resolved_sources: [
             {
-                dcid: 'provenance/OECDCreditorReportingSystem',
+                ref: 'provenance/OECDCreditorReportingSystem',
                 label: 'OECD Creditor Reporting System (CRS)',
+                documentation: '/api/graph/documentation/provenance/OECDCreditorReportingSystem',
             },
         ],
     },
     slots: [
         {
-            key: { axis: 'how', property: { dcid: 'crsCooperationModality' }, label: 'modality' },
+            key: { axis: 'how', property: { ref: 'crsCooperationModality' }, label: 'modality' },
         },
     ],
     open_axis_facts: [
@@ -452,7 +453,10 @@ test('detailRows describes the file: years, series, unit, licence linked to its 
         {
             label: 'Licence',
             value: 'OECD Terms and Conditions',
-            source: 'provenance/OECDCreditorReportingSystem',
+            source: {
+                ref: 'provenance/OECDCreditorReportingSystem',
+                documentation: '/api/graph/documentation/provenance/OECDCreditorReportingSystem',
+            },
         },
         { label: 'File size', value: '48.2 MB' },
         { label: 'Gaps', value: '301 variables state no modality' },
@@ -468,7 +472,7 @@ test('detailRows leaves out what the API did not send, and links no licence for 
             window: { start_year: 2000, end_year: 2022 },
             licence: { label: 'PublicDomain' },
         },
-        resolution: { resolved_sources: [{ dcid: 'a' }, { dcid: 'b' }] },
+        resolution: { resolved_sources: [{ ref: 'a' }, { ref: 'b' }] },
     };
 
     assert.deepEqual(detailRows(inflation), [
@@ -563,7 +567,7 @@ test('slotOptionsEntry returns an empty, non-truncated entry when the spec is pr
 
 test('slotOptionsEntry reads back a populated entry, truncated true preserved', () => {
     const entry = {
-        options: [{ value: { ref: { dcid: 'country/KEN', label: 'Kenya' } } }],
+        options: [{ value: { ref: { ref: 'country/KEN', label: 'Kenya' } } }],
         truncated: true,
     };
     const bySpec = { 'spec-1': { 'where:': entry } };
@@ -593,8 +597,8 @@ test('mergeSlotOptionsEntry seeds a brand new spec/key pair into an empty map', 
 });
 
 test('mergeSlotOptionsEntry adds a second key under a spec without dropping a sibling key already there', () => {
-    const first = { options: [{ value: { ref: { dcid: 'country/KEN' } } }], truncated: false };
-    const second = { options: [{ value: { ref: { dcid: 'crsPurpose/110' } } }], truncated: true };
+    const first = { options: [{ value: { ref: { ref: 'country/KEN' } } }], truncated: false };
+    const second = { options: [{ value: { ref: { ref: 'crsPurpose/110' } } }], truncated: true };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', first);
 
     assert.deepEqual(mergeSlotOptionsEntry(bySpec, 'spec-1', 'how:crsPurpose', second), {
@@ -603,8 +607,8 @@ test('mergeSlotOptionsEntry adds a second key under a spec without dropping a si
 });
 
 test("mergeSlotOptionsEntry overwrites an existing key's entry, options and truncated both replaced", () => {
-    const stale = { options: [{ value: { ref: { dcid: 'a' } } }], truncated: true };
-    const fresh = { options: [{ value: { ref: { dcid: 'b' } } }], truncated: false };
+    const stale = { options: [{ value: { ref: { ref: 'a' } } }], truncated: true };
+    const fresh = { options: [{ value: { ref: { ref: 'b' } } }], truncated: false };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', stale);
 
     assert.deepEqual(mergeSlotOptionsEntry(bySpec, 'spec-1', 'where:', fresh), {
@@ -628,7 +632,7 @@ test("mergeSlotOptionsEntry leaves a different spec's entries untouched", () => 
 test('slotOptionLabel reshapes a source-axis option through sourceOptionLabel (de-camelcased)', () => {
     const slot = { key: { axis: 'source' } };
     const option = {
-        value: { ref: { dcid: 'WorldDevelopmentIndicators', label: 'WorldDevelopmentIndicators' } },
+        value: { ref: { ref: 'WorldDevelopmentIndicators', label: 'WorldDevelopmentIndicators' } },
     };
 
     assert.equal(slotOptionLabel(slot, option), 'World Development Indicators');
@@ -636,13 +640,13 @@ test('slotOptionLabel reshapes a source-axis option through sourceOptionLabel (d
 
 test('slotOptionLabel reads the plain optionLabel for a non-source axis', () => {
     const slot = { key: { axis: 'how' } };
-    const option = { value: { ref: { dcid: 'crsPurpose/110', label: 'Education' } } };
+    const option = { value: { ref: { ref: 'crsPurpose/110', label: 'Education' } } };
 
     assert.equal(slotOptionLabel(slot, option), 'Education');
 });
 
 test('slotOptionLabel falls back to optionLabel rather than throwing when the slot has no key at all', () => {
-    const option = { value: { ref: { dcid: 'crsPurpose/110', label: 'Education' } } };
+    const option = { value: { ref: { ref: 'crsPurpose/110', label: 'Education' } } };
 
     assert.equal(slotOptionLabel({}, option), 'Education');
 });
@@ -667,7 +671,7 @@ test('showGroupHeadings is true for two groups', () => {
 
 test("a level-scoped option list stays level-scoped after slotOptionsEntry's lookup, so a shared renderer would route it through the hierarchy branch", () => {
     const levelScoped = [
-        { value: { ref: { dcid: 'crsPurpose/100' } }, relation: 'root', member_count: 12 },
+        { value: { ref: { ref: 'crsPurpose/100' } }, relation: 'root', member_count: 12 },
     ];
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'how:crsPurpose', {
         options: levelScoped,
@@ -681,7 +685,7 @@ test("a level-scoped option list stays level-scoped after slotOptionsEntry's loo
 });
 
 test("a flat option list stays flat after slotOptionsEntry's lookup, so a shared renderer would route it through the flat branch", () => {
-    const flat = [{ value: { ref: { dcid: 'country/KEN' } } }];
+    const flat = [{ value: { ref: { ref: 'country/KEN' } } }];
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', {
         options: flat,
         truncated: false,
@@ -691,7 +695,7 @@ test("a flat option list stays flat after slotOptionsEntry's lookup, so a shared
 });
 
 test('mergeSlotOptionsEntry then slotOptionsEntry round-trips a truncated entry exactly, not just its option list', () => {
-    const entry = { options: [{ value: { ref: { dcid: 'crsTypeOfFlow/110' } } }], truncated: true };
+    const entry = { options: [{ value: { ref: { ref: 'crsTypeOfFlow/110' } } }], truncated: true };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'how:crsTypeOfFlow', entry);
 
     assert.deepEqual(slotOptionsEntry(bySpec, 'spec-1', 'how:crsTypeOfFlow'), entry);
@@ -701,7 +705,7 @@ test('mergeSlotOptionsEntry then slotOptionsEntry round-trips a truncated entry 
 
 test('optionMuted is true for a flat option the probe confirmed has no data', () => {
     const option = {
-        value: { ref: { dcid: 'country/LVA' } },
+        value: { ref: { ref: 'country/LVA' } },
         coverage: { kind: 'bare', has_data: false },
     };
 
@@ -710,10 +714,10 @@ test('optionMuted is true for a flat option the probe confirmed has no data', ()
 
 test('optionMuted is false for an observed option, and false for a never-probed one', () => {
     const observed = {
-        value: { ref: { dcid: 'country/DEU' } },
+        value: { ref: { ref: 'country/DEU' } },
         coverage: { kind: 'bare', has_data: true },
     };
-    const unprobed = { value: { ref: { dcid: 'country/KEN' } } };
+    const unprobed = { value: { ref: { ref: 'country/KEN' } } };
 
     assert.equal(optionMuted(observed), false);
     assert.equal(optionMuted(unprobed), false);
@@ -722,12 +726,12 @@ test('optionMuted is false for an observed option, and false for a never-probed 
 test('optionMuted reads a probed-zero level-scoped parent the same way it reads a flat option (F2)', () => {
     const options = [
         {
-            value: { ref: { dcid: 'crsPurpose/100' } },
+            value: { ref: { ref: 'crsPurpose/100' } },
             relation: 'parent',
             member_count: 40,
             coverage: { kind: 'bare', has_data: false },
         },
-        { value: { ref: { dcid: 'crsPurpose/110' } }, relation: 'child', member_count: 12 },
+        { value: { ref: { ref: 'crsPurpose/110' } }, relation: 'child', member_count: 12 },
     ];
     const partition = partitionLevelOptions(options);
 
@@ -736,9 +740,9 @@ test('optionMuted reads a probed-zero level-scoped parent the same way it reads 
 
 test('optionMuted reads a probed-zero level-scoped child the same way it reads a flat option', () => {
     const options = [
-        { value: { ref: { dcid: 'crsPurpose/100' } }, relation: 'parent', member_count: 40 },
+        { value: { ref: { ref: 'crsPurpose/100' } }, relation: 'parent', member_count: 40 },
         {
-            value: { ref: { dcid: 'crsPurpose/110' } },
+            value: { ref: { ref: 'crsPurpose/110' } },
             relation: 'child',
             member_count: 12,
             coverage: { kind: 'bare', has_data: false },
@@ -753,8 +757,8 @@ test('optionMuted reads a probed-zero level-scoped child the same way it reads a
 
 test('rankOptionsByCoverage passes a flat list through unchanged when nothing carries a probed verdict', () => {
     const options = [
-        { value: { ref: { dcid: 'country/DEU' } } },
-        { value: { ref: { dcid: 'country/KEN' } } },
+        { value: { ref: { ref: 'country/DEU' } } },
+        { value: { ref: { ref: 'country/KEN' } } },
     ];
 
     assert.deepEqual(rankOptionsByCoverage(options, 'country/KEN'), options);
@@ -762,35 +766,35 @@ test('rankOptionsByCoverage passes a flat list through unchanged when nothing ca
 
 test('rankOptionsByCoverage ranks a flat option list richest-first and demotes a probed-zero option to the end', () => {
     const options = [
-        { value: { ref: { dcid: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
+        { value: { ref: { ref: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
         {
-            value: { ref: { dcid: 'country/DEU' } },
+            value: { ref: { ref: 'country/DEU' } },
             coverage: { kind: 'exact', has_data: true, observation_count: 18 },
         },
         {
-            value: { ref: { dcid: 'country/KEN' } },
+            value: { ref: { ref: 'country/KEN' } },
             coverage: { kind: 'exact', has_data: true, observation_count: 5 },
         },
     ];
 
     assert.deepEqual(
-        rankOptionsByCoverage(options, null).map((o) => o.value.ref.dcid),
+        rankOptionsByCoverage(options, null).map((o) => o.value.ref.ref),
         ['country/DEU', 'country/KEN', 'country/LVA'],
     );
 });
 
 test('rankOptionsByCoverage keeps the bound option visible ahead of other probed-zero options, even when it is itself probed-zero', () => {
     const options = [
-        { value: { ref: { dcid: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
-        { value: { ref: { dcid: 'country/CZE' } }, coverage: { kind: 'bare', has_data: false } },
+        { value: { ref: { ref: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
+        { value: { ref: { ref: 'country/CZE' } }, coverage: { kind: 'bare', has_data: false } },
         {
-            value: { ref: { dcid: 'country/DEU' } },
+            value: { ref: { ref: 'country/DEU' } },
             coverage: { kind: 'exact', has_data: true, observation_count: 18 },
         },
     ];
 
     assert.deepEqual(
-        rankOptionsByCoverage(options, 'country/CZE').map((o) => o.value.ref.dcid),
+        rankOptionsByCoverage(options, 'country/CZE').map((o) => o.value.ref.ref),
         ['country/DEU', 'country/CZE', 'country/LVA'],
     );
 });
@@ -1032,7 +1036,7 @@ function kenyaFixtureSpec() {
             key: { axis: 'where', property: null, label: 'place' },
             binding: {
                 kind: 'value',
-                value: { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
+                value: { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
             },
         },
     ];
@@ -1090,8 +1094,8 @@ test("anchorDcid reads a multi-bound where slot's set binding as its first value
     spec.slots[0].binding = {
         kind: 'set',
         values: [
-            { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
-            { value_kind: 'entity', ref: { dcid: 'country/ETH', label: 'Ethiopia' } },
+            { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
+            { value_kind: 'entity', ref: { ref: 'country/ETH', label: 'Ethiopia' } },
         ],
     };
 
@@ -1153,7 +1157,7 @@ test('entitySlotBindingForRefs is unbound for an empty selection', () => {
 test('entitySlotBindingForRefs renders one ref as a plain value, never a length-1 set', () => {
     assert.deepEqual(entitySlotBindingForRefs([{ dcid: 'country/KEN', label: 'Kenya' }]), {
         kind: 'value',
-        value: { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
+        value: { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
     });
 });
 
@@ -1166,8 +1170,8 @@ test('entitySlotBindingForRefs renders two or more refs as a set', () => {
         {
             kind: 'set',
             values: [
-                { value_kind: 'entity', ref: { dcid: 'country/KEN', label: 'Kenya' } },
-                { value_kind: 'entity', ref: { dcid: 'country/ETH', label: 'Ethiopia' } },
+                { value_kind: 'entity', ref: { ref: 'country/KEN', label: 'Kenya' } },
+                { value_kind: 'entity', ref: { ref: 'country/ETH', label: 'Ethiopia' } },
             ],
         },
     );
@@ -1639,7 +1643,7 @@ test("a single-part entity_ambiguous plan routes its wording token to that wordi
     assert.equal(partIndex, 0);
     assert.equal(wording.role, 'origin');
     assert.deepEqual(
-        ambiguousWordingGroup(wording, response.parts[0].no_data)?.candidates.map((c) => c.dcid),
+        ambiguousWordingGroup(wording, response.parts[0].no_data)?.candidates.map((c) => c.ref),
         ['InternationalBankForReconstructionAndDevelopment', 'InternationalDevelopmentAssociation'],
     );
 });
@@ -1714,7 +1718,7 @@ test('ambiguousEntityMenuTitle reads a restatement whose entities are null', () 
 // --- rootGroups ------------------------------------------------------------
 
 const levelOption = (dcid: string, relation: string, parent?: string) => ({
-    value: { ref: { dcid, label: dcid } },
+    value: { ref: { ref: dcid, label: dcid } },
     relation,
     ...(parent ? { parent } : {}),
 });
@@ -1733,8 +1737,8 @@ test('rootGroups puts each child under the root its parent names, in wire order'
 
     assert.deepEqual(
         groups.map(({ root, children }) => [
-            root.value.ref.dcid,
-            children.map((child) => child.value.ref.dcid),
+            root.value.ref.ref,
+            children.map((child) => child.value.ref.ref),
         ]),
         [
             ['crsPurpose/100', ['crsPurpose/120', 'crsPurpose/110']],
@@ -1787,11 +1791,11 @@ test('rootGroups reads a root whose one child serves the same rows as that child
 
 const valueBinding = (dcid: string) => ({
     kind: 'value',
-    value: { value_kind: 'taxonomy', ref: { dcid, label: dcid } },
+    value: { value_kind: 'taxonomy', ref: { ref: dcid, label: dcid } },
 });
 
-const dcids = (options: { value: { ref: { dcid: string } } }[]) =>
-    options.map((option) => option.value.ref.dcid);
+const dcids = (options: { value: { ref: { ref: string } } }[]) =>
+    options.map((option) => option.value.ref.ref);
 
 const boundMenu = (binding: unknown, options: unknown[]) => {
     const menu = levelMenu(binding, options);
@@ -1814,7 +1818,7 @@ test('levelMenu groups an unbound slot, or one bound to a set, by root', () => {
         assert.equal(menu.kind, 'unbound');
         assert.deepEqual(
             menu.kind === 'unbound' &&
-                menu.groups.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+                menu.groups.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
             [
                 ['CRSPurposeCode100', ['CRSPurposeCode110']],
                 ['CRSPurposeCode200', []],
@@ -1830,8 +1834,8 @@ test('levelMenu puts a bound non-root between its parent and its children', () =
         levelOption('CRSPurposeCode100', 'parent'),
     ]);
 
-    assert.equal(menu.up?.value.ref.dcid, 'CRSPurposeCode100');
-    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode120');
+    assert.equal(menu.up?.value.ref.ref, 'CRSPurposeCode100');
+    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode120');
     assert.deepEqual(dcids(menu.down), ['CRSPurposeCode122', 'CRSPurposeCode121']);
     assert.deepEqual(menu.sideways, []);
 });
@@ -1845,10 +1849,10 @@ test('levelMenu keeps a bound root as the current pick, its children down and th
     ]);
 
     assert.equal(menu.up, null);
-    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode100');
+    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode100');
     assert.deepEqual(dcids(menu.down), ['CRSPurposeCode110', 'CRSPurposeCode120']);
     assert.deepEqual(
-        menu.sideways.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+        menu.sideways.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
         [
             ['CRSPurposeCode200', []],
             ['CRSPurposeCode300', []],
@@ -1862,10 +1866,10 @@ test('levelMenu keeps a childless bound root as the current pick beside the othe
         levelOption('DAC2aAidType207', 'root'),
     ]);
 
-    assert.equal(menu.current.value.ref.dcid, 'DAC2aAidType216');
+    assert.equal(menu.current.value.ref.ref, 'DAC2aAidType216');
     assert.deepEqual(menu.down, []);
     assert.deepEqual(
-        menu.sideways.map(({ root }) => root.value.ref.dcid),
+        menu.sideways.map(({ root }) => root.value.ref.ref),
         ['DAC2aAidType206', 'DAC2aAidType207'],
     );
 });
@@ -1878,7 +1882,7 @@ test("levelMenu takes a flat code system's bound value from the list, with its r
 
     assert.equal(menu.current.served_rows, 7);
     assert.deepEqual(
-        menu.sideways.map(({ root }) => root.value.ref.dcid),
+        menu.sideways.map(({ root }) => root.value.ref.ref),
         ['crsTypeOfFlow/11'],
     );
 });
@@ -1893,10 +1897,10 @@ test('levelMenu keeps every child reachable under its root for a binding the cod
         levelOption('CRSPurposeCode210', 'child', 'CRSPurposeCode200'),
     ]);
 
-    assert.equal(menu.current.value.ref.dcid, 'CRSPurposeCode999');
+    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode999');
     assert.deepEqual(menu.down, []);
     assert.deepEqual(
-        menu.sideways.map(({ root, children }) => [root.value.ref.dcid, dcids(children)]),
+        menu.sideways.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
         [
             ['CRSPurposeCode100', ['CRSPurposeCode110']],
             ['CRSPurposeCode200', ['CRSPurposeCode210']],
@@ -1929,7 +1933,7 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
         download: { rows: 1284, rows_exact: true },
     };
     const one = (served_rows: number | null) => ({
-        options: [{ value: { ref: { dcid: 'Net' } }, served_rows }],
+        options: [{ value: { ref: { ref: 'Net' } }, served_rows }],
         truncated: false,
     });
 
@@ -1943,10 +1947,10 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
     // serves fewer rows than the answer. A set of one reads as a value.
     const set = (...dcids: string[]) => ({
         key: { axis: 'how' },
-        binding: { kind: 'set', values: dcids.map((dcid) => ({ ref: { dcid } })) },
+        binding: { kind: 'set', values: dcids.map((dcid) => ({ ref: { ref: dcid } })) },
     });
     const members = (...dcids: string[]) => ({
-        options: dcids.map((dcid) => ({ value: { ref: { dcid } }, served_rows: null })),
+        options: dcids.map((dcid) => ({ value: { ref: { ref: dcid } }, served_rows: null })),
         truncated: false,
     });
 

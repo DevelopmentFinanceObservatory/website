@@ -17,7 +17,7 @@ import type { CSSProperties } from 'react';
 import styles from '../cards/ChartCard.module.scss';
 
 import { formatAxis } from '@/lib/chat/widgets';
-import { tooltipValue, valueUnitOption } from '@/lib/studio/chartValue';
+import { tooltipValue, valueAxisTitle, valueUnitOption } from '@/lib/studio/chartValue';
 import type { SeriesPair, ThemeDerived } from '@/lib/studio/theme';
 
 /**
@@ -232,7 +232,8 @@ const htmlTooltip = ({
 // Options are built per scale factor and theme — Chart.js draws in raw px,
 // so every font/padding rides the same fluid factor as the grid, and every
 // colour is the theme's resolved hex. The chart's unit sets how the value
-// axis and the tooltip write a number: "5.33%" for a percentage.
+// axis and the tooltip write a number: "5.33%" for a percentage, any other
+// unit named in the axis title and beside each tooltip value.
 export const buildChartOptions = (
     scale: number,
     autoSkip: boolean,
@@ -309,6 +310,9 @@ export const buildChartOptions = (
                 beginAtZero: true,
                 grid: { color: theme.line },
                 border: { display: false },
+                // The unit in words beside the numbers. A percentage's ticks
+                // carry the % sign instead.
+                title: { ...valueAxisTitle(unit), color: theme.text, font: labelFont },
                 ticks: {
                     maxTicksLimit: 4,
                     color: theme.text,

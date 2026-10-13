@@ -35,7 +35,7 @@ export const priceBasis = (spec: any): PriceBasis | null => {
 
     const qualifier = (spec?.measure_axis_values ?? []).find(
         (entry: any) => entry?.axis === QUALIFIER_AXIS,
-    )?.value?.dcid;
+    )?.value?.ref;
     const prices = qualifier ? PRICES_BY_QUALIFIER[qualifier] : undefined;
 
     return prices ? { prices, baseYear: null } : null;

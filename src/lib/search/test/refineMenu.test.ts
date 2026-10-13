@@ -81,7 +81,7 @@ test("refineItems reads each part's own tokens in a multi-part answer and leaves
                 options: [
                     {
                         value: {
-                            ref: { dcid: 'country/DEU', label: 'Germany' },
+                            ref: { ref: 'country/DEU', label: 'Germany' },
                             value_kind: 'entity',
                         },
                     },
@@ -126,12 +126,12 @@ test('refineItems lists a bound binding no token states with its current value, 
 });
 
 test('refineItems lists a slot bound to a set whose options are that set, since one member narrows it', () => {
-    const member = (dcid: string) => ({ value_kind: 'entity', ref: { dcid, label: dcid } });
+    const member = (dcid: string) => ({ value_kind: 'entity', ref: { ref: dcid, label: dcid } });
     const spec = {
         spec_id: 'sex-set',
         slots: [
             {
-                key: { axis: 'how', property: { dcid: 'sex' }, label: 'sex' },
+                key: { axis: 'how', property: { ref: 'sex' }, label: 'sex' },
                 binding: { kind: 'set', values: [member('Female'), member('Male')] },
             },
         ],

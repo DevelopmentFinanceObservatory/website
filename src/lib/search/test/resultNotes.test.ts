@@ -9,6 +9,7 @@ import {
     resolvedPartCount,
     snapshotLiveNote,
     tableCaptionNotes,
+    TOTALS_NOTE,
     unSystemFailedReads,
     stepPhrase,
     noDataCardParts,
@@ -448,3 +449,34 @@ for (const [unreadable, expected] of [
         assert.deepEqual(snapshotLiveNote(snapshotDatasets, new Set(unreadable)), expected);
     });
 }
+
+test('tableCaptionNotes adds the do-not-sum line only when the table marks a total', () => {
+    const series = (ref: string, party_kind: string) => ({
+        entities: [{ role: 'destination', ref, label: ref, party_kind }],
+        points: [{ date: '2023', value: 1 }],
+    });
+    const part = (kinds: [string, string][]) => ({
+        variableText: 'aid',
+        spec: { observations: { series: kinds.map(([ref, kind]) => series(ref, kind)) } },
+    });
+
+    assert.deepEqual(
+        tableCaptionNotes([
+            part([
+                ['a', 'party'],
+                ['b', 'party'],
+                ['africa', 'total'],
+            ]),
+        ]),
+        [TOTALS_NOTE],
+    );
+    assert.deepEqual(
+        tableCaptionNotes([
+            part([
+                ['a', 'party'],
+                ['africa', 'total'],
+            ]),
+        ]),
+        [],
+    );
+});

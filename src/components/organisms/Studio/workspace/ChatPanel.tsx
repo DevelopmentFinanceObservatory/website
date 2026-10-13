@@ -95,7 +95,11 @@ const ChatPanel = ({
         if (chat.plan) {
             chat.respondPlan('amend', follow.trim());
         } else if (editTarget) {
-            chat.send(follow, { componentId: editTarget.id, intent: 'follow_up' });
+            chat.send(follow, {
+                componentId: editTarget.id,
+                intent: 'follow_up',
+                title: editTarget.title,
+            });
             onClearEditTarget();
         } else {
             chat.send(follow);
@@ -171,6 +175,11 @@ const ChatPanel = ({
                         {chat.queued.map((item) => (
                             <div key={item.id} className={styles.queued}>
                                 <p className={classNames(styles.chatBubble, styles.queuedBubble)}>
+                                    {item.card?.title && (
+                                        <span className={styles.chatBubbleCard}>
+                                            About “{item.card.title}”
+                                        </span>
+                                    )}
                                     {item.text}
                                 </p>
                                 <button

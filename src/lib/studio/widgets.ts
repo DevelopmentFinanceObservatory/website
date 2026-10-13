@@ -24,13 +24,16 @@ import type {
 import { comparison } from './comparison.ts';
 import {
     asUnit,
+    describedBy,
     payloadChart,
+    payloadDescription,
     payloadFrameRef,
     payloadNoteText,
     payloadProvenance,
     payloadStat,
     payloadTable,
     payloadTitle,
+    type DescriptionRead,
     type PayloadChart,
     type PayloadProvenance,
     type PayloadStat,
@@ -38,6 +41,8 @@ import {
     type PayloadUnit,
     type StructuredUnit,
 } from './payload.ts';
+import type { Description } from './description.ts';
+import { gapsOf, licenceWords } from './descriptionBlocks.ts';
 import { formatPeriod } from './period.ts';
 import {
     cellNumber,
@@ -431,56 +436,113 @@ const provenanceOf = (frame: ComponentCreated): PayloadProvenance => {
     };
 };
 
-const sourceWidget = (frame: ComponentCreated): TextWidget => ({
-    kind: 'text',
-    id: frame.component_id,
-    title: titleOf(frame.payload, frame.fact_summary),
-    body: provenanceOf(frame)
-        .sources.map((source) => {
-            const publisher = source.publisher ? ` — ${source.publisher}` : '';
+// The provenance of a described card's envelope, which holds lineage only:
+// its sources, freshness, warnings and citation live in the description.
+const LINEAGE_ONLY: PayloadProvenance = {
+    citation: null,
+    sources: [],
+    dataThrough: null,
+    lastRefreshed: null,
+    leftOut: [],
+};
 
-            return `${source.name}${publisher} (${licenceOf(source.licence) ?? 'licence not stated'})`;
-        })
-        .join('\n'),
-});
+// One line of a source card: "OECD CRS — OECD (CC BY 4.0)".
+const sourceCardLine = (name: string, publisher: string | null, licence: string | null): string =>
+    `${name}${publisher ? ` — ${publisher}` : ''} (${licence ?? 'licence not stated'})`;
+
+// A described source card's lines, from its description, which is its
+// source's document.
+const describedSourceLines = (description: Description): string[] => {
+    const gaps = gapsOf(description);
+
+    return description.sources.map((source, index) =>
+        sourceCardLine(
+            source.label,
+            source.publisher ?? null,
+            licenceWords(description, index, gaps),
+        ),
+    );
+};
+
+/** A source card: one line per source, from its description when it carries
+ *  one, else from provenance. */
+const sourceWidget = (
+    frame: ComponentCreated,
+    description: Description | undefined,
+): TextWidget => {
+    const lines = description
+        ? describedSourceLines(description)
+        : provenanceOf(frame).sources.map((source) =>
+              sourceCardLine(source.name, source.publisher ?? null, licenceOf(source.licence)),
+          );
+
+    return {
+        kind: 'text',
+        id: frame.component_id,
+        title: titleOf(frame.payload, frame.fact_summary),
+        body: lines.join('\n'),
+    };
+};
 
 // The unit the More Info panel names, from the fact summary.
 const infoUnit = (facts: FactSummary): string | null => unitDescription(asUnit(facts.unit));
 
-/** The card's More Info payload: attribution, window, unit and indicators from
- *  the fact summary; the citation, every source, freshness and what the data
- *  leaves out from provenance (the graph's own name for a source is fetched
- *  later, by the panel, by the source's dcid: its `ref` where it has one,
- *  else its id). */
-const infoOf = (facts: FactSummary, provenance: PayloadProvenance): CardInfo => {
-    const sources: CardSource[] = provenance.sources.map((source) => ({
-        id: source.ref ?? source.id,
-        name: source.name,
-        licence: licenceOf(source.licence),
-        url: source.url || null,
-        retrieved: source.retrieved ?? null,
+// A described card's sources, from its description: the card face, Download
+// Data and analytics name them as they name a legacy card's.
+const describedSources = (description: Description): CardSource[] =>
+    description.sources.map((source) => ({
+        id: source.ref,
+        name: source.label,
+        licence: source.licence ?? null,
+        url: null,
+        retrieved: null,
     }));
+
+/** The card's More Info payload: attribution, window and unit from the fact
+ *  summary; the citation, freshness and what the data leaves out
+ *  from provenance; and the stored description when the payload carries one.
+ *  The sources come from the description on a described card. A legacy card
+ *  takes them from provenance, and the panel fetches the graph's own name
+ *  for each later, by the source's dcid: its `ref` where it has one, else
+ *  its id. */
+const infoOf = (
+    facts: FactSummary,
+    provenance: PayloadProvenance,
+    description: Description | undefined,
+): CardInfo => {
+    const sources: CardSource[] = description
+        ? describedSources(description)
+        : provenance.sources.map((source) => ({
+              id: source.ref ?? source.id,
+              name: source.name,
+              licence: licenceOf(source.licence),
+              url: source.url || null,
+              retrieved: source.retrieved ?? null,
+          }));
     const first = sources[0];
 
     return {
         label: facts.attribution.label,
-        sourceId: first?.id ?? null,
+        sourceId: sources.find((source) => source.id !== null)?.id ?? null,
         sourceName: first?.name ?? null,
         sourceCount: facts.attribution.source_count,
         indicatorCount: facts.attribution.indicator_count,
         years: facts.window ?? null,
         unit: infoUnit(facts),
-        indicators: facts.indicators ?? [],
         licence: first?.licence ?? null,
         dataThrough: provenance.dataThrough,
         lastRefreshed: provenance.lastRefreshed,
         citation: provenance.citation,
         sources,
         ...(provenance.leftOut.length > 0 ? { leftOut: provenance.leftOut } : {}),
+        ...(description ? { description } : {}),
     };
 };
 
-const componentWidget = (frame: ComponentCreated): Widget | null => {
+const componentWidget = (
+    frame: ComponentCreated,
+    description: Description | undefined,
+): Widget | null => {
     switch (frame.type) {
         case 'stat_card':
             return statWidget(frame);
@@ -496,7 +558,7 @@ const componentWidget = (frame: ComponentCreated): Widget | null => {
         case 'note_narration':
             return noteWidget(frame);
         case 'source_card':
-            return sourceWidget(frame);
+            return sourceWidget(frame, description);
         default:
             return null;
     }
@@ -504,7 +566,8 @@ const componentWidget = (frame: ComponentCreated): Widget | null => {
 
 /** One created component → one canvas widget. */
 export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
-    const widget = componentWidget(frame);
+    const description = describedBy(payloadDescription(frame.payload));
+    const widget = componentWidget(frame, description);
 
     if (!widget || widget.kind === 'text') {
         // A note carries no data of its own, so it gets no info panel.
@@ -514,7 +577,7 @@ export const widgetFromComponent = (frame: ComponentCreated): Widget | null => {
     return {
         ...widget,
         frame: payloadFrameRef(frame.payload) ?? frame.provenance.inputs[0],
-        info: infoOf(frame.fact_summary, provenanceOf(frame)),
+        info: infoOf(frame.fact_summary, provenanceOf(frame), description),
     };
 };
 
@@ -564,9 +627,19 @@ const retitle = (widget: Widget, title: string): Widget =>
  * replaces what the card shows: its title, and its drawing, values and ref
  * when the payload resolves a component of the card's kind. A frame without
  * a payload leaves the card as it is; useChat then reads the revision by id
- * and applies its payload here.
+ * and applies its payload here. `read` is the payload's description as its
+ * frame's reader took it; a caller that has read it passes it on.
+ *
+ * A payload with provenance or a description rebuilds the card's info from
+ * its own facts. A refused description counts, so the card's More Info
+ * falls back to the legacy panel over the new data and drops the previous
+ * revision's description.
  */
-export const reviseWidget = (widget: Widget, frame: ComponentRevised): Widget => {
+export const reviseWidget = (
+    widget: Widget,
+    frame: ComponentRevised,
+    read: DescriptionRead | undefined = payloadDescription(frame.payload),
+): Widget => {
     const { payload } = frame;
 
     if (!payload) {
@@ -591,8 +664,10 @@ export const reviseWidget = (widget: Widget, frame: ComponentRevised): Widget =>
         ref: refOf(frame),
         frame: payloadFrameRef(payload) ?? redrawn.frame,
         source: frame.fact_summary.attribution.label,
-        ...(provenance
-            ? { info: infoOf(frame.fact_summary, provenance) }
+        ...(provenance || read
+            ? {
+                  info: infoOf(frame.fact_summary, provenance ?? LINEAGE_ONLY, describedBy(read)),
+              }
             : redrawn.info && { info: { ...redrawn.info, unit: infoUnit(frame.fact_summary) } }),
     };
 };
