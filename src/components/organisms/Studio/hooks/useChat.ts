@@ -8,6 +8,7 @@ import {
     type ActivityEntry,
     type SavedActivityEntry,
 } from '@/lib/studio/activity';
+import { restoreCardRevisions } from '@/lib/studio/cardDownload';
 import {
     createStallWatch,
     createStepLine,
@@ -40,10 +41,13 @@ import type {
     StudioFrame,
 } from '@/lib/studio/wire';
 import { uuid } from '@/lib/uuid';
-import type { Widget } from '@/lib/chat/widgets';
+import type { CardRef, Widget } from '@/lib/chat/widgets';
 
+// A user message sent from a card's "Ask follow up" keeps that card's title,
+// so the transcript shows what the question was about.
 export type ChatMessage =
-    { role: 'user'; text: string } | { role: 'bot'; text: string; followups?: string[] };
+    | { role: 'user'; text: string; card?: { title: string } }
+    | { role: 'bot'; text: string; followups?: string[] };
 
 // A widget stamped with the send() turn it arrived in — the canvas keeps
 // only the latest turn's widgets plus whatever the user pinned.
@@ -68,6 +72,7 @@ export type PlanState = {
 export type CardTarget = {
     componentId: string;
     intent: 'follow_up' | 'edit';
+    title?: string;
 };
 
 // A message sent while a request was in flight: it waits for the
@@ -107,6 +112,7 @@ export type ChatState = {
 // shared/forked copy starts from.
 export type ChatSnapshot = {
     sessionId: string | null;
+    componentRefs?: CardRef[];
     messages: ChatMessage[];
     widgets: TurnWidget[];
     activity?: SavedActivityEntry[];
@@ -217,9 +223,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // to retire the original — otherwise an edit leaves two cards behind.
     const editingRef = useRef<string | null>(null);
     // component_id → the revision we're currently holding. A card-scoped turn
-    // has to address both (the contract rejects a stale revision), and the
-    // number only ever arrives on the frames, never on the widget.
-    const revisionsRef = useRef(new Map<string, number>());
+    // has to address both (the contract rejects a stale revision). Frames
+    // keep it current; a reopened conversation starts from its saved cards.
+    const revisionsRef = useRef(restoreCardRevisions(initial));
     // The harness's latest canvas manifest as this page saw it, to tell
     // which cards a newer one took off (the agent removing cards). Saved
     // with the conversation, so a reopened one keeps it.
@@ -764,7 +770,11 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             setState((prev) => ({
                 ...withLine(prev, 'Resolving the question'),
-                messages: [...prev.messages, { role: 'user', text }, { role: 'bot', text: '' }],
+                messages: [
+                    ...prev.messages,
+                    { role: 'user', text, ...(card?.title && { card: { title: card.title } }) },
+                    { role: 'bot', text: '' },
+                ],
                 activity: [
                     ...prev.activity,
                     { turn, prompt: text, startedAt: Date.now(), tools: [] },
@@ -963,6 +973,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         inFlightRef.current = 0;
         queueRef.current = [];
         sessionRef.current = null;
+        revisionsRef.current.clear();
         canvasRef.current = null;
         agentRemovedRef.current = [];
         hiddenSentRef.current.clear();
@@ -996,6 +1007,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         queueRef.current = [];
         pendingInterruptRef.current = null;
         sessionRef.current = saved.sessionId;
+        revisionsRef.current = restoreCardRevisions(saved);
         canvasRef.current = restoreCanvas(saved);
         agentRemovedRef.current = [];
         hiddenSentRef.current.clear();
@@ -1017,6 +1029,10 @@ export const useChat = (initial?: ChatSnapshot) => {
     const snapshot = useCallback(
         () => ({
             sessionId: sessionRef.current,
+            componentRefs: Array.from(revisionsRef.current, ([component_id, revision]) => ({
+                component_id,
+                revision,
+            })),
             turnCount: turnCount.current,
             canvas: canvasRef.current,
         }),

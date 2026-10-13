@@ -1,54 +1,35 @@
 'use client';
 
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { useState } from 'react';
 
 import styles from './CardChrome.module.scss';
 
 import Logo from '@/assets/svg/logo.svg';
 import Icon from '@/components/atoms/Icon/Icon';
+import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import { type CardInfo, sourceLine } from '@/lib/chat/widgets';
 import { leftOutOf } from '@/lib/studio/liveCards';
 
-// A chrome-bar tag ("Source Name") with its content in a hover popup — the
-// house popup pattern (Radix dropdown on hover), no shadow, opens beneath.
+// A chrome-bar tag ("Source Name") with its content in the house popup.
 // Without content it's a plain label.
-const InfoTag = ({ label, content }: { label: string; content?: string }) => {
-    const [open, setOpen] = useState(false);
-
-    if (!content) {
-        return <span className={styles.source}>{label}</span>;
-    }
-
-    return (
-        <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
-            <DropdownMenu.Trigger asChild>
-                <button
-                    type="button"
-                    className={styles.source}
-                    onMouseEnter={() => setOpen(true)}
-                    onMouseLeave={() => setOpen(false)}
-                >
+const InfoTag = ({ label, content }: { label: string; content?: string }) =>
+    content ? (
+        <HoverPopup
+            label={label}
+            triggerClassName={styles.source}
+            contentClassName={styles.sourceMenu}
+            trigger={
+                <>
                     <Icon name="info" className={styles.sourceIcon} />
                     {label}
-                </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                    className={styles.sourceMenu}
-                    side="bottom"
-                    align="start"
-                    sideOffset={6}
-                    collisionPadding={16}
-                    onCloseAutoFocus={(event) => event.preventDefault()}
-                >
-                    {content}
-                </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+                </>
+            }
+        >
+            {content}
+        </HoverPopup>
+    ) : (
+        <span className={styles.source}>{label}</span>
     );
-};
 
 // The attribution line: the source name, or every source's joined on a card
 // citing several, with the indicator count on its own line under it. A click

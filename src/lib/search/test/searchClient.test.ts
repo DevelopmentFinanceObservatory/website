@@ -344,7 +344,7 @@ test("entityOptions reports the door's own truncated flag from the response", as
 
 // Shaped from dfo-apis events.py's PlaceOptionsEvent.options: list[SlotOption]
 // (models/options.py's SlotOption -- value: SlotValue, coverage), SlotValue's
-// own ref: GraphRef (models/grammar.py -- {dcid, label}). A captured
+// own ref: GraphRef (models/grammar.py -- {ref, label}). A captured
 // place_options frame for "Population of Kenya" would carry Kenya's own
 // peers this way, coverage populated (the event always sets include_coverage
 // true).
@@ -356,17 +356,17 @@ const capturedPlaceOptionsEvent = {
     anchor_ref: 'country/KEN',
     options: [
         {
-            value: { ref: { dcid: 'country/GHA', label: 'Ghana' }, value_kind: 'entity' },
+            value: { ref: { ref: 'country/GHA', label: 'Ghana' }, value_kind: 'entity' },
             coverage: { kind: 'exact', has_data: true, observation_count: 40 },
         },
         {
-            value: { ref: { dcid: 'country/NGA', label: 'Nigeria' }, value_kind: 'entity' },
+            value: { ref: { ref: 'country/NGA', label: 'Nigeria' }, value_kind: 'entity' },
             coverage: { kind: 'exact', has_data: true, observation_count: 12 },
         },
         // A dcid the label lookup failed for: SlotOptions.options' own
         // contract drops these server-side, but a client-side defensive
         // filter should too, matching entityOptions()'s own behaviour.
-        { value: { ref: { dcid: 'country/ZZZ', label: '' }, value_kind: 'entity' } },
+        { value: { ref: { ref: 'country/ZZZ', label: '' }, value_kind: 'entity' } },
     ],
     truncated: false,
 };
@@ -390,7 +390,7 @@ test("placeOptionValues reshapes a captured place_options event's wire SlotOptio
 
 test('placeOptionValues drops an item missing a dcid or label rather than showing it half-filled', () => {
     const options = placeOptionValues([
-        { value: { ref: { dcid: 'country/ZZZ', label: '' }, value_kind: 'entity' } },
+        { value: { ref: { ref: 'country/ZZZ', label: '' }, value_kind: 'entity' } },
         { value: { ref: null, value_kind: 'entity' } },
     ]);
 
@@ -421,7 +421,7 @@ test('flattenSpec reads a SlotOptions payload carrying truncated (post-drift-cor
                 {
                     key: {
                         axis: 'how',
-                        property: { dcid: 'crsPurpose', label: 'purpose' },
+                        property: { ref: 'crsPurpose', label: 'purpose' },
                         label: 'purpose',
                     },
                     options: [{ value: { value_kind: 'enum_value' } }],
@@ -444,13 +444,13 @@ test('flattenSpec reads a SlotOptions payload carrying truncated (post-drift-cor
 
 test('isLevelScopedOptions is true once relation is populated on the list', () => {
     assert.equal(
-        isLevelScopedOptions([{ value: { ref: { dcid: 'x', label: 'X' } }, relation: 'root' }]),
+        isLevelScopedOptions([{ value: { ref: { ref: 'x', label: 'X' } }, relation: 'root' }]),
         true,
     );
 });
 
 test('isLevelScopedOptions is false for a flat/seed option list (relation absent)', () => {
-    assert.equal(isLevelScopedOptions([{ value: { ref: { dcid: 'x', label: 'X' } } }]), false);
+    assert.equal(isLevelScopedOptions([{ value: { ref: { ref: 'x', label: 'X' } } }]), false);
 });
 
 test('isLevelScopedOptions is false for an empty option list', () => {
@@ -459,12 +459,12 @@ test('isLevelScopedOptions is false for an empty option list', () => {
 
 test("partitionLevelOptions splits a bound node's neighbours into one parent and its children", () => {
     const parent = {
-        value: { ref: { dcid: 'infectious', label: 'Infectious disease control' } },
+        value: { ref: { ref: 'infectious', label: 'Infectious disease control' } },
         relation: 'parent',
         member_count: 1204,
     };
     const child = {
-        value: { ref: { dcid: 'tb', label: 'Tuberculosis control' } },
+        value: { ref: { ref: 'tb', label: 'Tuberculosis control' } },
         relation: 'child',
         member_count: 88,
     };
@@ -478,8 +478,8 @@ test("partitionLevelOptions splits a bound node's neighbours into one parent and
 
 test('partitionLevelOptions reads every entry as a root when the slot is unbound or its code system is flat', () => {
     const roots = [
-        { value: { ref: { dcid: 'a', label: 'A' } }, relation: 'root', member_count: 5 },
-        { value: { ref: { dcid: 'b', label: 'B' } }, relation: 'root', member_count: 2 },
+        { value: { ref: { ref: 'a', label: 'A' } }, relation: 'root', member_count: 5 },
+        { value: { ref: { ref: 'b', label: 'B' } }, relation: 'root', member_count: 2 },
     ];
 
     const partition = partitionLevelOptions(roots);
@@ -491,7 +491,7 @@ test('partitionLevelOptions reads every entry as a root when the slot is unbound
 
 test('entitySlotOptions reads the requested directional axis rather than assuming origin', () => {
     const options = [
-        { value: { value_kind: 'entity' as const, ref: { dcid: 'donor-1', label: 'Donor' } } },
+        { value: { value_kind: 'entity' as const, ref: { ref: 'donor-1', label: 'Donor' } } },
     ];
     const entries = {
         'spec-1': [
@@ -502,7 +502,7 @@ test('entitySlotOptions reads the requested directional axis rather than assumin
                     {
                         value: {
                             value_kind: 'entity' as const,
-                            ref: { dcid: 'country/KEN', label: 'Kenya' },
+                            ref: { ref: 'country/KEN', label: 'Kenya' },
                         },
                     },
                 ],
@@ -513,7 +513,7 @@ test('entitySlotOptions reads the requested directional axis rather than assumin
 
     assert.deepEqual(entitySlotOptions({ spec_id: 'spec-1' }, entries, 'origin'), options);
     assert.equal(
-        entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination')[0]?.value.ref?.dcid,
+        entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination')[0]?.value.ref?.ref,
         'country/KEN',
     );
 });

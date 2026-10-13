@@ -8,6 +8,7 @@
  * This module has no DOM dependency, so `node --test` can import it directly.
  */
 
+import { capitalise } from '../capitalise.ts';
 import {
     DATASET_FORMATS,
     type DatasetCoverageDimension,
@@ -61,10 +62,13 @@ export const parseDownloadChoices = (raw: string | null): DownloadChoices => {
 };
 
 /** The extra columns an answer can join: `available` and `partial` alike, a
- *  partial one showing its coverage on its row. */
+ *  partial one showing its coverage on its row. A column the long layout
+ *  already writes (`long_layout_defaults`) is not an extra. */
 export const enrichmentChoices = (options: DatasetOutputOptions | null | undefined) =>
     (options?.enrichments ?? []).filter(
-        (entry) => entry.state === 'available' || entry.state === 'partial',
+        (entry) =>
+            (entry.state === 'available' || entry.state === 'partial') &&
+            !options?.long_layout_defaults?.includes(entry.token),
     );
 
 /** The remembered tokens this answer offers, in the answer's own order, so a
@@ -163,7 +167,7 @@ const readableName = (raw: string): string => {
         .trim()
         .toLowerCase();
 
-    return words.charAt(0).toUpperCase() + words.slice(1);
+    return capitalise(words);
 };
 
 export const enrichmentLabel = (entry: DatasetEnrichment): string =>
@@ -178,6 +182,34 @@ export const coverageNote = (entry: DatasetEnrichment): string | null => {
     const { covered, entities } = entry.coverage ?? {};
 
     return covered == null || entities == null ? 'partial' : `${covered} of ${entities}`;
+};
+
+/** What a role column is called for the viewer: Provider or Recipient for a
+ *  flow's role column (its coverage dimension's axis), the bound entity's type
+ *  for observationAbout ("Country"), and the column's own name otherwise. */
+const roleHeading = ({
+    column,
+    dimensions,
+    entities,
+}: {
+    column: string;
+    dimensions?: DatasetCoverageDimension[] | null;
+    // The answer's bound entities, which name observationAbout's type.
+    entities?: { role?: string; entity_type?: string | null }[] | null;
+}): string => {
+    const axis = (dimensions ?? []).find((dimension) => dimension.label === column)?.axis;
+
+    if (axis && AXIS_HEADINGS[axis]) {
+        return AXIS_HEADINGS[axis];
+    }
+
+    if (column === OBSERVATION_ABOUT) {
+        const type = entities?.find((entity) => entity.role === OBSERVATION_ABOUT)?.entity_type;
+
+        return type ? readableName(type) : 'Place';
+    }
+
+    return readableName(column);
 };
 
 export type EnrichmentGroup = {
@@ -202,25 +234,6 @@ export const enrichmentGroups = ({
     // The answer's bound entities, which name observationAbout's type.
     entities?: { role?: string; entity_type?: string | null }[] | null;
 }): EnrichmentGroup[] => {
-    const axisByColumn = new Map(
-        (dimensions ?? []).map((dimension) => [dimension.label, dimension.axis]),
-    );
-    const heading = (column: string): string => {
-        const axis = axisByColumn.get(column);
-
-        if (axis && AXIS_HEADINGS[axis]) {
-            return AXIS_HEADINGS[axis];
-        }
-
-        if (column === OBSERVATION_ABOUT) {
-            const type = entities?.find((entity) => entity.role === OBSERVATION_ABOUT)?.entity_type;
-
-            return type ? readableName(type) : 'Place';
-        }
-
-        return readableName(column);
-    };
-
     const groups = new Map<string, EnrichmentGroup>();
 
     for (const entry of enrichmentChoices(options)) {
@@ -231,11 +244,62 @@ export const enrichmentGroups = ({
         } else {
             groups.set(entry.column, {
                 column: entry.column,
-                heading: heading(entry.column),
+                heading: roleHeading({ column: entry.column, dimensions, entities }),
                 entries: [entry],
             });
         }
     }
 
     return [...groups.values()];
+};
+
+/**
+ * Where the total rows of a download go. The options document's
+ * `long_layout_totals` names the roles whose totals (rows for a group such as
+ * a region, which hold the figures of its members) a long CSV or Excel file
+ * keeps out of its main table. The server lists roles that can hold a total,
+ * and an open role may hold none in this answer, so the note says
+ * "Any ... totals". A bundle's CSV writes them to a second file, an Excel file
+ * to a second sheet, and a bare CSV leaves them out. Null when no role sets
+ * rows apart, and for Parquet, which keeps every row.
+ */
+export const totalsNote = ({
+    options,
+    dimensions,
+    entities,
+    format,
+    bundle,
+    bundleOffered,
+}: {
+    options: DatasetOutputOptions | null | undefined;
+    dimensions?: DatasetCoverageDimension[] | null;
+    entities?: { role?: string; entity_type?: string | null }[] | null;
+    format: DatasetFormat;
+    bundle: boolean;
+    bundleOffered: boolean;
+}): string | null => {
+    const roles = options?.long_layout_totals ?? [];
+
+    if (roles.length === 0 || format === 'parquet') {
+        return null;
+    }
+
+    const who = new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(
+        roles.map((column) => roleHeading({ column, dimensions, entities }).toLowerCase()),
+    );
+    // "Any": a role listed here can hold a total, and this answer may hold none.
+    const subject = `Any ${who} totals`;
+    const why = "so the main table's rows can be added up";
+
+    if (format === 'xlsx') {
+        return `${subject} go on a second sheet, ${why}.`;
+    }
+
+    if (bundle) {
+        return `${subject} go in a second CSV file in the download, ${why}.`;
+    }
+
+    return `${subject} are left out of the file, ${why}.${
+        bundleOffered ? ' Tick README to get them as a second file.' : ''
+    }`;
 };

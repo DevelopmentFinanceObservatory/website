@@ -185,14 +185,14 @@ test('the resolved membership chooses the layout over the coverage variables cou
 
 test('many variables: the breakdown counts the variables by each value of an axis they differ on -- humanitarian aid from Germany', () => {
     const value = (dcid: string, label: string, count: number) => ({
-        value: { dcid, label },
+        value: { ref: dcid, label },
         count,
     });
     const summary = buildWhySummary({
         ...oda,
         stat_vars: { member_count: 39, member_count_exact: true, served_count: 39 },
         slots: [
-            { key: { axis: 'how', property: { dcid: 'crsTypeOfFinance' }, label: 'instrument' } },
+            { key: { axis: 'how', property: { ref: 'crsTypeOfFinance' }, label: 'instrument' } },
         ],
         open_axis_facts: [
             {
@@ -477,7 +477,7 @@ test('chosen: a slot a declared default filled follows the facets; other provena
     const filter = (provenance: string, label: string, ref: string) => ({
         key: { axis: 'how', label },
         binding_kind: 'value',
-        refs: [{ dcid: ref, label: ref }],
+        refs: [{ ref, label: ref }],
         provenance,
     });
     const spec = {
@@ -500,7 +500,7 @@ test('chosen: a slot a declared default filled follows the facets; other provena
 });
 
 test('sources carry the licence only when the answer serves one source', () => {
-    const source = (dcid: string) => ({ dcid, label: dcid });
+    const source = (ref: string) => ({ ref, label: ref });
     const download = { licence: { label: 'CCBY4' } };
 
     assert.equal(

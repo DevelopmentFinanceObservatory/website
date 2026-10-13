@@ -32,13 +32,13 @@ export const northKoreaMeasureSpec = {
         {
             key: {
                 axis: 'how',
-                property: { dcid: 'crsPurpose', label: 'CRS purpose' },
+                property: { ref: 'crsPurpose', label: 'CRS purpose' },
                 label: 'sector',
             },
             binding: {
                 kind: 'value',
                 value: {
-                    ref: { dcid: 'CRSPurposeCode700', label: 'humanitarian aid' },
+                    ref: { ref: 'CRSPurposeCode700', label: 'humanitarian aid' },
                     value_kind: 'enum_value',
                 },
             },
@@ -46,13 +46,13 @@ export const northKoreaMeasureSpec = {
         {
             key: {
                 axis: 'how',
-                property: { dcid: 'crsTypeOfFinance', label: 'CRS type of finance' },
+                property: { ref: 'crsTypeOfFinance', label: 'CRS type of finance' },
                 label: 'instrument',
             },
             binding: {
                 kind: 'value',
                 value: {
-                    ref: { dcid: 'CRSTypeOfFinance110', label: 'standard grant' },
+                    ref: { ref: 'CRSTypeOfFinance110', label: 'standard grant' },
                     value_kind: 'enum_value',
                 },
             },
@@ -60,7 +60,7 @@ export const northKoreaMeasureSpec = {
         {
             key: {
                 axis: 'how',
-                property: { dcid: 'crsTypeOfFlow', label: 'CRS type of flow' },
+                property: { ref: 'crsTypeOfFlow', label: 'CRS type of flow' },
                 label: 'flow',
             },
             binding: { kind: 'unbound' },
@@ -68,13 +68,13 @@ export const northKoreaMeasureSpec = {
         {
             key: {
                 axis: 'how',
-                property: { dcid: 'financialFlowType', label: 'financial flow type' },
+                property: { ref: 'financialFlowType', label: 'financial flow type' },
                 label: 'financial flow type',
             },
             binding: {
                 kind: 'value',
                 value: {
-                    ref: { dcid: 'Disbursement', label: 'disbursement' },
+                    ref: { ref: 'Disbursement', label: 'disbursement' },
                     value_kind: 'enum_value',
                 },
             },
@@ -82,12 +82,12 @@ export const northKoreaMeasureSpec = {
         {
             key: {
                 axis: 'how',
-                property: { dcid: 'nettingBasis', label: 'netting basis' },
+                property: { ref: 'nettingBasis', label: 'netting basis' },
                 label: 'netting basis',
             },
             binding: {
                 kind: 'value',
-                value: { ref: { dcid: 'Gross', label: 'gross' }, value_kind: 'enum_value' },
+                value: { ref: { ref: 'Gross', label: 'gross' }, value_kind: 'enum_value' },
             },
         },
     ] as unknown as Slot[],
@@ -162,7 +162,7 @@ export const northKoreaMeasureSpec = {
         {
             property: 'crsTypeOfFinance',
             varies: false,
-            value: { dcid: 'CRSTypeOfFinance110', label: 'standard grant' },
+            value: { ref: 'CRSTypeOfFinance110', label: 'standard grant' },
             distinct_count: 1,
             undeclared_count: 0,
         },
@@ -186,7 +186,7 @@ export const northKoreaSlotOptionsBySpec = {
             options: [
                 {
                     value: {
-                        ref: { dcid: 'CRSTypeOfFlow10', label: 'official development assistance' },
+                        ref: { ref: 'CRSTypeOfFlow10', label: 'official development assistance' },
                         value_kind: 'enum_value',
                     },
                     relation: 'root',
@@ -194,7 +194,7 @@ export const northKoreaSlotOptionsBySpec = {
                 },
                 {
                     value: {
-                        ref: { dcid: 'CRSTypeOfFlow30', label: 'private development finance' },
+                        ref: { ref: 'CRSTypeOfFlow30', label: 'private development finance' },
                         value_kind: 'enum_value',
                     },
                     relation: 'root',

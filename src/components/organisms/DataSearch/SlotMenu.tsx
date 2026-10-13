@@ -9,7 +9,12 @@ import styles from './DataSearch.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import { onMenuContentKeyDownCapture } from '@/lib/search/menuContentKeys';
-import { dcidSetsEqual, multiSelectApplyLabel, toggleDcid } from '@/lib/search/pickerState';
+import {
+    dcidSetsEqual,
+    multiSelectApplyLabel,
+    optionFilterCount,
+    toggleDcid,
+} from '@/lib/search/pickerState';
 
 export { onMenuContentKeyDownCapture };
 
@@ -347,6 +352,27 @@ export const OptionFilterInput = ({
         aria-label={label}
         autoComplete="off"
     />
+);
+
+/** A menu list's filter box, pinned to the top of .slotMenuBody's scroll
+ *  so it stays in reach down a long list. Under it, once the list has
+ *  loaded, how many of the list's `total` options the filter leaves
+ *  `shown`. */
+export const OptionFilterBar = ({
+    count,
+    children,
+}: {
+    count: { shown: number; total: number } | null;
+    children: React.ReactNode;
+}) => (
+    <div className={styles.optionFilter}>
+        {children}
+        {count && (
+            <p className={styles.optionFilterCount} aria-live="polite">
+                {optionFilterCount(count.shown, count.total)}
+            </p>
+        )}
+    </div>
 );
 
 /** The empty-filter-result note shared by the same filterable lists. */

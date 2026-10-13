@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { GraphNode } from '../../graph/wire.ts';
+
 import {
     graphNodeDescription,
     measureAlternatives,
@@ -54,7 +56,7 @@ test("unitSwitches pairs each price basis with every part's own sibling, and dro
         ...constantPrices,
         definition: { ...constantPrices.definition, spec_id: specId },
         measure_axis_values: [
-            { axis: 'measurementQualifier', value: { dcid: qualifier, label: qualifier } },
+            { axis: 'measurementQualifier', value: { ref: qualifier, label: qualifier } },
         ],
     });
     const grantsReal = atBasis('grants-real', 'RealValue');
@@ -114,40 +116,26 @@ test('measureVarianceNotes covers crsTypeOfFlow too before its slot_options fram
     ]);
 });
 
-// Trimmed from dev API /api/graph/node/{dcid} answers. The StatVar with a
-// description is the node shape once the graph serves one.
-const graphNodes: [string, unknown, string | null][] = [
+// A batch-door node entry with the given description.
+const describedNode = (description: string | null): GraphNode => ({
+    kind: 'other',
+    ref: 'Disbursement',
+    label: 'disbursement',
+    types: ['Property'],
+    description,
+    links: {},
+    gaps: description === null ? ['description'] : [],
+    built_from: {},
+});
+
+const graphNodes: [string, GraphNode | null, string | null][] = [
     [
-        'a generic node reads properties.description',
-        {
-            shape: 'node',
-            dcid: 'Disbursement',
-            label: 'disbursement',
-            properties: { description: ["The placing of resources at the recipient's disposal."] },
-        },
+        'a node reads its description',
+        describedNode("The placing of resources at the recipient's disposal."),
         "The placing of resources at the recipient's disposal.",
     ],
-    [
-        'a StatVar node reads its own description',
-        {
-            shape: 'stat_var',
-            dcid: 'sdg/FP_CPI_TOTL_ZG',
-            label: 'Annual inflation, consumer prices',
-            definition: 'mp=value,pt=SDG_FP_CPI_TOTL_ZG',
-            description: 'The annual percentage change in the cost of a basket of goods.',
-        },
-        'The annual percentage change in the cost of a basket of goods.',
-    ],
-    [
-        'a StatVar node with only a machine definition has none',
-        {
-            shape: 'stat_var',
-            dcid: 'sdg/FP_CPI_TOTL_ZG',
-            definition: 'mp=value,pt=SDG_FP_CPI_TOTL_ZG',
-        },
-        null,
-    ],
-    ['a node with no properties has none', { shape: 'node', dcid: 'amount', properties: {} }, null],
+    ['a node with no description has none', describedNode(null), null],
+    ['a node with a blank description has none', describedNode('  '), null],
     ['a node the graph does not hold has none', null, null],
 ];
 
@@ -161,7 +149,7 @@ for (const [description, node, expected] of graphNodes) {
 // two of its five related measures.
 const currentAccount: RelatedMeasure = {
     stat_var: {
-        dcid: 'sdg/BN_CAB_XOKA_GD_ZS',
+        ref: 'sdg/BN_CAB_XOKA_GD_ZS',
         label: 'Current account balance as a proportion of GDP',
     },
     definition: {
@@ -172,13 +160,13 @@ const currentAccount: RelatedMeasure = {
 };
 const reserves: RelatedMeasure = {
     ...currentAccount,
-    stat_var: { dcid: 'sdg/FI_RES_TOTL_MO', label: 'Total reserves in months of imports' },
+    stat_var: { ref: 'sdg/FI_RES_TOTL_MO', label: 'Total reserves in months of imports' },
     definition: { ...currentAccount.definition, spec_id: 'spec_1a156f792cd0b0af6712427feebd5a1e' },
 };
 
 test("relatedMeasures lists the related measures under their group's name", () => {
     const related = relatedMeasures({
-        related_group: { dcid: 'dc/g/SDG_17.13.1', label: '17.13.1: Macroeconomic Dashboard' },
+        related_group: { ref: 'dc/g/SDG_17.13.1', label: '17.13.1: Macroeconomic Dashboard' },
         related_measures: [currentAccount, reserves],
     });
 
@@ -191,7 +179,7 @@ test("measureSwitchEntry posts the picked measure's own identity with the groups
     const measures = [...northKoreaMeasureSpec.alternative_measures.slice(0, 2), currentAccount];
     const entity_groups = {
         observationAbout: {
-            dcid: 'undata-geo/G00403000',
+            ref: 'undata-geo/G00403000',
             label: 'Asia',
             entity_type: 'UNGeoRegion',
         },
@@ -215,7 +203,7 @@ test("measureSwitchEntry posts the picked measure's own identity with the groups
 // Humanitarian aid from Germany on the local API: the elected measure and
 // its two alternatives.
 const axisValues = (values: [string, string, string][]): MeasureAxisValue[] =>
-    values.map(([axis, dcid, label]) => ({ axis, value: { dcid, label } }));
+    values.map(([axis, ref, label]) => ({ axis, value: { ref, label } }));
 const gross = axisValues([
     ['populationType', 'FinancialFlow', 'financial flow'],
     ['measuredProperty', 'amount', 'amount'],
@@ -224,7 +212,7 @@ const gross = axisValues([
     ['nettingBasis', 'Gross', 'gross'],
 ]);
 const net = gross.map((value) =>
-    value.axis === 'nettingBasis' ? { ...value, value: { dcid: 'Net', label: 'net' } } : value,
+    value.axis === 'nettingBasis' ? { ...value, value: { ref: 'Net', label: 'net' } } : value,
 );
 const commitments = axisValues([
     ['populationType', 'FinancialObligation', 'financial obligation'],
@@ -232,7 +220,7 @@ const commitments = axisValues([
     ['measurementQualifier', 'Nominal', 'nominal'],
     ['financialObligationType', 'Commitment', 'commitment'],
 ]);
-const dcids = (refs: { dcid: string }[]) => refs.map((ref) => ref.dcid);
+const dcids = (refs: { ref: string }[]) => refs.map((ref) => ref.ref);
 
 test('measureDefinitionValues defines the values that set a row apart from the other rows', () => {
     assert.deepEqual(dcids(measureDefinitionValues(gross, [net, commitments])), [
@@ -286,8 +274,8 @@ test('measureSlotGroups lists each stated slot with a choice: flow for CRS aid, 
 });
 
 test('measureSlotGroups keeps a stated slot bound to a set whose options are that set, since one member narrows it', () => {
-    const member = (dcid: string) => ({ value_kind: 'entity', ref: { dcid, label: dcid } });
-    const key = { axis: 'how', property: { dcid: 'sex', label: 'sex' }, label: 'sex' };
+    const member = (dcid: string) => ({ value_kind: 'entity', ref: { ref: dcid, label: dcid } });
+    const key = { axis: 'how', property: { ref: 'sex', label: 'sex' }, label: 'sex' };
     const spec = {
         spec_id: 'sex-set',
         slots: [{ key, binding: { kind: 'set', values: [member('Female'), member('Male')] } }],

@@ -16,6 +16,7 @@ import styles from './DataSearch.module.scss';
 import { OptionRowInfo } from './SlotMenu';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { capitalise } from '@/lib/capitalise';
 import {
     definitionMembersReader,
     type MemberSpec,
@@ -38,7 +39,7 @@ const readMembers = definitionMembersReader();
 // The graph's own documentation for a source (the same door the Sources
 // pages read), shared by every row that asks. A source with no page (the
 // catalogue excludes it, or the read failed) resolves to null.
-export const sourceDoc = (dcid: string) =>
+const sourceDoc = (dcid: string) =>
     graph.read<{ description?: string | null }>(`/api/source-doc/${dcid}`);
 
 const describeSource = (dcid: string): Promise<string | null> =>
@@ -54,12 +55,12 @@ const describeNode = (dcid: string): Promise<string | null> =>
 // full…"), leaving out a value the graph has no definition for. Null when
 // it has none.
 const describeValues = (values: GraphRef[]): Promise<string | null> =>
-    Promise.all(values.map((value) => describeNode(value.dcid))).then((texts) => {
+    Promise.all(values.map((value) => describeNode(value.ref))).then((texts) => {
         const lines = values.flatMap((value, at) => {
             const text = texts[at];
-            const label = value.label ?? value.dcid;
+            const label = value.label ?? value.ref;
 
-            return text ? [`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${text}`] : [];
+            return text ? [`${capitalise(label)}: ${text}`] : [];
         });
 
         return lines.length > 0 ? lines.join('\n') : null;

@@ -35,7 +35,6 @@ const factsOf = (label: string): FactSummary => ({
     component_id: 'cmp_test',
     revision: 1,
     series: [{ id: 's_a', label: 'Germany', point_count: 2, first: 1, last: 2 }],
-    indicators: [],
     attribution: { label, source_count: 1, indicator_count: 1 },
     window: { start: '2022', end: '2023' },
     // The unit text dfo-apis' recorded summary gives (`liveFacts`).
@@ -704,6 +703,8 @@ test('a refusal its back end calls retryable is transient whatever its code', ()
 test('the live note dates the text by the UTC day the share was made', () => {
     assert.match(liveNote('2026-10-07T23:59:30.000Z'), /written 7 Oct 2026$/);
     assert.match(liveNote('2026-10-08T00:00:30.000Z'), /written 8 Oct 2026$/);
+    // September stays "Sep", whatever the ICU version prints for en-GB.
+    assert.match(liveNote('2026-09-28T12:00:00.000Z'), /written 28 Sep 2026$/);
     // The gallery passes a canvas with no creation time.
     assert.doesNotMatch(liveNote(undefined), /written/);
     assert.doesNotMatch(liveNote('not a date'), /written|Invalid/);

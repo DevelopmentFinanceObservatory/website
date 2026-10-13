@@ -35,6 +35,11 @@
  * count, or `member_count` where the list was cut and exact, and
  * `data_date_range` spans the listed members), each related measure its
  * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
+ *
+ * Each `headline.recent_years` was added later: its first entry restates the
+ * headline's own counts, and the two years before it come from the same
+ * identity resubmitted (`dataset_resubmit`) to the dev API at commit
+ * 0f4b6e04e on 2026-10-12, whose headline matched this one.
  */
 
 export const servedAid: unknown = {
@@ -167,19 +172,19 @@ export const servedAid: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal",
             "label": "gross disbursements (official development assistance)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -187,7 +192,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -195,7 +200,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -203,7 +208,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -211,7 +216,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -219,7 +224,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -227,7 +232,7 @@ export const servedAid: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -260,7 +265,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -274,7 +279,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -288,7 +293,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -302,7 +307,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -311,7 +316,7 @@ export const servedAid: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   },
                   "value_kind": "enum_value"
@@ -323,7 +328,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -332,7 +337,7 @@ export const servedAid: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   },
                   "value_kind": "enum_value"
@@ -344,7 +349,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -353,7 +358,7 @@ export const servedAid: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Gross",
+                    "ref": "Gross",
                     "label": "gross"
                   },
                   "value_kind": "enum_value"
@@ -370,7 +375,7 @@ export const servedAid: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/GTM",
+                    "ref": "country/GTM",
                     "label": "Guatemala"
                   },
                   "value_kind": "entity"
@@ -454,7 +459,36 @@ export const servedAid: unknown = {
             "role_counts": {
               "financingProvider": 1,
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 63,
+                "series": 63,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 54,
+                "series": 54,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 51,
+                "series": 51,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 1284,
@@ -495,7 +529,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -504,7 +538,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB",
+                      "ref": "CRSCooperationModalityB",
                       "label": "core contribution and pooled programme and fund"
                     },
                     "value_kind": "enum_value"
@@ -518,7 +552,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB03",
+                      "ref": "CRSCooperationModalityB03",
                       "label": "contribution to specific-purpose programme and fund managed by an international organisation"
                     },
                     "value_kind": "enum_value"
@@ -533,7 +567,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB01",
+                      "ref": "CRSCooperationModalityB01",
                       "label": "core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes"
                     },
                     "value_kind": "enum_value"
@@ -548,7 +582,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC",
+                      "ref": "CRSCooperationModalityC",
                       "label": "project-type intervention (group)"
                     },
                     "value_kind": "enum_value"
@@ -562,7 +596,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC01",
+                      "ref": "CRSCooperationModalityC01",
                       "label": "project-type intervention"
                     },
                     "value_kind": "enum_value"
@@ -577,7 +611,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD",
+                      "ref": "CRSCooperationModalityD",
                       "label": "expert and other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -591,7 +625,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD02",
+                      "ref": "CRSCooperationModalityD02",
                       "label": "other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -606,7 +640,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD01",
+                      "ref": "CRSCooperationModalityD01",
                       "label": "donor country personnel"
                     },
                     "value_kind": "enum_value"
@@ -621,7 +655,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE",
+                      "ref": "CRSCooperationModalityE",
                       "label": "scholarship and student cost in donor country"
                     },
                     "value_kind": "enum_value"
@@ -635,7 +669,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE01",
+                      "ref": "CRSCooperationModalityE01",
                       "label": "scholarship and training in donor country"
                     },
                     "value_kind": "enum_value"
@@ -650,7 +684,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityE02",
+                      "ref": "CRSCooperationModalityE02",
                       "label": "imputed student cost"
                     },
                     "value_kind": "enum_value"
@@ -665,7 +699,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityH",
+                      "ref": "CRSCooperationModalityH",
                       "label": "other in-donor expenditure"
                     },
                     "value_kind": "enum_value"
@@ -679,7 +713,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityH01",
+                      "ref": "CRSCooperationModalityH01",
                       "label": "development awareness"
                     },
                     "value_kind": "enum_value"
@@ -699,7 +733,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -708,7 +742,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode998",
+                      "ref": "CRSPurposeCode998",
                       "label": "unallocated and unspecified"
                     },
                     "value_kind": "enum_value"
@@ -722,7 +756,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99810",
+                      "ref": "CRSPurposeCode99810",
                       "label": "sectors not specified"
                     },
                     "value_kind": "enum_value"
@@ -737,7 +771,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99820",
+                      "ref": "CRSPurposeCode99820",
                       "label": "non-sector allocable promotion of development awareness"
                     },
                     "value_kind": "enum_value"
@@ -752,7 +786,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode100",
+                      "ref": "CRSPurposeCode100",
                       "label": "social infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -766,7 +800,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode140",
+                      "ref": "CRSPurposeCode140",
                       "label": "water supply and sanitation"
                     },
                     "value_kind": "enum_value"
@@ -781,7 +815,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode110",
+                      "ref": "CRSPurposeCode110",
                       "label": "education"
                     },
                     "value_kind": "enum_value"
@@ -796,7 +830,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode160",
+                      "ref": "CRSPurposeCode160",
                       "label": "other social infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -811,7 +845,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode120",
+                      "ref": "CRSPurposeCode120",
                       "label": "health"
                     },
                     "value_kind": "enum_value"
@@ -826,7 +860,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode130",
+                      "ref": "CRSPurposeCode130",
                       "label": "population policy, programme, and reproductive health"
                     },
                     "value_kind": "enum_value"
@@ -841,7 +875,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode150",
+                      "ref": "CRSPurposeCode150",
                       "label": "government and civil society"
                     },
                     "value_kind": "enum_value"
@@ -856,7 +890,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode200",
+                      "ref": "CRSPurposeCode200",
                       "label": "economic infrastructure and services"
                     },
                     "value_kind": "enum_value"
@@ -870,7 +904,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode240",
+                      "ref": "CRSPurposeCode240",
                       "label": "banking and financial services"
                     },
                     "value_kind": "enum_value"
@@ -885,7 +919,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode220",
+                      "ref": "CRSPurposeCode220",
                       "label": "communication system and technology"
                     },
                     "value_kind": "enum_value"
@@ -900,7 +934,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode250",
+                      "ref": "CRSPurposeCode250",
                       "label": "business environment and governance"
                     },
                     "value_kind": "enum_value"
@@ -915,7 +949,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode210",
+                      "ref": "CRSPurposeCode210",
                       "label": "transport and storage"
                     },
                     "value_kind": "enum_value"
@@ -930,7 +964,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode230",
+                      "ref": "CRSPurposeCode230",
                       "label": "energy"
                     },
                     "value_kind": "enum_value"
@@ -945,7 +979,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode300",
+                      "ref": "CRSPurposeCode300",
                       "label": "productive sector"
                     },
                     "value_kind": "enum_value"
@@ -959,7 +993,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode310",
+                      "ref": "CRSPurposeCode310",
                       "label": "agriculture, forestry and fishing"
                     },
                     "value_kind": "enum_value"
@@ -974,7 +1008,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode320",
+                      "ref": "CRSPurposeCode320",
                       "label": "industry, mining and construction"
                     },
                     "value_kind": "enum_value"
@@ -989,7 +1023,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode400",
+                      "ref": "CRSPurposeCode400",
                       "label": "multisector"
                     },
                     "value_kind": "enum_value"
@@ -1003,7 +1037,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode430",
+                      "ref": "CRSPurposeCode430",
                       "label": "other multisector"
                     },
                     "value_kind": "enum_value"
@@ -1018,7 +1052,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode410",
+                      "ref": "CRSPurposeCode410",
                       "label": "general environment protection"
                     },
                     "value_kind": "enum_value"
@@ -1033,7 +1067,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode500",
+                      "ref": "CRSPurposeCode500",
                       "label": "commodity aid and general programme assistance"
                     },
                     "value_kind": "enum_value"
@@ -1047,7 +1081,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode520",
+                      "ref": "CRSPurposeCode520",
                       "label": "food assistance"
                     },
                     "value_kind": "enum_value"
@@ -1062,7 +1096,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode530",
+                      "ref": "CRSPurposeCode530",
                       "label": "other commodity assistance"
                     },
                     "value_kind": "enum_value"
@@ -1077,7 +1111,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode700",
+                      "ref": "CRSPurposeCode700",
                       "label": "humanitarian aid"
                     },
                     "value_kind": "enum_value"
@@ -1091,7 +1125,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode720",
+                      "ref": "CRSPurposeCode720",
                       "label": "emergency response"
                     },
                     "value_kind": "enum_value"
@@ -1106,7 +1140,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode730",
+                      "ref": "CRSPurposeCode730",
                       "label": "reconstruction and rehabilitation"
                     },
                     "value_kind": "enum_value"
@@ -1121,7 +1155,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode740",
+                      "ref": "CRSPurposeCode740",
                       "label": "disaster preparedness"
                     },
                     "value_kind": "enum_value"
@@ -1141,7 +1175,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -1150,7 +1184,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance100",
+                      "ref": "CRSTypeOfFinance100",
                       "label": "grant"
                     },
                     "value_kind": "enum_value"
@@ -1164,7 +1198,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance110",
+                      "ref": "CRSTypeOfFinance110",
                       "label": "standard grant"
                     },
                     "value_kind": "enum_value"
@@ -1179,7 +1213,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance420",
+                      "ref": "CRSTypeOfFinance420",
                       "label": "debt instrument"
                     },
                     "value_kind": "enum_value"
@@ -1193,7 +1227,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance421",
+                      "ref": "CRSTypeOfFinance421",
                       "label": "standard loan"
                     },
                     "value_kind": "enum_value"
@@ -1208,7 +1242,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance500",
+                      "ref": "CRSTypeOfFinance500",
                       "label": "equity and share in collective investment vehicle"
                     },
                     "value_kind": "enum_value"
@@ -1222,7 +1256,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance510",
+                      "ref": "CRSTypeOfFinance510",
                       "label": "common equity"
                     },
                     "value_kind": "enum_value"
@@ -1242,7 +1276,7 @@ export const servedAid: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -1251,7 +1285,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow10",
+                      "ref": "CRSTypeOfFlow10",
                       "label": "official development assistance"
                     },
                     "value_kind": "enum_value"
@@ -1265,7 +1299,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow21",
+                      "ref": "CRSTypeOfFlow21",
                       "label": "non-export credit official flow"
                     },
                     "value_kind": "enum_value"
@@ -1279,7 +1313,7 @@ export const servedAid: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow60",
+                      "ref": "CRSTypeOfFlow60",
                       "label": "private sector instrument"
                     },
                     "value_kind": "enum_value"
@@ -1301,17 +1335,17 @@ export const servedAid: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/GTM",
+                "ref": "country/GTM",
                 "label": "Guatemala"
               },
               {
-                "dcid": "country/DEU",
+                "ref": "country/DEU",
                 "label": "Germany"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/OECDCreditorReportingSystem",
+                "ref": "provenance/OECDCreditorReportingSystem",
                 "label": "OECD Creditor Reporting System (CRS)",
                 "source": {
                   "ref": "dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd",
@@ -1407,35 +1441,35 @@ export const servedAid: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialFlow",
+                    "ref": "FinancialFlow",
                     "label": "financial flow"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialFlowType",
                   "value": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   }
                 },
                 {
                   "axis": "nettingBasis",
                   "value": {
-                    "dcid": "Net",
+                    "ref": "Net",
                     "label": "net"
                   }
                 }
@@ -1509,28 +1543,28 @@ export const servedAid: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialObligation",
+                    "ref": "FinancialObligation",
                     "label": "financial obligation"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialObligationType",
                   "value": {
-                    "dcid": "Commitment",
+                    "ref": "Commitment",
                     "label": "commitment"
                   }
                 }
@@ -1551,35 +1585,35 @@ export const servedAid: unknown = {
             {
               "axis": "populationType",
               "value": {
-                "dcid": "FinancialFlow",
+                "ref": "FinancialFlow",
                 "label": "financial flow"
               }
             },
             {
               "axis": "measuredProperty",
               "value": {
-                "dcid": "amount",
+                "ref": "amount",
                 "label": "amount"
               }
             },
             {
               "axis": "measurementQualifier",
               "value": {
-                "dcid": "Nominal",
+                "ref": "Nominal",
                 "label": "nominal"
               }
             },
             {
               "axis": "financialFlowType",
               "value": {
-                "dcid": "Disbursement",
+                "ref": "Disbursement",
                 "label": "disbursement"
               }
             },
             {
               "axis": "nettingBasis",
               "value": {
-                "dcid": "Gross",
+                "ref": "Gross",
                 "label": "gross"
               }
             }
@@ -1593,14 +1627,14 @@ export const servedAid: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode11420",
+                    "ref": "CRSPurposeCode11420",
                     "label": "higher education"
                   },
                   "count": 8
                 },
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode11120",
+                    "ref": "CRSPurposeCode11120",
                     "label": "education facility and training"
                   },
                   "count": 6
@@ -1615,14 +1649,14 @@ export const servedAid: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance110",
+                    "ref": "CRSTypeOfFinance110",
                     "label": "standard grant"
                   },
                   "count": 261
                 },
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance421",
+                    "ref": "CRSTypeOfFinance421",
                     "label": "standard loan"
                   },
                   "count": 17
@@ -1637,14 +1671,14 @@ export const servedAid: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityC01",
+                    "ref": "CRSCooperationModalityC01",
                     "label": "project-type intervention"
                   },
                   "count": 75
                 },
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityB01",
+                    "ref": "CRSCooperationModalityB01",
                     "label": "core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes"
                   },
                   "count": 43
@@ -3930,19 +3964,19 @@ export const servedAidSector: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal",
             "label": "gross disbursements (agriculture, forestry and fishing, official development assistance)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -3950,7 +3984,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -3958,7 +3992,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -3966,7 +4000,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -3974,7 +4008,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -3982,7 +4016,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -3990,7 +4024,7 @@ export const servedAidSector: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -4023,7 +4057,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -4037,7 +4071,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -4046,7 +4080,7 @@ export const servedAidSector: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSPurposeCode310",
+                    "ref": "CRSPurposeCode310",
                     "label": "agriculture, forestry and fishing"
                   },
                   "value_kind": "enum_value"
@@ -4055,131 +4089,131 @@ export const servedAidSector: unknown = {
               "expansion": {
                 "added": [
                   {
-                    "dcid": "CRSPurposeCode311",
+                    "ref": "CRSPurposeCode311",
                     "label": "agriculture"
                   },
                   {
-                    "dcid": "CRSPurposeCode312",
+                    "ref": "CRSPurposeCode312",
                     "label": "forestry"
                   },
                   {
-                    "dcid": "CRSPurposeCode313",
+                    "ref": "CRSPurposeCode313",
                     "label": "fishing"
                   },
                   {
-                    "dcid": "CRSPurposeCode31110",
+                    "ref": "CRSPurposeCode31110",
                     "label": "agricultural policy and administrative management"
                   },
                   {
-                    "dcid": "CRSPurposeCode31120",
+                    "ref": "CRSPurposeCode31120",
                     "label": "agricultural development"
                   },
                   {
-                    "dcid": "CRSPurposeCode31130",
+                    "ref": "CRSPurposeCode31130",
                     "label": "agricultural land resource"
                   },
                   {
-                    "dcid": "CRSPurposeCode31140",
+                    "ref": "CRSPurposeCode31140",
                     "label": "agricultural water resource"
                   },
                   {
-                    "dcid": "CRSPurposeCode31150",
+                    "ref": "CRSPurposeCode31150",
                     "label": "agricultural input"
                   },
                   {
-                    "dcid": "CRSPurposeCode31161",
+                    "ref": "CRSPurposeCode31161",
                     "label": "food crop production"
                   },
                   {
-                    "dcid": "CRSPurposeCode31162",
+                    "ref": "CRSPurposeCode31162",
                     "label": "industrial and export crop production"
                   },
                   {
-                    "dcid": "CRSPurposeCode31163",
+                    "ref": "CRSPurposeCode31163",
                     "label": "livestock"
                   },
                   {
-                    "dcid": "CRSPurposeCode31164",
+                    "ref": "CRSPurposeCode31164",
                     "label": "agrarian reform"
                   },
                   {
-                    "dcid": "CRSPurposeCode31165",
+                    "ref": "CRSPurposeCode31165",
                     "label": "agricultural alternative development"
                   },
                   {
-                    "dcid": "CRSPurposeCode31166",
+                    "ref": "CRSPurposeCode31166",
                     "label": "agricultural extension"
                   },
                   {
-                    "dcid": "CRSPurposeCode31181",
+                    "ref": "CRSPurposeCode31181",
                     "label": "agricultural education and training"
                   },
                   {
-                    "dcid": "CRSPurposeCode31182",
+                    "ref": "CRSPurposeCode31182",
                     "label": "agricultural research"
                   },
                   {
-                    "dcid": "CRSPurposeCode31191",
+                    "ref": "CRSPurposeCode31191",
                     "label": "agricultural service"
                   },
                   {
-                    "dcid": "CRSPurposeCode31192",
+                    "ref": "CRSPurposeCode31192",
                     "label": "plant and post-harvest protection and pest control"
                   },
                   {
-                    "dcid": "CRSPurposeCode31193",
+                    "ref": "CRSPurposeCode31193",
                     "label": "agricultural financial service"
                   },
                   {
-                    "dcid": "CRSPurposeCode31194",
+                    "ref": "CRSPurposeCode31194",
                     "label": "agricultural co-operative"
                   },
                   {
-                    "dcid": "CRSPurposeCode31195",
+                    "ref": "CRSPurposeCode31195",
                     "label": "livestock and veterinary service"
                   },
                   {
-                    "dcid": "CRSPurposeCode31210",
+                    "ref": "CRSPurposeCode31210",
                     "label": "forestry policy and administrative management"
                   },
                   {
-                    "dcid": "CRSPurposeCode31220",
+                    "ref": "CRSPurposeCode31220",
                     "label": "forestry development"
                   },
                   {
-                    "dcid": "CRSPurposeCode31261",
+                    "ref": "CRSPurposeCode31261",
                     "label": "fuelwood and charcoal"
                   },
                   {
-                    "dcid": "CRSPurposeCode31281",
+                    "ref": "CRSPurposeCode31281",
                     "label": "forestry education and training"
                   },
                   {
-                    "dcid": "CRSPurposeCode31282",
+                    "ref": "CRSPurposeCode31282",
                     "label": "forestry research"
                   },
                   {
-                    "dcid": "CRSPurposeCode31291",
+                    "ref": "CRSPurposeCode31291",
                     "label": "forestry service"
                   },
                   {
-                    "dcid": "CRSPurposeCode31310",
+                    "ref": "CRSPurposeCode31310",
                     "label": "fishing policy and administrative management"
                   },
                   {
-                    "dcid": "CRSPurposeCode31320",
+                    "ref": "CRSPurposeCode31320",
                     "label": "fishery development"
                   },
                   {
-                    "dcid": "CRSPurposeCode31381",
+                    "ref": "CRSPurposeCode31381",
                     "label": "fishery education and training"
                   },
                   {
-                    "dcid": "CRSPurposeCode31382",
+                    "ref": "CRSPurposeCode31382",
                     "label": "fishery research"
                   },
                   {
-                    "dcid": "CRSPurposeCode31391",
+                    "ref": "CRSPurposeCode31391",
                     "label": "fishery service"
                   }
                 ]
@@ -4190,7 +4224,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -4204,7 +4238,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -4213,7 +4247,7 @@ export const servedAidSector: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   },
                   "value_kind": "enum_value"
@@ -4225,7 +4259,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -4234,7 +4268,7 @@ export const servedAidSector: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   },
                   "value_kind": "enum_value"
@@ -4246,7 +4280,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -4255,7 +4289,7 @@ export const servedAidSector: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Gross",
+                    "ref": "Gross",
                     "label": "gross"
                   },
                   "value_kind": "enum_value"
@@ -4272,7 +4306,7 @@ export const servedAidSector: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/GTM",
+                    "ref": "country/GTM",
                     "label": "Guatemala"
                   },
                   "value_kind": "entity"
@@ -4354,7 +4388,36 @@ export const servedAidSector: unknown = {
             "role_counts": {
               "financingProvider": 1,
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 10,
+                "series": 10,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 7,
+                "series": 7,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 6,
+                "series": 6,
+                "role_counts": {
+                  "financingProvider": 1,
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 163,
@@ -4395,7 +4458,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -4404,7 +4467,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB",
+                      "ref": "CRSCooperationModalityB",
                       "label": "core contribution and pooled programme and fund"
                     },
                     "value_kind": "enum_value"
@@ -4418,7 +4481,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB03",
+                      "ref": "CRSCooperationModalityB03",
                       "label": "contribution to specific-purpose programme and fund managed by an international organisation"
                     },
                     "value_kind": "enum_value"
@@ -4433,7 +4496,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityB01",
+                      "ref": "CRSCooperationModalityB01",
                       "label": "core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes"
                     },
                     "value_kind": "enum_value"
@@ -4448,7 +4511,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC",
+                      "ref": "CRSCooperationModalityC",
                       "label": "project-type intervention (group)"
                     },
                     "value_kind": "enum_value"
@@ -4462,7 +4525,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityC01",
+                      "ref": "CRSCooperationModalityC01",
                       "label": "project-type intervention"
                     },
                     "value_kind": "enum_value"
@@ -4477,7 +4540,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD",
+                      "ref": "CRSCooperationModalityD",
                       "label": "expert and other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -4491,7 +4554,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityD02",
+                      "ref": "CRSCooperationModalityD02",
                       "label": "other technical assistance"
                     },
                     "value_kind": "enum_value"
@@ -4511,7 +4574,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -4520,7 +4583,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode311",
+                      "ref": "CRSPurposeCode311",
                       "label": "agriculture"
                     },
                     "value_kind": "enum_value"
@@ -4535,7 +4598,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode312",
+                      "ref": "CRSPurposeCode312",
                       "label": "forestry"
                     },
                     "value_kind": "enum_value"
@@ -4550,7 +4613,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode300",
+                      "ref": "CRSPurposeCode300",
                       "label": "productive sector"
                     },
                     "value_kind": "enum_value"
@@ -4569,7 +4632,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -4578,7 +4641,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance100",
+                      "ref": "CRSTypeOfFinance100",
                       "label": "grant"
                     },
                     "value_kind": "enum_value"
@@ -4592,7 +4655,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance110",
+                      "ref": "CRSTypeOfFinance110",
                       "label": "standard grant"
                     },
                     "value_kind": "enum_value"
@@ -4607,7 +4670,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance420",
+                      "ref": "CRSTypeOfFinance420",
                       "label": "debt instrument"
                     },
                     "value_kind": "enum_value"
@@ -4621,7 +4684,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance421",
+                      "ref": "CRSTypeOfFinance421",
                       "label": "standard loan"
                     },
                     "value_kind": "enum_value"
@@ -4641,7 +4704,7 @@ export const servedAidSector: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -4650,7 +4713,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow10",
+                      "ref": "CRSTypeOfFlow10",
                       "label": "official development assistance"
                     },
                     "value_kind": "enum_value"
@@ -4664,7 +4727,7 @@ export const servedAidSector: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow21",
+                      "ref": "CRSTypeOfFlow21",
                       "label": "non-export credit official flow"
                     },
                     "value_kind": "enum_value"
@@ -4686,17 +4749,17 @@ export const servedAidSector: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/GTM",
+                "ref": "country/GTM",
                 "label": "Guatemala"
               },
               {
-                "dcid": "country/DEU",
+                "ref": "country/DEU",
                 "label": "Germany"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/OECDCreditorReportingSystem",
+                "ref": "provenance/OECDCreditorReportingSystem",
                 "label": "OECD Creditor Reporting System (CRS)",
                 "source": {
                   "ref": "dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd",
@@ -4789,35 +4852,35 @@ export const servedAidSector: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialFlow",
+                    "ref": "FinancialFlow",
                     "label": "financial flow"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialFlowType",
                   "value": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   }
                 },
                 {
                   "axis": "nettingBasis",
                   "value": {
-                    "dcid": "Net",
+                    "ref": "Net",
                     "label": "net"
                   }
                 }
@@ -4892,28 +4955,28 @@ export const servedAidSector: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialObligation",
+                    "ref": "FinancialObligation",
                     "label": "financial obligation"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialObligationType",
                   "value": {
-                    "dcid": "Commitment",
+                    "ref": "Commitment",
                     "label": "commitment"
                   }
                 }
@@ -4934,35 +4997,35 @@ export const servedAidSector: unknown = {
             {
               "axis": "populationType",
               "value": {
-                "dcid": "FinancialFlow",
+                "ref": "FinancialFlow",
                 "label": "financial flow"
               }
             },
             {
               "axis": "measuredProperty",
               "value": {
-                "dcid": "amount",
+                "ref": "amount",
                 "label": "amount"
               }
             },
             {
               "axis": "measurementQualifier",
               "value": {
-                "dcid": "Nominal",
+                "ref": "Nominal",
                 "label": "nominal"
               }
             },
             {
               "axis": "financialFlowType",
               "value": {
-                "dcid": "Disbursement",
+                "ref": "Disbursement",
                 "label": "disbursement"
               }
             },
             {
               "axis": "nettingBasis",
               "value": {
-                "dcid": "Gross",
+                "ref": "Gross",
                 "label": "gross"
               }
             }
@@ -4976,14 +5039,14 @@ export const servedAidSector: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityC01",
+                    "ref": "CRSCooperationModalityC01",
                     "label": "project-type intervention"
                   },
                   "count": 98
                 },
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityB03",
+                    "ref": "CRSCooperationModalityB03",
                     "label": "contribution to specific-purpose programme and fund managed by an international organisation"
                   },
                   "count": 50
@@ -4998,14 +5061,14 @@ export const servedAidSector: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance110",
+                    "ref": "CRSTypeOfFinance110",
                     "label": "standard grant"
                   },
                   "count": 321
                 },
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance421",
+                    "ref": "CRSTypeOfFinance421",
                     "label": "standard loan"
                   },
                   "count": 87
@@ -7337,19 +7400,19 @@ export const servedDebt: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal_by_role",
             "label": "Debt service on external debt (current US$)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -7357,7 +7420,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -7365,7 +7428,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financingResource",
+                  "ref": "financingResource",
                   "label": "financing resource"
                 },
                 "label": "financing resource"
@@ -7373,7 +7436,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "guaranteeStatus",
+                  "ref": "guaranteeStatus",
                   "label": "guarantee status"
                 },
                 "label": "guarantee status"
@@ -7381,7 +7444,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsCreditorType",
+                  "ref": "idsCreditorType",
                   "label": "IDS creditor type"
                 },
                 "label": "IDS creditor type"
@@ -7389,7 +7452,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsDebtorType",
+                  "ref": "idsDebtorType",
                   "label": "IDS debtor type"
                 },
                 "label": "IDS debtor type"
@@ -7397,7 +7460,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsConcessionality",
+                  "ref": "idsConcessionality",
                   "label": "IDS concessionality"
                 },
                 "label": "IDS concessionality"
@@ -7405,7 +7468,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "includesIMFCredit",
+                  "ref": "includesIMFCredit",
                   "label": "includes IMF credit"
                 },
                 "label": "includes IMF credit"
@@ -7413,7 +7476,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "maturityBand",
+                  "ref": "maturityBand",
                   "label": "maturity band"
                 },
                 "label": "maturity band"
@@ -7421,7 +7484,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "netOf",
+                  "ref": "netOf",
                   "label": "net of"
                 },
                 "label": "net of"
@@ -7429,7 +7492,7 @@ export const servedDebt: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -7461,7 +7524,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -7470,7 +7533,7 @@ export const servedDebt: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "ServicingPayment",
+                    "ref": "ServicingPayment",
                     "label": "servicing payment"
                   },
                   "value_kind": "enum_value"
@@ -7482,7 +7545,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financingResource",
+                  "ref": "financingResource",
                   "label": "financing resource"
                 },
                 "label": "financing resource"
@@ -7496,7 +7559,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "guaranteeStatus",
+                  "ref": "guaranteeStatus",
                   "label": "guarantee status"
                 },
                 "label": "guarantee status"
@@ -7510,7 +7573,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsCreditorType",
+                  "ref": "idsCreditorType",
                   "label": "IDS creditor type"
                 },
                 "label": "IDS creditor type"
@@ -7524,7 +7587,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsDebtorType",
+                  "ref": "idsDebtorType",
                   "label": "IDS debtor type"
                 },
                 "label": "IDS debtor type"
@@ -7538,7 +7601,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsConcessionality",
+                  "ref": "idsConcessionality",
                   "label": "IDS concessionality"
                 },
                 "label": "IDS concessionality"
@@ -7552,7 +7615,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "includesIMFCredit",
+                  "ref": "includesIMFCredit",
                   "label": "includes IMF credit"
                 },
                 "label": "includes IMF credit"
@@ -7566,7 +7629,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "maturityBand",
+                  "ref": "maturityBand",
                   "label": "maturity band"
                 },
                 "label": "maturity band"
@@ -7580,7 +7643,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "netOf",
+                  "ref": "netOf",
                   "label": "net of"
                 },
                 "label": "net of"
@@ -7594,7 +7657,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -7613,7 +7676,7 @@ export const servedDebt: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/GHA",
+                    "ref": "country/GHA",
                     "label": "Ghana"
                   },
                   "value_kind": "entity"
@@ -7698,7 +7761,33 @@ export const servedDebt: unknown = {
             "series": 1,
             "role_counts": {
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 1,
+                "series": 1,
+                "role_counts": {
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 1,
+                "series": 1,
+                "role_counts": {
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 1,
+                "series": 1,
+                "role_counts": {
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 55,
@@ -7739,7 +7828,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -7748,7 +7837,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "ServicingPayment",
+                      "ref": "ServicingPayment",
                       "label": "servicing payment"
                     },
                     "value_kind": "enum_value"
@@ -7758,7 +7847,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "Disbursement",
+                      "ref": "Disbursement",
                       "label": "disbursement"
                     },
                     "value_kind": "enum_value"
@@ -7773,7 +7862,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "guaranteeStatus",
+                  "ref": "guaranteeStatus",
                   "label": "guarantee status"
                 },
                 "label": "guarantee status"
@@ -7782,7 +7871,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "PublicOrPubliclyGuaranteed",
+                      "ref": "PublicOrPubliclyGuaranteed",
                       "label": "public or publicly guaranteed"
                     },
                     "value_kind": "enum_value"
@@ -7799,7 +7888,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsCreditorType",
+                  "ref": "idsCreditorType",
                   "label": "IDS creditor type"
                 },
                 "label": "IDS creditor type"
@@ -7808,7 +7897,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSCreditorTypePROP",
+                      "ref": "IDSCreditorTypePROP",
                       "label": "other private creditors (IDS creditor type)"
                     },
                     "value_kind": "enum_value"
@@ -7820,7 +7909,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSCreditorTypeOFFT",
+                      "ref": "IDSCreditorTypeOFFT",
                       "label": "official creditors (IDS creditor type)"
                     },
                     "value_kind": "enum_value"
@@ -7832,7 +7921,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSCreditorTypePRVT",
+                      "ref": "IDSCreditorTypePRVT",
                       "label": "private creditors (IDS creditor type)"
                     },
                     "value_kind": "enum_value"
@@ -7844,7 +7933,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSCreditorTypePCBK",
+                      "ref": "IDSCreditorTypePCBK",
                       "label": "commercial banks (IDS creditor type)"
                     },
                     "value_kind": "enum_value"
@@ -7856,7 +7945,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSCreditorTypePBND",
+                      "ref": "IDSCreditorTypePBND",
                       "label": "bondholders (IDS creditor type)"
                     },
                     "value_kind": "enum_value"
@@ -7873,7 +7962,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "idsDebtorType",
+                  "ref": "idsDebtorType",
                   "label": "IDS debtor type"
                 },
                 "label": "IDS debtor type"
@@ -7882,7 +7971,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSDebtorTypeOPS",
+                      "ref": "IDSDebtorTypeOPS",
                       "label": "other public sector (IDS debtor type)"
                     },
                     "value_kind": "enum_value"
@@ -7894,7 +7983,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSDebtorTypePS",
+                      "ref": "IDSDebtorTypePS",
                       "label": "public sector (IDS debtor type)"
                     },
                     "value_kind": "enum_value"
@@ -7906,7 +7995,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "IDSDebtorTypeGG",
+                      "ref": "IDSDebtorTypeGG",
                       "label": "general government (IDS debtor type)"
                     },
                     "value_kind": "enum_value"
@@ -7923,7 +8012,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "includesIMFCredit",
+                  "ref": "includesIMFCredit",
                   "label": "includes IMF credit"
                 },
                 "label": "includes IMF credit"
@@ -7932,7 +8021,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "WithoutIMFCredit",
+                      "ref": "WithoutIMFCredit",
                       "label": "without IMF credit"
                     },
                     "value_kind": "enum_value"
@@ -7949,7 +8038,7 @@ export const servedDebt: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "maturityBand",
+                  "ref": "maturityBand",
                   "label": "maturity band"
                 },
                 "label": "maturity band"
@@ -7958,7 +8047,7 @@ export const servedDebt: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "LongTermMaturity",
+                      "ref": "LongTermMaturity",
                       "label": "long-term maturity"
                     },
                     "value_kind": "enum_value"
@@ -7978,13 +8067,13 @@ export const servedDebt: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/GHA",
+                "ref": "country/GHA",
                 "label": "Ghana"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/WorldBankInternationalDebtStatistics",
+                "ref": "provenance/WorldBankInternationalDebtStatistics",
                 "label": "World Bank International Debt Statistics (IDS)",
                 "source": {
                   "ref": "dc/s/WorldBank",
@@ -10234,7 +10323,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "financialFlowType",
+        "ref": "financialFlowType",
         "label": "financial flow type"
       },
       "label": "financial flow type"
@@ -10243,7 +10332,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "ServicingPayment",
+            "ref": "ServicingPayment",
             "label": "servicing payment"
           },
           "value_kind": "enum_value"
@@ -10253,7 +10342,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "Disbursement",
+            "ref": "Disbursement",
             "label": "disbursement"
           },
           "value_kind": "enum_value"
@@ -10269,7 +10358,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "guaranteeStatus",
+        "ref": "guaranteeStatus",
         "label": "guarantee status"
       },
       "label": "guarantee status"
@@ -10278,7 +10367,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "PublicOrPubliclyGuaranteed",
+            "ref": "PublicOrPubliclyGuaranteed",
             "label": "public or publicly guaranteed"
           },
           "value_kind": "enum_value"
@@ -10296,7 +10385,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "idsCreditorType",
+        "ref": "idsCreditorType",
         "label": "IDS creditor type"
       },
       "label": "IDS creditor type"
@@ -10305,7 +10394,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSCreditorTypePROP",
+            "ref": "IDSCreditorTypePROP",
             "label": "other private creditors (IDS creditor type)"
           },
           "value_kind": "enum_value"
@@ -10317,7 +10406,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSCreditorTypeOFFT",
+            "ref": "IDSCreditorTypeOFFT",
             "label": "official creditors (IDS creditor type)"
           },
           "value_kind": "enum_value"
@@ -10329,7 +10418,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSCreditorTypePRVT",
+            "ref": "IDSCreditorTypePRVT",
             "label": "private creditors (IDS creditor type)"
           },
           "value_kind": "enum_value"
@@ -10341,7 +10430,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSCreditorTypePCBK",
+            "ref": "IDSCreditorTypePCBK",
             "label": "commercial banks (IDS creditor type)"
           },
           "value_kind": "enum_value"
@@ -10353,7 +10442,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSCreditorTypePBND",
+            "ref": "IDSCreditorTypePBND",
             "label": "bondholders (IDS creditor type)"
           },
           "value_kind": "enum_value"
@@ -10371,7 +10460,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "idsDebtorType",
+        "ref": "idsDebtorType",
         "label": "IDS debtor type"
       },
       "label": "IDS debtor type"
@@ -10380,7 +10469,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSDebtorTypeOPS",
+            "ref": "IDSDebtorTypeOPS",
             "label": "other public sector (IDS debtor type)"
           },
           "value_kind": "enum_value"
@@ -10392,7 +10481,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSDebtorTypePS",
+            "ref": "IDSDebtorTypePS",
             "label": "public sector (IDS debtor type)"
           },
           "value_kind": "enum_value"
@@ -10404,7 +10493,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "IDSDebtorTypeGG",
+            "ref": "IDSDebtorTypeGG",
             "label": "general government (IDS debtor type)"
           },
           "value_kind": "enum_value"
@@ -10422,7 +10511,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "includesIMFCredit",
+        "ref": "includesIMFCredit",
         "label": "includes IMF credit"
       },
       "label": "includes IMF credit"
@@ -10431,7 +10520,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "WithoutIMFCredit",
+            "ref": "WithoutIMFCredit",
             "label": "without IMF credit"
           },
           "value_kind": "enum_value"
@@ -10449,7 +10538,7 @@ export const servedDebtEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "maturityBand",
+        "ref": "maturityBand",
         "label": "maturity band"
       },
       "label": "maturity band"
@@ -10458,7 +10547,7 @@ export const servedDebtEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "LongTermMaturity",
+            "ref": "LongTermMaturity",
             "label": "long-term maturity"
           },
           "value_kind": "enum_value"
@@ -10541,19 +10630,19 @@ export const servedGdp: unknown = {
             "shape_id": "economicactivity_amount_measuredvalue_nominal",
             "label": "Nominal gross domestic product",
             "population_type": {
-              "dcid": "EconomicActivity",
+              "ref": "EconomicActivity",
               "label": "EconomicActivity"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -10561,7 +10650,7 @@ export const servedGdp: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -10569,7 +10658,7 @@ export const servedGdp: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "economicSector",
+                  "ref": "economicSector",
                   "label": "economicSector"
                 },
                 "label": "economic sector"
@@ -10601,7 +10690,7 @@ export const servedGdp: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -10610,7 +10699,7 @@ export const servedGdp: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "GrossDomesticProduction",
+                    "ref": "GrossDomesticProduction",
                     "label": "GrossDomesticProduction"
                   },
                   "value_kind": "enum_value"
@@ -10622,7 +10711,7 @@ export const servedGdp: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "economicSector",
+                  "ref": "economicSector",
                   "label": "economicSector"
                 },
                 "label": "economic sector"
@@ -10641,7 +10730,7 @@ export const servedGdp: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -10749,7 +10838,7 @@ export const servedGdp: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -10758,7 +10847,7 @@ export const servedGdp: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "GrossDomesticProduction",
+                      "ref": "GrossDomesticProduction",
                       "label": "GrossDomesticProduction"
                     },
                     "value_kind": "enum_value"
@@ -10773,7 +10862,7 @@ export const servedGdp: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "economicSector",
+                  "ref": "economicSector",
                   "label": "economicSector"
                 },
                 "label": "economic sector"
@@ -10782,7 +10871,7 @@ export const servedGdp: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "AccommodationAndFoodSector",
+                      "ref": "AccommodationAndFoodSector",
                       "label": "Accommodation and food sector"
                     },
                     "value_kind": "enum_value"
@@ -10792,7 +10881,7 @@ export const servedGdp: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "AdministrativeAndSupportServices",
+                      "ref": "AdministrativeAndSupportServices",
                       "label": "Administrative and support services"
                     },
                     "value_kind": "enum_value"
@@ -10802,7 +10891,7 @@ export const servedGdp: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "AgriculturalSupportActivities",
+                      "ref": "AgriculturalSupportActivities",
                       "label": "Agricultural support activities"
                     },
                     "value_kind": "enum_value"
@@ -10812,7 +10901,7 @@ export const servedGdp: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "Agriculture",
+                      "ref": "Agriculture",
                       "label": "Agriculture"
                     },
                     "value_kind": "enum_value"
@@ -10830,13 +10919,13 @@ export const servedGdp: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/WorldDevelopmentIndicators",
+                "ref": "dc/base/WorldDevelopmentIndicators",
                 "label": "World Development Indicators",
                 "source": {
                   "ref": "dc/s/WorldBank",
@@ -10857,13 +10946,13 @@ export const servedGdp: unknown = {
           "measure_label_axes": [],
           "measure_axis_values": [],
           "related_group": {
-            "dcid": "dc/g/EconomicActivity_ActivitySource-GrossDomesticProduction",
+            "ref": "dc/g/EconomicActivity_ActivitySource-GrossDomesticProduction",
             "label": "Economic Activity With Activity Source = Gross Domestic Production"
           },
           "related_measures": [
             {
               "stat_var": {
-                "dcid": "GrowthRate_Amount_EconomicActivity_GrossDomesticProduction",
+                "ref": "GrowthRate_Amount_EconomicActivity_GrossDomesticProduction",
                 "label": "Gross domestic product growth rate"
               },
               "definition": {
@@ -11047,7 +11136,7 @@ export const servedGdpEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "activitySource",
+        "ref": "activitySource",
         "label": "activitySource"
       },
       "label": "activity source"
@@ -11056,7 +11145,7 @@ export const servedGdpEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "GrossDomesticProduction",
+            "ref": "GrossDomesticProduction",
             "label": "GrossDomesticProduction"
           },
           "value_kind": "enum_value"
@@ -11093,7 +11182,7 @@ export const servedGdpEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "economicSector",
+        "ref": "economicSector",
         "label": "economicSector"
       },
       "label": "economic sector"
@@ -11102,7 +11191,7 @@ export const servedGdpEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "AccommodationAndFoodSector",
+            "ref": "AccommodationAndFoodSector",
             "label": "Accommodation and food sector"
           },
           "value_kind": "enum_value"
@@ -11133,7 +11222,7 @@ export const servedGdpEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "AdministrativeAndSupportServices",
+            "ref": "AdministrativeAndSupportServices",
             "label": "Administrative and support services"
           },
           "value_kind": "enum_value"
@@ -11164,7 +11253,7 @@ export const servedGdpEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "AgriculturalSupportActivities",
+            "ref": "AgriculturalSupportActivities",
             "label": "Agricultural support activities"
           },
           "value_kind": "enum_value"
@@ -11195,7 +11284,7 @@ export const servedGdpEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "Agriculture",
+            "ref": "Agriculture",
             "label": "Agriculture"
           },
           "value_kind": "enum_value"
@@ -11316,19 +11405,19 @@ export const servedHealth: unknown = {
             "shape_id": "economicactivity_amount_measuredvalue_per_count_person",
             "label": "Healthcare expenditure per person",
             "population_type": {
-              "dcid": "EconomicActivity",
+              "ref": "EconomicActivity",
               "label": "EconomicActivity"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_denominator": {
-              "dcid": "Count_Person",
+              "ref": "Count_Person",
               "label": "Total population"
             },
             "measurement_denominator_unresolved": false,
@@ -11336,7 +11425,7 @@ export const servedHealth: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -11344,7 +11433,7 @@ export const servedHealth: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -11386,7 +11475,7 @@ export const servedHealth: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -11395,7 +11484,7 @@ export const servedHealth: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "ExpenditureActivity",
+                    "ref": "ExpenditureActivity",
                     "label": "ExpenditureActivity"
                   },
                   "value_kind": "enum_value"
@@ -11407,7 +11496,7 @@ export const servedHealth: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -11416,7 +11505,7 @@ export const servedHealth: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "HealthcareExpenditure",
+                    "ref": "HealthcareExpenditure",
                     "label": "HealthcareExpenditure"
                   },
                   "value_kind": "enum_value"
@@ -11433,7 +11522,7 @@ export const servedHealth: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -11538,7 +11627,7 @@ export const servedHealth: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -11547,7 +11636,7 @@ export const servedHealth: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "ExpenditureActivity",
+                      "ref": "ExpenditureActivity",
                       "label": "ExpenditureActivity"
                     },
                     "value_kind": "enum_value"
@@ -11562,7 +11651,7 @@ export const servedHealth: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -11571,7 +11660,7 @@ export const servedHealth: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "HealthcareExpenditure",
+                      "ref": "HealthcareExpenditure",
                       "label": "HealthcareExpenditure"
                     },
                     "value_kind": "enum_value"
@@ -11589,13 +11678,13 @@ export const servedHealth: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/WorldDevelopmentIndicators",
+                "ref": "dc/base/WorldDevelopmentIndicators",
                 "label": "World Development Indicators",
                 "source": {
                   "ref": "dc/s/WorldBank",
@@ -11620,13 +11709,13 @@ export const servedHealth: unknown = {
           "measure_label_axes": [],
           "measure_axis_values": [],
           "related_group": {
-            "dcid": "dc/g/EconomicActivity_ActivitySource-ExpenditureActivity_ExpenditureType",
+            "ref": "dc/g/EconomicActivity_ActivitySource-ExpenditureActivity_ExpenditureType",
             "label": "Economic Activity With Activity Source = Expenditure Activity, Expenditure Type"
           },
           "related_measures": [
             {
               "stat_var": {
-                "dcid": "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government",
+                "ref": "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government",
                 "label": "Fraction of Government Expenditure on Tertiary Education"
               },
               "definition": {
@@ -11829,7 +11918,7 @@ export const servedHealthEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "activitySource",
+        "ref": "activitySource",
         "label": "activitySource"
       },
       "label": "activity source"
@@ -11838,7 +11927,7 @@ export const servedHealthEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "ExpenditureActivity",
+            "ref": "ExpenditureActivity",
             "label": "ExpenditureActivity"
           },
           "value_kind": "enum_value"
@@ -11875,7 +11964,7 @@ export const servedHealthEvents: unknown = [
     "key": {
       "axis": "how",
       "property": {
-        "dcid": "expenditureType",
+        "ref": "expenditureType",
         "label": "expenditureType"
       },
       "label": "expenditure type"
@@ -11884,7 +11973,7 @@ export const servedHealthEvents: unknown = [
       {
         "value": {
           "ref": {
-            "dcid": "HealthcareExpenditure",
+            "ref": "HealthcareExpenditure",
             "label": "HealthcareExpenditure"
           },
           "value_kind": "enum_value"
@@ -12045,19 +12134,19 @@ export const servedMulti: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal",
             "label": "gross disbursements (official development assistance)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -12065,7 +12154,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -12073,7 +12162,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -12081,7 +12170,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -12089,7 +12178,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -12097,7 +12186,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -12105,7 +12194,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -12138,7 +12227,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -12152,7 +12241,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -12166,7 +12255,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -12180,7 +12269,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -12189,7 +12278,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   },
                   "value_kind": "enum_value"
@@ -12201,7 +12290,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -12210,7 +12299,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   },
                   "value_kind": "enum_value"
@@ -12222,7 +12311,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -12231,7 +12320,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Gross",
+                    "ref": "Gross",
                     "label": "gross"
                   },
                   "value_kind": "enum_value"
@@ -12248,7 +12337,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -12326,7 +12415,36 @@ export const servedMulti: unknown = {
             "role_counts": {
               "financingProvider": 75,
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 1852,
+                "series": 1852,
+                "role_counts": {
+                  "financingProvider": 75,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 1748,
+                "series": 1748,
+                "role_counts": {
+                  "financingProvider": 76,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 1709,
+                "series": 1709,
+                "role_counts": {
+                  "financingProvider": 74,
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 30325,
@@ -12367,7 +12485,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -12376,7 +12494,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA",
+                      "ref": "CRSCooperationModalityA",
                       "label": "budget support"
                     },
                     "value_kind": "enum_value"
@@ -12390,7 +12508,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA02",
+                      "ref": "CRSCooperationModalityA02",
                       "label": "sector budget support"
                     },
                     "value_kind": "enum_value"
@@ -12405,7 +12523,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSCooperationModalityA01",
+                      "ref": "CRSCooperationModalityA01",
                       "label": "general budget support"
                     },
                     "value_kind": "enum_value"
@@ -12425,7 +12543,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -12434,7 +12552,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode998",
+                      "ref": "CRSPurposeCode998",
                       "label": "unallocated and unspecified"
                     },
                     "value_kind": "enum_value"
@@ -12448,7 +12566,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99810",
+                      "ref": "CRSPurposeCode99810",
                       "label": "sectors not specified"
                     },
                     "value_kind": "enum_value"
@@ -12463,7 +12581,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode99820",
+                      "ref": "CRSPurposeCode99820",
                       "label": "non-sector allocable promotion of development awareness"
                     },
                     "value_kind": "enum_value"
@@ -12483,7 +12601,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -12492,7 +12610,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance100",
+                      "ref": "CRSTypeOfFinance100",
                       "label": "grant"
                     },
                     "value_kind": "enum_value"
@@ -12506,7 +12624,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance110",
+                      "ref": "CRSTypeOfFinance110",
                       "label": "standard grant"
                     },
                     "value_kind": "enum_value"
@@ -12521,7 +12639,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFinance210",
+                      "ref": "CRSTypeOfFinance210",
                       "label": "interest subsidy"
                     },
                     "value_kind": "enum_value"
@@ -12541,7 +12659,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -12550,7 +12668,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow10",
+                      "ref": "CRSTypeOfFlow10",
                       "label": "official development assistance"
                     },
                     "value_kind": "enum_value"
@@ -12564,7 +12682,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow21",
+                      "ref": "CRSTypeOfFlow21",
                       "label": "non-export credit official flow"
                     },
                     "value_kind": "enum_value"
@@ -12578,7 +12696,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSTypeOfFlow30",
+                      "ref": "CRSTypeOfFlow30",
                       "label": "private development finance"
                     },
                     "value_kind": "enum_value"
@@ -12607,13 +12725,13 @@ export const servedMulti: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/OECDCreditorReportingSystem",
+                "ref": "provenance/OECDCreditorReportingSystem",
                 "label": "OECD Creditor Reporting System (CRS)",
                 "source": {
                   "ref": "dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd",
@@ -12706,35 +12824,35 @@ export const servedMulti: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialFlow",
+                    "ref": "FinancialFlow",
                     "label": "financial flow"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialFlowType",
                   "value": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   }
                 },
                 {
                   "axis": "nettingBasis",
                   "value": {
-                    "dcid": "Net",
+                    "ref": "Net",
                     "label": "net"
                   }
                 }
@@ -12805,28 +12923,28 @@ export const servedMulti: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialObligation",
+                    "ref": "FinancialObligation",
                     "label": "financial obligation"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialObligationType",
                   "value": {
-                    "dcid": "Commitment",
+                    "ref": "Commitment",
                     "label": "commitment"
                   }
                 }
@@ -12847,35 +12965,35 @@ export const servedMulti: unknown = {
             {
               "axis": "populationType",
               "value": {
-                "dcid": "FinancialFlow",
+                "ref": "FinancialFlow",
                 "label": "financial flow"
               }
             },
             {
               "axis": "measuredProperty",
               "value": {
-                "dcid": "amount",
+                "ref": "amount",
                 "label": "amount"
               }
             },
             {
               "axis": "measurementQualifier",
               "value": {
-                "dcid": "Nominal",
+                "ref": "Nominal",
                 "label": "nominal"
               }
             },
             {
               "axis": "financialFlowType",
               "value": {
-                "dcid": "Disbursement",
+                "ref": "Disbursement",
                 "label": "disbursement"
               }
             },
             {
               "axis": "nettingBasis",
               "value": {
-                "dcid": "Gross",
+                "ref": "Gross",
                 "label": "gross"
               }
             }
@@ -12889,14 +13007,14 @@ export const servedMulti: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode99810",
+                    "ref": "CRSPurposeCode99810",
                     "label": "sectors not specified"
                   },
                   "count": 16
                 },
                 {
                   "value": {
-                    "dcid": "CRSPurposeCode15110",
+                    "ref": "CRSPurposeCode15110",
                     "label": "public sector policy and administrative management"
                   },
                   "count": 14
@@ -12911,14 +13029,14 @@ export const servedMulti: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance110",
+                    "ref": "CRSTypeOfFinance110",
                     "label": "standard grant"
                   },
                   "count": 1144
                 },
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance421",
+                    "ref": "CRSTypeOfFinance421",
                     "label": "standard loan"
                   },
                   "count": 235
@@ -12933,14 +13051,14 @@ export const servedMulti: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityC01",
+                    "ref": "CRSCooperationModalityC01",
                     "label": "project-type intervention"
                   },
                   "count": 383
                 },
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityD02",
+                    "ref": "CRSCooperationModalityD02",
                     "label": "other technical assistance"
                   },
                   "count": 164
@@ -15005,19 +15123,19 @@ export const servedMulti: unknown = {
             "shape_id": "economicactivity_amount_measuredvalue_per_count_person",
             "label": "Healthcare expenditure per person",
             "population_type": {
-              "dcid": "EconomicActivity",
+              "ref": "EconomicActivity",
               "label": "EconomicActivity"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_denominator": {
-              "dcid": "Count_Person",
+              "ref": "Count_Person",
               "label": "Total population"
             },
             "measurement_denominator_unresolved": false,
@@ -15025,7 +15143,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -15033,7 +15151,7 @@ export const servedMulti: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -15075,7 +15193,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -15084,7 +15202,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "ExpenditureActivity",
+                    "ref": "ExpenditureActivity",
                     "label": "ExpenditureActivity"
                   },
                   "value_kind": "enum_value"
@@ -15096,7 +15214,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -15105,7 +15223,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "HealthcareExpenditure",
+                    "ref": "HealthcareExpenditure",
                     "label": "HealthcareExpenditure"
                   },
                   "value_kind": "enum_value"
@@ -15122,7 +15240,7 @@ export const servedMulti: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -15227,7 +15345,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "activitySource",
+                  "ref": "activitySource",
                   "label": "activitySource"
                 },
                 "label": "activity source"
@@ -15236,7 +15354,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "ExpenditureActivity",
+                      "ref": "ExpenditureActivity",
                       "label": "ExpenditureActivity"
                     },
                     "value_kind": "enum_value"
@@ -15251,7 +15369,7 @@ export const servedMulti: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "expenditureType",
+                  "ref": "expenditureType",
                   "label": "expenditureType"
                 },
                 "label": "expenditure type"
@@ -15260,7 +15378,7 @@ export const servedMulti: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "HealthcareExpenditure",
+                      "ref": "HealthcareExpenditure",
                       "label": "HealthcareExpenditure"
                     },
                     "value_kind": "enum_value"
@@ -15278,13 +15396,13 @@ export const servedMulti: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/WorldDevelopmentIndicators",
+                "ref": "dc/base/WorldDevelopmentIndicators",
                 "label": "World Development Indicators",
                 "source": {
                   "ref": "dc/s/WorldBank",
@@ -15309,13 +15427,13 @@ export const servedMulti: unknown = {
           "measure_label_axes": [],
           "measure_axis_values": [],
           "related_group": {
-            "dcid": "dc/g/EconomicActivity_ActivitySource-ExpenditureActivity_ExpenditureType",
+            "ref": "dc/g/EconomicActivity_ActivitySource-ExpenditureActivity_ExpenditureType",
             "label": "Economic Activity With Activity Source = Expenditure Activity, Expenditure Type"
           },
           "related_measures": [
             {
               "stat_var": {
-                "dcid": "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government",
+                "ref": "Amount_EconomicActivity_ExpenditureActivity_TertiaryEducationExpenditure_Government_AsFractionOf_Amount_EconomicActivity_ExpenditureActivity_EducationExpenditure_Government",
                 "label": "Fraction of Government Expenditure on Tertiary Education"
               },
               "definition": {

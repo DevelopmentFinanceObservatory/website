@@ -122,13 +122,11 @@ const ChartCard = ({
     // away (QA-57).
     const names = useMemo(() => legendLabels(widget.series.map((s) => s.label)), [widget]);
 
-    // A lone "Value" is the table->chart converter's placeholder, and a
-    // transposed comparison's one series is the period already in the title:
-    // neither earns a legend.
+    // A legend tells series apart, so a chart of one series has none (the
+    // title names it), and neither has a transposed comparison, whose one
+    // series is the period already in the title.
     const showLegend =
-        widget.series.some((s) => s.label) &&
-        !widget.horizontal &&
-        !(widget.series.length === 1 && widget.series[0]!.label === 'Value');
+        widget.series.length > 1 && widget.series.some((s) => s.label) && !widget.horizontal;
 
     return (
         <article className={cardStyles.card}>

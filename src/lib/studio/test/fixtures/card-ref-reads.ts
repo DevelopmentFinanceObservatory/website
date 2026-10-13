@@ -28,7 +28,6 @@ const factsOf = (
     component_id: id,
     revision,
     series: series.map((one, index) => ({ id: `s_${index}`, point_count: 2, ...one })),
-    indicators: [],
     attribution: { label: 'WHO · 1 indicator(s)', source_count: 1, indicator_count: 1 },
     window,
 });

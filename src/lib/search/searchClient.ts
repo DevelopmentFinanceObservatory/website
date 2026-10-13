@@ -47,7 +47,7 @@ export const SEARCH_BASE = process.env.NEXT_PUBLIC_SEARCH_API_BASE ?? '';
 // so only the fields the page dereferences are typed; the rest stays `any`.
 export type SlotKey = {
     axis: string;
-    property: { dcid: string; label: string } | null;
+    property: { ref: string; label: string } | null;
     label: string;
 };
 
@@ -170,7 +170,7 @@ export type SearchEvent =
 /** Mirrors SlotKey.as_ref(): the "axis:property_dcid" join key shared by
  * SentenceToken.binding_ref, Slot.key, and SlotOptions.key. */
 export function keyRef(key: SlotKey): string {
-    return `${key.axis}:${key.property?.dcid ?? ''}`;
+    return `${key.axis}:${key.property?.ref ?? ''}`;
 }
 
 export type SearchInput =
@@ -681,7 +681,7 @@ export async function resolveBuffered(req: unknown, signal?: AbortSignal): Promi
 // countries), `scope: 'children'` (admin level 1 under the current place).
 // Request: the spec's hashed identity + `for`. The door derives the identity's
 // own StatVar population server-side (dfo-apis #877), posting no
-// resolved-stat-var seed. Response: `options.items[].value` = { ref: {dcid, label},
+// resolved-stat-var seed. Response: `options.items[].value` = { ref: {ref, label},
 // value_kind: 'entity' } and `options.truncated`.
 // ---------------------------------------------------------------------------
 
@@ -698,15 +698,15 @@ export type EntityOption = { dcid: string; label: string; coverage?: any };
 
 /** `options.items` from a POST /api/search/options body, or the wire
  *  SlotOption[] a `place_options` SSE event carries (same per-item shape —
- *  `{value: {ref: {dcid, label}}, coverage}`, `place_options` just skips the
+ *  `{value: {ref: {ref, label}}, coverage}`, `place_options` just skips the
  *  `items` wrapper) — reshaped to the flat client `EntityOption` PlaceEditor
  *  renders. An item missing a dcid or label is dropped rather than shown
  *  half-filled. */
 export function placeOptionValues(items: any[]): EntityOption[] {
     return (items ?? [])
-        .filter((item) => item?.value?.ref?.dcid && item?.value?.ref?.label)
+        .filter((item) => item?.value?.ref?.ref && item?.value?.ref?.label)
         .map((item) => ({
-            dcid: item.value.ref.dcid,
+            dcid: item.value.ref.ref,
             label: item.value.ref.label,
             coverage: item.coverage ?? undefined,
         }));
@@ -888,6 +888,17 @@ export type DatasetOutputOptions = {
     formats?: { name: string; state: DatasetOptionState }[];
     bundle?: { state: DatasetOptionState } | null;
     enrichments?: DatasetEnrichment[];
+    /** the enrichment tokens a long-layout download writes with no `columns`
+     *  option, e.g. financingRecipient_label. The extras list leaves them
+     *  out, since they are always present. Absent from an API that predates
+     *  it. */
+    long_layout_defaults?: string[];
+    /** the roles (frame column names, e.g. financingRecipient) whose total
+     *  rows a long-layout CSV or XLSX keeps out of its main table. A bundle
+     *  writes them to a second CSV, an XLSX to a second sheet, a bare CSV
+     *  leaves them out. Parquet keeps every row. Empty when no role sets rows
+     *  apart, and absent from an API that predates it. */
+    long_layout_totals?: string[];
     pivots?: { index: string; columns: string; state: DatasetOptionState }[];
     groupby?: unknown;
 };

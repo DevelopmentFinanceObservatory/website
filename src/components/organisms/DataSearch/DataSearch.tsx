@@ -35,6 +35,7 @@ import {
     STARTING_POINT_QUERY,
     type SearchCatalogue,
 } from '@/lib/search/catalogue';
+import { localShortDateText } from '@/lib/sources/updateDates';
 import { decodePermalinkState, encodePermalinkState } from '@/lib/search/permalink';
 import { track } from '@/lib/events/client';
 import {
@@ -922,10 +923,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 ) : (
                                     <p className={styles.shareNote}>
                                         Snapshot · data as of{' '}
-                                        {new Date(openedShare.createdAt).toLocaleDateString(
-                                            'en-GB',
-                                            { day: 'numeric', month: 'short', year: 'numeric' },
-                                        )}
+                                        {localShortDateText(new Date(openedShare.createdAt))}
                                         <button
                                             type="button"
                                             className={styles.shareLatest}

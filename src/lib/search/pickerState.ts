@@ -15,7 +15,7 @@ import type { Coverage, Warning } from './types.ts';
  *  view.ts's splitCurrentPick<T> can bound its generic to it, rather than
  *  taking unconstrained options and forcing a cast here. */
 export interface OptionLike {
-    value?: { ref?: { dcid?: string; label?: string } };
+    value?: { ref?: { ref?: string; label?: string } };
     dcid?: string;
     label?: string;
     coverage?: Coverage | null;
@@ -43,9 +43,9 @@ export function filterOptionsByQuery<T>(
 }
 
 /** Bridges the engine's nested SlotOption/EntityOptions shape
- *  (value.ref.dcid) and the flat client EntityOption shape (dcid). */
+ *  (value.ref.ref) and the flat client EntityOption shape (dcid). */
 export function entityOptionDcid(option: OptionLike | null | undefined): string | undefined {
-    return option?.value?.ref?.dcid ?? option?.dcid ?? undefined;
+    return option?.value?.ref?.ref ?? option?.dcid ?? undefined;
 }
 
 /** Null when an option carries neither dcid nor label. Dropped rather than
@@ -144,3 +144,13 @@ export function dcidSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): b
  *  since a count of zero reads as nothing to apply. */
 export const multiSelectApplyLabel = (selectedCount: number, disabled: boolean): string =>
     disabled || selectedCount === 0 ? 'Apply' : `Apply (${selectedCount})`;
+
+const countFormat = new Intl.NumberFormat('en');
+
+/** The line under a list's filter box: how many options the filter leaves
+ *  of the list's total ("12 of 216 listed"), or the total alone while the
+ *  filter hides none ("216 listed"). */
+export const optionFilterCount = (shown: number, total: number): string =>
+    shown === total
+        ? `${countFormat.format(total)} listed`
+        : `${countFormat.format(shown)} of ${countFormat.format(total)} listed`;

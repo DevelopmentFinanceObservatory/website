@@ -10,6 +10,7 @@ import {
     offeredEnrichment,
     parseDownloadChoices,
     resolveChoices,
+    totalsNote,
 } from '@/lib/search/downloadOptions';
 import type { OperationProgress } from '@/lib/search/operationPoll';
 import {
@@ -347,6 +348,15 @@ export const useDatasetDownload = ({ specId, definition, entities }: DatasetDown
             entities,
         }),
         enrichment: offeredEnrichment(choices.enrichment, outputOptions),
+        // Where a download keeps its total rows, null when it keeps none apart.
+        totalsNote: totalsNote({
+            options: outputOptions,
+            dimensions: optionsDocument?.coverage?.dimensions,
+            entities,
+            format: resolved.format,
+            bundle: resolved.bundle,
+            bundleOffered: resolved.bundleOffered,
+        }),
         toggleEnrichment,
         downloading,
         progress,

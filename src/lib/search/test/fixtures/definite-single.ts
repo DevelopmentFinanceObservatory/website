@@ -140,15 +140,15 @@ export const definiteSingle: unknown = {
             "shape_id": "person_count_measuredvalue",
             "label": "Total population",
             "population_type": {
-              "dcid": "Person",
+              "ref": "Person",
               "label": "Person"
             },
             "measured_property": {
-              "dcid": "count",
+              "ref": "count",
               "label": "count"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_denominator_unresolved": false,
@@ -156,7 +156,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "age",
+                  "ref": "age",
                   "label": "age"
                 },
                 "label": "age"
@@ -164,7 +164,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "maritalStatus",
+                  "ref": "maritalStatus",
                   "label": "maritalStatus"
                 },
                 "label": "marital status"
@@ -172,7 +172,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "gender",
+                  "ref": "gender",
                   "label": "gender"
                 },
                 "label": "gender"
@@ -180,7 +180,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "placeOfBirth",
+                  "ref": "placeOfBirth",
                   "label": "placeOfBirth"
                 },
                 "label": "place of birth"
@@ -188,7 +188,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nativity",
+                  "ref": "nativity",
                   "label": "nativity"
                 },
                 "label": "nativity"
@@ -196,7 +196,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "employment",
+                  "ref": "employment",
                   "label": "employment"
                 },
                 "label": "employment"
@@ -204,7 +204,7 @@ export const definiteSingle: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "employmentStatus",
+                  "ref": "employmentStatus",
                   "label": "employmentStatus"
                 },
                 "label": "employment status"
@@ -236,7 +236,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "age",
+                  "ref": "age",
                   "label": "age"
                 },
                 "label": "age"
@@ -250,7 +250,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "maritalStatus",
+                  "ref": "maritalStatus",
                   "label": "maritalStatus"
                 },
                 "label": "marital status"
@@ -264,7 +264,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "gender",
+                  "ref": "gender",
                   "label": "gender"
                 },
                 "label": "gender"
@@ -278,7 +278,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "placeOfBirth",
+                  "ref": "placeOfBirth",
                   "label": "placeOfBirth"
                 },
                 "label": "place of birth"
@@ -292,7 +292,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nativity",
+                  "ref": "nativity",
                   "label": "nativity"
                 },
                 "label": "nativity"
@@ -306,7 +306,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "employment",
+                  "ref": "employment",
                   "label": "employment"
                 },
                 "label": "employment"
@@ -320,7 +320,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "employmentStatus",
+                  "ref": "employmentStatus",
                   "label": "employmentStatus"
                 },
                 "label": "employment status"
@@ -339,7 +339,7 @@ export const definiteSingle: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -458,7 +458,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "age",
+                  "ref": "age",
                   "label": "age"
                 },
                 "label": "age"
@@ -467,7 +467,7 @@ export const definiteSingle: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "Years0To4",
+                      "ref": "Years0To4",
                       "label": "Years 0 To 4"
                     },
                     "value_kind": "enum_value"
@@ -481,7 +481,7 @@ export const definiteSingle: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "gender",
+                  "ref": "gender",
                   "label": "gender"
                 },
                 "label": "gender"
@@ -490,7 +490,7 @@ export const definiteSingle: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "Female",
+                      "ref": "Female",
                       "label": "Female"
                     },
                     "value_kind": "enum_value"
@@ -499,7 +499,7 @@ export const definiteSingle: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "Male",
+                      "ref": "Male",
                       "label": "Male"
                     },
                     "value_kind": "enum_value"
@@ -516,13 +516,13 @@ export const definiteSingle: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "dc/base/WorldDevelopmentIndicators",
+                "ref": "dc/base/WorldDevelopmentIndicators",
                 "label": "World Development Indicators",
                 "source": {
                   "ref": "dc/s/WorldBank",
@@ -551,13 +551,13 @@ export const definiteSingle: unknown = {
           "measure_label_axes": [],
           "measure_axis_values": [],
           "related_group": {
-            "dcid": "dc/g/Demographics",
+            "ref": "dc/g/Demographics",
             "label": "Demographics"
           },
           "related_measures": [
             {
               "stat_var": {
-                "dcid": "GrowthRate_Count_Person",
+                "ref": "GrowthRate_Count_Person",
                 "label": "Rate of Population Growth"
               },
               "definition": {
@@ -587,7 +587,7 @@ export const definiteSingle: unknown = {
             },
             {
               "stat_var": {
-                "dcid": "LifeExpectancy_Person",
+                "ref": "LifeExpectancy_Person",
                 "label": "Life Expectancy"
               },
               "definition": {

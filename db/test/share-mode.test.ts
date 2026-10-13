@@ -20,6 +20,7 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 const saved: SavedConversation = {
     id: 'conv-1',
     sessionId: 'harness-session-1',
+    componentRefs: [{ component_id: 'private-card', revision: 3 }],
     title: 'Aid to Kenya',
     updatedAt: 1,
     messages: [],
@@ -155,7 +156,13 @@ test('Studio share writes', async (t) => {
         const row = await stored(id);
 
         assert.equal(row?.mode, 'snapshot');
-        assert.deepEqual(row?.data, { ...saved, sessionId: null, messages: [], activity: [] });
+        assert.deepEqual(row?.data, {
+            ...saved,
+            sessionId: null,
+            componentRefs: [],
+            messages: [],
+            activity: [],
+        });
         assert.equal(await snapshotOwnedShare(db, id, 'owner'), 'done');
         assert.equal((await stored(id))?.mode, 'snapshot');
     });

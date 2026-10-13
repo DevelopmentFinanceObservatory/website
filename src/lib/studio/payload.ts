@@ -7,12 +7,11 @@
  * field comment.
  */
 
+import { asRecord } from '../asRecord.ts';
+import { readDescription, type Description } from './description.ts';
 import type { Source, SpecRef } from './wire.ts';
 
 type UnknownRecord = Record<string, unknown>;
-
-const asRecord = (value: unknown): UnknownRecord | undefined =>
-    value !== null && typeof value === 'object' ? (value as UnknownRecord) : undefined;
 
 const nonBlank = (value: unknown): string | undefined =>
     typeof value === 'string' && value.trim() ? value : undefined;
@@ -393,3 +392,47 @@ export const payloadProvenance = (
             .filter((detail) => detail !== undefined),
     };
 };
+
+/** A description read from an untyped value, or why it is refused. */
+export type DescriptionRead = ReturnType<typeof readDescription>;
+
+/** Logs a card revision whose description the reader refused, the record
+ *  every path that reads a description shares. */
+export const warnDescriptionRefused = (
+    componentId: unknown,
+    revision: unknown,
+    reason: string,
+): void => {
+    console.warn('card description refused; showing the legacy panel', {
+        componentId,
+        revision,
+        reason,
+    });
+};
+
+/** The envelope's stored `description` as the reader takes it: read, or
+ *  refused with the reason. Undefined for a payload without one, such as a
+ *  card issued before descriptions existed. A refused description is logged
+ *  here, so each frame's reader calls this once and hands the result to
+ *  everything that draws from the frame. */
+export const payloadDescription = (
+    payload: UnknownRecord | null | undefined,
+): DescriptionRead | undefined => {
+    const value = payload?.['description'];
+
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const read = readDescription(value);
+
+    if ('refused' in read) {
+        warnDescriptionRefused(payload?.['component_id'], payload?.['revision'], read.refused);
+    }
+
+    return read;
+};
+
+/** The description a read holds; undefined when it is absent or refused. */
+export const describedBy = (read: DescriptionRead | undefined): Description | undefined =>
+    read && 'description' in read ? read.description : undefined;

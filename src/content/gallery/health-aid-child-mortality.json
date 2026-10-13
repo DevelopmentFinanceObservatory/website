@@ -1,0 +1,3154 @@
+{
+  "id": "health-aid-child-mortality",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "Does health aid go where children are dying?",
+  "views": {},
+  "canvas": {
+    "ids": [
+      "cmp_01M4R7Y5HXNSTMHN6C52AY8JQM",
+      "cmp_01M4R7Y6FSEYSX5BHV8XMRQVHV"
+    ],
+    "revision": 8,
+    "compositionId": "cps_134ba911e12d49b4"
+  },
+  "layout": {
+    "cmp_01M4R7Y5HXNSTMHN6C52AY8JQM": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    },
+    "cmp_01M4R7Y6FSEYSX5BHV8XMRQVHV": {
+      "h": 14,
+      "w": 22,
+      "col": 23,
+      "row": 0
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "id": "cmp_01M4R7MSMW636G08NYPQR66Y6W",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7MSMW636G08NYPQR66Y6W"
+      },
+      "data": {
+        "rows": [
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            817140353,
+            "US Dollar"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            633030218,
+            "US Dollar"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            931446628,
+            "US Dollar"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            808920084,
+            "US Dollar"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            681700623,
+            "US Dollar"
+          ],
+          [
+            "Ethiopia",
+            "2020",
+            473471734,
+            "US Dollar"
+          ],
+          [
+            "Ethiopia",
+            "2021",
+            415505246,
+            "US Dollar"
+          ],
+          [
+            "Ethiopia",
+            "2022",
+            738802917,
+            "US Dollar"
+          ],
+          [
+            "Ethiopia",
+            "2023",
+            659765016,
+            "US Dollar"
+          ],
+          [
+            "Ethiopia",
+            "2024",
+            535587800,
+            "US Dollar"
+          ],
+          [
+            "Nigeria",
+            "2020",
+            592363322,
+            "US Dollar"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            753402735,
+            "US Dollar"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            1115520688,
+            "US Dollar"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            768876794,
+            "US Dollar"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            843938573,
+            "US Dollar"
+          ],
+          [
+            "Kenya",
+            "2020",
+            268328083,
+            "US Dollar"
+          ],
+          [
+            "Kenya",
+            "2021",
+            415801560,
+            "US Dollar"
+          ],
+          [
+            "Kenya",
+            "2022",
+            387435539,
+            "US Dollar"
+          ],
+          [
+            "Kenya",
+            "2023",
+            238349270,
+            "US Dollar"
+          ],
+          [
+            "Kenya",
+            "2024",
+            314932746,
+            "US Dollar"
+          ],
+          [
+            "Tanzania",
+            "2020",
+            373970204,
+            "US Dollar"
+          ],
+          [
+            "Tanzania",
+            "2021",
+            351754282,
+            "US Dollar"
+          ],
+          [
+            "Tanzania",
+            "2022",
+            383842512,
+            "US Dollar"
+          ],
+          [
+            "Tanzania",
+            "2023",
+            372703882,
+            "US Dollar"
+          ],
+          [
+            "Tanzania",
+            "2024",
+            356259767,
+            "US Dollar"
+          ],
+          [
+            "Mozambique",
+            "2020",
+            311727839,
+            "US Dollar"
+          ],
+          [
+            "Mozambique",
+            "2021",
+            307526922,
+            "US Dollar"
+          ],
+          [
+            "Mozambique",
+            "2022",
+            430936682,
+            "US Dollar"
+          ],
+          [
+            "Mozambique",
+            "2023",
+            320524997,
+            "US Dollar"
+          ],
+          [
+            "Mozambique",
+            "2024",
+            347283449,
+            "US Dollar"
+          ],
+          [
+            "Uganda",
+            "2020",
+            273949202,
+            "US Dollar"
+          ],
+          [
+            "Uganda",
+            "2021",
+            374359489,
+            "US Dollar"
+          ],
+          [
+            "Uganda",
+            "2022",
+            530568400,
+            "US Dollar"
+          ],
+          [
+            "Uganda",
+            "2023",
+            395315398,
+            "US Dollar"
+          ],
+          [
+            "Uganda",
+            "2024",
+            300007391,
+            "US Dollar"
+          ],
+          [
+            "Zambia",
+            "2020",
+            196771154,
+            "US Dollar"
+          ],
+          [
+            "Zambia",
+            "2021",
+            194164535,
+            "US Dollar"
+          ],
+          [
+            "Zambia",
+            "2022",
+            377953016,
+            "US Dollar"
+          ],
+          [
+            "Zambia",
+            "2023",
+            194951802,
+            "US Dollar"
+          ],
+          [
+            "Zambia",
+            "2024",
+            182995182,
+            "US Dollar"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "US Dollar",
+        "label": "OECD Creditor Reporting System (CRS) · 180 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2020"
+        },
+        "licence": "OECD Terms and Conditions",
+        "sources": [
+          {
+            "id": "provenance/OECDCreditorReportingSystem",
+            "url": "https://data-explorer.oecd.org/vis?tm=crs&pg=0&snb=30&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_CRS%40DF_CRS&df[ag]=OECD.DCD.FSD&df[vs]=1.6&isAvailabilityDisabled=false&page=0",
+            "name": "OECD Creditor Reporting System (CRS)",
+            "licence": "OECD Terms and Conditions",
+            "retrieved": "2026-10-12"
+          }
+        ],
+        "citation": "OECD Creditor Reporting System (CRS) via ONE DFO, retrieved 2026-10-12",
+        "sourceId": "provenance/OECDCreditorReportingSystem",
+        "indicators": [
+          {
+            "id": "dcid:spec_7378fe29fab6efd1d5484220985b6d5e",
+            "name": "gross disbursements, health, official development assistance",
+            "description": "A total over 180 indicators."
+          }
+        ],
+        "sourceName": "OECD Creditor Reporting System (CRS)",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 180
+      },
+      "kind": "chart",
+      "turn": 1,
+      "unit": "US Dollar",
+      "frame": {
+        "spec_id": "ops_361a3ebec0db68ed5fedf9f80f376c44",
+        "content_version": "ocv_81cedd94c8f6d23feb70f1c28357f904"
+      },
+      "title": "Health aid gross disbursements (2020-2024)",
+      "series": [
+        {
+          "label": "Democratic Republic of the Congo",
+          "values": [
+            817140353,
+            633030218,
+            931446628,
+            808920084,
+            681700623
+          ]
+        },
+        {
+          "label": "Ethiopia",
+          "values": [
+            473471734,
+            415505246,
+            738802917,
+            659765016,
+            535587800
+          ]
+        },
+        {
+          "label": "Nigeria",
+          "values": [
+            592363322,
+            753402735,
+            1115520688,
+            768876794,
+            843938573
+          ]
+        },
+        {
+          "label": "Kenya",
+          "values": [
+            268328083,
+            415801560,
+            387435539,
+            238349270,
+            314932746
+          ]
+        },
+        {
+          "label": "Tanzania",
+          "values": [
+            373970204,
+            351754282,
+            383842512,
+            372703882,
+            356259767
+          ]
+        },
+        {
+          "label": "Mozambique",
+          "values": [
+            311727839,
+            307526922,
+            430936682,
+            320524997,
+            347283449
+          ]
+        },
+        {
+          "label": "Uganda",
+          "values": [
+            273949202,
+            374359489,
+            530568400,
+            395315398,
+            300007391
+          ]
+        },
+        {
+          "label": "Zambia",
+          "values": [
+            196771154,
+            194164535,
+            377953016,
+            194951802,
+            182995182
+          ]
+        }
+      ],
+      "source": "OECD Creditor Reporting System (CRS) · 180 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M4R7MT30P6JSMNYSBN68126P",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7MT30P6JSMNYSBN68126P"
+      },
+      "data": {
+        "rows": [
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            92.73416098,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            92.91332881,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            92.48282699,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            91.31432658,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            89.67813399,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2020",
+            51.52091193,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2021",
+            70.35092372,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2022",
+            68.05999664,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2023",
+            51.4884097,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2024",
+            44.50446439,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2020",
+            117.4226256,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            117.5558698,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            117.4552593,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            116.816469,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            115.6494336,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2020",
+            42.09492585,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2021",
+            41.29701685,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2022",
+            40.54448683,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2023",
+            39.62486532,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2024",
+            38.84781015,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2020",
+            43.75678936,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2021",
+            41.72426845,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2022",
+            40.11449654,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2023",
+            38.48650169,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2024",
+            36.99925027,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2020",
+            67.5654552,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2021",
+            65.52334693,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2022",
+            63.92771487,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2023",
+            61.65108796,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2024",
+            59.41832513,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2020",
+            50.86326661,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2021",
+            50.16234611,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2022",
+            49.98188992,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2023",
+            49.3762863,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2024",
+            48.71046835,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Zambia",
+            "2020",
+            52.47109561,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Zambia",
+            "2021",
+            50.35439039,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Zambia",
+            "2022",
+            49.48460837,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Zambia",
+            "2023",
+            49.13386607,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Zambia",
+            "2024",
+            48.3652144,
+            "Count per 1,000 live births"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "Count per 1,000 live births",
+        "label": "SDG Global Database · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2020"
+        },
+        "leftOut": [
+          "The served coverage falls short of the requested scope. No observations were served for country/ATF, country/ESH, country/MYT, country/REU, country/SHN.",
+          "The UN System Data Commons did not answer for part of the request: either the resolve, so the answer holds no UN candidates, or reads for named places, so the answer holds no UN data for the places the warning names. No UN data was read for country/ESH."
+        ],
+        "licence": null,
+        "sources": [
+          {
+            "id": "undata/p/SDG",
+            "url": "https://unstats.un.org/sdgs/dataportal",
+            "name": "SDG Global Database",
+            "licence": null,
+            "retrieved": "2026-10-12"
+          }
+        ],
+        "citation": "SDG Global Database via ONE DFO, retrieved 2026-10-12",
+        "sourceId": "undata/p/SDG",
+        "indicators": [
+          {
+            "id": "dcid:undata/sdg/SH_DYN_MORT.AGE--Y0T4",
+            "name": "Mortality rate [Age=Under 5 years old]",
+            "description": ""
+          }
+        ],
+        "sourceName": "SDG Global Database",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 1,
+      "unit": "Count per 1,000 live births",
+      "frame": {
+        "spec_id": "spec_b9c02f5d617d7db7e73acd86203fa63b",
+        "content_version": "cv_b74297f2a4aa27d89829f5a0a8d59f69"
+      },
+      "title": "Under-five mortality rate per 1,000 live births (2020-2024)",
+      "series": [
+        {
+          "label": "Democratic Republic of the Congo",
+          "values": [
+            92.73416098,
+            92.91332881,
+            92.48282699,
+            91.31432658,
+            89.67813399
+          ]
+        },
+        {
+          "label": "Ethiopia",
+          "values": [
+            51.52091193,
+            70.35092372,
+            68.05999664,
+            51.4884097,
+            44.50446439
+          ]
+        },
+        {
+          "label": "Nigeria",
+          "values": [
+            117.4226256,
+            117.5558698,
+            117.4552593,
+            116.816469,
+            115.6494336
+          ]
+        },
+        {
+          "label": "Kenya",
+          "values": [
+            42.09492585,
+            41.29701685,
+            40.54448683,
+            39.62486532,
+            38.84781015
+          ]
+        },
+        {
+          "label": "Tanzania",
+          "values": [
+            43.75678936,
+            41.72426845,
+            40.11449654,
+            38.48650169,
+            36.99925027
+          ]
+        },
+        {
+          "label": "Mozambique",
+          "values": [
+            67.5654552,
+            65.52334693,
+            63.92771487,
+            61.65108796,
+            59.41832513
+          ]
+        },
+        {
+          "label": "Uganda",
+          "values": [
+            50.86326661,
+            50.16234611,
+            49.98188992,
+            49.3762863,
+            48.71046835
+          ]
+        },
+        {
+          "label": "Zambia",
+          "values": [
+            52.47109561,
+            50.35439039,
+            49.48460837,
+            49.13386607,
+            48.3652144
+          ]
+        }
+      ],
+      "source": "SDG Global Database · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M4R7MTBAV1438NTARBHJSPN5",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7MTBAV1438NTARBHJSPN5"
+      },
+      "data": {
+        "rows": [
+          [
+            "Nigeria",
+            "2020",
+            117.4226256,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            117.5558698,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            117.4552593,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            116.816469,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            115.6494336,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            92.73416098,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            92.91332881,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            92.48282699,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            91.31432658,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            89.67813399,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Somalia",
+            "2020",
+            114.7012214,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Somalia",
+            "2021",
+            110.999845,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Somalia",
+            "2022",
+            143.0631539,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Somalia",
+            "2023",
+            104.2903556,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Somalia",
+            "2024",
+            101.0657208,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Chad",
+            "2020",
+            110.5859686,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Chad",
+            "2021",
+            107.2519645,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Chad",
+            "2022",
+            103.8756911,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Chad",
+            "2023",
+            100.5814248,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Chad",
+            "2024",
+            97.25753138,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Central African Republic",
+            "2020",
+            124.1878524,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Central African Republic",
+            "2021",
+            178.7000968,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Central African Republic",
+            "2022",
+            424.5792017,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Central African Republic",
+            "2023",
+            92.60568153,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Central African Republic",
+            "2024",
+            89.72778272,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Sierra Leone",
+            "2020",
+            104.3543113,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Sierra Leone",
+            "2021",
+            100.631692,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Sierra Leone",
+            "2022",
+            97.09468551,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Sierra Leone",
+            "2023",
+            93.77243866,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Sierra Leone",
+            "2024",
+            90.49958567,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Niger",
+            "2020",
+            119.518704,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Niger",
+            "2021",
+            118.0100168,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Niger",
+            "2022",
+            115.9877348,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Niger",
+            "2023",
+            113.4675256,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Niger",
+            "2024",
+            110.7203442,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mali",
+            "2020",
+            87.62846311,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mali",
+            "2021",
+            83.60686649,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mali",
+            "2022",
+            79.7216448,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mali",
+            "2023",
+            76.20850593,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mali",
+            "2024",
+            72.98126569,
+            "Count per 1,000 live births"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "observationAbout",
+            "label": "observationAbout"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "Count per 1,000 live births",
+        "label": "SDG Global Database · 1 indicator(s)",
+        "years": null,
+        "leftOut": [
+          "The served coverage falls short of the requested scope. No observations were served for country/ATF, country/ESH, country/MYT, country/REU, country/SHN.",
+          "The UN System Data Commons did not answer for part of the request: either the resolve, so the answer holds no UN candidates, or reads for named places, so the answer holds no UN data for the places the warning names. No UN data was read for country/ESH."
+        ],
+        "licence": null,
+        "sources": [
+          {
+            "id": "undata/p/SDG",
+            "url": "https://unstats.un.org/sdgs/dataportal",
+            "name": "SDG Global Database",
+            "licence": null,
+            "retrieved": "2026-10-12"
+          }
+        ],
+        "citation": "SDG Global Database via ONE DFO, retrieved 2026-10-12",
+        "sourceId": "undata/p/SDG",
+        "indicators": [
+          {
+            "id": "dcid:undata/sdg/SH_DYN_MORT.AGE--Y0T4",
+            "name": "Mortality rate [Age=Under 5 years old]",
+            "description": ""
+          }
+        ],
+        "sourceName": "SDG Global Database",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 1
+      },
+      "kind": "table",
+      "rows": [
+        [
+          "Nigeria",
+          "2020",
+          "117.42"
+        ],
+        [
+          "Nigeria",
+          "2021",
+          "117.56"
+        ],
+        [
+          "Nigeria",
+          "2022",
+          "117.46"
+        ],
+        [
+          "Nigeria",
+          "2023",
+          "116.82"
+        ],
+        [
+          "Nigeria",
+          "2024",
+          "115.65"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2020",
+          "92.73"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2021",
+          "92.91"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2022",
+          "92.48"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2023",
+          "91.31"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2024",
+          "89.68"
+        ],
+        [
+          "Somalia",
+          "2020",
+          "114.7"
+        ],
+        [
+          "Somalia",
+          "2021",
+          "111"
+        ],
+        [
+          "Somalia",
+          "2022",
+          "143.06"
+        ],
+        [
+          "Somalia",
+          "2023",
+          "104.29"
+        ],
+        [
+          "Somalia",
+          "2024",
+          "101.07"
+        ],
+        [
+          "Chad",
+          "2020",
+          "110.59"
+        ],
+        [
+          "Chad",
+          "2021",
+          "107.25"
+        ],
+        [
+          "Chad",
+          "2022",
+          "103.88"
+        ],
+        [
+          "Chad",
+          "2023",
+          "100.58"
+        ],
+        [
+          "Chad",
+          "2024",
+          "97.26"
+        ],
+        [
+          "Central African Republic",
+          "2020",
+          "124.19"
+        ],
+        [
+          "Central African Republic",
+          "2021",
+          "178.7"
+        ],
+        [
+          "Central African Republic",
+          "2022",
+          "424.58"
+        ],
+        [
+          "Central African Republic",
+          "2023",
+          "92.61"
+        ],
+        [
+          "Central African Republic",
+          "2024",
+          "89.73"
+        ],
+        [
+          "Sierra Leone",
+          "2020",
+          "104.35"
+        ],
+        [
+          "Sierra Leone",
+          "2021",
+          "100.63"
+        ],
+        [
+          "Sierra Leone",
+          "2022",
+          "97.09"
+        ],
+        [
+          "Sierra Leone",
+          "2023",
+          "93.77"
+        ],
+        [
+          "Sierra Leone",
+          "2024",
+          "90.5"
+        ],
+        [
+          "Niger",
+          "2020",
+          "119.52"
+        ],
+        [
+          "Niger",
+          "2021",
+          "118.01"
+        ],
+        [
+          "Niger",
+          "2022",
+          "115.99"
+        ],
+        [
+          "Niger",
+          "2023",
+          "113.47"
+        ],
+        [
+          "Niger",
+          "2024",
+          "110.72"
+        ],
+        [
+          "Mali",
+          "2020",
+          "87.63"
+        ],
+        [
+          "Mali",
+          "2021",
+          "83.61"
+        ],
+        [
+          "Mali",
+          "2022",
+          "79.72"
+        ],
+        [
+          "Mali",
+          "2023",
+          "76.21"
+        ],
+        [
+          "Mali",
+          "2024",
+          "72.98"
+        ]
+      ],
+      "turn": 1,
+      "frame": {
+        "spec_id": "spec_b9c02f5d617d7db7e73acd86203fa63b",
+        "content_version": "cv_b74297f2a4aa27d89829f5a0a8d59f69"
+      },
+      "title": "Under-five mortality rate across selected African countries (2020-2024)",
+      "source": "SDG Global Database · 1 indicator(s)",
+      "columns": [
+        "observationAbout",
+        "Period",
+        "Value"
+      ]
+    },
+    {
+      "id": "cmp_01M4R7Y5HXNSTMHN6C52AY8JQM",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7Y5HXNSTMHN6C52AY8JQM"
+      },
+      "data": {
+        "rows": [
+          [
+            "Nigeria",
+            "2020",
+            2.768102305526658,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            3.447605347504773,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            4.998952314312016,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            3.3739988483999976,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            3.6270434344020663,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            8.512765600849372,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            6.384639806306739,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            9.096427816104868,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            7.646489657866698,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            6.2383228691061134,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2020",
+            3.981508635499597,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2021",
+            3.4019162396080755,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2022",
+            5.892308635132247,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2023",
+            5.126710246377054,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2024",
+            4.055647016248333,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2020",
+            5.138678336201538,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2021",
+            7.813004059477369,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2022",
+            7.141344961291249,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2023",
+            4.307075608138441,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2024",
+            5.580654200851191,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2020",
+            6.133394173578847,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2021",
+            5.598471676423195,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2022",
+            5.931567155249734,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2023",
+            5.594675407579191,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2024",
+            5.1963090895489055,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2020",
+            6.162095178746493,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2021",
+            8.15403846099393,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2022",
+            11.214075437093353,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2023",
+            8.124599537892093,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2024",
+            5.998337281874839,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2020",
+            10.126396778709555,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2021",
+            9.698778281684632,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2022",
+            13.196148816370382,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2023",
+            9.529462532659277,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2024",
+            10.027887373690385,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2020",
+            4.479669424763552,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2021",
+            9.01307811990437,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2022",
+            7.528918507477959,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2023",
+            7.388842323914995,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2024",
+            6.6301261256509125,
+            "US Dollar per Total population"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "US Dollar per Total population",
+        "label": "OECD Creditor Reporting System (CRS); World Development Indicators · 181 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2020"
+        },
+        "licence": "OECD Terms and Conditions",
+        "sources": [
+          {
+            "id": "provenance/OECDCreditorReportingSystem",
+            "url": null,
+            "name": "OECD Creditor Reporting System (CRS)",
+            "licence": "OECD Terms and Conditions",
+            "retrieved": null
+          },
+          {
+            "id": "dc/base/WorldDevelopmentIndicators",
+            "url": null,
+            "name": "World Development Indicators",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": null
+          }
+        ],
+        "citation": "OECD Creditor Reporting System (CRS); World Development Indicators",
+        "sourceId": "provenance/OECDCreditorReportingSystem",
+        "indicators": [
+          {
+            "id": "dcid:ops_8b2995b28c6a92250cf812872a583498",
+            "name": "gross disbursements, health, official development assistance per Total population",
+            "description": "The first divided by the second for each year both report."
+          }
+        ],
+        "sourceName": "OECD Creditor Reporting System (CRS)",
+        "dataThrough": "2024",
+        "sourceCount": 2,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 181
+      },
+      "kind": "chart",
+      "turn": 2,
+      "unit": "US Dollar per Total population",
+      "frame": {
+        "spec_id": "ops_8b2995b28c6a92250cf812872a583498",
+        "content_version": "ocv_4a62482ce33532c860c843c789c08a79"
+      },
+      "title": "Health aid gross disbursements per capita in selected African countries (2020-2024)",
+      "series": [
+        {
+          "label": "Nigeria",
+          "values": [
+            2.768102305526658,
+            3.447605347504773,
+            4.998952314312016,
+            3.3739988483999976,
+            3.6270434344020663
+          ]
+        },
+        {
+          "label": "Democratic Republic of the Congo",
+          "values": [
+            8.512765600849372,
+            6.384639806306739,
+            9.096427816104868,
+            7.646489657866698,
+            6.2383228691061134
+          ]
+        },
+        {
+          "label": "Ethiopia",
+          "values": [
+            3.981508635499597,
+            3.4019162396080755,
+            5.892308635132247,
+            5.126710246377054,
+            4.055647016248333
+          ]
+        },
+        {
+          "label": "Kenya",
+          "values": [
+            5.138678336201538,
+            7.813004059477369,
+            7.141344961291249,
+            4.307075608138441,
+            5.580654200851191
+          ]
+        },
+        {
+          "label": "Tanzania",
+          "values": [
+            6.133394173578847,
+            5.598471676423195,
+            5.931567155249734,
+            5.594675407579191,
+            5.1963090895489055
+          ]
+        },
+        {
+          "label": "Uganda",
+          "values": [
+            6.162095178746493,
+            8.15403846099393,
+            11.214075437093353,
+            8.124599537892093,
+            5.998337281874839
+          ]
+        },
+        {
+          "label": "Mozambique",
+          "values": [
+            10.126396778709555,
+            9.698778281684632,
+            13.196148816370382,
+            9.529462532659277,
+            10.027887373690385
+          ]
+        },
+        {
+          "label": "Ghana",
+          "values": [
+            4.479669424763552,
+            9.01307811990437,
+            7.528918507477959,
+            7.388842323914995,
+            6.6301261256509125
+          ]
+        }
+      ],
+      "source": "OECD Creditor Reporting System (CRS); World Development Indicators · 181 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M4R7Y6FSEYSX5BHV8XMRQVHV",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7Y6FSEYSX5BHV8XMRQVHV"
+      },
+      "data": {
+        "rows": [
+          [
+            "Nigeria",
+            "2020",
+            117.4226256,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            117.5558698,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            117.4552593,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            116.816469,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            115.6494336,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            92.73416098,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            92.91332881,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            92.48282699,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            91.31432658,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            89.67813399,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2020",
+            51.52091193,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2021",
+            70.35092372,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2022",
+            68.05999664,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2023",
+            51.4884097,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ethiopia",
+            "2024",
+            44.50446439,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2020",
+            42.09492585,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2021",
+            41.29701685,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2022",
+            40.54448683,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2023",
+            39.62486532,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Kenya",
+            "2024",
+            38.84781015,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2020",
+            43.75678936,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2021",
+            41.72426845,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2022",
+            40.11449654,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2023",
+            38.48650169,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Tanzania",
+            "2024",
+            36.99925027,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2020",
+            50.86326661,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2021",
+            50.16234611,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2022",
+            49.98188992,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2023",
+            49.3762863,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Uganda",
+            "2024",
+            48.71046835,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2020",
+            67.5654552,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2021",
+            65.52334693,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2022",
+            63.92771487,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2023",
+            61.65108796,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Mozambique",
+            "2024",
+            59.41832513,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ghana",
+            "2020",
+            42.16112695,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ghana",
+            "2021",
+            40.29059478,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ghana",
+            "2022",
+            38.64361633,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ghana",
+            "2023",
+            37.18577962,
+            "Count per 1,000 live births"
+          ],
+          [
+            "Ghana",
+            "2024",
+            35.87762706,
+            "Count per 1,000 live births"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "series",
+            "label": "Series"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "Count per 1,000 live births",
+        "label": "SDG Global Database · 1 indicator(s)",
+        "years": {
+          "end": "2024",
+          "start": "2020"
+        },
+        "leftOut": [
+          "The served coverage falls short of the requested scope. No observations were served for country/ATF, country/ESH, country/MYT, country/REU, country/SHN.",
+          "The UN System Data Commons did not answer for part of the request: either the resolve, so the answer holds no UN candidates, or reads for named places, so the answer holds no UN data for the places the warning names. No UN data was read for country/ESH."
+        ],
+        "licence": null,
+        "sources": [
+          {
+            "id": "undata/p/SDG",
+            "url": "https://unstats.un.org/sdgs/dataportal",
+            "name": "SDG Global Database",
+            "licence": null,
+            "retrieved": "2026-10-12"
+          }
+        ],
+        "citation": "SDG Global Database via ONE DFO, retrieved 2026-10-12",
+        "sourceId": "undata/p/SDG",
+        "indicators": [
+          {
+            "id": "dcid:undata/sdg/SH_DYN_MORT.AGE--Y0T4",
+            "name": "Mortality rate [Age=Under 5 years old]",
+            "description": ""
+          }
+        ],
+        "sourceName": "SDG Global Database",
+        "dataThrough": "2024",
+        "sourceCount": 1,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 1
+      },
+      "kind": "chart",
+      "turn": 2,
+      "unit": "Count per 1,000 live births",
+      "frame": {
+        "spec_id": "spec_02879a735429b36f1195628902ad6ad8",
+        "content_version": "cv_b74297f2a4aa27d89829f5a0a8d59f69"
+      },
+      "title": "Under-five mortality rate per 1,000 live births in selected African countries (2020-2024)",
+      "series": [
+        {
+          "label": "Nigeria",
+          "values": [
+            117.4226256,
+            117.5558698,
+            117.4552593,
+            116.816469,
+            115.6494336
+          ]
+        },
+        {
+          "label": "Democratic Republic of the Congo",
+          "values": [
+            92.73416098,
+            92.91332881,
+            92.48282699,
+            91.31432658,
+            89.67813399
+          ]
+        },
+        {
+          "label": "Ethiopia",
+          "values": [
+            51.52091193,
+            70.35092372,
+            68.05999664,
+            51.4884097,
+            44.50446439
+          ]
+        },
+        {
+          "label": "Kenya",
+          "values": [
+            42.09492585,
+            41.29701685,
+            40.54448683,
+            39.62486532,
+            38.84781015
+          ]
+        },
+        {
+          "label": "Tanzania",
+          "values": [
+            43.75678936,
+            41.72426845,
+            40.11449654,
+            38.48650169,
+            36.99925027
+          ]
+        },
+        {
+          "label": "Uganda",
+          "values": [
+            50.86326661,
+            50.16234611,
+            49.98188992,
+            49.3762863,
+            48.71046835
+          ]
+        },
+        {
+          "label": "Mozambique",
+          "values": [
+            67.5654552,
+            65.52334693,
+            63.92771487,
+            61.65108796,
+            59.41832513
+          ]
+        },
+        {
+          "label": "Ghana",
+          "values": [
+            42.16112695,
+            40.29059478,
+            38.64361633,
+            37.18577962,
+            35.87762706
+          ]
+        }
+      ],
+      "source": "SDG Global Database · 1 indicator(s)",
+      "chartType": "line",
+      "categories": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024"
+      ]
+    },
+    {
+      "id": "cmp_01M4R7Y8Y9WW9FN3XXHCNNS9HT",
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R7Y8Y9WW9FN3XXHCNNS9HT"
+      },
+      "data": {
+        "rows": [
+          [
+            "Nigeria",
+            "2020",
+            2.768102305526658,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2021",
+            3.447605347504773,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2022",
+            4.998952314312016,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2023",
+            3.3739988483999976,
+            "US Dollar per Total population"
+          ],
+          [
+            "Nigeria",
+            "2024",
+            3.6270434344020663,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2020",
+            8.512765600849372,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2021",
+            6.384639806306739,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2022",
+            9.096427816104868,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2023",
+            7.646489657866698,
+            "US Dollar per Total population"
+          ],
+          [
+            "Democratic Republic of the Congo",
+            "2024",
+            6.2383228691061134,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2020",
+            3.981508635499597,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2021",
+            3.4019162396080755,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2022",
+            5.892308635132247,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2023",
+            5.126710246377054,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ethiopia",
+            "2024",
+            4.055647016248333,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2020",
+            5.138678336201538,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2021",
+            7.813004059477369,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2022",
+            7.141344961291249,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2023",
+            4.307075608138441,
+            "US Dollar per Total population"
+          ],
+          [
+            "Kenya",
+            "2024",
+            5.580654200851191,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2020",
+            6.133394173578847,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2021",
+            5.598471676423195,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2022",
+            5.931567155249734,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2023",
+            5.594675407579191,
+            "US Dollar per Total population"
+          ],
+          [
+            "Tanzania",
+            "2024",
+            5.1963090895489055,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2020",
+            6.162095178746493,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2021",
+            8.15403846099393,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2022",
+            11.214075437093353,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2023",
+            8.124599537892093,
+            "US Dollar per Total population"
+          ],
+          [
+            "Uganda",
+            "2024",
+            5.998337281874839,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2020",
+            10.126396778709555,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2021",
+            9.698778281684632,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2022",
+            13.196148816370382,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2023",
+            9.529462532659277,
+            "US Dollar per Total population"
+          ],
+          [
+            "Mozambique",
+            "2024",
+            10.027887373690385,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2020",
+            4.479669424763552,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2021",
+            9.01307811990437,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2022",
+            7.528918507477959,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2023",
+            7.388842323914995,
+            "US Dollar per Total population"
+          ],
+          [
+            "Ghana",
+            "2024",
+            6.6301261256509125,
+            "US Dollar per Total population"
+          ]
+        ],
+        "columns": [
+          {
+            "key": "financingRecipient",
+            "label": "financingRecipient"
+          },
+          {
+            "key": "period",
+            "label": "Period"
+          },
+          {
+            "key": "value",
+            "label": "Value"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ]
+      },
+      "info": {
+        "unit": "US Dollar per Total population",
+        "label": "OECD Creditor Reporting System (CRS); World Development Indicators · 181 indicator(s)",
+        "years": null,
+        "licence": "OECD Terms and Conditions",
+        "sources": [
+          {
+            "id": "provenance/OECDCreditorReportingSystem",
+            "url": null,
+            "name": "OECD Creditor Reporting System (CRS)",
+            "licence": "OECD Terms and Conditions",
+            "retrieved": null
+          },
+          {
+            "id": "dc/base/WorldDevelopmentIndicators",
+            "url": null,
+            "name": "World Development Indicators",
+            "licence": "Creative Commons Attribution License",
+            "retrieved": null
+          }
+        ],
+        "citation": "OECD Creditor Reporting System (CRS); World Development Indicators",
+        "sourceId": "provenance/OECDCreditorReportingSystem",
+        "indicators": [
+          {
+            "id": "dcid:ops_8b2995b28c6a92250cf812872a583498",
+            "name": "gross disbursements, health, official development assistance per Total population",
+            "description": "The first divided by the second for each year both report."
+          }
+        ],
+        "sourceName": "OECD Creditor Reporting System (CRS)",
+        "dataThrough": "2024",
+        "sourceCount": 2,
+        "lastRefreshed": "2026-10-12",
+        "indicatorCount": 181
+      },
+      "kind": "table",
+      "rows": [
+        [
+          "Nigeria",
+          "2020",
+          "2.77"
+        ],
+        [
+          "Nigeria",
+          "2021",
+          "3.45"
+        ],
+        [
+          "Nigeria",
+          "2022",
+          "5"
+        ],
+        [
+          "Nigeria",
+          "2023",
+          "3.37"
+        ],
+        [
+          "Nigeria",
+          "2024",
+          "3.63"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2020",
+          "8.51"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2021",
+          "6.38"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2022",
+          "9.1"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2023",
+          "7.65"
+        ],
+        [
+          "Democratic Republic of the Congo",
+          "2024",
+          "6.24"
+        ],
+        [
+          "Ethiopia",
+          "2020",
+          "3.98"
+        ],
+        [
+          "Ethiopia",
+          "2021",
+          "3.4"
+        ],
+        [
+          "Ethiopia",
+          "2022",
+          "5.89"
+        ],
+        [
+          "Ethiopia",
+          "2023",
+          "5.13"
+        ],
+        [
+          "Ethiopia",
+          "2024",
+          "4.06"
+        ],
+        [
+          "Kenya",
+          "2020",
+          "5.14"
+        ],
+        [
+          "Kenya",
+          "2021",
+          "7.81"
+        ],
+        [
+          "Kenya",
+          "2022",
+          "7.14"
+        ],
+        [
+          "Kenya",
+          "2023",
+          "4.31"
+        ],
+        [
+          "Kenya",
+          "2024",
+          "5.58"
+        ],
+        [
+          "Tanzania",
+          "2020",
+          "6.13"
+        ],
+        [
+          "Tanzania",
+          "2021",
+          "5.6"
+        ],
+        [
+          "Tanzania",
+          "2022",
+          "5.93"
+        ],
+        [
+          "Tanzania",
+          "2023",
+          "5.59"
+        ],
+        [
+          "Tanzania",
+          "2024",
+          "5.2"
+        ],
+        [
+          "Uganda",
+          "2020",
+          "6.16"
+        ],
+        [
+          "Uganda",
+          "2021",
+          "8.15"
+        ],
+        [
+          "Uganda",
+          "2022",
+          "11.21"
+        ],
+        [
+          "Uganda",
+          "2023",
+          "8.12"
+        ],
+        [
+          "Uganda",
+          "2024",
+          "6"
+        ],
+        [
+          "Mozambique",
+          "2020",
+          "10.13"
+        ],
+        [
+          "Mozambique",
+          "2021",
+          "9.7"
+        ],
+        [
+          "Mozambique",
+          "2022",
+          "13.2"
+        ],
+        [
+          "Mozambique",
+          "2023",
+          "9.53"
+        ],
+        [
+          "Mozambique",
+          "2024",
+          "10.03"
+        ],
+        [
+          "Ghana",
+          "2020",
+          "4.48"
+        ],
+        [
+          "Ghana",
+          "2021",
+          "9.01"
+        ],
+        [
+          "Ghana",
+          "2022",
+          "7.53"
+        ],
+        [
+          "Ghana",
+          "2023",
+          "7.39"
+        ],
+        [
+          "Ghana",
+          "2024",
+          "6.63"
+        ]
+      ],
+      "turn": 2,
+      "frame": {
+        "spec_id": "ops_8b2995b28c6a92250cf812872a583498",
+        "content_version": "ocv_4a62482ce33532c860c843c789c08a79"
+      },
+      "title": "Health aid gross disbursements per capita in selected African countries (2020-2024)",
+      "source": "OECD Creditor Reporting System (CRS); World Development Indicators · 181 indicator(s)",
+      "columns": [
+        "financingRecipient",
+        "Period",
+        "Value"
+      ]
+    }
+  ],
+  "activity": [
+    {
+      "turn": 1,
+      "tools": [
+        {
+          "id": "s0",
+          "name": "Reading your question",
+          "state": "complete",
+          "startedAt": 1791814451269,
+          "durationMs": 2175
+        },
+        {
+          "id": "s2",
+          "args": "search",
+          "name": "Searching for data",
+          "state": "complete",
+          "summary": "health aid per person and under-five mortality across African countries over the last 5 years · no data for health aid per capita; no data for under-five mortality rate",
+          "startedAt": 1791814453445
+        },
+        {
+          "id": "s4",
+          "name": "Reading what the search found",
+          "state": "complete",
+          "startedAt": 1791814455289,
+          "durationMs": 2434
+        },
+        {
+          "id": "s6",
+          "args": "search",
+          "name": "Searching for data",
+          "state": "complete",
+          "summary": "health aid per person and under-five mortality across Africa over the last 5 years · Found under-five mortality rate (more than one reading); no supported dataset for health aid per capita",
+          "startedAt": 1791814457784
+        },
+        {
+          "id": "s8",
+          "name": "Reading what the search found",
+          "state": "complete",
+          "startedAt": 1791814463315,
+          "durationMs": 1956
+        },
+        {
+          "id": "s10",
+          "args": "search",
+          "name": "Searching for data",
+          "state": "complete",
+          "summary": "health aid to African countries · Found health aid",
+          "startedAt": 1791814465258
+        },
+        {
+          "id": "s12",
+          "name": "Reading what the search found",
+          "state": "complete",
+          "startedAt": 1791814474703,
+          "durationMs": 3002
+        },
+        {
+          "id": "s14",
+          "name": "Working on a plan",
+          "state": "complete",
+          "startedAt": 1791814477662,
+          "durationMs": 10614
+        },
+        {
+          "id": "s16",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and every donor and 2 more",
+          "startedAt": 1791814488277,
+          "durationMs": 3920
+        },
+        {
+          "id": "s18",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and every donor and 2 more",
+          "startedAt": 1791814498241,
+          "durationMs": 899
+        },
+        {
+          "id": "s20",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "startedAt": 1791814506768,
+          "durationMs": 26
+        },
+        {
+          "id": "s22",
+          "name": "Reworking the draft",
+          "state": "complete",
+          "startedAt": 1791814506793,
+          "durationMs": 2050
+        },
+        {
+          "id": "s25",
+          "name": "Working on a plan",
+          "state": "complete",
+          "startedAt": 1791814587420,
+          "durationMs": 4858
+        },
+        {
+          "id": "s27",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "startedAt": 1791814592341,
+          "durationMs": 29
+        },
+        {
+          "id": "s29",
+          "name": "Reworking the draft",
+          "state": "complete",
+          "startedAt": 1791814592342,
+          "durationMs": 3622
+        },
+        {
+          "id": "s31",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "startedAt": 1791814595928,
+          "durationMs": 29
+        },
+        {
+          "id": "s33",
+          "name": "Reworking the draft",
+          "state": "complete",
+          "startedAt": 1791814595956,
+          "durationMs": 6719
+        },
+        {
+          "id": "s35",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and every donor and 2 more",
+          "startedAt": 1791814602777,
+          "durationMs": 1417
+        },
+        {
+          "id": "s37",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "startedAt": 1791814609163,
+          "durationMs": 44
+        },
+        {
+          "id": "s39",
+          "name": "Reworking the draft",
+          "state": "complete",
+          "startedAt": 1791814609210,
+          "durationMs": 4545
+        },
+        {
+          "id": "s41",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and every donor and 2 more",
+          "startedAt": 1791814613755,
+          "durationMs": 217
+        },
+        {
+          "id": "s43",
+          "name": "Getting the plan ready for you",
+          "state": "complete",
+          "startedAt": 1791814618041,
+          "durationMs": 383
+        },
+        {
+          "id": "s46",
+          "name": "Starting the plan",
+          "state": "complete",
+          "startedAt": 1791814669863,
+          "durationMs": 1980
+        },
+        {
+          "id": "s48",
+          "args": "get_data",
+          "name": "Fetch under-five mortality rate for each member of Africa",
+          "state": "complete",
+          "summary": "Retrieved the requested data for observationAbout country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country/BWA, country/CAF, country/CIV, and 5…",
+          "startedAt": 1791814671910,
+          "durationMs": 1871
+        },
+        {
+          "id": "s49",
+          "args": "get_data",
+          "name": "Fetch population for each member of Africa",
+          "state": "complete",
+          "summary": "Retrieved the requested data for observationAbout country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country/BWA, country/CAF, country/CIV, and 5…",
+          "startedAt": 1791814672754,
+          "durationMs": 2800
+        },
+        {
+          "id": "s50",
+          "args": "get_data",
+          "name": "Fetch health aid gross disbursements for each member of Africa and every donor",
+          "state": "complete",
+          "summary": "Retrieved gross disbursements, health, official development assistance for destination country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country…",
+          "startedAt": 1791814682704,
+          "durationMs": 12756
+        },
+        {
+          "id": "s51",
+          "args": "aggregate",
+          "name": "Total health aid gross disbursements by year and by entity",
+          "state": "complete",
+          "summary": "aggregate: sum grouped by financingRecipient, time_period",
+          "startedAt": 1791814683242,
+          "durationMs": 286
+        },
+        {
+          "id": "s56",
+          "name": "Reading the plan's results",
+          "state": "complete",
+          "startedAt": 1791814683305,
+          "durationMs": 6732
+        },
+        {
+          "id": "s58",
+          "args": "make_charts",
+          "name": "Making 3 charts",
+          "state": "complete",
+          "startedAt": 1791814690042
+        },
+        {
+          "id": "s59",
+          "args": "write_component",
+          "name": "Line chart: Health aid gross disbursements (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7MSMW636G08NYPQR66Y6W",
+          "startedAt": 1791814691331,
+          "durationMs": 600
+        },
+        {
+          "id": "s62",
+          "args": "write_component",
+          "name": "Line chart: Under-five mortality rate per 1,000 live births (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7MT30P6JSMNYSBN68126P",
+          "startedAt": 1791814691345,
+          "durationMs": 485
+        },
+        {
+          "id": "s65",
+          "args": "write_component",
+          "name": "Table: Under-five mortality rate across selected African countries (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7MTBAV1438NTARBHJSPN5",
+          "startedAt": 1791814691345,
+          "durationMs": 141
+        },
+        {
+          "id": "s69",
+          "name": "Going over the charts",
+          "state": "complete",
+          "startedAt": 1791814691357,
+          "durationMs": 2349
+        }
+      ],
+      "prompt": "I am trying to understand whether health aid go where children are dying. Could you pull health aid per person data and compare it with under-five mortality across African countries over the last 5 years?",
+      "endedAt": 1791814694730,
+      "startedAt": 1791814451019
+    },
+    {
+      "turn": 2,
+      "tools": [
+        {
+          "id": "s0",
+          "name": "Reading your question",
+          "state": "complete",
+          "startedAt": 1791814829489,
+          "durationMs": 2530
+        },
+        {
+          "id": "s2",
+          "name": "Working on a plan",
+          "state": "complete",
+          "startedAt": 1791814832056,
+          "durationMs": 10387
+        },
+        {
+          "id": "s4",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and 2 more",
+          "startedAt": 1791814842512,
+          "durationMs": 4805
+        },
+        {
+          "id": "s6",
+          "name": "Checking the plan against the data",
+          "state": "complete",
+          "summary": "health aid gross disbursements for each member of Africa and 2 more",
+          "startedAt": 1791814853673,
+          "durationMs": 199
+        },
+        {
+          "id": "s8",
+          "name": "Getting the plan ready for you",
+          "state": "complete",
+          "startedAt": 1791814855371,
+          "durationMs": 144
+        },
+        {
+          "id": "s11",
+          "name": "Starting the plan",
+          "state": "complete",
+          "startedAt": 1791814978544,
+          "durationMs": 2396
+        },
+        {
+          "id": "s13",
+          "args": "get_data",
+          "name": "Fetch population for each member of Africa",
+          "state": "complete",
+          "summary": "Retrieved the requested data for observationAbout country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country/BWA, country/CAF, country/CIV, and 5…",
+          "startedAt": 1791814980938,
+          "durationMs": 2294
+        },
+        {
+          "id": "s14",
+          "args": "get_data",
+          "name": "Fetch under-five mortality rate for each member of Africa",
+          "state": "complete",
+          "summary": "Retrieved the requested data for observationAbout country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country/BWA, country/CAF, country/CIV, and 5…",
+          "startedAt": 1791814981793,
+          "durationMs": 3149
+        },
+        {
+          "id": "s15",
+          "args": "get_data",
+          "name": "Fetch health aid gross disbursements for each member of Africa",
+          "state": "complete",
+          "summary": "Retrieved gross disbursements, health, official development assistance for destination country/AGO, country/ATF, country/BDI, country/BEN, country/BFA, country…",
+          "startedAt": 1791814991607,
+          "durationMs": 12949
+        },
+        {
+          "id": "s16",
+          "args": "aggregate",
+          "name": "Total health aid gross disbursements by year and by entity",
+          "state": "complete",
+          "summary": "aggregate: sum grouped by financingRecipient, time_period",
+          "startedAt": 1791814992122,
+          "durationMs": 223
+        },
+        {
+          "id": "s17",
+          "args": "quotient_of",
+          "name": "Divide health aid gross disbursements by population per recipient",
+          "state": "complete",
+          "summary": "quotient_of: 53 key(s), 265 matched (key, period) pair(s), in CurrencyUSD per Count_Person",
+          "startedAt": 1791814992434,
+          "durationMs": 349
+        },
+        {
+          "id": "s23",
+          "name": "Reading the plan's results",
+          "state": "complete",
+          "startedAt": 1791814992463,
+          "durationMs": 4615
+        },
+        {
+          "id": "s25",
+          "args": "make_charts",
+          "name": "Making 3 charts",
+          "state": "failed",
+          "summary": "1 of 3 could not be drawn: Health aid gross disbursements per capita across African countries (2020-2024): table select expands to an estimated 53 series, over the platform's maximum of 24",
+          "startedAt": 1791814997080
+        },
+        {
+          "id": "s26",
+          "args": "write_component",
+          "name": "Line chart: Health aid gross disbursements per capita in selected African countries (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7Y5HXNSTMHN6C52AY8JQM",
+          "startedAt": 1791814998678,
+          "durationMs": 867
+        },
+        {
+          "id": "s29",
+          "args": "write_component",
+          "name": "Line chart: Under-five mortality rate per 1,000 live births in selected African countries (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7Y6FSEYSX5BHV8XMRQVHV",
+          "startedAt": 1791814998709,
+          "durationMs": 649
+        },
+        {
+          "id": "s33",
+          "name": "Going over the charts",
+          "state": "complete",
+          "startedAt": 1791814998709,
+          "durationMs": 2326
+        },
+        {
+          "id": "s35",
+          "args": "make_charts",
+          "name": "Making 1 chart",
+          "state": "complete",
+          "startedAt": 1791815000954
+        },
+        {
+          "id": "s36",
+          "args": "write_component",
+          "name": "Table: Health aid gross disbursements per capita in selected African countries (2020-2024)",
+          "state": "complete",
+          "widgetId": "cmp_01M4R7Y8Y9WW9FN3XXHCNNS9HT",
+          "startedAt": 1791815001222,
+          "durationMs": 193
+        },
+        {
+          "id": "s40",
+          "name": "Going over the charts",
+          "state": "complete",
+          "startedAt": 1791815001222,
+          "durationMs": 1764
+        }
+      ],
+      "prompt": "Could you divide the health aid by population so that we can compare aid per capita with the u5 mortality rate.",
+      "endedAt": 1791815004119,
+      "startedAt": 1791814829206
+    }
+  ],
+  "graceIds": [],
+  "messages": [
+    {
+      "role": "user",
+      "text": "I am trying to understand whether health aid go where children are dying. Could you pull health aid per person data and compare it with under-five mortality across African countries over the last 5 years?"
+    },
+    {
+      "role": "bot",
+      "text": "The data covers 2020 to 2024 across African countries, retrieved from the OECD Creditor Reporting System (CRS) for health official development assistance (ODA) gross disbursements, the World Development Indicators for population, and the SDG Global Database for under-five mortality rates. The health aid figures represent the members' figures individually and sum 180 indicators. A direct per-capita division ratio across countries was not computed by the plan, so total health aid gross disbursements and under-five mortality rates are presented.\n\nThis data cannot establish the causes of resource allocation or health outcomes."
+    },
+    {
+      "role": "user",
+      "text": "Could you divide the health aid by population so that we can compare aid per capita with the u5 mortality rate."
+    },
+    {
+      "role": "bot",
+      "text": "Health aid gross disbursements per person were calculated by dividing total health official development assistance (ODA) gross disbursements from the OECD Creditor Reporting System (CRS) by total population from the World Development Indicators, covering 2020 to 2024. Under-five mortality rates per 1,000 live births are drawn from the SDG Global Database.\n\nKey details regarding the series and computations:\n- The health aid gross disbursements sum the family's 180 indicators across donors for each recipient.\n- The figures for Africa reflect the individual members' figures; 1 recipient entry (Saint Helena) lacked a population figure to divide by and was excluded from the per capita calculations.\n- This data presents health aid per person alongside under-five mortality rates across countries, but cannot establish the causes of funding patterns or health outcomes."
+    }
+  ],
+  "graceTurn": 0,
+  "pinnedIds": [],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 2,
+  "updatedAt": 1791820440452,
+  "removedIds": [
+    "cmp_01M4R7Y8Y9WW9FN3XXHCNNS9HT"
+  ],
+  "shareMarks": [
+    {
+      "at": 1791815264021,
+      "shareId": "ejfkdRyF",
+      "messageIndex": 4
+    },
+    {
+      "at": 1791815292126,
+      "shareId": "BMJYZvjM",
+      "messageIndex": 4
+    },
+    {
+      "at": 1791817232521,
+      "shareId": "POiKoVhA",
+      "messageIndex": 4
+    }
+  ]
+}

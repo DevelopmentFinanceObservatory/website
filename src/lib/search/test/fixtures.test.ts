@@ -154,7 +154,7 @@ for (const name of specFixtureNames) {
 test('crs-hierarchical-purpose: the bound crsPurpose leaf carries a parent relation and no children', () => {
     const [spec] = rawSpecsIn(fixtures['crs-hierarchical-purpose']);
     const crsPurpose = spec.resolved.slot_options.find(
-        (entry: any) => entry.key.property.dcid === 'crsPurpose',
+        (entry: any) => entry.key.property.ref === 'crsPurpose',
     );
 
     assert.ok(crsPurpose, 'fixture carries a crsPurpose slot_options entry');
@@ -178,7 +178,7 @@ test('catalogue-kenya: normalizes to the same body, scoped to the confirmed coun
 
     assert.equal(normalized, body);
     assert.equal(normalized.kind, 'catalogue');
-    assert.deepEqual(normalized.scope.place, { dcid: 'country/KEN', label: 'Kenya' });
+    assert.deepEqual(normalized.scope.place, { ref: 'country/KEN', label: 'Kenya' });
 });
 
 test('definite-rank-operation: the definite part keeps its rank operation and flattens its spec', () => {
@@ -202,7 +202,7 @@ test('entity-ambiguous: operations default to empty and data_query rides through
         [null, 'country/FRA'],
     );
     assert.deepEqual(
-        part.no_data.ambiguous_entities[0].candidates.map((candidate: any) => candidate.dcid),
+        part.no_data.ambiguous_entities[0].candidates.map((candidate: any) => candidate.ref),
         ['country/COD', 'country/COG'],
     );
 });

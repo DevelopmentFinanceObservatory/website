@@ -1,0 +1,113 @@
+{
+  "id": "china-debt-service-africa",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "Debt service paid to China by African countries",
+  "views": {},
+  "canvas": {
+    "ids": [
+      "cmp_01M4R52ZWTCTQZM7Q2B6PYXJJB",
+      "cmp_01M4R5306ZSAZTXVG7W6E2N51D"
+    ],
+    "revision": 2,
+    "compositionId": "cps_5f812d7d5f7442a9"
+  },
+  "layout": {
+    "cmp_01M4R52ZWTCTQZM7Q2B6PYXJJB": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    },
+    "cmp_01M4R5306ZSAZTXVG7W6E2N51D": {
+      "h": 14,
+      "w": 22,
+      "col": 23,
+      "row": 0
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "kind": "chart",
+      "id": "cmp_01M4R52ZWTCTQZM7Q2B6PYXJJB",
+      "turn": 1,
+      "chartType": "line",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R52ZWTCTQZM7Q2B6PYXJJB"
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "cmp_01M4R5306ZSAZTXVG7W6E2N51D",
+      "turn": 1,
+      "chartType": "bar",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4R5306ZSAZTXVG7W6E2N51D"
+      }
+    }
+  ],
+  "activity": [],
+  "graceIds": [],
+  "messages": [],
+  "graceTurn": 0,
+  "pinnedIds": [],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 1,
+  "updatedAt": 1791819860371,
+  "removedIds": [],
+  "shareMarks": [
+    {
+      "at": 1791815346722,
+      "shareId": "Eplakr9D",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815460269,
+      "shareId": "64gpYTkJ",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815496112,
+      "shareId": "mmS87nao",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815498760,
+      "shareId": "5rPTr9mI",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815531425,
+      "shareId": "VHIkKqkc",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815568780,
+      "shareId": "JXFCF7cH",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791815595237,
+      "shareId": "FJfKGPjz",
+      "messageIndex": 2
+    },
+    {
+      "at": 1791819859173,
+      "shareId": "UCa6OJea",
+      "messageIndex": 2
+    }
+  ]
+}

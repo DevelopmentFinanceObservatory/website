@@ -27,6 +27,11 @@
  * count, or `member_count` where the list was cut and exact, and
  * `data_date_range` spans the listed members), each related measure its
  * StatVar as `stat_var`, and `trace.resolved_stat_vars` is gone.
+ *
+ * Each `headline.recent_years` was added later: its first entry restates the
+ * headline's own counts, and the two years before it come from the same
+ * identity resubmitted (`dataset_resubmit`) to the dev API at commit
+ * 0f4b6e04e on 2026-10-12, whose headline matched this one.
  */
 
 export const crsHierarchicalPurpose: unknown = {
@@ -156,19 +161,19 @@ export const crsHierarchicalPurpose: unknown = {
             "shape_id": "financialflow_amount_measuredvalue_nominal",
             "label": "gross disbursements (malaria control, official development assistance, standard grant)",
             "population_type": {
-              "dcid": "FinancialFlow",
+              "ref": "FinancialFlow",
               "label": "financial flow"
             },
             "measured_property": {
-              "dcid": "amount",
+              "ref": "amount",
               "label": "amount"
             },
             "stat_type": {
-              "dcid": "measuredValue",
+              "ref": "measuredValue",
               "label": "measuredValue"
             },
             "measurement_qualifier": {
-              "dcid": "Nominal",
+              "ref": "Nominal",
               "label": "Nominal"
             },
             "measurement_denominator_unresolved": false,
@@ -176,7 +181,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -184,7 +189,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -192,7 +197,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -200,7 +205,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -208,7 +213,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -216,7 +221,7 @@ export const crsHierarchicalPurpose: unknown = {
               {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -249,7 +254,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsCooperationModality",
+                  "ref": "crsCooperationModality",
                   "label": "CRS cooperation modality"
                 },
                 "label": "modality"
@@ -263,7 +268,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -272,7 +277,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSPurposeCode12262",
+                    "ref": "CRSPurposeCode12262",
                     "label": "malaria control"
                   },
                   "value_kind": "enum_value"
@@ -284,7 +289,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFinance",
+                  "ref": "crsTypeOfFinance",
                   "label": "CRS type of finance"
                 },
                 "label": "instrument"
@@ -298,7 +303,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsTypeOfFlow",
+                  "ref": "crsTypeOfFlow",
                   "label": "CRS type of flow"
                 },
                 "label": "flow"
@@ -307,7 +312,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   },
                   "value_kind": "enum_value"
@@ -319,7 +324,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "financialFlowType",
+                  "ref": "financialFlowType",
                   "label": "financial flow type"
                 },
                 "label": "financial flow type"
@@ -328,7 +333,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   },
                   "value_kind": "enum_value"
@@ -340,7 +345,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "nettingBasis",
+                  "ref": "nettingBasis",
                   "label": "netting basis"
                 },
                 "label": "netting basis"
@@ -349,7 +354,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "Gross",
+                    "ref": "Gross",
                     "label": "gross"
                   },
                   "value_kind": "enum_value"
@@ -366,7 +371,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "kind": "value",
                 "value": {
                   "ref": {
-                    "dcid": "country/KEN",
+                    "ref": "country/KEN",
                     "label": "Kenya"
                   },
                   "value_kind": "entity"
@@ -458,7 +463,36 @@ export const crsHierarchicalPurpose: unknown = {
             "role_counts": {
               "financingProvider": 9,
               "financingRecipient": 1
-            }
+            },
+            "recent_years": [
+              {
+                "year": 2024,
+                "observations": 9,
+                "series": 9,
+                "role_counts": {
+                  "financingProvider": 9,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2023,
+                "observations": 6,
+                "series": 6,
+                "role_counts": {
+                  "financingProvider": 6,
+                  "financingRecipient": 1
+                }
+              },
+              {
+                "year": 2022,
+                "observations": 10,
+                "series": 10,
+                "role_counts": {
+                  "financingProvider": 8,
+                  "financingRecipient": 1
+                }
+              }
+            ]
           },
           "download": {
             "rows": 74,
@@ -499,7 +533,7 @@ export const crsHierarchicalPurpose: unknown = {
               "key": {
                 "axis": "how",
                 "property": {
-                  "dcid": "crsPurpose",
+                  "ref": "crsPurpose",
                   "label": "CRS purpose"
                 },
                 "label": "sector"
@@ -508,7 +542,7 @@ export const crsHierarchicalPurpose: unknown = {
                 {
                   "value": {
                     "ref": {
-                      "dcid": "CRSPurposeCode122",
+                      "ref": "CRSPurposeCode122",
                       "label": "basic health"
                     },
                     "value_kind": "enum_value"
@@ -537,13 +571,13 @@ export const crsHierarchicalPurpose: unknown = {
           "trace": {
             "resolved_entities": [
               {
-                "dcid": "country/KEN",
+                "ref": "country/KEN",
                 "label": "Kenya"
               }
             ],
             "resolved_sources": [
               {
-                "dcid": "provenance/OECDCreditorReportingSystem",
+                "ref": "provenance/OECDCreditorReportingSystem",
                 "label": "OECD Creditor Reporting System (CRS)",
                 "source": {
                   "ref": "dc/s/OrganisationForEconomicCo-operationAndDevelopmentOecd",
@@ -561,7 +595,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "text": "ODA",
                 "named": [
                   {
-                    "dcid": "CRSTypeOfFlow10",
+                    "ref": "CRSTypeOfFlow10",
                     "label": "official development assistance"
                   }
                 ],
@@ -572,7 +606,7 @@ export const crsHierarchicalPurpose: unknown = {
                 "text": "malaria control",
                 "named": [
                   {
-                    "dcid": "CRSPurposeCode12262",
+                    "ref": "CRSPurposeCode12262",
                     "label": "malaria control"
                   }
                 ],
@@ -664,35 +698,35 @@ export const crsHierarchicalPurpose: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialFlow",
+                    "ref": "FinancialFlow",
                     "label": "financial flow"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialFlowType",
                   "value": {
-                    "dcid": "Disbursement",
+                    "ref": "Disbursement",
                     "label": "disbursement"
                   }
                 },
                 {
                   "axis": "nettingBasis",
                   "value": {
-                    "dcid": "Net",
+                    "ref": "Net",
                     "label": "net"
                   }
                 }
@@ -765,28 +799,28 @@ export const crsHierarchicalPurpose: unknown = {
                 {
                   "axis": "populationType",
                   "value": {
-                    "dcid": "FinancialObligation",
+                    "ref": "FinancialObligation",
                     "label": "financial obligation"
                   }
                 },
                 {
                   "axis": "measuredProperty",
                   "value": {
-                    "dcid": "amount",
+                    "ref": "amount",
                     "label": "amount"
                   }
                 },
                 {
                   "axis": "measurementQualifier",
                   "value": {
-                    "dcid": "Nominal",
+                    "ref": "Nominal",
                     "label": "nominal"
                   }
                 },
                 {
                   "axis": "financialObligationType",
                   "value": {
-                    "dcid": "Commitment",
+                    "ref": "Commitment",
                     "label": "commitment"
                   }
                 }
@@ -807,35 +841,35 @@ export const crsHierarchicalPurpose: unknown = {
             {
               "axis": "populationType",
               "value": {
-                "dcid": "FinancialFlow",
+                "ref": "FinancialFlow",
                 "label": "financial flow"
               }
             },
             {
               "axis": "measuredProperty",
               "value": {
-                "dcid": "amount",
+                "ref": "amount",
                 "label": "amount"
               }
             },
             {
               "axis": "measurementQualifier",
               "value": {
-                "dcid": "Nominal",
+                "ref": "Nominal",
                 "label": "nominal"
               }
             },
             {
               "axis": "financialFlowType",
               "value": {
-                "dcid": "Disbursement",
+                "ref": "Disbursement",
                 "label": "disbursement"
               }
             },
             {
               "axis": "nettingBasis",
               "value": {
-                "dcid": "Gross",
+                "ref": "Gross",
                 "label": "gross"
               }
             }
@@ -849,14 +883,14 @@ export const crsHierarchicalPurpose: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityB01",
+                    "ref": "CRSCooperationModalityB01",
                     "label": "core support to non-governmental organisations, other private bodies, public-private partnerships, and research institutes"
                   },
                   "count": 1
                 },
                 {
                   "value": {
-                    "dcid": "CRSCooperationModalityB03",
+                    "ref": "CRSCooperationModalityB03",
                     "label": "contribution to specific-purpose programme and fund managed by an international organisation"
                   },
                   "count": 1
@@ -867,7 +901,7 @@ export const crsHierarchicalPurpose: unknown = {
               "property": "crsTypeOfFinance",
               "varies": false,
               "value": {
-                "dcid": "CRSTypeOfFinance110",
+                "ref": "CRSTypeOfFinance110",
                 "label": "standard grant"
               },
               "distinct_count": 1,
@@ -875,7 +909,7 @@ export const crsHierarchicalPurpose: unknown = {
               "values": [
                 {
                   "value": {
-                    "dcid": "CRSTypeOfFinance110",
+                    "ref": "CRSTypeOfFinance110",
                     "label": "standard grant"
                   },
                   "count": 5

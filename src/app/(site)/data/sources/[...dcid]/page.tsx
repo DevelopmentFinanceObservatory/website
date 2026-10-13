@@ -38,7 +38,7 @@ const SourcePage = async ({ params }: SourcePageProps) => {
         <main>
             {/* Suspense: the tabs read the URL (useSearchParams) on a static page. */}
             <Suspense fallback={null}>
-                <SourceDetail dcid={ref} doc={doc} />
+                <SourceDetail dcid={ref} doc={doc} now={new Date().toISOString()} />
             </Suspense>
         </main>
     );

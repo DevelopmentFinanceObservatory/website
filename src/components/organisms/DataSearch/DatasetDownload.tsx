@@ -23,6 +23,7 @@ export type DownloadSheetState = Pick<
     | 'enrichmentGroups'
     | 'enrichment'
     | 'toggleEnrichment'
+    | 'totalsNote'
     | 'downloading'
     | 'progress'
     | 'error'

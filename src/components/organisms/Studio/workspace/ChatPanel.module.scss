@@ -491,6 +491,15 @@
     border-radius: rem(6);
 }
 
+.chatBubbleCard {
+    display: block;
+    margin-bottom: rem(3);
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 // A message waiting behind the streaming turn: the user bubble, dimmed,
 // with a remove control beside it.
 .queued {

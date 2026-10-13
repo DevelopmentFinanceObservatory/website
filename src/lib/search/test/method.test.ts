@@ -41,7 +41,7 @@ const recordedSpec = (): any => {
                   options: [
                       {
                           value: {
-                              ref: { dcid: 'Estimated', label: 'Estimated' },
+                              ref: { ref: 'Estimated', label: 'Estimated' },
                               value_kind: 'enum_value',
                           },
                       },
@@ -131,7 +131,7 @@ test('a shared method token offers and posts only the methods every bound part o
     const dropped = 'MOSPISecondAdvanceEstimates';
     const methods = second.facet_options.find((entry: any) => entry.axis === 'measurementMethod');
 
-    methods.options = methods.options.filter((option: any) => option.value.ref?.dcid !== dropped);
+    methods.options = methods.options.filter((option: any) => option.value.ref?.ref !== dropped);
 
     const keys = (specs: any[]) => sharedMethodPicker(specs)?.choices.map((choice) => choice.key);
     const common = keys([second])!;
@@ -193,7 +193,7 @@ const estimatedSpec = (methods: string[]): any => {
             ? {
                   ...entry,
                   options: methods.map((dcid) => ({
-                      value: { ref: { dcid, label: dcid }, value_kind: 'enum_value' },
+                      value: { ref: { ref: dcid, label: dcid }, value_kind: 'enum_value' },
                   })),
               }
             : entry,
@@ -271,7 +271,7 @@ test('methodPicker is null with nothing to switch to', () => {
             ? {
                   ...entry,
                   options: entry.options.filter(
-                      (option: any) => option.value.ref.dcid === spec.facets.measurementMethod.ref,
+                      (option: any) => option.value.ref.ref === spec.facets.measurementMethod.ref,
                   ),
               }
             : entry,
@@ -317,7 +317,7 @@ test('sourceSlotOptions still reads only the provenance axis', () => {
     const options = sourceSlotOptions(specOf(methodUnbound));
 
     assert.deepEqual(
-        options.map((option) => option.value.ref.dcid),
+        options.map((option) => option.value.ref.ref),
         [
             'dc/base/India_NationalAccountsStatistics',
             'dc/base/India_RBIStateDomesticProduct_AggCountry',
@@ -334,7 +334,7 @@ const LIVE_METHOD_OPTIONS = {
     truncated: false,
     source: 'observed',
     options: [
-        { value: { ref: { dcid: 'Estimated', label: 'estimated' }, value_kind: 'enum_value' } },
+        { value: { ref: { ref: 'Estimated', label: 'estimated' }, value_kind: 'enum_value' } },
         { value: { value_kind: 'enum_value' } },
     ],
 };
@@ -543,7 +543,7 @@ const singleMethodBody = (): any => {
                   options: [
                       {
                           value: {
-                              ref: { dcid: 'Estimated', label: 'Estimated' },
+                              ref: { ref: 'Estimated', label: 'Estimated' },
                               value_kind: 'enum_value',
                           },
                       },

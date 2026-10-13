@@ -1,0 +1,54 @@
+{
+  "id": "dac-in-donor-refugee-costs",
+  "notes": {},
+  "theme": {
+    "preset": "default",
+    "overrides": {}
+  },
+  "title": "In-donor refugee costs as a share of total ODA",
+  "views": {},
+  "canvas": {
+    "ids": [
+      "cmp_01M4RD1ZV835QM8N6KBM0APJEC"
+    ],
+    "revision": 12,
+    "compositionId": "cps_bade9787dc3245e9"
+  },
+  "layout": {
+    "cmp_01M4RD1ZV835QM8N6KBM0APJEC": {
+      "h": 14,
+      "w": 22,
+      "col": 0,
+      "row": 0
+    }
+  },
+  "titles": {},
+  "widgets": [
+    {
+      "kind": "chart",
+      "id": "cmp_01M4RD1ZV835QM8N6KBM0APJEC",
+      "turn": 1,
+      "chartType": "bar",
+      "title": "",
+      "categories": [],
+      "series": [],
+      "ref": {
+        "revision": 1,
+        "component_id": "cmp_01M4RD1ZV835QM8N6KBM0APJEC"
+      }
+    }
+  ],
+  "activity": [],
+  "graceIds": [],
+  "messages": [],
+  "graceTurn": 0,
+  "pinnedIds": [
+    "cmp_01M4RD1ZV835QM8N6KBM0APJEC"
+  ],
+  "sessionId": null,
+  "textCards": [],
+  "turnCount": 1,
+  "updatedAt": 1791820998001,
+  "removedIds": [],
+  "shareMarks": []
+}

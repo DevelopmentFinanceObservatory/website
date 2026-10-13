@@ -28,17 +28,22 @@ const core = {
     entities: { origin: ['country/DEU', 'country/FRA'] },
     requested_window: { kind: 'all' },
 };
+// Groups as shares stored them before Search named a group's node `ref`, and
+// as every migration leaves them.
 const eu = { origin: { dcid: 'EuropeanUnion', label: 'EU member states' } };
 const g7 = { origin: { dcid: null, label: 'G7 countries' } };
+const euRef = { origin: { label: 'EU member states', ref: 'EuropeanUnion' } };
+const g7Ref = { origin: { label: 'G7 countries', ref: null } };
+const africa = { label: 'Africa', ref: 'africa', entity_type: 'Continent', total: 'DACAfrica' };
 
 type StoredRef = { identity: object; entity_groups: object | null };
 
 /**
  * Each case migrates a database through `from`, stores `rows` as shares of
  * that state hold them, then applies every later migration. `entity_groups`
- * ends in the `entity_groups` column, a filled column keeps its value, and
- * the rest of the identity, and every row without the member, stays as it
- * was.
+ * ends in the `entity_groups` column with each group's node under `ref`, a
+ * filled column keeps its value, and the rest of the identity, and every
+ * row without the member, stays as it was.
  */
 const cases: { name: string; from: number; rows: StoredRef[]; groups: (object | null)[] }[] = [
     {
@@ -50,7 +55,7 @@ const cases: { name: string; from: number; rows: StoredRef[]; groups: (object | 
             { identity: { ...core, entity_groups: null }, entity_groups: null },
             { identity: core, entity_groups: null },
         ],
-        groups: [eu, g7, null, null],
+        groups: [euRef, g7Ref, null, null],
     },
     {
         name: 'migration 0014 clears entity_groups from an identity and keeps a filled column',
@@ -62,7 +67,19 @@ const cases: { name: string; from: number; rows: StoredRef[]; groups: (object | 
             { identity: { ...core, entity_groups: g7 }, entity_groups: eu },
             { identity: core, entity_groups: eu },
         ],
-        groups: [eu, g7, eu, eu, eu],
+        groups: [euRef, g7Ref, euRef, euRef, euRef],
+    },
+    {
+        name: "migration 0016 renames each stored group's dcid to ref",
+        from: 15,
+        rows: [
+            { identity: core, entity_groups: eu },
+            { identity: core, entity_groups: g7 },
+            { identity: core, entity_groups: { ...eu, destination: africa } },
+            { identity: core, entity_groups: euRef },
+            { identity: core, entity_groups: null },
+        ],
+        groups: [euRef, g7Ref, { ...euRef, destination: africa }, euRef, null],
     },
 ];
 

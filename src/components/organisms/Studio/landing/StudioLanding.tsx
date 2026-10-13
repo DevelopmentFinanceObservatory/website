@@ -12,14 +12,6 @@ import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
-// Examples tuned to what the agent runs on — the DFO knowledge graph (WDI/WHO
-// families, the same prompts the search page is tuned for); the
-// "comprehensive" phrasing exercises the plan flow.
-const SUGGESTIONS = [
-    'Life expectancy in Nigeria',
-    'GDP per capita of Vietnam in 2023',
-    'Give me a comprehensive overview of health spending in Kenya',
-];
 
 const LANDING_TABS = [
     { id: 'try', label: 'Try one of these' },
@@ -31,6 +23,8 @@ type StudioLandingProps = {
     onQueryChange: (value: string) => void;
     // Start a canvas from the prompt or a suggestion.
     onBegin: (text: string) => void;
+    // The visit's example prompts (pickExamples), drawn by the page.
+    examples: readonly string[];
     inputRef: RefObject<PromptField | null>;
     // The account's recent canvases (the three most recent are shown); null
     // for a guest — no switch, the suggestions alone.
@@ -52,6 +46,7 @@ const StudioLanding = ({
     query,
     onQueryChange,
     onBegin,
+    examples,
     inputRef,
     history,
     openingId,
@@ -75,15 +70,15 @@ const StudioLanding = ({
     return (
         <div className={classNames(styles.stage, leaving && styles.stageOut)}>
             <p className={styles.eyebrow} data-reveal="text">
-                Create a Canvas
+                Start exploring
             </p>
             <h1 className={styles.title} data-reveal="text" style={revealIndex(1)}>
-                Start exploring with DFO&nbsp;data
+                From questions to&nbsp;insights
             </h1>
             <p className={styles.lead} data-reveal="text" style={revealIndex(2)}>
-                Describe what you want to explore and Studio does the rest — querying live data,
-                running cross-dataset analysis, and dropping a visualization onto your canvas for
-                you to modify and publish.
+                Describe it in your own words and Studio does the rest — querying live data, running
+                analysis across datasets, and building charts on your canvas for you to edit and
+                share.
             </p>
 
             {wall ? (
@@ -133,7 +128,7 @@ const StudioLanding = ({
                         >
                             <div ref={tryPanelRef} className={styles.accordionInner}>
                                 <div className={styles.suggestions} data-reveal-group="trigger">
-                                    {SUGGESTIONS.map((suggestion, index) => (
+                                    {examples.map((suggestion, index) => (
                                         <button
                                             key={suggestion}
                                             type="button"
