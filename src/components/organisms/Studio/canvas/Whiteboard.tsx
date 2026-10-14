@@ -14,6 +14,7 @@ import {
     effectiveKind,
     FILTER_KIND,
     GAP,
+    heightIsDerived,
     resolveCardView,
     widgetTitle,
 } from './layout';
@@ -149,6 +150,7 @@ const Whiteboard = ({
     const { slots, setSlots, fitRows, raise } = useSlots({
         widgets,
         pinnedIds,
+        views,
         initialLayout,
         viewCols,
         onLayoutChange,
@@ -422,6 +424,9 @@ const Whiteboard = ({
                     chartSource,
                 } = resolveCardView(widget, views[widget.id]);
                 const isText = widget.kind === 'text';
+                // A chart view's height follows its content, so its grip
+                // changes the width alone.
+                const widthOnly = heightIsDerived(widget, cardView);
                 const dimmed = !!dimKind && effectiveKind(widget, views[widget.id]) !== dimKind;
                 const extras: CardExtras = {
                     pinned: pinnedIds.includes(widget.id),
@@ -551,9 +556,12 @@ const Whiteboard = ({
                             )}
                             {!isLeaving && !readOnly && !isText && (
                                 <span
-                                    className={styles.resizeGrip}
+                                    className={classNames(
+                                        styles.resizeGrip,
+                                        widthOnly && styles.resizeGripWidth,
+                                    )}
                                     data-nowave=""
-                                    onPointerDown={resizing.startResize(widget.id)}
+                                    onPointerDown={resizing.startResize(widget.id, widthOnly)}
                                     onPointerMove={resizing.moveResize}
                                     onPointerUp={resizing.endResize}
                                     onPointerCancel={resizing.endResize}
@@ -570,6 +578,7 @@ const Whiteboard = ({
                                 scale={f}
                                 theme={theme}
                                 widthCells={slot.w}
+                                heightCells={slot.h}
                                 onFit={(rows) => fitRows(widget.id, rows)}
                                 extras={extras}
                             />

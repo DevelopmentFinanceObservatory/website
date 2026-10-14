@@ -1,4 +1,5 @@
 import { chartFromTable, type ChartWidget, type Widget } from '@/lib/chat/widgets';
+import { estimatedRows, FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
 
 /**
  * The whiteboard's geometry: cells, card footprints, the free-spot search
@@ -19,6 +20,13 @@ export const MAX_COLS = 500;
 
 // Card footprints in cells: cards SPAWN at the default size, and the corner
 // grip can only take them between min and max.
+//
+// That holds for every width, and for the height of a stat card and of a
+// table view. A text card and a chart view have a DERIVED height (see
+// heightIsDerived): the card reports the rows it needs and the slot takes
+// them, between the kind's minimum and FITTED_ROWS_MAX. So `chart.h` and
+// `table.h` below are a table view's default and its grip's range, and the
+// floor of a chart view.
 //
 // A stat card's height is budgeted, not guessed (QA-28). At rem(20) a cell,
 // its column needs: 32 padding, the title, the 20 gap under it, the number
@@ -56,7 +64,7 @@ export const SPAN_MAX: Record<Widget['kind'], { w: number; h: number }> = {
     key_number: { w: 26, h: 13 },
     chart: { w: 34, h: 21 },
     table: { w: 34, h: 21 },
-    text: { w: 14, h: 60 },
+    text: { w: 14, h: FITTED_ROWS_MAX },
 };
 
 // Card-type filter tab → widget kind; everything else on the sheet fades down.
@@ -157,11 +165,37 @@ export const liveRects = (slots: Slots, exclude: string[] = []): Rect[] =>
         .filter(([id, slot]) => !exclude.includes(id) && !slot.leaving)
         .map(([, slot]) => slot as Rect);
 
+// Where a crowded card goes: the nearest spot that fits among `settled`, or,
+// when nothing within nearestSpot's window does, the first clear row straight
+// down. The second always exists (the sheet grows downward), so a card never
+// stays on top of another.
+export const settleSpot = (rect: Rect, settled: Rect[]): Spot => {
+    const near = nearestSpot({ col: rect.col, row: rect.row }, rect.w, rect.h, settled, MAX_COLS);
+
+    if (near) {
+        return near;
+    }
+
+    let { row } = rect;
+
+    for (;;) {
+        const at = { ...rect, row };
+        const crowding = settled.filter((other) => tooCloseRects(at, other));
+
+        if (crowding.length === 0) {
+            return { col: rect.col, row };
+        }
+
+        row = Math.max(...crowding.map((other) => other.row + other.h + GAP));
+    }
+};
+
 // Post-move settling: anchors (and pinned cards) hold their ground, every
 // other card that got crowded slides to its nearest fit. `movePinned`:
-// pinned cards normally hold their ground (walls for a resize), but a USER
-// edit — a text card growing to its content — is allowed to nudge them: pin
-// protects against incoming widgets, not against the user's own actions.
+// pinned cards normally hold their ground (walls for a resize), but a card
+// whose height is derived moves them when it grows to its content. Its
+// height is not negotiable, so holding the pinned card would leave the two
+// overlapping.
 export const settleAround = (
     next: Slots,
     anchors: string[],
@@ -178,12 +212,7 @@ export const settleAround = (
 
     for (const [id, s] of others) {
         if (settled.some((rect) => tooCloseRects(s, rect))) {
-            const spot = nearestSpot({ col: s.col, row: s.row }, s.w, s.h, settled, MAX_COLS) ?? {
-                col: s.col,
-                row: s.row,
-            };
-
-            next[id] = { ...s, col: spot.col, row: spot.row };
+            next[id] = { ...s, ...settleSpot(s, settled) };
         }
 
         settled.push(next[id]!);
@@ -213,8 +242,29 @@ export const widgetTitle = (widget: Widget): string =>
 
 // The chartable form of a card's data: itself for charts, derived for
 // tables, null when it can't chart (no varying dimension to label bars with).
-export const chartSourceOf = (widget: Widget): ChartWidget | null =>
-    widget.kind === 'chart' ? widget : widget.kind === 'table' ? chartFromTable(widget) : null;
+// A table's chart is derived once per widget, so a card that keys on its
+// chart's identity (ChartCard's measuring token) sees the same object on
+// every render.
+const tableCharts = new WeakMap<Widget, ChartWidget | null>();
+
+export const chartSourceOf = (widget: Widget): ChartWidget | null => {
+    if (widget.kind === 'chart') {
+        return widget;
+    }
+
+    if (widget.kind !== 'table') {
+        return null;
+    }
+
+    let chart = tableCharts.get(widget);
+
+    if (chart === undefined) {
+        chart = chartFromTable(widget);
+        tableCharts.set(widget, chart);
+    }
+
+    return chart;
+};
 
 // The card's current view: null = no switcher (a lone number, a note, or a
 // table whose data can't chart); otherwise the user's pick or the
@@ -245,5 +295,45 @@ export const resolveCardView = (
             ? ['chart-bar', 'chart-line', 'chart-table']
             : ['chart-bar', 'chart-table'],
         chartSource,
+    };
+};
+
+// --- Whose height is derived --------------------------------------------------
+
+type ResolvedView = Pick<ReturnType<typeof resolveCardView>, 'view' | 'chartSource'>;
+
+// Whether the card's height follows its content: a text card, and any card
+// showing as a chart. `view` is the resolved view (resolveCardView). Such a
+// card reports its rows through `onFit`; nothing else sets its height.
+export const heightIsDerived = (widget: Widget, view: CardView | null): boolean =>
+    widget.kind === 'text' || view === 'chart-bar' || view === 'chart-line';
+
+// The heights in cells a card may take in its current view.
+export const heightRange = (
+    widget: Widget,
+    view: CardView | null,
+): { min: number; max: number } => ({
+    min: SPAN_MIN[widget.kind].h,
+    max: heightIsDerived(widget, view) ? FITTED_ROWS_MAX : SPAN_MAX[widget.kind].h,
+});
+
+// The footprint a fresh card spawns at. A chart view takes the height its
+// shape is estimated to need at the default width, so the measured fit that
+// follows moves it by a cell or two at most.
+export const spawnSpan = (
+    widget: Widget,
+    { view, chartSource }: ResolvedView,
+): { w: number; h: number } => {
+    const span = SPAN_DEFAULT[widget.kind];
+
+    if (!chartSource || view === null || view === 'chart-table') {
+        return span;
+    }
+
+    const { min, max } = heightRange(widget, view);
+
+    return {
+        w: span.w,
+        h: clamp(estimatedRows(chartSource, view === 'chart-line', span.w), min, max),
     };
 };

@@ -8,7 +8,8 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * Usage events (the analytics in DFO Overview → Data access → "Events to
  * record"), stored in our own `event` table and, when POSTHOG_KEY and
  * POSTHOG_HOST are set, forwarded server-side to PostHog (EU cloud): no
- * cookies, no browser-side analytics script, no prompt text. The browser
+ * cookies, no browser-side analytics script, no Studio prompt text. The
+ * search events hold the first 500 characters of the query. The browser
  * posts its events through /api/events (see ./client); the server records
  * its own directly.
  *

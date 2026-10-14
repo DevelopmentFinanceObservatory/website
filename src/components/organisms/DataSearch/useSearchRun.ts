@@ -529,9 +529,10 @@ export const useSearchRun = () => {
                                 });
                             }
                             break;
-                        // `shape` carries variable_index too (would map the
-                        // same way as `step`), but nothing renders its
-                        // payload. A deliberate no-op.
+                        // `frame` and `shape` carry variable_index too (would
+                        // map the same way as `step`), but nothing renders
+                        // their payloads. A deliberate no-op.
+                        case 'frame':
                         case 'shape':
                             break;
                         case 'sentence':
