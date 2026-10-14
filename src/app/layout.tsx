@@ -15,9 +15,27 @@ import '@fontsource/dm-mono/500.css';
 
 import '@/styles/main.scss';
 
+const SITE_NAME = 'Development Finance Observatory';
+const SITE_DESCRIPTION =
+    'The Development Finance Observatory integrates aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source.';
+
+// Link previews need absolute image URLs. Staging builds the image
+// production runs, so the origin is the production host rather than a
+// build-time variable; without it Next writes localhost. Pages that set no
+// openGraph of their own inherit this card, and the image is
+// app/opengraph-image.tsx.
 export const metadata: Metadata = {
+    metadataBase: new URL('https://developmentfinance.org'),
     title: 'DFO — Development Finance Observatory',
-    description: 'Development finance data simplified.',
+    description: SITE_DESCRIPTION,
+    openGraph: {
+        type: 'website',
+        siteName: SITE_NAME,
+        title: SITE_NAME,
+        description: SITE_DESCRIPTION,
+    },
+    // X reads the Open Graph tags; this only picks its large-image layout.
+    twitter: { card: 'summary_large_image' },
 };
 
 // Cover the phone's safe areas (the notch band, the home-indicator strip):
