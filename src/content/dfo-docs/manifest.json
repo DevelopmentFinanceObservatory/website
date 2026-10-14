@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-14T06:27:35Z",
+  "generated_at": "2026-10-14T10:52:06Z",
   "generator_commit": "65a1e5b810a4689d663a36ac810d2a2cb38dab0f",
   "nav": [
     {
@@ -1440,7 +1440,7 @@
       "description": "Build a Parquet dataset from a plain-English development-finance question.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/quickstart.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T18:24:27Z",
       "corpus_path": "corpus/dfo-apis/quickstart.md"
     },
@@ -1452,7 +1452,7 @@
       "description": "Understand how questions, specs, versions, StatVars, series, rows, and facets fit together.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/concepts.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/concepts.md"
     },
@@ -1464,7 +1464,7 @@
       "description": "Resolve a plain-English question into an interpretable DFO spec.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/resolve-a-question.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/resolve-a-question.md"
     },
@@ -1476,7 +1476,7 @@
       "description": "Create, retrieve, and download a versioned DFO dataset.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/get-a-dataset.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/get-a-dataset.md"
     },
@@ -1488,7 +1488,7 @@
       "description": "Resolve names, inspect graph nodes, list what belongs to them, and read source documentation.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/look-things-up.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/look-things-up.md"
     },
@@ -1500,7 +1500,7 @@
       "description": "Reference for DFO API URLs, versioning, response tracing, and errors.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/conventions.md",
-      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "source_commit": "1d29a70e59f70570c5ed8d610ec83291c8eb6f54",
       "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/conventions.md"
     },
@@ -1512,8 +1512,8 @@
       "description": "Connect the DFO to Claude, ChatGPT, or Gemini so your assistant can look up development finance data. Developers can also connect Claude Code, Codex, or Gemini CLI.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/connect.md",
-      "source_commit": "6fc58b2ce96e4382ec6c123ed9f01f0450703b9e",
-      "last_modified": "2026-10-13T21:45:35Z",
+      "source_commit": "afbf84ffad716d120dc08f2f8d3d91a195a5fc09",
+      "last_modified": "2026-10-14T10:50:14Z",
       "corpus_path": "corpus/dfo-ai/connect.md"
     },
     {
@@ -1524,7 +1524,7 @@
       "description": "How a question to the DFO MCP server becomes a cited answer, and the limits and refusals that bound it.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/what-you-can-ask.md",
-      "source_commit": "6fc58b2ce96e4382ec6c123ed9f01f0450703b9e",
+      "source_commit": "afbf84ffad716d120dc08f2f8d3d91a195a5fc09",
       "last_modified": "2026-10-13T13:38:53Z",
       "corpus_path": "corpus/dfo-ai/what-you-can-ask.md"
     },
