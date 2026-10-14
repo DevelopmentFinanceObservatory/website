@@ -67,6 +67,8 @@
 
 // Three to a row; the rem(4) gaps show the ground between the white cards.
 .grid {
+    @include page-band;
+
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: rem(4);

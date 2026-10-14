@@ -16,7 +16,7 @@ The marketplace is the GitHub repository `DevelopmentFinanceObservatory/skills`.
 
 A zip file installs one skill. The zip steps below install `oda-measures`, the skill on how ODA is measured, which the check at the end uses. Repeat them for each skill you need.
 
-The zip file for a skill is on that skill's page in the Skills section of this site. Open the page, such as [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md), and choose "Download this skill as a zip". If a skill page does not have that option, the DFO does not offer an install.
+The zip file for a skill is on that skill's page in the Skills section of this site. Open the page, such as [`oda-measures`](../../dfo-skills/oda-measures/SKILL.md), and choose "Download this skill as a zip". Only a skill whose page has that option can be installed this way.
 
 ## Steps
 

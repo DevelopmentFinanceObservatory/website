@@ -5,6 +5,8 @@
 .hero {
     @include flex(column, flex-end, flex-start);
 
+    @include page-band;
+
     position: relative;
     min-height: rem(452);
     padding-top: rem(100);
@@ -63,7 +65,7 @@
 
 .aside {
     position: absolute;
-    right: rem(10);
+    right: band-offset(rem(10));
     bottom: rem(30);
     z-index: 1;
 }

@@ -4,6 +4,12 @@
 :root {
     --app-height: 100svh;
     --page-gutter: #{rem(32)};
+
+    // The design's own width. The root font is 1.25vw up to $size-hd, so
+    // below that ceiling this is exactly 100vw and the band is the window;
+    // past it the window only adds gutters (QA-74).
+
+    --page-max: #{rem(1280)};
     --color-lime: #{$color-lime};
     --color-periwinkle: #{$color-periwinkle};
     --color-charcoal: #{$color-charcoal};

@@ -19,7 +19,7 @@ const Home = async () => {
                 phoneLines={['Development', 'Finance Data.', 'Simplified.']}
                 scrollLabel="Get Started"
                 scrollHref="#content"
-                description="The DFO integrates aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source."
+                description="The DFO integrates data on aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source."
                 credit={{
                     label: 'Built on Data Commons by Google',
                     href: 'https://datacommons.org',

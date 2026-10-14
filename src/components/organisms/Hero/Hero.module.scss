@@ -19,6 +19,8 @@
     // of the viewport.
     overflow: clip;
     background-color: var(--color-bg);
+
+    @include page-band;
 }
 
 .decor {
@@ -54,12 +56,14 @@
 .map {
     position: absolute;
 
-    // Glued to the hero's top edge, full design width. The viewBox runs to
-    // 826 (South America's tip included), so on ordinary viewport heights
-    // the whole drawing fits; only a short window crops the bottom.
+    // Glued to the hero's top edge, the window's full width: the drawing is
+    // the hero's ground and has to reach both edges, or it reads as a map
+    // someone cut off. The viewBox runs to 826 (South America's tip
+    // included), so on ordinary viewport heights the whole drawing fits;
+    // only a short window crops the bottom.
     top: rem(-50);
     left: 0;
-    width: rem(1280);
+    width: 100%;
     height: auto;
     color: var(--color-beige);
 }
@@ -127,7 +131,11 @@ $hero-text-stagger: 0.09s;
     // Each layer peeks out by the same amount on both open sides: this one by
     // 34 past .inner, .inner by 36 past .core. Change a height and the width
     // follows, or the telescope reads lopsided.
-    width: rem(780);
+    // Absolutely positioned, so the percentage inside band-offset() reads
+    // the hero's own width. The layers below cannot use it — their
+    // percentages would read their parent — so each takes the offset from
+    // the parent that already carries it.
+    width: calc(#{rem(780)} + #{band-offset()});
     height: rem(430);
     background-color: var(--color-hero-wrapper);
 }
@@ -138,7 +146,7 @@ $hero-text-stagger: 0.09s;
     flex-shrink: 0;
     align-items: flex-end;
     justify-content: flex-start;
-    width: rem(746);
+    width: calc(100% - #{rem(34)});
     height: rem(396);
     overflow: hidden;
 }
@@ -176,9 +184,13 @@ $hero-text-stagger: 0.09s;
     flex-direction: column;
     flex-shrink: 0;
     justify-content: flex-end;
-    width: rem(710);
+    width: calc(100% - #{rem(36)});
     height: rem(360);
-    padding: 0 rem(15) rem(10) rem(10);
+
+    // 100% is .inner, which is rem(746) plus the band offset, so this is
+    // that offset plus the design's own rem(10) — the text keeps the band's
+    // baseline while the box runs to the screen's edge.
+    padding: 0 rem(15) rem(10) calc(100% - #{rem(736)});
     background-color: var(--color-hero-core);
 }
 

@@ -17,7 +17,7 @@ OECD Creditor Reporting System (2026), via the Development Finance Observatory
 Use the full form in a reference list:
 
 ```
-OECD, Creditor Reporting System (2026), via the Development Finance Observatory. "Gross disbursements (nominal) for basic health care for standard grant for official development assistance to Togo from France" [dataset]. Retrieved 28 September 2026 from https://{host}/s/{id} (snapshot, data as of 28 Sep 2026).
+OECD, Creditor Reporting System (2026), via the Development Finance Observatory. "Gross disbursements (nominal) for basic health care for standard grant for official development assistance to Togo from France" [dataset]. Retrieved 28 September 2026 from https://developmentfinance.org/s/{id} (snapshot, data as of 28 Sep 2026).
 ```
 
 ## Live and snapshot links
