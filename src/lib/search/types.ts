@@ -39,14 +39,33 @@ export interface UnitAlternative {
 
 /**
  * Mirrors the server's own Ordering (dfo-apis vocab.py) one-for-one:
- * broadest_first when ambiguous from the start (descending breadth, spec_id
- * tie-break); intent_rank when the near-neighbor margin gate downgraded a
- * definite answer, best-match first.
+ * intent_rank is the order the status rule offers the readings in, and every
+ * first answer uses it: the elected reading first, then its rivals in menu
+ * order, each stating its `basis`. broadest_first is a posted candidates
+ * entry's own order, kept as posted and stated back.
  */
 export type Ordering = 'broadest_first' | 'intent_rank';
 
+/**
+ * Why a part offers a Spec as one of its candidates (dfo-apis vocab.py
+ * CandidateBasis): `structural`, a reading that differs from the elected one
+ * only on a stat type, price basis or denominator the request leaves open;
+ * `nominated`, a reading the model named as a genuine reading of the phrase;
+ * `twin`, an equivalent reading of the elected one, offered where the elected
+ * one holds no data; `direction`, the same reading with the other direction
+ * for a place the request names without one.
+ */
+export type CandidateBasis = 'structural' | 'nominated' | 'twin' | 'direction';
+
+/** A normalised form a question can ask for (dfo-apis vocab.py QuantityForm):
+ *  per person, per a numbered count of people, per area, a rate, or a share
+ *  of a whole. */
+export type QuantityForm = 'per_person' | 'per_head_base' | 'per_area' | 'rate' | 'share';
+
 /** Why a no_data outcome was returned (closed enum). */
 export type NoDataReason =
+    | 'source_not_resolved'
+    | 'source_ambiguous'
     | 'entity_not_resolved'
     | 'entity_ambiguous'
     | 'entity_set_too_large'
@@ -66,9 +85,9 @@ export type NoDataReason =
 
 /**
  * Present on `NoData.gate` exactly when `flagged_match` or `alternate_match`
- * is present, except `role_incompatible`/`qualifier_not_bound`, whose
- * `flagged_match` records a graph-confirmed identity with no availability
- * verdict taken. Mirrors dfo-apis `NoDataGate` one-for-one.
+ * is present, except `role_incompatible`, `qualifier_not_bound` and
+ * `denominator_not_available`, whose `flagged_match` records a
+ * graph-confirmed identity with no availability verdict taken. Mirrors dfo-apis `NoDataGate` one-for-one.
  */
 export type NoDataGate =
     | 'no_member_has_data_at_place'
@@ -231,7 +250,7 @@ export interface Slot {
 
 export interface Shape {
     shape_id: string;
-    /** plain-language family name, e.g. "development finance flows" */
+    /** plain-language name of what the reading serves: a composed measure label, the served series' name, or the family's name */
     label: string;
     // The five structural anchors. All nullable: a custom-DC import may omit any
     // five-tuple arc, so the StatVar doesn't assert it.
@@ -377,6 +396,9 @@ export interface ResolvedFilter {
 export interface ResolvedQualifier {
     text: string;
     named: GraphRef[];
+    /** the constraint property of the slot_filters entry whose binding
+     *  consumed the term, or, on an unbound value the answer's shape has a
+     *  slot for but leaves unmet, that slot's property; null otherwise */
     slot?: string | null;
     disposition: 'bound' | 'unbound' | 'no_vocabulary';
 }
@@ -397,6 +419,14 @@ export interface ResolutionTrace {
      * round-trips to keep identity stable across promote.
      */
     requested_window?: RequestedWindow;
+    /**
+     * The normalised form the quantity read found in the question when no
+     * wording pattern named one ("debt to GDP" asks for a rate), which the
+     * answer was then checked against. Null when a wording pattern named the
+     * form, when the question asks for none, and when no bind ran for this
+     * Spec.
+     */
+    stated_form?: QuantityForm | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -851,6 +881,12 @@ export interface Spec {
     /** qualitative, relative retrieval confidence; null when not assessed */
     confidence?: Confidence | null;
     /**
+     * Why the part offers this Spec as one of its candidates. The elected
+     * reading, listed first, carries none; null on a definite answer and on
+     * every Spec outside CandidateSet.specs.
+     */
+    basis?: CandidateBasis | null;
+    /**
      * The observation values behind coverage above; absent when not resolved for this
      * Spec (no entity to probe, options.include_observations is false, deferred to a
      * trailing SSE `observations` event, or a candidates/nearest_real/flagged_match spec).
@@ -1147,6 +1183,7 @@ export type DepartureCode =
     | 'modelled_values'
     | 'group_read_as_members'
     | 'direction_discarded'
+    | 'direction_inferred'
     | 'scope_limited';
 
 /** One way a part's answer differs from what its request asked. Mirrors
@@ -1176,17 +1213,146 @@ export interface LateDepartures {
 }
 
 // ---------------------------------------------------------------------------
+// Frame (what one part asks; carried by the stream's `frame` event)
+// ---------------------------------------------------------------------------
+// Mirrors dfo-apis src/search/engine/frame.py. The response carries no frame;
+// only the SSE stream's `frame` event does (searchClient.ts SearchEvent).
+
+/** Who stated a frame field: the caller, the extraction model, a code reader
+ *  over the request's words, the quantity read's model over the variable
+ *  phrase, or the default the question left in place. */
+export type FrameStatedBy = 'caller' | 'extraction' | 'reader' | 'model' | 'default';
+
+/** A frame value and who stated it. */
+export interface FrameStated<T> {
+    value: T;
+    stated_by: FrameStatedBy;
+}
+
+/** The flow axis a place is named on. `both` is a place put on both axes, as a
+ *  self-flow; `undirected` is a place named with no axis. */
+export type FrameDirection = 'origin' | 'destination' | 'both' | 'undirected';
+
+/** The reading asked of a place: its members each as their own place, or the
+ *  default, which is the set's node where it has one and its members
+ *  otherwise. */
+export type FrameReading = 'default' | 'members';
+
+/** Every year the data holds, the latest year, or a window of years. */
+export type FrameWindow = 'all' | 'latest' | TimeWindow;
+
+/** One place the part names, keyed by the request's text for it. */
+export interface FramePlace {
+    /** the request's text for the place; the dcid on the dataset_resubmit door */
+    name: string;
+    stated_by: FrameStatedBy;
+    direction: FrameDirection;
+    /** whether the request's words give the place its direction; a role read
+     *  off the measure, as in a possessive, states none */
+    direction_stated: boolean;
+    reading: FrameReading;
+    /** the dcid the caller pinned for the place, when it gave one */
+    pin?: string | null;
+    /** the places the name stands for under its reading, once resolved; empty
+     *  before place resolution and for a name that did not resolve */
+    dcids: string[];
+}
+
+/** One data source a part names or excludes, as its words, a reference, or
+ *  both (dfo-apis src/search/models/request.py SourceMention). */
+export interface FrameSourceMention {
+    text?: string | null;
+    ref?: string | null;
+    polarity: 'include' | 'exclude';
+}
+
+/** The codes the part's words match in one recalled vocabulary. */
+export interface FrameVocabularyCodes {
+    /** the vocabulary's constraint properties, sorted */
+    vocabulary: string[];
+    /** the code dcids matched, in match order */
+    codes: string[];
+}
+
+/** The value a constraint slot takes where the question names none. */
+export interface FrameSlotDefault {
+    property: string;
+    value: string;
+    stated_by: 'default';
+}
+
+/** What the part measures, as the recalled vocabularies read its words. */
+export interface FrameMeasure {
+    codes: FrameStated<FrameVocabularyCodes[]>;
+    /** the measure class a word names (prevalence, incidence, mortality) */
+    measure_class?: FrameStated<string> | null;
+    /** the statType: measuredValue unless a measure word states another */
+    stat_type: FrameStated<string>;
+    /** the qualifier phrases the door dropped from the variable */
+    dropped: FrameStated<string[]>;
+    /** the declared default of each constraint slot the recalled shapes hold */
+    slot_defaults: FrameSlotDefault[];
+}
+
+/** The form the part asks its measure in. */
+export interface FrameNormalisation {
+    /** the normalisations the words name (a QuantityForm each), sorted; "level"
+     *  when they name none */
+    form: FrameStated<string[]>;
+    /** the denominator the words name, as the quantity read chose it: a base
+     *  the eligible shapes divide by under its graph name, else the words that
+     *  name it; null when the words name none */
+    denominator?: FrameStated<string> | null;
+}
+
+/** Something the frame could not settle, with its possible readings.
+ *  direction: a place named with no axis on a question a recalled shape gives
+ *  roles; span: words that match two or more codes, or a code and a measure
+ *  value; group_reading: a set holding both a node and members, read by
+ *  default. */
+export interface FrameUnresolved {
+    kind: 'direction' | 'span' | 'group_reading';
+    /** the place name or the words */
+    subject: string;
+    readings: string[];
+}
+
+/** What one part asks. `measure`, `normalisation` and `unresolved` are set
+ *  after recall. The dataset_resubmit door builds no frame, so none reaches
+ *  the page there. */
+export interface Frame {
+    variable: FrameStated<string>;
+    places: FramePlace[];
+    window: FrameStated<FrameWindow>;
+    /** the unit phrase the question states */
+    unit?: FrameStated<string | IdentityUnitRequest> | null;
+    sources?: FrameStated<FrameSourceMention[]> | null;
+    operations: FrameStated<Operation[]>;
+    /** the flow axes asked member by member, sorted */
+    open_roles: FrameStated<RoleAxis[]>;
+    /** the measurementQualifier the words name; no value stated by "default"
+     *  reads the dataset's declared default reading. The stream omits a null
+     *  value, so `value` is absent then. */
+    price_basis: { value?: string | null; stated_by: FrameStatedBy };
+    measure?: FrameMeasure | null;
+    normalisation?: FrameNormalisation | null;
+    unresolved: FrameUnresolved[];
+}
+
+// ---------------------------------------------------------------------------
 // Envelope sub-objects
 // ---------------------------------------------------------------------------
 
-/** A set of 2..N competing Specs, ordered broadest-first. Each spec carries
+/** A set of 2..N competing Specs, ordered per `ordering`. Each spec carries
  *  its own rendered_sentence/sentence_plan, lifted flat by flattenSpec. */
 export interface CandidateSet {
-    /** constant "broadest_first" in v1 */
+    /** "intent_rank" on a first answer; "broadest_first" restates a posted
+     *  candidates entry's own order */
     ordering: Ordering;
     /** the maximum number of candidates applied */
     max_candidates: number;
-    /** 2..N competing Specs, broadest to narrowest */
+    /** 2..N competing Specs: the elected reading first, then its rivals, each
+     *  stating its `basis` */
     specs: Spec[];
     truncated?: boolean;
 }
@@ -1209,6 +1375,41 @@ export interface AmbiguousEntityGroup {
     candidates: AmbiguousEntityCandidate[];
 }
 
+/** One reading of an ambiguous source wording (dfo-apis
+ *  src/search/models/outcomes.py AmbiguousSourceCandidate). */
+export interface AmbiguousSourceCandidate {
+    /** the source's reference; a client posts it back as a source mention's
+     *  `ref` */
+    ref: string;
+    /** the source's display name in the origin catalogue */
+    label: string;
+    /** what `ref` names: a provenance, a catalogue Dataset, or a publishing
+     *  Source */
+    kind: 'provenance' | 'dataset' | 'source';
+}
+
+/** One source wording that names two or more unrelated admitted sources, with
+ *  the sources it could name (dfo-apis src/search/models/outcomes.py
+ *  AmbiguousSourceGroup). `text` equals some `restatement.sources[i].text` on
+ *  the same part. */
+export interface AmbiguousSourceGroup {
+    text: string;
+    /** provenances first, then datasets and sources */
+    candidates: AmbiguousSourceCandidate[];
+}
+
+/** The denominators a denominator_not_available refusal compared (dfo-apis
+ *  src/search/models/outcomes.py NoDataDenominator). */
+export interface NoDataDenominator {
+    /** the denominator the question named, as read from the bases the
+     *  candidate series divide by; null when it named none, or named one no
+     *  candidate series divides by */
+    asked?: GraphRef | null;
+    /** the denominator the flagged match divides by; null when it states none
+     *  (a level, or a series whose name alone gives its base) */
+    found?: GraphRef | null;
+}
+
 /** Outcome when no grounded result can be returned. */
 export interface NoData {
     /** why nothing could be returned (closed enum) */
@@ -1224,12 +1425,23 @@ export interface NoData {
      *  order, each with the nodes it could name. Empty for every other
      *  reason. */
     ambiguous_entities?: AmbiguousEntityGroup[];
+    /** The source wordings this refusal is about, in query order: every
+     *  included wording that matched no admitted source for
+     *  source_not_resolved, every ambiguous wording for source_ambiguous.
+     *  Empty for every other reason. */
+    source_terms?: string[];
+    /** Every ambiguous wording behind a source_ambiguous outcome, in query
+     *  order, each with the admitted sources it could name. Empty for every
+     *  other reason. */
+    ambiguous_sources?: AmbiguousSourceGroup[];
     /**
-     * Set when the reason is entity_ambiguous: the parsed form of this part,
-     * with every resolved entity's dcid pinned and the ambiguous entity's
-     * dcid left empty. The site pins a pick onto the part's `restatement`
-     * instead (parsedEdit.ts's buildAmbiguousPickPart), so it reads none of
-     * this.
+     * Set when the reason is entity_ambiguous or source_ambiguous: the parsed
+     * form of this part. On entity_ambiguous every resolved entity's dcid is
+     * pinned and the ambiguous entity's dcid left empty; on source_ambiguous
+     * every resolved source mention carries its ref and each ambiguous
+     * wording carries none. The site pins a pick onto the part's
+     * `restatement` instead (parsedEdit.ts's buildAmbiguousPickPart), so it
+     * reads none of this.
      */
     data_query?: ParsedInput | null;
     /** Terms the engine refused to silently drop before answering. Present
@@ -1257,6 +1469,12 @@ export interface NoData {
      * Present only with that reason and when the binder has candidates.
      */
     unit_alternatives?: UnitAlternative[];
+    /**
+     * The denominator the question named and the one the flagged match
+     * divides by. Set on every denominator_not_available refusal that
+     * elected a series; null for every other reason.
+     */
+    denominator?: NoDataDenominator | null;
 }
 
 /** A run-health signal. */
@@ -1345,11 +1563,12 @@ export interface QueryEcho {
 /** Wire-shaped candidate set carried on a candidates Part: `specs` are un-flattened
  *  WireSpecs (searchClient.flattenSpec turns these into CandidateSet.specs above). */
 export interface WireCandidateSet {
-    /** constant "broadest_first" in v1 */
+    /** "intent_rank" on a first answer; "broadest_first" restates a posted
+     *  candidates entry's own order */
     ordering: Ordering;
     /** the maximum number of candidates applied */
     max_candidates: number;
-    /** 2..N competing WireSpecs, broadest to narrowest */
+    /** 2..N competing WireSpecs, in `ordering` order */
     specs: WireSpec[];
     truncated?: boolean;
 }
@@ -1359,6 +1578,8 @@ export interface WireNoData {
     reason: NoDataReason;
     entity_terms?: string[];
     ambiguous_entities?: AmbiguousEntityGroup[];
+    source_terms?: string[];
+    ambiguous_sources?: AmbiguousSourceGroup[];
     data_query?: ParsedInput | null;
     unbound_qualifiers?: ResolvedQualifier[];
     /** optional; real, grounded WireSpecs with data adjacent to the request */
@@ -1373,6 +1594,7 @@ export interface WireNoData {
      * Present only with that reason and when the binder has candidates.
      */
     unit_alternatives?: UnitAlternative[];
+    denominator?: NoDataDenominator | null;
 }
 
 /** Outcome when the query itself can't be answered by this contract (e.g. an

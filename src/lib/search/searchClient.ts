@@ -30,6 +30,7 @@ import type {
     LateDepartures,
     EntityGroup,
     EntityRoleKey,
+    Frame,
     Operation,
     Part,
     PlaceOptionsScope,
@@ -70,7 +71,23 @@ export type SearchEvent =
           expected_results: number;
       }
     | {
+          /** One part's completed frame (dfo-apis events.py FrameEvent), after
+           *  recall and before the part's `shape` event. A part that ends before
+           *  its shapes are read, a part answered from the response cache and the
+           *  dataset_resubmit door send none. */
+          kind: 'frame';
+          variable_index: number;
+          frame: Frame;
+          /** the distinct measurementDenominator dcids the part's eligible
+           *  shapes carry, sorted; empty when none divides */
+          denominators_on_offer: string[];
+      }
+    | {
           kind: 'shape';
+          /** always true where sent: the shape is the top admissible reading
+           *  while bind runs, and the part's `sentence` event names what it
+           *  answers with. A server that predates the field omits it. */
+          provisional?: true;
           variable_index: number;
           shape_id: string;
           label: string;
@@ -80,6 +97,12 @@ export type SearchEvent =
           refine_supported: boolean;
       }
     | {
+          /** One part's answered sentence, sent once per part just before the
+           *  `response` event of a resolution that ran. It names the Spec the
+           *  part answers with: the definite answer, the first candidate of a
+           *  candidates part, or the flagged match of a refusal. A response
+           *  served from the response cache sends none, and neither does a part
+           *  that flags nothing. */
           kind: 'sentence';
           variable_index: number;
           spec_id: string;
@@ -144,6 +167,9 @@ export type SearchEvent =
           kind: 'done';
           elapsed_ms: number;
           timed_out: boolean;
+          /** this request's trace_id, shared with diagnostics and every
+           *  problem-details body */
+          trace_id: string;
           telemetry: { llm_usage?: Record<string, number> | null };
           /** Late-arriving warnings, some scoped to a spec_id the same way
            *  the observations/slot_options/facet_options trailing events

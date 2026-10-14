@@ -16,26 +16,27 @@ const PHONE_INSETS = 20;
  * factor, or fixed-px cards fall out of proportion against their rem-sized
  * content on wider screens. On phones the cell fits the screen instead.
  */
+export const gridCell = (): number => {
+    const base = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const fluid = (GRID_CELL * base) / 16;
+
+    if (!window.matchMedia(PHONE_QUERY).matches) {
+        return fluid;
+    }
+
+    const fit = Math.floor((window.innerWidth - PHONE_INSETS) / PHONE_CARD_CELLS);
+
+    return Math.max(PHONE_MIN_CELL, Math.min(fluid, fit));
+};
+
+/** The cell as state, re-read on every window resize. */
 export const useGridCell = (): number => {
     const [cell, setCell] = useState(GRID_CELL);
 
     useEffect(() => {
         let raf = 0;
 
-        const measure = () => {
-            const base = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            const fluid = (GRID_CELL * base) / 16;
-
-            if (window.matchMedia(PHONE_QUERY).matches) {
-                const fit = Math.floor((window.innerWidth - PHONE_INSETS) / PHONE_CARD_CELLS);
-
-                setCell(Math.max(PHONE_MIN_CELL, Math.min(fluid, fit)));
-
-                return;
-            }
-
-            setCell(fluid);
-        };
+        const measure = () => setCell(gridCell());
 
         const queue = () => {
             cancelAnimationFrame(raf);

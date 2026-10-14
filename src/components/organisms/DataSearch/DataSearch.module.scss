@@ -1992,6 +1992,16 @@ span.slotMarked {
         margin-top: rem(8);
     }
 
+    // Why the part offers this reading, in the same small type as the
+    // closest-match lead.
+    .cardBasis {
+        @include font-size(14px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        color: var(--color-sage);
+        letter-spacing: -0.01em;
+    }
+
     .cardRetry {
         margin-top: auto;
     }
