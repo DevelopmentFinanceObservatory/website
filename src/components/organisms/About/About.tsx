@@ -257,11 +257,11 @@ const About = () => {
                     </h3>
                     <div className={styles.prose}>
                         <p data-reveal="text" style={revealIndex(2)}>
-                            The DFO integrates aid, debt, climate and health finance, domestic
-                            budgets, and remittances into a single open platform – making it more
-                            interconnected and usable – with every number traceable to its source.
-                            It also supports a new generation of AI-assisted workflows, making
-                            trusted data easier to access and explore.
+                            The DFO integrates data on aid, debt, climate and health finance,
+                            domestic budgets, and remittances into a single open platform – making
+                            it more interconnected and usable – with every number traceable to its
+                            source. It also supports a new generation of AI-assisted workflows,
+                            making trusted data easier to access and explore.
                         </p>
                         <p data-reveal="text" style={revealIndex(3)}>
                             The DFO is an initiative by ONE Data, with support from{' '}

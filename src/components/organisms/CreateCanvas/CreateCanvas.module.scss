@@ -8,6 +8,8 @@
     --color-gray-2700: var(--color-stone);
     --color-gray-2700-hover: var(--color-stone-hover);
 
+    @include page-band;
+
     position: relative;
     padding-top: rem(208);
     padding-bottom: rem(272);

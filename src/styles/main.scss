@@ -1,3 +1,5 @@
+@use "sass:map";
+@use "sass:math";
 @use "variables" as *;
 @use "mixins" as *;
 @use "breakpoints" as *;
@@ -13,8 +15,15 @@
     }
 }
 
+// The whole design is sized in rem off a width-driven root, so without a
+// ceiling a wide monitor simply zooms the site (at 3440px the root reaches
+// 43px and body copy 51px — QA-74). The root holds from $size-hd up; past
+// that the window only adds width, never size.
 html {
-    font-size: vw($browser-context);
+    font-size: min(
+        #{vw($browser-context)},
+        #{math.div(strip-units($size-hd), map.get($widths, desktop)) * $browser-context}
+    );
 
     // What shows behind the safe areas and on overscroll.
     background-color: var(--color-bg);
