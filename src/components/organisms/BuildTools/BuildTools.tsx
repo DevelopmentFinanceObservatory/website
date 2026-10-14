@@ -16,22 +16,22 @@ const PACKAGES_HREF = docsSectionHref('oda_reader');
 const boxes = [
     {
         title: 'REST API',
-        text: 'Three core endpoints: search indicators, query observations, and availability to check data coverage',
+        text: 'Turn a plain-English question into a dataset in CSV, Excel, or Parquet, with its sources and citation. Look up names and codes.',
         href: '/docs',
     },
     {
         title: 'Python Packages',
-        text: 'Pull clean, sourced development finance data into your pipeline in minutes. Data refreshes automatically as DFO updates',
+        text: 'Load OECD, IMF, and TOSSD data into pandas straight from the publisher, with our open-source packages.',
         href: PACKAGES_HREF,
     },
     {
         title: 'MCP Server',
-        text: 'Add DFO to Claude, Cursor, or any MCP-compatible environment. All DFO tools become available in your session instantly',
+        text: 'Connect the DFO to Claude, ChatGPT, or Gemini. Your assistant answers from DFO data and names the source of each number.',
         href: '/docs',
     },
     {
         title: 'Embed Anywhere',
-        text: 'Drop DFO charts with live data directly into your own reports, dashboards, or other digital tools.',
+        text: 'Paste iframe code from Studio into any web page to show a whole canvas or a single chart, on live data or as a snapshot.',
         href: '/docs',
     },
 ];

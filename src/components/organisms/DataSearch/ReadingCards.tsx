@@ -8,7 +8,7 @@ import { TokenAbout } from './TokenAbout';
 
 import Button from '@/components/atoms/Button/Button';
 import { isClosestMatch } from '@/lib/search/departures';
-import { readingOf, readingsSummary } from '@/lib/search/readings';
+import { basisNote, readingOf, readingsSummary } from '@/lib/search/readings';
 import { tokenAbout } from '@/lib/search/tokenAbout';
 import type { Part } from '@/lib/search/types';
 import { statVarsUnreadable } from '@/lib/search/view';
@@ -17,8 +17,9 @@ import { statVarsUnreadable } from '@/lib/search/view';
  * A candidates part's readings, one card per candidate spec: the reading's
  * heading and byline as plain text, since an edit to a reading the reader
  * has not chosen has nothing to apply to, and its measure's About block
- * shown open, since the definition is what tells two readings apart. The
- * card's one action picks the reading. The part's own summary plan is the
+ * shown open, since the definition is what tells two readings apart. A
+ * rival reading leads with why the part offers it (`basis`). The card's
+ * one action picks the reading. The part's own summary plan is the
  * block's screen-reader text, and a closest-match part draws its lead once
  * above the cards.
  */
@@ -50,6 +51,7 @@ const ReadingCards = ({
                 return {
                     spec,
                     reading,
+                    note: basisNote(spec.basis),
                     about: tokenAbout(measure, spec, reading.statedElsewhere),
                 };
             }),
@@ -69,7 +71,7 @@ const ReadingCards = ({
                 {readingsSummary(part.sentence_plan)}
             </p>
             <ul className={styles.cards}>
-                {readings.map(({ spec, reading, about }, index) => (
+                {readings.map(({ spec, reading, note, about }, index) => (
                     <li
                         key={spec.spec_id}
                         className={styles.readingCard}
@@ -91,6 +93,7 @@ const ReadingCards = ({
                             </>
                         ) : (
                             <>
+                                {note && <p className={styles.cardBasis}>{note}</p>}
                                 <div aria-hidden="true">
                                     <p className={styles.cardTitle}>{reading.heading}</p>
                                     {reading.byline && (

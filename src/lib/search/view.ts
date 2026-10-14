@@ -21,6 +21,7 @@ import type {
     FacetBasis,
     IdentityFacets,
     NoData,
+    NoDataDenominator,
     NoDataGate,
     NoDataReason,
     ObservationsOmission,
@@ -1242,9 +1243,9 @@ const variablesBreakdown = (spec: any): WhyBreakdown[] =>
             more: Math.max(fact.values.length - BREAKDOWN_VALUES, 0),
         }));
 
-// "This answer uses 1 of at least 3 Life Expectancy variables.", null when
+// "This answer uses 1 of at least 3 variables.", null when
 // the answer serves every member stat_vars.member_count counts.
-const familyNote = (served: number, statVars: any, shapeLabel?: string | null): string | null => {
+const familyNote = (served: number, statVars: any): string | null => {
     const members = statVars.member_count;
 
     if (members == null || members <= served) {
@@ -1253,7 +1254,7 @@ const familyNote = (served: number, statVars: any, shapeLabel?: string | null): 
 
     const total = `${statVars.member_count_exact === false ? 'at least ' : ''}${formatCount(members)}`;
 
-    return `This answer uses ${formatCount(served)} of ${total} ${shapeLabel ? `${shapeLabel} ` : ''}variables.`;
+    return `This answer uses ${formatCount(served)} of ${total} variables.`;
 };
 
 const whyMembers = (members: MembersRead | null | undefined): WhyMembers => {
@@ -1432,7 +1433,7 @@ export const buildWhySummary = (
     return {
         measure,
         rows,
-        family: count > 0 ? familyNote(count, statVars, spec.shape?.label) : null,
+        family: count > 0 ? familyNote(count, statVars) : null,
         variables,
         sources: sources.map((ref: any) => ({
             ref: ref.ref,
@@ -2285,6 +2286,8 @@ export const flattenPartsRows = (
 // marked unresolved phrase's hover title. Both surfaces read this one map,
 // so they say the same thing for the same reason code.
 const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
+    source_not_resolved: "We couldn't match the data source named in that query.",
+    source_ambiguous: 'More than one data source matches that wording. Try naming it in full.',
     entity_not_resolved: "We couldn't match the place in that query.",
     entity_ambiguous: 'More than one place matches that wording. Try being more specific.',
     entity_set_too_large: 'That place has too many members for us to check them all at once.',
@@ -2296,7 +2299,7 @@ const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
     rate_coverage_gap: "We couldn't calculate that rate for the requested period.",
     no_matching_slice: 'That specific combination is unavailable as a data series.',
     binding_mismatch: 'No published series carries every condition in that query.',
-    denominator_not_available: 'The denominator needed for this measure is unavailable.',
+    denominator_not_available: 'The matching series is not in the form that query asks for.',
     no_observations: 'This region has no observations.',
     facet_not_available: 'Data exists, but not from the requested source, method, or unit.',
     role_incompatible: 'The matched series is not published as a flow to or from that place.',
@@ -2310,8 +2313,9 @@ export const noDataReasonText = (reason?: NoDataReason | null): string =>
     (reason && NO_DATA_REASON_TEXT[reason]) || 'No data matched this query.';
 
 // Names the failed gate for every reason pairing a flagged_match with one.
-// role_incompatible/qualifier_not_bound's flagged_match carries no gate
-// since no availability verdict was taken.
+// The flagged_match of role_incompatible, qualifier_not_bound and
+// denominator_not_available carries no gate since no availability verdict
+// was taken.
 const NO_DATA_GATE_TEXT: Record<NoDataGate, string> = {
     no_member_has_data_at_place: 'That match has no data at this place.',
     no_member_asserts_bound_properties: "That match doesn't carry the condition this query needs.",
@@ -2329,12 +2333,32 @@ const quoted = (terms: string[]): string => terms.map((term) => `“${term}”`)
 const unitAlternativeText = ({ currency, label }: UnitAlternative): string =>
     typeof currency === 'string' ? label : `the ${label}'s currency`;
 
+/** The denominators a denominator_not_available refusal compared, as the
+ *  sentence after its reason. Null when it names neither. */
+const denominatorText = ({ asked, found }: NoDataDenominator): string | null => {
+    if (asked && found) {
+        return `The closest series divides by ${found.label}. The query asks to divide by ${asked.label}.`;
+    }
+    if (asked) {
+        return `The closest series states no base. The query asks to divide by ${asked.label}.`;
+    }
+    if (found) {
+        return `The closest series divides by ${found.label}.`;
+    }
+    return null;
+};
+
 /** A no_data outcome in plain language, naming the entities it is about
  *  when the refusal carries them. */
 export const noDataText = (
     noData?: Pick<
         NoData,
-        'reason' | 'entity_terms' | 'unbound_qualifiers' | 'gate' | 'unit_alternatives'
+        | 'reason'
+        | 'entity_terms'
+        | 'unbound_qualifiers'
+        | 'gate'
+        | 'unit_alternatives'
+        | 'denominator'
     > | null,
 ): string => {
     const base = noDataReasonText(noData?.reason);
@@ -2361,6 +2385,11 @@ export const noDataText = (
         return qualifiers.length > 0
             ? `We couldn't apply ${quoted(qualifiers)} to this query.`
             : base;
+    }
+
+    if (noData?.reason === 'denominator_not_available' && noData.denominator) {
+        const compared = denominatorText(noData.denominator);
+        if (compared) return `${base} ${compared}`;
     }
 
     if (noData?.gate) {

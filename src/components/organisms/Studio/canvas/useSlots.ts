@@ -3,26 +3,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+    type CardView,
     clamp,
     findSpot,
+    heightRange,
     LEAVE_MS,
     MAX_COLS,
     nearestSpot,
     type Rect,
+    resolveCardView,
     settleAround,
+    settleSpot,
     type Slots,
-    SPAN_DEFAULT,
     SPAN_MAX,
     SPAN_MIN,
+    spawnSpan,
     tooCloseRects,
 } from './layout';
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
+import { FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
 
 type UseSlotsArgs = {
     widgets: Widget[];
     pinnedIds: string[];
+    // Per-card view picks. A card's view decides whether its height is
+    // derived, and so the heights its slot may hold.
+    views: Record<string, CardView>;
     // A restored conversation's saved card rects — newcomers found here mount
     // straight into their old spot and size instead of auto-placing.
     initialLayout?: CardLayout;
@@ -37,12 +45,13 @@ type UseSlotsArgs = {
  * vanished (replaced by a newer turn, or a reset) fade out in place before
  * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
  * honouring only pinned cards, and any unpinned veteran they crowd slides to
- * the nearest place that still fits. Also owns the text card's content-fit
- * (rows follow the text) and the z-order counter.
+ * the nearest place that still fits. Also owns the content-fit of text cards
+ * and chart views (rows follow the content) and the z-order counter.
  */
 export const useSlots = ({
     widgets,
     pinnedIds,
+    views,
     initialLayout,
     viewCols,
     onLayoutChange,
@@ -73,11 +82,19 @@ export const useSlots = ({
                 for (const [id, slot] of Object.entries(prev)) {
                     if (ids.has(id)) {
                         // Same card, possibly new content (an edited text
-                        // card): the slot re-points at the fresh widget.
+                        // card): the slot re-points at the fresh widget. Its
+                        // height stays inside what its view allows, so a chart
+                        // switched to the table view comes back into the
+                        // grip's range.
                         const fresh = byId.get(id)!;
+                        const { min, max } = heightRange(
+                            fresh,
+                            resolveCardView(fresh, views[id]).view,
+                        );
+                        const h = clamp(slot.h, min, max);
 
-                        if (fresh !== slot.widget) {
-                            next[id] = { ...slot, widget: fresh };
+                        if (fresh !== slot.widget || h !== slot.h) {
+                            next[id] = { ...slot, widget: fresh, h };
                             changed = true;
                         } else {
                             next[id] = slot;
@@ -106,13 +123,19 @@ export const useSlots = ({
                     .map(([, slot]) => slot);
 
                 for (const widget of newcomers) {
-                    // A restored card keeps its saved rect (size clamped to
-                    // the current per-kind range); fresh ones auto-place.
+                    // A restored card keeps its saved rect, its width clamped
+                    // to the kind's range and its height to what its view
+                    // allows; fresh ones auto-place at their spawn footprint.
+                    // A derived height refits once the card mounts.
                     const saved = initialLayout?.[widget.id];
-                    const min = SPAN_MIN[widget.kind];
-                    const max = SPAN_MAX[widget.kind];
-                    const w = saved ? clamp(saved.w, min.w, max.w) : SPAN_DEFAULT[widget.kind].w;
-                    const h = saved ? clamp(saved.h, min.h, max.h) : SPAN_DEFAULT[widget.kind].h;
+                    const resolved = resolveCardView(widget, views[widget.id]);
+                    const rows = heightRange(widget, resolved.view);
+                    const { w, h } = saved
+                        ? {
+                              w: clamp(saved.w, SPAN_MIN[widget.kind].w, SPAN_MAX[widget.kind].w),
+                              h: clamp(saved.h, rows.min, rows.max),
+                          }
+                        : spawnSpan(widget, resolved);
                     // A saved spot is honoured only while it's free — a card
                     // put back later (chat chip → Add) whose old place is now
                     // taken lands at the nearest free spot instead of on top.
@@ -144,15 +167,7 @@ export const useSlots = ({
 
                 for (const [id, slot] of veterans) {
                     if (settled.some((rect) => tooCloseRects(slot, rect))) {
-                        const spot = nearestSpot(
-                            { col: slot.col, row: slot.row },
-                            slot.w,
-                            slot.h,
-                            settled,
-                            MAX_COLS,
-                        ) ?? { col: slot.col, row: slot.row };
-
-                        next[id] = { ...slot, col: spot.col, row: spot.row };
+                        next[id] = { ...slot, ...settleSpot(slot, settled) };
                     }
 
                     settled.push(next[id]!);
@@ -175,7 +190,7 @@ export const useSlots = ({
         });
 
         return () => cancelAnimationFrame(frame);
-    }, [widgets, pinnedIds, viewCols, initialLayout]);
+    }, [widgets, pinnedIds, views, viewCols, initialLayout]);
 
     // Every settle (placement, drop, swap, resize) reports the live layout —
     // the parent persists it with the conversation.
@@ -195,9 +210,9 @@ export const useSlots = ({
         onLayoutChange(layout);
     }, [slots, onLayoutChange]);
 
-    // A text card's content-driven height: set the slot's rows and let the
-    // unpinned neighbours make room — pinned ones too, since this is the
-    // user's own edit (pin protects against incoming widgets).
+    // Sets the slot's rows for a derived height (a text card, a chart view),
+    // between the kind's minimum and the cap, and lets the neighbours make
+    // room. Pinned ones move too, since the card cannot take less.
     const fitRows = useCallback(
         (id: string, rows: number) => {
             setSlots((prev) => {
@@ -207,7 +222,7 @@ export const useSlots = ({
                     return prev;
                 }
 
-                const h = clamp(rows, SPAN_MIN[slot.widget.kind].h, SPAN_MAX[slot.widget.kind].h);
+                const h = clamp(rows, SPAN_MIN[slot.widget.kind].h, FITTED_ROWS_MAX);
 
                 if (h === slot.h) {
                     return prev;

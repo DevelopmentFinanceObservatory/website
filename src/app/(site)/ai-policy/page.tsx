@@ -8,10 +8,6 @@ export const metadata: Metadata = {
         'How the DFO’s AI-assisted search works, where its figures come from, and what happens to what you type.',
 };
 
-// ONE's own text (legal's draft, "Website policy content - DFO"). Two
-// bullets of section 3 — retention and legal basis — are still blanks in
-// that draft, so they are not on the page yet: a policy page must not
-// publish a placeholder.
 const AiPolicyPage = () => (
     <main>
         <Policy title="AI Transparency">
@@ -28,6 +24,11 @@ const AiPolicyPage = () => (
                 you so rather than provide an answer. It is not able to guarantee the complete
                 elimination of errors, and we encourage users to verify any figure used for
                 high-stakes decisions against the cited primary source.
+            </p>
+            <p>
+                The same data is available to other AI assistants, such as Claude and ChatGPT,
+                through the DFO’s connector. There the DFO supplies the figures and their sources,
+                and the assistant you chose writes the answer under its provider’s own terms.
             </p>
 
             <h2>2. Data provenance and source grounding</h2>
@@ -53,17 +54,52 @@ const AiPolicyPage = () => (
                     system pipeline.
                 </li>
                 <li>
-                    <strong>Enterprise isolation.</strong> Natural language interactions are
-                    processed through isolated enterprise-tier channels. Your query strings, search
-                    history, and session parameters are confidential and are not used to train any
-                    public AI model.
+                    <strong>How questions are processed.</strong> The text of your question is sent
+                    to Google’s Gemini models, which read it to find the data you asked for and, in
+                    the Studio, to write the answer.
                 </li>
                 <li>
-                    <strong>Data minimization.</strong> Query text is processed only to generate a
-                    response and is not linked to a persistent user profile beyond what’s needed to
-                    maintain your active session.
+                    <strong>What a search records.</strong> When you search on this site, we record
+                    the first 500 characters of your question together with the data it matched, to
+                    learn what people look for and where the data falls short. The record is tied to
+                    your account if you are signed in, and to a random identifier in your browser if
+                    you accepted usage statistics in the cookie banner. These records are held in
+                    the DFO’s own database and in PostHog, an analytics service hosted in the EU.
+                </li>
+                <li>
+                    <strong>Studio conversations.</strong> The Studio stores each conversation so
+                    that it can continue from one message to the next. If you are signed in, the
+                    conversation is also saved to your account until you delete it or delete your
+                    account. A technical record of each conversation, including its text, is kept in
+                    Langfuse, a monitoring service hosted in the EU, so that we can find and fix
+                    faults. Usage statistics record that a prompt was sent and how long it was, and
+                    leave out its text.
+                </li>
+                <li>
+                    <strong>Connected assistants.</strong> When you use the DFO from another
+                    assistant, the DFO receives the question and the data requests that assistant
+                    sends. It needs no account and is not told who you are. Charts and tables the
+                    assistant creates through the DFO are stored so that they can be shown, and
+                    anyone who has a chart’s link can open it.
+                </li>
+                <li>
+                    <strong>Internet addresses.</strong> Our servers’ request logs record the
+                    internet address of each request, as on any website. Usage statistics do not
+                    include it.
                 </li>
             </ul>
+            <p>
+                For a question about your data, or for help with the DFO, write to{' '}
+                <a href="mailto:data@one.org">data@one.org</a>. ONE’s{' '}
+                <a
+                    href="https://www.one.org/info/privacy-policy/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    privacy policy
+                </a>{' '}
+                covers the rest of this website.
+            </p>
         </Policy>
     </main>
 );

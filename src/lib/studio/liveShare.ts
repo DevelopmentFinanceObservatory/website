@@ -5,6 +5,7 @@ import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare } from '../chat/shareMode.ts';
 import type { ShareDb } from '../chat/shareWrites.ts';
 import type { CardRef, Widget } from '../chat/widgets.ts';
+import { dropEncodedLength, pick } from '../proxy/headers.ts';
 import {
     BackendError,
     bounded,
@@ -410,13 +411,8 @@ export const dataResponse = async (
                 : await storedExport(exporting, ref, options);
         const headers = new Headers(NO_STORE);
 
-        for (const name of EXPORT_HEADERS) {
-            const value = upstream.headers.get(name);
-
-            if (value) {
-                headers.set(name, value);
-            }
-        }
+        pick(upstream.headers, EXPORT_HEADERS, headers);
+        dropEncodedLength(upstream.headers, headers);
 
         return new Response(upstream.body, { headers });
     } catch (error) {

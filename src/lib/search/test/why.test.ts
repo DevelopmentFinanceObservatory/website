@@ -169,10 +169,7 @@ test('the resolved membership chooses the layout over the coverage variables cou
         value: 'Official development assistance gross disbursements 0',
         code: 'Amount_FinancialFlow_Gross_Disbursement_0',
     });
-    assert.equal(
-        single.family,
-        'This answer uses 1 of 3 gross disbursements (nominal, official development assistance) variables.',
-    );
+    assert.equal(single.family, 'This answer uses 1 of 3 variables.');
 
     // Membership unsettled and the members still being read: the family's
     // floor fills the Variables group, whatever coverage counts.
@@ -286,7 +283,7 @@ const singleOfFamily = [
             { label: 'Years', value: '1960 to 2023' },
             { label: 'Place', value: 'Ethiopia' },
         ],
-        family: 'This answer uses 1 of at least 3 Life Expectancy variables.',
+        family: 'This answer uses 1 of at least 3 variables.',
     },
     {
         description: 'GDP of Kenya',
@@ -322,7 +319,7 @@ const singleOfFamily = [
             { label: 'Years', value: '1960 to 2024' },
             { label: 'Place', value: 'Kenya' },
         ],
-        family: 'This answer uses 1 of at least 38 Nominal gross domestic product variables.',
+        family: 'This answer uses 1 of at least 38 variables.',
     },
 ];
 

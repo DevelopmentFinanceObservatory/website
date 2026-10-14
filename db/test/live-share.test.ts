@@ -529,6 +529,30 @@ test('live share routes', async (t) => {
         assert.equal(stub.to('/render/data').length, 0);
     });
 
+    // Node's fetch decodes a gzipped export and keeps its compressed length.
+    await t.test(
+        'data: a gzipped export streams every row without its compressed length',
+        async () => {
+            const id = await liveShare();
+            const { deps } = over({
+                refreshFrame: () => frameAnswer('current', DATASET_FRAME),
+                storedExport: () =>
+                    new Response('year,value\n2024,1\n', {
+                        headers: {
+                            'content-type': 'text/csv',
+                            'content-encoding': 'gzip',
+                            'content-length': '9',
+                        },
+                    }),
+            });
+
+            const file = await download(deps, id, 'data', 'format=csv&bundle=false');
+
+            assert.equal(file.headers.get('content-length'), null);
+            assert.equal(await file.text(), 'year,value\n2024,1\n');
+        },
+    );
+
     await t.test('data: no file while pending, on an error, or on a refused export', async () => {
         const id = await liveShare();
         const queued = over({

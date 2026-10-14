@@ -145,3 +145,15 @@ test('clientResponseHeaders: carries the Retry-After of a busy refusal', () => {
 
     assert.equal(out.get('retry-after'), '5');
 });
+
+test('clientResponseHeaders: leaves the content-length of an encoded body behind', () => {
+    const encoded = { 'content-type': 'application/json', 'content-length': '512' };
+
+    assert.equal(clientResponseHeaders(new Headers(encoded)).get('content-length'), '512');
+    assert.equal(
+        clientResponseHeaders(new Headers({ ...encoded, 'content-encoding': 'gzip' })).get(
+            'content-length',
+        ),
+        null,
+    );
+});

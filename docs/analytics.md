@@ -4,7 +4,7 @@ Usage events go to our own database, errors to Sentry, and page views to Google 
 
 ## Usage events
 
-The events DFO Overview asks for (Data access → "Events to record") land in the `event` table (`db/schema.ts`, migration `0006_events`): one row per event with a dotted `name`, the event's own `props` (JSONB), `user_id` when signed in, a random per-browser `visitor_id` (localStorage, no cookie) when the visitor has consented, and the `page`. No IPs, no prompt text.
+The events DFO Overview asks for (Data access → "Events to record") land in the `event` table (`db/schema.ts`, migration `0006_events`): one row per event with a dotted `name`, the event's own `props` (JSONB), `user_id` when signed in, a random per-browser `visitor_id` (localStorage, no cookie) when the visitor has consented, and the `page`. No event holds an IP address or the text of a Studio prompt. The three search events hold the first 500 characters of the query.
 
 The browser stores `visitor_id` only after the visitor accepts "DFO usage statistics" in the Analytics category of the cookie banner (Usercentrics service `L3eMCSMT3WELG7`, read through the CMP's `window.__ucCmp` API and `UC_CONSENT` event in `src/lib/consent.ts`). Until then, including while the banner is loading or blocked, events arrive with a null visitor id. Withdrawing consent deletes the stored id.
 
