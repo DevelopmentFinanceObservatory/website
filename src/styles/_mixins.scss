@@ -64,6 +64,22 @@ $browser-context: 16px;
     flex-direction: column;
 }
 
+// Hold a section's content to the design width and let the window's surplus
+// fall away as side gutters. $inset is the section's own inline padding, which
+// stays inside the band. Backgrounds and absolutely positioned decor are
+// unaffected: they resolve against the padding box, which still spans the
+// whole section.
+@mixin page-band($left: 0px, $right: $left) {
+    padding-left: max(#{$left}, calc((100% - var(--page-max)) / 2 + #{$left}));
+    padding-right: max(#{$right}, calc((100% - var(--page-max)) / 2 + #{$right}));
+}
+
+// Where the band begins, for decor that must line up with the content but is
+// positioned against the section rather than laid out in it.
+@function band-offset($inset: 0px) {
+    @return max(#{$inset}, calc((100% - var(--page-max)) / 2 + #{$inset}));
+}
+
 @mixin flex($direction: row, $justify: space-between, $align: center) {
     display: flex;
     flex-direction: $direction;

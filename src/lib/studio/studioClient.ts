@@ -162,8 +162,7 @@ export const runTurn = (
 export const runInterrupt = (
     conversationId: string,
     interruptId: string,
-    decision: InterruptResponse['decision'],
-    payload: string | undefined,
+    reply: Pick<InterruptResponse, 'decision' | 'payload' | 'answers'>,
     handlers: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> =>
@@ -174,8 +173,7 @@ export const runInterrupt = (
             schema_version: 1,
             conversation_id: conversationId,
             interrupt_id: interruptId,
-            decision,
-            ...(payload !== undefined ? { payload } : {}),
+            ...reply,
         },
         handlers,
         signal,

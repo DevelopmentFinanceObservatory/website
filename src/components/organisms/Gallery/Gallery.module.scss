@@ -181,10 +181,12 @@
 
 // Three to a row with visible gaps (the approved v2 design breathes).
 .grid {
+    @include page-band(rem(14));
+
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: rem(80) rem(50);
-    padding: rem(40) rem(14) rem(14);
+    padding-block: rem(40) rem(14);
     list-style: none;
 }
 

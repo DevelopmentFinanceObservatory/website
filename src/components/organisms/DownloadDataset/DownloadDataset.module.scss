@@ -3,8 +3,10 @@
 @use "breakpoints" as *;
 
 .section {
+    @include page-band(rem(47));
+
     position: relative;
-    padding: rem(220) rem(47) rem(175);
+    padding-block: rem(220) rem(175);
     overflow: hidden;
     background-color: var(--color-bg);
 }

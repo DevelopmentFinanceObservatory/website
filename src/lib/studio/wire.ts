@@ -227,10 +227,17 @@ export type InterruptResponse = {
     conversation_id: string;
     interrupt_id: string;
     decision: InterruptDecision;
-    // Amendment text (amend) or the chosen option id / free text (answer);
-    // omitted for approve / reject / skip.
+    // Amendment text (amend), or the chosen option id / free text when
+    // answering a legacy single-question elicitation frame. Omitted
+    // otherwise.
     payload?: string;
+    // One answer per question of an `elicitation.request`, keyed by the
+    // frame's question ids exactly. Sent with `answer` only.
+    answers?: Record<string, ElicitationAnswer>;
 };
+
+export type ElicitationAnswer =
+    { kind: 'option'; option_id: string } | { kind: 'text'; text: string } | { kind: 'skipped' };
 
 export type MutationOperation =
     | { op: 'add'; component_id: string }
@@ -338,12 +345,39 @@ export type ElicitationOption = {
     recommended?: boolean;
 };
 
+export type ElicitationInput = 'single_select' | 'multi_select' | 'text';
+
+export type ElicitationQuestion = {
+    id: string;
+    question: string;
+    input: ElicitationInput;
+    options?: ElicitationOption[] | null;
+    allow_free_text?: boolean;
+    // This question alone may be left to DFO (`{kind: "skipped"}`).
+    skippable?: boolean;
+    // Why the `recommended` option (if any) is recommended.
+    rationale?: string | null;
+};
+
 export type ElicitationRequest = {
     event: 'elicitation.request';
     seq: number;
     interrupt_id: string;
+    // One to three questions, answered together in one reply.
+    questions: ElicitationQuestion[];
+    // The whole pause may be dismissed with `decision: "skip"`.
+    skippable?: boolean;
+    progress?: StepProgress | null;
+};
+
+/** The single-question frame of a harness that predates `questions`.
+ *  Answered with `payload`, not `answers`. */
+export type LegacyElicitationRequest = {
+    event: 'elicitation.request';
+    seq: number;
+    interrupt_id: string;
     question: string;
-    input: 'single_select' | 'multi_select' | 'text';
+    input: ElicitationInput;
     options?: ElicitationOption[] | null;
     allow_free_text: boolean;
     skippable: boolean;
@@ -368,6 +402,7 @@ export type StudioFrame =
     | ComponentRevised
     | { event: 'composition.updated'; seq: number; manifest: CompositionManifest }
     | ElicitationRequest
+    | LegacyElicitationRequest
     | { event: 'suggestions'; seq: number; items: { label: string; prompt: string }[] }
     | { event: 'error'; seq: number; error: ToolError }
     | { event: 'done'; seq: number; trace_id: string; composition?: CompositionManifest | null };

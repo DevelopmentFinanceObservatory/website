@@ -26,7 +26,11 @@ $table-head-cover: rem(48);
     // rem(30) lines the page's left baseline (the idle prompt's caret, the
     // hero boxes' inner edge) up with the nav's Insights link.
 
-    --search-gutter: #{rem(30)};
+    // The band rides in the gutter itself, so every block that cancels the
+    // gutter to go full bleed lands on the band's edge rather than the
+    // window's (QA-74).
+
+    --search-gutter: #{band-offset(rem(30))};
     --search-inset: #{rem(30)};
 
     // The stat tiles' dark variant (the light defaults live in StatTiles).
@@ -1874,7 +1878,9 @@ span.slotMarked {
 }
 
 .tableHead {
-    @include font-size(11px, 1);
+    // 11px read as fine print next to the 16px rows; the two-line labels get
+    // a little leading with it.
+    @include font-size(13px, 1.2);
 
     // One element, no overlays: the thick top border (page-bg colored) is the
     // strip that hides rows scrolling underneath. It's constant, so the flow
@@ -1903,7 +1909,11 @@ span.slotMarked {
     letter-spacing: -0.01em;
 }
 
+// Figures line up in a column only if every digit is the same width, so the
+// value cells read in the mono face the table head already uses (QA-80).
 .usd {
+    font-family: var(--font-dm-mono);
+    font-variant-numeric: tabular-nums;
     text-align: right;
 }
 
