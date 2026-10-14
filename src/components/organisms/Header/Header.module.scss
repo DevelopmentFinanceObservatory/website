@@ -11,7 +11,9 @@
     left: 0;
     z-index: $z-header;
     gap: rem(16);
-    padding: calc(#{rem(16)} + env(safe-area-inset-top)) rem(10) rem(16) rem(30);
+    @include page-band(rem(30), rem(10));
+
+    padding-block: calc(#{rem(16)} + env(safe-area-inset-top)) rem(16);
     transition: translate 0.5s $ease-custom;
 
     @include breakpoint(phone) {

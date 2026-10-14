@@ -22,10 +22,12 @@
 // minmax(0, 1fr): a wide table or code line scrolls inside its own box
 // instead of widening the column past the screen.
 .body {
+    @include page-band(rem(10));
+
     display: grid;
     grid-template-columns: rem(202) minmax(0, 1fr) rem(202);
     gap: rem(40);
-    padding: rem(100) rem(10) 0;
+    padding-block: rem(100) 0;
 }
 
 .nav {

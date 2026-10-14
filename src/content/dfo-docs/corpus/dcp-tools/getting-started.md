@@ -42,8 +42,6 @@ Install the package, then create a `CustomDataManager`. It's the object you'll r
 pip install dcp-tools
 ```
 
-While 1.0.0 is still in alpha, pip skips pre-releases by default, so this command installs nothing yet. Run `pip install --pre dcp-tools` instead until a stable release is out.
-
 ```python
 from dcp_tools import CustomDataManager
 
@@ -65,7 +63,7 @@ flags: importName=None, includeInputSubdirs=None, groupStatVarsByProperty=None, 
 
 ## Step 2: Register a source and a provenance
 
-Register where the data comes from: a Source (the publishing organization) and a Provenance (this specific dataset). Every input file you register later points back at a Provenance dcid, so it has to exist first.
+Register where the data comes from: a Source (the publishing organisation) and a Provenance (this specific dataset). Every input file you register later points back at a Provenance dcid, so it has to exist first.
 
 ```python
 manager.add_source(dcid="ONEData", url="https://data.one.org")
@@ -77,7 +75,7 @@ manager.add_provenance(
 ```
 
 > [!NOTE]
-> `dcid` is the node's identifier, so it can't contain spaces — `add_source` mints `"ONEData"` into `dcid:source/ONEData`. For a human-readable label (spaces allowed), pass `name`; it's optional.
+> `dcid` is the node's identifier, so it can't contain spaces. `add_source` mints `"ONEData"` into `dcid:source/ONEData`. For a human-readable label (spaces allowed), pass the optional `name`.
 
 Both calls add MCF nodes in memory. Export them to see what they'll look like on disk:
 
@@ -167,7 +165,7 @@ manager.add_variable_to_mcf(
 )
 ```
 
-`dcid` is a bare token here, so `dcp-tools` normalizes it to `dcid:climateFinanceProvidedCommitments` for you. It must match the `variable` column values exactly. Export the checkpoint and take a look:
+`dcid` is a bare token here, so `dcp-tools` normalises it to `dcid:climateFinanceProvidedCommitments` for you. It must match the `variable` column values exactly. Export the checkpoint and take a look:
 
 ```python
 manager.export_mcf_file("one_climate_finance", mcf_file_name="custom_nodes.mcf")

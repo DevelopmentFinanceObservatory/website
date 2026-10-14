@@ -14,7 +14,9 @@
     display: flex;
     gap: rem(116);
     height: rem(676);
-    padding: rem(40) rem(10) calc(#{rem(20)} + env(safe-area-inset-bottom));
+    @include page-band(rem(10));
+
+    padding-block: rem(40) calc(#{rem(20)} + env(safe-area-inset-bottom));
     overflow: hidden;
     background-color: var(--color-charcoal);
     box-shadow: 0 rem(-24) rem(60) rgb(54 54 54 / 35%);

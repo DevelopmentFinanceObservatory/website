@@ -218,8 +218,7 @@ const ChatPanel = ({
                             ) : !chat.plan && chat.clarify ? (
                                 <ClarifyPicker
                                     clarify={chat.clarify}
-                                    onChoose={chat.chooseOption}
-                                    onAnswer={chat.answerText}
+                                    onAnswer={chat.answerClarify}
                                     onSkip={chat.skipClarify}
                                 />
                             ) : (

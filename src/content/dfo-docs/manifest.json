@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-11T12:09:11Z",
-  "generator_commit": "2de23fcd7f2351a5eb2aeea6993abb8716959f1a",
+  "generated_at": "2026-10-14T06:27:35Z",
+  "generator_commit": "65a1e5b810a4689d663a36ac810d2a2cb38dab0f",
   "nav": [
     {
       "id": "hub",
@@ -298,29 +298,6 @@
                         {
                           "id": "dfo-skills/oda-channels/references/sector-imputations",
                           "title": "Sector imputations for multilateral aid",
-                          "kind": "page"
-                        }
-                      ]
-                    },
-                    {
-                      "id": "group:skills/dfo-skills/domains/development-assistance/oda-policy-markers",
-                      "title": "oda-policy-markers",
-                      "kind": "group",
-                      "page_id": "dfo-skills/oda-policy-markers",
-                      "children": [
-                        {
-                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
-                          "title": "Reporting commitments vs. disbursements",
-                          "kind": "page"
-                        },
-                        {
-                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-general",
-                          "title": "Policy markers",
-                          "kind": "page"
-                        },
-                        {
-                          "id": "dfo-skills/oda-policy-markers/references/policy-marker-scoring",
-                          "title": "Policy marker scoring",
                           "kind": "page"
                         }
                       ]
@@ -875,8 +852,8 @@
       "description": "Build Data Commons Platform import files with the dcp-tools Python API or CLI, upload them, and trigger ingestion.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/index.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T13:35:47Z",
       "corpus_path": "corpus/dcp-tools/index.md"
     },
     {
@@ -887,8 +864,8 @@
       "description": "Install dcp-tools and build a complete climate finance import bundle from Python, then export it and check the config, MCF, and CSV files.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/getting-started.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T14:56:42Z",
       "corpus_path": "corpus/dcp-tools/getting-started.md"
     },
     {
@@ -899,8 +876,8 @@
       "description": "Use CustomDataManager recipes to register data, define StatVars and schema nodes, merge configs, validate bundles, and export files.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/preparing-data.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T14:56:42Z",
       "corpus_path": "corpus/dcp-tools/preparing-data.md"
     },
     {
@@ -911,8 +888,8 @@
       "description": "Why dcp-tools writes both config.json and MCF files, how a CSV column becomes an observation predicate, and how custom dimensions carry bilateral data.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/dc-schemas.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T13:35:47Z",
       "corpus_path": "corpus/dcp-tools/dc-schemas.md"
     },
     {
@@ -923,8 +900,8 @@
       "description": "Upload an exported bundle to Google Cloud Storage, trigger the Data Commons Platform ingestion workflow, check the upload, and fix common settings errors.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/loading-data.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T13:35:47Z",
       "corpus_path": "corpus/dcp-tools/loading-data.md"
     },
     {
@@ -935,8 +912,8 @@
       "description": "Use the dcp-tools CLI reference to convert CSV files to MCF, upload bundles, trigger ingestion, and check command options.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/cli-tools.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T13:35:47Z",
       "corpus_path": "corpus/dcp-tools/cli-tools.md"
     },
     {
@@ -947,8 +924,8 @@
       "description": "Read dcp-tools release notes from version 0.0.1 onwards, including changes to the API, settings and exported files.",
       "source_repo": "ONEcampaign/dcp-tools",
       "source_path": "docs/docs/changelog.md",
-      "source_commit": "222262ca19ce653bfa166e755b445c6e45c0fc66",
-      "last_modified": "2026-09-28T08:43:06Z",
+      "source_commit": "106083fbb821c93f41cbe1206de4f4f42512b5ca",
+      "last_modified": "2026-10-13T15:23:24Z",
       "corpus_path": "corpus/dcp-tools/changelog.md"
     },
     {
@@ -959,8 +936,8 @@
       "description": "Download seven development finance datasets with ODA Reader and use Python functions for filtering, bulk files, caching and schema translation.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/index.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/index.md"
     },
     {
@@ -971,8 +948,8 @@
       "description": "Understand the access problems ODA Reader addresses, compare it with direct downloads and SDMX libraries, and decide when another tool fits better.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/why-oda-reader.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/why-oda-reader.md"
     },
     {
@@ -983,8 +960,8 @@
       "description": "Install ODA Reader with pip or uv, download a year of DAC1 data, filter it by donor, and fetch DAC2a.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/getting-started.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/getting-started.md"
     },
     {
@@ -995,8 +972,8 @@
       "description": "What each of the seven datasets holds, from DAC1 aggregates to CRS project data and AidData, with the download function and an example for each.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/datasets.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/datasets.md"
     },
     {
@@ -1007,8 +984,8 @@
       "description": "Filter ODA Reader downloads by dimension, combine values and filters, find valid codes, and diagnose empty or slow queries.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/filtering.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/filtering.md"
     },
     {
@@ -1016,11 +993,11 @@
       "path": "tools/oda-reader/bulk-downloads",
       "title": "Bulk Downloads",
       "kind": "page",
-      "description": "Download the full CRS, DAC1, DAC2b, Multisystem and AidData files, stream them in chunks to save memory, and handle their .Stat schema.",
+      "description": "Download the full CRS, DAC1, DAC2b, Multisystem and AidData files, stream the CRS and Multisystem files in chunks to save memory, and handle their .Stat schema.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/bulk-downloads.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/bulk-downloads.md"
     },
     {
@@ -1031,8 +1008,8 @@
       "description": "Configure API and bulk-file caches, change cache locations, clear stored data, and set request limits for OECD calls.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/caching.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/caching.md"
     },
     {
@@ -1043,8 +1020,8 @@
       "description": "How the pre_process and dotstat_codes options convert Data Explorer API columns and codes to the OECD.Stat schema, and which mode to pick.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/schema-translation.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/schema-translation.md"
     },
     {
@@ -1055,8 +1032,8 @@
       "description": "Fetch OECD DAC codelists such as purpose codes, recipients and provider agencies as snapshots, read their keys, and reconcile them against stored versions.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/codelists.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/codelists.md"
     },
     {
@@ -1067,8 +1044,8 @@
       "description": "Check codelist function signatures, snapshot attributes, frame columns, reconciliation results, module constants and exceptions.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/codelists-reference.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/codelists-reference.md"
     },
     {
@@ -1079,8 +1056,8 @@
       "description": "Map the 26 OECD codelist ids to names and fetch functions, and identify the contract that covers each codelist.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/codelist-ids.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/codelist-ids.md"
     },
     {
@@ -1091,8 +1068,8 @@
       "description": "Build SDMX filters with QueryBuilder, pin dataflow versions, tune rate limits, combine queries, and debug failed downloads.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/advanced.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/advanced.md"
     },
     {
@@ -1103,8 +1080,8 @@
       "description": "Find ODA Reader release notes in the repository, understand semantic versioning, and upgrade with pip or uv.",
       "source_repo": "ONEcampaign/oda_reader",
       "source_path": "docs/docs/changelog.md",
-      "source_commit": "fe9b01a6598939d7be6b9f2b21a7cb811bcbca49",
-      "last_modified": "2026-09-28T08:42:40Z",
+      "source_commit": "96341817a81f717ad19106a246fb651b631d5294",
+      "last_modified": "2026-10-13T13:35:44Z",
       "corpus_path": "corpus/oda_reader/changelog.md"
     },
     {
@@ -1115,8 +1092,8 @@
       "description": "What imf-reader fetches from the IMF, how it joins the WEO API and bulk archive, and a first WEO query in pandas.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/index.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/index.md"
     },
     {
@@ -1127,8 +1104,8 @@
       "description": "Compare imf-reader with weo-reader and manual downloads, and learn how it handles IMF WEO and SDR data and where it falls short.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/why-imf-reader.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/why-imf-reader.md"
     },
     {
@@ -1139,8 +1116,8 @@
       "description": "Install imf-reader, fetch and filter a WEO release, check which release you got, and fetch SDR exchange rates and holdings.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/getting-started.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/getting-started.md"
     },
     {
@@ -1151,8 +1128,8 @@
       "description": "Fetch and filter IMF WEO releases, inspect their columns and series metadata, and check which errors the package can raise.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/weo.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/weo.md"
     },
     {
@@ -1163,8 +1140,8 @@
       "description": "Learn which WEO releases each IMF source serves, which two are corrupt, and where units and metadata differ.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/weo-coverage.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/weo-coverage.md"
     },
     {
@@ -1175,8 +1152,8 @@
       "description": "How to fetch SDR holdings, allocations, exchange rates, and interest rates from IMF web pages with imf-reader.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/sdr.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/sdr.md"
     },
     {
@@ -1187,8 +1164,8 @@
       "description": "Where imf-reader keeps its disk cache, how long entries last, and how to relocate, inspect, clear, or disable it.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/caching.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
-      "last_modified": "2026-09-28T08:43:26Z",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
+      "last_modified": "2026-10-13T13:35:17Z",
       "corpus_path": "corpus/imf-reader/caching.md"
     },
     {
@@ -1199,7 +1176,7 @@
       "description": "Where to find the imf-reader version history, how its version numbers work, and what the 3.0 release removes.",
       "source_repo": "ONEcampaign/imf-reader",
       "source_path": "docs/docs/changelog.md",
-      "source_commit": "6bac8bdcabe8feb3fb3c5f1aa561812f4ebfce57",
+      "source_commit": "9170b4b1dc6ae81c9073618ebf6a3e44b3ecbee3",
       "last_modified": "2026-09-28T08:43:26Z",
       "corpus_path": "corpus/imf-reader/changelog.md"
     },
@@ -1211,7 +1188,7 @@
       "description": "What tossd-reader does, how to install it, and where to start when loading TOSSD activity-level data into pandas.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/index.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
       "last_modified": "2026-09-28T08:43:43Z",
       "corpus_path": "corpus/tossd-reader/index.md"
     },
@@ -1223,8 +1200,8 @@
       "description": "Rank Senegal's TOSSD providers for 2024 and build a 2019 to 2024 constant-price disbursement trend for a consistent provider cohort.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/tutorials/first-analysis.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/tutorials/first-analysis.md"
     },
     {
@@ -1235,8 +1212,8 @@
       "description": "Export annual TOSSD data to Parquet, inspect its provenance manifest, verify the data vintage, and reload the extract for analysis.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/tutorials/reproducible-extract.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/tutorials/reproducible-extract.md"
     },
     {
@@ -1247,8 +1224,8 @@
       "description": "Browse the packaged codelists and resolve a provider, recipient, or other code or name to a value that get_tossd accepts.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/look-up-codes.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/look-up-codes.md"
     },
     {
@@ -1259,8 +1236,8 @@
       "description": "Filter TOSSD activities by sector name or code, match the published sector vocabulary, and reach sub-sector detail through purpose codes.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/filter-by-sector.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/filter-by-sector.md"
     },
     {
@@ -1271,8 +1248,8 @@
       "description": "Rank official providers by total TOSSD disbursement with rank_entities, which leaves out aggregate summary rows by default.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/rank-providers.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/rank-providers.md"
     },
     {
@@ -1283,8 +1260,8 @@
       "description": "Compare TOSSD disbursements across years in constant prices with a fixed provider cohort, and see which structural breaks fall in the window.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/compare-years.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/compare-years.md"
     },
     {
@@ -1295,8 +1272,8 @@
       "description": "Sum TOSSD disbursements by least developed country status, World Bank income group, or UN region, with regional and multi-country flows kept separate.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/aggregate-by-recipient-group.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/aggregate-by-recipient-group.md"
     },
     {
@@ -1307,8 +1284,8 @@
       "description": "Split TOSSD flows into grants, concessional loans, non-concessional loans, and equity, and calculate net transfers after debt repayments.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/analyse-instruments-and-debt.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/analyse-instruments-and-debt.md"
     },
     {
@@ -1319,8 +1296,8 @@
       "description": "Calculate disbursements by SDG goal or target, weighting activities across their reported tags so totals preserve each activity's full value.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/analyse-by-sdg.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/analyse-by-sdg.md"
     },
     {
@@ -1331,8 +1308,8 @@
       "description": "Use the twelve packaged keyword markers to examine climate and gender finance, with a combined total that counts each row once across selected markers.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/analyse-by-keyword.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/analyse-by-keyword.md"
     },
     {
@@ -1343,8 +1320,8 @@
       "description": "Filter to Pillar II.A or II.B, break Pillar II down by sub-pillar and year, and check sub-pillar coverage before comparing years.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/analyse-by-subpillar.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/analyse-by-subpillar.md"
     },
     {
@@ -1355,8 +1332,8 @@
       "description": "Isolate Pillar II spending recorded inside the provider country and calculate its share of total Pillar II disbursements.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/provider-costs.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/provider-costs.md"
     },
     {
@@ -1367,8 +1344,8 @@
       "description": "Add ISO3 codes to TOSSD provider and recipient columns and join the data to World Bank, IMF, or in-house country datasets.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/join-other-datasets.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/join-other-datasets.md"
     },
     {
@@ -1379,8 +1356,8 @@
       "description": "Use reconcile() to check TOSSD figures against the tossd.online portal or a spreadsheet, then investigate any mismatch.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/reconcile-a-figure.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/reconcile-a-figure.md"
     },
     {
@@ -1391,8 +1368,8 @@
       "description": "Load a year's TOSSD data with get_tossd_raw() and inspect the publisher's original column names, data types, and order.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/read-published-columns.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/read-published-columns.md"
     },
     {
@@ -1403,8 +1380,8 @@
       "description": "Prime the local cache while connected, switch tossd-reader to offline mode, and inspect which data vintages sit on disk.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/how-to/work-offline.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/how-to/work-offline.md"
     },
     {
@@ -1415,8 +1392,8 @@
       "description": "How TOSSD splits finance into Pillar I and Pillar II, and when to exclude aggregate provider rows to avoid double-counting.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/about/pillars-and-aggregates.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/about/pillars-and-aggregates.md"
     },
     {
@@ -1427,8 +1404,8 @@
       "description": "What the eight TOSSD amount columns measure, from commitments and disbursements to constant prices, net flows, and mobilised private finance.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/about/amounts.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/about/amounts.md"
     },
     {
@@ -1439,8 +1416,8 @@
       "description": "Why TOSSD totals grew from 2019 to 2024, through more reporting providers, inflation, and classification changes, and how TOSSD differs from ODA.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/about/comparability.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/about/comparability.md"
     },
     {
@@ -1451,8 +1428,8 @@
       "description": "Why TOSSD files change in place, and how the cache, provenance records, export manifests, and offline mode let you reproduce a result.",
       "source_repo": "ONEcampaign/tossd-reader",
       "source_path": "docs/about/reproducibility.md",
-      "source_commit": "d6f20928fce06dac487266b5dda394437fd3894c",
-      "last_modified": "2026-09-28T08:43:43Z",
+      "source_commit": "70303888d7d0f483b0f9bdaf3c827ff98fb88ebd",
+      "last_modified": "2026-10-13T13:35:28Z",
       "corpus_path": "corpus/tossd-reader/about/reproducibility.md"
     },
     {
@@ -1463,8 +1440,8 @@
       "description": "Build a Parquet dataset from a plain-English development-finance question.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/quickstart.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T18:24:27Z",
       "corpus_path": "corpus/dfo-apis/quickstart.md"
     },
     {
@@ -1475,8 +1452,8 @@
       "description": "Understand how questions, specs, versions, StatVars, series, rows, and facets fit together.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/concepts.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/concepts.md"
     },
     {
@@ -1487,8 +1464,8 @@
       "description": "Resolve a plain-English question into an interpretable DFO spec.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/resolve-a-question.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/resolve-a-question.md"
     },
     {
@@ -1499,8 +1476,8 @@
       "description": "Create, retrieve, and download a versioned DFO dataset.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/get-a-dataset.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/get-a-dataset.md"
     },
     {
@@ -1508,11 +1485,11 @@
       "path": "api/look-things-up",
       "title": "Look things up",
       "kind": "page",
-      "description": "Resolve names, inspect graph nodes, and read source documentation.",
+      "description": "Resolve names, inspect graph nodes, list what belongs to them, and read source documentation.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/look-things-up.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/look-things-up.md"
     },
     {
@@ -1523,8 +1500,8 @@
       "description": "Reference for DFO API URLs, versioning, response tracing, and errors.",
       "source_repo": "ONEcampaign/dfo-apis",
       "source_path": "docs/guide/conventions.md",
-      "source_commit": "b65b427074b274a763454578b96c10f180050301",
-      "last_modified": "2026-10-11T11:54:40Z",
+      "source_commit": "dabd4f594413fa2ac6b136d7d10479196ec0da69",
+      "last_modified": "2026-10-13T14:23:33Z",
       "corpus_path": "corpus/dfo-apis/conventions.md"
     },
     {
@@ -1535,8 +1512,8 @@
       "description": "Connect the DFO to Claude, ChatGPT, or Gemini so your assistant can look up development finance data. Developers can also connect Claude Code, Codex, or Gemini CLI.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/connect.md",
-      "source_commit": "1839ed83b60e0535a29862309fd3728142e5061d",
-      "last_modified": "2026-10-11T12:06:14Z",
+      "source_commit": "6fc58b2ce96e4382ec6c123ed9f01f0450703b9e",
+      "last_modified": "2026-10-13T21:45:35Z",
       "corpus_path": "corpus/dfo-ai/connect.md"
     },
     {
@@ -1547,8 +1524,8 @@
       "description": "How a question to the DFO MCP server becomes a cited answer, and the limits and refusals that bound it.",
       "source_repo": "ONEcampaign/dfo-ai",
       "source_path": "docs/guide/what-you-can-ask.md",
-      "source_commit": "1839ed83b60e0535a29862309fd3728142e5061d",
-      "last_modified": "2026-10-11T12:06:14Z",
+      "source_commit": "6fc58b2ce96e4382ec6c123ed9f01f0450703b9e",
+      "last_modified": "2026-10-13T13:38:53Z",
       "corpus_path": "corpus/dfo-ai/what-you-can-ask.md"
     },
     {
@@ -1559,8 +1536,8 @@
       "description": "Context for answering questions about the Development Finance Observatory itself: what it is, who builds and funds it, what data it holds and from which sources, how answers are sourced and cited, how often data updates, privacy, and where to get help. Load when a user asks about the DFO or this assistant.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "internal/skills/dfo-faq/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T22:12:16Z",
       "corpus_path": "corpus/dfo-skills/dfo-faq/SKILL.md"
     },
     {
@@ -1571,8 +1548,8 @@
       "description": "Context for working with the OECD DAC1 table, the donor-level totals of ODA, OOF, export credits and private flows by aid type. Covers who reports, the flow types (grant equivalent, net and gross disbursements, commitments) and price bases, what the ODA total includes (in-donor costs and core multilateral contributions), private sector instruments, ODA/GNI, and the double-counting traps with donor aggregates, EU Institutions, nested aid-type lines and memo items. Load once DAC1 has been chosen for an analysis, or when working with DAC1 figures. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-dac1/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-dac1/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-dac1.zip"
     },
@@ -1584,7 +1561,7 @@
       "description": "Context for working with the OECD DAC2A table, ODA disbursements by donor and recipient country or region. Covers its measures, multilateral agencies reporting as donors and appearing as recipients, how its totals reconcile with DAC1, the OECD's imputed multilateral ODA by recipient, and the double-counting traps with donor and recipient aggregates, EU aggregates and imputed figures. Load once DAC2A has been chosen for an analysis, or when working with DAC2A figures. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-dac2a/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
       "last_modified": "2026-10-10T21:21:31Z",
       "corpus_path": "corpus/dfo-skills/oda-dac2a/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-dac2a.zip"
@@ -1597,8 +1574,8 @@
       "description": "Context for working with the OECD DAC2B table, other official flows (OOF) and officially supported export credits by donor and recipient. Covers its measures, why bilateral donors' figures sit at regional or income-group level while country detail comes from multilateral lenders, and the double-counting traps with donor and recipient aggregates and nested measures. Load once DAC2B has been chosen for an analysis, or when working with DAC2B figures. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-dac2b/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-dac2b/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-dac2b.zip"
     },
@@ -1610,8 +1587,8 @@
       "description": "Context for working with the OECD Creditor Reporting System (CRS), the activity-level dataset of ODA, OOF, private sector instruments and private philanthropy reported by bilateral providers, multilateral organisations and foundations. Covers its attributes, coverage by year and against DAC1, the flow categories and bilateral/multilateral flags, the April 2026 core contribution records and their treatment in the DFO, and the double-counting traps with multilateral outflows, foundation funding and regional buckets. Load once the CRS has been chosen for an analysis, or when working with CRS records. For choosing between DAC datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-crs/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:35:07Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-crs/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-crs.zip"
     },
@@ -1623,8 +1600,8 @@
       "description": "Context for working with ONE's imputed multilateral sectors dataset, which estimates how much of each provider's core (unearmarked) contributions to multilateral organisations reached each sector and recipient. Covers how the estimate is built from Multisystem core contributions and multilaterals' CRS spending, its dimensions and price basis, how it relates to the OECD's imputed multilateral ODA and the discontinued OECD sectoral method, how contributions with borrowed or no shares are published, and the double-counting traps when combining it with bilateral CRS data or multilateral outflows. Load once this dataset has been chosen for an analysis, or when working with its figures. For choosing between datasets, use oda-dataset-selection.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-imputed-multilateral-sectors/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-imputed-multilateral-sectors/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-imputed-multilateral-sectors.zip"
     },
@@ -1636,8 +1613,8 @@
       "description": "Context for working with the World Bank's International Debt Statistics (IDS), the external debt of low- and middle-income countries as reported by the borrowers. Covers its sources, the debt stocks, flows, debt service, net flows and net transfers it reports and how they relate, the creditor and borrower breakdowns, the DFO's version of the data, the conversion to US dollars, projections, revisions and underreporting, how IDS differs from creditor-side data such as the CRS, and how its series codes are built. Load once IDS has been chosen for an analysis, or when working with IDS figures.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-ids/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-07T13:23:02Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-ids/SKILL.md",
       "bundle_path": "corpus/dfo-skills/debt-ids.zip"
     },
@@ -1648,8 +1625,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-ids/references/series-codes.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-02T11:11:50Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-ids/references/series-codes.md"
     },
     {
@@ -1657,11 +1634,11 @@
       "path": "skills/imf-weo",
       "title": "imf-weo",
       "kind": "skill",
-      "description": "Context for working with the IMF World Economic Outlook (WEO) database, the IMF staff's annual macroeconomic estimates and projections for 197 economies. Covers which years are actual and which are projections, which currencies and units can be compared or summed across countries, fiscal-year reporters and level breaks, how IMF country groups are built, countries with suspended data, and how the DFO's version of the data is shaped. Load once WEO has been chosen for an analysis, or when working with WEO figures.",
+      "description": "Context for working with the IMF World Economic Outlook (WEO) database, the IMF staff's annual macroeconomic estimates and projections for 197 economies. Covers which years are actual and which are projections, which currencies and units can be compared or summed across countries, fiscal-year reporters and level breaks, how IMF country groups are built, countries with suspended data, and how the DFO's version of the data is shaped. The DFO holds the WEO's national accounts series only. Load once WEO has been chosen for an analysis, or when working with WEO figures.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/imf-weo/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/imf-weo/SKILL.md",
       "bundle_path": "corpus/dfo-skills/imf-weo.zip"
     },
@@ -1673,8 +1650,8 @@
       "description": "Context for choosing the dataset that answers an ODA or development finance question. Summarises what each dataset covers, which breakdowns each supports, and how their totals relate.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-dataset-selection/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-dataset-selection/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-dataset-selection.zip"
     },
@@ -1686,8 +1663,8 @@
       "description": "Core definitions, measures and classifications in ODA analysis. Covers the 0.7% ODA/GNI target and how ODA/GNI is calculated, the grant equivalent methodology and its 2018 break in comparability, Core ODA and the items it excludes (in-donor refugee costs, imputed student costs, debt relief), donor groupings (DAC members, DAC associates, non-DAC donors and EU Institutions, with the double-counting risk EU Institutions bring), ONE's sector groupings by CRS purpose code, and indicators of donor prioritisation such as sector shares and the bilateral/multilateral split.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-concepts.zip"
     },
@@ -1698,8 +1675,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/core-oda.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/core-oda.md"
     },
     {
@@ -1709,7 +1686,7 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/donor-groupings.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
       "last_modified": "2026-10-09T07:33:29Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/donor-groupings.md"
     },
@@ -1720,8 +1697,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/key-indicators.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/key-indicators.md"
     },
     {
@@ -1731,8 +1708,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-concepts/references/sector-groupings.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:35:07Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-concepts/references/sector-groupings.md"
     },
     {
@@ -1743,8 +1720,8 @@
       "description": "How the OECD DAC measures and reports ODA. Covers the flow types (gross disbursements, net disbursements, grant equivalents, and commitments) and which questions each fits, current and constant prices, DAC deflators and base years, and the 2018 switch to the grant-equivalent headline. Also covers how grants, concessional loans, and private sector instruments (PSI) qualify as ODA and are counted, including grant elements, discount rates, additionality, the institutional and instrument approaches, PSI transition arrangements, and the policy debate on loan and PSI measurement. Relevant to choosing a measure, comparing ODA across donors or years, explaining what an ODA figure represents, and assessing how a financing instrument counts in ODA.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-measures.zip"
     },
@@ -1755,8 +1732,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/flow-types.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/flow-types.md"
     },
     {
@@ -1766,8 +1743,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/grants-loans-psi.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/grants-loans-psi.md"
     },
     {
@@ -1777,8 +1754,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-measures/references/price-basis.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-measures/references/price-basis.md"
     },
     {
@@ -1789,8 +1766,8 @@
       "description": "Context for how ODA is channelled from donors to recipients. Covers the OECD distinction between bilateral and multilateral ODA, earmarked (bi-multi) funding through multilaterals, the OECD List of ODA-eligible international organisations, channel of delivery codes, multilateral outflows, and how a donor's core multilateral contributions are attributed to sectors through imputations.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-channels/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-channels/SKILL.md",
       "bundle_path": "corpus/dfo-skills/oda-channels.zip"
     },
@@ -1801,8 +1778,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-channels/references/bilateral-multilateral.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-09T07:33:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-channels/references/bilateral-multilateral.md"
     },
     {
@@ -1812,55 +1789,9 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/oda-channels/references/sector-imputations.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/oda-channels/references/sector-imputations.md"
-    },
-    {
-      "id": "dfo-skills/oda-policy-markers",
-      "path": "skills/oda-policy-markers",
-      "title": "oda-policy-markers",
-      "kind": "skill",
-      "description": "Covers OECD DAC policy markers used to classify bilateral ODA in the Creditor Reporting System (CRS). Use when the user asks what a policy marker is, which markers exist, how to score an activity, how to interpret gender or climate marker data, or how to analyse ODA by policy objective. Also use when the user asks whether policy marker analysis is appropriate for a given question.",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-policy-markers/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-07T13:23:02Z",
-      "corpus_path": "corpus/dfo-skills/oda-policy-markers/SKILL.md",
-      "bundle_path": "corpus/dfo-skills/oda-policy-markers.zip"
-    },
-    {
-      "id": "dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
-      "path": "skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements",
-      "title": "Reporting commitments vs. disbursements",
-      "kind": "page",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
-      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-commitments-vs-disbursements.md"
-    },
-    {
-      "id": "dfo-skills/oda-policy-markers/references/policy-marker-general",
-      "path": "skills/oda-policy-markers/references/policy-marker-general",
-      "title": "Policy markers",
-      "kind": "page",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-policy-markers/references/policy-marker-general.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
-      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-general.md"
-    },
-    {
-      "id": "dfo-skills/oda-policy-markers/references/policy-marker-scoring",
-      "path": "skills/oda-policy-markers/references/policy-marker-scoring",
-      "title": "Policy marker scoring",
-      "kind": "page",
-      "source_repo": "ONEcampaign/dfo-skills",
-      "source_path": "skills/oda-policy-markers/references/policy-marker-scoring.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
-      "corpus_path": "corpus/dfo-skills/oda-policy-markers/references/policy-marker-scoring.md"
     },
     {
       "id": "dfo-skills/debt-concepts",
@@ -1870,8 +1801,8 @@
       "description": "Core concepts in sovereign debt analysis, domestic and external, that hold across data sources. Covers external against domestic debt and the three ways of drawing the line between them, where domestic public debt figures come from and what sets domestic debt apart, which parts of the public sector a debt figure covers, face value against present value, the choices that make two figures for \"external public debt\" or \"debt service\" differ (IMF credit, creditor groups, Chinese lenders, regional definitions, denominators) and the choices ONE's published analysis makes, concessionality under the World Bank, OECD and IMF definitions, and how debt relief appears in aid data and in debt data. Load for any question about a country's public, external or domestic debt, its creditors, debt service or debt relief, alongside the skill for the data source in use.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-concepts/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-concepts/SKILL.md",
       "bundle_path": "corpus/dfo-skills/debt-concepts.zip"
     },
@@ -1882,8 +1813,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-concepts/references/creditors.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-concepts/references/creditors.md"
     },
     {
@@ -1893,8 +1824,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-concepts/references/domestic-debt.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-06T11:21:42Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-concepts/references/domestic-debt.md"
     },
     {
@@ -1904,8 +1835,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-concepts/references/relief-and-restructuring.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-concepts/references/relief-and-restructuring.md"
     },
     {
@@ -1916,8 +1847,8 @@
       "description": "Context for describing a country's external debt: how much it owes and how that has changed, who borrowed, which creditors hold the debt, its cost and terms, debt service against exports and revenue, upcoming payments, debt flows, arrears and reserves, and comparisons with peers. Covers which measure answers each part, the traps in each, and what an external-only profile leaves out. Load for questions about a country's debt situation, how much it owes and to whom, how expensive its debt is, or what it pays each year. Questions about whether the debt is sustainable or at risk need the debt-sustainability skill as well.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-profile/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-07T13:23:02Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-profile/SKILL.md",
       "bundle_path": "corpus/dfo-skills/debt-profile.zip"
     },
@@ -1929,8 +1860,8 @@
       "description": "Context on how the IMF and World Bank assess whether a country's public debt is sustainable, and how far public data can approximate their assessments. Covers debt sustainability analyses (DSAs), which of the two frameworks applies to a country (the joint framework for low-income countries, LIC-DSF, or the IMF's framework for market-access countries, MAC-SRDSF), risk ratings against sustainability judgements, solvency against liquidity, the indicators and thresholds each framework uses, and why indicators built from debt and macroeconomic data differ from a DSA's. Carries the IMF's list of LIC DSAs with each country's latest risk of external debt distress. Load for questions about whether a country's debt is sustainable, its risk of debt distress or sovereign stress, which countries are at high risk or in debt distress, default risk, DSA ratings, debt thresholds or the debt sustainability frameworks.",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-sustainability/SKILL.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-11T12:06:29Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-sustainability/SKILL.md",
       "bundle_path": "corpus/dfo-skills/debt-sustainability.zip"
     },
@@ -1941,8 +1872,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-sustainability/references/lic-dsa-list.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-06T12:35:35Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-sustainability/references/lic-dsa-list.md"
     },
     {
@@ -1952,8 +1883,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-sustainability/references/lic-dsf.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-06T12:35:35Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-sustainability/references/lic-dsf.md"
     },
     {
@@ -1963,8 +1894,8 @@
       "kind": "page",
       "source_repo": "ONEcampaign/dfo-skills",
       "source_path": "skills/debt-sustainability/references/mac-srdsf.md",
-      "source_commit": "89887bd57bdee7d21b032a8f95ad66d06f3d63e3",
-      "last_modified": "2026-10-06T12:35:35Z",
+      "source_commit": "8add45a2d219149698bf1df91b1200db10d2425b",
+      "last_modified": "2026-10-13T13:34:58Z",
       "corpus_path": "corpus/dfo-skills/debt-sustainability/references/mac-srdsf.md"
     },
     {

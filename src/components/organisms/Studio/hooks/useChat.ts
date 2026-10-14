@@ -19,7 +19,14 @@ import {
     WORKING,
 } from '@/lib/studio/chatLine';
 import { createCanvasEdits } from '@/lib/studio/canvasEdits';
-import { clarifyFromFrame, type Clarify } from '@/lib/studio/clarify';
+import {
+    clarifyFromFrame,
+    clarifyNote,
+    clarifyReply,
+    type Clarify,
+    type ClarifyAnswers,
+    type ClarifyReply,
+} from '@/lib/studio/clarify';
 import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
@@ -209,13 +216,11 @@ export const useChat = (initial?: ChatSnapshot) => {
         initial && !initial.sessionId ? buildRecap(initial.messages) : null,
     );
     // The pending pause's addressing (interrupt_id) with, for elicitations,
-    // its options (chooseOption() reads a chosen id's label from these for
-    // the transcript note) and whether free text / skip are allowed.
+    // the normalized clarify that answerClarify() builds its reply and
+    // status note from, and that skipClarify() reads `skippable` from.
     const pendingInterruptRef = useRef<{
         interruptId: string;
-        options?: Clarify['options'];
-        allowFreeText?: boolean;
-        skippable?: boolean;
+        clarify?: Clarify;
     } | null>(null);
     // The card an in-flight `edit` turn is changing. The harness answers an
     // edit with a REPLACEMENT component under a new id (and drops the old one
@@ -572,9 +577,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         grace.cancel();
                         pendingInterruptRef.current = {
                             interruptId: clarify.interruptId,
-                            options: clarify.options,
-                            allowFreeText: clarify.allowFreeText,
-                            skippable: clarify.skippable,
+                            clarify,
                         };
                         setState((prev) => ({
                             ...prev,
@@ -848,11 +851,7 @@ export const useChat = (initial?: ChatSnapshot) => {
     // Continue a paused turn on /interrupt — shared by clarify answers, the
     // skip button and the plan actions.
     const resume = useCallback(
-        (
-            decision: 'approve' | 'amend' | 'reject' | 'answer' | 'skip',
-            payload: string | undefined,
-            note: string | null,
-        ) => {
+        (reply: ClarifyReply, note: string | null) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
 
@@ -872,38 +871,24 @@ export const useChat = (initial?: ChatSnapshot) => {
             }
 
             stream(turnCount.current, (handlers, signal) =>
-                runInterrupt(
-                    conversation,
-                    pending.interruptId,
-                    decision,
-                    payload,
-                    handlers,
-                    signal,
-                ),
+                runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
             );
         },
         [stream],
     );
 
-    // Answer the pending clarify with a chosen option: resumes with its id,
-    // the transcript note names its label.
-    const chooseOption = useCallback(
-        (id: string) => {
-            const pending = pendingInterruptRef.current;
-            const label = pending?.options?.find((option) => option.id === id)?.label ?? id;
+    // Answer every question of the pending clarify at once, keyed by
+    // question id. The reply takes the frame's shape (`answers`, or a legacy
+    // frame's `payload`); the note names the chosen labels and typed text.
+    const answerClarify = useCallback(
+        (answers: ClarifyAnswers) => {
+            const clarify = pendingInterruptRef.current?.clarify;
 
-            resume('answer', id, `_You chose: ${label}_`);
-        },
-        [resume],
-    );
+            if (!clarify) {
+                return;
+            }
 
-    // Answer the pending clarify with free text: resumes with the trimmed
-    // text, which the transcript note also shows.
-    const answerText = useCallback(
-        (text: string) => {
-            const trimmed = text.trim();
-
-            resume('answer', trimmed, `_${trimmed}_`);
+            resume(clarifyReply(clarify, answers), `_${clarifyNote(clarify, answers)}_`);
         },
         [resume],
     );
@@ -914,8 +899,8 @@ export const useChat = (initial?: ChatSnapshot) => {
     const skipClarify = useCallback(() => {
         const pending = pendingInterruptRef.current;
 
-        if (pending?.skippable) {
-            resume('skip', undefined, '_Skipped._');
+        if (pending?.clarify?.skippable) {
+            resume({ decision: 'skip' }, '_Skipped._');
 
             return;
         }
@@ -937,7 +922,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                       ? '_Plan rejected._'
                       : `_Change requested: ${payload ?? ''}_`;
 
-            resume(decision, decision === 'amend' ? payload : undefined, note);
+            resume({ decision, ...(decision === 'amend' ? { payload } : {}) }, note);
         },
         [resume],
     );
@@ -1048,8 +1033,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         canvasVersion,
         send,
         unqueue,
-        chooseOption,
-        answerText,
+        answerClarify,
         skipClarify,
         respondPlan,
         stop,

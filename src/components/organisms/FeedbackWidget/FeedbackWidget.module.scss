@@ -21,7 +21,7 @@
     @include flex(column, flex-end, flex-end);
 
     position: fixed;
-    right: calc(#{rem(10)} + env(safe-area-inset-right));
+    right: calc(#{band-offset(rem(10))} + env(safe-area-inset-right));
     bottom: env(safe-area-inset-bottom);
     z-index: $z-header + 1;
     gap: rem(8);
