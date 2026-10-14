@@ -194,6 +194,44 @@ test('noDataText names the only_alternate_has_data gate, honest that a different
     );
 });
 
+test('noDataText explains a source refusal in its own words', () => {
+    assert.equal(
+        noDataText({ reason: 'source_not_resolved' }),
+        "We couldn't match the data source named in that query.",
+    );
+    assert.equal(
+        noDataText({ reason: 'source_ambiguous' }),
+        'More than one data source matches that wording. Try naming it in full.',
+    );
+});
+
+test('noDataText names the denominators a denominator_not_available refusal compared', () => {
+    const base = 'The matching series is not in the form that query asks for.';
+    const gdp = { ref: 'Amount_EconomicActivity_GrossDomesticProduction_Nominal', label: 'GDP' };
+    const gni = { ref: 'Amount_EconomicActivity_GrossNationalIncome_Nominal', label: 'GNI' };
+    const rows = [
+        {
+            denominator: { asked: gdp, found: gni },
+            text: `${base} The closest series divides by GNI. The query asks to divide by GDP.`,
+        },
+        {
+            denominator: { asked: gdp, found: null },
+            text: `${base} The closest series states no base. The query asks to divide by GDP.`,
+        },
+        {
+            denominator: { asked: null, found: gni },
+            text: `${base} The closest series divides by GNI.`,
+        },
+        { denominator: { asked: null, found: null }, text: base },
+        // Today's server sends no denominator.
+        { denominator: undefined, text: base },
+    ];
+
+    for (const { denominator, text } of rows) {
+        assert.equal(noDataText({ reason: 'denominator_not_available', denominator }), text);
+    }
+});
+
 // --- noDataCallout ----------------------------------------------------
 
 const QUESTION = 'government expenditure Kenya received as a donor in 2020';

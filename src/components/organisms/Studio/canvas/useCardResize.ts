@@ -15,7 +15,9 @@ import { DRAG_SLACK } from './useCardDrag';
 
 /**
  * Literal corner-grip resizing: snapped to cells, clamped to the per-kind
- * range. Pinned neighbours are hard walls (a step into them is refused);
+ * range. A card whose height is derived (layout's heightIsDerived) resizes in
+ * width only, and its height follows through the card's own fit. Pinned
+ * neighbours are hard walls (a step into them is refused);
  * unpinned ones scoot to the nearest fit live, step by step. Like a drag,
  * holding the grip near an edge auto-scrolls the sheet, and the scrolled
  * distance counts toward the resize (its own rAF loop).
@@ -43,6 +45,7 @@ export const useCardResize = ({
 }: UseCardResizeArgs) => {
     const startRef = useRef<{
         id: string;
+        widthOnly: boolean;
         w: number;
         h: number;
         x: number;
@@ -84,8 +87,13 @@ export const useCardResize = ({
             const max = SPAN_MAX[slot.widget.kind];
             // Width and height resize independently; the card's innards
             // scale, with the Source/Built-with bar always pinned visible.
+            // A derived height is the slot's live one. The fit changes it
+            // mid-drag, and the height at grab time would undo that on
+            // every move.
             const w = clamp(start.w + Math.round(dx / CELL), min.w, max.w);
-            const h = clamp(start.h + Math.round(dy / CELL), min.h, max.h);
+            const h = start.widthOnly
+                ? slot.h
+                : clamp(start.h + Math.round(dy / CELL), min.h, max.h);
 
             if (w === slot.w && h === slot.h) {
                 return prev;
@@ -128,38 +136,40 @@ export const useCardResize = ({
         rafRef.current = requestAnimationFrame(frame);
     };
 
-    const startResize = (id: string) => (event: React.PointerEvent<HTMLElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
+    const startResize =
+        (id: string, widthOnly: boolean) => (event: React.PointerEvent<HTMLElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.setPointerCapture(event.pointerId);
 
-        const slot = slots[id];
-        const scroller = scrollerOf(boardRef);
+            const slot = slots[id];
+            const scroller = scrollerOf(boardRef);
 
-        if (!slot) {
-            return;
-        }
+            if (!slot) {
+                return;
+            }
 
-        startRef.current = {
-            id,
-            w: slot.w,
-            h: slot.h,
-            x: event.clientX,
-            y: event.clientY,
-            scrollLeft: scroller?.scrollLeft ?? 0,
-            scrollTop: scroller?.scrollTop ?? 0,
+            startRef.current = {
+                id,
+                widthOnly,
+                w: slot.w,
+                h: slot.h,
+                x: event.clientX,
+                y: event.clientY,
+                scrollLeft: scroller?.scrollLeft ?? 0,
+                scrollTop: scroller?.scrollTop ?? 0,
+            };
+            pointRef.current = { x: event.clientX, y: event.clientY };
+            speedRef.current = { x: 0, y: 0 };
+            setFloor({
+                cols: extent.rightCol + GAP + DRAG_SLACK,
+                rows: extent.bottomRow + GAP + DRAG_SLACK,
+            });
+
+            if (!rafRef.current) {
+                rafRef.current = requestAnimationFrame(frame);
+            }
         };
-        pointRef.current = { x: event.clientX, y: event.clientY };
-        speedRef.current = { x: 0, y: 0 };
-        setFloor({
-            cols: extent.rightCol + GAP + DRAG_SLACK,
-            rows: extent.bottomRow + GAP + DRAG_SLACK,
-        });
-
-        if (!rafRef.current) {
-            rafRef.current = requestAnimationFrame(frame);
-        }
-    };
 
     const moveResize = (event: React.PointerEvent) => {
         if (!startRef.current) {

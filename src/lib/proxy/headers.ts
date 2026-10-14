@@ -9,8 +9,10 @@
  * Datasets API's file links answer), cache-control (the `no-store` on such a
  * redirect to a signed URL, which forward.ts's default `no-cache` would
  * weaken), retry-after (on a busy refusal), www-authenticate and every
- * `mcp-*` header. Matching by prefix means a protocol header added later needs no
- * change here. Authorization and x-dfo-caller are set by forward.ts.
+ * `mcp-*` header. The content-length is left behind when the upstream encoded
+ * the body, since fetch has decoded it by then. Matching by prefix means a
+ * protocol header added later needs no change here. Authorization and
+ * x-dfo-caller are set by forward.ts.
  */
 const MCP_PREFIX = 'mcp-';
 
@@ -59,9 +61,18 @@ export const upstreamRequestHeaders = (source: Headers, into: Headers = new Head
     return into;
 };
 
+// Node's fetch decodes an encoded body and keeps the upstream's headers, so a
+// content-length beside a content-encoding counts bytes the client never gets.
+export const dropEncodedLength = (source: Headers, into: Headers): void => {
+    if (source.has('content-encoding')) {
+        into.delete('content-length');
+    }
+};
+
 /** The upstream's response headers that go back to the client. */
 export const clientResponseHeaders = (source: Headers, into: Headers = new Headers()): Headers => {
     pickWithMcp(source, RESPONSE_HEADERS, into);
+    dropEncodedLength(source, into);
 
     return into;
 };

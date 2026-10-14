@@ -17,6 +17,7 @@ import type { CSSProperties } from 'react';
 import styles from '../cards/ChartCard.module.scss';
 
 import { formatAxis } from '@/lib/chat/widgets';
+import { GUTTER_SHARE, LABEL_LINE_HEIGHT, labelFontSize, wrapLabel } from '@/lib/studio/chartFit';
 import { tooltipValue, valueAxisTitle, valueUnitOption } from '@/lib/studio/chartValue';
 import type { SeriesPair, ThemeDerived } from '@/lib/studio/theme';
 
@@ -90,6 +91,22 @@ const hoverGuide: Plugin<'bar' | 'line', { color: string }> = {
 };
 
 ChartJS.register(hoverGuide);
+
+// Tells the card each time the chart has laid itself out, so the card reads
+// the layout it sized itself for and not the one before a resize. The
+// callback rides in via chart.options.plugins.layoutReport.
+const layoutReport: Plugin<'bar' | 'line', { onLayout?: (chart: ChartJS) => void }> = {
+    id: 'layoutReport',
+    afterLayout: (chart, _args, options) => options.onLayout?.(chart),
+};
+
+ChartJS.register(layoutReport);
+
+// What a ranking's plot needs besides its rows, read off a finished layout
+// at `width`. `settled` is false while the plot is too short for Chart.js
+// to give the value axis its full height, which makes the band a low
+// reading.
+export type RowsLayout = { width: number; band: number; settled: boolean };
 
 // The bars' checkered weave — the same pattern the SCSS mixin paints on the
 // legend swatches, tiled from 3px squares of the series pair (scaled with
@@ -234,14 +251,83 @@ const htmlTooltip = ({
 // colour is the theme's resolved hex. The chart's unit sets how the value
 // axis and the tooltip write a number: "5.33%" for a percentage, any other
 // unit named in the axis title and beside each tooltip value.
+//
+// `rows` marks a ranking (see plotShape in lib/studio/chartFit). Every bar is
+// named, a long name wraps to a second line, and `onLayout` hears what the
+// plot needs beside its rows after each layout.
 export const buildChartOptions = (
     scale: number,
     autoSkip: boolean,
     theme: ThemeDerived,
-    { horizontal = false, unit }: { horizontal?: boolean; unit?: string } = {},
+    {
+        horizontal = false,
+        unit,
+        rows = false,
+        fontsReady = true,
+        onLayout,
+    }: {
+        horizontal?: boolean;
+        unit?: string;
+        rows?: boolean;
+        fontsReady?: boolean;
+        onLayout?: (layout: RowsLayout) => void;
+    } = {},
 ) => {
     // Small tick type on both axes — long names fit more text per line.
-    const labelFont = { family: 'Outfit', size: Math.round(8 * scale), weight: 700 as const };
+    // Chart.js keeps the text widths it measures for the life of a scale,
+    // keyed by the font. Naming the fallback until the faces have loaded
+    // gives the loaded face a clean set.
+    const labelFont = {
+        family: fontsReady ? 'Outfit' : 'Outfit, sans-serif',
+        size: labelFontSize(scale),
+        weight: 700 as const,
+    };
+    // Chart.js's own gap between an axis and its tick labels, scaled.
+    const categoryPadding = 3 * scale;
+
+    // A ranking's name set in the gutter: wrapped by what fits a share of
+    // the plot's width in the label type.
+    const gutterLabel = (chart: ChartJS, label: string): string | string[] => {
+        const { ctx } = chart;
+        const budget = chart.width * GUTTER_SHARE;
+
+        ctx.save();
+        ctx.font = `${labelFont.weight} ${labelFont.size}px ${labelFont.family}`;
+
+        const wrapped = wrapLabel(label, (text) => ctx.measureText(text).width <= budget);
+
+        ctx.restore();
+
+        return wrapped;
+    };
+
+    // The inset Chart.js leaves above a ranking's rows: half the last
+    // category's label plus the category tick padding, as `_calculatePadding`
+    // in chart.js sets a vertical scale's `paddingTop`. Worked out from that
+    // name and the tick options below, because the figure Chart.js holds
+    // follows the last label auto-skip kept, and so the plot's height.
+    const rowsInset = (chart: ChartJS): number => {
+        const last = gutterLabel(chart, String(chart.data.labels?.at(-1) ?? ''));
+        const lines = Array.isArray(last) ? last.length : 1;
+
+        return (lines * labelFont.size * LABEL_LINE_HEIGHT) / 2 + categoryPadding;
+    };
+
+    // The band is everything in the plot but the rows, which is the value
+    // axis and the inset above the first row.
+    const reportLayout = (chart: ChartJS) => {
+        const axis = chart.scales.x;
+
+        if (!axis || !onLayout) {
+            return;
+        }
+
+        onLayout({
+            width: chart.width,
+            band: axis.height + rowsInset(chart),
+            settled: axis.height < axis.maxHeight,
+        });
+    };
 
     // No hover (touch): the tooltip comes on a tap, not on a finger dragging
     // across the plot (that's a pan of the sheet), and leaves on the next
@@ -277,6 +363,7 @@ export const buildChartOptions = (
         plugins: {
             legend: { display: false },
             hoverGuide: { color: theme.muted },
+            layoutReport: { onLayout: rows ? reportLayout : undefined },
             // The house popup as HTML (Chart.js's external tooltip): full
             // control of type and wrapping — series names wrap to two lines,
             // values are bold — see .chartTip in the SCSS.
@@ -300,25 +387,37 @@ export const buildChartOptions = (
                     // once they don't (short year runs never rotate).
                     maxRotation: 45,
                     autoSkip,
-                    autoSkipPadding: 6 * scale,
-                    callback(this: Scale, value: number | string): string {
-                        return elideLabel(this.getLabelForValue(Number(value)));
+                    // Two lines of a ranking's name fill the row's pitch, so
+                    // any padding there would skip names a full pitch holds.
+                    autoSkipPadding: rows ? 0 : 6 * scale,
+                    padding: categoryPadding,
+                    callback(this: Scale, value: number | string): string | string[] {
+                        const label = this.getLabelForValue(Number(value));
+
+                        return rows ? gutterLabel(this.chart, label) : elideLabel(label);
                     },
                 },
             },
             [horizontal ? 'x' : 'y']: {
                 beginAtZero: true,
-                grid: { color: theme.line },
+                // Chart.js's own tick mark and title padding, scaled like
+                // the rest. The axis is part of a ranking card's height.
+                grid: { color: theme.line, tickLength: 8 * scale },
                 border: { display: false },
                 // The unit in words beside the numbers. A percentage's ticks
                 // carry the % sign instead.
-                title: { ...valueAxisTitle(unit), color: theme.text, font: labelFont },
+                title: {
+                    ...valueAxisTitle(unit),
+                    color: theme.text,
+                    font: labelFont,
+                    padding: 4 * scale,
+                },
                 ticks: {
                     maxTicksLimit: 4,
                     color: theme.text,
                     font: labelFont,
                     // A touch of air between the values and the plot.
-                    padding: Math.round(6 * scale),
+                    padding: 6 * scale,
                     callback: (value: number | string) => formatAxis(Number(value), unit),
                 },
             },

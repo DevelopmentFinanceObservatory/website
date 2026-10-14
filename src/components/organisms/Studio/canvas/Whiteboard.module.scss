@@ -172,7 +172,8 @@
 }
 
 // The resize grip: a corner glyph at the card's bottom-right, hover-only.
-// Dragging it resizes the card cell by cell within its kind's range.
+// Dragging it resizes the card cell by cell within its kind's range. On a
+// chart view it changes the width alone (the height follows the chart).
 .resizeGrip {
     @include flex(row, center, center);
 
@@ -198,6 +199,10 @@
             stroke-linecap: round;
         }
     }
+}
+
+.resizeGripWidth {
+    cursor: ew-resize;
 }
 
 .slot:hover .resizeGrip {

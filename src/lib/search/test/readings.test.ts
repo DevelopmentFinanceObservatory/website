@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { foldReadings, readingOf, readingsSummary } from '../readings.ts';
+import { basisNote, foldReadings, readingOf, readingsSummary } from '../readings.ts';
 import type { SentenceToken } from '../types.ts';
 
 const heading = (text: string, part_index?: number | null): SentenceToken => ({
@@ -132,4 +132,12 @@ test('foldReadings returns the plan itself when no part is a candidates part', (
     const plan = [heading('Aid to Kenya.', 0)];
 
     assert.equal(foldReadings(plan, [{ status: 'definite', variable_text: 'aid' }]), plan);
+});
+
+test('basisNote leads a rival reading with why it is offered, and the elected one with nothing', () => {
+    assert.equal(basisNote('direction'), 'The same measure, read in the other direction');
+    assert.equal(basisNote('twin'), 'An equivalent series that holds data');
+    assert.equal(basisNote(null), null);
+    // Today's server sends no basis.
+    assert.equal(basisNote(undefined), null);
 });

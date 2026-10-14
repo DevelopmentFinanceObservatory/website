@@ -3,7 +3,8 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { limiterKeyFor, setCaller, trustedHops } from './caller';
-import { clientResponseHeaders, pick, upstreamRequestHeaders } from './headers';
+import { relayBody } from './compress';
+import { clientResponseHeaders, dropEncodedLength, pick, upstreamRequestHeaders } from './headers';
 import { hit, rateHeaders, type Surface } from './rateLimit';
 
 /**
@@ -13,9 +14,12 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  * must not reach a client). An /api/* or /mcp call is rate-limited per IP
  * (src/lib/proxy/rateLimit, on only with REDIS_URL). A call is forwarded
  * with its method, query, body, content headers and every mcp-* header
- * (src/lib/proxy/headers), and the upstream's response streamed back
- * untouched: SSE (search resolve, studio turns, MCP) and file downloads both
- * depend on nothing being buffered here.
+ * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
+ * (search resolve, studio turns, MCP) and file downloads both depend on
+ * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
+ * or more is gzipped on the way for a client that accepts it
+ * (src/lib/proxy/compress); an event stream and every /mcp response go back
+ * as the upstream sent them.
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
@@ -52,7 +56,15 @@ type ForwardOptions = {
     caller?: string;
     // What to answer when the upstream is unreachable.
     unreachable: string;
+    // False sends every body back unencoded, whatever its type.
+    compress?: boolean;
 };
+
+const unreachable = (detail: string, headers: Record<string, string>): Response =>
+    Response.json(
+        { error: 'transient_unavailable', retry: 'retry_after_delay', detail },
+        { status: 502, headers },
+    );
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     const verdict = options.surface ? await hit(options.surface, clientIp(req)) : undefined;
@@ -96,16 +108,12 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             ...(hasBody ? { duplex: 'half' } : {}),
             cache: 'no-store',
             redirect: 'manual',
+            // A client that leaves takes the upstream call with it, a body
+            // that has gone quiet included.
+            signal: req.signal,
         } as RequestInit);
     } catch {
-        return Response.json(
-            {
-                error: 'transient_unavailable',
-                retry: 'retry_after_delay',
-                detail: options.unreachable,
-            },
-            { status: 502, headers: limitHeaders },
-        );
+        return unreachable(options.unreachable, limitHeaders);
     }
 
     const out = clientResponseHeaders(
@@ -113,7 +121,23 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         new Headers({ 'Cache-Control': 'no-cache', ...limitHeaders }),
     );
 
-    return new Response(upstream.body, { status: upstream.status, headers: out });
+    return relayBody({
+        accept: req.headers.get('accept-encoding'),
+        upstream,
+        headers: out,
+        compress: options.compress,
+        onEarlyFailure: (error) => {
+            // A client that left aborted the read itself, so no one is answered.
+            if (!req.signal.aborted) {
+                console.error(
+                    `relay failed before the first byte: ${new URL(options.target).pathname}`,
+                    error,
+                );
+            }
+
+            return unreachable(options.unreachable, limitHeaders);
+        },
+    });
 };
 
 // A static asset's request and response headers: conditional requests out,
@@ -157,6 +181,7 @@ export const forwardAsset = async (req: NextRequest, target: string): Promise<Re
     const out = new Headers();
 
     pick(upstream.headers, ASSET_RESPONSE_HEADERS, out);
+    dropEncodedLength(upstream.headers, out);
 
     return new Response(upstream.body, { status: upstream.status, headers: out });
 };

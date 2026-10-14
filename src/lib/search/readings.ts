@@ -7,7 +7,7 @@
 
 import { refsStatedBesides, sentenceBlocks } from './departures.ts';
 import { planSentenceText, tokenPart } from './sentencePlan.ts';
-import type { Part, SentenceToken } from './types';
+import type { CandidateBasis, Part, SentenceToken } from './types';
 
 /** What one reading card shows: its heading and byline as plain text, the
  *  measure token its About block describes, and the refs the reading's
@@ -24,6 +24,21 @@ const blockText = (plan: readonly SentenceToken[], segment: 'heading' | 'byline'
         .filter((block) => block.segment === segment)
         .map((block) => block.tokens.map((token) => token.text).join(''))
         .join(' ');
+
+// Why the part offers a reading beside the elected one (Spec.basis), as
+// the line its card leads with.
+const BASIS_NOTES: Record<CandidateBasis, string> = {
+    structural: 'Differs only in a choice your question left open',
+    nominated: 'Another reading of your words',
+    twin: 'An equivalent series that holds data',
+    direction: 'The same measure, read in the other direction',
+};
+
+/** The line a reading card leads with, saying why the part offers it.
+ *  Null for the elected reading, which carries no basis, and for a server
+ *  that sends none. */
+export const basisNote = (basis: CandidateBasis | null | undefined): string | null =>
+    (basis && BASIS_NOTES[basis]) ?? null;
 
 /** The reading a candidate spec's own sentence plan states. */
 export function readingOf(spec: { sentence_plan?: SentenceToken[] | null }): Reading {

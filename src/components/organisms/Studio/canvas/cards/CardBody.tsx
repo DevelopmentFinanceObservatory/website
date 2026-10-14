@@ -16,8 +16,10 @@ type CardBodyProps = {
     chartSource: ChartWidget | null;
     scale: number;
     theme: ThemeDerived;
-    // Text cards report the rows their content needs.
+    // Text and chart cards report the rows their content needs.
     widthCells: number;
+    // The card's current height in cells. A chart keeps it while it fits.
+    heightCells?: number;
     onFit: (rows: number) => void;
     extras: CardExtras;
 };
@@ -35,6 +37,7 @@ const CardBody = ({
     scale,
     theme,
     widthCells,
+    heightCells,
     onFit,
     extras,
 }: CardBodyProps) => {
@@ -66,6 +69,9 @@ const CardBody = ({
                 line={view === 'chart-line'}
                 scale={scale}
                 theme={theme}
+                widthCells={widthCells}
+                heightCells={heightCells}
+                onFit={onFit}
                 {...extras}
             />
         );
