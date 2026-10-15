@@ -1,3 +1,4 @@
+import { apisFetch } from '@/lib/apisAuth';
 import { db } from '@/lib/db';
 import { refreshResponse } from '@/lib/studio/liveShare';
 
@@ -11,5 +12,5 @@ type Context = { params: Promise<{ id: string; cardId: string }> };
 export const POST = async (_request: Request, { params }: Context) => {
     const { id, cardId } = await params;
 
-    return refreshResponse({ db, env: process.env, fetch }, id, cardId);
+    return refreshResponse({ db, env: process.env, fetch: apisFetch }, id, cardId);
 };

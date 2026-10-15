@@ -13,8 +13,10 @@
  * at most once an hour however many people open it.
  */
 
+import { unstable_cache } from 'next/cache.js';
 import { cache } from 'react';
 
+import { apisFetch } from '../apisAuth.ts';
 import { originLine } from '../dataCommons.ts';
 import { searchApiBase } from '../searchApi.ts';
 import type {
@@ -106,6 +108,48 @@ const cleanDcid = (dcid: string): string => dcid.replace(/^dcid:/, '');
 // A transient upstream or cold-start 503/504 from the API, which the read retries.
 const TRANSIENT_STATUSES = new Set([503, 504]);
 
+/** A graph answer other than 200, thrown so `unstable_cache` stores nothing. */
+class GraphAnswer extends Error {
+    readonly status: number;
+    readonly code: string | undefined;
+
+    constructor(status: number, code: string | undefined) {
+        super(`graph answered HTTP ${status}`);
+        this.status = status;
+        this.code = code;
+    }
+}
+
+/**
+ * One graph read, cached for REVALIDATE_SECONDS under its path. Only a 200
+ * body is stored. Any other answer is thrown as a GraphAnswer, and a throw
+ * leaves the cache untouched, so a 404 or a 503 is read again next time.
+ *
+ * The cache sits around the call because Next's fetch cache keys on the
+ * request headers, and the apis token (apisAuth.ts) changes at every refresh,
+ * which would store a fresh copy of each read per token. The fetch itself is
+ * `no-store`. Its timeout signal also opts it out of Next's per-render
+ * request dedupe, which would otherwise replay the first 503 to the retry.
+ */
+const cachedGraphRead = unstable_cache(
+    async (path: string): Promise<unknown> => {
+        const res = await apisFetch(`${searchApiBase()}/api/graph/${path}`, {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+        });
+
+        if (res.status !== 200) {
+            const body = (await res.json().catch(() => null)) as { code?: string } | null;
+
+            throw new GraphAnswer(res.status, body?.code);
+        }
+
+        return res.json();
+    },
+    ['sources-graph-read'],
+    { revalidate: REVALIDATE_SECONDS },
+);
+
 /**
  * One graph read. A 4xx answer returns null: 404 `node_not_held` is this
  * deployment not holding the node, 404 `not_found` is a bad dcid (a defect
@@ -114,46 +158,31 @@ const TRANSIENT_STATUSES = new Set([503, 504]);
  * surfaces as an error and only a true absence renders as a missing source.
  * `retries` re-reads after a 503 or 504, once `RETRY_DELAY_MS` has passed,
  * before that throw.
- *
- * Every read carries a timeout signal. Beyond bounding the read, the signal
- * opts the fetch out of Next's per-render request dedupe, which would
- * otherwise replay the first 503 to the retry. The hourly data cache applies
- * to a 200 answer.
  */
 const readGraph = async <T>(path: string, { retries = 0 } = {}): Promise<T | null> => {
-    const url = `${searchApiBase()}/api/graph/${path}`;
-    let res: Response;
-
     try {
-        res = await fetch(url, {
-            signal: AbortSignal.timeout(READ_TIMEOUT_MS),
-            next: { revalidate: REVALIDATE_SECONDS },
-        });
+        return (await cachedGraphRead(path)) as T;
     } catch (error) {
-        throw new Error(`sources: the graph read "${path}" failed`, { cause: error });
-    }
+        if (!(error instanceof GraphAnswer)) {
+            throw new Error(`sources: the graph read "${path}" failed`, { cause: error });
+        }
 
-    if (TRANSIENT_STATUSES.has(res.status) && retries > 0) {
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        if (TRANSIENT_STATUSES.has(error.status) && retries > 0) {
+            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
 
-        return readGraph<T>(path, { retries: retries - 1 });
-    }
+            return readGraph<T>(path, { retries: retries - 1 });
+        }
 
-    if (res.status >= 500) {
-        throw new Error(`sources: the graph answered "${path}" with HTTP ${res.status}`);
-    }
+        if (error.status >= 500) {
+            throw new Error(`sources: the graph answered "${path}" with HTTP ${error.status}`);
+        }
 
-    if (res.status === 404) {
-        const body = (await res.json().catch(() => null)) as { code?: string } | null;
-
-        if (body?.code === 'not_found') {
+        if (error.status === 404 && error.code === 'not_found') {
             console.error(`sources: the graph rejects "${path}" as unknown`);
         }
 
         return null;
     }
-
-    return res.ok ? ((await res.json()) as T) : null;
 };
 
 /**
@@ -221,8 +250,8 @@ const documentationPath = (dcid: string): string | null => {
 /** One source's documentation, for the detail page; null when the graph
  *  holds no such source or the dcid is not a well-formed path. Memoised per
  *  server request, so the page and its generateMetadata share one read. The
- *  fetch data cache stores only a 200 answer, so without this a 404 or a
- *  failure is read twice. */
+ *  hourly cache stores only a 200 answer, so without this a 404 or a failure
+ *  is read twice. */
 export const loadSourceDoc = cache(async (dcid: string): Promise<SourceDoc | null> => {
     const path = documentationPath(dcid);
 

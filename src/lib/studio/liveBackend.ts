@@ -16,6 +16,8 @@
  * live-refresh credential (`LIVE_REFRESH_PRINCIPAL`), which dfo-apis takes in
  * the `x-dfo-principal` header and dfo-ai as a bearer token. The component
  * read and the stored export are public and carry no credential.
+ * Callers inject `apisFetch` (src/lib/apisAuth), which adds the site's
+ * Cloud Run ID token to the dfo-apis calls and leaves the dfo-ai call alone.
  *
  * Every failure is a `BackendError` whose `code` is machine-readable, either
  * one of this module's own codes or the code of the back end's refusal.

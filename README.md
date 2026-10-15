@@ -28,10 +28,10 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Nothing here needs access to ONE's Google Cloud project (`dev-fin-observatory`). What runs depends on which back ends you can reach:
+Only the dev apis proxy below needs access to ONE's Google Cloud project (`dev-fin-observatory`). What runs depends on which back ends you can reach:
 
 - The static pages, `pnpm lint` and `pnpm typecheck` run with no configuration.
-- The data search and graph pages call the DFO apis service at `SEARCH_API_BASE`. `.env.example` points it at ONE's shared dev deployment, so those pages work only while that deployment is reachable from your network. Point it at your own `apis` instance to run them independently.
+- The data search and graph pages call the DFO apis service at `SEARCH_API_BASE`. `.env.example` points it at `http://localhost:8083`, where ONE maintainers run a `gcloud run services proxy` to the dev deployment; that proxy needs an account with invoker access in `dev-fin-observatory`, as `docs/development.md` describes. Without that access, point it at your own `apis` instance.
 - The Studio needs an `ai` harness at `STUDIO_API_BASE` (default `http://localhost:8080`) and a `STUDIO_TOKEN`, which ONE issues for its own deployments. Run the `ai` repository locally to use it.
 - Accounts and saved conversations need local Postgres (`just db-up && just db-migrate`, which requires Docker) and your own OAuth client credentials for at least one sign-in provider.
 - `pnpm test` needs the local Postgres but nothing from the cloud.
