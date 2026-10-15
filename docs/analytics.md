@@ -42,7 +42,7 @@ Source maps upload during `next build` when `SENTRY_ORG`, `SENTRY_PROJECT` and `
 
 ## Google Analytics
 
-`src/components/atoms/GoogleAnalytics/GoogleAnalytics.tsx` loads GA4 (measurement ID `G-NCWQ8XTXG1`) from the root layout when the page is served from `developmentfinance.org` or `www.developmentfinance.org`. The check reads the host name because production promotes the image built on staging, which makes every build-time variable the same on both. The ID and the host list are constants at the top of that file.
+`src/components/atoms/GoogleAnalytics/GoogleAnalytics.tsx` loads GA4 (measurement ID `G-NCWQ8XTXG1`) from the root layout when the page is served from `developmentfinance.org` or `www.developmentfinance.org`. The check reads the host name because production promotes the image built on dev, which makes every build-time variable the same on both. The ID and the host list are constants at the top of that file.
 
 Consent Mode v2 runs in advanced mode. An inline script in `src/app/layout.tsx` sets every consent type to `denied` on every host, ahead of the Usercentrics loader, and GA sends cookieless pings until the visitor chooses. Usercentrics has Google Consent Mode on and a "Google Analytics 4" service, and sends the `consent update` when the visitor chooses.
 
@@ -52,7 +52,7 @@ The "Privacy settings" button in the footer (`src/components/organisms/Footer/Fo
 
 Enhanced measurement records page views on App Router navigations (history changes), outbound clicks, scrolls, site search (`?q=`) and file downloads, so the site sends GA only its config call. The `track()` events above go to our own database alone.
 
-To check it on production, open the network panel and filter on `google-analytics.com/g/collect`. Before consent the requests carry `gcs=G100`, and after accepting in the banner they carry `gcs=G111`. The visit then shows in GA under Reports → Realtime. Localhost and staging make no `gtag/js` request.
+To check it on production, open the network panel and filter on `google-analytics.com/g/collect`. Before consent the requests carry `gcs=G100`, and after accepting in the banner they carry `gcs=G111`. The visit then shows in GA under Reports → Realtime. Localhost and dev make no `gtag/js` request.
 
 ## Guest Studio
 

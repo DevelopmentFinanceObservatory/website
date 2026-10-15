@@ -7,7 +7,7 @@ import { isEmbedPath } from '@/lib/embed';
 
 const MEASUREMENT_ID = 'G-NCWQ8XTXG1';
 
-// Production promotes the image built on staging, so every build-time env
+// Production promotes the image built on dev, so every build-time env
 // var is the same on both. The host name tells them apart.
 const PRODUCTION_HOSTS = ['developmentfinance.org', 'www.developmentfinance.org'];
 

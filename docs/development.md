@@ -42,7 +42,7 @@ workflows. `just` with no arguments lists everything. Install it with
 | Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `check` |
 | Container             | `docker-build`, `run-local`, `clean`                    |
 | Diagnostics           | `status`, `doctor`, `logs`, `deployed`                  |
-| Deploy config         | `set-staging-deploy-vars`, `deploy-prod`                |
+| Deploy config         | `set-dev-deploy-vars`, `deploy-prod`                |
 
 Run `just <recipe>` to see what each one does, or `just --list` for the
 one-line descriptions.
@@ -93,7 +93,7 @@ tools know about neither. A new migration is always a new file —
 never edit one that has already applied, even locally, and write a
 follow-up migration instead.
 
-This reaches staging the same way. Every staging deploy runs a migration
+This reaches the dev environment the same way. Every dev deploy runs a migration
 Job against the same image before the service rolls out to it.
 
 ### Card reference backfill

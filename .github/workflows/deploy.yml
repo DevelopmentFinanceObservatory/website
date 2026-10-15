@@ -1,18 +1,15 @@
 name: Deploy
 
-# Auto-deploys on every push to staging that touches the website image's
+# Auto-deploys on every push to dev that touches the website image's
 # inputs: the app source, its manifest/lockfile, deploy/Dockerfile, or the
 # deploy workflows themselves. The steps live in build-migrate-deploy.yml,
-# which deploy-prod.yml also runs, so staging exercises exactly the steps
-# production runs.
-#
-# Staging runs in the dev-fin-observatory GCP project, which only the
-# ONEcampaign copy of this repo can reach, so the deploy is guarded to that
-# owner.
+# which deploy-prod.yml also runs, so dev exercises exactly the steps
+# production runs. The deploy goes to the `dev` GitHub Environment, which
+# targets the dev-fin-observatory GCP project.
 
 on:
   push:
-    branches: [staging]
+    branches: [dev]
   workflow_dispatch: {}
 
 concurrency:
@@ -45,7 +42,7 @@ jobs:
               - '.github/workflows/deploy.yml'
               - '.github/workflows/build-migrate-deploy.yml'
 
-      # staging is the only branch that deploys. REF_NAME is read through
+      # dev is the only branch that deploys. REF_NAME is read through
       # env: rather than interpolated into the script, so a branch name
       # can't inject shell.
       - id: env
@@ -53,8 +50,8 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           case "$REF_NAME" in
-          staging)
-            echo "environment=staging" >> "$GITHUB_OUTPUT"
+          dev)
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
             ;;
           *)
             echo "::error::No deploy environment is mapped for branch '$REF_NAME'."
@@ -64,7 +61,7 @@ jobs:
 
   deploy:
     needs: changes
-    if: github.repository_owner == 'ONEcampaign' && needs.changes.outputs.website == 'true'
+    if: needs.changes.outputs.website == 'true'
     permissions:
       contents: read
       id-token: write

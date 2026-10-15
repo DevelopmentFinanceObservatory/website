@@ -5,7 +5,7 @@ import { isCloudSqlConfigured, resolveRuntimeConnection } from '../connection.ts
 /**
  * Pure resolver logic only -- no DB needed. Cloud SQL over PSC can't be
  * exercised locally at all, so this is the only automated coverage
- * `resolveRuntimeConnection` gets; everything else is staging soak after
+ * `resolveRuntimeConnection` gets; everything else is dev soak after
  * merge.
  */
 test('resolveRuntimeConnection', async (t) => {
