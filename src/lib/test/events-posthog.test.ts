@@ -44,7 +44,7 @@ test('sends the capture payload with the environment stamped', async () => {
     await sendEventToPosthog(
         'search.query',
         { spec_ids: ['a', 'b'], places: 3 },
-        { visitorId: 'v-123', userId: 'u-456', page: '/data' },
+        { visitorId: 'v-123', userId: 'u-456', page: '/data', headers: null },
     );
 
     assert.equal(captured.length, 1);
@@ -58,28 +58,104 @@ test('sends the capture payload with the environment stamped', async () => {
     assert.equal(props.page, '/data');
     assert.equal(props.signed_in, true);
     assert.deepEqual(props.spec_ids, ['a', 'b']);
-    assert.ok(typeof body.timestamp === 'string' && !Number.isNaN(Date.parse(body.timestamp as string)));
+    assert.ok(
+        typeof body.timestamp === 'string' && !Number.isNaN(Date.parse(body.timestamp as string)),
+    );
 });
 
-test('distinct_id falls back from visitor to user to anonymous', async () => {
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Firefox/131.0';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// A browser request as it arrives through Cloudflare and the load balancer.
+const browserHeaders = (country = 'GB') =>
+    new Headers({
+        'user-agent': UA,
+        'x-forwarded-for': '203.0.113.9, 34.1.1.1, 35.2.2.2',
+        'cf-ipcountry': country,
+    });
+
+const visitors = [
+    { kind: 'consented', who: { visitorId: 'v-123' }, distinctId: 'v-123', personless: false },
+    {
+        kind: 'signed in without consent',
+        who: { userId: 'u-789' },
+        distinctId: 'u-789',
+        personless: false,
+    },
+    { kind: 'anonymous', who: {}, distinctId: UUID, personless: true },
+] as const;
+
+for (const visitor of visitors) {
+    test(`the ${visitor.kind} visitor's payload`, async () => {
+        const captured: Captured[] = [];
+        stubFetch(200, captured);
+
+        // A browser cannot set PostHog's own properties through event props.
+        const props = { $ip: '192.0.2.1', $process_person_profile: true, kind: 'chat' };
+        await sendEventToPosthog('feedback.submit', props, {
+            ...visitor.who,
+            headers: browserHeaders(),
+        });
+        await sendEventToPosthog('feedback.submit', props, {
+            ...visitor.who,
+            headers: browserHeaders(),
+        });
+
+        const [first, second] = captured.map((call) => call.body);
+        const properties = first.properties as Record<string, unknown>;
+
+        if (typeof visitor.distinctId === 'string') {
+            assert.equal(first.distinct_id, visitor.distinctId);
+            assert.equal(second.distinct_id, visitor.distinctId);
+        } else {
+            assert.match(String(first.distinct_id), visitor.distinctId);
+            assert.match(String(second.distinct_id), visitor.distinctId);
+            assert.notEqual(first.distinct_id, second.distinct_id);
+        }
+
+        assert.equal(properties.$raw_user_agent, UA);
+        assert.equal(properties.country, 'GB');
+        assert.equal(properties.$ip, undefined);
+        assert.equal(properties.$geoip_disable, true);
+        assert.equal(properties.$process_person_profile, visitor.personless ? false : undefined);
+        assert.equal(properties.kind, 'chat');
+    });
+}
+
+test('an event with no browser request carries no user agent or country', async () => {
     const captured: Captured[] = [];
     stubFetch(200, captured);
 
-    await sendEventToPosthog('auth.signin', {}, { userId: 'u-789' });
-    await sendEventToPosthog('feedback.submit', {}, {});
+    await sendEventToPosthog('embed.view', {}, { visitorId: 'v-123', headers: null });
 
-    assert.equal(captured[0].body.distinct_id, 'u-789');
-    assert.equal((captured[0].body.properties as Record<string, unknown>).signed_in, true);
-    assert.equal(captured[1].body.distinct_id, 'anonymous');
-    assert.equal((captured[1].body.properties as Record<string, unknown>).signed_in, false);
+    const properties = captured[0].body.properties as Record<string, unknown>;
+    assert.equal(properties.$raw_user_agent, undefined);
+    assert.equal(properties.country, null);
+    assert.equal(properties.$geoip_disable, true);
 });
+
+for (const [header, country] of [
+    ['us', 'US'],
+    ['XX', null],
+    ['T1', null],
+] as const) {
+    test(`CF-IPCountry ${header} gives country ${country}`, async () => {
+        const captured: Captured[] = [];
+        stubFetch(200, captured);
+
+        await sendEventToPosthog('embed.view', {}, { headers: browserHeaders(header) });
+
+        const properties = captured[0].body.properties as Record<string, unknown>;
+        assert.equal(properties.country, country);
+    });
+}
 
 test('a non-ok answer throws so track() can log it', async () => {
     const captured: Captured[] = [];
     stubFetch(500, captured);
 
     await assert.rejects(
-        () => sendEventToPosthog('guest.wall_hit', {}, {}),
+        () => sendEventToPosthog('guest.wall_hit', {}, { headers: null }),
         /PostHog answered 500/,
     );
 });

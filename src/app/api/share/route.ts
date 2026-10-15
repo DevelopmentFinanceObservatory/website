@@ -79,7 +79,7 @@ export const POST = async (request: Request) => {
         track(
             'share.create',
             shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
-            { userId: user.id },
+            { userId: user.id, headers: request.headers },
         ),
     );
 
