@@ -34,7 +34,7 @@ Around it:
 ## Repo map
 
 | Repo                                                                    | What it is                                                                                                                                                           |
-|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`dcp`](https://github.com/DevelopmentFinanceObservatory/dcp)           | The knowledge graph engine, ONE's fork of Data Commons, serving the graph over the mixer and SDMX APIs.                                                              |
 | [`apis`](https://github.com/DevelopmentFinanceObservatory/apis)         | The Search, Datasets, Graph, and Presentation APIs. The Search, Datasets, and Graph APIs read from the `dcp` graph, and the Presentation API persists to PostgreSQL. |
 | [`ai`](https://github.com/DevelopmentFinanceObservatory/ai)             | The agent harness and the DFO's MCP servers, deployed as one Cloud Run service.                                                                                      |
@@ -49,15 +49,16 @@ All services run in the `dev-fin-observatory` GCP project, region
 `northamerica-northeast1`.
 
 | Repo      | Service                                                        |
-|-----------|----------------------------------------------------------------|
+| --------- | -------------------------------------------------------------- |
 | `website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app        |
 | `apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs              |
 | `ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                |
 | `dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app |
 
 `website`'s service is the one `dev` deploys to. `apis`, `ai`, and `dcp`
-run their own dev services. `apis` and `ai` return 404 at the root and serve Swagger UI at `/docs`. The
-website service is reachable by anyone with the URL.
+run their own dev services. `apis` and `ai` return 404 at the root and
+serve Swagger UI at `/docs`. The website service is reachable by anyone
+with the URL.
 
 ## Conventions
 
@@ -80,7 +81,7 @@ dev service automatically on every push to `dev`. `main` is the
 production release branch. A push to `main` builds and deploys production
 through the `production` GitHub Environment, which needs approval from the
 release reviewers.
-`infra` owns the Cloud Run service *definition* (service account,
+`infra` owns the Cloud Run service _definition_ (service account,
 scaling, secrets, env vars). This repo's CI only swaps images on the
 service `infra` already defined. See `deploy/README.md` for the
 vars/secrets and prerequisites.

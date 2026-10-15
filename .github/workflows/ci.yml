@@ -4,111 +4,110 @@ name: CI
 # filter. Once ci is a required check, filtering by path would leave a
 # docs-only PR without a triggered run, and the merge would block forever.
 # A draft pull request runs nothing; marking it ready starts the run. main
-# moves either by fast-forward to a dev commit that already ran here or
-# through a pull request whose own run tested the merge, so main has no push
-# trigger.
+# moves through a pull request whose own run tested the merge, so main has no
+# push trigger.
 #
 # The contract is the root README's conventions: pnpm with a committed
 # lockfile, and `lint`, `typecheck`, `test`, `build` scripts in package.json,
 # plus `lint:css` (stylelint).
 
 on:
-  push:
-    branches: [dev]
-  # fix/** and feat/** cover a stacked PR, whose base is the branch below it.
-  # `ready_for_review` starts the run when a draft is marked ready.
-  pull_request:
-    branches: [main, dev, "fix/**", "feat/**"]
-    types: [opened, synchronize, reopened, ready_for_review]
+    push:
+        branches: [dev]
+    # fix/** and feat/** cover a stacked PR, whose base is the branch below it.
+    # `ready_for_review` starts the run when a draft is marked ready.
+    pull_request:
+        branches: [main, dev, 'fix/**', 'feat/**']
+        types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  ci:
-    if: github.event.pull_request.draft != true
-    runs-on: ubuntu-latest
+    ci:
+        if: github.event.pull_request.draft != true
+        runs-on: ubuntu-latest
 
-    # Backs the Test step below. Migration 0000's grant/revoke assertions and
-    # the advisory-lock concurrency test both need a real Postgres to run
-    # against, not a mock. Version matches deploy/Dockerfile's runtime target
-    # (postgres:18.4). The service container tag only needs the major version.
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
+        # Backs the Test step below. Migration 0000's grant/revoke assertions and
+        # the advisory-lock concurrency test both need a real Postgres to run
+        # against, not a mock. Version matches deploy/Dockerfile's runtime target
+        # (postgres:18.4). The service container tag only needs the major version.
+        services:
+            postgres:
+                image: postgres:18
+                env:
+                    POSTGRES_PASSWORD: postgres
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd="pg_isready -U postgres"
+                    --health-interval=5s
+                    --health-timeout=5s
+                    --health-retries=10
 
-    steps:
-      - uses: actions/checkout@v6
+        steps:
+            - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: pnpm
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+            - name: Install
+              run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+            - name: Lint
+              run: pnpm lint
 
-      - name: Lint CSS
-        run: pnpm lint:css
+            - name: Lint CSS
+              run: pnpm lint:css
 
-      - name: Typecheck
-        run: pnpm typecheck
+            - name: Typecheck
+              run: pnpm typecheck
 
-      - name: Test
-        env:
-          PGHOST: localhost
-          PGPORT: 5432
-          PGUSER: postgres
-          PGPASSWORD: postgres
-        run: pnpm test
+            - name: Test
+              env:
+                  PGHOST: localhost
+                  PGPORT: 5432
+                  PGUSER: postgres
+                  PGPASSWORD: postgres
+              run: pnpm test
 
-      - name: Build
-        run: pnpm build
+            - name: Build
+              run: pnpm build
 
-      # dist/** is eslint-ignored (eslint.config.mjs), so this runs after
-      # Lint rather than before it -- that ignore stays a convenience for
-      # local developers, not a load-bearing ordering requirement for CI.
-      - name: Build migrate bundle
-        run: pnpm build:migrate
+            # dist/** is eslint-ignored (eslint.config.mjs), so this runs after
+            # Lint rather than before it -- that ignore stays a convenience for
+            # local developers, not a load-bearing ordering requirement for CI.
+            - name: Build migrate bundle
+              run: pnpm build:migrate
 
-      # Loads the real bundle with no connection env set at all, so a
-      # regression in the esbuild config or the entrypoint's wiring (a
-      # broken import, a bundling target mismatch) surfaces here instead of
-      # first appearing when deploy.yml's migration Job runs it. Asserts on
-      # STDERR content, not just the exit code. A bundle that fails to load
-      # at all (a syntax error, a missing export) also exits 1, so an
-      # exit-code-only check can't tell "loaded and failed its env check" --
-      # the only outcome this step should accept -- from "never loaded".
-      - name: Smoke test migrate bundle
-        run: |
-          set +e
-          stderr_output=$(node dist/migrate.cjs 2>&1 >/dev/null)
-          status=$?
-          set -e
+            # Loads the real bundle with no connection env set at all, so a
+            # regression in the esbuild config or the entrypoint's wiring (a
+            # broken import, a bundling target mismatch) surfaces here instead of
+            # first appearing when deploy.yml's migration Job runs it. Asserts on
+            # STDERR content, not just the exit code. A bundle that fails to load
+            # at all (a syntax error, a missing export) also exits 1, so an
+            # exit-code-only check can't tell "loaded and failed its env check" --
+            # the only outcome this step should accept -- from "never loaded".
+            - name: Smoke test migrate bundle
+              run: |
+                  set +e
+                  stderr_output=$(node dist/migrate.cjs 2>&1 >/dev/null)
+                  status=$?
+                  set -e
 
-          echo "$stderr_output"
+                  echo "$stderr_output"
 
-          if [ "$status" -eq 0 ]; then
-            echo "::error::migrate bundle exited 0 with no environment configured; expected it to fail naming the missing WEBSITE_DB_NAME env var."
-            exit 1
-          fi
+                  if [ "$status" -eq 0 ]; then
+                    echo "::error::migrate bundle exited 0 with no environment configured; expected it to fail naming the missing WEBSITE_DB_NAME env var."
+                    exit 1
+                  fi
 
-          case "$stderr_output" in
-          *"missing required environment variable WEBSITE_DB_NAME"*)
-            ;;
-          *)
-            echo "::error::migrate bundle's stderr did not mention the missing WEBSITE_DB_NAME env var -- it may have failed to load at all rather than failing its env check."
-            exit 1
-            ;;
-          esac
+                  case "$stderr_output" in
+                  *"missing required environment variable WEBSITE_DB_NAME"*)
+                    ;;
+                  *)
+                    echo "::error::migrate bundle's stderr did not mention the missing WEBSITE_DB_NAME env var -- it may have failed to load at all rather than failing its env check."
+                    exit 1
+                    ;;
+                  esac

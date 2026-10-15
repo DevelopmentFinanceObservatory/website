@@ -19,9 +19,9 @@ const SITE_NAME = 'Development Finance Observatory';
 const SITE_DESCRIPTION =
     'The Development Finance Observatory integrates aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source.';
 
-// Link previews need absolute image URLs. Dev builds the image
-// production runs, so the origin is the production host rather than a
-// build-time variable; without it Next writes localhost. Pages that set no
+// Link previews need absolute image URLs. Dev and production build the same
+// image, so the origin is the production host and no build-time variable
+// sets it. Without it Next writes localhost. Pages that set no
 // openGraph of their own inherit this card, and the image is
 // app/opengraph-image.tsx.
 export const metadata: Metadata = {

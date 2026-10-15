@@ -42,7 +42,7 @@ Source maps upload during `next build` when `SENTRY_ORG`, `SENTRY_PROJECT` and `
 
 ## Google Analytics
 
-`src/components/atoms/GoogleAnalytics/GoogleAnalytics.tsx` loads GA4 (measurement ID `G-NCWQ8XTXG1`) from the root layout when the page is served from `developmentfinance.org` or `www.developmentfinance.org`. The check reads the host name because production promotes the image built on dev, which makes every build-time variable the same on both. The ID and the host list are constants at the top of that file.
+`src/components/atoms/GoogleAnalytics/GoogleAnalytics.tsx` loads GA4 (measurement ID `G-NCWQ8XTXG1`) from the root layout when the page is served from `developmentfinance.org` or `www.developmentfinance.org`. The check reads the host name because dev and production build the same Dockerfile with the same build-time variables. The ID and the host list are constants at the top of that file.
 
 Consent Mode v2 runs in advanced mode. An inline script in `src/app/layout.tsx` sets every consent type to `denied` on every host, ahead of the Usercentrics loader, and GA sends cookieless pings until the visitor chooses. Usercentrics has Google Consent Mode on and a "Google Analytics 4" service, and sends the `consent update` when the visitor chooses.
 
