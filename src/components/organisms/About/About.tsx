@@ -13,7 +13,7 @@ import { revealIndex, useReveal } from '@/hooks/useReveal';
  * About DFO — the project's own one-pager, rebuilt inside the app.
  *
  * The copy and the staircase layout come from the standalone landing at
- * developmentfinance.org (huncwotdigital/ode-dfo): numbered steps, a narrow
+ * developmentfinance.org: numbered steps, a narrow
  * column that sits right of centre, and stat panels that step further left
  * the deeper they go. The page keeps that structure and the house
  * typography; the standalone site's own chrome (its rail, footer and
