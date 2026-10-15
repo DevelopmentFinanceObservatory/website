@@ -1,23 +1,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- reads the flat page Spec, typed shallowly like the rest of the engine-contract layer */
 /**
  * The props of the search usage events (docs/analytics.md): `search.query`,
- * `search.empty` and `search.studio_handoff` all describe one answer the
- * same way. What the answer was (`kind`, and a declined answer's `reason`),
- * the operations the question asked for, what resolved (each part's
- * definition and counts) and what did not (each refused part's reason).
+ * `search.empty`, `search.edit` and `search.studio_handoff` all describe one
+ * answer the same way. They give what the answer was (`kind`, and a declined
+ * answer's `reason`), the operations the question asked for, what resolved
+ * (each part's definition and counts) and what did not (each refused part's
+ * reason).
  *
  * POST /api/events stores at most MAX_PROPS_BYTES of props, and one answer
- * can serve hundreds of StatVars and places, so a part's props follow the
- * question, never the data, and the free text is clipped. A role's places
+ * can serve hundreds of StatVars and places, so a part's props grow with the
+ * question alone and the free text is clipped. A role's places
  * are its named group, a sample of members and the count, and a slot's refs
  * are a sample and the count. The event then steps down a ladder until it
- * fits: every source id, three source ids per part, a minimal form per part,
- * and last a floor of fixed size, each marked `truncated` but the first two.
- * The ladder runs on the complete props, `seeds` included, and every rung is
- * measured as the route measures it (`fitsProps`). The API takes at most six
+ * fits. The rungs are every source id, three source ids per part, a minimal
+ * form per part, and last a floor of fixed size. The last two are marked
+ * `truncated`.
+ * The ladder runs on the complete props, `seeds` and a settled post's run
+ * fields included, and every rung is measured as the route measures it
+ * (`fitsProps`). The run fields stay on every rung, and the floor drops only
+ * their `byStep`. The API takes at most six
  * parts per question (`_PARSED_MAX_PARTS` in dfo-apis
- * search/models/request.py); the floor holds only a fixed-length spec id and
- * integer counts per part, so it needs no check.
+ * search/models/request.py), and the floor holds only a fixed-length spec id
+ * and integer counts per part, so it needs no check.
  */
 
 import { fitsProps } from '../events/limits.ts';
@@ -26,6 +30,7 @@ import type {
     HydratedPart,
     IdentityBinding,
     OperationVerb,
+    Resolution,
     ResolveResponse,
     Spec,
     SpecIdentity,
@@ -39,7 +44,51 @@ const MAX_SPEC_ID = 64;
 
 type Rung = 'full' | 'sampled' | 'minimal' | 'floor';
 
-export type SearchEventProps = {
+/** Where a search's text came from: the prompt, an example sentence, the
+ *  starting point's catalogue, a refine of the heading, a retry, a `?q=`
+ *  permalink, a share link, or a dataset version link (`?spec=`). */
+export type SearchSource =
+    'typed' | 'example' | 'catalogue' | 'refine' | 'retry' | 'permalink' | 'share' | 'version_link';
+
+/** The useSearchRun callback that posted an edit. `replay` is a permalink's
+ *  stored edits, posted once after its base run lands. */
+export type EditKind =
+    'slot' | 'entity' | 'window' | 'facet' | 'pick' | 'measure' | 'parsed' | 'shared' | 'replay';
+
+/** The engine's own verdict on an answer: a resolution's `status`, else its
+ *  `kind`. dfo-apis logs the same value on its `resolve` line. */
+export type SearchOutcome = Resolution['status'] | 'catalogue' | 'declined';
+
+export const searchOutcome = (response: ResolveResponse): SearchOutcome =>
+    response.kind === 'resolution' ? response.status : response.kind;
+
+/** What every event of one post carries. `post` is 0 for the base run and
+ *  counts up for each edit post of the same `searchId`. `hidden` marks a post
+ *  whose page was hidden while it was in flight. */
+export type SearchRunProps = {
+    searchId: string;
+    post: number;
+    source: SearchSource;
+    edited: boolean;
+    editKind?: EditKind;
+    traceId: string | null;
+    /** Client time from the post's start to this event. */
+    ms: number;
+    hidden?: true;
+};
+
+/** A settled post's own fields, kept on every rung of the fit. */
+export type SearchSettleProps = SearchRunProps & {
+    outcome: SearchOutcome;
+    /** The engine's `done.elapsed_ms`, trailing observation reads included. */
+    engineMs: number;
+    /** The engine's `timing_ms.by_step`; dropped on the floor rung. */
+    byStep?: Record<string, number>;
+    /** The soft deadline cut the run short; its unfinished parts read as no_data. */
+    timedOut: boolean;
+};
+
+export type SearchEventProps = Partial<SearchSettleProps> & {
     query: string;
     edited: boolean;
     kind: ResolveResponse['kind'];
@@ -149,6 +198,7 @@ export function searchEventProps({
     reason,
     parts,
     seeds,
+    run,
 }: {
     query: string;
     edited: boolean;
@@ -157,6 +207,8 @@ export function searchEventProps({
     parts: HydratedPart[];
     /** A caller's own fields ride inside the fit, so none is added after it. */
     seeds?: number;
+    /** A settled post's fields, or the ids a Studio hand-off carries. */
+    run?: Partial<SearchSettleProps>;
 }): SearchEventProps {
     const operations = [
         ...new Set(parts.flatMap((part) => (part.part?.operations ?? []).map((op) => op.verb))),
@@ -213,7 +265,17 @@ export function searchEventProps({
             ),
         }));
 
+    const runProps = (rung: Rung): Partial<SearchSettleProps> => {
+        if (!run) {
+            return {};
+        }
+
+        const { byStep, ...kept } = run;
+
+        return rung === 'floor' || !byStep ? kept : { ...kept, byStep };
+    };
     const props = (rung: Rung): SearchEventProps => ({
+        ...runProps(rung),
         query: rung === 'floor' ? '' : clip(query, MAX_QUERY),
         edited,
         kind,
@@ -241,3 +303,156 @@ export function searchEventProps({
  *  `search.empty`, the data-gap signal. */
 export const searchEventName = (props: SearchEventProps): 'search.query' | 'search.empty' =>
     props.resolved.length > 0 || props.kind === 'catalogue' ? 'search.query' : 'search.empty';
+
+/** The events one post can end on, and the abandon a hidden page sends. */
+export type SearchPostEventName =
+    'search.query' | 'search.empty' | 'search.edit' | 'search.error' | 'search.abandon';
+
+export type AbandonReason = 'hidden' | 'superseded' | 'reset';
+
+/** The fields of the engine's `done` event a settle reads. */
+export type SearchDone = { trace_id: string; elapsed_ms: number; timed_out: boolean };
+
+/** A failure as the stream reports it: a problem-details `code`, the HTTP
+ *  `status`, and the `trace_id` when the engine sent one. */
+export type SearchFailure = {
+    code?: string | null;
+    status?: number | null;
+    traceId?: string | null;
+};
+
+export type SearchPostTracker = ReturnType<typeof searchPostTracker>;
+
+/**
+ * The usage events of one post: a base run (`post` 0) or one edit post.
+ * The post ends exactly once, on the first of `settle`, `fail` or `abandon`;
+ * every later call is a no-op, so a stream's trailing events, a late abort
+ * or a second hide cannot send a second terminal event. `hide` sends one
+ * `search.abandon` with reason `hidden` while the post is in flight and marks
+ * the post's later terminal event `hidden: true`.
+ */
+export function searchPostTracker(
+    post: {
+        searchId: string;
+        post: number;
+        source: SearchSource;
+        editKind: EditKind | null;
+        query: string;
+    },
+    {
+        emit,
+        now,
+    }: {
+        emit: (name: SearchPostEventName, props: Record<string, unknown>) => void;
+        now: () => number;
+    },
+) {
+    const startedAt = now();
+    const edited = post.post > 0;
+    let ended = false;
+    let hidden = false;
+    let traceId: string | null = null;
+    let step: string | null = null;
+
+    const runProps = (): SearchRunProps => ({
+        searchId: post.searchId,
+        post: post.post,
+        source: post.source,
+        edited,
+        ...(post.editKind && { editKind: post.editKind }),
+        traceId,
+        ms: Math.round(now() - startedAt),
+        ...(hidden && { hidden: true as const }),
+    });
+    const end = (): boolean => {
+        if (ended) {
+            return false;
+        }
+
+        ended = true;
+
+        return true;
+    };
+
+    const fail = ({ code, status, traceId: failedTrace }: SearchFailure) => {
+        if (!end()) {
+            return;
+        }
+
+        traceId = failedTrace ?? traceId;
+        emit('search.error', {
+            ...runProps(),
+            query: clip(post.query, MAX_QUERY),
+            error: code ?? (status != null ? String(status) : 'stream'),
+            ...(status != null && { status }),
+        });
+    };
+
+    return {
+        /** The last pipeline step the post reached, for an abandon. */
+        step(name: string) {
+            step = name;
+        },
+        /** The answer landed: its trace id joins any later error or abandon. */
+        respond(response: ResolveResponse) {
+            traceId = response.diagnostics.trace_id;
+        },
+        /** `response` and `parts` are the post's own answer with `done`
+         *  applied. A post whose stream ended with no answer is an error. */
+        settle({
+            response,
+            parts,
+            done,
+        }: {
+            response: ResolveResponse | null;
+            parts: HydratedPart[];
+            done: SearchDone;
+        }) {
+            if (!response) {
+                fail({ code: 'no_response', traceId: done.trace_id });
+
+                return;
+            }
+
+            if (!end()) {
+                return;
+            }
+
+            traceId = done.trace_id;
+
+            const byStep = response.diagnostics.timing_ms?.by_step;
+            const props = searchEventProps({
+                query: post.query,
+                edited,
+                kind: response.kind,
+                reason: response.kind === 'declined' ? response.reason : null,
+                parts,
+                run: {
+                    ...runProps(),
+                    outcome: searchOutcome(response),
+                    engineMs: done.elapsed_ms,
+                    ...(byStep && { byStep }),
+                    timedOut: done.timed_out,
+                },
+            });
+
+            emit(edited ? 'search.edit' : searchEventName(props), props);
+        },
+        fail,
+        abandon(reason: Exclude<AbandonReason, 'hidden'>) {
+            if (!end()) {
+                return;
+            }
+
+            emit('search.abandon', { ...runProps(), reason, step });
+        },
+        hide() {
+            if (ended || hidden) {
+                return;
+            }
+
+            emit('search.abandon', { ...runProps(), reason: 'hidden', step });
+            hidden = true;
+        },
+    };
+}

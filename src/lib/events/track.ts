@@ -17,19 +17,29 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - search.query      an answered search (spec ids, measures and filters, places,
  *                     window, StatVar and place counts)
  * - search.empty      a search the graph couldn't answer (the reasons)
+ * - search.edit       an edit to a search answer, re-resolved (its outcome)
+ * - search.error      a search post that failed (the error code)
+ * - search.abandon    a search post left in flight (hidden, superseded or reset)
+ * - search.action     a click on a search answer (pick, download, share, ...)
+ * - search.start_point  the starting point shown, with no search call
  * - search.studio_handoff  a Studio action on a search answer
- * - studio.prompt     a prompt sent in the Studio (turn, intent — not the text)
+ * - studio.prompt     a prompt sent in the Studio (turn and intent, without the text)
  * - studio.card       a card the harness put on the canvas (kind, source, years, unit)
  * - studio.session_end  a Studio session left (turns, cards, pins)
  * - auth.signin       a sign-in (provider)
  * - guest.wall_hit    a guest ran out of free prompts
  * - feedback.submit   a feedback sent (kind)
  * - embed.view        an embed loaded in an iframe (share id, kind, host site)
- * - share.create      a Studio share link made (share id, kind, mode)
+ * - share.create      a Studio or search share link made (share id, kind, mode)
  */
 export const EVENT_NAMES = [
     'search.query',
     'search.empty',
+    'search.edit',
+    'search.error',
+    'search.abandon',
+    'search.action',
+    'search.start_point',
     'search.studio_handoff',
     'studio.prompt',
     'studio.card',

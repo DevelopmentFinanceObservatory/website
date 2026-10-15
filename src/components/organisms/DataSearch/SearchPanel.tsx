@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import DatasetDownload from './DatasetDownload';
 import styles from './DataSearch.module.scss';
 import SearchShare, { type CreateSearchShare } from './SearchShare';
-import { useDatasetDownload } from './useDatasetDownload';
+import { type DatasetDownloaded, useDatasetDownload } from './useDatasetDownload';
 
 import Button from '@/components/atoms/Button/Button';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
@@ -22,6 +22,7 @@ const SearchPanel = ({
     note,
     createShare,
     onStudio,
+    onDownload,
 }: {
     spec: any;
     // Says a download may differ from the preview (resultNotes downloadNote).
@@ -32,6 +33,8 @@ const SearchPanel = ({
     // hidden without it, as it is while an operation_not_applied departure
     // offers Studio.
     onStudio?: () => void;
+    // Records a download that reached its file.
+    onDownload?: (downloaded: DatasetDownloaded) => void;
 }) => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     // The share box pops like the other menus here: 'closed' keeps it mounted
@@ -71,6 +74,7 @@ const SearchPanel = ({
         specId: spec?.spec_id,
         definition: spec?.definition,
         entities: spec?.entities,
+        onDownload,
     });
 
     const rowCount = downloadRowCount(spec);

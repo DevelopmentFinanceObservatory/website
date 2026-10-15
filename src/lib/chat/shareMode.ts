@@ -79,12 +79,12 @@ export const readStudioShareRequest = (
     return { kind: body.kind, mode: mode as ShareMode, saved, cardId: body.cardId };
 };
 
-/** The props of the `share.create` event for a Studio share. */
+/** The props of the `share.create` event, for a Studio or a search share. */
 export const shareCreateProps = (created: {
     id: string;
-    kind: StudioShareKind;
+    kind: ShareKind;
     mode: ShareMode;
-}): { shareId: string; kind: StudioShareKind; mode: ShareMode } => ({
+}): { shareId: string; kind: ShareKind; mode: ShareMode } => ({
     shareId: created.id,
     kind: created.kind,
     mode: created.mode,
