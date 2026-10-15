@@ -313,13 +313,6 @@ set-dev-deploy-vars repo='DevelopmentFinanceObservatory/website':
     gh variable set PROJECT_ID --env dev --repo {{repo}} --body {{PROJECT_ID}}
     gh variable set AR_REPO    --env dev --repo {{repo}} --body {{AR_REPO}}
 
-# Production is a promotion of an already-built image. TAG is the full git
-# SHA a dev deploy already pushed, and it must already be on main.
-#
-# Trigger deploy-prod.yml for an already-built image
-deploy-prod TAG:
-    gh workflow run deploy-prod.yml -f image_tag={{TAG}}
-
 # ── Internal ───────────────────────────────────────────
 
 # An ACTIVE account and a present ADC file are not proof either one still

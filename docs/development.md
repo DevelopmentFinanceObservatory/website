@@ -42,7 +42,7 @@ workflows. `just` with no arguments lists everything. Install it with
 | Quality               | `lint`, `format`, `typecheck`, `test`, `build`, `check` |
 | Container             | `docker-build`, `run-local`, `clean`                    |
 | Diagnostics           | `status`, `doctor`, `logs`, `deployed`                  |
-| Deploy config         | `set-dev-deploy-vars`, `deploy-prod`                |
+| Deploy config         | `set-dev-deploy-vars`                                   |
 
 Run `just <recipe>` to see what each one does, or `just --list` for the
 one-line descriptions.
