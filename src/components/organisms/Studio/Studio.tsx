@@ -41,6 +41,7 @@ import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
+import { isPrompt } from '@/lib/studio/transcript';
 import type { Seed } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
@@ -165,7 +166,7 @@ const Studio = ({
     // removed): the count follows the user turns in the transcript, so the
     // queue's own drain is covered too. Only growth counts — New Chat empties
     // the transcript without giving prompts back.
-    const sentCount = conversation.messages.filter((message) => message.role === 'user').length;
+    const sentCount = conversation.messages.filter(isPrompt).length;
     const sentRef = useRef(sentCount);
 
     useEffect(() => {
