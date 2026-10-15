@@ -20,6 +20,7 @@ The browser stores `visitor_id` only after the visitor accepts "DFO usage statis
 | `guest.wall_hit` | a guest used up the free prompts | `prompts` |
 | `feedback.submit` | a feedback submission | `kind` (`chat` / `widget`) |
 | `embed.view` | an `/embed/<id>` page rendered | `shareId`, `kind` (`card` / `canvas` / `conversation`), `host` (the hostname of the page the iframe sits on, else null) |
+| `gallery.open` | a click, middle-click or Enter on a tile in the `/insights/gallery` grid | `slug` (the item's slug), `kind` (`conversation` / `canvas` / `card` / `dataset`) |
 
 Browser code calls `track()` from `src/lib/events/client.ts`, which posts to `POST /api/events` (allow-listed names, props capped at 8 KB, always 204); server code calls `track()` from `src/lib/events/track.ts` directly. The list of names lives in `track.ts` — add there first.
 
