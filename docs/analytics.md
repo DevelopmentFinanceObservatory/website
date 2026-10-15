@@ -54,6 +54,18 @@ Enhanced measurement records page views on App Router navigations (history chang
 
 To check it on production, open the network panel and filter on `google-analytics.com/g/collect`. Before consent the requests carry `gcs=G100`, and after accepting in the banner they carry `gcs=G111`. The visit then shows in GA under Reports → Realtime. Localhost and dev make no `gtag/js` request.
 
+## Request log
+
+The site writes one JSON line to stdout for each page view and API call, which Cloud Logging stores as a structured entry. `src/proxy.ts`, the Next.js proxy, writes it through `logRequest()` in `src/lib/proxy/requestLog.ts`. Visitor counts come from this line, because Cloud Run's own request log records Cloudflare's edge address as the client.
+
+```json
+{"severity":"INFO","message":"request","caller":"ip:3f9c0a…","method":"GET","path":"/embed/abc123","host":"developmentfinance.org","kind":"page","userAgent":"Mozilla/5.0 …"}
+```
+
+`caller` is the same `ip:<digest>` the `/mcp` proxy sends upstream as `x-dfo-caller` (`src/lib/proxy/caller.ts`): an HMAC of the client address under `CALLER_HMAC_KEY`, with the address taken from `X-Forwarded-For` at the `TRUSTED_PROXY_HOPS` position. It is null when the key is unset or the request carries no usable address. `kind` is `page`, `api` (`/api` and `/mcp`), `rsc` (a client-side navigation) or `prefetch` (a Next.js or browser prefetch). Embeds under `/embed/` are logged as pages. `/_next/` files, images and fonts are not logged. The line holds no raw IP address, query string, cookie or `Authorization` header.
+
+`next.config.ts` sets `skipProxyUrlNormalize` so the proxy sees the `RSC` and `Next-Router-Prefetch` headers, which Next.js otherwise strips before the proxy runs.
+
 ## Guest Studio
 
 The Studio is open without an account: `GUEST_LIMIT` (5, `src/components/organisms/Studio/GuestWall.tsx`) prompts, counted in localStorage, then the prompt is replaced by a sign-in wall. Front-end only by design — a cleared localStorage resets it. Guests get no history, saving or sharing (all need an account).
