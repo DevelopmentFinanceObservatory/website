@@ -28,7 +28,7 @@ const MIGRATIONS_SCHEMA = 'public';
 //
 // Advisory locks are scoped to the session's current database, not the
 // cluster (https://www.postgresql.org/docs/current/explicit-locking.html
-// #ADVISORY-LOCKS), so dev and staging sharing one Cloud SQL instance
+// #ADVISORY-LOCKS), so two environments sharing one Cloud SQL instance
 // (each with its own database) cannot collide over this key.
 //
 // The key is a literal rather than a runtime `hashtext('...')` call.

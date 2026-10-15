@@ -16,11 +16,16 @@
  * repairs its reference), and the options and members doors, which write
  * nothing. A register or publish refusal goes back at once.
  *
+ * Each attempt goes through `apisFetch` (src/lib/apisAuth), which adds the
+ * apis ID token on Cloud Run and leaves the browser's calls as they are.
+ *
  * This module has no DOM or Node dependency, so `node --test` imports it, and
  * the browser client and the server routes share it.
  */
 
-export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+import { apisFetch, type Fetch } from '../apisAuth.ts';
+
+export type { Fetch };
 
 export const MAX_RETRIES = 3;
 export const BASE_DELAY_MS = 500;
@@ -108,7 +113,7 @@ const pause = (ms: number, signal?: AbortSignal | null): Promise<void> =>
  * attempts and rejects once the call's own signal aborts.
  */
 export const retryingFetch = ({
-    fetchImpl = (input, init) => fetch(input, init),
+    fetchImpl = apisFetch,
     sleep = pause,
 }: {
     fetchImpl?: Fetch;
@@ -136,5 +141,5 @@ export const retryingFetch = ({
     };
 };
 
-/** The global `fetch`, read at call time, with the retry. */
+/** `apisFetch` (the global `fetch`, read at call time) with the retry. */
 export const datasetsFetch: Fetch = retryingFetch();

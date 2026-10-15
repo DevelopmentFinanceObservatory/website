@@ -7,8 +7,8 @@ import { isEmbedPath } from '@/lib/embed';
 
 const MEASUREMENT_ID = 'G-NCWQ8XTXG1';
 
-// Production promotes the image built on staging, so every build-time env
-// var is the same on both. The host name tells them apart.
+// Dev and production build the same Dockerfile with the same build-time env
+// vars. The host name tells them apart.
 const PRODUCTION_HOSTS = ['developmentfinance.org', 'www.developmentfinance.org'];
 
 const noSubscribe = () => () => {};

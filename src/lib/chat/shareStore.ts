@@ -9,6 +9,7 @@ import {
     type OwnerWriteResult,
 } from './shareWrites';
 
+import { apisFetch } from '@/lib/apisAuth';
 import { db } from '@/lib/db';
 import { liveShareRefusal, type LiveShareRefusal } from '@/lib/studio/liveShare';
 import { snapshotLiveShare } from '@/lib/studio/liveShareResults';
@@ -46,7 +47,7 @@ export const liveShareRefusalFor = ({
     kind,
     cardId,
 }: StudioShareRequest): Promise<LiveShareRefusal | null> =>
-    liveShareRefusal({ env: process.env, fetch }, pruneForShare(saved, kind, cardId));
+    liveShareRefusal({ env: process.env, fetch: apisFetch }, pruneForShare(saved, kind, cardId));
 
 export const getShare = async (id: string) => {
     const [row] = await db.select().from(share).where(eq(share.id, id)).limit(1);

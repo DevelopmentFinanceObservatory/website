@@ -179,10 +179,12 @@ build:
 graph-types:
     pnpm graph:types
 
-# Reads `GET /api/graph/schema` from the given dfo-apis, dev by default.
+# Reads `GET /api/graph/schema` from the given dfo-apis, a local proxy to dev by
+# default. The dev service admits only invoker identities, so start the proxy
+# first (see "Reach the dev APIs" in docs/development.md).
 #
 # Refresh the Graph API schema snapshot from a deployed dfo-apis, then the types
-graph-schema url="https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app":
+graph-schema url="http://localhost:8083":
     pnpm graph:schema {{url}}
 
 # Everything ci.yml runs, in CI's order. Green here means green there.
@@ -304,21 +306,14 @@ deployed: _check-gcloud
 # ── Deploy config ──────────────────────────────────────
 
 # REGION/PROJECT_ID/AR_REPO are static constants this repo owns, kept in git
-# rather than typed into the GitHub UI. dfo-infra pushes SERVICE_WEBSITE,
+# rather than typed into the GitHub UI. infra pushes SERVICE_WEBSITE,
 # WIF_PROVIDER, and WIF_SA itself. See deploy/README.md for the full division.
 #
-# Set REGION/PROJECT_ID/AR_REPO on the staging GitHub Environment
-set-staging-deploy-vars repo='ONEcampaign/dfo-website':
-    gh variable set REGION     --env staging --repo {{repo}} --body {{REGION}}
-    gh variable set PROJECT_ID --env staging --repo {{repo}} --body {{PROJECT_ID}}
-    gh variable set AR_REPO    --env staging --repo {{repo}} --body {{AR_REPO}}
-
-# Production is a promotion of an already-built image. TAG is the full git
-# SHA a staging deploy already pushed, and it must already be on main.
-#
-# Trigger deploy-prod.yml for an already-built image
-deploy-prod TAG:
-    gh workflow run deploy-prod.yml -f image_tag={{TAG}}
+# Set REGION/PROJECT_ID/AR_REPO on the dev GitHub Environment
+set-dev-deploy-vars repo='DevelopmentFinanceObservatory/website':
+    gh variable set REGION     --env dev --repo {{repo}} --body {{REGION}}
+    gh variable set PROJECT_ID --env dev --repo {{repo}} --body {{PROJECT_ID}}
+    gh variable set AR_REPO    --env dev --repo {{repo}} --body {{AR_REPO}}
 
 # ── Internal ───────────────────────────────────────────
 
