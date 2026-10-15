@@ -56,7 +56,13 @@ import {
     snapshotLiveNote,
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
-import { searchEventProps, startSearchAction, type SearchSource } from '@/lib/search/searchEvents';
+import {
+    HANDOFF_SOURCE_PARAM,
+    handoffSource,
+    searchEventProps,
+    startSearchAction,
+    type SearchSource,
+} from '@/lib/search/searchEvents';
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
@@ -178,8 +184,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const runQuery = useCallback(
         (text: string, source: SearchSource) => {
             if (text === STARTING_POINT_QUERY) {
-                showStartingPoint(text);
-                track('search.start_point', { source });
+                showStartingPoint(text, source);
             } else {
                 run({ kind: 'raw_text', query: text }, text, source);
             }
@@ -476,6 +481,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     );
 
     // Permalink / homepage handoff: ?q= (and ?s=) auto-runs once per value.
+    // The homepage prompt adds `via` (typed or example). It is read here and
+    // stripped at once, so the address bar never offers it for copying and a
+    // pasted link records `permalink`.
     useEffect(() => {
         const q = searchParams.get('q');
         const s = searchParams.get('s') ?? '';
@@ -487,8 +495,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
         startedRef.current = key;
 
+        const source = handoffSource(searchParams.get(HANDOFF_SOURCE_PARAM));
+
+        if (searchParams.has(HANDOFF_SOURCE_PARAM)) {
+            const rest = new URLSearchParams(searchParams);
+
+            rest.delete(HANDOFF_SOURCE_PARAM);
+            window.history.replaceState(null, '', `/data?${rest}`);
+        }
+
         if (!s) {
-            runRef.current(q, 'permalink');
+            runRef.current(q, source);
 
             return;
         }
@@ -509,9 +526,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 // URL-sync effect below must not read that transient empty
                 // state as "no edits" and strip `s=` before they land.
                 suppressEmptyEditWriteRef.current = true;
-                replayRef.current(state, 'permalink');
+                replayRef.current(state, source);
             } else {
-                runRef.current(q, 'permalink');
+                runRef.current(q, source);
             }
         });
         // `run` and `replay` are deliberately absent. Watching either would

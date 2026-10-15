@@ -8,17 +8,23 @@
  * mount effect had just started, such as a `?q=` permalink's search, which
  * its own ref guard then never restarts. `unmount()` defers the teardown by
  * a microtask and runs it only if no `mount()` came in between.
+ *
+ * `left()` is true from the teardown until the next `mount()`, so async work
+ * that resolves after the component has gone can refuse to start more. A
+ * Strict Mode remount cancels the teardown and never sets it.
  */
 export function unmountTeardown(
     teardown: () => void,
     defer: (run: () => void) => void = queueMicrotask,
-): { mount: () => void; unmount: () => void } {
+): { mount: () => void; unmount: () => void; left: () => boolean } {
     let mounted = false;
     let pending = false;
+    let left = false;
 
     return {
         mount() {
             mounted = true;
+            left = false;
         },
         unmount() {
             mounted = false;
@@ -32,9 +38,11 @@ export function unmountTeardown(
                 pending = false;
 
                 if (!mounted) {
+                    left = true;
                     teardown();
                 }
             });
         },
+        left: () => left,
     };
 }

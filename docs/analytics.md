@@ -32,7 +32,7 @@ Every search post, the base run and each edit after it, ends on one terminal eve
 
 - `searchId`: a UUID minted when a search starts (a query, a permalink, a share or version link), kept by its edit posts.
 - `post`: 0 for the base run, then 1, 2, … for each edit post of the same search.
-- `source`: where the search came from: `typed`, `example` (a suggestion or example chip), `catalogue` (the starting point), `refine`, `retry`, `permalink` (`?q=`), `share` (`/s/<id>`) or `version_link` (`?spec=`).
+- `source`: where the search came from: `typed`, `example` (a suggestion or example chip), `catalogue` (the starting point), `refine`, `retry`, `permalink` (a shared or bookmarked `?q=` link), `share` (`/s/<id>`) or `version_link` (`?spec=`). A search typed or picked on the homepage reaches `/data` with `?q=` and keeps `typed` or `example`.
 - `edited` (true from post 1) and `editKind` (`slot`, `entity`, `window`, `facet`, `pick`, `measure`, `parsed`, `shared`, or `replay` for a permalink's stored edits).
 - `traceId`: the engine's trace id, the `trace_id` on the dfo-apis `resolve` log line, null when the post ended before the engine answered.
 - `ms`: client time from the post's start to the event.

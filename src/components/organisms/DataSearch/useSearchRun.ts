@@ -76,8 +76,9 @@
  *   for permalink.ts's encodePermalinkState.
  * - `run(input, label, source)`: a fresh raw_text query; full replace,
  *   aborts any edit post in flight too.
- * - `showStartingPoint(label)`: settles on a catalogue answer with no place
- *   and no search call, for the page to fill from the catalogue it holds.
+ * - `showStartingPoint(label, source)`: settles on a catalogue answer with
+ *   no place and no search call, for the page to fill from the catalogue it
+ *   holds, and records `search.start_point`.
  * - `reset()`: abort everything, back to idle.
  * Indexed edit callbacks. Each posts a dataset_resubmit carrying every
  * part's current entry with just this index rewritten. editMeasure posts
@@ -134,7 +135,8 @@
  * aborted by `reset` abandons as `reset`. A client-side navigation that
  * unmounts the search abandons each post in flight as `left` and aborts its
  * stream. The tracker sends only the first of these, so each post sends one
- * terminal event. A page hidden mid-post sends a `hidden`
+ * terminal event. After that unmount every run start refuses, so a link
+ * lookup that resolves late starts no search and sends nothing. A page hidden mid-post sends a `hidden`
  * abandon from the visibility listener below. `searchIds()` reads the
  * current search's id and the trace of the answer on screen, for the events
  * a visitor's click on that answer sends.
@@ -143,6 +145,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { track } from '@/lib/events/client';
+import { uuid } from '@/lib/uuid';
 
 import { withEntityEdit, withFacetEdit, withResolvedSlotEdit } from '@/lib/search/promote';
 import type { PermalinkEdit, PermalinkState } from '@/lib/search/permalink';
@@ -420,7 +423,7 @@ export const useSearchRun = () => {
     // first, and an edit needs a run's parts, so the fallback never mints.
     const trackPost = useCallback((editKind: EditKind | null, query: string) => {
         const search = (searchRef.current ??= {
-            id: crypto.randomUUID(),
+            id: uuid(),
             source: 'typed',
             posts: 0,
             traceId: null,
@@ -456,7 +459,9 @@ export const useSearchRun = () => {
     // A client-side navigation unmounts the search with its posts in flight:
     // each ends as `left` and its stream aborts, so a late answer sends no
     // second terminal event. unmountTeardown keeps Strict Mode's dev
-    // remount from aborting a search a mount effect has just started.
+    // remount from aborting a search a mount effect has just started. Once
+    // it has run, `startRun` and `showStartingPoint` refuse, so a link
+    // lookup that resolves after the visitor has gone starts nothing.
     const leaveRef = useRef<ReturnType<typeof unmountTeardown> | null>(null);
     useEffect(() => {
         const leave = (leaveRef.current ??= unmountTeardown(() => {
@@ -760,7 +765,11 @@ export const useSearchRun = () => {
             label: string,
             source: SearchSource,
             onResponse?: (normalized: Resolution) => void,
-        ) => {
+        ): boolean => {
+            if (leaveRef.current?.left()) {
+                return false;
+            }
+
             // A fresh query replaces everything: abort the previous full run
             // and any edit post in flight.
             baseTrackRef.current?.abandon('superseded');
@@ -778,7 +787,7 @@ export const useSearchRun = () => {
 
             runController.current = controller;
             runOp.current = op;
-            searchRef.current = { id: crypto.randomUUID(), source, posts: 0, traceId: null };
+            searchRef.current = { id: uuid(), source, posts: 0, traceId: null };
 
             const tracker = trackPost(null, label);
 
@@ -806,6 +815,8 @@ export const useSearchRun = () => {
             setUnreadableRefs(new Set());
 
             runBaseStream(op, controller, input, tracker, onResponse);
+
+            return true;
         },
         [runBaseStream, trackPost],
     );
@@ -860,9 +871,13 @@ export const useSearchRun = () => {
     }, []);
 
     /** The starting point with no search call: a settled catalogue answer
-     *  with no place, under `label`. */
+     *  with no place, under `label`. Records `search.start_point`. */
     const showStartingPoint = useCallback(
-        (label: string) => {
+        (label: string, source: SearchSource) => {
+            if (leaveRef.current?.left()) {
+                return;
+            }
+
             // The reader moved to another view: end any post in flight as
             // superseded before reset() would send `reset`. The tracker
             // sends only the first terminal event.
@@ -872,6 +887,7 @@ export const useSearchRun = () => {
             setPhase('done');
             setQuery(label);
             setAnswer({ kind: 'catalogue', scope: { place: null } });
+            track('search.start_point', { source });
         },
         [reset],
     );
@@ -1250,7 +1266,7 @@ export const useSearchRun = () => {
             // frozen observations through that ref, whatever spec_id comes back.
             // A version link has no question; the wire refuses an empty
             // raw_query.
-            startRun(
+            const started = startRun(
                 {
                     kind: 'dataset_resubmit',
                     entries,
@@ -1264,7 +1280,7 @@ export const useSearchRun = () => {
                     : undefined,
             );
 
-            if (shared.mode !== 'snapshot') {
+            if (!started || shared.mode !== 'snapshot') {
                 return;
             }
 

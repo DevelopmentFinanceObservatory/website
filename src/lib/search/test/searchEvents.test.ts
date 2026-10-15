@@ -4,6 +4,9 @@ import test from 'node:test';
 
 import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
 import {
+    HANDOFF_SOURCE_PARAM,
+    handoffHref,
+    handoffSource,
     searchEventProps,
     searchOutcome,
     searchPostTracker,
@@ -584,4 +587,20 @@ test('a failure carries its code, else its HTTP status, and the trace it names',
             ['search.error', 'no_response', undefined, 'trace-d', 'ODA to Kenya'],
         ],
     );
+});
+
+test('a homepage handoff carries typed or example; any other value is a permalink', () => {
+    const arrival = (href: string) =>
+        handoffSource(new URL(href, 'https://example.org').searchParams.get(HANDOFF_SOURCE_PARAM));
+
+    assert.equal(arrival(handoffHref('aid & debt', 'typed')), 'typed');
+    assert.equal(arrival(handoffHref('aid & debt', 'example')), 'example');
+    assert.equal(
+        new URL(handoffHref('aid & debt', 'typed'), 'https://example.org').searchParams.get('q'),
+        'aid & debt',
+    );
+
+    for (const href of ['/data?q=aid', '/data?q=aid&via=share', '/data?q=aid&via=Typed']) {
+        assert.equal(arrival(href), 'permalink');
+    }
 });

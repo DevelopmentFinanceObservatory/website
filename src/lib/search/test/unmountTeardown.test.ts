@@ -28,6 +28,7 @@ test('a Strict Mode unmount and remount in one pass tears nothing down', () => {
     flush();
 
     assert.equal(runs(), 0);
+    assert.equal(guard.left(), false);
 });
 
 test('a real unmount tears down once, after the pass that unmounted it', () => {
@@ -39,9 +40,15 @@ test('a real unmount tears down once, after the pass that unmounted it', () => {
     guard.unmount();
 
     assert.equal(runs(), 0);
+    assert.equal(guard.left(), false);
 
     flush();
     flush();
 
     assert.equal(runs(), 1);
+    assert.equal(guard.left(), true);
+
+    guard.mount();
+
+    assert.equal(guard.left(), false);
 });

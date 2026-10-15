@@ -1,6 +1,7 @@
 'use client';
 
 import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '@/lib/consent';
+import { uuid } from '@/lib/uuid';
 
 import type { EventName, EventProps } from './track';
 
@@ -43,7 +44,7 @@ const visitorId = (): string | null => {
         let id = localStorage.getItem(VISITOR_KEY);
 
         if (!id) {
-            id = crypto.randomUUID();
+            id = uuid();
             localStorage.setItem(VISITOR_KEY, id);
         }
 

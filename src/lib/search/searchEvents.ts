@@ -50,6 +50,20 @@ type Rung = 'full' | 'sampled' | 'minimal' | 'floor';
 export type SearchSource =
     'typed' | 'example' | 'catalogue' | 'refine' | 'retry' | 'permalink' | 'share' | 'version_link';
 
+/** The `/data` query param that carries a prompt's source from another page.
+ *  `/data` reads it once and strips it from the URL before the search
+ *  settles, so a copied link holds `?q=` alone and records `permalink`. */
+export const HANDOFF_SOURCE_PARAM = 'via';
+
+/** The `/data` URL a prompt on another page sends its query to. */
+export const handoffHref = (query: string, via: 'typed' | 'example'): string =>
+    `/data?q=${encodeURIComponent(query)}&${HANDOFF_SOURCE_PARAM}=${via}`;
+
+/** The source of a `?q=` arrival: the handoff's own `typed` or `example`,
+ *  and `permalink` for anything else, a missing param included. */
+export const handoffSource = (via: string | null): SearchSource =>
+    via === 'typed' || via === 'example' ? via : 'permalink';
+
 /** The useSearchRun callback that posted an edit. `replay` is a permalink's
  *  stored edits, posted once after its base run lands. */
 export type EditKind =
