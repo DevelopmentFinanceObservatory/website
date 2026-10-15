@@ -27,6 +27,27 @@ it empty the Share dialog offers Snapshot only. A live card's refreshed
 answer stands for `LIVE_SHARE_WINDOW_S` seconds (default 300, at most 900)
 before the next viewer asks the back ends again.
 
+### Reach the dev APIs
+
+The dev apis service (`dfo-dev-apis`) admits only callers that hold
+`roles/run.invoker` on it. The deployed site proves its identity with an ID
+token from the Cloud Run metadata server (`src/lib/apisAuth.ts`); off Cloud
+Run the site sends no token. Local work goes through `gcloud run services
+proxy`, which signs each call with your gcloud login:
+
+```bash
+gcloud auth login
+gcloud run services proxy dfo-dev-apis --region northamerica-northeast1 \
+  --project dev-fin-observatory --port 8083
+```
+
+Leave it running and set `SEARCH_API_BASE=http://localhost:8083`, as
+`.env.example` does. Your account needs `roles/run.invoker` on the service,
+directly or through a group; without it the proxy answers 403. Google does
+not document whether the proxy renews its token after an hour, so if calls
+start answering 401 or 403 later in a session, restart it.
+The scripts below reach the APIs the same way.
+
 ## just
 
 The [justfile](../justfile) is the entry point for the commands below — it
@@ -112,7 +133,9 @@ node scripts/backfill-card-refs.ts --write      # write matched cards
 It reads the database from `DATABASE_URL`, or from the `WEBSITE_DB_*`
 variables the runtime uses for Cloud SQL, and component revisions from
 `SEARCH_API_BASE`. Node does not load `.env.local`, so set them on the
-command line.
+command line. Against dev, start the proxy from
+[Reach the dev APIs](#reach-the-dev-apis) and pass
+`SEARCH_API_BASE=http://localhost:8083`.
 
 A card's `id` is its component id. The script reads every revision of that
 component and takes the one revision that gives the card its title and its
@@ -149,6 +172,11 @@ Running it again writes nothing.
 | `pnpm optimize:svg`     | SVGO over `src/assets` (run after adding)        |
 | `pnpm db:generate`      | Generate a migration from `db/schema.ts`         |
 | `pnpm db:migrate:local` | Apply migrations to the local database           |
+| `pnpm graph:types`      | Regenerate the graph types from the snapshot     |
+| `pnpm graph:schema`     | Refresh the graph schema snapshot from an apis   |
+
+`pnpm graph:schema http://localhost:8083` reads the snapshot from dev apis
+through the proxy in [Reach the dev APIs](#reach-the-dev-apis).
 
 ## Conventions
 

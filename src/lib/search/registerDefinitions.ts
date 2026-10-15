@@ -8,6 +8,8 @@
  * `node --test` imports it directly.
  */
 
+import { apisFetch } from '../apisAuth.ts';
+
 const REGISTER_TIMEOUT_MS = 20_000;
 
 type RegisterOptions = {
@@ -25,7 +27,7 @@ type RegisterOptions = {
 export const registerDefinitions = async ({
     base,
     definitions,
-    fetchImpl = fetch,
+    fetchImpl = apisFetch,
 }: RegisterOptions): Promise<void> => {
     for (const definition of definitions) {
         const res = await fetchImpl(`${base}/api/datasets/register`, {

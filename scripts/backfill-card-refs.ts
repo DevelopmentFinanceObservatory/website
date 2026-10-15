@@ -10,7 +10,10 @@
 //
 // It reads the database from DATABASE_URL, or from the WEBSITE_DB_* Cloud
 // SQL variables the runtime uses, and component revisions from
-// SEARCH_API_BASE.
+// SEARCH_API_BASE. The dev apis admits only invokers, so against dev that is
+// http://localhost:8083 behind `gcloud run services proxy dfo-dev-apis
+// --region northamerica-northeast1 --project dev-fin-observatory --port 8083`
+// (docs/development.md, "Reach the dev APIs").
 import { parseArgs } from 'node:util';
 
 import type { Pool } from 'pg';

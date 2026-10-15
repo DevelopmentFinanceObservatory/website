@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
+import { apisFetch } from '@/lib/apisAuth';
+
 import { limiterKeyFor, setCaller, trustedHops } from './caller';
 import { relayBody } from './compress';
 import { clientResponseHeaders, dropEncodedLength, pick, upstreamRequestHeaders } from './headers';
@@ -24,6 +26,10 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
  *   /api/v1/studio/*                 → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
+ *
+ * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
+ * (src/lib/apisAuth matches on the target's origin). The other upstreams get
+ * none.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -100,7 +106,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     let upstream: Response;
 
     try {
-        upstream = await fetch(options.target, {
+        upstream = await apisFetch(options.target, {
             method: req.method,
             headers,
             body: hasBody ? req.body : undefined,
