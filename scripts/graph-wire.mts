@@ -6,6 +6,11 @@
 //   node scripts/graph-wire.mts types         rewrite schema.d.ts from the snapshot
 //   node scripts/graph-wire.mts schema <url>  refresh the snapshot from a deployed
 //                                             dfo-apis, then rewrite schema.d.ts
+//
+// The dev apis admits only invokers, so <url> for dev is a local
+// `gcloud run services proxy dfo-dev-apis --region northamerica-northeast1
+// --project dev-fin-observatory --port 8083`, http://localhost:8083
+// (docs/development.md, "Reach the dev APIs").
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

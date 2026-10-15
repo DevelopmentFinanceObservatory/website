@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
+
+// Before graph.ts, which loads next/cache.
+import { nextCache } from '../../test/nextCacheStub.ts';
 
 import {
     loadSourceDoc,
@@ -11,6 +14,9 @@ import {
 
 // graph.ts reads its API origin at call time; every fetch below is mocked.
 process.env.SEARCH_API_BASE = 'https://apis.example.org';
+
+// Each test starts with an empty read cache.
+beforeEach(nextCache.clear);
 
 const json = (body: unknown, status = 200): Response =>
     new Response(JSON.stringify(body), {
@@ -153,6 +159,8 @@ test('loadSources retries the catalogue once after a 503 or 504, once the delay 
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     for (const status of [503, 504]) {
+        nextCache.clear();
+
         const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
             fetchMock.mock.callCount() === 0
                 ? json({ code: 'upstream_unavailable' }, status)
@@ -193,7 +201,7 @@ test('loadSources throws after a second 503, having read the catalogue twice', a
     assert.equal(fetchMock.mock.callCount(), 2);
 });
 
-test('every graph read carries its own timeout signal, so Next does not dedupe the retry', async (t) => {
+test('every graph read is no-store with its own timeout signal, so Next does not dedupe the retry', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
 
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
@@ -215,9 +223,42 @@ test('every graph read carries its own timeout signal, so Next does not dedupe t
         assert.ok(signal instanceof AbortSignal);
     }
     assert.notEqual(signals[0], signals[1]);
-    assert.deepEqual((fetchMock.mock.calls[0].arguments[1] as { next: unknown }).next, {
-        revalidate: 3600,
-    });
+    for (const call of fetchMock.mock.calls) {
+        assert.equal((call.arguments[1] as RequestInit).cache, 'no-store');
+    }
+});
+
+test('a 200 answer is cached for an hour under its path and served without a second read', async (t) => {
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => json({ gaps: [] }));
+
+    await loadSourceDoc('dc/d/A');
+    await loadSourceDoc('dc/d/A');
+    await loadSourceDoc('dc/d/B');
+
+    assert.equal(fetchMock.mock.callCount(), 2);
+    assert.deepEqual(
+        [...nextCache.stored.values()].map((entry) => entry.revalidate),
+        [3600, 3600],
+    );
+});
+
+test('a 404, a 5xx or a failed request is not cached, so the next call reads again', async (t) => {
+    for (const answer of [
+        async () => json({ code: 'node_not_held' }, 404),
+        async () => json({ code: 'pool_exhausted' }, 500),
+        async (): Promise<Response> => {
+            throw new TypeError('fetch failed');
+        },
+    ]) {
+        const fetchMock = t.mock.method(globalThis, 'fetch', answer);
+
+        await loadSourceDoc('dc/d/A').catch(() => null);
+        await loadSourceDoc('dc/d/A').catch(() => null);
+
+        assert.equal(fetchMock.mock.callCount(), 2);
+        assert.equal(nextCache.stored.size, 0);
+        fetchMock.mock.restore();
+    }
 });
 
 test('loadSources does not retry a 500', async (t) => {
