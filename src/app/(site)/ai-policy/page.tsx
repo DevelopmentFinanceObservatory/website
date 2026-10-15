@@ -84,8 +84,10 @@ const AiPolicyPage = () => (
                 </li>
                 <li>
                     <strong>Internet addresses.</strong> Our servers’ request logs record the
-                    internet address of each request, as on any website. Usage statistics do not
-                    include it.
+                    internet address of each request, as on any website. If you accepted usage
+                    statistics, PostHog uses your address to estimate your country and city, then
+                    discards it. Otherwise usage statistics leave it out. Usage statistics record
+                    your browser’s name and version, to tell people from automated traffic.
                 </li>
             </ul>
             <p>

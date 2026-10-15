@@ -40,6 +40,7 @@ export const POST = async (request: Request) => {
         userId: session?.user.id ?? null,
         visitorId: clip(body?.visitorId, MAX_ID),
         page: clip(body?.page, MAX_PAGE),
+        headers: request.headers,
     });
 
     return new NextResponse(null, { status: 204 });

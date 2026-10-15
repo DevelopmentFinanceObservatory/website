@@ -95,7 +95,7 @@ export const POST = async (req: NextRequest) => {
     void track(
         'feedback.submit',
         { kind: message.startsWith('Studio chat feedback') ? 'chat' : 'widget' },
-        { page },
+        { page, headers: req.headers },
     );
 
     return json(200, true, 'Thanks for your feedback!');

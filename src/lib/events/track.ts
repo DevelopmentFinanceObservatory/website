@@ -45,10 +45,17 @@ export type EventName = (typeof EVENT_NAMES)[number];
 
 export type EventProps = Record<string, unknown>;
 
+/**
+ * Who an event is about. `headers` are the incoming browser request's, for
+ * the user agent and client address forwarded to PostHog (see ./posthog),
+ * or null for an event with no browser request behind it. Required, so a
+ * caller with a request cannot leave it out.
+ */
 export type Who = {
     userId?: string | null;
     visitorId?: string | null;
     page?: string | null;
+    headers: Headers | null;
 };
 
 /**
@@ -56,7 +63,7 @@ export type Who = {
  * failed insert or forward is logged and swallowed, and each sink fails
  * independently of the other.
  */
-export const track = async (name: EventName, props: EventProps = {}, who: Who = {}) => {
+export const track = async (name: EventName, props: EventProps, who: Who) => {
     try {
         await db.insert(event).values({
             name,

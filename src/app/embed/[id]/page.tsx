@@ -41,8 +41,9 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
     // Counted here, server-side, with no identifier and nothing stored on the
     // device, so it needs no consent. Headers are read during render: inside
     // after() they throw.
-    const host = refererHost((await headers()).get('referer'));
-    after(() => track('embed.view', { shareId: id, kind: row.kind, host }));
+    const incoming = await headers();
+    const host = refererHost(incoming.get('referer'));
+    after(() => track('embed.view', { shareId: id, kind: row.kind, host }, { headers: incoming }));
 
     return <EmbedView shared={sharedViewOf(row)} />;
 };
