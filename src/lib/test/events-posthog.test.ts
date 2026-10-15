@@ -19,7 +19,6 @@ test.beforeEach(() => {
     process.env.POSTHOG_KEY = 'phc_test';
     process.env.POSTHOG_HOST = 'https://eu.i.posthog.example';
     process.env.ENVIRONMENT = 'dev';
-    process.env.TRUSTED_PROXY_HOPS = '2';
 });
 
 test.afterEach(() => {
@@ -27,7 +26,6 @@ test.afterEach(() => {
     delete process.env.POSTHOG_KEY;
     delete process.env.POSTHOG_HOST;
     delete process.env.ENVIRONMENT;
-    delete process.env.TRUSTED_PROXY_HOPS;
 });
 
 test('configured only when both halves are set', () => {
@@ -68,30 +66,23 @@ test('sends the capture payload with the environment stamped', async () => {
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Firefox/131.0';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-// A browser request behind two load balancers (TRUSTED_PROXY_HOPS=2), with
-// a forged entry the client put in front.
-const browserHeaders = () =>
+// A browser request as it arrives through Cloudflare and the load balancer.
+const browserHeaders = (country = 'GB') =>
     new Headers({
         'user-agent': UA,
-        'x-forwarded-for': '198.51.100.66, 203.0.113.9, 34.1.1.1, 35.2.2.2',
+        'x-forwarded-for': '203.0.113.9, 34.1.1.1, 35.2.2.2',
+        'cf-ipcountry': country,
     });
 
 const visitors = [
-    {
-        kind: 'consented',
-        who: { visitorId: 'v-123' },
-        distinctId: 'v-123',
-        ip: '203.0.113.9',
-        personless: false,
-    },
+    { kind: 'consented', who: { visitorId: 'v-123' }, distinctId: 'v-123', personless: false },
     {
         kind: 'signed in without consent',
         who: { userId: 'u-789' },
         distinctId: 'u-789',
-        ip: undefined,
         personless: false,
     },
-    { kind: 'anonymous', who: {}, distinctId: UUID, ip: undefined, personless: true },
+    { kind: 'anonymous', who: {}, distinctId: UUID, personless: true },
 ] as const;
 
 for (const visitor of visitors) {
@@ -123,14 +114,15 @@ for (const visitor of visitors) {
         }
 
         assert.equal(properties.$raw_user_agent, UA);
-        assert.equal(properties.$ip, visitor.ip);
-        assert.equal(properties.$geoip_disable, visitor.ip ? undefined : true);
+        assert.equal(properties.country, 'GB');
+        assert.equal(properties.$ip, undefined);
+        assert.equal(properties.$geoip_disable, true);
         assert.equal(properties.$process_person_profile, visitor.personless ? false : undefined);
         assert.equal(properties.kind, 'chat');
     });
 }
 
-test('an event with no browser request carries no user agent or address', async () => {
+test('an event with no browser request carries no user agent or country', async () => {
     const captured: Captured[] = [];
     stubFetch(200, captured);
 
@@ -138,9 +130,25 @@ test('an event with no browser request carries no user agent or address', async 
 
     const properties = captured[0].body.properties as Record<string, unknown>;
     assert.equal(properties.$raw_user_agent, undefined);
-    assert.equal(properties.$ip, undefined);
+    assert.equal(properties.country, null);
     assert.equal(properties.$geoip_disable, true);
 });
+
+for (const [header, country] of [
+    ['us', 'US'],
+    ['XX', null],
+    ['T1', null],
+] as const) {
+    test(`CF-IPCountry ${header} gives country ${country}`, async () => {
+        const captured: Captured[] = [];
+        stubFetch(200, captured);
+
+        await sendEventToPosthog('embed.view', {}, { headers: browserHeaders(header) });
+
+        const properties = captured[0].body.properties as Record<string, unknown>;
+        assert.equal(properties.country, country);
+    });
+}
 
 test('a non-ok answer throws so track() can log it', async () => {
     const captured: Captured[] = [];

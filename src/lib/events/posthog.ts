@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { clientAddress, trustedHops } from '../proxy/caller.ts';
 import type { EventName, EventProps, Who } from './track';
 
 // The PostHog half of src/lib/events, in its own module (no db or server-only imports) so src/lib/test/events-posthog.test.ts can exercise it under plain node.
@@ -8,17 +7,12 @@ import type { EventName, EventProps, Who } from './track';
 export const posthogConfigured = (): boolean =>
     Boolean(process.env.POSTHOG_KEY && process.env.POSTHOG_HOST);
 
-// The visitor's address for a consented visitor (see clientAddress in
-// src/lib/proxy/caller), else undefined. A malformed TRUSTED_PROXY_HOPS
-// gives undefined rather than a guess.
-const consentedAddress = (who: Who): string | undefined => {
-    const hops = trustedHops(process.env);
+// The ISO country code Cloudflare's edge puts in CF-IPCountry, or null.
+// Cloudflare sends XX when it has no location and T1 for Tor.
+const visitorCountry = (headers: Headers | null): string | null => {
+    const code = headers?.get('cf-ipcountry')?.trim().toUpperCase();
 
-    if (!who.visitorId || !who.headers || typeof hops !== 'number') {
-        return undefined;
-    }
-
-    return clientAddress(who.headers.get('x-forwarded-for'), hops);
+    return code && /^[A-Z]{2}$/.test(code) && code !== 'XX' ? code : null;
 };
 
 /**
@@ -33,15 +27,15 @@ const consentedAddress = (who: Who): string | undefined => {
  * $process_person_profile false, so it creates no person.
  *
  * $raw_user_agent is the request's User-Agent, which PostHog's bot filter
- * reads. $ip is the client address for a consented visitor only; every
- * other event sets $geoip_disable, since PostHog would otherwise locate the
- * server. An event with no browser request behind it (who.headers null)
- * carries neither. Event props cannot set PostHog's `$` properties.
+ * reads. country is the visitor's country from Cloudflare. Every event sets
+ * $geoip_disable, since PostHog would otherwise locate the server, and no
+ * event carries the visitor's IP. An event with no browser request behind
+ * it (who.headers null) has no user agent and a null country. Event props
+ * cannot set PostHog's `$` properties.
  */
 export const sendEventToPosthog = async (name: EventName, props: EventProps, who: Who) => {
     const person = who.visitorId ?? who.userId;
     const userAgent = who.headers?.get('user-agent');
-    const ip = consentedAddress(who);
     const ownProps = Object.fromEntries(
         Object.entries(props).filter(([key]) => !key.startsWith('$')),
     );
@@ -58,8 +52,9 @@ export const sendEventToPosthog = async (name: EventName, props: EventProps, who
                 environment: process.env.ENVIRONMENT ?? 'unknown',
                 page: who.page ?? null,
                 signed_in: Boolean(who.userId),
+                country: visitorCountry(who.headers),
                 ...(userAgent && { $raw_user_agent: userAgent }),
-                ...(ip ? { $ip: ip } : { $geoip_disable: true }),
+                $geoip_disable: true,
                 ...(!person && { $process_person_profile: false }),
             },
             timestamp: new Date().toISOString(),
