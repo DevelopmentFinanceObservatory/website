@@ -308,7 +308,10 @@ export const searchEventName = (props: SearchEventProps): 'search.query' | 'sear
 export type SearchPostEventName =
     'search.query' | 'search.empty' | 'search.edit' | 'search.error' | 'search.abandon';
 
-export type AbandonReason = 'hidden' | 'superseded' | 'reset';
+/** Why a post ended in flight: the page was hidden, a newer post or the
+ *  starting point replaced it, the reader reset the page, or the reader
+ *  navigated away and the search unmounted. */
+export type AbandonReason = 'hidden' | 'superseded' | 'reset' | 'left';
 
 /** The fields of the engine's `done` event a settle reads. */
 export type SearchDone = { trace_id: string; elapsed_ms: number; timed_out: boolean };
@@ -455,4 +458,23 @@ export function searchPostTracker(
             hidden = true;
         },
     };
+}
+
+/** The search and the trace behind the answer on screen, null for each
+ *  before a search and on the starting point. */
+export type SearchIds = { searchId: string | null; traceId: string | null };
+
+/**
+ * Starts a visitor's action on the answer on screen: reads the ids now and
+ * returns the sender of its `search.action`. A share or a download sends
+ * once its request lands, when a newer search may be on screen, and the
+ * event still names the search the visitor acted on.
+ */
+export function startSearchAction<TAction extends object>(
+    searchIds: () => SearchIds,
+    emit: (name: 'search.action', props: Record<string, unknown>) => void,
+): (action: TAction) => void {
+    const ids = searchIds();
+
+    return (action) => emit('search.action', { ...ids, ...action });
 }

@@ -7,6 +7,8 @@ import {
     searchEventProps,
     searchOutcome,
     searchPostTracker,
+    startSearchAction,
+    type SearchIds,
     type SearchPostEventName,
     type SearchSettleProps,
 } from '../searchEvents.ts';
@@ -481,14 +483,18 @@ test('a hidden post sends one hidden abandon and marks its later settle', () => 
     );
 });
 
-test('a settled post ignores a later hide, and a superseded one abandons once', () => {
+test('a settled post ignores a later hide, and an abandoned one sends nothing more', () => {
     const settled = tracked();
     const superseded = tracked(1);
+    const left = tracked();
 
     settled.tracker.settle({ response: response('catalogue'), parts: [], done });
     settled.tracker.hide();
     superseded.tracker.abandon('superseded');
     superseded.tracker.abandon('reset');
+    // The search unmounted, then its stream's answer landed.
+    left.tracker.abandon('left');
+    left.tracker.settle({ response: response('catalogue'), parts: [], done });
 
     assert.deepEqual(
         settled.sent.map(([name]) => name),
@@ -498,6 +504,29 @@ test('a settled post ignores a later hide, and a superseded one abandons once', 
         superseded.sent.map(([name, props]) => [name, props.reason, props.traceId]),
         [['search.abandon', 'superseded', null]],
     );
+    assert.deepEqual(
+        left.sent.map(([name, props]) => [name, props.reason]),
+        [['search.abandon', 'left']],
+    );
+});
+
+test('an action names the search on screen when it started, not when it landed', () => {
+    const sent: [string, Record<string, unknown>][] = [];
+    let onScreen: SearchIds = { searchId: 'search-a', traceId: 'trace-a' };
+    const send = startSearchAction<{ action: 'share'; shareId: string }>(
+        () => onScreen,
+        (name, props) => sent.push([name, props]),
+    );
+
+    onScreen = { searchId: 'search-b', traceId: 'trace-b' };
+    send({ action: 'share', shareId: 'share-1' });
+
+    assert.deepEqual(sent, [
+        [
+            'search.action',
+            { searchId: 'search-a', traceId: 'trace-a', action: 'share', shareId: 'share-1' },
+        ],
+    ]);
 });
 
 test('a failure carries its code, else its HTTP status, and the trace it names', () => {

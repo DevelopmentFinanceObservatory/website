@@ -2,16 +2,17 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { event } from '../../../db/schema';
+import { logEvent } from './eventLog';
 import { posthogConfigured, sendEventToPosthog } from './posthog';
 
 /**
  * Usage events (the analytics in DFO Overview → Data access → "Events to
- * record"), stored in our own `event` table and, when POSTHOG_KEY and
- * POSTHOG_HOST are set, forwarded server-side to PostHog (EU cloud): no
- * cookies, no browser-side analytics script, no Studio prompt text. The
- * search events hold the first 500 characters of the query. The browser
- * posts its events through /api/events (see ./client); the server records
- * its own directly.
+ * record"), written as one JSON log line (see ./eventLog), stored in our own
+ * `event` table and, when POSTHOG_KEY and POSTHOG_HOST are set, forwarded
+ * server-side to PostHog (EU cloud): no cookies, no browser-side analytics
+ * script, no Studio prompt text. The search events hold the first 500
+ * characters of the query. The browser posts its events through /api/events
+ * (see ./client); the server records its own directly.
  *
  * Every name the site emits, so a typo can't fork the data:
  * - search.query      an answered search (spec ids, measures and filters, places,
@@ -19,7 +20,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - search.empty      a search the graph couldn't answer (the reasons)
  * - search.edit       an edit to a search answer, re-resolved (its outcome)
  * - search.error      a search post that failed (the error code)
- * - search.abandon    a search post left in flight (hidden, superseded or reset)
+ * - search.abandon    a search post left in flight (hidden, superseded, reset or left)
  * - search.action     a click on a search answer (pick, download, share, ...)
  * - search.start_point  the starting point shown, with no search call
  * - search.studio_handoff  a Studio action on a search answer
@@ -73,9 +74,12 @@ export type Who = {
 /**
  * Record one event. Fire-and-forget: analytics never cost a request, so a
  * failed insert or forward is logged and swallowed, and each sink fails
- * independently of the other.
+ * independently of the others. The log line goes first and cannot throw, so
+ * Cloud Logging has the event whether the insert or the forward fails.
  */
 export const track = async (name: EventName, props: EventProps, who: Who) => {
+    logEvent(name, props, who);
+
     try {
         await db.insert(event).values({
             name,

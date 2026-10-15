@@ -131,8 +131,10 @@
  * an `error` event or a thrown error fails, and a stream that closes with
  * neither fails as `stream`. A post aborted by a newer one or by
  * `showStartingPoint` abandons as `superseded` at the abort site, and one
- * aborted by `reset` abandons as `reset`. The tracker sends only the first of
- * these, so each post sends one terminal event. A page hidden mid-post sends a `hidden`
+ * aborted by `reset` abandons as `reset`. A client-side navigation that
+ * unmounts the search abandons each post in flight as `left` and aborts its
+ * stream. The tracker sends only the first of these, so each post sends one
+ * terminal event. A page hidden mid-post sends a `hidden`
  * abandon from the visibility listener below. `searchIds()` reads the
  * current search's id and the trace of the answer on screen, for the events
  * a visitor's click on that answer sends.
@@ -204,10 +206,12 @@ import type {
 import {
     searchPostTracker,
     type EditKind,
+    type SearchIds,
     type SearchPostTracker,
     type SearchSource,
 } from '@/lib/search/searchEvents';
 import { sharedUnitEdit } from '@/lib/search/unitPicker';
+import { unmountTeardown } from '@/lib/search/unmountTeardown';
 import type { WindowApplyValue } from '@/lib/search/windowState';
 
 export type SearchPhase = 'idle' | 'loading' | 'done' | 'error';
@@ -448,11 +452,29 @@ export const useSearchRun = () => {
         return () => document.removeEventListener('visibilitychange', onVisibility);
     }, []);
 
+    // A client-side navigation unmounts the search with its posts in flight:
+    // each ends as `left` and its stream aborts, so a late answer sends no
+    // second terminal event. unmountTeardown keeps Strict Mode's dev
+    // remount from aborting a search a mount effect has just started.
+    const leaveRef = useRef<ReturnType<typeof unmountTeardown> | null>(null);
+    useEffect(() => {
+        const leave = (leaveRef.current ??= unmountTeardown(() => {
+            baseTrackRef.current?.abandon('left');
+            editTrackRef.current?.abandon('left');
+            runController.current?.abort();
+            postController.current?.controller.abort();
+        }));
+
+        leave.mount();
+
+        return leave.unmount;
+    }, []);
+
     // The search and the trace behind the answer on screen, read when a
     // visitor acts on it (`search.action`, the Studio hand-off). Both are
     // null before a search and on the starting point.
     const searchIds = useCallback(
-        () => ({
+        (): SearchIds => ({
             searchId: searchRef.current?.id ?? null,
             traceId: searchRef.current?.traceId ?? null,
         }),

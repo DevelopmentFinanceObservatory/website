@@ -22,7 +22,7 @@ const SearchPanel = ({
     note,
     createShare,
     onStudio,
-    onDownload,
+    onDownloadStart,
 }: {
     spec: any;
     // Says a download may differ from the preview (resultNotes downloadNote).
@@ -33,8 +33,8 @@ const SearchPanel = ({
     // hidden without it, as it is while an operation_not_applied departure
     // offers Studio.
     onStudio?: () => void;
-    // Records a download that reached its file.
-    onDownload?: (downloaded: DatasetDownloaded) => void;
+    // Called as a download starts; records it once it reaches its file.
+    onDownloadStart?: () => (downloaded: DatasetDownloaded) => void;
 }) => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     // The share box pops like the other menus here: 'closed' keeps it mounted
@@ -74,7 +74,7 @@ const SearchPanel = ({
         specId: spec?.spec_id,
         definition: spec?.definition,
         entities: spec?.entities,
-        onDownload,
+        onDownloadStart,
     });
 
     const rowCount = downloadRowCount(spec);

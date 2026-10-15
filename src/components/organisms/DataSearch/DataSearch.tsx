@@ -56,7 +56,7 @@ import {
     snapshotLiveNote,
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
-import { searchEventProps, type SearchSource } from '@/lib/search/searchEvents';
+import { searchEventProps, startSearchAction, type SearchSource } from '@/lib/search/searchEvents';
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
@@ -317,9 +317,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         searchIds,
     ]);
 
-    // A visitor's action on the answer on screen (docs/analytics.md).
-    const trackAction = useCallback(
-        (action: SearchAction) => track('search.action', { ...searchIds(), ...action }),
+    // A visitor's action on the answer on screen (docs/analytics.md): the
+    // ids are read as the visitor acts, and the returned sender records it.
+    const startAction = useCallback(
+        () => startSearchAction<SearchAction>(searchIds, track),
         [searchIds],
     );
 
@@ -754,8 +755,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         specId: part.hydratedSpec!.spec_id,
         label: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
     }));
-    const createShare: CreateSearchShare = (mode) =>
-        createSearchShare({
+    const createShare: CreateSearchShare = (mode) => {
+        const sendAction = startAction();
+
+        return createSearchShare({
             mode,
             query,
             parts: sharedParts.map(searchSharePart),
@@ -764,10 +767,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 return result;
             }
 
-            trackAction({ action: 'share', mode, shareId: result.id });
+            sendAction({ action: 'share', mode, shareId: result.id });
 
             return { ...result, datasets: sharedDatasets };
         });
+    };
     // A part whose question asked for more than search does carries an
     // operation_not_applied departure, whose action hands it to Studio;
     // without one, the side panel offers Studio itself, so a page shows one
@@ -1087,13 +1091,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     note={downloadNote(definiteParts[0].part?.warnings)}
                                     createShare={createShare}
                                     onStudio={studioDeparture ? undefined : openStudio}
-                                    onDownload={(downloaded) =>
-                                        trackAction({
-                                            action: 'download',
-                                            partIndex: definiteParts[0].index,
-                                            ...downloaded,
-                                        })
-                                    }
+                                    onDownloadStart={() => {
+                                        const sendAction = startAction();
+                                        const partIndex = definiteParts[0].index;
+
+                                        return (downloaded) =>
+                                            sendAction({
+                                                action: 'download',
+                                                partIndex,
+                                                ...downloaded,
+                                            });
+                                    }}
                                 />
                             )}
                         </div>
@@ -1121,7 +1129,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                             part={part.part}
                                             prefix={parts.length > 1 ? part.variableText : null}
                                             onPick={(spec) => {
-                                                trackAction({
+                                                startAction()({
                                                     action: 'pick_reading',
                                                     partIndex: part.index,
                                                     specId: spec.spec_id,

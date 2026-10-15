@@ -98,8 +98,10 @@ export type DatasetDownloadTarget = {
     // The answer's bound entities, whose type heads the observationAbout
     // group of extra columns ("Country").
     entities?: { role?: string; entity_type?: string | null }[] | null;
-    // Called once a download's file opens, with what was rendered.
-    onDownload?: (downloaded: DatasetDownloaded) => void;
+    // Called as a download starts. The function it returns is called once
+    // the file opens, with what was rendered, so a caller can bind the
+    // record to what was on screen when the visitor clicked.
+    onDownloadStart?: () => (downloaded: DatasetDownloaded) => void;
 };
 
 /** A download that reached its file: the spec and the choices it used. */
@@ -115,7 +117,7 @@ export const useDatasetDownload = ({
     specId,
     definition,
     entities,
-    onDownload,
+    onDownloadStart,
 }: DatasetDownloadTarget) => {
     const choices = useSyncExternalStore(subscribeChoices, readChoices, serverChoices);
     const [optionsOpen, setOptionsOpen] = useState(false);
@@ -237,6 +239,7 @@ export const useDatasetDownload = ({
         }
 
         const controller = new AbortController();
+        const downloaded = onDownloadStart?.();
 
         downloadAbortRef.current = controller;
         setDownloading(true);
@@ -318,7 +321,7 @@ export const useDatasetDownload = ({
             }
 
             window.location.assign(artifactHref(artifact.url));
-            onDownload?.({ specId, format, bundle });
+            downloaded?.({ specId, format, bundle });
         } catch (caught) {
             if (controller.signal.aborted) {
                 return;
