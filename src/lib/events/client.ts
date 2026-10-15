@@ -56,8 +56,14 @@ const visitorId = (): string | null => {
 /**
  * Record a usage event from the browser (POST /api/events). Fire-and-forget
  * with `keepalive`, so an event sent on the way out of a page still lands.
+ * `page` defaults to the current path; an event sent after a navigation passes
+ * the page it describes.
  */
-export const track = (name: EventName, props: EventProps = {}) => {
+export const track = (
+    name: EventName,
+    props: EventProps = {},
+    page: string = location.pathname,
+) => {
     try {
         void fetch('/api/events', {
             method: 'POST',
@@ -66,7 +72,7 @@ export const track = (name: EventName, props: EventProps = {}) => {
                 name,
                 props,
                 visitorId: visitorId(),
-                page: location.pathname,
+                page,
             }),
             keepalive: true,
         }).catch(() => undefined);

@@ -433,6 +433,7 @@ export const useSearchRun = () => {
                 source: search.source,
                 editKind,
                 query,
+                page: location.pathname,
             },
             { emit: track, now: () => performance.now() },
         );

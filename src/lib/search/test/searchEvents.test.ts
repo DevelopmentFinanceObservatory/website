@@ -373,7 +373,7 @@ test('the outcome is a resolution status, else the answer kind', () => {
 
 /** A tracker over a fake clock, and the events it sent. */
 const tracked = (post = 0) => {
-    const sent: [SearchPostEventName, Record<string, any>][] = [];
+    const sent: [SearchPostEventName, Record<string, any>, string][] = [];
     let clock = 1000;
     const tracker = searchPostTracker(
         {
@@ -382,8 +382,9 @@ const tracked = (post = 0) => {
             source: 'example',
             editKind: post > 0 ? 'slot' : null,
             query: 'ODA to Kenya',
+            page: '/data',
         },
-        { emit: (name, props) => sent.push([name, props]), now: () => clock },
+        { emit: (name, props, page) => sent.push([name, props, page]), now: () => clock },
     );
 
     return { tracker, sent, advance: (ms: number) => (clock += ms) };
@@ -510,12 +511,38 @@ test('a settled post ignores a later hide, and an abandoned one sends nothing mo
     );
 });
 
+test('every event of a post carries the page it started on, after the page changed', () => {
+    const left = tracked();
+    const hidden = tracked();
+    const settled = tracked();
+    const failed = tracked();
+
+    // The tracker holds the start page, so nothing it reads can have moved on.
+    left.tracker.abandon('left');
+    hidden.tracker.hide();
+    settled.tracker.settle({ response: response('catalogue'), parts: [], done });
+    failed.tracker.fail({});
+
+    assert.deepEqual(
+        [left, hidden, settled, failed].map(({ sent }) =>
+            sent.map(([name, , page]) => [name, page]),
+        ),
+        [
+            [['search.abandon', '/data']],
+            [['search.abandon', '/data']],
+            [['search.query', '/data']],
+            [['search.error', '/data']],
+        ],
+    );
+});
+
 test('an action names the search on screen when it started, not when it landed', () => {
-    const sent: [string, Record<string, unknown>][] = [];
+    const sent: [string, Record<string, unknown>, string][] = [];
     let onScreen: SearchIds = { searchId: 'search-a', traceId: 'trace-a' };
     const send = startSearchAction<{ action: 'share'; shareId: string }>(
         () => onScreen,
-        (name, props) => sent.push([name, props]),
+        (name, props, page) => sent.push([name, props, page]),
+        '/data',
     );
 
     onScreen = { searchId: 'search-b', traceId: 'trace-b' };
@@ -525,6 +552,7 @@ test('an action names the search on screen when it started, not when it landed',
         [
             'search.action',
             { searchId: 'search-a', traceId: 'trace-a', action: 'share', shareId: 'share-1' },
+            '/data',
         ],
     ]);
 });

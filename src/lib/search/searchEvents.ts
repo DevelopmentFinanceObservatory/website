@@ -341,12 +341,14 @@ export function searchPostTracker(
         source: SearchSource;
         editKind: EditKind | null;
         query: string;
+        /** The page the post started on; a `left` abandon runs after the URL has changed. */
+        page: string;
     },
     {
         emit,
         now,
     }: {
-        emit: (name: SearchPostEventName, props: Record<string, unknown>) => void;
+        emit: (name: SearchPostEventName, props: Record<string, unknown>, page: string) => void;
         now: () => number;
     },
 ) {
@@ -383,12 +385,16 @@ export function searchPostTracker(
         }
 
         traceId = failedTrace ?? traceId;
-        emit('search.error', {
-            ...runProps(),
-            query: clip(post.query, MAX_QUERY),
-            error: code ?? (status != null ? String(status) : 'stream'),
-            ...(status != null && { status }),
-        });
+        emit(
+            'search.error',
+            {
+                ...runProps(),
+                query: clip(post.query, MAX_QUERY),
+                error: code ?? (status != null ? String(status) : 'stream'),
+                ...(status != null && { status }),
+            },
+            post.page,
+        );
     };
 
     return {
@@ -439,7 +445,7 @@ export function searchPostTracker(
                 },
             });
 
-            emit(edited ? 'search.edit' : searchEventName(props), props);
+            emit(edited ? 'search.edit' : searchEventName(props), props, post.page);
         },
         fail,
         abandon(reason: Exclude<AbandonReason, 'hidden'>) {
@@ -447,14 +453,14 @@ export function searchPostTracker(
                 return;
             }
 
-            emit('search.abandon', { ...runProps(), reason, step });
+            emit('search.abandon', { ...runProps(), reason, step }, post.page);
         },
         hide() {
             if (ended || hidden) {
                 return;
             }
 
-            emit('search.abandon', { ...runProps(), reason: 'hidden', step });
+            emit('search.abandon', { ...runProps(), reason: 'hidden', step }, post.page);
             hidden = true;
         },
     };
@@ -468,13 +474,14 @@ export type SearchIds = { searchId: string | null; traceId: string | null };
  * Starts a visitor's action on the answer on screen: reads the ids now and
  * returns the sender of its `search.action`. A share or a download sends
  * once its request lands, when a newer search may be on screen, and the
- * event still names the search the visitor acted on.
+ * event still names the search the visitor acted on, and the page it was on.
  */
 export function startSearchAction<TAction extends object>(
     searchIds: () => SearchIds,
-    emit: (name: 'search.action', props: Record<string, unknown>) => void,
+    emit: (name: 'search.action', props: Record<string, unknown>, page: string) => void,
+    page: string,
 ): (action: TAction) => void {
     const ids = searchIds();
 
-    return (action) => emit('search.action', { ...ids, ...action });
+    return (action) => emit('search.action', { ...ids, ...action }, page);
 }

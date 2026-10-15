@@ -320,7 +320,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // A visitor's action on the answer on screen (docs/analytics.md): the
     // ids are read as the visitor acts, and the returned sender records it.
     const startAction = useCallback(
-        () => startSearchAction<SearchAction>(searchIds, track),
+        () => startSearchAction<SearchAction>(searchIds, track, location.pathname),
         [searchIds],
     );
 
