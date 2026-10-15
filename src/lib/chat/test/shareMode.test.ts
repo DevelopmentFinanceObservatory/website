@@ -103,8 +103,13 @@ test('readStudioShareRequest: a request without a kind, a conversation, or a car
 });
 
 test('shareCreateProps: the share.create event carries the kind and the mode within the props limit', () => {
-    const props = shareCreateProps({ id: 'abcd1234', kind: 'card', mode: 'live' });
+    for (const [kind, mode] of [
+        ['card', 'live'],
+        ['search', 'snapshot'],
+    ] as const) {
+        const props = shareCreateProps({ id: 'abcd1234', kind, mode });
 
-    assert.deepEqual(props, { shareId: 'abcd1234', kind: 'card', mode: 'live' });
-    assert.ok(fitsProps(props));
+        assert.deepEqual(props, { shareId: 'abcd1234', kind, mode });
+        assert.ok(fitsProps(props));
+    }
 });

@@ -5,6 +5,7 @@ import { after } from 'next/server';
 
 import EmbedView from '@/components/organisms/EmbedView/EmbedView';
 import { getShare } from '@/lib/chat/shareStore';
+import { refererHost } from '@/lib/events/referer';
 import { track } from '@/lib/events/track';
 import { sharedViewOf } from '@/lib/studio/liveCards';
 
@@ -20,12 +21,6 @@ export const generateMetadata = async ({ params }: EmbedPageProps): Promise<Meta
         robots: { index: false, follow: false },
     };
 };
-
-// The host site of the page the iframe sits on, as a bare hostname: the
-// Referer's path and query can carry personal data, so they never leave here.
-// Null when the host page's referrer policy strips it.
-const refererHost = (referer: string | null): string | null =>
-    URL.parse(referer ?? '')?.hostname || null;
 
 // The iframe view of a share: just the read-only sheet, or the one card,
 // edge to edge. A search share has no sheet to embed. A live share's data

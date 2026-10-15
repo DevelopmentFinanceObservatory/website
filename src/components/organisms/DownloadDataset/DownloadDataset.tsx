@@ -17,6 +17,7 @@ import {
     roundedCount,
     type SearchCatalogue,
 } from '@/lib/search/catalogue';
+import { handoffHref } from '@/lib/search/searchEvents';
 
 // `catalogue` is the search catalogue the homepage loaded on the server, or
 // null: its examples are the chips, its counts the tiles and the indicator
@@ -71,7 +72,7 @@ const DownloadDataset = ({ catalogue }: { catalogue: SearchCatalogue | null }) =
             <div className={styles.prompt}>
                 <DataPrompt
                     suggestions={catalogueChips(catalogue)}
-                    onSubmit={(query) => router.push(`/data?q=${encodeURIComponent(query)}`)}
+                    onSubmit={(query, via) => router.push(handoffHref(query, via))}
                 />
             </div>
             {tiles.length > 0 && (
