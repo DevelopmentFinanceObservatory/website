@@ -13,7 +13,7 @@ data search, the Studio and user accounts are in.
 Around it:
 
 - `deploy/` holds the Dockerfile pattern and the division of responsibility
-  with `dfo-infra`. They define the Cloud Run service, and this repo's CI
+  with `infra`. They define the Cloud Run service, and this repo's CI
   only swaps images onto it.
 - `db/` holds the schema migration runner: a Cloud Run Job connects to the
   website databases as an IAM service account through the Cloud SQL
@@ -21,7 +21,7 @@ Around it:
   the service to a new image.
 - `.github/workflows/` holds the CI and deploy workflows. CI runs `lint`,
   `typecheck`, `test`, and `build` on every PR that is not a draft, and on
-  each push to `staging`. The deploy workflow runs on pushes to `staging`
+  each push to `dev`. The deploy workflow runs on pushes to `dev`
   that touch the image's inputs.
 - `docs/development.md` — how to run the app locally and the conventions
   the code follows (styles, components, animation system).
@@ -33,32 +33,32 @@ Around it:
 
 ## Repo map
 
-| Repo                                                          | What it is                                                                                                                                                             |
-|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`dfo-dcp`](https://github.com/ONEcampaign/dfo-dcp)           | The knowledge graph engine, ONE's fork of Data Commons, serving the graph over the mixer and SDMX APIs.                                                                |
-| [`dfo-apis`](https://github.com/ONEcampaign/dfo-apis)         | The Search, Datasets, Graph, and Presentation APIs. The Search, Datasets, and Graph APIs read from the `dfo-dcp` graph, and the Presentation API persists to PostgreSQL. |
-| [`dfo-ai`](https://github.com/ONEcampaign/dfo-ai)             | The agent harness and the DFO's MCP servers, deployed as one Cloud Run service.                                                                                        |
-| [`dfo-spec-kit`](https://github.com/ONEcampaign/dfo-spec-kit) | Shared spec models (spec-id hashing, materialisation, manifest and component-spec schemas) that publish the TS types this app renders from [forthcoming].              |
-| [`dfo-website`](https://github.com/ONEcampaign/dfo-website)   | This repo, the public Next.js site and the proxy that fronts the platform for external traffic.                                                                        |
-| [`dfo-skills`](https://github.com/ONEcampaign/dfo-skills)     | The open repository of domain-knowledge packages agents load dynamically at runtime [forthcoming].                                                                     |
-| [`dfo-infra`](https://github.com/ONEcampaign/dfo-infra)       | Infrastructure as code: the Cloud Run service definitions, service accounts, scaling, and secrets.                                                                     |
+| Repo                                                                    | What it is                                                                                                                                                           |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dcp`](https://github.com/DevelopmentFinanceObservatory/dcp)           | The knowledge graph engine, ONE's fork of Data Commons, serving the graph over the mixer and SDMX APIs.                                                              |
+| [`apis`](https://github.com/DevelopmentFinanceObservatory/apis)         | The Search, Datasets, Graph, and Presentation APIs. The Search, Datasets, and Graph APIs read from the `dcp` graph, and the Presentation API persists to PostgreSQL. |
+| [`ai`](https://github.com/DevelopmentFinanceObservatory/ai)             | The agent harness and the DFO's MCP servers, deployed as one Cloud Run service.                                                                                      |
+| [`spec-kit`](https://github.com/DevelopmentFinanceObservatory/spec-kit) | Shared spec models (spec-id hashing, materialisation, manifest and component-spec schemas) that publish the TS types this app renders from [forthcoming].            |
+| [`website`](https://github.com/DevelopmentFinanceObservatory/website)   | This repo, the public Next.js site and the proxy that fronts the platform for external traffic.                                                                      |
+| [`skills`](https://github.com/DevelopmentFinanceObservatory/skills)     | The open repository of domain-knowledge packages agents load dynamically at runtime [forthcoming].                                                                   |
+| [`infra`](https://github.com/DevelopmentFinanceObservatory/infra)       | Infrastructure as code: the Cloud Run service definitions, service accounts, scaling, and secrets.                                                                   |
 
 ## Deployed services
 
 All services run in the `dev-fin-observatory` GCP project, region
 `northamerica-northeast1`.
 
-| Repo          | Service                                                          |
-|---------------|------------------------------------------------------------------|
-| `dfo-website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app          |
-| `dfo-apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs                |
-| `dfo-ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                  |
-| `dfo-dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app   |
+| Repo      | Service                                                        |
+| --------- | -------------------------------------------------------------- |
+| `website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app        |
+| `apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs              |
+| `ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                |
+| `dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app |
 
-`dfo-website`'s service is the one `staging` deploys to. `dfo-apis`,
-`dfo-ai`, and `dfo-dcp` run their own dev services. `dfo-apis` and
-`dfo-ai` return 404 at the root and serve Swagger UI at `/docs`. The
-website service is reachable by anyone with the URL.
+`website`'s service is the one `dev` deploys to. `apis`, `ai`, and `dcp`
+run their own dev services. `apis` and `ai` return 404 at the root and
+serve Swagger UI at `/docs`. The website service is reachable by anyone
+with the URL.
 
 ## Conventions
 
@@ -77,34 +77,27 @@ in the same PR.
 ## Deploys
 
 GitHub Actions builds the `dfo-website` image and updates the Cloud Run
-staging service automatically on every push to `staging`. `main` is the
-production release branch. It only ever fast-forwards to a validated
-`staging` commit and never auto-deploys. Production deploys through a
-manual `workflow_dispatch` that promotes the image already built for that
-commit.
-`dfo-infra` owns the Cloud Run service *definition* (service account,
+dev service automatically on every push to `dev`. `main` is the
+production release branch. A push to `main` builds and deploys production
+through the `production` GitHub Environment, which needs approval from the
+release reviewers.
+`infra` owns the Cloud Run service _definition_ (service account,
 scaling, secrets, env vars). This repo's CI only swaps images on the
-service `dfo-infra` already defined. See `deploy/README.md` for the
+service `infra` already defined. See `deploy/README.md` for the
 vars/secrets and prerequisites.
 
 ## Contributing
 
-`staging` is the default branch. Branch off it and open a pull request
+`dev` is the default branch. Branch off it and open a pull request
 into it. The `ci` check has to pass before the PR merges, and force-pushes
-are blocked. Each merge deploys to staging.
+are blocked. Each merge deploys to the dev service.
 
-`main` is production, the same model `dfo-apis` uses with `dev` in place
-of `staging`. Nobody opens pull requests into it. To release:
+`main` is production, the same model `apis` uses. To release:
 
-1. Confirm the `staging` commit you want is deployed and validated on the
-   staging service.
-1. Fast-forward `main` to it with `git push origin <sha>:main`. Because
-   `staging` contains everything on `main`, this is always a clean
-   fast-forward.
+1. Confirm the `dev` commit you want is deployed and validated on the
+   dev service.
+1. Open a pull request from `dev` into `main`. `main` requires one approval
+   and the `ci` check, and blocks force-pushes and deletion.
+1. Merge it. `deploy-prod.yml` builds and deploys that commit once the
+   release reviewers approve the `production` environment.
 1. Tag it: `git tag prod-YYYY-MM-DD <sha> && git push origin prod-YYYY-MM-DD`.
-1. Promote the image: `just deploy-prod <sha>`.
-
-The SHA must be one `deploy.yml` built an image for, so pick the commit
-the staging service is running, not a later docs-only commit. `main`
-requires the `ci` check and blocks force-pushes and deletion, so it can
-only move forward.

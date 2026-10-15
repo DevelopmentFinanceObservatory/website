@@ -2,14 +2,9 @@ name: Deploy production
 
 # Builds, migrates and deploys production on every push to main, and on a
 # manual dispatch from main to redeploy. The steps live in
-# build-migrate-deploy.yml, the same ones deploy.yml runs on staging, here
-# against the `production` GitHub Environment.
-#
-# Production runs from the DevelopmentFinanceObservatory copy of this repo,
-# whose main is a tree copy of a ONEcampaign commit, so the deploy is guarded
-# to that owner. The `production` environment restricts deploys to main.
-# The human gate is the release approval on the pull request into main,
-# since environment reviewers are unavailable on private repos.
+# build-migrate-deploy.yml, the same ones deploy.yml runs on dev, here
+# against the `production` GitHub Environment. That environment restricts
+# deploys to main and requires approval from the release reviewers.
 
 on:
   push:
@@ -22,7 +17,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.repository_owner == 'DevelopmentFinanceObservatory'
     permissions:
       contents: read
       id-token: write

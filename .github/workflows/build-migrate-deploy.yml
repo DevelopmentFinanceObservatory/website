@@ -1,12 +1,12 @@
 name: Build, migrate and deploy
 
-# The deploy steps deploy.yml (staging) and deploy-prod.yml (production)
+# The deploy steps deploy.yml (dev) and deploy-prod.yml (production)
 # share. Called with the GitHub Environment to run in. Every name comes
 # from that environment's vars and secrets, so the steps are identical in
 # both and only the environment differs.
 #
 # This workflow only swaps the image on a Cloud Run service and migration
-# Job that already exist. dfo-infra owns creating and configuring both. See
+# Job that already exist. infra owns creating and configuring both. See
 # deploy/README.md for the division of responsibility and the vars and
 # secrets each environment needs.
 #
@@ -100,7 +100,7 @@ jobs:
       # dfo-website:<sha>` and anything else that expects it). Only the
       # ref this workflow acts on below is pinned.
       #
-      # dfo-infra leaves this repo's Artifact Registry without immutable
+      # infra leaves this repo's Artifact Registry without immutable
       # tags, because immutable tags also block deletion and a rebuild that
       # replaces an existing SHA's digest would have no way back. Pinning
       # here is a consumer-side control on top of that. Do not simplify
@@ -133,9 +133,9 @@ jobs:
             --project="${{ vars.PROJECT_ID }}" \
             --wait
 
-      # Image-only update against the service dfo-infra already defined,
+      # Image-only update against the service infra already defined,
       # using `--image` rather than `gcloud run services replace`, which
-      # takes a full manifest and would fight dfo-infra for ownership of
+      # takes a full manifest and would fight infra for ownership of
       # scaling, secrets, and service-account config. This step runs only
       # once the migration job above has exited 0, so the service never
       # serves an image ahead of the schema it expects.

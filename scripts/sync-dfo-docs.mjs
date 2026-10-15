@@ -4,7 +4,7 @@
 // page records a `bundle_path` goes to public/docs, where the site serves it
 // at /docs/<page path>.zip. Each run empties both directories first, so they
 // hold this script's output only. The copy is committed, so the build reads
-// plain files and needs no access to the private dfo-docs repo. A bump PR
+// plain files and needs no credentials. A bump PR
 // moves the pin by re-running this script with a new SHA.
 //
 //   node scripts/sync-dfo-docs.mjs            # latest corpus commit
@@ -14,7 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const REPO = 'https://github.com/ONEcampaign/dfo-docs.git';
+const REPO = 'https://github.com/DevelopmentFinanceObservatory/docs.git';
 const ROOT = path.resolve(import.meta.dirname, '..');
 
 // execFileSync stops at 1 MiB of output unless told otherwise, and a skill's

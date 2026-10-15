@@ -18,7 +18,7 @@ const realFetch = globalThis.fetch;
 test.beforeEach(() => {
     process.env.POSTHOG_KEY = 'phc_test';
     process.env.POSTHOG_HOST = 'https://eu.i.posthog.example';
-    process.env.ENVIRONMENT = 'staging';
+    process.env.ENVIRONMENT = 'dev';
 });
 
 test.afterEach(() => {
@@ -54,7 +54,7 @@ test('sends the capture payload with the environment stamped', async () => {
     assert.equal(body.event, 'search.query');
     assert.equal(body.distinct_id, 'v-123');
     const props = body.properties as Record<string, unknown>;
-    assert.equal(props.environment, 'staging');
+    assert.equal(props.environment, 'dev');
     assert.equal(props.page, '/data');
     assert.equal(props.signed_in, true);
     assert.deepEqual(props.spec_ids, ['a', 'b']);
