@@ -31,6 +31,7 @@ import { posthogConfigured, sendEventToPosthog } from './posthog';
  * - feedback.submit   a feedback sent (kind)
  * - embed.view        an embed loaded in an iframe (share id, kind, host site)
  * - share.create      a Studio or search share link made (share id, kind, mode)
+ * - share.open        a share link opened at /s/<id> (share id, kind, mode, host site)
  */
 export const EVENT_NAMES = [
     'search.query',
@@ -49,6 +50,7 @@ export const EVENT_NAMES = [
     'feedback.submit',
     'embed.view',
     'share.create',
+    'share.open',
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
