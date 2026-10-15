@@ -7,7 +7,7 @@ name: CI
 # moves through a pull request whose own run tested the merge, so main has no
 # push trigger.
 #
-# The contract is the root README's conventions: pnpm with a committed
+# The contract is the conventions in docs/development.md: pnpm with a committed
 # lockfile, and `lint`, `typecheck`, `test`, `build` scripts in package.json,
 # plus `lint:css` (stylelint).
 
