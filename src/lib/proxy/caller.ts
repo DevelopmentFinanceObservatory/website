@@ -190,7 +190,9 @@ export const requestCaller = (incoming: Headers): string | undefined => {
     if ('problem' in config) {
         if (!warned) {
             warned = true;
-            console.warn(`${config.problem}; MCP calls go upstream without ${CALLER_HEADER}`);
+            console.warn(
+                `${config.problem}; MCP calls go upstream without ${CALLER_HEADER} and request logs carry no caller`,
+            );
         }
 
         return undefined;
