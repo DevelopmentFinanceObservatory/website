@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # Cloud Run image for the DFO website: the Next.js app in standalone output
-# mode (next.config.ts sets `output: 'standalone'`, per the root README's
-# conventions).
+# mode (next.config.ts sets `output: 'standalone'`, per the conventions in
+# docs/development.md).
 #
 # Build from the REPO ROOT, not from deploy/:
 #

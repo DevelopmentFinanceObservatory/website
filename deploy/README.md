@@ -31,8 +31,7 @@ pushed image's digest rather than the tag.
 Every deploy also runs a Cloud Run Job that applies the website
 database's schema migrations before the service moves to the new image:
 `build-migrate-deploy.yml` points the Job at the image it just pushed,
-executes it with `--wait`, and only updates the service once the Job exits
-0. A failed migration fails the deploy and leaves the service on its current
+executes it with `--wait`, and only updates the service once the Job exits 0. A failed migration fails the deploy and leaves the service on its current
 image. infra defines each environment's Job (named by
 `MIGRATE_JOB_WEBSITE`, `dfo-dev-website-staging-migrate` on dev) and the
 migrator identity it runs as. This repo owns the migrate entrypoint and the
@@ -75,7 +74,7 @@ migration.
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the
 deploy
 target (`dev`, `production`). Configure the same variable and secret
-*names* in each environment with per-environment values. The workflow YAML
+_names_ in each environment with per-environment values. The workflow YAML
 doesn't change between environments, only the environment it targets does.
 These are the same names `ai` uses, except the service and migration Job
 vars, so the `infra` foundation outputs slot into both repos the same way.
@@ -102,10 +101,10 @@ For dev, infra has set up:
   Workload Identity Federation pool and provider that already serves
   `ai` (foundation), with the per-repo restriction at the SA binding.
 - That deployer service account, with:
-  - `roles/run.developer` (update Cloud Run services)
-  - `roles/artifactregistry.writer` to push images
-  - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
-    that's a separate identity)
+    - `roles/run.developer` (update Cloud Run services)
+    - `roles/artifactregistry.writer` to push images
+    - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
+      that's a separate identity)
 - The Cloud Run service for the `dfo-website` image, including its runtime
   service account, scaling config, env vars, and secrets. This repo's
   workflows only ever update the `--image` on the service that already
@@ -163,7 +162,7 @@ every client under one shared address, each with one error logged.
 
 ## Repo-side prerequisites
 
-- The application itself, following the conventions in the root README
+- The application itself, following the conventions in `docs/development.md`
   (pnpm, `output: 'standalone'`, the `lint`/`typecheck`/`test`/`build`
   script contract).
 - The migrate entrypoint and its migrations, both under `db/`. The
