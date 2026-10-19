@@ -2,8 +2,8 @@
 /**
  * Browser-side search client for the /prototype gut-check page.
  *
- * Streaming: POST + `Accept: text/event-stream` parsed off a ReadableStream
- * (EventSource can't POST). Buffered: the same POST minus the Accept header.
+ * Resolve: POST + `Accept: text/event-stream` parsed off a ReadableStream
+ * (EventSource can't POST).
  *
  * Base URL: same-origin '/api/search/*' everywhere — nginx routes it to :8083 in
  * the container, and next.config.mjs rewrites it to the local engine in dev,
@@ -682,24 +682,6 @@ function apiError(body: any, status: number): ApiError {
     return err;
 }
 
-/** Buffered path: plain JSON request/response. Throws on non-2xx, carrying
- * the refusal's machine-readable `code` and `pointer` (when present) on the
- * thrown Error. See `apiError`. */
-export async function resolveBuffered(req: unknown, signal?: AbortSignal): Promise<any> {
-    const res = await fetch(`${SEARCH_BASE}/api/search/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req),
-        signal,
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-        throw apiError(body, res.status);
-    }
-    if (body == null) throw new Error('Search API returned an unparsable response');
-    return normalizeResponse(body);
-}
-
 // ---------------------------------------------------------------------------
 // The `options` door (POST /api/search/options) — place_options' successor,
 // verified live 2026-08-18. Enumerates the entities that could take a role in
@@ -950,12 +932,12 @@ export type DatasetOptionsDocument = {
  * What one dataset says it can do (`/api/datasets/{spec_id}/options`):
  * per-definition, unlike the deployment-wide capability document above.
  * Formats carry a live state and enrichments carry their coverage. With a
- * `definition` the door is POSTed and answers for a spec no one has minted yet, without registering it.
- * Without one it is a GET, which answers for a registered spec, such as the
- * frame behind a Studio card. It materialises the frame to answer, so the
- * panel asks only when the download options open or a remembered extra
- * column must be checked against the extras the answer offers. Null on any
- * refusal or failure.
+ * `definition` the door is POSTed, registers the definition, and answers for
+ * a spec no one has minted yet. Without one it is a GET, which answers for a
+ * registered spec, such as the frame behind a Studio card. It materialises
+ * the frame to answer, so the panel asks only when the download options open
+ * or a remembered extra column must be checked against the extras the answer
+ * offers. Null on any refusal or failure.
  */
 export async function fetchDatasetOptions(
     req: { spec_id: string; definition?: any },
@@ -1183,6 +1165,84 @@ export async function resolveStream(
             return;
         }
     }
+}
+
+/**
+ * The live suggestion for a draft query: the answer the stream's `response`
+ * event carries. It posts the body a submit of the same text posts
+ * (buildRequest with coverage) over SSE, so the search API's response cache
+ * stores the run under the submit's key and can serve the submit from it.
+ * The stream keeps reading to `done` after the promise settles, since the
+ * cache stores nothing for a run that ends early; abort `signal` to stop it.
+ * Rejects on an `error` event before the response, on a stream that ends
+ * without one, and with AbortError on an abort.
+ */
+export function resolveSuggestion(query: string, signal: AbortSignal): Promise<any> {
+    return new Promise((resolve, reject) => {
+        resolveStream(
+            buildRequest({ kind: 'raw_text', query }, true),
+            (event) => {
+                if (event.kind === 'response') {
+                    resolve(event.response);
+                } else if (event.kind === 'error') {
+                    reject(new Error(event.detail));
+                }
+            },
+            signal,
+        ).then(() => reject(new Error('Search stream ended without a response')), reject);
+    });
+}
+
+/** The one live suggestion stream a prompt holds; see createSuggestionSlot. */
+export type SuggestionSlot = {
+    /** The suggestion for `query`: the live stream's when it asked the same
+     *  text, otherwise a new stream, which aborts the live one. */
+    suggest(query: string): Promise<any>;
+    /** Aborts the live stream unless it asked `query`; null aborts it
+     *  whatever it asked. */
+    keepOnly(query: string | null): void;
+};
+
+/**
+ * Holds the prompt's suggestion stream. The search API single-flights
+ * identical requests, so a submit of the suggestion's text joins the live
+ * stream and is answered at its `done`, and aborting that stream would send
+ * the submit back to a cold run. The stream is aborted only when the draft
+ * moves to other text, a different text is submitted, or the prompt goes
+ * away. A failed stream is aborted and leaves the slot, so asking again
+ * retries.
+ */
+export function createSuggestionSlot(): SuggestionSlot {
+    let live: { query: string; controller: AbortController; response: Promise<any> } | null = null;
+
+    const keepOnly = (query: string | null) => {
+        if (live && live.query !== query) {
+            live.controller.abort();
+            live = null;
+        }
+    };
+
+    return {
+        suggest(query) {
+            keepOnly(query);
+            if (live) {
+                return live.response;
+            }
+            const controller = new AbortController();
+            const response = resolveSuggestion(query, controller.signal);
+            const entry = { query, controller, response };
+
+            live = entry;
+            response.catch(() => {
+                controller.abort();
+                if (live === entry) {
+                    live = null;
+                }
+            });
+            return response;
+        },
+        keepOnly,
+    };
 }
 
 // ---------------------------------------------------------------------------

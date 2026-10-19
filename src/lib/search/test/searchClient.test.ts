@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
     applyDoneEvent,
     artifactHref,
+    buildRequest,
+    createSuggestionSlot,
     entityOptions,
     fetchDatasetOptions,
     fetchDefinitionMembers,
@@ -14,6 +16,7 @@ import {
     pinDownloadedVersion,
     placeOptionValues,
     resolveStream,
+    resolveSuggestion,
     type SearchEvent,
 } from '../searchClient.ts';
 import type { Warning } from '../types.ts';
@@ -986,6 +989,124 @@ async function streamEvents(body: unknown, before: SearchEvent[] = []): Promise<
         globalThis.fetch = realFetch;
     }
 }
+
+/** What resolveSuggestion sent and settled with for `query`, against a
+ *  fetch that answers with `frames` as an event stream. */
+async function suggestion(query: string, frames: string, signal = new AbortController().signal) {
+    const realFetch = globalThis.fetch;
+    let sent: RequestInit | undefined;
+    globalThis.fetch = async (_url, init) => {
+        sent = init;
+        signal.throwIfAborted();
+        return new Response(frames, { headers: { 'content-type': 'text/event-stream' } });
+    };
+    try {
+        const settled = await resolveSuggestion(query, signal).then(
+            (response) => ({ response }),
+            (error: Error) => ({ error }),
+        );
+        return { sent, settled };
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+}
+
+// The search API's response cache serves a submit from a suggestion's run
+// only when the suggestion streamed the submit's exact body: a buffered entry,
+// or one keyed on other options, never matches the submit's key.
+test("resolveSuggestion streams the submit's request and settles on its response", async () => {
+    const declined = fixtures['declined-out-of-scope'];
+    const { sent, settled } = await suggestion(
+        'fertility rate in Kenya',
+        `event: response\ndata: ${JSON.stringify({ kind: 'response', response: declined })}\n\n` +
+            `event: done\ndata: ${JSON.stringify({ kind: 'done', warnings: [] })}\n\n`,
+    );
+
+    assert.equal(new Headers(sent?.headers).get('accept'), 'text/event-stream');
+    assert.equal(
+        sent?.body,
+        JSON.stringify(buildRequest({ kind: 'raw_text', query: 'fertility rate in Kenya' }, true)),
+    );
+    assert.deepEqual(settled, { response: declined });
+});
+
+test('resolveSuggestion rejects on a stream error and on an abort', async () => {
+    const failed = await suggestion(
+        'fertility rate in Kenya',
+        `event: error\ndata: ${JSON.stringify({ kind: 'error', detail: 'boom', code: null })}\n\n`,
+    );
+    assert.equal('error' in failed.settled && failed.settled.error.message, 'boom');
+
+    const controller = new AbortController();
+    controller.abort();
+    const aborted = await suggestion('fertility rate in Kenya', '', controller.signal);
+    assert.equal('error' in aborted.settled && aborted.settled.error.name, 'AbortError');
+});
+
+/** A fetch that answers every resolve with `frame` and then holds the
+ *  stream open until the request's signal aborts, recording each signal. */
+function holdingFetch(frame: object) {
+    const signals: AbortSignal[] = [];
+    const fetch = async (_url: unknown, init?: RequestInit) => {
+        const signal = init!.signal!;
+        signals.push(signal);
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    new TextEncoder().encode(
+                        `event: ${(frame as { kind: string }).kind}\ndata: ${JSON.stringify(frame)}\n\n`,
+                    ),
+                );
+                signal.addEventListener('abort', () => controller.error(signal.reason));
+            },
+        });
+        return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+    };
+    return { fetch: fetch as typeof globalThis.fetch, signals };
+}
+
+// The search API single-flights identical requests: a submit of the
+// suggestion's text joins the live stream, so only other text may abort it.
+test('a suggestion slot keeps the live stream for its own text and aborts it for any other', async () => {
+    const realFetch = globalThis.fetch;
+    const declined = fixtures['declined-out-of-scope'];
+    const held = holdingFetch({ kind: 'response', response: declined });
+    globalThis.fetch = held.fetch;
+    const slot = createSuggestionSlot();
+    try {
+        assert.deepEqual(await slot.suggest('fertility rate in Kenya'), declined);
+        slot.keepOnly('fertility rate in Kenya');
+        assert.deepEqual(await slot.suggest('fertility rate in Kenya'), declined);
+        assert.equal(held.signals.length, 1);
+        assert.equal(held.signals[0]!.aborted, false);
+
+        slot.keepOnly('fertility rate in Ghana');
+        assert.equal(held.signals[0]!.aborted, true);
+
+        await slot.suggest('fertility rate in Ghana');
+        assert.equal(held.signals.length, 2);
+        slot.keepOnly(null);
+        assert.equal(held.signals[1]!.aborted, true);
+    } finally {
+        slot.keepOnly(null);
+        globalThis.fetch = realFetch;
+    }
+});
+
+test('a suggestion slot asks again after a failed stream', async () => {
+    const realFetch = globalThis.fetch;
+    const held = holdingFetch({ kind: 'error', detail: 'boom', code: null });
+    globalThis.fetch = held.fetch;
+    const slot = createSuggestionSlot();
+    try {
+        await assert.rejects(slot.suggest('fertility rate in Kenya'), /boom/);
+        await assert.rejects(slot.suggest('fertility rate in Kenya'), /boom/);
+        assert.equal(held.signals.length, 2);
+    } finally {
+        slot.keepOnly(null);
+        globalThis.fetch = realFetch;
+    }
+});
 
 test('resolveStream ends on the run error for a response with an unknown kind', async () => {
     const events = await streamEvents({
