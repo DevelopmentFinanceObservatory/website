@@ -9,10 +9,11 @@
  * Datasets API's file links answer), cache-control (the `no-store` on such a
  * redirect to a signed URL, which forward.ts's default `no-cache` would
  * weaken), retry-after (on a busy refusal), www-authenticate, server-timing
- * (the upstream's phase timings), x-dfo-trace-id and every `mcp-*` header. The content-length is left behind when the upstream encoded
- * the body, since fetch has decoded it by then. Matching by prefix means a
- * protocol header added later needs no change here. Authorization and
- * x-dfo-caller are set by forward.ts.
+ * (the upstream's phase timings), x-dfo-trace-id and every `mcp-*` header.
+ * The content-length is left behind when the upstream encoded the body,
+ * since fetch has decoded it by then. Matching by prefix means a protocol
+ * header added later needs no change here. Authorization and x-dfo-caller
+ * are set by forward.ts.
  */
 const MCP_PREFIX = 'mcp-';
 
