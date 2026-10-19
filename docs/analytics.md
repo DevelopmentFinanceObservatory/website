@@ -54,6 +54,10 @@ Enhanced measurement records page views on App Router navigations (history chang
 
 To check it on production, open the network panel and filter on `google-analytics.com/g/collect`. Before consent the requests carry `gcs=G100`, and after accepting in the banner they carry `gcs=G111`. The visit then shows in GA under Reports → Realtime. Localhost and dev make no `gtag/js` request.
 
-## Guest Studio
+## Studio prompt allowance
 
-The Studio is open without an account: `GUEST_LIMIT` (5, `src/components/organisms/Studio/GuestWall.tsx`) prompts, counted in localStorage, then the prompt is replaced by a sign-in wall. Front-end only by design — a cleared localStorage resets it. Guests get no history, saving or sharing (all need an account).
+A Studio prompt is one turn (`POST /api/studio/turn`). The proxy spends one from the caller's daily allowance before it forwards the turn (`src/lib/studio/spendPrompt.ts`). A guest gets 5 a day per network address, an IPv6 address counted by its /64, so guests behind one shared address share them. A signed-in user gets 75 a day, counted by user id. Both reset at 00:00 UTC. The numbers live in `src/lib/studio/promptAllowance.ts` and the counts in the `limit_counter` table. A turn past its allowance gets a 429 `resource_exhausted`, whose detail the chat shows as the reply. A turn whose allowance the database cannot read within 5 seconds gets a 503. A turn the harness answers with anything but success gives its prompt back, since no model ran. The proxy forwards only the four routes the browser calls (`turn`, `interrupt`, `cancel`, `composition`) and answers 404 to any other path, so no encoding of a path reaches the turn route without spending a prompt.
+
+The browser also counts a guest's prompts in localStorage and replaces the prompt with a sign-in wall at 5. Clearing it brings the prompt back but not the allowance. Guests get no history, saving or sharing (all need an account).
+
+In local dev every guest comes from the same address and so shares one allowance. Sign in, or delete the `studio-guest:` rows from `limit_counter`.

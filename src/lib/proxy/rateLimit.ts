@@ -1,16 +1,17 @@
 import 'server-only';
 
-import Redis from 'ioredis';
+import { counterDb, db } from '@/lib/db';
 
 import { limiterBucket } from './caller';
+import { countHit, pruneCounters, type Verdict } from './limitCounter';
 
 /**
  * Per-IP rate limit for the platform proxy's /api/* and /mcp routes
- * (src/lib/proxy/forward): a fixed window in Redis, shared by every
- * instance. An IPv6 client is counted by its /64 (see limiterBucket). On
- * only when REDIS_URL is set. Without it every call passes, so a deployment
- * can run the proxy before its Redis exists. A Redis error fails open too,
- * as does a Redis that does not answer within COMMAND_TIMEOUT_MS. The
+ * (src/lib/proxy/forward): a fixed window counted in Postgres
+ * (./limitCounter), shared by every instance. An IPv6 client is counted by
+ * its /64 (see limiterBucket). A count runs on its own small pool
+ * (src/lib/db's counterDb), which gives up after 500 ms on a query and 2 s
+ * on a connection. A database error or a timed-out count fails open: the
  * platform's own doors are the backstop, and the limit is a courtesy.
  *
  * The window and the allowance per surface are env-tunable:
@@ -22,8 +23,8 @@ import { limiterBucket } from './caller';
  */
 const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
 
-// A connected Redis that stops answering must not hold the request.
-const COMMAND_TIMEOUT_MS = 500;
+// How often each instance deletes dead counters.
+const PRUNE_EVERY_MS = 60 * 60 * 1000;
 
 export const LIMITS = {
     api: Number(process.env.RATE_LIMIT_API) || 120,
@@ -38,65 +39,25 @@ export const LIMITS = {
 
 export type Surface = keyof typeof LIMITS;
 
-// Next dev hot-reloads modules: the client lives on globalThis so a save
-// doesn't leak a connection per edit.
-const globalForRedis = globalThis as unknown as { redis?: Redis | null };
-
-const redis = (): Redis | null => {
-    if (globalForRedis.redis !== undefined) {
-        return globalForRedis.redis;
-    }
-
-    const url = process.env.REDIS_URL;
-
-    globalForRedis.redis = url
-        ? new Redis(url, {
-              lazyConnect: true,
-              maxRetriesPerRequest: 1,
-              enableOfflineQueue: false,
-              commandTimeout: COMMAND_TIMEOUT_MS,
-          })
-        : null;
-
-    return globalForRedis.redis;
-};
-
-export type Verdict = {
-    allowed: boolean;
-    limit: number;
-    remaining: number;
-    // Seconds until the window resets.
-    reset: number;
-};
+let lastPrune = 0;
 
 /**
  * Count one call for `ip` on `surface` and say whether it is within the
- * allowance. Without Redis: always allowed, limit reported as-is.
+ * allowance. A database that fails or is slow lets the call through. Each
+ * instance also deletes dead counters, at most once an hour, the Studio's
+ * included (every Studio call passes here too). The delete runs on the main
+ * pool, which has no timeout to cut it short.
  */
 export const hit = async (surface: Surface, ip: string): Promise<Verdict> => {
     const limit = LIMITS[surface];
-    const client = redis();
 
-    if (!client) {
-        return { allowed: true, limit, remaining: limit, reset: WINDOW_S };
+    if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
+        lastPrune = Date.now();
+        pruneCounters(db).catch((error) => console.warn('limit counters not pruned', error));
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const window = now - (now % WINDOW_S);
-    const key = `rl:${surface}:${limiterBucket(ip)}:${window}`;
-
     try {
-        const [[, count]] = (await client.multi().incr(key).expire(key, WINDOW_S).exec()) as [
-            [null, number],
-            [null, number],
-        ];
-
-        return {
-            allowed: count <= limit,
-            limit,
-            remaining: Math.max(0, limit - count),
-            reset: window + WINDOW_S - now,
-        };
+        return await countHit(counterDb, `${surface}:${limiterBucket(ip)}`, limit, WINDOW_S);
     } catch (error) {
         console.warn('rate limit unavailable, passing', error);
 

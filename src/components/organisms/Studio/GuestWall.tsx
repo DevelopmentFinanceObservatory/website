@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 import styles from './GuestWall.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
-
-// Free prompts before a guest has to sign in.
-export const GUEST_LIMIT = 5;
+import { GUEST_PROMPTS } from '@/lib/studio/promptAllowance';
 
 /**
  * What a guest sees in place of the prompt once the free prompts are spent:
@@ -20,7 +18,7 @@ const GuestWall = () => {
     return (
         <div className={styles.wall} role="status">
             <p className={styles.copy}>
-                You&apos;ve used your {GUEST_LIMIT} free prompts. Sign in to keep exploring
+                You&apos;ve used your {GUEST_PROMPTS} free prompts. Sign in to keep exploring
                 Studio.
             </p>
             <Button

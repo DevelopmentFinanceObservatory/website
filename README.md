@@ -29,7 +29,7 @@ Around it:
   frontend contract, the storage/Slack/email sinks and their config, and
   the local dev loop.
 - `docs/analytics.md` — usage events (the `event` table and what each
-  surface records), Sentry, and the guest Studio limit.
+  surface records), Sentry, and the Studio prompt allowance.
 
 ## Repo map
 

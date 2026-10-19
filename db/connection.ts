@@ -4,7 +4,7 @@ import {
     IpAddressTypes,
     type DriverOptions,
 } from '@google-cloud/cloud-sql-connector';
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 
 /**
  * The env var contract the migrate entrypoint and dfo-infra's Terraform
@@ -214,8 +214,14 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
  *   import or build.
  * - URL: `connectionString` may be `undefined` here (no env at build); pg
  *   only fails to connect with it later.
+ *
+ * `sizing` overrides the pool size and adds timeouts, for a pool that must
+ * give up fast (src/lib/db/index.ts's counter pool).
  */
-export function buildRuntimePool(env: EnvLike = process.env): Pool {
+export function buildRuntimePool(
+    env: EnvLike = process.env,
+    sizing: Pick<PoolConfig, 'max' | 'connectionTimeoutMillis' | 'query_timeout'> = {},
+): Pool {
     if (isCloudSqlConfigured(env)) {
         return new Pool({
             stream: () => getCloudSqlRuntimeStream()(),
@@ -223,6 +229,7 @@ export function buildRuntimePool(env: EnvLike = process.env): Pool {
             database: env.WEBSITE_DB_NAME,
             max: 5,
             idleTimeoutMillis: 30_000,
+            ...sizing,
         });
     }
 
@@ -230,5 +237,6 @@ export function buildRuntimePool(env: EnvLike = process.env): Pool {
         connectionString: env.DATABASE_URL,
         max: 5,
         idleTimeoutMillis: 30_000,
+        ...sizing,
     });
 }
