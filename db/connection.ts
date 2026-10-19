@@ -217,26 +217,36 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
  *
  * `sizing` overrides the pool size and adds timeouts, for a pool that must
  * give up fast (src/lib/db/index.ts's counter pool).
+ *
+ * Every pool gets an `'error'` listener. pg-pool emits `'error'` when an
+ * idle client fails (Cloud SQL or a proxy dropping the connection), and an
+ * emitter with no listener throws, which would crash the server. pg-pool
+ * has already removed the dead client by then, so the listener only logs.
+ * The next query opens a fresh connection.
  */
 export function buildRuntimePool(
     env: EnvLike = process.env,
     sizing: Pick<PoolConfig, 'max' | 'connectionTimeoutMillis' | 'query_timeout'> = {},
 ): Pool {
-    if (isCloudSqlConfigured(env)) {
-        return new Pool({
-            stream: () => getCloudSqlRuntimeStream()(),
-            user: env.WEBSITE_DB_USER,
-            database: env.WEBSITE_DB_NAME,
-            max: 5,
-            idleTimeoutMillis: 30_000,
-            ...sizing,
-        });
-    }
+    const pool = isCloudSqlConfigured(env)
+        ? new Pool({
+              stream: () => getCloudSqlRuntimeStream()(),
+              user: env.WEBSITE_DB_USER,
+              database: env.WEBSITE_DB_NAME,
+              max: 5,
+              idleTimeoutMillis: 30_000,
+              ...sizing,
+          })
+        : new Pool({
+              connectionString: env.DATABASE_URL,
+              max: 5,
+              idleTimeoutMillis: 30_000,
+              ...sizing,
+          });
 
-    return new Pool({
-        connectionString: env.DATABASE_URL,
-        max: 5,
-        idleTimeoutMillis: 30_000,
-        ...sizing,
+    pool.on('error', (error) => {
+        console.error('idle database client failed:', error);
     });
+
+    return pool;
 }
