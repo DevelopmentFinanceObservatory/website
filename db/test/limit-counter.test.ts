@@ -2,6 +2,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { CODE_LIMITS, codeLimitKeys, takeCodeAllowance } from '../../src/lib/auth/codeLimit.ts';
 import { countHit, pruneCounters } from '../../src/lib/proxy/limitCounter.ts';
 import { refundPrompt, spendPrompt } from '../../src/lib/studio/spendPrompt.ts';
 import { GUEST_PROMPTS, USER_DAILY_PROMPTS } from '../../src/lib/studio/promptAllowance.ts';
@@ -14,7 +15,8 @@ const DAY_S = 86_400;
 
 /**
  * The shared limiter (src/lib/proxy/limitCounter) and the Studio's prompt
- * allowances on top of it (src/lib/studio/spendPrompt), run as the runtime
+ * allowances and sign-in code caps on top of it (src/lib/studio/spendPrompt,
+ * src/lib/auth/codeLimit), run as the runtime
  * role on a migrated database, so migration 0017's table and the default
  * grants are exercised too.
  */
@@ -187,4 +189,38 @@ test('limit counters and Studio prompt allowances', async (t) => {
         assert.ok(refusal!.retry_after_seconds! > 0 && refusal!.retry_after_seconds! <= DAY_S);
         assert.equal(await spendPrompt(db, { userId: 'user-b' }), null);
     });
+
+    await t.test(
+        'a sign-in code past a cap is refused, and the refusal charges no key',
+        async () => {
+            const send = (email: string, ip: string) =>
+                takeCodeAllowance(db, codeLimitKeys('secret', email, ip));
+
+            for (let i = 0; i < CODE_LIMITS.address; i++) {
+                assert.deepEqual(await send('ana@one.org', '203.0.113.40'), { ok: true });
+            }
+
+            const refused = await send('ana@one.org', '203.0.113.40');
+
+            assert.equal(refused.ok, false);
+            assert.ok(
+                !refused.ok &&
+                    refused.retryAfterS > 0 &&
+                    refused.retryAfterS <= CODE_LIMITS.windowS,
+            );
+
+            // Use up one network's cap on other inboxes, then aim it at bea.
+            for (let i = 0; i < CODE_LIMITS.network; i++) {
+                await send(`user${i}@one.org`, '203.0.113.41');
+            }
+            for (let i = 0; i < CODE_LIMITS.address + 1; i++) {
+                assert.equal((await send('bea@one.org', '203.0.113.41')).ok, false);
+            }
+
+            // Those refusals left bea's inbox uncharged.
+            for (let i = 0; i < CODE_LIMITS.address; i++) {
+                assert.deepEqual(await send('bea@one.org', '203.0.113.42'), { ok: true });
+            }
+        },
+    );
 });

@@ -16,7 +16,7 @@ The browser stores `visitor_id` only after the visitor accepts "DFO usage statis
 | `studio.prompt` | a prompt sent in the Studio | `turn`, `intent` (`new` / `follow_up` / `edit`), `length`, `guest` |
 | `studio.card` | a card the harness put on the canvas | `kind`, `turn`, `source`, `indicators` (DCIDs), `years`, `unit` (in words with its magnitude and price basis, `US Dollar, millions, constant 2023 prices`; a composed unit as its numerator and denominator either side of "per", each part's magnitude and price basis in brackets beside it, `US Dollar per Total population` or `Euro (constant 2020 prices) per Total population`; a percentage as `Percent`; null when the card states none), `guest` |
 | `studio.session_end` | New Chat, or the page is left | `turns`, `cards`, `pins`, `guest` |
-| `auth.signin` | a provider callback ended in a session | `provider` |
+| `auth.signin` | a provider callback or an email code ended in a session | `provider` (`email` for a code) |
 | `guest.wall_hit` | a guest used up the free prompts | `prompts` |
 | `feedback.submit` | a feedback submission | `kind` (`chat` / `widget`) |
 | `embed.view` | an `/embed/<id>` page rendered | `shareId`, `kind` (`card` / `canvas` / `conversation`), `host` (the hostname of the page the iframe sits on, else null) |

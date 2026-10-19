@@ -84,7 +84,8 @@
     background-color: var(--color-charcoal);
     border: 0;
     border-radius: rem(6);
-    transition: background-color 0.25s ease,
+    transition:
+        background-color 0.25s ease,
         color 0.25s ease,
         opacity 0.25s ease;
 
@@ -130,4 +131,117 @@
     .title {
         @include font-size(36px, 1.1);
     }
+}
+
+// The quiet "Use email instead" way in under the provider pills is a plain
+// Button with its chevron (SearchSentence's "About this answer" pattern).
+.emailToggle {
+    --plain-color: var(--color-charcoal);
+
+    align-self: center;
+    margin-top: rem(2);
+}
+
+// The house grid-rows accordion (DataSearch's .accordion). Going from 0fr
+// to 1fr transitions the height without measuring it.
+.accordion {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-top: rem(-8);
+    transition:
+        grid-template-rows 0.4s $ease-custom,
+        margin-top 0.4s $ease-custom;
+}
+
+.accordionOpen {
+    grid-template-rows: 1fr;
+    margin-top: 0;
+}
+
+.accordionInner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+// Email sign-in (EmailSignIn.tsx), set on a hairline under the toggle so it
+// reads as the secondary way in.
+.emailPanel {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    padding-top: rem(10);
+    border-top: 1px solid var(--color-sage-light);
+}
+
+.emailForm {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(6);
+}
+
+.label {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+}
+
+.input {
+    @include font-size(14px, 1.1);
+
+    width: 100%;
+    height: rem(38);
+    margin-bottom: rem(2);
+    padding: 0 rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(4);
+    transition: border-color 0.25s ease;
+
+    &::placeholder {
+        color: var(--color-sage);
+    }
+
+    &:hover:not(:disabled) {
+        border-color: var(--color-sage);
+    }
+
+    &:focus-visible {
+        border-color: var(--color-sage-dark);
+        outline: none;
+    }
+
+    &:disabled {
+        opacity: 0.6;
+    }
+}
+
+.hint {
+    @include font-size(13px, 1.4);
+
+    margin-bottom: rem(4);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+}
+
+.startOver {
+    --plain-color: var(--color-charcoal);
+
+    align-self: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .accordion {
+        transition: none;
+    }
+}
+
+// With no provider configured the panel is the whole card and has no hairline.
+.card > .accordion:first-child .emailPanel {
+    padding-top: 0;
+    border-top: 0;
 }

@@ -17,7 +17,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Copy `.env.example` to `.env.local`. The homepage and the data search run
 without anything set; the Studio needs `STUDIO_TOKEN`, and accounts need
-`DATABASE_URL` and `BETTER_AUTH_SECRET`. To open the dev server from a
+`DATABASE_URL` and `BETTER_AUTH_SECRET`. Email sign-in also needs the SMTP
+settings, `AUTH_EMAIL_FROM` and the two Turnstile keys (`.env.example` has
+Cloudflare's test keys for local use). To open the dev server from a
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 

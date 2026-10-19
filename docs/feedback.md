@@ -29,13 +29,13 @@ A submission with a filled honeypot gets a fake 200 so bots learn nothing. A sin
 
 ## Configuration
 
-| Variable | Sink | Meaning |
-|---|---|---|
-| `DATABASE_URL` / `WEBSITE_DB_*` | storage | The shared pool from `src/lib/db`; nothing feedback-specific, storage is on wherever the app has a database |
-| `FEEDBACK_SLACK_WEBHOOK_URL` | slack | Slack incoming webhook; deployed it is mounted from Secret Manager by dfo-infra, whose placeholder value `disabled` (or anything that isn't a URL) means off |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | email | SMTP endpoint; `SMTP_HOST` unset turns email off |
-| `SMTP_USER` / `SMTP_PASS` | email | optional SMTP auth |
-| `FEEDBACK_FROM` / `FEEDBACK_TO` | email | sender identity and destination inbox |
+| Variable                                  | Sink    | Meaning                                                                                                                                                      |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL` / `WEBSITE_DB_*`           | storage | The shared pool from `src/lib/db`; nothing feedback-specific, storage is on wherever the app has a database                                                  |
+| `FEEDBACK_SLACK_WEBHOOK_URL`              | slack   | Slack incoming webhook; deployed it is mounted from Secret Manager by dfo-infra, whose placeholder value `disabled` (or anything that isn't a URL) means off |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | email   | SMTP endpoint, shared with email sign-in (`src/lib/mail/smtp.ts`). The connection must use TLS 1.2 or later. `SMTP_HOST` unset turns email off               |
+| `SMTP_USER` / `SMTP_PASS`                 | email   | optional SMTP auth                                                                                                                                           |
+| `FEEDBACK_FROM` / `FEEDBACK_TO`           | email   | sender identity and destination inbox                                                                                                                        |
 
 Rotating the Slack webhook (leak, channel change) is a Secret Manager version plus a redeploy, no code change; see the dfo-infra website stack README.
 
