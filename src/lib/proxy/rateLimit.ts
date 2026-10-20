@@ -7,7 +7,7 @@ import { countHit, pruneCounters } from './limitCounter';
 import type { RateVerdict } from './rateHeaders';
 
 /**
- * Per-IP rate limit for the platform proxy's /api/*, /codes and /mcp routes
+ * Per-IP rate limit for the platform proxy's /api/*, /codes and /mcp calls
  * (src/lib/proxy/forward): a fixed window counted in Postgres
  * (./limitCounter), shared by every instance. An IPv6 client is counted by
  * its /64 (see limiterBucket). A count runs on its own small pool
@@ -22,7 +22,8 @@ import type { RateVerdict } from './rateHeaders';
  *
  * The window and the allowance per surface are env-tunable:
  *   RATE_LIMIT_WINDOW_S   (default 60)
- *   RATE_LIMIT_API        calls per window per IP on /api/* (default 120)
+ *   RATE_LIMIT_API        calls per window per IP on /api/* and /codes
+ *                         (default 120)
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)

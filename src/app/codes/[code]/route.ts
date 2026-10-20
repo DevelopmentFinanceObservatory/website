@@ -12,7 +12,10 @@ export const GET = async (req: NextRequest, { params }: { params: Promise<{ code
     const target = codeTarget(searchApiBase(), code, req.nextUrl.search);
 
     if (!target) {
-        return Response.json({ error: 'not_found' }, { status: 404 });
+        return Response.json(
+            { error: 'not_found', retry: 'do_not_retry', detail: 'There is no such refusal code.' },
+            { status: 404 },
+        );
     }
 
     return forward(req, {
