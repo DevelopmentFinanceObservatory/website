@@ -1960,10 +1960,10 @@ export interface DatasetIdentityEntry {
     identity: BaseIdentity;
     entity_groups?: Record<string, EntityGroup> | null;
     operations?: Operation[];
-    /** the part's `assumptions`, echoed as the response gave them. The
-     *  engine keeps an echoed declared default whose slot the identity still
-     *  binds to the same values and drops one the edit changed; [] or absent
-     *  keeps none. */
+    /** the part's `assumptions`, echoed as the response gave them, [] included.
+     *  The engine states the echoed items that still hold after the edit and
+     *  nothing the echo lacks, so [] states none; absent, it computes them as
+     *  for a fresh request. */
     assumptions?: Assumption[];
 }
 

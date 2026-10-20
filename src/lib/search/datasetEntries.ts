@@ -203,7 +203,7 @@ function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): Datase
 function withAssumptions(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
     const assumptions = part.part?.assumptions;
 
-    if (entry.entry_kind !== 'identity' || !assumptions?.length) return entry;
+    if (entry.entry_kind !== 'identity' || assumptions === undefined) return entry;
     return { ...entry, assumptions };
 }
 

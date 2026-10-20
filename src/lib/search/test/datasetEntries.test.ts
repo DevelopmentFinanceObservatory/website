@@ -114,7 +114,15 @@ test("buildDatasetEntries echoes a part's assumptions on its identity entry, an 
     assert.deepEqual((edited as DatasetIdentityEntry).assumptions, assumptions);
 });
 
-test('buildDatasetEntries leaves assumptions off a part with none and off every other entry kind', () => {
+test('buildDatasetEntries echoes an empty assumptions list, which states none', () => {
+    const [part] = hydratedParts('definite-single');
+    const stated: HydratedPart = { ...part, part: { ...part.part!, assumptions: [] } };
+    const [entry] = buildDatasetEntries([stated]) as DatasetIdentityEntry[];
+
+    assert.deepEqual(entry.assumptions, []);
+});
+
+test('buildDatasetEntries leaves assumptions off a response without them and off every other entry kind', () => {
     const [definite] = buildDatasetEntries(hydratedParts('definite-single'));
     const [candidates] = hydratedParts('multi-candidate');
     const assumed: HydratedPart = {
