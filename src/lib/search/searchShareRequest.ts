@@ -121,6 +121,11 @@ const isAssumption = (value: any): value is Assumption =>
     value.text.length <= ASSUMPTION_TEXT_MAX_LENGTH * 2 &&
     [...value.text].length <= ASSUMPTION_TEXT_MAX_LENGTH;
 
+/** A part's echoed list as Search takes it: within the item cap, every item
+ *  an `Assumption` within its bounds. */
+export const isAssumptions = (value: any): value is Assumption[] =>
+    Array.isArray(value) && value.length <= ASSUMPTIONS_MAX && value.every(isAssumption);
+
 export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !!value &&
     typeof value === 'object' &&
@@ -134,10 +139,7 @@ export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !Object.hasOwn(value.identity, 'entity_groups') &&
     (value.entityGroups == null || isEntityGroups(value.entityGroups)) &&
     Array.isArray(value.operations) &&
-    (value.assumptions == null ||
-        (Array.isArray(value.assumptions) &&
-            value.assumptions.length <= ASSUMPTIONS_MAX &&
-            value.assumptions.every(isAssumption))) &&
+    (value.assumptions == null || isAssumptions(value.assumptions)) &&
     !!value.definition &&
     typeof value.definition === 'object';
 

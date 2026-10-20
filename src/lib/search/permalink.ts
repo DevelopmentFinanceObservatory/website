@@ -18,6 +18,7 @@
  * run anyway.
  */
 
+import { isAssumptions } from './searchShareRequest.ts';
 import type { DatasetIdentityEntry, DatasetParsedEntry } from './types';
 
 const PREFIX_DEFLATE = 'd.';
@@ -123,11 +124,14 @@ const isReplayableEditEntryKind = (kind: unknown): kind is PermalinkEdit['entry'
 
 /** An identity entry as the door takes it today. A link stored before the
  *  door derived membership from the identity also carries the base it was
- *  edited from and the StatVars it served, which the door refuses. */
+ *  edited from and the StatVars it served, which the door refuses. The
+ *  entry's `assumptions` echo survives as stored, [] included, when Search
+ *  would take it; a list it would refuse is dropped, and the engine then
+ *  states the part's assumptions as for a fresh request. */
 const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] => {
     if (entry.entry_kind !== 'identity') return entry;
 
-    const { variable_text, identity, entity_groups, operations } = entry;
+    const { variable_text, identity, entity_groups, operations, assumptions } = entry;
 
     return {
         entry_kind: 'identity',
@@ -135,6 +139,7 @@ const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] 
         identity,
         ...(entity_groups ? { entity_groups } : {}),
         ...(operations ? { operations } : {}),
+        ...(isAssumptions(assumptions) ? { assumptions } : {}),
     };
 };
 
