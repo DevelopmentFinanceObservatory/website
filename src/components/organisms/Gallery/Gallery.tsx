@@ -12,6 +12,7 @@ import {
     GALLERY_REGIONS,
     GALLERY_SOURCES,
     GALLERY_TYPES,
+    type GalleryItem,
     galleryHref,
 } from './galleryData';
 
@@ -21,6 +22,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import { useUrlParam } from '@/hooks/useUrlParam';
+import { track } from '@/lib/events/client';
 
 // Selections live in the URL (?types=stats,charts&regions=ssa&q=debt) so a
 // filtered view is shareable and survives a reload — the Sources page's
@@ -34,6 +36,21 @@ const parseSources = idsParser(new Set(GALLERY_SOURCES.map((s) => s.id)));
 const serializeIds = (ids: string[]) => (ids.length ? ids.join(',') : null);
 const parseQuery = (raw: string | null) => raw ?? '';
 const serializeQuery = (value: string) => (value.trim() ? value : null);
+
+// Records `gallery.open` when a visitor activates a tile's link. `click` covers
+// a left-click, a modifier-click and Enter on the focused link; a middle-click
+// fires `auxclick` instead, so that one is listened for too. Prefetch and
+// hover raise neither. `track()` posts with `keepalive` and returns at once,
+// so the navigation never waits on it.
+const openEvents = (item: GalleryItem) => {
+    const open = () => track('gallery.open', { slug: item.slug, kind: item.kind });
+    return {
+        onClick: open,
+        onAuxClick: (event: React.MouseEvent) => {
+            if (event.button === 1) open();
+        },
+    };
+};
 
 /**
  * Insights → Gallery: expert-curated Studio canvases, ready to monitor
@@ -145,7 +162,11 @@ const Gallery = () => {
                             style={revealIndex(index)}
                             data-button-zone
                         >
-                            <Link href={galleryHref(item)} className={styles.cardLink}>
+                            <Link
+                                href={galleryHref(item)}
+                                className={styles.cardLink}
+                                {...openEvents(item)}
+                            >
                                 <span className={styles.cover}>
                                     <Image
                                         {...cover}
@@ -177,6 +198,7 @@ const Gallery = () => {
                                 className={styles.cardAction}
                                 tabIndex={-1}
                                 aria-hidden
+                                {...openEvents(item)}
                             >
                                 {action}
                             </Button>

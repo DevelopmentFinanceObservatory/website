@@ -41,10 +41,10 @@ import { decodePermalinkState, encodePermalinkState } from '@/lib/search/permali
 import { track } from '@/lib/events/client';
 import {
     createSearchShare,
+    createSuggestionSlot,
     fetchSearchShare,
     fetchVersionLink,
     type OpenedSearchShare,
-    resolveBuffered,
     type SearchShareMode,
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
@@ -178,18 +178,22 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const refine = answerRefineItems({ response, parts, optionsBySpec, entityOptionsBySpec });
     const [refineOpen, setRefineOpen] = useState<RefineOpen | null>(null);
 
+    const [suggestionSlot] = useState(createSuggestionSlot);
+
     // A query as text: the starting point's own question shows the catalogue
     // the page holds, with no search call, and records `search.start_point`.
-    // Any other text is a search, whose events useSearchRun sends.
+    // Other text is a search, whose events useSearchRun sends. Every run
+    // keeps only the live suggestion stream for the same text.
     const runQuery = useCallback(
         (text: string, source: SearchSource) => {
+            suggestionSlot.keepOnly(text);
             if (text === STARTING_POINT_QUERY) {
                 showStartingPoint(text, source);
             } else {
                 run({ kind: 'raw_text', query: text }, text, source);
             }
         },
-        [run, showStartingPoint],
+        [suggestionSlot, run, showStartingPoint],
     );
 
     // Latest `runQuery`/`replay`/`openShare`/`reset`, read (not watched) by the
@@ -329,8 +333,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         [searchIds],
     );
 
-    // Live suggestions: a debounced background resolve (no observations — faster)
-    // renders interpretation cards under the prompt while the user is still typing.
+    // Live suggestions: a debounced background resolve renders interpretation
+    // cards under the prompt while the user is still typing. It posts the
+    // submit's own request (see createSuggestionSlot), so submitting the same
+    // text can be served from the search API's response cache.
     const handleDraft = useCallback((value: string) => {
         setDraft(value);
         setSuggest(null);
@@ -351,34 +357,27 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     useEffect(() => {
         const text = draft.trim();
 
+        // Other text supersedes the live suggestion. Leaving idle does not:
+        // a submit of the same text is answered by that stream.
+        suggestionSlot.keepOnly(text);
+
         if (phase !== 'idle' || text.length < 8) {
             return;
         }
 
-        const controller = new AbortController();
+        let current = true;
         const timer = window.setTimeout(() => {
             setSuggestPending(true);
-            resolveBuffered(
-                {
-                    schema_version: 1,
-                    input: { kind: 'raw_text', query: text },
-                    // include_observations: without it the engine skips the
-                    // materialise pass and coverage counts come back empty.
-                    response_options: {
-                        include_option_coverage: false,
-                        include_observations: true,
-                    },
-                },
-                controller.signal,
-            )
+            suggestionSlot
+                .suggest(text)
                 .then((body) => {
-                    if (!controller.signal.aborted) {
+                    if (current) {
                         setSuggest(body);
                         setSuggestPending(false);
                     }
                 })
                 .catch(() => {
-                    if (!controller.signal.aborted) {
+                    if (current) {
                         setSuggestPending(false);
                     }
                 });
@@ -386,9 +385,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
         return () => {
             window.clearTimeout(timer);
-            controller.abort();
+            current = false;
         };
-    }, [draft, phase]);
+    }, [draft, phase, suggestionSlot]);
+
+    useEffect(() => () => suggestionSlot.keepOnly(null), [suggestionSlot]);
 
     // A share link (/s/<id> lands here as ?share=<id>): load its references
     // and replay them — live, or over the snapshot's captured data.

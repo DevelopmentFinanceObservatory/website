@@ -48,12 +48,12 @@ Around it:
 All services run in the `dev-fin-observatory` GCP project, region
 `northamerica-northeast1`.
 
-| Repo      | Service                                                        |
-| --------- | -------------------------------------------------------------- |
-| `website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app        |
-| `apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs              |
-| `ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                |
-| `dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app |
+| Repo      | Service                                                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app                                                          |
+| `apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs (needs an invoker identity; reach it through the gcloud proxy) |
+| `ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                                                                  |
+| `dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app                                                   |
 
 `website`'s service is the one `dev` deploys to. `apis`, `ai`, and `dcp`
 run their own dev services. `apis` and `ai` return 404 at the root and

@@ -27,6 +27,7 @@ The browser stores `visitor_id` only after the visitor accepts "DFO usage statis
 | `share.create` | a share link stored | `shareId`, `kind` (`conversation` / `canvas` / `card`, or `search` for a search result), `mode` (`live` / `snapshot`). A search share joins its `search.action` through `shareId` |
 | `embed.view` | an `/embed/<id>` page rendered | `shareId`, `kind` (`card` / `canvas` / `conversation`), `host` (the hostname of the page the iframe sits on, else null) |
 | `share.open` | an `/s/<id>` page loaded, for a Studio share and for a search share (which then redirects to `/data?share=<id>`) | `shareId`, `kind` (`conversation` / `canvas` / `card` / `search`), `mode` (`live` / `snapshot`), `host` (the hostname of the page the link was followed from, else null). Carries no visitor id and no user id; a search share's run on `/data` reports `source: 'share'` separately |
+| `gallery.open` | a click, middle-click or Enter on a tile in the `/insights/gallery` grid | `slug` (the item's slug), `kind` (`conversation` / `canvas` / `card` / `dataset`) |
 
 Every search post, the base run and each edit after it, ends on one terminal event: `search.query`, `search.empty`, `search.edit`, `search.error`, or a `superseded`, `reset` or `left` abandon. A page closed mid-post leaves only its `hidden` abandon. `useSearchRun` gives each post a tracker from `searchPostTracker()` in `src/lib/search/searchEvents.ts`, which sends only the first terminal event it is asked for. These run fields are on every one of them:
 

@@ -179,10 +179,12 @@ build:
 graph-types:
     pnpm graph:types
 
-# Reads `GET /api/graph/schema` from the given dfo-apis, dev by default.
+# Reads `GET /api/graph/schema` from the given dfo-apis, a local proxy to dev by
+# default. The dev service admits only invoker identities, so start the proxy
+# first (see "Reach the dev APIs" in docs/development.md).
 #
 # Refresh the Graph API schema snapshot from a deployed dfo-apis, then the types
-graph-schema url="https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app":
+graph-schema url="http://localhost:8083":
     pnpm graph:schema {{url}}
 
 # Everything ci.yml runs, in CI's order. Green here means green there.
