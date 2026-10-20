@@ -58,7 +58,7 @@ import {
 } from '@/lib/search/pickerState';
 import { spliceSentence } from '@/lib/search/refine';
 import { keyRef } from '@/lib/search/searchClient';
-import { planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
+import { planCoverageText, planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
 import type {
     EntityRoleKey,
     GraphRef,
@@ -673,7 +673,8 @@ const lowerFirst = (text: string): string =>
     /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 
 // The answer block over every part of the resolve response, from the
-// envelope's own composed `sentence_plan`: a muted "Closest match" lead when
+// envelope's own composed `sentence_plan`: a muted coverage lead ("Answered
+// 1 of 2 parts.") on a mixed answer, a muted "Closest match" lead when
 // a part shows the nearest measure, the heading tokens inside the page's one
 // <h1>, the byline (unit and source) in a <p> after it, every part's
 // departures as a list, each with the one action it offers, and the
@@ -1988,6 +1989,7 @@ export const SearchSentenceHeading = ({
     const closestParts = answerParts.filter(
         (part) => part.part?.status !== 'candidates' && isClosestMatch(part.part),
     );
+    const coverageLead = response ? planCoverageText(rawPlan) : '';
     const closestLead =
         closestParts.length === 0
             ? null
@@ -2095,6 +2097,7 @@ export const SearchSentenceHeading = ({
 
     return (
         <>
+            {coverageLead && <p className={styles.coverageLead}>{coverageLead}</p>}
             {closestLead && <p className={styles.closestLead}>{closestLead}</p>}
             <h1
                 className={styles.sentence}

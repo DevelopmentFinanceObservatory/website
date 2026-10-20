@@ -11,7 +11,7 @@ import {
     statingTokenIndex,
 } from '../departures.ts';
 import { normalizeResponse } from '../searchClient.ts';
-import { planSentenceText } from '../sentencePlan.ts';
+import { planCoverageText, planSentenceText } from '../sentencePlan.ts';
 import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
@@ -173,8 +173,8 @@ test("assumptionClauses names each part's own clause when the plan is written pa
 test('assumptionClauses labels a clause by the owner of its lead token', () => {
     // A definite part beside a candidates part: one byline, two owned clauses.
     const definiteAndCandidates = [
-        token('Answered 1 of 2 parts.', 'heading', null),
-        token(' ', 'heading', null),
+        token('Answered 1 of 2 parts.', 'coverage', null),
+        token(' ', 'coverage', null),
         token('Aid to Kenya', 'heading', 0),
         token('.', 'heading', 0),
         token(' ', 'byline', 0),
@@ -227,25 +227,30 @@ test('assumptionClauses labels a clause by the owner of its lead token', () => {
     ]);
 });
 
-test("a mixed answer's opener reads as plain heading text before the first part's heading", () => {
+test("a mixed answer's coverage line is its own block, left out of the heading text", () => {
     const plan = [
-        token('Answered 1 of 2 parts.', 'heading', null),
-        token(' ', 'heading', null),
+        token('Answered 1 of 2 parts.', 'coverage', null),
+        token(' ', 'coverage', null),
         { kind: 'slot', text: 'Aid to Kenya', axis: 'what', segment: 'heading', part_index: 0 },
         token('.', 'heading', 0),
         token(' ', 'byline', 0),
         token('OECD.', 'byline', 0),
     ] satisfies SentenceToken[];
-    const [heading] = sentenceBlocks(plan);
 
     assert.deepEqual(
-        heading.tokens.slice(0, 2).map(({ kind, text }) => [kind, text]),
+        sentenceBlocks(plan).map(({ segment, tokens }) => [
+            segment,
+            tokens.map(({ text }) => text).join(''),
+        ]),
         [
-            ['text', 'Answered 1 of 2 parts.'],
-            ['text', ' '],
+            ['coverage', 'Answered 1 of 2 parts.'],
+            ['heading', 'Aid to Kenya.'],
+            ['byline', 'OECD.'],
         ],
     );
-    assert.equal(planSentenceText(plan), 'Answered 1 of 2 parts. Aid to Kenya.');
+    assert.equal(planSentenceText(plan), 'Aid to Kenya.');
+    assert.equal(planCoverageText(plan), 'Answered 1 of 2 parts.');
+    assert.equal(planCoverageText(plan.slice(2)), '');
 });
 
 // ---------------------------------------------------------------------------

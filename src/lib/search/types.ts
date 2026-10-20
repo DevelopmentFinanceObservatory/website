@@ -1101,12 +1101,14 @@ export interface WireSpec {
 // Sentence plan (the engine's rendered, tokenised confirmation sentence)
 // ---------------------------------------------------------------------------
 
-/** The block of the answer a sentence token belongs to: the heading states
- *  what the answer is, the byline its unit and source, a departure token
- *  carries the text of one `Departure` on the same part, and an assumption
- *  token is a word of the closing clause naming the part's `assumptions`
- *  ("Assumed: official development assistance; every provider."). */
-export type SentenceSegment = 'heading' | 'byline' | 'departure' | 'assumption';
+/** The block of the answer a sentence token belongs to: a coverage token is
+ *  a word of the "Answered 1 of 2 parts." a mixed answer's envelope sentence
+ *  opens with, the heading states what the answer is, the byline its unit
+ *  and source, a departure token carries the text of one `Departure` on the
+ *  same part, and an assumption token is a word of the closing clause naming
+ *  the part's `assumptions` ("Assumed: official development assistance;
+ *  every provider."). */
+export type SentenceSegment = 'coverage' | 'heading' | 'byline' | 'departure' | 'assumption';
 
 /** The axis a sentence token fills: every slot axis plus the byline's
  *  facet axes no request slot carries: 'unit', the unit of measure, and

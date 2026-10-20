@@ -50,14 +50,27 @@ export function earlySentenceTokens(
     return tokens;
 }
 
-/** The heading a plan reads as: its heading tokens joined verbatim, since
- *  the engine's tokens carry their own spacing, and trimmed. The byline
- *  (unit and source), departure and assumption tokens are left out. Empty for a
- *  missing plan. */
-export function planSentenceText(plan: readonly SentenceToken[] | null | undefined): string {
-    return (plan ?? [])
-        .filter((token) => token.segment === 'heading')
+const segmentText = (
+    plan: readonly SentenceToken[] | null | undefined,
+    segment: SentenceToken['segment'],
+): string =>
+    (plan ?? [])
+        .filter((token) => token.segment === segment)
         .map((token) => token.text)
         .join('')
         .trim();
+
+/** The heading a plan reads as: its heading tokens joined verbatim, since
+ *  the engine's tokens carry their own spacing, and trimmed. The coverage
+ *  line, byline (unit and source), departure and assumption tokens are left
+ *  out. Empty for a missing plan. */
+export function planSentenceText(plan: readonly SentenceToken[] | null | undefined): string {
+    return segmentText(plan, 'heading');
+}
+
+/** The coverage line a mixed answer's plan opens with ("Answered 1 of 2
+ *  parts."), its coverage tokens joined and trimmed. Empty when the plan has
+ *  none. */
+export function planCoverageText(plan: readonly SentenceToken[] | null | undefined): string {
+    return segmentText(plan, 'coverage');
 }
