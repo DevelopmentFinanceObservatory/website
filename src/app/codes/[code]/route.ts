@@ -9,10 +9,15 @@ import { searchApiBase } from '@/lib/searchApi';
 // root-relative path, so the link in it resolves here (see src/lib/proxy/codes).
 export const GET = async (req: NextRequest, { params }: { params: Promise<{ code: string }> }) => {
     const { code } = await params;
+    const target = codeTarget(searchApiBase(), code, req.nextUrl.search);
+
+    if (!target) {
+        return Response.json({ error: 'not_found' }, { status: 404 });
+    }
 
     return forward(req, {
         surface: 'api',
-        target: codeTarget(searchApiBase(), code, req.nextUrl.search),
+        target,
         unreachable: 'The Search API is unreachable.',
     });
 };

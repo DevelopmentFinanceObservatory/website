@@ -13,8 +13,8 @@ test('codeTarget: puts the code at the API root, keeping the query', () => {
     );
 });
 
-test('codeTarget: a code cannot leave the /codes segment', () => {
-    const target = new URL(codeTarget('https://api.example', '../openapi.json', ''));
-
-    assert.equal(target.pathname, '/codes/..%2Fopenapi.json');
-});
+for (const code of ['..', '.', '../openapi.json', 'request_invalid/..', 'Request_Invalid', '']) {
+    test(`codeTarget: no address for ${JSON.stringify(code)}, which no code can be`, () => {
+        assert.equal(codeTarget('https://api.example', code, '?q'), null);
+    });
+}

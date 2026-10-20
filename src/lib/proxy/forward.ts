@@ -14,7 +14,7 @@ import { hit, type Surface } from './rateLimit';
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
- * must not reach a client). An /api/* or /mcp call is rate-limited per IP
+ * must not reach a client). An /api/*, /codes or /mcp call is rate-limited per IP
  * (src/lib/proxy/rateLimit; the X-RateLimit-* headers go out only on a
  * counted call). A call is forwarded
  * with its method, query, body, content headers and every mcp-* header

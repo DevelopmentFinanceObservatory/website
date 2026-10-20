@@ -5,5 +5,11 @@
  * forwards that path to the API. Kept apart from forward.ts, which imports
  * server-only, so `node --test` can load it.
  */
-export const codeTarget = (apiBase: string, code: string, search: string): string =>
-    `${apiBase}/codes/${encodeURIComponent(code)}${search}`;
+
+// Every registry code is snake_case, so a code of this shape stays in the
+// one path segment after /codes/; `.` and `..` would resolve out of it.
+const CODE = /^[a-z][a-z0-9_]*$/;
+
+/** The registry address for `code`, or null for a value no code can be. */
+export const codeTarget = (apiBase: string, code: string, search: string): string | null =>
+    CODE.test(code) ? `${apiBase}/codes/${code}${search}` : null;

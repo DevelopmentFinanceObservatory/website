@@ -7,7 +7,7 @@ import { countHit, pruneCounters } from './limitCounter';
 import type { RateVerdict } from './rateHeaders';
 
 /**
- * Per-IP rate limit for the platform proxy's /api/* and /mcp routes
+ * Per-IP rate limit for the platform proxy's /api/*, /codes and /mcp routes
  * (src/lib/proxy/forward): a fixed window counted in Postgres
  * (./limitCounter), shared by every instance. An IPv6 client is counted by
  * its /64 (see limiterBucket). A count runs on its own small pool
