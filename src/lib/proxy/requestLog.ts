@@ -1,7 +1,10 @@
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
+import { IncomingMessage } from 'node:http';
+
 import { requestCaller } from './caller.ts';
 
 /**
- * One JSON line on stdout per visitor request, written by src/proxy.ts, so
+ * One JSON line on stdout per visitor request, registered at server startup, so
  * Cloud Logging can count visitors by caller. Cloud Run's own request log
  * records Cloudflare's edge address, so it cannot.
  *
@@ -22,9 +25,9 @@ export type RequestLogEntry = {
     userAgent: string | null;
 };
 
-// Framework files and images and fonts by extension. src/proxy.ts's matcher
-// skips the same paths before the proxy runs; this repeats it because a
-// matcher must be a literal.
+type RequestMetadata = Pick<Request, 'url' | 'method' | 'headers'>;
+
+// Framework files and images and fonts by extension.
 const STATIC_ASSET = /^\/_next\/|\.(?:png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$/i;
 
 const isApiPath = (path: string): boolean =>
@@ -32,8 +35,7 @@ const isApiPath = (path: string): boolean =>
 
 /**
  * What a request is, or undefined for a static asset, which is not logged.
- * The RSC headers reach the proxy because next.config.ts sets
- * skipProxyUrlNormalize; Next.js strips them otherwise.
+ * The HTTP diagnostic event carries headers before Next.js normalises them.
  */
 export const requestKind = (path: string, headers: Headers): RequestKind | undefined => {
     if (STATIC_ASSET.test(path)) {
@@ -55,7 +57,7 @@ export const requestKind = (path: string, headers: Headers): RequestKind | undef
 
 /** The log entry for a request, or undefined when it is not logged. */
 export const requestLogEntry = (
-    request: Request,
+    request: RequestMetadata,
     caller: string | undefined,
 ): RequestLogEntry | undefined => {
     const path = new URL(request.url).pathname;
@@ -77,15 +79,81 @@ export const requestLogEntry = (
     };
 };
 
+const requestMetadata = (request: RequestMetadata | IncomingMessage): RequestMetadata => {
+    if (!(request instanceof IncomingMessage)) {
+        return request;
+    }
+
+    const headers = new Headers();
+
+    // Keep the original headers even when Next.js has already handled the request.
+    for (let index = 0; index < request.rawHeaders.length; index += 2) {
+        const name = request.rawHeaders[index];
+        const value = request.rawHeaders[index + 1];
+
+        if (name === undefined) {
+            continue;
+        }
+
+        if (value !== undefined) {
+            headers.append(name, value);
+        }
+    }
+
+    return {
+        url: new URL(request.url ?? '/', 'http://localhost').href,
+        method: request.method ?? 'GET',
+        headers,
+    };
+};
+
 /** Write the request's log line. Never throws: a logging fault must not fail the request. */
-export const logRequest = (request: Request): void => {
+export const logRequest = (request: RequestMetadata | IncomingMessage): void => {
     try {
-        const entry = requestLogEntry(request, requestCaller(request.headers));
+        const metadata = requestMetadata(request);
+        const entry = requestLogEntry(metadata, requestCaller(metadata.headers));
 
         if (entry) {
             console.log(JSON.stringify(entry));
         }
-    } catch (error) {
-        console.error('request log failed', error);
+    } catch {
+        // URL and header errors can include raw request data.
+        console.error('request log failed');
     }
+};
+
+const REQUEST_CHANNELS = ['http.server.request.start', 'http.server.response.finish'];
+
+// Share the subscriber and request set across Next dev reloads.
+const globalForRequestLog = globalThis as typeof globalThis & {
+    dfoRequestLogSubscriber?: (message: unknown) => void;
+    dfoLoggedRequests?: WeakSet<IncomingMessage>;
+};
+const loggedRequests = (globalForRequestLog.dfoLoggedRequests ??= new WeakSet());
+
+const onServerRequest = (message: unknown): void => {
+    if (
+        typeof message === 'object' &&
+        message !== null &&
+        'request' in message &&
+        message.request instanceof IncomingMessage &&
+        !loggedRequests.has(message.request)
+    ) {
+        loggedRequests.add(message.request);
+        logRequest(message.request);
+    }
+};
+
+/** Observe HTTP headers without reading or buffering a request body. */
+export const registerRequestLogging = (): void => {
+    for (const channel of REQUEST_CHANNELS) {
+        if (globalForRequestLog.dfoRequestLogSubscriber) {
+            unsubscribe(channel, globalForRequestLog.dfoRequestLogSubscriber);
+        }
+
+        // Finish catches a request accepted before instrumentation registered.
+        subscribe(channel, onServerRequest);
+    }
+
+    globalForRequestLog.dfoRequestLogSubscriber = onServerRequest;
 };

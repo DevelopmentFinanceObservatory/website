@@ -56,7 +56,7 @@ To check it on production, open the network panel and filter on `google-analytic
 
 ## Request log
 
-The site writes one JSON line to stdout for each page view and API call, which Cloud Logging stores as a structured entry. `src/proxy.ts`, the Next.js proxy, writes it through `logRequest()` in `src/lib/proxy/requestLog.ts`. Visitor counts come from this line, because Cloud Run's own request log records Cloudflare's edge address as the client.
+The site writes one JSON line to stdout for each page view and API call, which Cloud Logging stores as a structured entry. `src/instrumentation.ts` registers `registerRequestLogging()` in `src/lib/proxy/requestLog.ts` at server startup. It observes Node's `http.server.request.start` diagnostic channel and reads the request's method, path, and headers. A request accepted during startup is logged when its response finishes, if it was not already logged at the start. Visitor counts come from this line, because Cloud Run's own request log records Cloudflare's edge address as the client.
 
 ```json
 {"severity":"INFO","message":"request","caller":"ip:3f9c0a…","method":"GET","path":"/embed/abc123","host":"developmentfinance.org","kind":"page","userAgent":"Mozilla/5.0 …"}
@@ -64,7 +64,7 @@ The site writes one JSON line to stdout for each page view and API call, which C
 
 `caller` is the same `ip:<digest>` the `/mcp` proxy sends upstream as `x-dfo-caller` (`src/lib/proxy/caller.ts`): an HMAC of the client address under `CALLER_HMAC_KEY`, with the address taken from `X-Forwarded-For` at the `TRUSTED_PROXY_HOPS` position. It is null when the key is unset or the request carries no usable address. `kind` is `page`, `api` (`/api` and `/mcp`), `rsc` (a client-side navigation) or `prefetch` (a Next.js or browser prefetch). Embeds under `/embed/` are logged as pages. `/_next/` files, images and fonts are not logged. The line holds no raw IP address, query string, cookie or `Authorization` header.
 
-`next.config.ts` sets `skipProxyUrlNormalize` so the proxy sees the `RSC` and `Next-Router-Prefetch` headers, which Next.js otherwise strips before the proxy runs.
+The diagnostic event carries `RSC` and `Next-Router-Prefetch` headers before Next.js normalises them. Logging leaves request bodies unread, so API and MCP payloads stream to their handlers in full. A Next.js proxy would buffer those bodies and truncate them at its default 10 MB limit.
 
 ## Guest Studio
 

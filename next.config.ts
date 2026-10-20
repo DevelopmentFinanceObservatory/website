@@ -6,10 +6,6 @@ const nextConfig: NextConfig = {
     // Self-contained server bundle for the Cloud Run image (deploy/Dockerfile).
     output: 'standalone',
     devIndicators: false,
-    // Hands src/proxy.ts the raw request, RSC headers included, so the
-    // request log can mark RSC and prefetch requests. The proxy never
-    // rewrites, so the URL normalisation this turns off has nothing to act on.
-    skipProxyUrlNormalize: true,
     // The Cloud SQL connector (db/connection.ts, instrumentation.ts) is
     // Node-only, so this opts it out of Server Components bundling to a
     // native `require`, which as a side effect makes the standalone
