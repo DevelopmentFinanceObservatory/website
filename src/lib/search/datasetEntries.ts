@@ -13,12 +13,11 @@
  * `placeholder` entry, holding its position without asking the engine to
  * re-derive anything. Every entry, overrides included, carries its part's
  * `operations`, so an edit keeps what the question asked of the data (a
- * `parsed` entry's part carries its own), and
- * every identity entry carries its part's `assumptions` as the response gave
- * them, so an edit that leaves a declared default's slot alone keeps it. A
- * candidates part's own `assumptions` are only what its readings share, so a
- * pick and each candidate echo their reading's `reading_assumptions` list
- * instead.
+ * `parsed` entry's part carries its own). Every identity entry carries its
+ * part's `assumptions` as the response gave them, so an edit that leaves a
+ * declared default's slot alone keeps it. A candidates part's own
+ * `assumptions` are only what its readings share, so a pick and each
+ * candidate echo their reading's `reading_assumptions` list.
  */
 
 import type {
@@ -77,8 +76,8 @@ export type SharedEntryRef = {
 
 /** The `identity` entry a stored share part replays: the identity as
  *  stored, its groups beside it, the operations its question asked, and
- *  the assumptions its response gave, [] included. A share stored before
- *  assumptions were kept posts none. */
+ *  the assumptions its response gave, [] included. A share with null
+ *  assumptions posts none. */
 export function sharedRefEntry(ref: SharedEntryRef): DatasetIdentityEntry {
     return {
         entry_kind: 'identity',

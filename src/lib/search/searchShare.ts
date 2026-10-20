@@ -34,7 +34,7 @@ export type SearchShareRef = {
     identity: unknown;
     entityGroups: Record<string, EntityGroup> | null;
     operations: Operation[];
-    // Null for a share stored before assumptions were kept.
+    // Null for a share stored without assumptions.
     assumptions: Assumption[] | null;
     contentVersion: string | null;
     // The file a snapshot captured and pinned. Null for a live share, and

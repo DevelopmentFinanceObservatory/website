@@ -141,7 +141,7 @@ test("assumptionClauses names each part's own clause when the plan is written pa
         { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
         { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
     ]);
-    // A part with no clause beside one that states its own: the clause still names its part.
+    // A part with no clause beside one that states its own. The clause still names its part.
     const onlySecond = [
         token('Aid.', 'heading', 0),
         token(' ', 'byline', 0),
@@ -171,7 +171,7 @@ test("assumptionClauses names each part's own clause when the plan is written pa
 });
 
 test('assumptionClauses labels a clause by the owner of its lead token', () => {
-    // A definite part beside a candidates part: one byline, two owned clauses.
+    // A definite part beside a candidates part gives one byline and two owned clauses.
     const definiteAndCandidates = [
         token('Answered 1 of 2 parts.', 'coverage', null),
         token(' ', 'coverage', null),
@@ -195,7 +195,7 @@ test('assumptionClauses labels a clause by the owner of its lead token', () => {
         { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
         { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
     ]);
-    // Parts 0 and 1 fold into one sentence: the folded clause's lead has no owner, though
+    // Parts 0 and 1 fold into one sentence. The folded clause's lead has no owner, though
     // one of its items is part 1's, so only part 2's clause takes a label.
     const folded = [
         token('Aid to Kenya.', 'heading', null),

@@ -171,7 +171,7 @@ export type AboutAnswerNotes = {
 };
 
 /** The notes "About this answer" shows for one definite part: its
- *  `assumptions` and the warnings `ABOUT_WARNING_CODES` names, no other. */
+ *  `assumptions` and the warnings `ABOUT_WARNING_CODES` names. */
 export function aboutAnswerNotes(
     spec: MeasureMenuSpec,
     warnings: readonly Warning[] | null | undefined,

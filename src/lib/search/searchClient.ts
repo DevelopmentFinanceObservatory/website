@@ -1274,8 +1274,8 @@ export type OpenedSearchShare = {
         entityGroups: Record<string, EntityGroup> | null;
         operations: Operation[];
         /** The part's assumptions as the shared response gave them, echoed
-         *  on replay. Null for a share stored before they were kept and for
-         *  a version link. */
+         *  on replay. Null for a share stored without them and for a
+         *  version link. */
         assumptions: Assumption[] | null;
         contentVersion: string | null;
     }[];

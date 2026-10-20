@@ -74,8 +74,8 @@ const humanitarianWarnings: Warning[] = [
     },
 ];
 
-// The part's assumptions on the same answer: the recipient role it left open,
-// and the flow type its code system's default filled.
+// The part's assumptions on the same answer. They hold the recipient role it
+// left open and the flow type its code system's default filled.
 const humanitarianAssumptions: Assumption[] = [
     {
         kind: 'declared_default',

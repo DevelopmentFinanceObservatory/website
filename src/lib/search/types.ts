@@ -1222,9 +1222,9 @@ export interface LateDepartures {
 /** What an `Assumption` fills (dfo-apis vocab.py AssumptionKind):
  *  'declared_default', a slot the request left open that its code system's
  *  or shape's declared default fixed; 'open_role', a flow role no request
- *  word asked for, read across every entity on it with data: one series per
- *  member where the role scope default filled it and the shape declares the
- *  role, else the total over them; 'place_scope', a request that named no
+ *  word asked for, read across every entity on it with data, as one series
+ *  per member where the role scope default filled it and the shape declares
+ *  the role, else as the total over them; 'place_scope', a request that named no
  *  place, read across every place with data. */
 export type AssumptionKind = 'declared_default' | 'open_role' | 'place_scope';
 
@@ -1450,7 +1450,7 @@ export interface NoDataOption {
     /** the request's own words this option settles, in query order */
     mentions: string[];
     /** the choice in words for a menu ("Republic of the Congo", "France to
-     *  Germany"); never parsed */
+     *  Germany"), for display only */
     label: string;
     /** a one-part parsed input settling this choice only, posted unchanged
      *  to the resolve door; its one part is a `parsed` dataset_resubmit
@@ -1976,8 +1976,8 @@ export interface DatasetIdentityEntry {
     operations?: Operation[];
     /** the part's `assumptions`, echoed as the response gave them, [] included.
      *  The engine states the echoed items that still hold after the edit and
-     *  nothing the echo lacks, so [] states none; absent, it computes them as
-     *  for a fresh request. */
+     *  nothing the echo lacks, so [] states none. When absent, it computes
+     *  them as for a fresh request. */
     assumptions?: Assumption[];
 }
 
@@ -1988,9 +1988,9 @@ export interface DatasetCandidateIdentity {
     identity: BaseIdentity;
     entity_groups?: Record<string, EntityGroup> | null;
     /** the reading's `reading_assumptions` list, echoed as the response gave
-     *  it, [] included, by the rule `DatasetIdentityEntry.assumptions` states;
-     *  absent, the engine computes the reading's assumptions as for a fresh
-     *  request. */
+     *  it, [] included, by the rule `DatasetIdentityEntry.assumptions` states.
+     *  When absent, the engine computes the reading's assumptions as for a
+     *  fresh request. */
     assumptions?: Assumption[];
 }
 

@@ -186,7 +186,7 @@ const everyProvider: Assumption = {
     text: 'every provider',
 };
 
-/** The multi-candidate part with `reading_assumptions` as given: the first
+/** The multi-candidate part with `reading_assumptions` as given. The first
  *  reading reads an open role the second lacks, so the part's own list holds
  *  only the place scope both share. */
 function candidatesWithReadings(
