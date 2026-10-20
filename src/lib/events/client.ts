@@ -1,6 +1,7 @@
 'use client';
 
 import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '@/lib/consent';
+import { uuid } from '@/lib/uuid';
 
 import type { EventName, EventProps } from './track';
 
@@ -43,7 +44,7 @@ const visitorId = (): string | null => {
         let id = localStorage.getItem(VISITOR_KEY);
 
         if (!id) {
-            id = crypto.randomUUID();
+            id = uuid();
             localStorage.setItem(VISITOR_KEY, id);
         }
 
@@ -56,8 +57,14 @@ const visitorId = (): string | null => {
 /**
  * Record a usage event from the browser (POST /api/events). Fire-and-forget
  * with `keepalive`, so an event sent on the way out of a page still lands.
+ * `page` defaults to the current path; an event sent after a navigation passes
+ * the page it describes.
  */
-export const track = (name: EventName, props: EventProps = {}) => {
+export const track = (
+    name: EventName,
+    props: EventProps = {},
+    page: string = location.pathname,
+) => {
     try {
         void fetch('/api/events', {
             method: 'POST',
@@ -66,7 +73,7 @@ export const track = (name: EventName, props: EventProps = {}) => {
                 name,
                 props,
                 visitorId: visitorId(),
-                page: location.pathname,
+                page,
             }),
             keepalive: true,
         }).catch(() => undefined);

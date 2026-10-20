@@ -11,7 +11,8 @@ import { revealIndex } from '@/hooks/useReveal';
 export type DataPromptProps = {
     suggestions?: string[];
     suggestionsHidden?: boolean;
-    onSubmit?: (query: string) => void;
+    // `via` says whether the text was typed or a suggestion chip was picked.
+    onSubmit?: (query: string, via: 'typed' | 'example') => void;
     onChange?: (query: string) => void;
     // Take the caret on mount. Applied from an effect rather than the DOM
     // attribute, so the decision can depend on the device without the server
@@ -88,9 +89,9 @@ const DataPrompt = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const submit = (query: string) => {
+    const submit = (query: string, via: 'typed' | 'example' = 'typed') => {
         if (query.trim()) {
-            onSubmit?.(query.trim());
+            onSubmit?.(query.trim(), via);
         }
     };
 
@@ -136,7 +137,7 @@ const DataPrompt = ({
             {suggestions && suggestions.length > 0 && (
                 <TryChips
                     examples={suggestions}
-                    onPick={submit}
+                    onPick={(text) => submit(text, 'example')}
                     hidden={suggestionsHidden}
                     className={styles.try}
                 />

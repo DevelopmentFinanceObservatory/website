@@ -191,6 +191,10 @@ export type SearchEvent =
            *  2026-09-08). useSearchRun.ts's edit lane keys `editError` to
            *  the entry index a `/input/entries/{i}/...` pointer names. */
           pointer?: string | null;
+          /** The problem-details `status` and `trace_id`: an engine error
+           *  frame carries both, and a non-2xx response forwards its own. */
+          status?: number | null;
+          trace_id?: string | null;
       };
 
 /** Mirrors SlotKey.as_ref(): the "axis:property_dcid" join key shared by
@@ -1110,6 +1114,8 @@ export async function resolveStream(
                 detail: detailText(body, res.status),
                 code: body?.code ?? null,
                 pointer: body?.pointer ?? null,
+                status: res.status,
+                trace_id: body?.trace_id ?? null,
             });
         }
         return;

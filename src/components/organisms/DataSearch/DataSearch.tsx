@@ -22,6 +22,7 @@ import {
     type RefineOpen,
 } from './SearchSentence';
 import SearchTable from './SearchTable';
+import type { DatasetDownloaded } from './useDatasetDownload';
 import { useSearchRun } from './useSearchRun';
 
 import Button from '@/components/atoms/Button/Button';
@@ -44,6 +45,7 @@ import {
     fetchSearchShare,
     fetchVersionLink,
     type OpenedSearchShare,
+    type SearchShareMode,
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
 import { searchSharePart } from '@/lib/search/searchShareRequest';
@@ -54,7 +56,13 @@ import {
     snapshotLiveNote,
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
-import { searchEventName, searchEventProps } from '@/lib/search/searchEvents';
+import {
+    HANDOFF_SOURCE_PARAM,
+    handoffSource,
+    searchEventProps,
+    startSearchAction,
+    type SearchSource,
+} from '@/lib/search/searchEvents';
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
@@ -111,6 +119,12 @@ const EarlySentenceHeading = ({
 // `catalogue` is the search catalogue the page loaded on the server, or null
 // when the API serves none: the idle chips, the stat tiles and the starting
 // point read it.
+/** What a visitor did with a search answer, sent as `search.action`. */
+type SearchAction =
+    | { action: 'pick_reading'; partIndex: number; specId: string }
+    | ({ action: 'download'; partIndex: number } & DatasetDownloaded)
+    | { action: 'share'; mode: SearchShareMode; shareId: string };
+
 const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -152,6 +166,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         editParsed,
         editShared,
         editFacet,
+        searchIds,
     } = useSearchRun();
     // A version link runs with no question of its own: the resolved sentence
     // stands in for it wherever the page needs text (the Studio handoff, a
@@ -166,16 +181,16 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const [suggestionSlot] = useState(createSuggestionSlot);
 
     // A query as text: the starting point's own question shows the catalogue
-    // the page holds, with no search call; any other text is a search. Every
-    // run, typed or opened from a link, passes here, so a live suggestion
-    // stream for other text stops and one for the same text answers the run.
+    // the page holds, with no search call, and records `search.start_point`.
+    // Other text is a search, whose events useSearchRun sends. Every run
+    // keeps only the live suggestion stream for the same text.
     const runQuery = useCallback(
-        (text: string) => {
+        (text: string, source: SearchSource) => {
             suggestionSlot.keepOnly(text);
             if (text === STARTING_POINT_QUERY) {
-                showStartingPoint(text);
+                showStartingPoint(text, source);
             } else {
-                run({ kind: 'raw_text', query: text }, text);
+                run({ kind: 'raw_text', query: text }, text, source);
             }
         },
         [suggestionSlot, run, showStartingPoint],
@@ -241,16 +256,16 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     }, []);
     // Opens a share, or a link read as one, and keeps it as the view's
     // origin until the user moves on from it.
-    const enterShare = useCallback((shared: OpenedSearchShare) => {
+    const enterShare = useCallback((shared: OpenedSearchShare, source: SearchSource) => {
         openedShareRef.current = shared;
         setOpenedShare(shared);
-        openShareRef.current(shared);
+        openShareRef.current(shared, source);
     }, []);
 
     const submitQuery = useCallback(
-        (text: string) => {
+        (text: string, source: SearchSource) => {
             leaveShare();
-            runQuery(text);
+            runQuery(text, source);
         },
         [runQuery, leaveShare],
     );
@@ -260,9 +275,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // empty sentence and drop the link.
     const retry = useCallback(() => {
         if (openedShareRef.current) {
-            enterShare(openedShareRef.current);
+            enterShare(openedShareRef.current, 'retry');
         } else {
-            submitQuery(query);
+            submitQuery(query, 'retry');
         }
     }, [enterShare, submitQuery, query]);
 
@@ -284,6 +299,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         });
         const seeds = handoffSeeds(parts);
         const token = writeSeeds(() => window.sessionStorage, seeds);
+        const { searchId, traceId } = searchIds();
 
         track(
             'search.studio_handoff',
@@ -294,10 +310,28 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 reason: answerReason,
                 parts,
                 seeds: token ? seeds.length : 0,
+                run: { ...(searchId && { searchId }), traceId },
             }),
         );
         router.push(studioHref(question, token));
-    }, [router, query, edits.length, openedShare, response, parts, answerKind, answerReason]);
+    }, [
+        router,
+        query,
+        edits.length,
+        openedShare,
+        response,
+        parts,
+        answerKind,
+        answerReason,
+        searchIds,
+    ]);
+
+    // A visitor's action on the answer on screen (docs/analytics.md): the
+    // ids are read as the visitor acts, and the returned sender records it.
+    const startAction = useCallback(
+        () => startSearchAction<SearchAction>(searchIds, track, location.pathname),
+        [searchIds],
+    );
 
     // Live suggestions: a debounced background resolve renders interpretation
     // cards under the prompt while the user is still typing. It posts the
@@ -380,7 +414,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 return;
             }
 
-            enterShare(shared);
+            enterShare(shared, 'share');
         });
         // `openShare` is deliberately absent for the same reason `run` and
         // `replay` are off the permalink effect's array below: watching a
@@ -419,7 +453,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
             }
 
             if (result.kind === 'opened') {
-                enterShare(result.shared);
+                enterShare(result.shared, 'version_link');
             } else {
                 setLinkRefusal({ link, result });
             }
@@ -439,7 +473,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
             if (shared) {
                 startedRef.current = `spec:${href}`;
-                enterShare({ ...shared, mode: 'live', link: latest });
+                enterShare({ ...shared, mode: 'live', link: latest }, 'version_link');
             }
 
             window.history.replaceState(null, '', href);
@@ -448,6 +482,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     );
 
     // Permalink / homepage handoff: ?q= (and ?s=) auto-runs once per value.
+    // The homepage prompt adds `via` (typed or example). It is read here and
+    // stripped at once, so the address bar never offers it for copying and a
+    // pasted link records `permalink`.
     useEffect(() => {
         const q = searchParams.get('q');
         const s = searchParams.get('s') ?? '';
@@ -459,8 +496,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
         startedRef.current = key;
 
+        const source = handoffSource(searchParams.get(HANDOFF_SOURCE_PARAM));
+
+        if (searchParams.has(HANDOFF_SOURCE_PARAM)) {
+            const rest = new URLSearchParams(searchParams);
+
+            rest.delete(HANDOFF_SOURCE_PARAM);
+            window.history.replaceState(null, '', `/data?${rest}`);
+        }
+
         if (!s) {
-            runRef.current(q);
+            runRef.current(q, source);
 
             return;
         }
@@ -481,9 +527,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 // URL-sync effect below must not read that transient empty
                 // state as "no edits" and strip `s=` before they land.
                 suppressEmptyEditWriteRef.current = true;
-                replayRef.current(state);
+                replayRef.current(state, source);
             } else {
-                runRef.current(q);
+                runRef.current(q, source);
             }
         });
         // `run` and `replay` are deliberately absent. Watching either would
@@ -580,34 +626,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
             cancelled = true;
         };
     }, [phase, query, edits, parts, answer]);
-
-    // Usage event, once per query, when the run has settled: every part for
-    // a resolution, the run itself for a catalogue or declined answer, which
-    // has no parts. `search.empty` when nothing answered (searchEvents.ts).
-    const trackedQueryRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        const settled =
-            phase === 'done' &&
-            (answer !== null ||
-                (parts.length > 0 && parts.every((part) => part.phase !== 'loading')));
-
-        if (!settled || !query || trackedQueryRef.current === query) {
-            return;
-        }
-
-        trackedQueryRef.current = query;
-
-        const props = searchEventProps({
-            query,
-            edited: edits.length > 0,
-            kind: answerKind,
-            reason: answerReason,
-            parts,
-        });
-
-        track(searchEventName(props), props);
-    }, [phase, answer, answerKind, answerReason, parts, query, edits.length]);
 
     // Read, not watched: startNew's identity changes with reset(), and
     // watching it would re-run the effect below on internal state.
@@ -755,12 +773,23 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         specId: part.hydratedSpec!.spec_id,
         label: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
     }));
-    const createShare: CreateSearchShare = (mode) =>
-        createSearchShare({
+    const createShare: CreateSearchShare = (mode) => {
+        const sendAction = startAction();
+
+        return createSearchShare({
             mode,
             query,
             parts: sharedParts.map(searchSharePart),
-        }).then((result) => ('id' in result ? { ...result, datasets: sharedDatasets } : result));
+        }).then((result) => {
+            if (!('id' in result)) {
+                return result;
+            }
+
+            sendAction({ action: 'share', mode, shareId: result.id });
+
+            return { ...result, datasets: sharedDatasets };
+        });
+    };
     // A part whose question asked for more than search does carries an
     // operation_not_applied departure, whose action hands it to Studio;
     // without one, the side panel offers Studio itself, so a page shows one
@@ -938,7 +967,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                                 }
 
                                                 leaveShare();
-                                                openShare({ ...openedShare, mode: 'live' });
+                                                openShare(
+                                                    { ...openedShare, mode: 'live' },
+                                                    'share',
+                                                );
                                             }}
                                         >
                                             View latest
@@ -975,9 +1007,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 <SearchAnswer
                                     answer={answer}
                                     catalogue={catalogue}
-                                    onRun={submitQuery}
+                                    onRun={(text) => submitQuery(text, 'example')}
                                     onStartNew={startNew}
-                                    onShowCatalogue={() => submitQuery(STARTING_POINT_QUERY)}
+                                    onShowCatalogue={() =>
+                                        submitQuery(STARTING_POINT_QUERY, 'catalogue')
+                                    }
                                     onStudio={openStudio}
                                 />
                             </div>
@@ -1024,7 +1058,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     onEditFacet={editFacet}
                                     onEditParsed={editParsed}
                                     onEditShared={editShared}
-                                    onRefine={submitQuery}
+                                    onRefine={(text) => submitQuery(text, 'refine')}
                                     onStudio={openStudio}
                                     refine={refine}
                                     onRefineOpen={setRefineOpen}
@@ -1075,6 +1109,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     note={downloadNote(definiteParts[0].part?.warnings)}
                                     createShare={createShare}
                                     onStudio={studioDeparture ? undefined : openStudio}
+                                    onDownloadStart={() => {
+                                        const sendAction = startAction();
+                                        const partIndex = definiteParts[0].index;
+
+                                        return (downloaded) =>
+                                            sendAction({
+                                                action: 'download',
+                                                partIndex,
+                                                ...downloaded,
+                                            });
+                                    }}
                                 />
                             )}
                         </div>
@@ -1101,8 +1146,15 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                             key={part.index}
                                             part={part.part}
                                             prefix={parts.length > 1 ? part.variableText : null}
-                                            onPick={(spec) => pickCandidate(part.index, spec)}
-                                            onRetry={() => submitQuery(query)}
+                                            onPick={(spec) => {
+                                                startAction()({
+                                                    action: 'pick_reading',
+                                                    partIndex: part.index,
+                                                    specId: spec.spec_id,
+                                                });
+                                                pickCandidate(part.index, spec);
+                                            }}
+                                            onRetry={() => submitQuery(query, 'retry')}
                                         />
                                     ),
                             )}
