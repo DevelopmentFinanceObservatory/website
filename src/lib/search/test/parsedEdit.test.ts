@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    ambiguousPickPart,
     applyRestatementEdit,
     buildAmbiguousPickPart,
     canPinEntityDcid,
@@ -15,7 +16,9 @@ import {
     odaToCongoNoData,
     odaToCongoRestatement,
 } from './fixtures/ambiguous-congo.ts';
-import type { ParsedPart, RoleAxis, SlotAxis } from '../types.ts';
+import { normalizeResponse } from '../searchClient.ts';
+import { fixtures } from './fixtures/index.ts';
+import type { NoData, ParsedPart, RoleAxis, SlotAxis } from '../types.ts';
 
 // ---------------------------------------------------------------------------
 // restatementTargetForToken / applyRestatementEdit: one restatement field per
@@ -215,6 +218,52 @@ test('canPinEntityDcid is false with no ambiguous_entities, absent or empty', ()
 // whether a no_data part gets the "Choose a Match" picker rather than the
 // generic Studio hand-off panel
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ambiguousPickPart: the refusal's own option for a pick
+// ---------------------------------------------------------------------------
+
+const congoPart = () => {
+    const [part] = normalizeResponse(fixtures['entity-ambiguous']).parts;
+
+    return part as { no_data: NoData; restatement: ParsedPart };
+};
+
+test("ambiguousPickPart posts the option's request unchanged, the resolved entity pinned too", () => {
+    const part = congoPart();
+    const [group] = part.no_data.ambiguous_entities!;
+    const [, republic] = group.candidates;
+
+    assert.equal(
+        ambiguousPickPart(part, 'Congo', republic),
+        part.no_data.options![1].data_query.parts[0],
+    );
+    assert.deepEqual(
+        ambiguousPickPart(part, 'Congo', republic)?.entities?.map((entity) => entity.dcid),
+        ['country/COG', 'country/FRA'],
+    );
+});
+
+test('ambiguousPickPart pins the restatement when no one option pins the candidate', () => {
+    const part = congoPart();
+    const [drc] = part.no_data.ambiguous_entities![0].candidates;
+    const fallback = buildAmbiguousPickPart(part.restatement, 'Congo', drc);
+    // A members option names the group with no dcid, so it pins nothing to match.
+    const members = part.no_data.options!.map((option) => ({
+        ...option,
+        data_query: {
+            ...option.data_query,
+            parts: [{ ...option.data_query.parts[0], entities: [{ text: 'Congo basin' }] }],
+        },
+    }));
+
+    for (const options of [undefined, [], members]) {
+        assert.deepEqual(
+            ambiguousPickPart({ ...part, no_data: { ...part.no_data, options } }, 'Congo', drc),
+            fallback,
+        );
+    }
+});
 
 test('offersAmbiguousPicker is true for the real ODA-to-Congo capture (restatement present)', () => {
     assert.equal(

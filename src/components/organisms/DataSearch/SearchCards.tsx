@@ -6,7 +6,7 @@ import classNames from 'classnames';
 import styles from './DataSearch.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
-import { buildAmbiguousPickPart, offersAmbiguousPicker } from '@/lib/search/parsedEdit';
+import { ambiguousPickPart, offersAmbiguousPicker } from '@/lib/search/parsedEdit';
 import {
     cardText,
     coverageSummary,
@@ -111,11 +111,10 @@ const SearchCards = ({
 
     if (part?.status === 'no_data') {
         // The single-part escape hatch for entity_ambiguous picking (see
-        // module doc). A pick pins the candidate's dcid onto the matching
-        // restatement entity and posts a parsed entry, a no-op if no entity
-        // matches.
+        // module doc). A pick posts the refusal's option for it as a parsed
+        // entry, or pins the candidate's dcid onto the matching restatement
+        // entity (ambiguousPickPart), a no-op if no entity matches.
         if (offersAmbiguousPicker(part) && onEditParsed && partIndex !== undefined) {
-            const restatement = part.restatement;
             const groups = part.no_data.ambiguous_entities ?? [];
 
             return (
@@ -130,8 +129,8 @@ const SearchCards = ({
                                     className={styles.card}
                                     style={{ '--i': index } as React.CSSProperties}
                                     onClick={() => {
-                                        const edited = buildAmbiguousPickPart(
-                                            restatement,
+                                        const edited = ambiguousPickPart(
+                                            part,
                                             group.text,
                                             candidate,
                                         );

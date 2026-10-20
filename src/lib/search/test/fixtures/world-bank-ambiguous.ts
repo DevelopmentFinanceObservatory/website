@@ -87,22 +87,52 @@ export const worldBankAmbiguous: unknown = {
           }
         ],
         "unbound_qualifiers": [],
-        "data_query": {
-          "kind": "parsed",
-          "parts": [
-            {
-              "variable_text": "ODA",
-              "entities": [
+        "options": [
+          {
+            "mentions": [
+              "World Bank"
+            ],
+            "label": "International Bank for Reconstruction and Development",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
                 {
-                  "text": "World Bank",
-                  "role_text": "from"
+                  "variable_text": "ODA",
+                  "entities": [
+                    {
+                      "text": "World Bank",
+                      "role_text": "from",
+                      "dcid": "InternationalBankForReconstructionAndDevelopment"
+                    }
+                  ],
+                  "operations": []
                 }
-              ],
-              "operations": []
+              ]
             }
-          ],
-          "raw_query": "ODA from the World Bank"
-        }
+          },
+          {
+            "mentions": [
+              "World Bank"
+            ],
+            "label": "International Development Association",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
+                {
+                  "variable_text": "ODA",
+                  "entities": [
+                    {
+                      "text": "World Bank",
+                      "role_text": "from",
+                      "dcid": "InternationalDevelopmentAssociation"
+                    }
+                  ],
+                  "operations": []
+                }
+              ]
+            }
+          }
+        ]
       }
     }
   ],

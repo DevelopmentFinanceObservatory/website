@@ -66,6 +66,9 @@ export type QuantityForm = 'per_person' | 'per_head_base' | 'per_area' | 'rate' 
 export type NoDataReason =
     | 'source_not_resolved'
     | 'source_ambiguous'
+    | 'source_code_not_held'
+    | 'source_code_ambiguous'
+    | 'source_code_shares_variable'
     | 'entity_not_resolved'
     | 'entity_ambiguous'
     | 'entity_set_too_large'
@@ -1099,9 +1102,11 @@ export interface WireSpec {
 // ---------------------------------------------------------------------------
 
 /** The block of the answer a sentence token belongs to: the heading states
- *  what the answer is, the byline its unit and source, and a departure
- *  token carries the text of one `Departure` on the same part. */
-export type SentenceSegment = 'heading' | 'byline' | 'departure';
+ *  what the answer is, the byline its unit and source, a departure token
+ *  carries the text of one `Departure` on the same part, and an assumption
+ *  token is a word of the closing clause naming the part's `assumptions`
+ *  ("Assumed: official development assistance; every provider."). */
+export type SentenceSegment = 'heading' | 'byline' | 'departure' | 'assumption';
 
 /** The axis a sentence token fills: every slot axis plus the byline's
  *  facet axes no request slot carries: 'unit', the unit of measure, and
@@ -1124,8 +1129,8 @@ export interface SentenceToken {
      *  states it */
     text: string;
     /** the block this token belongs to. A Spec's own plan holds heading and
-     *  byline tokens only; departure tokens sit on a part's or the
-     *  envelope's plan. */
+     *  byline tokens only; departure and assumption tokens sit on a part's
+     *  or the envelope's plan. */
     segment: SentenceSegment;
     /** the grammatical axis this token fills, when kind==="slot" */
     axis?: SentenceAxis | null;
@@ -1210,6 +1215,32 @@ export interface LateDepartures {
     part_index: number;
     spec_id: string;
     departures: Departure[];
+}
+
+/** What an `Assumption` fills (dfo-apis vocab.py AssumptionKind):
+ *  'declared_default', a slot the request left open that its code system's
+ *  or shape's declared default fixed; 'open_role', a flow role the request
+ *  named no entity on, read as the total over every entity on it;
+ *  'place_scope', a request that named no place, read across every place
+ *  with data. */
+export type AssumptionKind = 'declared_default' | 'open_role' | 'place_scope';
+
+/** One value a part's answer filled that its request did not ask for.
+ *  Mirrors dfo-apis src/search/models/assumption.py Assumption. The sentence
+ *  carrying the part closes with every one as one clause of `assumption`
+ *  tokens. */
+export interface Assumption {
+    kind: AssumptionKind;
+    /** the binding whose edit replaces it: "how:<property dcid>" for a
+     *  declared default, "origin:"/"destination:" for a role, "where:" for
+     *  the place scope */
+    binding_ref: string;
+    /** the value dcids a declared default bound its slot to; [] for an
+     *  open role and the place scope */
+    refs: string[];
+    /** the clause's words for it: "official development assistance",
+     *  "every provider", "every country", "the world as a whole" */
+    text: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1410,6 +1441,20 @@ export interface NoDataDenominator {
     found?: GraphRef | null;
 }
 
+/** One answer to the choice a no_data refusal asks for (dfo-apis
+ *  src/search/models/outcomes.py NoDataOption). */
+export interface NoDataOption {
+    /** the request's own words this option settles, in query order */
+    mentions: string[];
+    /** the choice in words for a menu ("Republic of the Congo", "France to
+     *  Germany"); never parsed */
+    label: string;
+    /** a one-part parsed input settling this choice only, posted unchanged
+     *  to the resolve door; its one part is a `parsed` dataset_resubmit
+     *  entry's part */
+    data_query: ParsedInput;
+}
+
 /** Outcome when no grounded result can be returned. */
 export interface NoData {
     /** why nothing could be returned (closed enum) */
@@ -1427,23 +1472,24 @@ export interface NoData {
     ambiguous_entities?: AmbiguousEntityGroup[];
     /** The source wordings this refusal is about, in query order: every
      *  included wording that matched no admitted source for
-     *  source_not_resolved, every ambiguous wording for source_ambiguous.
+     *  source_not_resolved, every ambiguous wording for source_ambiguous,
+     *  and the part's source_code for the three source_code_* reasons.
      *  Empty for every other reason. */
     source_terms?: string[];
     /** Every ambiguous wording behind a source_ambiguous outcome, in query
-     *  order, each with the admitted sources it could name. Empty for every
-     *  other reason. */
+     *  order, each with the admitted sources it could name, and for
+     *  source_code_ambiguous the part's source_code with the provenances
+     *  holding it. Empty for every other reason. */
     ambiguous_sources?: AmbiguousSourceGroup[];
     /**
-     * Set when the reason is entity_ambiguous or source_ambiguous: the parsed
-     * form of this part. On entity_ambiguous every resolved entity's dcid is
-     * pinned and the ambiguous entity's dcid left empty; on source_ambiguous
-     * every resolved source mention carries its ref and each ambiguous
-     * wording carries none. The site pins a pick onto the part's
-     * `restatement` instead (parsedEdit.ts's buildAmbiguousPickPart), so it
-     * reads none of this.
+     * One ready request per choice of an entity_ambiguous, source_ambiguous,
+     * source_code_ambiguous, role_not_resolved or unit_not_resolved refusal,
+     * in query then candidate order; empty for every other reason. It can
+     * list fewer entries than the candidates. The site's entity pick pins
+     * the part's `restatement` instead (parsedEdit.ts's
+     * buildAmbiguousPickPart).
      */
-    data_query?: ParsedInput | null;
+    options?: NoDataOption[];
     /** Terms the engine refused to silently drop before answering. Present
      * only for qualifier_not_bound. */
     unbound_qualifiers?: ResolvedQualifier[];
@@ -1580,7 +1626,7 @@ export interface WireNoData {
     ambiguous_entities?: AmbiguousEntityGroup[];
     source_terms?: string[];
     ambiguous_sources?: AmbiguousSourceGroup[];
-    data_query?: ParsedInput | null;
+    options?: NoDataOption[];
     unbound_qualifiers?: ResolvedQualifier[];
     /** optional; real, grounded WireSpecs with data adjacent to the request */
     nearest_real?: WireSpec[] | null;
@@ -1658,6 +1704,10 @@ export interface WirePart {
     /** every way this part's answer differs from what its request asked, in
      *  DepartureCode order; [] when the answer is what was asked */
     departures: Departure[];
+    /** every value the answer filled that the request did not ask for, in
+     *  clause order: declared defaults, open roles, then the place scope;
+     *  [] on no_data and unsupported */
+    assumptions?: Assumption[];
     status: ResolveStatus | 'unsupported';
     /** present iff status === "definite" */
     spec?: WireSpec;
@@ -1693,6 +1743,9 @@ export interface Part {
      *  DepartureCode order; [] when the answer is what was asked. The stream's
      *  `done` event can add more (see searchClient.applyDoneEvent). */
     departures: Departure[];
+    /** every value the answer filled that the request did not ask for, in
+     *  clause order (see WirePart.assumptions) */
+    assumptions?: Assumption[];
     status: ResolveStatus | 'unsupported';
     /** present iff status === "definite" */
     spec?: Spec;
@@ -1838,7 +1891,7 @@ export interface RawTextInput {
 }
 
 /** path B: pre-parsed parts, extract skipped. Also the shape of
- *  `NoData.data_query`. Parts byte-identical in every field collapse to
+ *  `NoDataOption.data_query`. Parts byte-identical in every field collapse to
  *  one before resolution. */
 export interface ParsedInput {
     kind: 'parsed';
@@ -1889,7 +1942,8 @@ export interface ParsedPart {
 // (datasetEntries.ts) never derives a `parsed` entry from a part's own
 // status; a typed edit or an entity_ambiguous pick builds one directly and
 // passes it in as an override. Every entry carries its part's `operations`
-// back, and the engine echoes them onto the rebuilt part.
+// back, and the engine echoes them onto the rebuilt part. An identity entry
+// also carries its part's `assumptions`.
 // ---------------------------------------------------------------------------
 
 /** A definite part's entry: the complete identity the part should resolve
@@ -1906,6 +1960,11 @@ export interface DatasetIdentityEntry {
     identity: BaseIdentity;
     entity_groups?: Record<string, EntityGroup> | null;
     operations?: Operation[];
+    /** the part's `assumptions`, echoed as the response gave them. The
+     *  engine keeps an echoed declared default whose slot the identity still
+     *  binds to the same values and drops one the edit changed; [] or absent
+     *  keeps none. */
+    assumptions?: Assumption[];
 }
 
 /** One competing identity inside a `candidates` entry, with the

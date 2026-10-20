@@ -102,6 +102,35 @@ test("buildDatasetEntries carries a part's operations on an edit's override entr
     assert.deepEqual((entry as DatasetIdentityEntry).operations, parts[0].part?.operations);
 });
 
+test("buildDatasetEntries echoes a part's assumptions on its identity entry, an edit's included", () => {
+    const parts = hydratedParts('broad-truncated');
+    const assumptions = parts[0].part?.assumptions;
+    const [own] = buildDatasetEntries(parts) as DatasetIdentityEntry[];
+    const override: DatasetIdentityEntry = { ...own, assumptions: undefined };
+    const [edited] = buildDatasetEntries(parts, { index: 0, entry: override });
+
+    assert.ok(assumptions?.length);
+    assert.deepEqual(own.assumptions, assumptions);
+    assert.deepEqual((edited as DatasetIdentityEntry).assumptions, assumptions);
+});
+
+test('buildDatasetEntries leaves assumptions off a part with none and off every other entry kind', () => {
+    const [definite] = buildDatasetEntries(hydratedParts('definite-single'));
+    const [candidates] = hydratedParts('multi-candidate');
+    const assumed: HydratedPart = {
+        ...candidates,
+        part: {
+            ...candidates.part!,
+            assumptions: [
+                { kind: 'place_scope', binding_ref: 'where:', refs: [], text: 'every place' },
+            ],
+        },
+    };
+
+    assert.equal('assumptions' in definite, false);
+    assert.equal('assumptions' in buildDatasetEntries([assumed])[0], false);
+});
+
 test('buildDatasetEntries leaves operations off a part that has none', () => {
     const [entry] = buildDatasetEntries(hydratedParts('definite-single'));
 

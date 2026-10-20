@@ -52,7 +52,7 @@ export function earlySentenceTokens(
 
 /** The heading a plan reads as: its heading tokens joined verbatim, since
  *  the engine's tokens carry their own spacing, and trimmed. The byline
- *  (unit and source) and departure tokens are left out. Empty for a
+ *  (unit and source), departure and assumption tokens are left out. Empty for a
  *  missing plan. */
 export function planSentenceText(plan: readonly SentenceToken[] | null | undefined): string {
     return (plan ?? [])

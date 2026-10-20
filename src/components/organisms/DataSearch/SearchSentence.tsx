@@ -40,6 +40,7 @@ import Button from '@/components/atoms/Button/Button';
 import { capitalise } from '@/lib/capitalise';
 import {
     answerDepartures,
+    assumptionClauses,
     isClosestMatch,
     refsStatedBesides,
     sentenceBlocks,
@@ -84,7 +85,7 @@ import {
     type UnitSwitch,
 } from '@/lib/search/measureMenu';
 import {
-    buildAmbiguousPickPart,
+    ambiguousPickPart,
     offersAmbiguousPicker,
     resolveTypedEdit,
 } from '@/lib/search/parsedEdit';
@@ -674,9 +675,11 @@ const lowerFirst = (text: string): string =>
 // The answer block over every part of the resolve response, from the
 // envelope's own composed `sentence_plan`: a muted "Closest match" lead when
 // a part shows the nearest measure, the heading tokens inside the page's one
-// <h1>, the byline (unit and source) in a <p> after it, and every part's
-// departures as a list, each with the one action it offers. The plan's own
-// departure tokens are skipped, since the list reads `parts[].departures`. A
+// <h1>, the byline (unit and source) in a <p> after it, every part's
+// departures as a list, each with the one action it offers, and the
+// assumptions clause ("Assumed: every provider.") in a closing <p>. The
+// plan's own departure tokens are skipped, since the list reads
+// `parts[].departures`. A
 // part-indexed what/how token routes its menu to that part's own spec; a
 // part-indexed where/when/source/role token routes to that same part's
 // slot, window, or provider menu; a shared where/when/source token (part_index
@@ -1831,9 +1834,10 @@ export const SearchSentenceHeading = ({
                 );
             }
 
-            // An entity_ambiguous pick pins the candidate's dcid onto the
-            // restatement entity whose text is the picked wording and posts
-            // a parsed entry, a no-op if no entity carries that text.
+            // An entity_ambiguous pick posts the refusal's option for it as
+            // a parsed entry, or pins the candidate's dcid onto the
+            // restatement entity whose text is the picked wording
+            // (ambiguousPickPart), a no-op if no entity carries that text.
             // Reachable only when the response carried ambiguous_entities
             // and a restatement to edit from. A wording the plan carries as
             // its own slot token opens a menu of the nodes it could name; a
@@ -1841,9 +1845,8 @@ export const SearchSentenceHeading = ({
             // wording on its what-token.
             if (wirePart.status === 'no_data' && offersAmbiguousPicker(wirePart)) {
                 const groups = wirePart.no_data.ambiguous_entities;
-                const restatement = wirePart.restatement;
                 const pick = (group: AmbiguousEntityGroup, candidate: AmbiguousEntityCandidate) => {
-                    const edited = buildAmbiguousPickPart(restatement, group.text, candidate);
+                    const edited = ambiguousPickPart(wirePart, group.text, candidate);
 
                     if (edited) onEditParsed(partIndex, edited);
                 };
@@ -1981,6 +1984,10 @@ export const SearchSentenceHeading = ({
 
     // Before the response lands the block is the <h1> alone.
     const answerParts = response ? parts : [];
+    const clauses = assumptionClauses(
+        rawPlan,
+        parts.map((part) => part.variableText ?? null),
+    );
     // A candidates part's lead sits above its reading cards instead.
     const closestParts = answerParts.filter(
         (part) => part.part?.status !== 'candidates' && isClosestMatch(part.part),
@@ -2101,6 +2108,17 @@ export const SearchSentenceHeading = ({
             </h1>
             {bylineNodes.length > 0 && <p className={styles.byline}>{bylineNodes}</p>}
             {departureItems.length > 0 && <DepartureList items={departureItems} />}
+            {clauses.length > 0 && (
+                <p className={styles.assumptions}>
+                    {clauses.map(({ key, prefix, text }) => (
+                        <span key={key}>
+                            {key > 0 && ' '}
+                            {prefix && `${prefix}: `}
+                            {text}
+                        </span>
+                    ))}
+                </p>
+            )}
         </>
     );
 };
@@ -2363,6 +2381,7 @@ export const SearchSentenceBody = ({
         variableText: part.variableText,
         spec: part.hydratedSpec,
         warnings: part.part?.warnings,
+        assumptions: part.part?.assumptions,
     }));
 
     return (

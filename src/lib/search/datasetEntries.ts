@@ -12,7 +12,9 @@
  * preserving posted candidate order. A no_data/unsupported part becomes a
  * `placeholder` entry, holding its position without asking the engine to
  * re-derive anything. Every entry, overrides included, carries its part's
- * `operations`, so an edit keeps what the question asked of the data.
+ * `operations`, so an edit keeps what the question asked of the data, and
+ * every identity entry carries its part's `assumptions` as the response gave
+ * them, so an edit that leaves a declared default's slot alone keeps it.
  */
 
 import type {
@@ -195,13 +197,24 @@ function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): Datase
     return { ...entry, operations };
 }
 
+/** An identity `entry` with its part's assumptions echoed, unchanged. The
+ *  engine decides which still hold after the edit. Every other entry kind,
+ *  and a part with none, leaves the entry as it is. */
+function withAssumptions(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
+    const assumptions = part.part?.assumptions;
+
+    if (entry.entry_kind !== 'identity' || !assumptions?.length) return entry;
+    return { ...entry, assumptions };
+}
+
 /**
  * Build the `entries` list for a `dataset_resubmit` post from the run's
  * current `parts`, in part order. With no override, every entry reflects
  * each part's own current content untouched: the shape a fresh post between
  * edits would carry. See `DatasetEntriesOverride` for what an edit changes;
- * pass an array to apply more than one, in order. Operations attach after
- * the overrides, so an edited entry keeps its part's operations too.
+ * pass an array to apply more than one, in order. Operations and
+ * assumptions attach after the overrides, so an edited entry keeps its
+ * part's too.
  */
 export function buildDatasetEntries(
     parts: HydratedPart[],
@@ -213,5 +226,5 @@ export function buildDatasetEntries(
         parts.map(entryForPart),
     );
 
-    return entries.map((entry, i) => withOperations(entry, parts[i]));
+    return entries.map((entry, i) => withAssumptions(withOperations(entry, parts[i]), parts[i]));
 }

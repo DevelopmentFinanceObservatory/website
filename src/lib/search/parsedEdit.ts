@@ -1,7 +1,8 @@
 /** Pure logic behind the parsed dataset_resubmit entry. A typed phrase edit
  *  rewrites one restatement field chosen from the token's axis/role (how has
- *  none, falling back to raw-text refineAt). An entity_ambiguous pick
- *  rewrites the restatement entity whose text matches the picked group.
+ *  none, falling back to raw-text refineAt). An entity_ambiguous pick posts
+ *  the refusal's own option for the pick (ambiguousPickPart), or rewrites
+ *  the restatement entity whose text matches the picked group.
  *  canPinEntityDcid gates a pinned dcid to only when the response itself
  *  carried ambiguous_entities, never invented from a candidate in hand some
  *  other way. */
@@ -129,6 +130,31 @@ export function offersAmbiguousPicker(part: unknown): part is AmbiguousPickerPar
         canPinEntityDcid(part.no_data) &&
         Boolean(part.restatement)
     );
+}
+
+/** The part an entity_ambiguous pick posts. It is the one-part request of
+ *  the refusal's option (`no_data.options`) that pins `candidate` on the
+ *  wording `groupText`, unchanged, when exactly one option does: that
+ *  request also pins every entity that resolved to one node. Otherwise,
+ *  as for an option asking for a group's members, which pins no dcid, it is
+ *  the restatement with the pick pinned (buildAmbiguousPickPart). */
+export function ambiguousPickPart(
+    part: { no_data: NoData; restatement: ParsedPart },
+    groupText: string,
+    candidate: AmbiguousEntityCandidate,
+): ParsedPart | null {
+    const pinned = (part.no_data.options ?? []).flatMap((option) => {
+        const [posted] = option.data_query.parts;
+        const pins = (posted?.entities ?? []).some(
+            (entity) => entity.text === groupText && entity.dcid === candidate.ref,
+        );
+
+        return option.mentions.includes(groupText) && pins && posted ? [posted] : [];
+    });
+
+    return pinned.length === 1
+        ? pinned[0]
+        : buildAmbiguousPickPart(part.restatement, groupText, candidate);
 }
 
 /** Rewrites the restatement entity whose text equals groupText to the

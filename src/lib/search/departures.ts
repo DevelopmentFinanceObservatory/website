@@ -1,26 +1,26 @@
-/** Pure logic behind the answer block: the heading and byline blocks of a
- *  sentence plan and the departures under them with the action each offers.
- *  No React. */
+/** Pure logic behind the answer block: the heading, byline and assumptions
+ *  blocks of a sentence plan and the departures under them with the action
+ *  each offers. No React. */
 
 import { offersStudioCallout } from './resultNotes.ts';
 import { tokenPart } from './sentencePlan.ts';
-import type { Departure, Part, SentenceToken } from './types.ts';
+import type { Departure, Part, SentenceSegment, SentenceToken } from './types.ts';
 
 export type SentenceBlock = {
-    segment: 'heading' | 'byline';
+    segment: Exclude<SentenceSegment, 'departure'>;
     tokens: SentenceToken[];
 };
 
 const isSpacing = (token: SentenceToken) => token.kind === 'text' && token.text.trim() === '';
 
-/** The plan's heading and byline as blocks, in plan order: each run of
- *  consecutive tokens in one segment is one block. Departure tokens are
- *  left out, since the departure list draws from `parts[].departures`, so
- *  heading runs a departure separated join into one block. A block's
- *  leading and trailing whitespace-only text tokens are the space between
- *  blocks and are dropped; a block left empty is dropped too. A plan of
- *  several separate sentences (one per part) reads heading, byline,
- *  heading, byline. */
+/** The plan's heading, byline and assumptions clause as blocks, in plan
+ *  order: each run of consecutive tokens in one segment is one block.
+ *  Departure tokens are left out, since the departure list draws from
+ *  `parts[].departures`, so heading runs a departure separated join into
+ *  one block. A block's leading and trailing whitespace-only text tokens are
+ *  the space between blocks and are dropped; a block left empty is dropped
+ *  too. A plan of several separate sentences (one per part) reads heading,
+ *  byline, assumption, heading, byline, assumption. */
 export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined): SentenceBlock[] {
     const blocks: SentenceBlock[] = [];
 
@@ -41,6 +41,41 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
             return { segment, tokens: start === -1 ? [] : tokens.slice(start, end + 1) };
         })
         .filter((block) => block.tokens.length > 0);
+}
+
+/** One assumptions clause the answer block draws after the byline and
+ *  departures: "Assumed: official development assistance; every provider." */
+export type AssumptionClause = {
+    key: number;
+    /** the part's variable text, set only when the plan holds a clause per
+     *  part */
+    prefix: string | null;
+    text: string;
+};
+
+/** The plan's assumptions clauses as text, in plan order: the one clause
+ *  of a joined sentence, or each part's own clause in a plan written part
+ *  by part, where each carries its part's variable text (`variableTexts`,
+ *  by part index) as `prefix`, as a per-part byline does. Empty when the
+ *  answer assumed nothing. */
+export function assumptionClauses(
+    plan: readonly SentenceToken[] | null | undefined,
+    variableTexts: readonly (string | null)[],
+): AssumptionClause[] {
+    const clauses = sentenceBlocks(plan).filter((block) => block.segment === 'assumption');
+    const partCount = variableTexts.length;
+
+    return clauses.map((block, key) => {
+        const owner = block.tokens
+            .map((token) => tokenPart(token, partCount))
+            .find((partIndex) => partIndex != null);
+
+        return {
+            key,
+            prefix: clauses.length > 1 && owner != null ? (variableTexts[owner] ?? null) : null,
+            text: block.tokens.map((token) => token.text).join(''),
+        };
+    });
 }
 
 /** What a departure's one action does: open the menu of the visible token
@@ -74,7 +109,7 @@ const isVisibleSlotOf = (
 
     return (
         token.kind === 'slot' &&
-        token.segment !== 'departure' &&
+        (token.segment === 'heading' || token.segment === 'byline') &&
         token.text.trim() !== '' &&
         (owner === partIndex || owner === null)
     );

@@ -128,6 +128,37 @@ test('foldReadings falls back to the summary heading and leaves other parts and 
     );
 });
 
+test("foldReadings keeps a candidates part's assumptions clause, and readingsSummary leaves it to the answer block", () => {
+    const clause = (text: string): SentenceToken => ({
+        kind: 'text',
+        text,
+        segment: 'assumption',
+        part_index: 0,
+    });
+    const plan = [
+        ...summaryPlan(0),
+        clause(' '),
+        clause('Assumed: '),
+        clause('every provider'),
+        clause('.'),
+    ];
+    const folded = foldReadings(plan, [
+        { status: 'candidates', variable_text: 'poverty reduction grants' },
+    ]);
+
+    assert.deepEqual(
+        folded.map((token) => [token.segment, token.text]),
+        [
+            ['heading', 'poverty reduction grants'],
+            ['assumption', ' '],
+            ['assumption', 'Assumed: '],
+            ['assumption', 'every provider'],
+            ['assumption', '.'],
+        ],
+    );
+    assert.equal(readingsSummary(plan), readingsSummary(summaryPlan(0)));
+});
+
 test('foldReadings returns the plan itself when no part is a candidates part', () => {
     const plan = [heading('Aid to Kenya.', 0)];
 

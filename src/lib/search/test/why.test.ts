@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { Warning } from '../types.ts';
+import type { Assumption, Warning } from '../types.ts';
 import { buildWhySummary, scopeAssumptions } from '../view.ts';
 
 // Trimmed from dev API answers: inflation in Pakistan (one variable) and ODA
@@ -64,6 +64,21 @@ const odaWarnings: Warning[] = [
     },
 ];
 
+// The assumption the ODA answer carries for the recipient role it left open.
+const openRecipients: Assumption = {
+    kind: 'open_role',
+    binding_ref: 'destination:',
+    refs: [],
+    text: 'every recipient',
+};
+
+const placeScope = (text: string): Assumption => ({
+    kind: 'place_scope',
+    binding_ref: 'where:',
+    refs: [],
+    text,
+});
+
 test('one variable: the Measure row carries its code and no Variables group appears', () => {
     const part = { warnings: [], variable_text: 'inflation' };
     const summary = buildWhySummary(inflation, part, inflationMembers);
@@ -79,7 +94,7 @@ test('one variable: the Measure row carries its code and no Variables group appe
         { label: 'Place', value: 'Pakistan' },
     ]);
     assert.equal(summary.variables, null);
-    assert.deepEqual(scopeAssumptions(inflation, []), []);
+    assert.deepEqual(scopeAssumptions(inflation, [], []), []);
     // Until the members door answers, the row names the measure without a code.
     assert.deepEqual(buildWhySummary(inflation, part).rows[0], {
         label: 'Measure',
@@ -99,8 +114,8 @@ test('many variables: rows name the role scope and the list reads the members do
         { label: 'Recipients', value: 'All 191 with data' },
     ]);
     // No time_window_defaulted on the wire: the headline's year_named says it.
-    assert.deepEqual(scopeAssumptions(oda, odaWarnings), [
-        'No recipient was named, so every recipient with data from Germany is included.',
+    assert.deepEqual(scopeAssumptions(oda, [openRecipients], odaWarnings), [
+        'The question left this role open, so the answer covers every recipient from Germany.',
         'No year was named, so the counts are for 2024, the latest year with data.',
     ]);
     assert.equal(summary.variables?.count, 1626);
@@ -337,8 +352,15 @@ test('one variable of a larger family: laid out as one variable, the family size
     }
 });
 
-test('each scope warning becomes one assumption sentence', () => {
-    const cases = [
+test('each assumption becomes one sentence, and each scope warning names its row', () => {
+    const cases: {
+        description: string;
+        spec: Record<string, unknown>;
+        codes: string[];
+        given: Assumption[];
+        row: { label: string; value: string };
+        assumptions: string[];
+    }[] = [
         {
             description: 'no place named',
             spec: {
@@ -354,10 +376,9 @@ test('each scope warning becomes one assumption sentence', () => {
                 },
             },
             codes: ['place_scope_defaulted'],
+            given: [placeScope('every place')],
             row: { label: 'Places', value: 'All 1,649 with data' },
-            assumptions: [
-                'No place was named, so every place with data is included, at every level.',
-            ],
+            assumptions: ['No place was named, so the answer covers every place.'],
         },
         {
             // Trimmed from the dev API's "population" answer, which it
@@ -377,8 +398,9 @@ test('each scope warning becomes one assumption sentence', () => {
                 },
             },
             codes: ['place_scope_defaulted'],
+            given: [placeScope('every country')],
             row: { label: 'Countries', value: 'All 216 with data' },
-            assumptions: ['No place was named, so every country with data is included.'],
+            assumptions: ['No place was named, so the answer covers every country.'],
         },
         {
             description: 'no provider named, the recipient bound',
@@ -389,9 +411,10 @@ test('each scope warning becomes one assumption sentence', () => {
                 coverage: { kind: 'breadth', dimensions: [{ label: 'providers', count: 36 }] },
             },
             codes: ['role_scope_defaulted'],
+            given: [{ ...openRecipients, binding_ref: 'origin:', text: 'every provider' }],
             row: { label: 'Providers', value: 'All 36 with data' },
             assumptions: [
-                'No provider was named, so every provider with data to Kenya is included.',
+                'The question left this role open, so the answer covers every provider to Kenya.',
                 'No year was named, so the counts are for 2024, the latest year with data.',
             ],
         },
@@ -399,6 +422,7 @@ test('each scope warning becomes one assumption sentence', () => {
             description: 'no year named, a broad answer counting its latest year',
             spec: oda,
             codes: ['time_window_defaulted'],
+            given: [],
             row: { label: 'Years', value: 'Latest is 2024' },
             assumptions: [
                 'No year was named, so the counts are for 2024, the latest year with data.',
@@ -408,22 +432,24 @@ test('each scope warning becomes one assumption sentence', () => {
             description: 'no year named, no headline year',
             spec: inflation,
             codes: ['time_window_defaulted'],
+            given: [],
             row: { label: 'Years', value: '2000 to 2022' },
             assumptions: ['No year was named, so every year with data is included.'],
         },
         {
-            description: 'a role warning with no open role on the spec keeps the API wording',
+            description:
+                'a role warning on a part that assumed nothing adds no sentence of its own',
             spec: { ...oda, entity_options: [] },
             codes: ['role_scope_defaulted'],
+            given: [],
             row: { label: 'Provider', value: 'Germany' },
             assumptions: [
-                'No recipient was named; the answer was resolved across the 191 recipients with data from Germany.',
                 'No year was named, so the counts are for 2024, the latest year with data.',
             ],
         },
     ];
 
-    for (const { description, spec, codes, row, assumptions } of cases) {
+    for (const { description, spec, codes, given, row, assumptions } of cases) {
         const warnings: Warning[] = codes.map(
             (code) =>
                 odaWarnings.find((warning) => warning.code === code) ?? {
@@ -438,7 +464,7 @@ test('each scope warning becomes one assumption sentence', () => {
             why.rows.some((r) => r.label === row.label && r.value === row.value),
             description,
         );
-        assert.deepEqual(scopeAssumptions(spec, warnings), assumptions, description);
+        assert.deepEqual(scopeAssumptions(spec, given, warnings), assumptions, description);
     }
 });
 
@@ -470,9 +496,9 @@ test('chosen: each facet axis gives its value and why, in source, method, unit o
     ]);
 });
 
-test('chosen: a slot a declared default filled follows the facets; other provenances add nothing', () => {
+test('a slot a declared default filled is stated once, as an assumption; no provenance adds a choice', () => {
     const filter = (provenance: string, label: string, ref: string) => ({
-        key: { axis: 'how', label },
+        key: { axis: 'how', property: { ref: label.replaceAll(' ', '') }, label },
         binding_kind: 'value',
         refs: [{ ref, label: ref }],
         provenance,
@@ -487,12 +513,20 @@ test('chosen: a slot a declared default filled follows the facets; other provena
         },
     };
 
-    assert.deepEqual(buildWhySummary(spec).chosen, [
-        {
-            label: 'Type of flow',
-            value: 'ODA',
-            reason: 'Filled in from the default for this measure.',
-        },
+    const defaulted: Assumption = {
+        kind: 'declared_default',
+        binding_ref: 'how:typeofflow',
+        refs: ['ODA'],
+        text: 'official development assistance',
+    };
+
+    assert.deepEqual(buildWhySummary(spec).chosen, []);
+    assert.deepEqual(scopeAssumptions(spec, [defaulted]), [
+        'No type of flow was named, so the answer uses official development assistance, the default for this measure.',
+    ]);
+    // A ref no slot names keeps the sentence without a label.
+    assert.deepEqual(scopeAssumptions(spec, [{ ...defaulted, binding_ref: 'how:other' }]), [
+        'The question left this open, so the answer uses official development assistance, the default for this measure.',
     ]);
 });
 

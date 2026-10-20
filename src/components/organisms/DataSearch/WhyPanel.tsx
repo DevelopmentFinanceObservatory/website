@@ -10,7 +10,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
-import type { Warning } from '@/lib/search/types';
+import type { Assumption, Warning } from '@/lib/search/types';
 import {
     buildWhySummary,
     formatCount,
@@ -151,6 +151,7 @@ export type AboutPart = {
     variableText: string | null;
     spec: Parameters<typeof buildWhySummary>[0];
     warnings?: Warning[];
+    assumptions?: Assumption[];
 };
 
 const AboutSection = ({
@@ -243,7 +244,7 @@ const AboutPartSection = ({
                 { warnings: part.warnings ?? [], variable_text: part.variableText },
                 members,
             )}
-            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec)}
+            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec, part.assumptions)}
         />
     );
 };

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     answerDepartures,
+    assumptionClauses,
     departureAction,
     isClosestMatch,
     refsStatedBesides,
@@ -10,6 +11,8 @@ import {
     statingTokenIndex,
 } from '../departures.ts';
 import { normalizeResponse } from '../searchClient.ts';
+import { planSentenceText } from '../sentencePlan.ts';
+import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
 import { servedAid } from './fixtures/served-options.ts';
@@ -61,6 +64,119 @@ test('sentenceBlocks joins heading runs a departure separated -- a no_data part 
         ['byline', 'Current US dollars · OECD Creditor Reporting System (CRS).'],
     ]);
     assert.deepEqual(sentenceBlocks(null), []);
+});
+
+// ---------------------------------------------------------------------------
+// The assumptions clause and the mixed-answer opener
+// ---------------------------------------------------------------------------
+
+const token = (
+    text: string,
+    segment: SentenceToken['segment'],
+    part_index?: number | null,
+): SentenceToken => ({ kind: 'text', text, segment, part_index });
+
+test('sentenceBlocks closes the plan with the assumptions clause, apart from the heading and byline', () => {
+    const plan = (fixtures['broad-truncated'] as { sentence_plan: SentenceToken[] }).sentence_plan;
+
+    assert.deepEqual(blockTexts(plan), [
+        ['heading', 'Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024.'],
+        ['byline', 'Current US dollars · OECD Creditor Reporting System (CRS).'],
+        ['assumption', 'Assumed: every donor.'],
+    ]);
+    assert.deepEqual(assumptionClauses(plan, ['ODA']), [
+        { key: 0, prefix: null, text: 'Assumed: every donor.' },
+    ]);
+    // The <h1>'s accessible name is the heading alone.
+    assert.equal(
+        planSentenceText(plan),
+        'Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024.',
+    );
+});
+
+test('the clause follows the departures, which the departure list draws', () => {
+    const plan = [
+        token('Aid to Kenya.', 'heading'),
+        token(' ', 'byline'),
+        token('OECD.', 'byline'),
+        token(' The data holds no values for 2024.', 'departure'),
+        token(' ', 'assumption'),
+        token('Assumed: ', 'assumption'),
+        token('official development assistance', 'assumption'),
+        token('; ', 'assumption'),
+        token('every provider', 'assumption'),
+        token('.', 'assumption'),
+    ];
+
+    assert.deepEqual(
+        blockTexts(plan).map(([segment]) => segment),
+        ['heading', 'byline', 'assumption'],
+    );
+    assert.deepEqual(assumptionClauses(plan, ['aid']), [
+        {
+            key: 0,
+            prefix: null,
+            text: 'Assumed: official development assistance; every provider.',
+        },
+    ]);
+});
+
+test("assumptionClauses names each part's own clause when the plan is written part by part", () => {
+    const sentence = (partIndex: number, item: string) => [
+        token('Aid.', 'heading', partIndex),
+        token(' ', 'byline', partIndex),
+        token('OECD.', 'byline', partIndex),
+        token(' ', 'assumption', partIndex),
+        token('Assumed: ', 'assumption', partIndex),
+        token(item, 'assumption', partIndex),
+        token('.', 'assumption', partIndex),
+    ];
+    const plan = [
+        ...sentence(0, 'every provider'),
+        token(' ', 'heading', null),
+        ...sentence(1, 'every country'),
+    ];
+
+    assert.deepEqual(assumptionClauses(plan, ['aid', 'debt']), [
+        { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+    // One joined clause over two parts, an item two parts share unowned, takes no prefix.
+    const joined = [
+        token('Aid and debt.', 'heading', null),
+        token(' ', 'assumption', null),
+        token('Assumed: ', 'assumption', null),
+        token('every provider', 'assumption', 0),
+        token('; ', 'assumption', null),
+        token('every country', 'assumption', null),
+        token('.', 'assumption', null),
+    ];
+
+    assert.deepEqual(assumptionClauses(joined, ['aid', 'debt']), [
+        { key: 0, prefix: null, text: 'Assumed: every provider; every country.' },
+    ]);
+    assert.deepEqual(assumptionClauses(null, []), []);
+});
+
+test("a mixed answer's opener reads as plain heading text before the first part's heading", () => {
+    const plan = [
+        token('Answered 1 of 2 parts.', 'heading', null),
+        token(' ', 'heading', null),
+        { kind: 'slot', text: 'Aid to Kenya', axis: 'what', segment: 'heading', part_index: 0 },
+        token('.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+    ] satisfies SentenceToken[];
+    const [heading] = sentenceBlocks(plan);
+
+    assert.deepEqual(
+        heading.tokens.slice(0, 2).map(({ kind, text }) => [kind, text]),
+        [
+            ['text', 'Answered 1 of 2 parts.'],
+            ['text', ' '],
+        ],
+    );
+    assert.equal(planSentenceText(plan), 'Answered 1 of 2 parts. Aid to Kenya.');
 });
 
 // ---------------------------------------------------------------------------

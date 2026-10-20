@@ -16,6 +16,7 @@ import type { OptionLike } from './pickerState.ts';
 import type { ApiError, EntityOption } from './searchClient';
 import type {
     AmbiguousEntityGroup,
+    Assumption,
     EntityOptions,
     EntityRoleKey,
     FacetBasis,
@@ -35,7 +36,7 @@ import type {
     UnitAlternative,
     Warning,
 } from './types';
-import { sentenceOf } from './searchClient.ts';
+import { keyRef, sentenceOf } from './searchClient.ts';
 import { unitWithBasis } from './unitLabel.ts';
 
 /** Display label of a slot/entity option, wherever the engine put it. */
@@ -1167,62 +1168,69 @@ const openRoles = (spec: any, codes: Set<string>): EntityRoleKey[] => {
     return open;
 };
 
-/** What a definite part's answer assumed, one sentence per scope the
- *  question left open: the place, an open provider or recipient role, and the
- *  year. "About this answer" reads this list (through resultNotes's
- *  aboutAnswerNotes). The year sentence keys on `headline.year_named`
- *  as well as `time_window_defaulted`, since a role-bearing answer can say
- *  no year was named without sending that warning. */
-export const scopeAssumptions = (spec: any, warnings?: readonly Warning[] | null): string[] => {
-    const codes = new Set((warnings ?? []).map((warning) => warning?.code));
-    const open = openRoles(spec, codes);
-    const assumptions: string[] = [];
+// The label of the slot `bindingRef` names on `spec` ("Type of flow"),
+// null when neither its trace nor its slots carry one.
+const slotLabelOf = (spec: any, bindingRef: string): string | null =>
+    [...(spec.resolution?.slot_filters ?? []), ...(spec.slots ?? [])].find(
+        (entry: any) => entry?.key && keyRef(entry.key) === bindingRef,
+    )?.key?.label ?? null;
 
-    if (codes.has('place_scope_defaulted')) {
-        assumptions.push(
-            placeScope(spec).noun === 'country'
-                ? 'No place was named, so every country with data is included.'
-                : 'No place was named, so every place with data is included, at every level.',
-        );
+const lowerFirst = (text: string): string =>
+    /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+
+// One assumption as the panel states it, in the words of its own `text`.
+const assumptionSentence = (spec: any, assumption: Assumption): string => {
+    const { kind, binding_ref: ref, text } = assumption;
+
+    if (kind === 'place_scope') return `No place was named, so the answer covers ${text}.`;
+
+    if (kind === 'open_role') {
+        const role = ref.split(':')[0];
+        const counterpart =
+            role === 'origin' ? 'destination' : role === 'destination' ? 'origin' : null;
+        const named = counterpart ? entityLabels(spec, counterpart) : [];
+        const scope = named.length
+            ? ` ${role === 'destination' ? 'from' : 'to'} ${orList(named)}`
+            : '';
+
+        return `The question left this role open, so the answer covers ${text}${scope}.`;
     }
 
-    if (codes.has('role_scope_defaulted')) {
-        const directional = open.filter((role) => role !== 'observationAbout');
+    const label = slotLabelOf(spec, ref);
 
-        for (const role of directional) {
-            const named = entityLabels(spec, role === 'origin' ? 'destination' : 'origin');
-            const noun = ROLE_WORDS[role].noun;
-            const scope = named.length
-                ? ` ${role === 'destination' ? 'from' : 'to'} ${orList(named)}`
-                : '';
+    return label
+        ? `No ${lowerFirst(label)} was named, so the answer uses ${text}, the default for this measure.`
+        : `The question left this open, so the answer uses ${text}, the default for this measure.`;
+};
 
-            assumptions.push(
-                `No ${noun} was named, so every ${noun} with data${scope} is included.`,
-            );
-        }
+/** What a definite part's answer assumed: one sentence per item of the
+ *  part's `assumptions` (a declared default, an open role, the place scope),
+ *  in the API's order, then the year. "About this answer" reads this list
+ *  (through resultNotes's aboutAnswerNotes). The year sentence keys on
+ *  `headline.year_named` as well as `time_window_defaulted`, since a
+ *  role-bearing answer can say no year was named without sending that
+ *  warning. */
+export const scopeAssumptions = (
+    spec: any,
+    assumptions: readonly Assumption[] | null | undefined,
+    warnings?: readonly Pick<Warning, 'code'>[] | null,
+): string[] => {
+    const sentences = (assumptions ?? []).map((assumption) => assumptionSentence(spec, assumption));
+    const yearDefaulted = (warnings ?? []).some(
+        (warning) => warning?.code === 'time_window_defaulted',
+    );
 
-        // The warning names no role, so with no open role to read it from,
-        // the API's own wording stands.
-        if (directional.length === 0) {
-            const message = warnings?.find((w) => w?.code === 'role_scope_defaulted')?.message;
-
-            if (message) {
-                assumptions.push(capitalise(message));
-            }
-        }
-    }
-
-    if (codes.has('time_window_defaulted') || spec.headline?.year_named === false) {
+    if (yearDefaulted || spec.headline?.year_named === false) {
         const year = spec.headline?.year;
 
-        assumptions.push(
+        sentences.push(
             year != null && spec.headline?.year_named === false
                 ? `No year was named, so the counts are for ${year}, the latest year with data.`
                 : 'No year was named, so every year with data is included.',
         );
     }
 
-    return assumptions;
+    return sentences;
 };
 
 // The values each axis lists before the rest are counted as "more".
@@ -1298,35 +1306,17 @@ const facetChoiceValue = (axis: string, facet: any): string | null => {
     return axis === 'measurementMethod' ? formatMethod(facet) : spaceCamel(raw);
 };
 
-// How each facet axis got its value (`resolved.facets[axis].basis`), then
-// each slot a declared default filled (`trace.slot_filters[].provenance`).
-const whyChoices = (spec: any): WhyChoice[] => {
-    const facets = FACET_CHOICE_AXES.flatMap(([axis, label]) => {
+// How each facet axis got its value (`resolved.facets[axis].basis`). A
+// slot a declared default filled is one of the part's `assumptions`, which
+// "What we assumed" states (scopeAssumptions).
+const whyChoices = (spec: any): WhyChoice[] =>
+    FACET_CHOICE_AXES.flatMap(([axis, label]) => {
         const facet = spec.facets?.[axis];
         const reason: string | undefined = facet && CHOICE_REASONS[facet.basis as FacetBasis];
         const value = reason ? facetChoiceValue(axis, facet) : null;
 
         return reason && value ? [{ label, value, reason }] : [];
     });
-    const slots = (spec.resolution?.slot_filters ?? []).flatMap((filter: any) => {
-        const value = (filter?.refs ?? [])
-            .map((ref: any) => ref?.label ?? ref?.ref)
-            .filter(Boolean)
-            .join(', ');
-
-        return filter?.provenance === 'declared_default' && value
-            ? [
-                  {
-                      label: capitalise(filter.key?.label ?? filter.key?.axis ?? 'Value'),
-                      value,
-                      reason: CHOICE_REASONS.declared_default,
-                  },
-              ]
-            : [];
-    });
-
-    return [...facets, ...slots];
-};
 
 // The licence label of the one source the answer serves, in words.
 const licenceText = (spec: any): string | null =>
@@ -2288,6 +2278,11 @@ export const flattenPartsRows = (
 const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
     source_not_resolved: "We couldn't match the data source named in that query.",
     source_ambiguous: 'More than one data source matches that wording. Try naming it in full.',
+    source_code_not_held: 'No source we search publishes that code for this question.',
+    source_code_ambiguous:
+        'More than one of the sources named publishes that code. Name the one you mean.',
+    source_code_shares_variable:
+        "That code's series also answer other codes of its source, so it can't be shown alone.",
     entity_not_resolved: "We couldn't match the place in that query.",
     entity_ambiguous: 'More than one place matches that wording. Try being more specific.',
     entity_set_too_large: 'That place has too many members for us to check them all at once.',

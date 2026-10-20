@@ -16,7 +16,7 @@ import {
     seriesPreviewCaptions,
     type SlotOptionsEntry,
 } from './view.ts';
-import type { Warning } from './types.ts';
+import type { Assumption, Warning } from './types.ts';
 
 const andList = (labels: string[]): string =>
     new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(labels);
@@ -45,12 +45,11 @@ export const CAPTION_WARNING_CODES: ReadonlySet<string> = new Set([
 /** Codes the download panel explains: what a download will hold. */
 export const DOWNLOAD_WARNING_CODES: ReadonlySet<string> = new Set(['membership_unverified']);
 
-/** Codes the "About this answer" panel explains: the scopes the question
- *  left open (read through view.ts's scopeAssumptions), and UN reads that
- *  failed. */
+/** Codes the "About this answer" panel explains: a year the question left
+ *  open (read through view.ts's scopeAssumptions), and UN reads that failed.
+ *  The place, role and slot defaults it states come from the part's
+ *  `assumptions`. */
 export const ABOUT_WARNING_CODES: ReadonlySet<string> = new Set([
-    'place_scope_defaulted',
-    'role_scope_defaulted',
     'time_window_defaulted',
     'un_system_unavailable',
 ]);
@@ -162,8 +161,8 @@ export type AboutAnswerNotes = {
     /** the coverage sentence ("2024 is the latest year with data, with 152
      *  values…"), null without a headline */
     coverage: string | null;
-    /** what the answer assumed, one sentence per scope the question left
-     *  open */
+    /** what the answer assumed, one sentence per item of the part's
+     *  `assumptions`, then the year when the question named none */
     assumptions: string[];
     /** one line per varying fact the measure menu cannot offer */
     variance: string[];
@@ -171,18 +170,19 @@ export type AboutAnswerNotes = {
     unavailable: string[];
 };
 
-/** The notes "About this answer" shows for one definite part. It reads
- *  only the warnings `ABOUT_WARNING_CODES` names. */
+/** The notes "About this answer" shows for one definite part: its
+ *  `assumptions` and the warnings `ABOUT_WARNING_CODES` names, no other. */
 export function aboutAnswerNotes(
     spec: MeasureMenuSpec,
     warnings: readonly Warning[] | null | undefined,
     optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>,
+    assumptions?: readonly Assumption[] | null,
 ): AboutAnswerNotes {
     const about = (warnings ?? []).filter((warning) => ABOUT_WARNING_CODES.has(warning.code));
 
     return {
         coverage: coverageSentence(spec),
-        assumptions: scopeAssumptions(spec, about),
+        assumptions: scopeAssumptions(spec, assumptions, about),
         variance: measureVarianceNotes(spec, optionsBySpec),
         unavailable: unSystemFailedReads(about),
     };
