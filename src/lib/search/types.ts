@@ -1485,9 +1485,9 @@ export interface NoData {
      * One ready request per choice of an entity_ambiguous, source_ambiguous,
      * source_code_ambiguous, role_not_resolved or unit_not_resolved refusal,
      * in query then candidate order; empty for every other reason. It can
-     * list fewer entries than the candidates. The site's entity pick pins
-     * the part's `restatement` instead (parsedEdit.ts's
-     * buildAmbiguousPickPart).
+     * list fewer entries than the candidates. The site's entity picker
+     * lists these options and posts the chosen one's part unchanged
+     * (parsedEdit.ts entityChoiceGroups).
      */
     options?: NoDataOption[];
     /** Terms the engine refused to silently drop before answering. Present

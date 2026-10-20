@@ -1,16 +1,12 @@
 /** Pure logic behind the parsed dataset_resubmit entry. A typed phrase edit
  *  rewrites one restatement field chosen from the token's axis/role (how has
  *  none, falling back to raw-text refineAt). An entity_ambiguous pick posts
- *  the refusal's own option for the pick (ambiguousPickPart), or rewrites
- *  the restatement entity whose text matches the picked group.
- *  canPinEntityDcid gates a pinned dcid to only when the response itself
- *  carried ambiguous_entities, never invented from a candidate in hand some
- *  other way. */
+ *  one of the refusal's own options (`no_data.options`) unchanged
+ *  (entityChoiceGroups, entityChoicePart). */
 
 import type {
-    AmbiguousEntityCandidate,
-    AmbiguousEntityGroup,
     NoData,
+    NoDataOption,
     ParsedPart,
     ParsedPartEntity,
     RoleAxis,
@@ -102,75 +98,40 @@ export function resolveTypedEdit(
     return applyRestatementEdit(restatement, target, text);
 }
 
-export function canPinEntityDcid(
-    noData: NoData | null | undefined,
-): noData is NoData & { ambiguous_entities: AmbiguousEntityGroup[] } {
-    return Boolean(noData?.ambiguous_entities?.length);
+/** One ambiguous wording of an entity_ambiguous refusal and the options
+ *  that settle it (`no_data.options` whose `mentions` hold the wording), in
+ *  the order the refusal lists them. */
+export type EntityChoiceGroup = { text: string; options: NoDataOption[] };
+
+/** The refusal's options grouped by the wording each settles, wordings in
+ *  the order their first option comes. An option settling two wordings
+ *  stands in both groups. Empty for every reason but entity_ambiguous. */
+export function entityChoiceGroups(noData: NoData | null | undefined): EntityChoiceGroup[] {
+    if (noData?.reason !== 'entity_ambiguous') return [];
+
+    const groups = new Map<string, NoDataOption[]>();
+
+    for (const option of noData.options ?? []) {
+        for (const text of option.mentions) {
+            groups.set(text, [...(groups.get(text) ?? []), option]);
+        }
+    }
+
+    return [...groups].map(([text, options]) => ({ text, options }));
 }
 
-type AmbiguousPickerPart = { no_data?: NoData | null; restatement?: ParsedPart | null };
+/** The part an entity choice posts: its option's one-part request,
+ *  unchanged. Null for an option carrying no part. */
+export const entityChoicePart = (option: NoDataOption): ParsedPart | null =>
+    option.data_query.parts[0] ?? null;
 
-const hasAmbiguousPickerShape = (part: unknown): part is AmbiguousPickerPart =>
-    typeof part === 'object' && part !== null;
-
-/** Whether a no_data part renders SearchCards' "Choose a Match" picker
- *  rather than a generic Studio hand-off panel: an entity_ambiguous reason,
- *  a response that itself carried ambiguous_entities (canPinEntityDcid), and
- *  a restatement to pin the pick onto. The one gate SearchCards and
- *  studioHandoffParts must agree on, so a picker-eligible part always keeps
+/** Whether a no_data part renders a "Choose a Match" picker rather than a
+ *  generic Studio hand-off panel: an entity_ambiguous refusal with at least
+ *  one option (entityChoiceGroups). The one gate SearchCards, SearchSentence
+ *  and studioHandoffParts agree on, so a picker-eligible part always keeps
  *  its own picker instead of collapsing into the generic studio callout. */
-export function offersAmbiguousPicker(part: unknown): part is AmbiguousPickerPart & {
-    no_data: NoData & { ambiguous_entities: AmbiguousEntityGroup[] };
-    restatement: ParsedPart;
-} {
-    if (!hasAmbiguousPickerShape(part)) return false;
+export function offersAmbiguousPicker(part: unknown): part is { no_data: NoData } {
+    if (typeof part !== 'object' || part === null) return false;
 
-    return (
-        part.no_data?.reason === 'entity_ambiguous' &&
-        canPinEntityDcid(part.no_data) &&
-        Boolean(part.restatement)
-    );
-}
-
-/** The part an entity_ambiguous pick posts. It is the one-part request of
- *  the refusal's option (`no_data.options`) that pins `candidate` on the
- *  wording `groupText`, unchanged, when exactly one option does: that
- *  request also pins every entity that resolved to one node. Otherwise,
- *  as for an option asking for a group's members, which pins no dcid, it is
- *  the restatement with the pick pinned (buildAmbiguousPickPart). */
-export function ambiguousPickPart(
-    part: { no_data: NoData; restatement: ParsedPart },
-    groupText: string,
-    candidate: AmbiguousEntityCandidate,
-): ParsedPart | null {
-    const pinned = (part.no_data.options ?? []).flatMap((option) => {
-        const [posted] = option.data_query.parts;
-        const pins = (posted?.entities ?? []).some(
-            (entity) => entity.text === groupText && entity.dcid === candidate.ref,
-        );
-
-        return option.mentions.includes(groupText) && pins && posted ? [posted] : [];
-    });
-
-    return pinned.length === 1
-        ? pinned[0]
-        : buildAmbiguousPickPart(part.restatement, groupText, candidate);
-}
-
-/** Rewrites the restatement entity whose text equals groupText to the
- *  candidate's label, pinned with its dcid. Returns null when no entity
- *  matches (the invariant broken), which the caller must treat as a no-op
- *  rather than re-confirming the same ambiguity. */
-export function buildAmbiguousPickPart(
-    restatement: ParsedPart,
-    groupText: string,
-    candidate: AmbiguousEntityCandidate,
-): ParsedPart | null {
-    const entities = restatement.entities ?? [];
-    const index = entities.findIndex((entity) => entity.text === groupText);
-    if (index === -1) return null;
-
-    const updated = entities.slice();
-    updated[index] = { ...updated[index], text: candidate.label, dcid: candidate.ref };
-    return { ...restatement, entities: updated };
+    return entityChoiceGroups((part as { no_data?: NoData | null }).no_data).length > 0;
 }

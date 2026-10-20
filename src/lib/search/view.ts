@@ -11,11 +11,12 @@ import { spaceCamel } from '../spaceCamel.ts';
 import type { MemberRef, MembersRead } from './definitionMembers.ts';
 import { coverageRichness, coverageState, partitionOptions } from './optionCoverage.ts';
 import type { OperationProgress } from './operationPoll';
+import { entityChoiceGroups } from './parsedEdit.ts';
+import type { EntityChoiceGroup } from './parsedEdit.ts';
 import { entityOptionDcid } from './pickerState.ts';
 import type { OptionLike } from './pickerState.ts';
 import type { ApiError, EntityOption } from './searchClient';
 import type {
-    AmbiguousEntityGroup,
     Assumption,
     EntityOptions,
     EntityRoleKey,
@@ -2478,7 +2479,7 @@ const ambiguousEntityNoun = (restatement: ParsedPart | null | undefined, text: s
 export const ambiguousEntityMenuTitle = (
     part: { no_data?: NoData | null; restatement?: ParsedPart | null } | null | undefined,
 ): string => {
-    const groups = part?.no_data?.ambiguous_entities ?? [];
+    const groups = entityChoiceGroups(part?.no_data);
 
     if (groups.length === 0) {
         return 'Select Place';
@@ -2492,27 +2493,27 @@ export const ambiguousEntityMenuTitle = (
 };
 
 /**
- * The ambiguous wording an entity_ambiguous part's slot token renders, or
- * null for any other token. The engine marks each wording as a `slot` token
- * with no `entity_refs` or `binding_ref`, the role the request gave it, and
- * text equal to one `no_data.ambiguous_entities` group's text (dfo-apis
- * search/render/no_data.py). The part's own variable slot is never one.
+ * The ambiguous wording an entity_ambiguous part's slot token renders, with
+ * the options that settle it (entityChoiceGroups), or null for any other
+ * token. The engine marks each wording as a `slot` token with no
+ * `entity_refs` or `binding_ref`, the role the request gave it, and text
+ * equal to the wording (dfo-apis search/render/no_data.py). The part's own
+ * variable slot is never one.
  */
 export const ambiguousWordingGroup = (
     token: SentenceToken,
     noData: NoData | null | undefined,
-): AmbiguousEntityGroup | null => {
+): EntityChoiceGroup | null => {
     if (
         token.kind !== 'slot' ||
         token.axis === 'what' ||
         token.binding_ref ||
-        token.entity_refs?.length ||
-        noData?.reason !== 'entity_ambiguous'
+        token.entity_refs?.length
     ) {
         return null;
     }
 
-    return noData.ambiguous_entities?.find((group) => group.text === token.text) ?? null;
+    return entityChoiceGroups(noData).find((group) => group.text === token.text) ?? null;
 };
 
 // Values render exactly as the engine sent them — US-style separators,

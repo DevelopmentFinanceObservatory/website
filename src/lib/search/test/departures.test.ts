@@ -170,6 +170,63 @@ test("assumptionClauses names each part's own clause when the plan is written pa
     assert.deepEqual(assumptionClauses(null, []), []);
 });
 
+test('assumptionClauses labels a clause by the owner of its lead token', () => {
+    // A definite part beside a candidates part: one byline, two owned clauses.
+    const definiteAndCandidates = [
+        token('Answered 1 of 2 parts.', 'heading', null),
+        token(' ', 'heading', null),
+        token('Aid to Kenya', 'heading', 0),
+        token('.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+        token(' ', 'assumption', 0),
+        token('Assumed: ', 'assumption', 0),
+        token('every provider', 'assumption', 0),
+        token('.', 'assumption', 0),
+        token(' ', 'heading', null),
+        token('debt', 'heading', 1),
+        token(' ', 'assumption', 1),
+        token('Assumed: ', 'assumption', 1),
+        token('every country', 'assumption', 1),
+        token('.', 'assumption', 1),
+    ];
+
+    assert.deepEqual(assumptionClauses(definiteAndCandidates, ['aid', 'debt']), [
+        { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+    // Parts 0 and 1 fold into one sentence: the folded clause's lead has no owner, though
+    // one of its items is part 1's, so only part 2's clause takes a label.
+    const folded = [
+        token('Aid to Kenya.', 'heading', null),
+        token(' ', 'byline', null),
+        token('OECD.', 'byline', null),
+        token(' ', 'assumption', null),
+        token('Assumed: ', 'assumption', null),
+        token('official development assistance', 'assumption', null),
+        token('; ', 'assumption', null),
+        token('every provider', 'assumption', 1),
+        token('.', 'assumption', null),
+        token(' ', 'heading', null),
+        token('Debt.', 'heading', 2),
+        token(' ', 'byline', 2),
+        token('World Bank.', 'byline', 2),
+        token(' ', 'assumption', 2),
+        token('Assumed: ', 'assumption', 2),
+        token('every country', 'assumption', 2),
+        token('.', 'assumption', 2),
+    ];
+
+    assert.deepEqual(assumptionClauses(folded, ['aid', 'aid to Uganda', 'debt']), [
+        {
+            key: 0,
+            prefix: null,
+            text: 'Assumed: official development assistance; every provider.',
+        },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+});
+
 test("a mixed answer's opener reads as plain heading text before the first part's heading", () => {
     const plan = [
         token('Answered 1 of 2 parts.', 'heading', null),

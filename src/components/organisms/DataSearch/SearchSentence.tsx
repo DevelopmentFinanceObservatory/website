@@ -60,13 +60,12 @@ import { spliceSentence } from '@/lib/search/refine';
 import { keyRef } from '@/lib/search/searchClient';
 import { planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
 import type {
-    AmbiguousEntityCandidate,
-    AmbiguousEntityGroup,
     EntityRoleKey,
     GraphRef,
     HydratedPart,
     IdentityFacetAxis,
     IdentityFacets,
+    NoDataOption,
     ParsedPart,
     MeasureAxisValue,
     RoleAxis,
@@ -85,7 +84,8 @@ import {
     type UnitSwitch,
 } from '@/lib/search/measureMenu';
 import {
-    ambiguousPickPart,
+    entityChoiceGroups,
+    entityChoicePart,
     offersAmbiguousPicker,
     resolveTypedEdit,
 } from '@/lib/search/parsedEdit';
@@ -1834,21 +1834,17 @@ export const SearchSentenceHeading = ({
                 );
             }
 
-            // An entity_ambiguous pick posts the refusal's option for it as
-            // a parsed entry, or pins the candidate's dcid onto the
-            // restatement entity whose text is the picked wording
-            // (ambiguousPickPart), a no-op if no entity carries that text.
-            // Reachable only when the response carried ambiguous_entities
-            // and a restatement to edit from. A wording the plan carries as
-            // its own slot token opens a menu of the nodes it could name; a
-            // part whose plan carries none opens one menu over every
-            // wording on its what-token.
+            // An entity_ambiguous pick posts the refusal's option for it
+            // unchanged as a parsed entry (entityChoicePart). A wording the
+            // plan carries as its own slot token opens a menu of the options
+            // that settle it; a part whose plan carries none opens one menu
+            // over every wording on its what-token.
             if (wirePart.status === 'no_data' && offersAmbiguousPicker(wirePart)) {
-                const groups = wirePart.no_data.ambiguous_entities;
-                const pick = (group: AmbiguousEntityGroup, candidate: AmbiguousEntityCandidate) => {
-                    const edited = ambiguousPickPart(wirePart, group.text, candidate);
+                const groups = entityChoiceGroups(wirePart.no_data);
+                const pick = (option: NoDataOption) => {
+                    const posted = entityChoicePart(option);
 
-                    if (edited) onEditParsed(partIndex, edited);
+                    if (posted) onEditParsed(partIndex, posted);
                 };
 
                 if (wording) {
@@ -1863,13 +1859,13 @@ export const SearchSentenceHeading = ({
                             )}
                             marked
                         >
-                            {wording.candidates.map((candidate) => (
+                            {wording.options.map((option, optionIndex) => (
                                 <DropdownMenu.Item
-                                    key={candidate.ref}
+                                    key={optionIndex}
                                     asChild
-                                    onSelect={() => pick(wording, candidate)}
+                                    onSelect={() => pick(option)}
                                 >
-                                    <OptionRow>{candidate.label}</OptionRow>
+                                    <OptionRow>{option.label}</OptionRow>
                                 </DropdownMenu.Item>
                             ))}
                         </SlotMenu>,
@@ -1886,16 +1882,16 @@ export const SearchSentenceHeading = ({
                             marked
                         >
                             {groups.flatMap((group) =>
-                                group.candidates.map((candidate) => (
+                                group.options.map((option, optionIndex) => (
                                     <DropdownMenu.Item
-                                        key={`${group.text}:${candidate.ref}`}
+                                        key={`${group.text}:${optionIndex}`}
                                         asChild
-                                        onSelect={() => pick(group, candidate)}
+                                        onSelect={() => pick(option)}
                                     >
                                         {/* Two ambiguous wordings share one
                                             menu, each row naming its own. */}
                                         <OptionRow detail={groups.length > 1 ? group.text : null}>
-                                            {candidate.label}
+                                            {option.label}
                                         </OptionRow>
                                     </DropdownMenu.Item>
                                 )),

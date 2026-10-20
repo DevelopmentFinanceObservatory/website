@@ -6,7 +6,11 @@ import classNames from 'classnames';
 import styles from './DataSearch.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
-import { ambiguousPickPart, offersAmbiguousPicker } from '@/lib/search/parsedEdit';
+import {
+    entityChoiceGroups,
+    entityChoicePart,
+    offersAmbiguousPicker,
+} from '@/lib/search/parsedEdit';
 import {
     cardText,
     coverageSummary,
@@ -110,35 +114,30 @@ const SearchCards = ({
     }
 
     if (part?.status === 'no_data') {
-        // The single-part escape hatch for entity_ambiguous picking (see
-        // module doc). A pick posts the refusal's option for it as a parsed
-        // entry, or pins the candidate's dcid onto the matching restatement
-        // entity (ambiguousPickPart), a no-op if no entity matches.
+        // The entity_ambiguous picker of a part with no slot token to hang
+        // it off. A pick posts the refusal's option for it unchanged as a
+        // parsed entry (entityChoicePart).
         if (offersAmbiguousPicker(part) && onEditParsed && partIndex !== undefined) {
-            const groups = part.no_data.ambiguous_entities ?? [];
+            const groups = entityChoiceGroups(part.no_data);
 
             return (
                 <div className={styles.cardsBlock}>
                     <p className={styles.cardsTitle}>Choose a Match</p>
                     <div className={styles.cards}>
-                        {groups.flatMap((group: any) =>
-                            group.candidates.map((candidate: any, index: number) => (
+                        {groups.flatMap((group) =>
+                            group.options.map((option, index) => (
                                 <button
-                                    key={`${group.text}:${candidate.ref}`}
+                                    key={`${group.text}:${index}`}
                                     type="button"
                                     className={styles.card}
                                     style={{ '--i': index } as React.CSSProperties}
                                     onClick={() => {
-                                        const edited = ambiguousPickPart(
-                                            part,
-                                            group.text,
-                                            candidate,
-                                        );
+                                        const posted = entityChoicePart(option);
 
-                                        if (edited) onEditParsed(partIndex, edited);
+                                        if (posted) onEditParsed(partIndex, posted);
                                     }}
                                 >
-                                    <span className={styles.cardTitle}>{candidate.label}</span>
+                                    <span className={styles.cardTitle}>{option.label}</span>
                                 </button>
                             )),
                         )}

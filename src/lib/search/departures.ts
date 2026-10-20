@@ -47,38 +47,37 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
  *  departures: "Assumed: official development assistance; every provider." */
 export type AssumptionClause = {
     key: number;
-    /** the part's variable text, set only when the plan holds a clause per
-     *  part */
+    /** the variable text of the part the clause belongs to, set only in a
+     *  response of several parts */
     prefix: string | null;
     text: string;
 };
 
-/** The plan's assumptions clauses as text, in plan order: the one clause
- *  of a joined sentence, or each part's own clause in a plan written part
- *  by part (one byline per part), where each carries its part's variable
- *  text (`variableTexts`, by part index) as `prefix`, as that part's byline
- *  does, whether or not the other parts state a clause. Empty when the
- *  answer assumed nothing. */
+/** The plan's assumptions clauses as text, in plan order. In a response of
+ *  several parts a clause carries as `prefix` the variable text
+ *  (`variableTexts`, by part index) of the part that owns its lead token
+ *  ("Assumed: "). dfo-apis' render/envelope.py `_clause` gives the lead to
+ *  the one part every item of the clause belongs to, or to no part when the
+ *  items' owners differ, so a clause naming several parts' items carries no
+ *  prefix. Empty when the answer assumed nothing. */
 export function assumptionClauses(
     plan: readonly SentenceToken[] | null | undefined,
     variableTexts: readonly (string | null)[],
 ): AssumptionClause[] {
-    const blocks = sentenceBlocks(plan);
-    const clauses = blocks.filter((block) => block.segment === 'assumption');
-    const perPart = blocks.filter((block) => block.segment === 'byline').length > 1;
     const partCount = variableTexts.length;
 
-    return clauses.map((block, key) => {
-        const owner = block.tokens
-            .map((token) => tokenPart(token, partCount))
-            .find((partIndex) => partIndex != null);
+    return sentenceBlocks(plan)
+        .filter((block) => block.segment === 'assumption')
+        .map((block, key) => {
+            const lead = block.tokens[0];
+            const owner = partCount > 1 && lead ? tokenPart(lead, partCount) : null;
 
-        return {
-            key,
-            prefix: perPart && owner != null ? (variableTexts[owner] ?? null) : null,
-            text: block.tokens.map((token) => token.text).join(''),
-        };
-    });
+            return {
+                key,
+                prefix: owner != null ? (variableTexts[owner] ?? null) : null,
+                text: block.tokens.map((token) => token.text).join(''),
+            };
+        });
 }
 
 /** What a departure's one action does: open the menu of the visible token

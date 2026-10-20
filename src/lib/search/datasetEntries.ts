@@ -12,12 +12,14 @@
  * preserving posted candidate order. A no_data/unsupported part becomes a
  * `placeholder` entry, holding its position without asking the engine to
  * re-derive anything. Every entry, overrides included, carries its part's
- * `operations`, so an edit keeps what the question asked of the data, and
+ * `operations`, so an edit keeps what the question asked of the data (a
+ * `parsed` entry's part carries its own), and
  * every identity entry carries its part's `assumptions` as the response gave
  * them, so an edit that leaves a declared default's slot alone keeps it.
  */
 
 import type {
+    Assumption,
     BaseIdentity,
     DatasetCandidateIdentity,
     DatasetCandidatesEntry,
@@ -67,10 +69,13 @@ export type SharedEntryRef = {
     identity: unknown;
     entityGroups: Record<string, EntityGroup> | null;
     operations: Operation[];
+    assumptions: Assumption[] | null;
 };
 
 /** The `identity` entry a stored share part replays: the identity as
- *  stored, its groups beside it, and the operations its question asked. */
+ *  stored, its groups beside it, the operations its question asked, and
+ *  the assumptions its response gave, [] included. A share stored before
+ *  assumptions were kept posts none. */
 export function sharedRefEntry(ref: SharedEntryRef): DatasetIdentityEntry {
     return {
         entry_kind: 'identity',
@@ -78,6 +83,7 @@ export function sharedRefEntry(ref: SharedEntryRef): DatasetIdentityEntry {
         identity: ref.identity as BaseIdentity,
         ...specEntityGroups({ entity_groups: ref.entityGroups }),
         ...(ref.operations.length ? { operations: ref.operations } : {}),
+        ...(ref.assumptions ? { assumptions: ref.assumptions } : {}),
     };
 }
 
@@ -185,15 +191,14 @@ function applyOverride(
     });
 }
 
-/** `entry` with its part's operations attached: on the entry itself, or on
- *  a `parsed` entry's `part`. A part with none leaves the entry as it is. */
+/** `entry` with its part's operations attached. A `parsed` entry posts its
+ *  `part` unchanged, since that part (a refusal option's request or an
+ *  edited restatement) carries its own operations. A part with none leaves
+ *  the entry as it is. */
 function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
     const operations = part.part?.operations;
 
-    if (!operations?.length) return entry;
-    if (entry.entry_kind === 'parsed') {
-        return { ...entry, part: { ...entry.part, operations } };
-    }
+    if (!operations?.length || entry.entry_kind === 'parsed') return entry;
     return { ...entry, operations };
 }
 

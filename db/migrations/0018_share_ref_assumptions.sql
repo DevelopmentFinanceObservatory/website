@@ -1,0 +1,1 @@
+ALTER TABLE "share_ref" ADD COLUMN "assumptions" jsonb;

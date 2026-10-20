@@ -105,6 +105,9 @@ export const shareRef = pgTable(
         // Null for a live share and for snapshots stored before the column.
         artifactDigest: text('artifact_digest'),
         operations: jsonb('operations').notNull().default([]),
+        // The part's assumptions as the response gave them, [] included,
+        // which the replay echoes. Null for a share stored before the column.
+        assumptions: jsonb('assumptions'),
     },
     (table) => [primaryKey({ columns: [table.shareId, table.partIndex] })],
 );
