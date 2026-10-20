@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import { limiterBucket } from '../proxy/caller.ts';
 import { countHit, refundHit, type CounterDb } from '../proxy/limitCounter.ts';
+import { inboxOf } from './inbox.ts';
 
 /**
  * Caps on sign-in codes sent, counted in the shared limiter
@@ -21,24 +22,6 @@ export const CODE_LIMITS = {
     network: 20,
     windowS: 60 * 60,
 } as const;
-
-const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
-
-/**
- * The address as the cap counts it: lower-case and without a `+tag`, and
- * for Gmail also without dots, since each of those variants reaches the
- * same inbox.
- */
-export const inboxOf = (email: string): string => {
-    const normalised = email.trim().toLowerCase();
-    const at = normalised.lastIndexOf('@');
-    const domain = normalised.slice(at + 1);
-    const local = normalised.slice(0, at).split('+')[0]!;
-
-    return GMAIL_DOMAINS.has(domain)
-        ? `${local.replaceAll('.', '')}@gmail.com`
-        : `${local}@${domain}`;
-};
 
 export type CodeLimitKey = { key: string; max: number };
 

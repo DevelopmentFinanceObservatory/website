@@ -1,12 +1,13 @@
 /**
- * `codeLimit.ts` without a database: which inbox an address counts as and
- * the keys a send counts against. takeCodeAllowance runs against Postgres in
- * db/test/limit-counter.test.ts.
+ * `codeLimit.ts` without a database: which inbox an address counts as
+ * (`inbox.ts`) and the keys a send counts against. takeCodeAllowance runs
+ * against Postgres in db/test/limit-counter.test.ts.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CODE_LIMITS, codeLimitKeys, inboxOf } from '../codeLimit.ts';
+import { CODE_LIMITS, codeLimitKeys } from '../codeLimit.ts';
+import { inboxOf } from '../inbox.ts';
 
 for (const [email, inbox] of [
     ['Ana.Silva@Finance.gov.br', 'ana.silva@finance.gov.br'],

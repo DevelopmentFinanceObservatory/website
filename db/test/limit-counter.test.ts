@@ -174,20 +174,29 @@ test('limit counters and Studio prompt allowances', async (t) => {
         assert.equal(rows[0]?.count, GUEST_PROMPTS + 1);
     });
 
-    await t.test('a signed-in user past the daily allowance is refused', async () => {
+    await t.test('a signed-in inbox past the daily allowance is refused', async () => {
         // Signing in after the guest wall opens the user's own allowance.
-        assert.equal(await spendPrompt(db, { userId: 'user-a' }), null);
+        assert.equal(await spendPrompt(db, { email: 'ana.silva@gmail.com' }), null);
 
+        // An email code makes an account per spelling of one address; the
+        // spellings draw on one allowance.
         for (let i = 1; i < USER_DAILY_PROMPTS; i++) {
-            await spendPrompt(db, { userId: 'user-a' });
+            await spendPrompt(db, {
+                email: i % 2 ? 'AnaSilva+dfo@gmail.com' : 'ana.silva@googlemail.com',
+            });
         }
 
-        const refusal = await spendPrompt(db, { userId: 'user-a' });
+        const refusal = await spendPrompt(db, { email: 'a.n.a.silva@gmail.com' });
 
         assert.equal(refusal?.error, 'resource_exhausted');
         assert.equal(refusal?.retry, 'retry_after_delay');
         assert.ok(refusal!.retry_after_seconds! > 0 && refusal!.retry_after_seconds! <= DAY_S);
-        assert.equal(await spendPrompt(db, { userId: 'user-b' }), null);
+        assert.equal(await spendPrompt(db, { email: 'ana.silva2@gmail.com' }), null);
+
+        const { rows } = await admin.query<{ n: number }>(
+            `select count(*)::int as n from limit_counter where key like 'studio-user:%@%'`,
+        );
+        assert.equal(rows[0]?.n, 0, 'a signed-in key holds no email address');
     });
 
     await t.test(

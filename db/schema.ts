@@ -225,7 +225,7 @@ export type EventRow = typeof event.$inferSelect;
  * One counter per limiter key (src/lib/proxy/limitCounter): the per-address
  * limits on /api and /mcp, the Studio's daily prompt allowances and the
  * hourly caps on sign-in codes sent. `key` names the allowance and the
- * caller (`api:203.0.113.7`, `studio-user:<user id>`,
+ * caller (`api:203.0.113.7`, `studio-user:<inbox digest>`,
  * `sign-in-code:<digest>`); `count` is the hits in the window that started
  * at `windowStart`. The next hit after the window ends starts the row over,
  * and rows idle for two days are deleted.
