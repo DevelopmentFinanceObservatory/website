@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildDatasetEntries, sharedRefEntry } from '../datasetEntries.ts';
+import { buildDatasetEntries, candidatePickEntry, sharedRefEntry } from '../datasetEntries.ts';
 import { withEntityEdit } from '../promote.ts';
 import { normalizeResponse, restorePlaceholderParts } from '../searchClient.ts';
 import type {
+    Assumption,
+    DatasetCandidatesEntry,
     DatasetIdentityEntry,
     DatasetParsedEntry,
     HydratedPart,
@@ -131,6 +133,17 @@ test('buildDatasetEntries echoes an empty assumptions list, which states none', 
     assert.deepEqual(entry.assumptions, []);
 });
 
+test('an identity edit of a no_data part posts no echo, so the edit reads fresh', () => {
+    const [own] = buildDatasetEntries(hydratedParts('definite-single')) as DatasetIdentityEntry[];
+    const [refused] = hydratedParts('entity-ambiguous');
+    const stated: HydratedPart = { ...refused, part: { ...refused.part!, assumptions: [] } };
+    const override: DatasetIdentityEntry = { ...own, assumptions: undefined };
+    const [entry] = buildDatasetEntries([stated], { index: 0, entry: override });
+
+    assert.equal(stated.part?.status, 'no_data');
+    assert.equal((entry as DatasetIdentityEntry).assumptions, undefined);
+});
+
 test('buildDatasetEntries leaves assumptions off a response without them and off every other entry kind', () => {
     const [definite] = buildDatasetEntries(hydratedParts('definite-single'));
     const [candidates] = hydratedParts('multi-candidate');
@@ -146,6 +159,90 @@ test('buildDatasetEntries leaves assumptions off a response without them and off
 
     assert.equal('assumptions' in definite, false);
     assert.equal('assumptions' in buildDatasetEntries([assumed])[0], false);
+});
+
+const everyPlace: Assumption = {
+    kind: 'place_scope',
+    binding_ref: 'where:',
+    refs: [],
+    text: 'every place',
+};
+const everyProvider: Assumption = {
+    kind: 'open_role',
+    binding_ref: 'origin:',
+    refs: [],
+    text: 'every provider',
+};
+
+/** The multi-candidate part with `reading_assumptions` as given: the first
+ *  reading reads an open role the second lacks, so the part's own list holds
+ *  only the place scope both share. */
+function candidatesWithReadings(
+    readings: (specIds: string[]) => Record<string, Assumption[]> | undefined,
+): HydratedPart {
+    const [part] = hydratedParts('multi-candidate');
+    const specIds = part.part!.candidates!.specs.map((spec) => spec.spec_id);
+
+    return {
+        ...part,
+        part: {
+            ...part.part!,
+            assumptions: [everyPlace],
+            reading_assumptions: readings(specIds),
+        },
+    };
+}
+
+const twoReadings = ([first, second]: string[]) => ({
+    [first]: [everyProvider, everyPlace],
+    [second]: [everyPlace],
+});
+
+test("a pick echoes the picked reading's own assumptions, not the readings' shared list", () => {
+    const part = candidatesWithReadings(twoReadings);
+    const [first, second] = part.part!.candidates!.specs;
+
+    for (const [spec, expected] of [
+        [first, [everyProvider, everyPlace]],
+        [second, [everyPlace]],
+    ] as const) {
+        const entry = candidatePickEntry(part, spec);
+        const [posted] = buildDatasetEntries([part], { index: 0, entry });
+
+        assert.equal(posted.entry_kind, 'identity');
+        assert.deepEqual((posted as DatasetIdentityEntry).identity, spec.identity);
+        assert.deepEqual((posted as DatasetIdentityEntry).assumptions, expected);
+    }
+});
+
+test("a candidates entry echoes each reading's own assumptions on its candidate", () => {
+    const [entry] = buildDatasetEntries([candidatesWithReadings(twoReadings)]);
+
+    assert.equal(entry.entry_kind, 'candidates');
+    assert.deepEqual(
+        (entry as DatasetCandidatesEntry).candidates.map((candidate) => candidate.assumptions),
+        [[everyProvider, everyPlace], [everyPlace]],
+    );
+});
+
+test('a reading the response gives no list for posts no echo, on a pick or a candidate', () => {
+    for (const part of [
+        candidatesWithReadings(() => undefined),
+        candidatesWithReadings(([first]) => ({ [first]: [] })),
+    ]) {
+        const specs = part.part!.candidates!.specs;
+        const pick = candidatePickEntry(part, specs[1]);
+        const [posted] = buildDatasetEntries([part], { index: 0, entry: pick });
+        const [entry] = buildDatasetEntries([part]) as DatasetCandidatesEntry[];
+
+        assert.equal('assumptions' in posted, false);
+        assert.equal('assumptions' in entry.candidates[1], false);
+    }
+
+    const stated = candidatesWithReadings(([first]) => ({ [first]: [] }));
+    const [entry] = buildDatasetEntries([stated]) as DatasetCandidatesEntry[];
+
+    assert.deepEqual(entry.candidates[0].assumptions, []);
 });
 
 test('buildDatasetEntries leaves operations off a part that has none', () => {

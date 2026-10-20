@@ -1219,10 +1219,11 @@ export interface LateDepartures {
 
 /** What an `Assumption` fills (dfo-apis vocab.py AssumptionKind):
  *  'declared_default', a slot the request left open that its code system's
- *  or shape's declared default fixed; 'open_role', a flow role the request
- *  named no entity on, read as the total over every entity on it;
- *  'place_scope', a request that named no place, read across every place
- *  with data. */
+ *  or shape's declared default fixed; 'open_role', a flow role no request
+ *  word asked for, read across every entity on it with data: one series per
+ *  member where the role scope default filled it and the shape declares the
+ *  role, else the total over them; 'place_scope', a request that named no
+ *  place, read across every place with data. */
 export type AssumptionKind = 'declared_default' | 'open_role' | 'place_scope';
 
 /** One value a part's answer filled that its request did not ask for.
@@ -1706,13 +1707,20 @@ export interface WirePart {
     departures: Departure[];
     /** every value the answer filled that the request did not ask for, in
      *  clause order: declared defaults, open roles, then the place scope;
-     *  [] on no_data and unsupported */
+     *  on a candidates part, the items every `reading_assumptions` list holds
+     *  alike; [] on no_data and unsupported */
     assumptions?: Assumption[];
     status: ResolveStatus | 'unsupported';
     /** present iff status === "definite" */
     spec?: WireSpec;
     /** present iff status === "candidates" */
     candidates?: WireCandidateSet;
+    /** candidates only: each shown reading's own assumptions, keyed by its
+     *  Spec's spec_id, as a definite part answering that Spec would carry
+     *  them; [] for a reading that assumes nothing. A pick echoes the picked
+     *  reading's list on its identity entry, and a candidates entry echoes
+     *  each reading's list on its candidate. */
+    reading_assumptions?: Record<string, Assumption[]>;
     /** present iff status === "no_data" */
     no_data?: WireNoData;
     /** present iff status === "unsupported" */
@@ -1751,6 +1759,9 @@ export interface Part {
     spec?: Spec;
     /** present iff status === "candidates" */
     candidates?: CandidateSet;
+    /** candidates only: each shown reading's own assumptions, keyed by
+     *  spec_id (see WirePart.reading_assumptions) */
+    reading_assumptions?: Record<string, Assumption[]>;
     /** present iff status === "no_data" */
     no_data?: NoData;
     /** present iff status === "unsupported" */
@@ -1943,7 +1954,8 @@ export interface ParsedPart {
 // status; a typed edit or an entity_ambiguous pick builds one directly and
 // passes it in as an override. Every entry carries its part's `operations`
 // back, and the engine echoes them onto the rebuilt part. An identity entry
-// also carries its part's `assumptions`.
+// also carries its part's `assumptions` (a picked reading's own list on a
+// candidates part), and each candidate its reading's.
 // ---------------------------------------------------------------------------
 
 /** A definite part's entry: the complete identity the part should resolve
@@ -1973,6 +1985,11 @@ export interface DatasetIdentityEntry {
 export interface DatasetCandidateIdentity {
     identity: BaseIdentity;
     entity_groups?: Record<string, EntityGroup> | null;
+    /** the reading's `reading_assumptions` list, echoed as the response gave
+     *  it, [] included, by the rule `DatasetIdentityEntry.assumptions` states;
+     *  absent, the engine computes the reading's assumptions as for a fresh
+     *  request. */
+    assumptions?: Assumption[];
 }
 
 /** A candidates part's entry: `ordering`/`truncated` echoed verbatim from the

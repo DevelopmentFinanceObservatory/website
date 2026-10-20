@@ -15,7 +15,10 @@
  * `operations`, so an edit keeps what the question asked of the data (a
  * `parsed` entry's part carries its own), and
  * every identity entry carries its part's `assumptions` as the response gave
- * them, so an edit that leaves a declared default's slot alone keeps it.
+ * them, so an edit that leaves a declared default's slot alone keeps it. A
+ * candidates part's own `assumptions` are only what its readings share, so a
+ * pick and each candidate echo their reading's `reading_assumptions` list
+ * instead.
  */
 
 import type {
@@ -103,6 +106,35 @@ function identityEntryFor(part: HydratedPart): DatasetIdentityEntry {
     };
 }
 
+/** A reading's own assumptions on a candidates part as an entry member:
+ *  `reading_assumptions[spec_id]`, [] included. A response without the
+ *  field or the key echoes nothing, so the engine computes them fresh. */
+function readingAssumptions(
+    part: HydratedPart,
+    spec: Pick<Spec, 'spec_id'>,
+): { assumptions?: Assumption[] } {
+    const assumptions = part.part?.reading_assumptions?.[spec.spec_id];
+
+    return assumptions ? { assumptions } : {};
+}
+
+/** The `identity` entry a pick of `spec` on a candidates part posts: the
+ *  reading's identity, its groups beside it, and the reading's own
+ *  assumptions (see `readingAssumptions`). */
+export function candidatePickEntry(part: HydratedPart, spec: Spec): DatasetIdentityEntry {
+    if (!spec.identity) {
+        throw new Error(`candidatePickEntry: part ${part.index} picked a spec with no identity`);
+    }
+
+    return {
+        entry_kind: 'identity',
+        variable_text: part.variableText ?? '',
+        identity: spec.identity,
+        ...specEntityGroups(spec),
+        ...readingAssumptions(part, spec),
+    };
+}
+
 function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
     const candidateSet = part.part?.candidates;
     if (!candidateSet) {
@@ -115,7 +147,11 @@ function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
                 `buildDatasetEntries: part ${part.index} has a candidate spec with no identity`,
             );
         }
-        return { identity: spec.identity, ...specEntityGroups(spec) };
+        return {
+            identity: spec.identity,
+            ...specEntityGroups(spec),
+            ...readingAssumptions(part, spec),
+        };
     });
 
     return {
@@ -202,13 +238,23 @@ function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): Datase
     return { ...entry, operations };
 }
 
-/** An identity `entry` with its part's assumptions echoed, unchanged. The
- *  engine decides which still hold after the edit. Every other entry kind,
- *  and a part with none, leaves the entry as it is. */
+/** An identity `entry` with its definite part's assumptions echoed,
+ *  unchanged. The engine decides which still hold after the edit. Every
+ *  other entry kind, and a part with none, leaves the entry as it is. So
+ *  does any other part: a candidates part's `assumptions` hold only what its
+ *  readings share, and an identity entry there is a pick, which carries its
+ *  reading's own list; a no_data part assumed nothing because it answered
+ *  nothing, so its edit reads fresh. */
 function withAssumptions(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
     const assumptions = part.part?.assumptions;
 
-    if (entry.entry_kind !== 'identity' || assumptions === undefined) return entry;
+    if (
+        entry.entry_kind !== 'identity' ||
+        part.part?.status !== 'definite' ||
+        assumptions === undefined
+    ) {
+        return entry;
+    }
     return { ...entry, assumptions };
 }
 
