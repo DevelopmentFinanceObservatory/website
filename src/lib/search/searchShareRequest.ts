@@ -92,6 +92,16 @@ const ASSUMPTION_KINDS: string[] = [
     'place_scope',
 ] satisfies AssumptionKind[];
 
+// Search's own bounds on an echoed `Assumption`: a text of 1 to 200 code
+// points, at most one ref of at most 1024 characters, a binding ref of at
+// most 1036 characters, and at most 67 items in a part's list. A share
+// storing one past them cannot open.
+const ASSUMPTION_TEXT_MAX_LENGTH = 200;
+const ASSUMPTION_MAX_REFS = 1;
+const ASSUMPTION_REF_MAX_LENGTH = 1024;
+const ASSUMPTION_BINDING_REF_MAX_LENGTH = 1036;
+const ASSUMPTIONS_MAX = 67;
+
 const isAssumption = (value: any): value is Assumption =>
     isPlainObject(value) &&
     Object.keys(value).every((member) =>
@@ -99,9 +109,17 @@ const isAssumption = (value: any): value is Assumption =>
     ) &&
     ASSUMPTION_KINDS.includes(value.kind) &&
     typeof value.binding_ref === 'string' &&
+    value.binding_ref.length <= ASSUMPTION_BINDING_REF_MAX_LENGTH &&
     Array.isArray(value.refs) &&
-    value.refs.every((ref: unknown) => typeof ref === 'string') &&
-    typeof value.text === 'string';
+    value.refs.length <= ASSUMPTION_MAX_REFS &&
+    value.refs.every(
+        (ref: unknown) => typeof ref === 'string' && ref.length <= ASSUMPTION_REF_MAX_LENGTH,
+    ) &&
+    typeof value.text === 'string' &&
+    value.text.length > 0 &&
+    // A text within the bound spans at most two UTF-16 units per code point.
+    value.text.length <= ASSUMPTION_TEXT_MAX_LENGTH * 2 &&
+    [...value.text].length <= ASSUMPTION_TEXT_MAX_LENGTH;
 
 export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !!value &&
@@ -117,7 +135,9 @@ export const isSearchSharePart = (value: any): value is SearchSharePart =>
     (value.entityGroups == null || isEntityGroups(value.entityGroups)) &&
     Array.isArray(value.operations) &&
     (value.assumptions == null ||
-        (Array.isArray(value.assumptions) && value.assumptions.every(isAssumption))) &&
+        (Array.isArray(value.assumptions) &&
+            value.assumptions.length <= ASSUMPTIONS_MAX &&
+            value.assumptions.every(isAssumption))) &&
     !!value.definition &&
     typeof value.definition === 'object';
 

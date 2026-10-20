@@ -117,6 +117,12 @@ test('a part reads with its assumptions, [] and null included, and a malformed o
         [{ ...oda, refs: [27] }],
         [{ ...oda, text: null }],
         [{ ...oda, note: 'extra' }],
+        [{ ...oda, text: '' }],
+        [{ ...oda, text: 'a'.repeat(201) }],
+        [{ ...oda, refs: ['ODA', 'OOF'] }],
+        [{ ...oda, refs: ['r'.repeat(1025)] }],
+        [{ ...oda, binding_ref: 'b'.repeat(1037) }],
+        Array.from({ length: 68 }, () => scope),
     ]) {
         assert.equal(reads(malformed), undefined, JSON.stringify(malformed));
     }
