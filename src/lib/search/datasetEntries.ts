@@ -239,17 +239,21 @@ function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): Datase
 }
 
 /** An identity `entry` with its definite part's assumptions echoed,
- *  unchanged. The engine decides which still hold after the edit. Every
- *  other entry kind, and a part with none, leaves the entry as it is. So
- *  does any other part: a candidates part's `assumptions` hold only what its
- *  readings share, and an identity entry there is a pick, which carries its
- *  reading's own list; a no_data part assumed nothing because it answered
- *  nothing, so its edit reads fresh. */
+ *  unchanged. The engine decides which still hold after the edit. An entry
+ *  that already carries an echo keeps it: a permalink replay posts each
+ *  stored edit with the echo it was posted with, which a later edit may have
+ *  narrowed below the fresh part's list. Every other entry kind, and a part
+ *  with none, leaves the entry as it is. So does any other part: a
+ *  candidates part's `assumptions` hold only what its readings share, and an
+ *  identity entry there is a pick, which carries its reading's own list; a
+ *  no_data part assumed nothing because it answered nothing, so its edit
+ *  reads fresh. */
 function withAssumptions(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
     const assumptions = part.part?.assumptions;
 
     if (
         entry.entry_kind !== 'identity' ||
+        entry.assumptions !== undefined ||
         part.part?.status !== 'definite' ||
         assumptions === undefined
     ) {

@@ -125,6 +125,18 @@ test("buildDatasetEntries echoes a part's assumptions on its identity entry, an 
     assert.deepEqual((edited as DatasetIdentityEntry).assumptions, assumptions);
 });
 
+test("an edit that carries its own echo keeps it over the part's list", () => {
+    const parts = hydratedParts('broad-truncated');
+    const [own] = buildDatasetEntries(parts) as DatasetIdentityEntry[];
+    const [replayed] = buildDatasetEntries(parts, {
+        index: 0,
+        entry: { ...own, assumptions: [] },
+    }) as DatasetIdentityEntry[];
+
+    assert.ok(parts[0].part?.assumptions?.length);
+    assert.deepEqual(replayed.assumptions, []);
+});
+
 test('buildDatasetEntries echoes an empty assumptions list, which states none', () => {
     const [part] = hydratedParts('definite-single');
     const stated: HydratedPart = { ...part, part: { ...part.part!, assumptions: [] } };
