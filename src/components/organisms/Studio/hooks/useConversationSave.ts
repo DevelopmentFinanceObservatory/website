@@ -203,6 +203,8 @@ export const useConversationSave = ({
                 if ('id' in answer && kind === 'conversation') {
                     addShareMark({
                         messageIndex: saved.messages.length,
+                        userMessages: saved.messages.filter((message) => message.role === 'user')
+                            .length,
                         shareId: answer.id,
                         at: Date.now(),
                     });
