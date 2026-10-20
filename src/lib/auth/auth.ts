@@ -89,7 +89,7 @@ export const auth = betterAuth({
                 await track(
                     'auth.signin',
                     { provider: ctx.params?.id ?? null },
-                    { userId: session.user.id },
+                    { userId: session.user.id, headers: ctx.headers ?? null },
                 );
             }
         }),

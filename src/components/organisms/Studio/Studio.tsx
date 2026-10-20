@@ -12,7 +12,7 @@ import { useChat } from './hooks/useChat';
 import { useConversationSave } from './hooks/useConversationSave';
 import { useLandingHistory } from './hooks/useLandingHistory';
 import { useLiveCards } from './hooks/useLiveCards';
-import GuestWall, { GUEST_LIMIT } from './GuestWall';
+import GuestWall from './GuestWall';
 import StudioLanding from './landing/StudioLanding';
 import { type PromptField } from './prompt/PromptForm';
 import type { ShareDatum } from './modals/ShareModal';
@@ -39,8 +39,10 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
+import { GUEST_PROMPTS } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
+import { isPrompt } from '@/lib/studio/transcript';
 import type { Seed } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
@@ -70,7 +72,7 @@ export type StudioProps = {
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
     // from history, a fresh fork).
     openId?: string;
-    // Signed out: GUEST_LIMIT free prompts, then the wall; nothing is saved
+    // Signed out: GUEST_PROMPTS free prompts, then the wall; nothing is saved
     // or shareable (both need an account).
     guest?: boolean;
     // A gallery item: the same read-only sheet, plus the one action a
@@ -84,9 +86,9 @@ export type StudioProps = {
     examples?: readonly string[];
 };
 
-// The guest's prompt count lives in the browser only — a limit, not a lock.
-// (ponytail: localStorage, clearing it resets the count; server-side
-// counting when that matters.)
+// The guest's prompt count in this browser, which decides when the wall goes
+// up. The proxy holds the real allowance (src/lib/studio/spendPrompt): a
+// guest past it, from a cleared browser too, gets its refusal as the reply.
 const GUEST_KEY = 'dfo-guest-prompts';
 const guestListeners = new Set<() => void>();
 const readGuestUsed = () => Number(localStorage.getItem(GUEST_KEY)) || 0;
@@ -165,7 +167,7 @@ const Studio = ({
     // removed): the count follows the user turns in the transcript, so the
     // queue's own drain is covered too. Only growth counts — New Chat empties
     // the transcript without giving prompts back.
-    const sentCount = conversation.messages.filter((message) => message.role === 'user').length;
+    const sentCount = conversation.messages.filter(isPrompt).length;
     const sentRef = useRef(sentCount);
 
     useEffect(() => {
@@ -179,14 +181,14 @@ const Studio = ({
     }, [guest, sentCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
-    const walled = guest && guestUsed + conversation.queued.length >= GUEST_LIMIT;
+    const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;
     // Every prompt (landing, follow-up, card menu) goes through here: past
     // the limit a guest's is dropped, the rest are counted as usage (turn,
     // intent and length — never the text).
     const send: typeof conversation.send = (text, options, seeds) => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
-        if (guest && readGuestUsed() + conversation.queued.length >= GUEST_LIMIT) {
+        if (guest && readGuestUsed() + conversation.queued.length >= GUEST_PROMPTS) {
             return;
         }
 

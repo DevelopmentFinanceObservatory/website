@@ -146,6 +146,20 @@ test('clientResponseHeaders: carries the Retry-After of a busy refusal', () => {
     assert.equal(out.get('retry-after'), '5');
 });
 
+test('clientResponseHeaders: carries the upstream Server-Timing and trace id', () => {
+    const out = clientResponseHeaders(
+        new Headers({
+            'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
+            'X-DFO-Trace-Id': 'abc123',
+        }),
+    );
+
+    assert.deepEqual(Object.fromEntries(out), {
+        'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
+        'x-dfo-trace-id': 'abc123',
+    });
+});
+
 test('clientResponseHeaders: leaves the content-length of an encoded body behind', () => {
     const encoded = { 'content-type': 'application/json', 'content-length': '512' };
 

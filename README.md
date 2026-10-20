@@ -42,7 +42,7 @@ Without `DATABASE_URL`, the dev server logs a warning and keeps serving the page
 
 - [`docs/development.md`](docs/development.md): running locally, the database, code conventions, branches, releases and the deployed services.
 - [`docs/feedback.md`](docs/feedback.md): the feedback endpoint (`POST /api/feedback`), its sinks and the local development loop.
-- [`docs/analytics.md`](docs/analytics.md): usage events, Sentry and the guest Studio limit.
+- [`docs/analytics.md`](docs/analytics.md): usage events, Sentry and the Studio prompt allowance.
 - [`deploy/README.md`](deploy/README.md): the image build, migrations on deploy, GitHub variables and the runtime environment contract.
 
 ## Contributing

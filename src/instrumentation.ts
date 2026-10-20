@@ -25,6 +25,9 @@ export async function register(): Promise<void> {
 
     await import('../sentry.server.config');
 
+    const { registerRequestLogging } = await import('./lib/proxy/requestLog');
+    registerRequestLogging();
+
     const { assertTrustedHops } = await import('./lib/proxy/caller');
 
     try {
@@ -38,10 +41,6 @@ export async function register(): Promise<void> {
         }
 
         console.warn(error instanceof Error ? error.message : String(error));
-    }
-
-    if (!process.env.REDIS_URL) {
-        console.warn('REDIS_URL is unset: the /api and /mcp rate limits are off.');
     }
 
     const { searchApiBase } = await import('./lib/searchApi');

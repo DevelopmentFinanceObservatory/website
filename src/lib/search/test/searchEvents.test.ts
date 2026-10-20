@@ -3,8 +3,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { fitsProps, MAX_PROPS_BYTES } from '../../events/limits.ts';
-import { searchEventProps } from '../searchEvents.ts';
-import type { HydratedPart } from '../types.ts';
+import {
+    HANDOFF_SOURCE_PARAM,
+    handoffHref,
+    handoffSource,
+    searchEventProps,
+    searchOutcome,
+    searchPostTracker,
+    startSearchAction,
+    type SearchIds,
+    type SearchPostEventName,
+    type SearchSettleProps,
+} from '../searchEvents.ts';
+import type { HydratedPart, ResolveResponse } from '../types.ts';
 
 // "ODA from France to Kenya" against the dev API elects 308 CRS StatVars;
 // "to all recipients" resolves some 200 places.
@@ -289,4 +300,307 @@ test('the floor holds a clipped spec id and integer counts per part, whatever th
     assert.equal(props.resolved[0].measure, undefined);
     assert.equal(props.resolved[0].specId.length, 64);
     assert.ok(JSON.stringify(props).length < MAX_PROPS_BYTES / 4);
+});
+
+const run: SearchSettleProps = {
+    searchId: 'search-1',
+    post: 0,
+    source: 'typed',
+    edited: false,
+    traceId: 'trace-1',
+    ms: 1200,
+    outcome: 'definite',
+    engineMs: 900,
+    byStep: { extract: 300, resolve: 500 },
+    timedOut: false,
+};
+
+test('the run fields ride every rung, the floor without its step timings', () => {
+    const spec = aidPart.hydratedSpec as any;
+    const heavy = (index: number) =>
+        ({
+            ...aidPart,
+            index,
+            hydratedSpec: {
+                ...spec,
+                spec_id: 's'.repeat(1000),
+                identity: { ...spec.identity, shape: { kind: 'x'.repeat(3000) } },
+            },
+        }) as HydratedPart;
+    const { byStep, ...kept } = run;
+    const rungs = [
+        [aidPart],
+        Array.from({ length: 6 }, (_, index) => ({ ...withSources(aidPart, 10, 140), index })),
+        Array.from({ length: 6 }, (_, index) => heavy(index)),
+    ] as HydratedPart[][];
+
+    for (const parts of rungs) {
+        const props = searchEventProps({
+            query: 'q',
+            edited: false,
+            kind: 'resolution',
+            reason: null,
+            parts,
+            run,
+        });
+        const floor = props.query === '';
+
+        assert.ok(fitsProps(props));
+        assert.deepEqual(
+            { ...kept, ...(!floor && { byStep }) },
+            Object.fromEntries(
+                Object.keys(run)
+                    .filter((key) => key in props)
+                    .map((key) => [key, props[key as keyof typeof props]]),
+            ),
+        );
+    }
+});
+
+const response = (kind: string, extra: object = {}) =>
+    ({
+        kind,
+        diagnostics: { trace_id: 'trace-r', timing_ms: { total: 800, by_step: { extract: 100 } } },
+        parts: [],
+        scope: { place: null },
+        ...extra,
+    }) as unknown as ResolveResponse;
+
+test('the outcome is a resolution status, else the answer kind', () => {
+    for (const status of ['definite', 'candidates', 'no_data', 'unsupported', 'mixed']) {
+        assert.equal(searchOutcome(response('resolution', { status })), status);
+    }
+    assert.equal(searchOutcome(response('catalogue')), 'catalogue');
+    assert.equal(searchOutcome(response('declined', { reason: 'out_of_scope' })), 'declined');
+});
+
+/** A tracker over a fake clock, and the events it sent. */
+const tracked = (post = 0) => {
+    const sent: [SearchPostEventName, Record<string, any>, string][] = [];
+    let clock = 1000;
+    const tracker = searchPostTracker(
+        {
+            searchId: 'search-1',
+            post,
+            source: 'example',
+            editKind: post > 0 ? 'slot' : null,
+            query: 'ODA to Kenya',
+            page: '/data',
+        },
+        { emit: (name, props, page) => sent.push([name, props, page]), now: () => clock },
+    );
+
+    return { tracker, sent, advance: (ms: number) => (clock += ms) };
+};
+
+const done = { trace_id: 'trace-d', elapsed_ms: 2500, timed_out: true };
+
+test('a post sends one terminal event: the first of settle, fail and abandon', () => {
+    const { tracker, sent, advance } = tracked();
+
+    tracker.respond(response('resolution', { status: 'definite' }));
+    advance(3000);
+    tracker.settle({
+        response: response('resolution', { status: 'definite' }),
+        parts: [aidPart],
+        done,
+    });
+    tracker.settle({ response: response('catalogue'), parts: [], done });
+    tracker.fail({ code: 'STALL_TIMEOUT' });
+    tracker.abandon('superseded');
+    tracker.hide();
+
+    assert.equal(sent.length, 1);
+
+    const [[name, props]] = sent;
+
+    assert.equal(name, 'search.query');
+    assert.deepEqual(
+        {
+            searchId: props.searchId,
+            post: props.post,
+            source: props.source,
+            edited: props.edited,
+            traceId: props.traceId,
+            ms: props.ms,
+            outcome: props.outcome,
+            engineMs: props.engineMs,
+            byStep: props.byStep,
+            timedOut: props.timedOut,
+            hidden: props.hidden,
+        },
+        {
+            searchId: 'search-1',
+            post: 0,
+            source: 'example',
+            edited: false,
+            traceId: 'trace-d',
+            ms: 3000,
+            outcome: 'definite',
+            engineMs: 2500,
+            byStep: { extract: 100 },
+            timedOut: true,
+            hidden: undefined,
+        },
+    );
+});
+
+test('a base run that answered nothing is search.empty, an edit post is search.edit', () => {
+    const base = tracked();
+    const edit = tracked(2);
+
+    base.tracker.settle({
+        response: response('resolution', { status: 'no_data' }),
+        parts: [refusedPart],
+        done,
+    });
+    edit.tracker.settle({
+        response: response('resolution', { status: 'no_data' }),
+        parts: [refusedPart],
+        done,
+    });
+
+    assert.equal(base.sent[0][0], 'search.empty');
+    assert.equal(edit.sent[0][0], 'search.edit');
+    assert.equal(edit.sent[0][1].post, 2);
+    assert.equal(edit.sent[0][1].edited, true);
+    assert.equal(edit.sent[0][1].editKind, 'slot');
+    assert.equal(edit.sent[0][1].outcome, 'no_data');
+});
+
+test('a hidden post sends one hidden abandon and marks its later settle', () => {
+    const { tracker, sent, advance } = tracked();
+
+    tracker.step('extract');
+    advance(400);
+    tracker.hide();
+    tracker.hide();
+    advance(600);
+    tracker.settle({ response: response('catalogue'), parts: [], done });
+
+    assert.deepEqual(
+        sent.map(([name, props]) => [name, props.reason, props.step, props.ms, props.hidden]),
+        [
+            ['search.abandon', 'hidden', 'extract', 400, undefined],
+            ['search.query', null, undefined, 1000, true],
+        ],
+    );
+});
+
+test('a settled post ignores a later hide, and an abandoned one sends nothing more', () => {
+    const settled = tracked();
+    const superseded = tracked(1);
+    const left = tracked();
+
+    settled.tracker.settle({ response: response('catalogue'), parts: [], done });
+    settled.tracker.hide();
+    superseded.tracker.abandon('superseded');
+    superseded.tracker.abandon('reset');
+    // The search unmounted, then its stream's answer landed.
+    left.tracker.abandon('left');
+    left.tracker.settle({ response: response('catalogue'), parts: [], done });
+
+    assert.deepEqual(
+        settled.sent.map(([name]) => name),
+        ['search.query'],
+    );
+    assert.deepEqual(
+        superseded.sent.map(([name, props]) => [name, props.reason, props.traceId]),
+        [['search.abandon', 'superseded', null]],
+    );
+    assert.deepEqual(
+        left.sent.map(([name, props]) => [name, props.reason]),
+        [['search.abandon', 'left']],
+    );
+});
+
+test('every event of a post carries the page it started on, after the page changed', () => {
+    const left = tracked();
+    const hidden = tracked();
+    const settled = tracked();
+    const failed = tracked();
+
+    // The tracker holds the start page, so nothing it reads can have moved on.
+    left.tracker.abandon('left');
+    hidden.tracker.hide();
+    settled.tracker.settle({ response: response('catalogue'), parts: [], done });
+    failed.tracker.fail({});
+
+    assert.deepEqual(
+        [left, hidden, settled, failed].map(({ sent }) =>
+            sent.map(([name, , page]) => [name, page]),
+        ),
+        [
+            [['search.abandon', '/data']],
+            [['search.abandon', '/data']],
+            [['search.query', '/data']],
+            [['search.error', '/data']],
+        ],
+    );
+});
+
+test('an action names the search on screen when it started, not when it landed', () => {
+    const sent: [string, Record<string, unknown>, string][] = [];
+    let onScreen: SearchIds = { searchId: 'search-a', traceId: 'trace-a' };
+    const send = startSearchAction<{ action: 'share'; shareId: string }>(
+        () => onScreen,
+        (name, props, page) => sent.push([name, props, page]),
+        '/data',
+    );
+
+    onScreen = { searchId: 'search-b', traceId: 'trace-b' };
+    send({ action: 'share', shareId: 'share-1' });
+
+    assert.deepEqual(sent, [
+        [
+            'search.action',
+            { searchId: 'search-a', traceId: 'trace-a', action: 'share', shareId: 'share-1' },
+            '/data',
+        ],
+    ]);
+});
+
+test('a failure carries its code, else its HTTP status, and the trace it names', () => {
+    const coded = tracked();
+    const status = tracked();
+    const silent = tracked();
+    const noAnswer = tracked();
+
+    coded.tracker.fail({ code: 'over_ceiling', status: 422, traceId: 'trace-e' });
+    status.tracker.respond(response('catalogue'));
+    status.tracker.fail({ status: 503 });
+    silent.tracker.fail({});
+    noAnswer.tracker.settle({ response: null, parts: [], done });
+
+    assert.deepEqual(
+        [coded, status, silent, noAnswer].map(({ sent: [[name, props]] }) => [
+            name,
+            props.error,
+            props.status,
+            props.traceId,
+            props.query,
+        ]),
+        [
+            ['search.error', 'over_ceiling', 422, 'trace-e', 'ODA to Kenya'],
+            ['search.error', '503', 503, 'trace-r', 'ODA to Kenya'],
+            ['search.error', 'stream', undefined, null, 'ODA to Kenya'],
+            ['search.error', 'no_response', undefined, 'trace-d', 'ODA to Kenya'],
+        ],
+    );
+});
+
+test('a homepage handoff carries typed or example; any other value is a permalink', () => {
+    const arrival = (href: string) =>
+        handoffSource(new URL(href, 'https://example.org').searchParams.get(HANDOFF_SOURCE_PARAM));
+
+    assert.equal(arrival(handoffHref('aid & debt', 'typed')), 'typed');
+    assert.equal(arrival(handoffHref('aid & debt', 'example')), 'example');
+    assert.equal(
+        new URL(handoffHref('aid & debt', 'typed'), 'https://example.org').searchParams.get('q'),
+        'aid & debt',
+    );
+
+    for (const href of ['/data?q=aid', '/data?q=aid&via=share', '/data?q=aid&via=Typed']) {
+        assert.equal(arrival(href), 'permalink');
+    }
 });

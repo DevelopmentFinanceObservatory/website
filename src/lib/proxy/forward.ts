@@ -14,7 +14,7 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
  * must not reach a client). An /api/* or /mcp call is rate-limited per IP
- * (src/lib/proxy/rateLimit, on only with REDIS_URL). A call is forwarded
+ * (src/lib/proxy/rateLimit). A call is forwarded
  * with its method, query, body, content headers and every mcp-* header
  * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
@@ -25,7 +25,8 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
- *   /api/v1/studio/*                 → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
+ *   /api/v1/studio/turn|interrupt|cancel|composition
+ *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
  * (src/lib/apisAuth matches on the target's origin). The other upstreams get
@@ -64,6 +65,9 @@ type ForwardOptions = {
     unreachable: string;
     // False sends every body back unencoded, whatever its type.
     compress?: boolean;
+    // Runs after the rate limit and before the upstream call; a Response it
+    // returns is the answer instead (the Studio's prompt allowance).
+    admit?: () => Promise<Response | null>;
 };
 
 const unreachable = (detail: string, headers: Record<string, string>): Response =>
@@ -88,6 +92,12 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
                 headers: { ...limitHeaders, 'Retry-After': String(verdict.reset) },
             },
         );
+    }
+
+    const refusal = await options.admit?.();
+
+    if (refusal) {
+        return refusal;
     }
 
     const headers = upstreamRequestHeaders(req.headers);

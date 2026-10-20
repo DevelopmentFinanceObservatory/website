@@ -1,7 +1,7 @@
 /**
- * A `component.created` `payload`, trimmed from dfo-ai's recorded transcript
- * https://github.com/ONEcampaign/dfo-ai/blob/32abd086fc9135fd3e9bd04298e0b68fbfad13cf/docs/transcripts/studio_transcript.jsonl
- * (line_chart, cmp_01M3KK0ZXJ24DJFK401ZVTW7MG), in the platform's resolved revision
+ * A `component.created` `payload`, trimmed from a Studio transcript the ai
+ * harness recorded (`studio_transcript.jsonl`, line_chart,
+ * cmp_01M3KK0ZXJ24DJFK401ZVTW7MG), in the platform's resolved revision
  * envelope shape.
  */
 export const envelopeCreated = {
