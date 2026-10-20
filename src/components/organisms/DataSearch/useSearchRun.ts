@@ -74,10 +74,11 @@
  *   edit post waits out the whole grace for an event that isn't coming.
  * - edits: every part's latest successful identity/parsed entry, ready
  *   for permalink.ts's encodePermalinkState.
- * - `run(input, label)`: a fresh raw_text query; full replace, aborts any
- *   edit post in flight too.
- * - `showStartingPoint(label)`: settles on a catalogue answer with no place
- *   and no search call, for the page to fill from the catalogue it holds.
+ * - `run(input, label, source)`: a fresh raw_text query; full replace,
+ *   aborts any edit post in flight too.
+ * - `showStartingPoint(label, source)`: settles on a catalogue answer with
+ *   no place and no search call, for the page to fill from the catalogue it
+ *   holds, and records `search.start_point`.
  * - `reset()`: abort everything, back to idle.
  * Indexed edit callbacks. Each posts a dataset_resubmit carrying every
  * part's current entry with just this index rewritten. editMeasure posts
@@ -85,7 +86,7 @@
  * not the part's current one. Every entry carries its part's operations
  * and the named groups of the Spec its identity derives from (see
  * datasetEntries.ts).
- * - `replay(state)`: runs `state.query`, then, right after its `response`
+ * - `replay(state, source)`: runs `state.query`, then, right after its `response`
  *   event, builds one entries list from the fresh parts with every stored
  *   edit applied as an override at its own index (skipped with a note on
  *   that part when its `variableText` no longer matches), and posts it once,
@@ -123,9 +124,28 @@
  * A refusal from the door carries a top-level `pointer` naming the entry it
  * refused (`/input/entries/{i}/...`). `editError` keys to that index when
  * present, or to every part the failed post was touching when it isn't.
+ *
+ * Usage events (docs/analytics.md). Every run start (`run`, `replay`,
+ * `openShare`) mints a `searchId`. Each post, the base run as post 0 and each
+ * edit post after it, owns a `searchPostTracker` made when the post starts.
+ * The post's own stream ends it from its own terminal path: `done` settles,
+ * an `error` event or a thrown error fails, and a stream that closes with
+ * neither fails as `stream`. A post aborted by a newer one or by
+ * `showStartingPoint` abandons as `superseded` at the abort site, and one
+ * aborted by `reset` abandons as `reset`. A client-side navigation that
+ * unmounts the search abandons each post in flight as `left` and aborts its
+ * stream. The tracker sends only the first of these, so each post sends one
+ * terminal event. After that unmount every run start refuses, so a link
+ * lookup that resolves late starts no search and sends nothing. A page hidden mid-post sends a `hidden`
+ * abandon from the visibility listener below. `searchIds()` reads the
+ * current search's id and the trace of the answer on screen, for the events
+ * a visitor's click on that answer sends.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { track } from '@/lib/events/client';
+import { uuid } from '@/lib/uuid';
 
 import { withEntityEdit, withFacetEdit, withResolvedSlotEdit } from '@/lib/search/promote';
 import type { PermalinkEdit, PermalinkState } from '@/lib/search/permalink';
@@ -186,7 +206,15 @@ import type {
     Spec,
     SpecObservations,
 } from '@/lib/search/types';
+import {
+    searchPostTracker,
+    type EditKind,
+    type SearchIds,
+    type SearchPostTracker,
+    type SearchSource,
+} from '@/lib/search/searchEvents';
 import { sharedUnitEdit } from '@/lib/search/unitPicker';
+import { unmountTeardown } from '@/lib/search/unmountTeardown';
 import type { WindowApplyValue } from '@/lib/search/windowState';
 
 export type SearchPhase = 'idle' | 'loading' | 'done' | 'error';
@@ -264,6 +292,24 @@ function partsFromResponse(response: Resolution): HydratedPart[] {
         phase: 'done',
         editError: null,
     }));
+}
+
+/** Ends a post's usage tracker on its own `done`: the event describes the
+ *  post's own answer with the late warnings and departures applied, read
+ *  from the stream's closure because React state may already hold a newer
+ *  post's answer. */
+function settlePost(
+    tracker: SearchPostTracker,
+    landed: ResolveResponse | null,
+    done: Extract<SearchEvent, { kind: 'done' }>,
+) {
+    const settled = landed?.kind === 'resolution' ? applyDoneEvent(landed, done) : landed;
+
+    tracker.settle({
+        response: settled,
+        parts: settled?.kind === 'resolution' ? partsFromResponse(settled) : [],
+        done,
+    });
 }
 
 /** Maps a refusal's `/input/entries/{i}/...` pointer to the entry index it
@@ -351,6 +397,19 @@ export const useSearchRun = () => {
     // reproduces.
     const basePhraseByPartRef = useRef<(string | null)[]>([]);
     const opSeq = useRef(0);
+    // The current search's id and source, the last post number used, and the
+    // trace of the post whose answer is on screen. Minted by every run start,
+    // cleared by reset.
+    const searchRef = useRef<{
+        id: string;
+        source: SearchSource;
+        posts: number;
+        traceId: string | null;
+    } | null>(null);
+    // The base run's and the current edit post's trackers. An ended tracker
+    // ignores every call, so neither ref needs clearing when its post ends.
+    const baseTrackRef = useRef<SearchPostTracker | null>(null);
+    const editTrackRef = useRef<SearchPostTracker | null>(null);
     // A monotonic stamp for every place_options merge, regardless of spec or
     // scope -- PlaceOptionsEntry.arrival, read by view.ts's
     // placeOptionsSignature so PlaceEditor's effect can tell a fresh arrival
@@ -358,6 +417,75 @@ export const useSearchRun = () => {
     // (a same_shape/conjoin merge relaunching the trailing task after this
     // scope already landed).
     const placeOptionsArrivalRef = useRef(0);
+
+    // A tracker for the next post of the current search: post 0 for a base
+    // run, the next number for an edit. Every run start sets `searchRef`
+    // first, and an edit needs a run's parts, so the fallback never mints.
+    const trackPost = useCallback((editKind: EditKind | null, query: string) => {
+        const search = (searchRef.current ??= {
+            id: uuid(),
+            source: 'typed',
+            posts: 0,
+            traceId: null,
+        });
+
+        return searchPostTracker(
+            {
+                searchId: search.id,
+                post: editKind ? ++search.posts : 0,
+                source: search.source,
+                editKind,
+                query,
+                page: location.pathname,
+            },
+            { emit: track, now: () => performance.now() },
+        );
+    }, []);
+
+    // The first hide of the page while a post is in flight. Browsers send
+    // `visibilitychange` before `pagehide`, so this one listener covers both.
+    useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState !== 'hidden') return;
+            baseTrackRef.current?.hide();
+            editTrackRef.current?.hide();
+        };
+
+        document.addEventListener('visibilitychange', onVisibility);
+
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, []);
+
+    // A client-side navigation unmounts the search with its posts in flight:
+    // each ends as `left` and its stream aborts, so a late answer sends no
+    // second terminal event. unmountTeardown keeps Strict Mode's dev
+    // remount from aborting a search a mount effect has just started. Once
+    // it has run, `startRun` and `showStartingPoint` refuse, so a link
+    // lookup that resolves after the visitor has gone starts nothing.
+    const leaveRef = useRef<ReturnType<typeof unmountTeardown> | null>(null);
+    useEffect(() => {
+        const leave = (leaveRef.current ??= unmountTeardown(() => {
+            baseTrackRef.current?.abandon('left');
+            editTrackRef.current?.abandon('left');
+            runController.current?.abort();
+            postController.current?.controller.abort();
+        }));
+
+        leave.mount();
+
+        return leave.unmount;
+    }, []);
+
+    // The search and the trace behind the answer on screen, read when a
+    // visitor acts on it (`search.action`, the Studio hand-off). Both are
+    // null before a search and on the starting point.
+    const searchIds = useCallback(
+        (): SearchIds => ({
+            searchId: searchRef.current?.id ?? null,
+            traceId: searchRef.current?.traceId ?? null,
+        }),
+        [],
+    );
 
     const updateRuntime = useCallback(
         (index: number, fn: (runtime: PartRuntime) => PartRuntime) => {
@@ -497,9 +625,12 @@ export const useSearchRun = () => {
             op: number,
             controller: AbortController,
             input: Extract<SearchInput, { kind: 'raw_text' | 'dataset_resubmit' }>,
+            tracker: SearchPostTracker,
             onResponse?: (normalized: Resolution) => void,
         ) => {
             const isCurrent = () => runOp.current === op;
+            // This post's own answer, for its usage event (`settlePost`).
+            let landed: ResolveResponse | null = null;
 
             resolveStream(
                 buildRequest(input, true),
@@ -518,6 +649,7 @@ export const useSearchRun = () => {
                             break;
                         case 'step':
                             if (!event.ran) break;
+                            tracker.step(event.step);
                             if (event.variable_index == null) {
                                 setSharedSteps((prev) => addStep(prev, event.step));
                             } else {
@@ -544,6 +676,11 @@ export const useSearchRun = () => {
                             break;
                         case 'response': {
                             const normalized = event.response as ResolveResponse;
+                            landed = normalized;
+                            tracker.respond(normalized);
+                            if (searchRef.current) {
+                                searchRef.current.traceId = normalized.diagnostics.trace_id;
+                            }
                             // A catalogue or declined answer has no parts:
                             // the run settles on its own `done` with no
                             // skeleton to size and nothing to replay.
@@ -580,6 +717,7 @@ export const useSearchRun = () => {
                             // into the part they name.
                             setResponse((prev) => (prev ? applyDoneEvent(prev, event) : prev));
                             setPhase('done');
+                            settlePost(tracker, landed, event);
                             // An edit post already in flight (fired between
                             // this run's own `response` and `done`, exactly
                             // what permalink replay does) owns the final
@@ -599,15 +737,24 @@ export const useSearchRun = () => {
                         case 'error':
                             setError(event.detail);
                             setPhase('error');
+                            tracker.fail({
+                                code: event.code,
+                                status: event.status,
+                                traceId: event.trace_id,
+                            });
                             break;
                     }
                 },
                 controller.signal,
-            ).catch((err: Error) => {
-                if (!isCurrent() || err.name === 'AbortError') return;
-                setError(err.message);
-                setPhase('error');
-            });
+            )
+                // A stream that closed with no `done` or `error`.
+                .then(() => tracker.fail({ code: 'stream' }))
+                .catch((err: Error) => {
+                    if (!isCurrent() || err.name === 'AbortError') return;
+                    setError(err.message);
+                    setPhase('error');
+                    tracker.fail({ code: 'stream' });
+                });
         },
         [applyTrailingEvent],
     );
@@ -616,10 +763,17 @@ export const useSearchRun = () => {
         (
             input: Extract<SearchInput, { kind: 'raw_text' | 'dataset_resubmit' }>,
             label: string,
+            source: SearchSource,
             onResponse?: (normalized: Resolution) => void,
-        ) => {
+        ): boolean => {
+            if (leaveRef.current?.left()) {
+                return false;
+            }
+
             // A fresh query replaces everything: abort the previous full run
             // and any edit post in flight.
+            baseTrackRef.current?.abandon('superseded');
+            editTrackRef.current?.abandon('superseded');
             runController.current?.abort();
             postController.current?.controller.abort();
             postController.current = null;
@@ -633,6 +787,11 @@ export const useSearchRun = () => {
 
             runController.current = controller;
             runOp.current = op;
+            searchRef.current = { id: uuid(), source, posts: 0, traceId: null };
+
+            const tracker = trackPost(null, label);
+
+            baseTrackRef.current = tracker;
 
             setPhase('loading');
             setQuery(label);
@@ -655,22 +814,31 @@ export const useSearchRun = () => {
             setPendingSnapshotSpecs(new Set());
             setUnreadableRefs(new Set());
 
-            runBaseStream(op, controller, input, onResponse);
+            runBaseStream(op, controller, input, tracker, onResponse);
+
+            return true;
         },
-        [runBaseStream],
+        [runBaseStream, trackPost],
     );
 
     /** A fresh raw_text query. Full replace: every part and any edit post in
      *  flight is gone the moment this starts. */
     const run = useCallback(
-        (input: Extract<SearchInput, { kind: 'raw_text' }>, label: string) => {
-            startRun(input, label);
+        (
+            input: Extract<SearchInput, { kind: 'raw_text' }>,
+            label: string,
+            source: SearchSource,
+        ) => {
+            startRun(input, label, source);
         },
         [startRun],
     );
 
     /** Abort anything in flight and drop back to a pristine idle run state. */
     const reset = useCallback(() => {
+        baseTrackRef.current?.abandon('reset');
+        editTrackRef.current?.abandon('reset');
+        searchRef.current = null;
         runController.current?.abort();
         postController.current?.controller.abort();
         postController.current = null;
@@ -703,13 +871,23 @@ export const useSearchRun = () => {
     }, []);
 
     /** The starting point with no search call: a settled catalogue answer
-     *  with no place, under `label`. */
+     *  with no place, under `label`. Records `search.start_point`. */
     const showStartingPoint = useCallback(
-        (label: string) => {
+        (label: string, source: SearchSource) => {
+            if (leaveRef.current?.left()) {
+                return;
+            }
+
+            // The reader moved to another view: end any post in flight as
+            // superseded before reset() would send `reset`. The tracker
+            // sends only the first terminal event.
+            baseTrackRef.current?.abandon('superseded');
+            editTrackRef.current?.abandon('superseded');
             reset();
             setPhase('done');
             setQuery(label);
             setAnswer({ kind: 'catalogue', scope: { place: null } });
+            track('search.start_point', { source });
         },
         [reset],
     );
@@ -722,8 +900,11 @@ export const useSearchRun = () => {
             basisParts: HydratedPart[],
             touchedIndices: number[],
             rawQuery: string,
+            tracker: SearchPostTracker,
         ) => {
             const isCurrent = () => postController.current?.op === op;
+            // This post's own answer, for its usage event.
+            let landed: Resolution | null = null;
             // Settling clears the pending-override queue only when nothing
             // has superseded this post: a superseded post's settle (its own
             // abort's catch) must never clobber what the superseding post
@@ -771,6 +952,7 @@ export const useSearchRun = () => {
                             // ever answers with a resolution.
                             if (normalized.kind !== 'resolution') {
                                 fail(`Unexpected ${normalized.kind} answer to an edit.`, null);
+                                tracker.fail({ code: 'unexpected_answer' });
                                 break;
                             }
                             const restored = restorePlaceholderParts(
@@ -779,6 +961,11 @@ export const useSearchRun = () => {
                                 entries.length,
                             );
 
+                            landed = restored;
+                            tracker.respond(restored);
+                            if (searchRef.current) {
+                                searchRef.current.traceId = restored.diagnostics.trace_id;
+                            }
                             setResponse(restored);
                             setExpectedParts(
                                 restored.parts.map((part, i) => ({
@@ -803,10 +990,16 @@ export const useSearchRun = () => {
                             // streams the same event shape.
                             setResponse((prev) => (prev ? applyDoneEvent(prev, event) : prev));
                             settle();
+                            settlePost(tracker, landed, event);
                             break;
                         case 'error':
                             fail(event.detail, event.pointer);
                             settle();
+                            tracker.fail({
+                                code: event.code,
+                                status: event.status,
+                                traceId: event.trace_id,
+                            });
                             break;
                         // interpretation/step/shape/sentence never arrive on
                         // this door.
@@ -815,12 +1008,16 @@ export const useSearchRun = () => {
                     }
                 },
                 controller.signal,
-            ).catch((err: Error & { pointer?: string | null }) => {
-                if (!isCurrent()) return;
-                settle();
-                if (err.name === 'AbortError') return;
-                fail(err.message, err.pointer);
-            });
+            )
+                // A stream that closed with no `done` or `error`.
+                .then(() => tracker.fail({ code: 'stream' }))
+                .catch((err: Error & { pointer?: string | null }) => {
+                    if (!isCurrent()) return;
+                    settle();
+                    if (err.name === 'AbortError') return;
+                    fail(err.message, err.pointer);
+                    tracker.fail({ code: 'stream' });
+                });
         },
         [applyTrailingEvent, recordEdits],
     );
@@ -837,6 +1034,7 @@ export const useSearchRun = () => {
         (
             override: DatasetEntriesOverride | DatasetEntriesOverride[],
             touchedIndices: number[],
+            editKind: EditKind,
             basisParts: HydratedPart[] = parts,
             // `replay` passes `state.query` explicitly: it fires synchronously
             // inside the base run's own `response` handler, before React has
@@ -860,11 +1058,16 @@ export const useSearchRun = () => {
             pendingOverridesRef.current = overrides;
             pendingIndicesRef.current = indices;
 
+            editTrackRef.current?.abandon('superseded');
             postController.current?.controller.abort();
             const controller = new AbortController();
             const op = ++opSeq.current;
             postController.current = { op, controller };
             setEditPostInFlight(true);
+
+            const tracker = trackPost(editKind, rawQuery);
+
+            editTrackRef.current = tracker;
 
             setRuntimes((prev) =>
                 prev.map((r, i) => ({
@@ -878,9 +1081,9 @@ export const useSearchRun = () => {
                 })),
             );
 
-            runDatasetStream(op, controller, entries, basisParts, [...indices], rawQuery);
+            runDatasetStream(op, controller, entries, basisParts, [...indices], rawQuery, tracker);
         },
-        [parts, query, runDatasetStream],
+        [parts, query, runDatasetStream, trackPost],
     );
 
     const identityOverrideEntry = useCallback(
@@ -907,7 +1110,7 @@ export const useSearchRun = () => {
             const identity = withResolvedSlotEdit(fromSpec, slotIndex, binding, entityRole);
             const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
-            runDatasetEdit({ index: partIndex, entry }, [partIndex]);
+            runDatasetEdit({ index: partIndex, entry }, [partIndex], 'slot');
         },
         [identityOverrideEntry, runDatasetEdit],
     );
@@ -919,7 +1122,7 @@ export const useSearchRun = () => {
             const identity = withEntityEdit(fromSpec.identity as BaseIdentity, role, dcids);
             const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
-            runDatasetEdit({ index: partIndex, entry }, [partIndex]);
+            runDatasetEdit({ index: partIndex, entry }, [partIndex], 'entity');
         },
         [identityOverrideEntry, runDatasetEdit],
     );
@@ -934,7 +1137,7 @@ export const useSearchRun = () => {
             };
             const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
-            runDatasetEdit({ index: partIndex, entry }, [partIndex]);
+            runDatasetEdit({ index: partIndex, entry }, [partIndex], 'window');
         },
         [identityOverrideEntry, runDatasetEdit],
     );
@@ -966,7 +1169,7 @@ export const useSearchRun = () => {
             axis: A,
             binding: IdentityFacets[A] | null,
         ) => {
-            runDatasetEdit(facetOverride(partIndex, fromSpec, axis, binding), [partIndex]);
+            runDatasetEdit(facetOverride(partIndex, fromSpec, axis, binding), [partIndex], 'facet');
         },
         [facetOverride, runDatasetEdit],
     );
@@ -976,7 +1179,7 @@ export const useSearchRun = () => {
         (partIndex: number, candidate: any) => {
             const entry = identityOverrideEntry(partIndex, candidate, candidate.identity);
 
-            runDatasetEdit({ index: partIndex, entry }, [partIndex]);
+            runDatasetEdit({ index: partIndex, entry }, [partIndex], 'pick');
         },
         [identityOverrideEntry, runDatasetEdit],
     );
@@ -995,6 +1198,7 @@ export const useSearchRun = () => {
                     ),
                 })),
                 picks.map(({ partIndex }) => partIndex),
+                'measure',
             );
         },
         [parts, runDatasetEdit],
@@ -1004,9 +1208,11 @@ export const useSearchRun = () => {
     // separate top-level echo the way the other three entry kinds do.
     const editParsed = useCallback(
         (partIndex: number, part: ParsedPart) => {
-            runDatasetEdit({ index: partIndex, entry: { entry_kind: 'parsed', part } }, [
-                partIndex,
-            ]);
+            runDatasetEdit(
+                { index: partIndex, entry: { entry_kind: 'parsed', part } },
+                [partIndex],
+                'parsed',
+            );
         },
         [runDatasetEdit],
     );
@@ -1019,25 +1225,30 @@ export const useSearchRun = () => {
     // whose part no longer asks the same variable is skipped with a
     // one-line note on that block instead.
     const replay = useCallback(
-        (state: PermalinkState) => {
-            startRun({ kind: 'raw_text', query: state.query }, state.query, (normalized) => {
-                const basisParts = partsFromResponse(normalized);
-                const { overrides, touched, stale } = buildReplayPlan(
-                    state.edits,
-                    normalized.parts,
-                );
+        (state: PermalinkState, source: SearchSource) => {
+            startRun(
+                { kind: 'raw_text', query: state.query },
+                state.query,
+                source,
+                (normalized) => {
+                    const basisParts = partsFromResponse(normalized);
+                    const { overrides, touched, stale } = buildReplayPlan(
+                        state.edits,
+                        normalized.parts,
+                    );
 
-                for (const index of stale) {
-                    updateRuntime(index, (r) => ({
-                        ...r,
-                        editError: 'This edit no longer applies to the current query.',
-                    }));
-                }
+                    for (const index of stale) {
+                        updateRuntime(index, (r) => ({
+                            ...r,
+                            editError: 'This edit no longer applies to the current query.',
+                        }));
+                    }
 
-                if (overrides.length === 0) return;
+                    if (overrides.length === 0) return;
 
-                runDatasetEdit(overrides, touched, basisParts, state.query);
-            });
+                    runDatasetEdit(overrides, touched, 'replay', basisParts, state.query);
+                },
+            );
         },
         [startRun, updateRuntime, runDatasetEdit],
     );
@@ -1048,27 +1259,28 @@ export const useSearchRun = () => {
     // A snapshot link also reads each part's frozen observations back from
     // dfo-apis and lays them over the live observations.
     const openShare = useCallback(
-        (shared: OpenedSearchShare) => {
+        (shared: OpenedSearchShare, source: SearchSource) => {
             const entries: DatasetResubmitEntry[] = shared.refs.map(sharedRefEntry);
 
             // The replay's part `i` answers ref `i`. A snapshot reads its
             // frozen observations through that ref, whatever spec_id comes back.
             // A version link has no question; the wire refuses an empty
             // raw_query.
-            startRun(
+            const started = startRun(
                 {
                     kind: 'dataset_resubmit',
                     entries,
                     ...(shared.query ? { raw_query: shared.query } : {}),
                 },
                 shared.query,
+                source,
                 shared.mode === 'snapshot'
                     ? (resolution) =>
                           setSnapshotBindings(bindSnapshotParts(shared.refs, resolution))
                     : undefined,
             );
 
-            if (shared.mode !== 'snapshot') {
+            if (!started || shared.mode !== 'snapshot') {
                 return;
             }
 
@@ -1142,7 +1354,7 @@ export const useSearchRun = () => {
             if (edit.axis === 'unit') {
                 const unitEdit = sharedUnitEdit(parts, edit.request);
 
-                if (unitEdit) runDatasetEdit(unitEdit.override, unitEdit.touched);
+                if (unitEdit) runDatasetEdit(unitEdit.override, unitEdit.touched, 'shared');
                 return;
             }
 
@@ -1173,6 +1385,7 @@ export const useSearchRun = () => {
                         ),
                     ),
                     bound.map((part) => part.index),
+                    'shared',
                 );
                 return;
             }
@@ -1214,7 +1427,7 @@ export const useSearchRun = () => {
                 );
             };
 
-            runDatasetEdit({ rewriteIdentity }, touched);
+            runDatasetEdit({ rewriteIdentity }, touched, 'shared');
         },
         [entityOptionsBySpec, facetOverride, parts, runDatasetEdit],
     );
@@ -1248,5 +1461,6 @@ export const useSearchRun = () => {
         editMeasure,
         editParsed,
         editShared,
+        searchIds,
     };
 };
