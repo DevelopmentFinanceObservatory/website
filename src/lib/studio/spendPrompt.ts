@@ -1,5 +1,10 @@
 import { limiterBucket } from '../proxy/caller.ts';
-import { countHit, refundHit, type CounterDb } from '../proxy/limitCounter.ts';
+import {
+    refundReservation,
+    reserveHit,
+    type CounterDb,
+    type Reservation,
+} from '../proxy/limitCounter.ts';
 import { GUEST_PROMPTS, USER_DAILY_PROMPTS } from './promptAllowance.ts';
 import type { ToolError } from './wire.ts';
 
@@ -38,42 +43,48 @@ export const studioRoute = (path: readonly string[]): string | null =>
 // resolved (src/lib/proxy/forward's clientIp).
 export type Prompter = { userId: string } | { address: string };
 
+export type PromptSpend =
+    { receipt: Reservation; refusal: null } | { receipt: null; refusal: ToolError };
+
 const counterOf = (prompter: Prompter) =>
     'address' in prompter
         ? { key: `studio-guest:${limiterBucket(prompter.address)}`, allowance: GUEST_PROMPTS }
         : { key: `studio-user:${prompter.userId}`, allowance: USER_DAILY_PROMPTS };
 
 /**
- * Spend one of `prompter`'s prompts for today. Null when the prompt is
- * within the allowance, otherwise the refusal to answer with (HTTP 429).
- * Throws what the database throws.
+ * Spend one of `prompter`'s prompts for today. An admitted spend returns its
+ * receipt; a refusal returns the HTTP 429 body. Throws what the database throws.
  */
-export const spendPrompt = async (db: CounterDb, prompter: Prompter): Promise<ToolError | null> => {
+export const spendPrompt = async (db: CounterDb, prompter: Prompter): Promise<PromptSpend> => {
     const { key, allowance } = counterOf(prompter);
-    const { allowed, reset } = await countHit(db, key, allowance, DAY_S);
+    const reservation = await reserveHit(db, key, allowance, DAY_S);
 
-    if (allowed) {
-        return null;
+    if (reservation.admitted) {
+        return { receipt: reservation.receipt, refusal: null };
     }
 
-    return 'address' in prompter
-        ? {
-              error: 'resource_exhausted',
-              retry: 'do_not_retry',
-              detail: `This network has used today's ${GUEST_PROMPTS} free prompts. Sign in to keep exploring Studio.`,
-              retry_after_seconds: reset,
-          }
-        : {
-              error: 'resource_exhausted',
-              retry: 'retry_after_delay',
-              detail: `You've used today's ${USER_DAILY_PROMPTS} prompts. Your allowance resets at 00:00 UTC.`,
-              retry_after_seconds: reset,
-          };
+    return {
+        receipt: null,
+        refusal:
+            'address' in prompter
+                ? {
+                      error: 'resource_exhausted',
+                      retry: 'do_not_retry',
+                      detail: `This network has used today's ${GUEST_PROMPTS} free prompts. Sign in to keep exploring Studio.`,
+                      retry_after_seconds: reservation.reset,
+                  }
+                : {
+                      error: 'resource_exhausted',
+                      retry: 'retry_after_delay',
+                      detail: `You've used today's ${USER_DAILY_PROMPTS} prompts. Your allowance resets at 00:00 UTC.`,
+                      retry_after_seconds: reservation.reset,
+                  },
+    };
 };
 
 /** Give back a prompt spent today on a turn the harness never started. */
-export const refundPrompt = (db: CounterDb, prompter: Prompter): Promise<void> =>
-    refundHit(db, counterOf(prompter).key, DAY_S);
+export const refundPrompt = (db: CounterDb, receipt: Reservation): Promise<void> =>
+    refundReservation(db, receipt);
 
 /**
  * The proxy's answer to a turn before it is forwarded, given `spend`, which
@@ -133,37 +144,37 @@ export const admitTurn = async (
  * a recorded spend. A refused or failed spend records nothing, so nothing
  * is refunded.
  */
-export const meterTurn = async <P>(
-    spend: () => Promise<{ prompter: P; refusal: ToolError | null }>,
-    refund: (prompter: P) => Promise<void>,
+export const meterTurn = async <R>(
+    spend: () => Promise<{ receipt: R | null; refusal: ToolError | null }>,
+    refund: (receipt: R) => Promise<void>,
     forward: (admit: () => Promise<Response | null>) => Promise<Response>,
     timeoutMs: number = ADMIT_TIMEOUT_MS,
 ): Promise<Response> => {
     // Whoever spent a prompt on this call, and whether the call has been
     // answered, so exactly one side gives a prompt back.
-    let spender: { prompter: P } | undefined;
+    let receipt: R | null = null;
     let answered = false;
 
     const spendAndRecord = async () => {
-        const { prompter, refusal } = await spend();
+        const result = await spend();
 
-        if (!refusal) {
-            spender = { prompter };
+        if (result.receipt !== null) {
+            receipt = result.receipt;
 
             if (answered) {
-                await refund(prompter);
+                await refund(result.receipt);
             }
         }
 
-        return refusal;
+        return result.refusal;
     };
 
     const response = await forward(() => admitTurn(spendAndRecord, timeoutMs));
 
     answered = true;
 
-    if (spender && !response.ok) {
-        await refund(spender.prompter);
+    if (receipt !== null && !response.ok) {
+        await refund(receipt);
     }
 
     return response;

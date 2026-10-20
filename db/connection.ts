@@ -226,7 +226,10 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
  */
 export function buildRuntimePool(
     env: EnvLike = process.env,
-    sizing: Pick<PoolConfig, 'max' | 'connectionTimeoutMillis' | 'query_timeout'> = {},
+    sizing: Pick<
+        PoolConfig,
+        'max' | 'connectionTimeoutMillis' | 'query_timeout' | 'statement_timeout'
+    > = {},
 ): Pool {
     const pool = isCloudSqlConfigured(env)
         ? new Pool({
@@ -249,4 +252,14 @@ export function buildRuntimePool(
     });
 
     return pool;
+}
+
+/** A small, bounded pool for rate and allowance counters. */
+export function buildCounterPool(env: EnvLike = process.env): Pool {
+    return buildRuntimePool(env, {
+        max: 2,
+        connectionTimeoutMillis: 2_000,
+        query_timeout: 500,
+        statement_timeout: 400,
+    });
 }

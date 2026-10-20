@@ -52,10 +52,10 @@ test('admitTurn answers a turn from its allowance', async (t) => {
 });
 
 test('meterTurn gives a prompt back only for a turn that did not start', async (t) => {
-    const prompter = { userId: 'u1' };
+    const receipt = { key: 'studio-user:u1', windowStart: new Date() };
     const spends =
         (refusal: ToolError | null = null) =>
-        async () => ({ prompter, refusal });
+        async () => ({ receipt: refusal ? null : receipt, refusal });
     // The turn the harness answers with `status` once the prompt is admitted.
     const answers = (status: number) => async (admit: () => Promise<Response | null>) =>
         (await admit()) ?? new Response(null, { status });
@@ -73,7 +73,7 @@ test('meterTurn gives a prompt back only for a turn that did not start', async (
         const response = await meterTurn(spends(), async (p) => void refunds.push(p), answers(502));
 
         assert.equal(response.status, 502);
-        assert.deepEqual(refunds, [prompter]);
+        assert.deepEqual(refunds, [receipt]);
     });
 
     await t.test('a refused spend returns its 429 and refunds nothing', async () => {
@@ -98,7 +98,7 @@ test('meterTurn gives a prompt back only for a turn that did not start', async (
             events.push('spent');
             landed();
 
-            return { prompter, refusal: null };
+            return { receipt, refusal: null };
         };
         const response = await meterTurn(
             late,
