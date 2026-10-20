@@ -1,6 +1,6 @@
 # Feedback backend
 
-`POST /api/feedback` takes a feedback submission and fans it out to up to three sinks, each active only when configured: the website tenant database (permanent record), a Slack channel via incoming webhook (how the team sees submissions day to day), and email over SMTP (unused until an email decision exists). Any subset is a valid deployment phase; with none configured the endpoint answers 503 so a form wired up too early fails loudly instead of dropping submissions.
+`POST /api/feedback` takes a feedback submission and fans it out to up to three sinks, each active only when configured: the website tenant database (permanent record), a Slack channel via incoming webhook (how the team sees submissions day to day), and email through the site's mail transport, the Amazon SES API when deployed and SMTP locally (unused until an email decision exists). Any subset is a valid deployment phase; with none configured the endpoint answers 503 so a form wired up too early fails loudly instead of dropping submissions.
 
 ## Request
 
@@ -29,13 +29,16 @@ A submission with a filled honeypot gets a fake 200 so bots learn nothing. A sin
 
 ## Configuration
 
-| Variable                                  | Sink    | Meaning                                                                                                                                                      |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL` / `WEBSITE_DB_*`           | storage | The shared pool from `src/lib/db`; nothing feedback-specific, storage is on wherever the app has a database                                                  |
-| `FEEDBACK_SLACK_WEBHOOK_URL`              | slack   | Slack incoming webhook; deployed it is mounted from Secret Manager by dfo-infra, whose placeholder value `disabled` (or anything that isn't a URL) means off |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | email   | SMTP endpoint, shared with email sign-in (`src/lib/mail/smtp.ts`). The connection must use TLS 1.2 or later. `SMTP_HOST` unset turns email off               |
-| `SMTP_USER` / `SMTP_PASS`                 | email   | optional SMTP auth                                                                                                                                           |
-| `FEEDBACK_FROM` / `FEEDBACK_TO`           | email   | sender identity and destination inbox                                                                                                                        |
+| Variable                                  | Sink    | Meaning                                                                                                                                                                                                                                     |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` / `WEBSITE_DB_*`           | storage | The shared pool from `src/lib/db`; nothing feedback-specific, storage is on wherever the app has a database                                                                                                                                 |
+| `FEEDBACK_SLACK_WEBHOOK_URL`              | slack   | Slack incoming webhook; deployed it is mounted from Secret Manager by dfo-infra, whose placeholder value `disabled` (or anything that isn't a URL) means off                                                                                |
+| `SES_ROLE_ARN` / `SES_REGION`             | email   | Amazon SES API, shared with email sign-in (`src/lib/mail/ses.ts`). The IAM role is assumed with the Cloud Run service account's Google ID token, so no AWS key is stored. Takes precedence over SMTP; one without the other turns email off |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | email   | SMTP endpoint for local work against a mail catcher (`src/lib/mail/smtp.ts`). The connection must use TLS 1.2 or later. With neither transport set, email is off                                                                            |
+| `SMTP_USER` / `SMTP_PASS`                 | email   | optional SMTP auth                                                                                                                                                                                                                          |
+| `FEEDBACK_FROM` / `FEEDBACK_TO`           | email   | sender identity and destination inbox                                                                                                                                                                                                       |
+
+Over SES the role sends only as the address its policy names, `studio@developmentfinance.org`, so `FEEDBACK_FROM` uses that address in the same case, with or without a display name. SES refuses a send from any other address.
 
 Rotating the Slack webhook (leak, channel change) is a Secret Manager version plus a redeploy, no code change; see the dfo-infra website stack README.
 

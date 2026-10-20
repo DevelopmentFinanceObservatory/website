@@ -10,7 +10,7 @@ import { takeCodeAllowance } from '@/lib/auth/codeLimit';
 import { emailSignInConfig } from '@/lib/auth/emailSignIn';
 import { CODE_SIGN_IN_PATH, emailSignInOptions } from '@/lib/auth/emailSignInOptions';
 import { track } from '@/lib/events/track';
-import { sendMail } from '@/lib/mail/smtp';
+import { sendMail } from '@/lib/mail/send';
 
 /** The sign-in providers, in the order the login page lists them. */
 export type Provider = 'google' | 'github' | 'microsoft';

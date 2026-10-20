@@ -1,11 +1,13 @@
-import { sendMail, smtpConfigured } from '@/lib/mail/smtp';
+import { sendMail } from '@/lib/mail/send';
+import { mailTransport } from '@/lib/mail/settings';
 
-// Email half of the feedback backend, sent through the site's SMTP transport (src/lib/mail/smtp).
+// Email half of the feedback backend, sent through the site's mail transport, the SES API when deployed and SMTP locally (src/lib/mail/settings).
 // FEEDBACK_TO is unset until ONE picks the inbox. data@one.org is the de facto DFO contact address if a default is ever wanted.
-// Unset SMTP_HOST means email is off and the route relies on storage alone.
+// With no transport configured, email is off and the route relies on storage alone.
 
 export const mailerConfigured = (): boolean =>
-    smtpConfigured() && Boolean(process.env.FEEDBACK_TO && process.env.FEEDBACK_FROM);
+    !('missing' in mailTransport(process.env)) &&
+    Boolean(process.env.FEEDBACK_TO && process.env.FEEDBACK_FROM);
 
 export const sendFeedbackEmail = async (fields: {
     message: string;

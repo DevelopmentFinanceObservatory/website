@@ -9,7 +9,8 @@ import test from 'node:test';
 import { emailSignInConfig, isThrowawayAddress, signInCodeMessage } from '../emailSignIn.ts';
 
 const FULL = {
-    SMTP_HOST: 'email-smtp.us-east-1.amazonaws.com',
+    SES_ROLE_ARN: 'arn:aws:iam::123456789012:role/dfo-website-dev-ses',
+    SES_REGION: 'us-east-1',
     AUTH_EMAIL_FROM: ' DFO Studio <studio@developmentfinance.org> ',
     TURNSTILE_SITE_KEY: 'site-key',
     TURNSTILE_SECRET_KEY: 'secret-key',
@@ -29,6 +30,19 @@ for (const name of Object.keys(FULL)) {
         assert.deepEqual(emailSignInConfig({ ...FULL, [name]: '  ' }), { missing: [name] });
     });
 }
+
+test('no mail transport and no From address: off, with both named', () => {
+    const env = {
+        ...FULL,
+        SES_ROLE_ARN: undefined,
+        SES_REGION: undefined,
+        AUTH_EMAIL_FROM: undefined,
+    };
+
+    assert.deepEqual(emailSignInConfig(env), {
+        missing: ['SES_ROLE_ARN/SES_REGION or SMTP_HOST', 'AUTH_EMAIL_FROM'],
+    });
+});
 
 for (const [email, throwaway] of [
     ['someone@mailinator.com', true],

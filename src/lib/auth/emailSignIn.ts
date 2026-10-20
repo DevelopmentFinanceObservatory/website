@@ -1,5 +1,7 @@
 import { disposableEmailBlocklistSet } from 'disposable-email-domains-js';
 
+import { mailTransport } from '../mail/settings.ts';
+
 /**
  * Email-code sign-in. /login sends a six-digit code to the address and the
  * visitor types it back (Better Auth's emailOTP plugin, wired in ./auth).
@@ -17,18 +19,22 @@ export type EmailSignInConfig = {
     turnstileSecretKey: string;
 };
 
-const REQUIRED = ['SMTP_HOST', 'AUTH_EMAIL_FROM', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'];
+const REQUIRED = ['AUTH_EMAIL_FROM', 'TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'];
 
 /**
  * The settings email sign-in runs on, or the names of the ones missing.
- * It needs a way to send mail and a Turnstile check in front of every send,
- * so with any of them unset it stays off and no code is sent without the
- * bot check.
+ * It needs a mail transport (lib/mail/settings), a From address and a
+ * Turnstile check in front of every send, so with any of them unset it
+ * stays off and no code is sent without the bot check.
  */
 export const emailSignInConfig = (
     env: Record<string, string | undefined>,
 ): EmailSignInConfig | { missing: string[] } => {
-    const missing = REQUIRED.filter((name) => !env[name]?.trim());
+    const transport = mailTransport(env);
+    const missing = [
+        ...('missing' in transport ? transport.missing : []),
+        ...REQUIRED.filter((name) => !env[name]?.trim()),
+    ];
 
     if (missing.length > 0) {
         return { missing };

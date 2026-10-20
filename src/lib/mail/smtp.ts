@@ -1,11 +1,6 @@
-import nodemailer from 'nodemailer';
-import type { SendMailOptions } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
-// The site's one way to send email is plain SMTP with every value from config, so the provider (Amazon SES, a Workspace relay, anything) changes with config alone.
-// Unset SMTP_HOST means no email at all. Each sender (feedback, sign-in codes) also needs its own from address before it switches on.
-
-export const smtpConfigured = (): boolean => Boolean(process.env.SMTP_HOST);
+// The SMTP transport, for local work against a mail catcher. Deployed, mail goes through the SES API instead (./ses), and ./settings picks between the two.
 
 /**
  * The transport settings. The connection must be encrypted. SMTP_SECURE=true
@@ -30,8 +25,4 @@ export const transportOptions = (
         greetingTimeout: 10_000,
         socketTimeout: 20_000,
     };
-};
-
-export const sendMail = async (message: SendMailOptions): Promise<void> => {
-    await nodemailer.createTransport(transportOptions(process.env)).sendMail(message);
 };

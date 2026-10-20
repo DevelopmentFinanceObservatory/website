@@ -28,7 +28,7 @@ const UNUSED_CODE_PATHS = [
 ];
 
 export type EmailSignInDeps = {
-    /** Sends one message (lib/mail/smtp's sendMail on the site). */
+    /** Sends one message (lib/mail/send's sendMail on the site, which sends through the SES API deployed and SMTP locally). */
     sendMail: (message: {
         from: string;
         to: string;
@@ -48,8 +48,8 @@ export type EmailSignInDeps = {
  * captcha plugin, which runs before any hook), for sign-in, never to a
  * throwaway domain, and within the per-inbox and per-network caps in
  * ./codeLimit. A code lasts CODE_MINUTES, takes three wrong tries, and is
- * stored encrypted under the auth secret. A send the mail server refuses
- * answers CODE_NOT_SENT.
+ * stored encrypted under the auth secret. A send the mail transport (SES or
+ * SMTP) refuses answers CODE_NOT_SENT.
  */
 export const emailSignInOptions = (config: EmailSignInConfig, deps: EmailSignInDeps) => {
     // emailOTP awaits the send but logs and drops its error, then answers
@@ -145,14 +145,22 @@ export const emailSignInOptions = (config: EmailSignInConfig, deps: EmailSignInD
                             ...signInCodeMessage(otp),
                         });
                     } catch (error) {
-                        // Log the error fields, not its message, since a refusal quotes the recipient.
-                        const { code, responseCode, command } = error as {
+                        // Log the error fields, not its message, since a refusal quotes the
+                        // recipient. SMTP errors carry code, responseCode and command. AWS
+                        // errors carry AccessDenied or MessageRejected in name.
+                        const { name, code, responseCode, command } = error as {
+                            name?: string;
                             code?: string;
                             responseCode?: number;
                             command?: string;
                         };
 
-                        console.error('sign-in code: send failed', { code, responseCode, command });
+                        console.error('sign-in code: send failed', {
+                            name,
+                            code,
+                            responseCode,
+                            command,
+                        });
 
                         if (ctx?.request) {
                             unsent.add(ctx.request);

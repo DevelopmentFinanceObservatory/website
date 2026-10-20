@@ -196,18 +196,32 @@ test('three wrong codes use the code up', async () => {
     assert.equal((await errorOf(await signIn('ana@one.org', code))).code, 'TOO_MANY_ATTEMPTS');
 });
 
-test('a send the mail server refuses answers CODE_NOT_SENT and logs no address', async (t) => {
-    const logged = t.mock.method(console, 'error', () => {});
-    const { send } = setup({
-        mailError: Object.assign(new Error('550 5.1.1 <ana@one.org>: Recipient rejected'), {
+for (const [transport, mailError, field] of [
+    [
+        'SMTP',
+        Object.assign(new Error('550 5.1.1 <ana@one.org>: Recipient rejected'), {
             code: 'EENVELOPE',
             responseCode: 550,
         }),
-    });
-    const response = await send('ana@one.org');
+        550,
+    ],
+    [
+        'SES',
+        Object.assign(new Error('Email address is not verified: ana@one.org'), {
+            name: 'MessageRejected',
+        }),
+        'MessageRejected',
+    ],
+] as const) {
+    test(`a send ${transport} refuses answers CODE_NOT_SENT and logs the error's fields but no address`, async (t) => {
+        const logged = t.mock.method(console, 'error', () => {});
+        const { send } = setup({ mailError });
+        const response = await send('ana@one.org');
+        const lines = inspect(logged.mock.calls.map(({ arguments: args }) => args));
 
-    assert.equal(response.status, 503);
-    assert.equal((await errorOf(response)).code, 'CODE_NOT_SENT');
-    assert.ok(logged.mock.callCount() > 0);
-    assert.ok(!inspect(logged.mock.calls.map(({ arguments: args }) => args)).includes('ana@'));
-});
+        assert.equal(response.status, 503);
+        assert.equal((await errorOf(response)).code, 'CODE_NOT_SENT');
+        assert.ok(lines.includes(String(field)));
+        assert.ok(!lines.includes('ana@'));
+    });
+}
