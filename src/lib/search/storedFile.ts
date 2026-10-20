@@ -3,7 +3,8 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { clientIp } from '@/lib/proxy/forward';
-import { hit, rateHeaders } from '@/lib/proxy/rateLimit';
+import { rateHeaders } from '@/lib/proxy/rateHeaders';
+import { hit } from '@/lib/proxy/rateLimit';
 import { datasetsFetch } from '@/lib/search/datasetsFetch';
 import { artifactHref } from '@/lib/search/searchClient';
 import { storedDownload, type VersionLinkDocument } from '@/lib/search/versionLink';

@@ -41,6 +41,12 @@ test('upstreamRequestHeaders: keeps the content headers and the session and prot
     });
 });
 
+test("upstreamRequestHeaders: carries the caller's user-agent", () => {
+    const out = upstreamRequestHeaders(new Headers({ 'User-Agent': 'dfo-python/0.4.1' }));
+
+    assert.deepEqual(Object.fromEntries(out), { 'user-agent': 'dfo-python/0.4.1' });
+});
+
 test('upstreamRequestHeaders: drops credentials, caller and other headers', () => {
     const out = upstreamRequestHeaders(
         new Headers({
@@ -157,6 +163,17 @@ test('clientResponseHeaders: carries the upstream Server-Timing and trace id', (
     assert.deepEqual(Object.fromEntries(out), {
         'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
         'x-dfo-trace-id': 'abc123',
+    });
+});
+
+test('clientResponseHeaders: carries the upstream x-dfo-commit and the Allow of a 405', () => {
+    const out = clientResponseHeaders(
+        new Headers({ 'X-DFO-Commit': '0eb97117', Allow: 'GET, HEAD' }),
+    );
+
+    assert.deepEqual(Object.fromEntries(out), {
+        allow: 'GET, HEAD',
+        'x-dfo-commit': '0eb97117',
     });
 });
 
