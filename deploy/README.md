@@ -31,8 +31,7 @@ pushed image's digest rather than the tag.
 Every deploy also runs a Cloud Run Job that applies the website
 database's schema migrations before the service moves to the new image:
 `build-migrate-deploy.yml` points the Job at the image it just pushed,
-executes it with `--wait`, and only updates the service once the Job exits
-0. A failed migration fails the deploy and leaves the service on its current
+executes it with `--wait`, and only updates the service once the Job exits 0. A failed migration fails the deploy and leaves the service on its current
 image. infra defines each environment's Job (named by
 `MIGRATE_JOB_WEBSITE`, `dfo-dev-website-staging-migrate` on dev) and the
 migrator identity it runs as. This repo owns the migrate entrypoint and the
@@ -75,7 +74,7 @@ migration.
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the
 deploy
 target (`dev`, `production`). Configure the same variable and secret
-*names* in each environment with per-environment values. The workflow YAML
+_names_ in each environment with per-environment values. The workflow YAML
 doesn't change between environments, only the environment it targets does.
 These are the same names `ai` uses, except the service and migration Job
 vars, so the `infra` foundation outputs slot into both repos the same way.
@@ -102,10 +101,10 @@ For dev, infra has set up:
   Workload Identity Federation pool and provider that already serves
   `ai` (foundation), with the per-repo restriction at the SA binding.
 - That deployer service account, with:
-  - `roles/run.developer` (update Cloud Run services)
-  - `roles/artifactregistry.writer` to push images
-  - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
-    that's a separate identity)
+    - `roles/run.developer` (update Cloud Run services)
+    - `roles/artifactregistry.writer` to push images
+    - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
+      that's a separate identity)
 - The Cloud Run service for the `dfo-website` image, including its runtime
   service account, scaling config, env vars, and secrets. This repo's
   workflows only ever update the `--image` on the service that already
@@ -124,26 +123,26 @@ service, and migration Job with its migrator identity.
 
 The app defines the definitive contract once it exists. Known so far:
 
-| Name (provisional)                    | What it is                                                                                                                                                                  |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                      |
-| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                           |
-| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                       |
-| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                 |
-| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                  |
-| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                    |
-| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                         |
-| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                             |
-| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                        |
-| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                           |
+| Name (provisional)                    | What it is                                                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                                                  |
+| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                       |
+| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                   |
+| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                             |
+| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                                              |
+| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                |
+| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
+| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
+| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                                                    |
+| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                       |
 | `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
-| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                               |
-| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                     |
-| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                 |
-| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                        |
-| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                    |
-| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                               |
-| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                           |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                           |
+| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                                                 |
+| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                                             |
+| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                                                    |
+| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                |
+| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
+| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the
@@ -162,7 +161,7 @@ every client under one shared address, each with one error logged.
 
 ## Repo-side prerequisites
 
-- The application itself, following the conventions in the root README
+- The application itself, following the conventions in `docs/development.md`
   (pnpm, `output: 'standalone'`, the `lint`/`typecheck`/`test`/`build`
   script contract).
 - The migrate entrypoint and its migrations, both under `db/`. The
