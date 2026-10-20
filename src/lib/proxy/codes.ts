@@ -7,7 +7,7 @@
  */
 
 // Every registry code is snake_case, so a code of this shape stays in the
-// one path segment after /codes/; `.` and `..` would resolve out of it.
+// one path segment after /codes/. `.` and `..` would resolve out of it.
 const CODE = /^[a-z][a-z0-9_]*$/;
 
 /** The registry address for `code`, or null for a value no code can be. */
