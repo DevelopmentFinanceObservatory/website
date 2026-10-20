@@ -220,3 +220,21 @@ export const event = pgTable(
 );
 
 export type EventRow = typeof event.$inferSelect;
+
+/**
+ * One counter per limiter key (src/lib/proxy/limitCounter): the per-address
+ * limits on /api and /mcp and the Studio's daily prompt allowances. `key`
+ * names the allowance and the caller (`api:203.0.113.7`,
+ * `studio-user:<user id>`); `count` is the hits in the window that started
+ * at `windowStart`. The next hit after the window ends starts the row over,
+ * and rows idle for two days are deleted.
+ */
+export const limitCounter = pgTable(
+    'limit_counter',
+    {
+        key: text('key').primaryKey(),
+        windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+        count: integer('count').notNull(),
+    },
+    (table) => [index('limit_counter_window_start_idx').on(table.windowStart)],
+);

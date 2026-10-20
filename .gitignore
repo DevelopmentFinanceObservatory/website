@@ -29,7 +29,5 @@ CLAUDE.md
 *.pem
 npm-debug.log*
 
-# local redis (rate-limit dev runs)
-dump.rdb
 /.claude
 /.idea

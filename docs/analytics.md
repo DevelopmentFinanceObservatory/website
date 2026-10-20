@@ -102,6 +102,10 @@ The site writes one JSON line to stdout for each page view and API call, which C
 
 The diagnostic event carries `RSC` and `Next-Router-Prefetch` headers before Next.js normalises them. Logging leaves request bodies unread, so API and MCP payloads stream to their handlers in full. A Next.js proxy would buffer those bodies and truncate them at its default 10 MB limit.
 
-## Guest Studio
+## Studio prompt allowance
 
-The Studio is open without an account: `GUEST_LIMIT` (5, `src/components/organisms/Studio/GuestWall.tsx`) prompts, counted in localStorage, then the prompt is replaced by a sign-in wall. Front-end only by design — a cleared localStorage resets it. Guests get no history, saving or sharing (all need an account).
+A Studio prompt is one turn (`POST /api/studio/turn`). The proxy atomically reserves one from the caller's daily allowance before it forwards the turn (`src/lib/studio/spendPrompt.ts`). Refused requests consume no allowance. A guest gets 5 a day per network address, an IPv6 address counted by its /64, so guests behind one shared address share them. A signed-in user gets 75 a day, counted by user id. Both reset at 00:00 UTC. The numbers live in `src/lib/studio/promptAllowance.ts` and the counts in the `limit_counter` table. A turn past its allowance gets a 429 `resource_exhausted`, whose detail the chat shows as the reply. Allowance and rate-limit queries use a separate two-connection pool with a 400 ms database statement limit, a 500 ms client query limit, and a 2 s connection limit, so they cannot occupy the pool used for sessions and history. An allowance that cannot be read gets a 503. A turn the harness answers with anything but success gives its reservation back in its original counter window, since no model ran. The proxy forwards only the four routes the browser calls (`turn`, `interrupt`, `cancel`, `composition`) and answers 404 to any other path, so no encoding of a path reaches the turn route without spending a prompt.
+
+The browser also counts a guest's prompts in localStorage and replaces the prompt with a sign-in wall at 5. Clearing it brings the prompt back but not the allowance. Guests get no history, saving or sharing (all need an account).
+
+In local dev every guest comes from the same address and so shares one allowance. Sign in, or delete the `studio-guest:` rows from `limit_counter`.

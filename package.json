@@ -36,7 +36,6 @@
     "classnames": "^2.5.1",
     "drizzle-orm": "^0.45.2",
     "html-to-image": "^1.11.13",
-    "ioredis": "^6",
     "lowlight": "^3.3.0",
     "mermaid": "^12.1.0",
     "next": "16.3.0",
