@@ -141,6 +141,18 @@ test("assumptionClauses names each part's own clause when the plan is written pa
         { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
         { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
     ]);
+    // A part with no clause beside one that states its own: the clause still names its part.
+    const onlySecond = [
+        token('Aid.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+        token(' ', 'heading', null),
+        ...sentence(1, 'every country'),
+    ];
+
+    assert.deepEqual(assumptionClauses(onlySecond, ['aid', 'debt']), [
+        { key: 0, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
     // One joined clause over two parts, an item two parts share unowned, takes no prefix.
     const joined = [
         token('Aid and debt.', 'heading', null),

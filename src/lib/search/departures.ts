@@ -55,14 +55,17 @@ export type AssumptionClause = {
 
 /** The plan's assumptions clauses as text, in plan order: the one clause
  *  of a joined sentence, or each part's own clause in a plan written part
- *  by part, where each carries its part's variable text (`variableTexts`,
- *  by part index) as `prefix`, as a per-part byline does. Empty when the
+ *  by part (one byline per part), where each carries its part's variable
+ *  text (`variableTexts`, by part index) as `prefix`, as that part's byline
+ *  does, whether or not the other parts state a clause. Empty when the
  *  answer assumed nothing. */
 export function assumptionClauses(
     plan: readonly SentenceToken[] | null | undefined,
     variableTexts: readonly (string | null)[],
 ): AssumptionClause[] {
-    const clauses = sentenceBlocks(plan).filter((block) => block.segment === 'assumption');
+    const blocks = sentenceBlocks(plan);
+    const clauses = blocks.filter((block) => block.segment === 'assumption');
+    const perPart = blocks.filter((block) => block.segment === 'byline').length > 1;
     const partCount = variableTexts.length;
 
     return clauses.map((block, key) => {
@@ -72,7 +75,7 @@ export function assumptionClauses(
 
         return {
             key,
-            prefix: clauses.length > 1 && owner != null ? (variableTexts[owner] ?? null) : null,
+            prefix: perPart && owner != null ? (variableTexts[owner] ?? null) : null,
             text: block.tokens.map((token) => token.text).join(''),
         };
     });
