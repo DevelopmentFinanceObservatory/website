@@ -20,6 +20,7 @@ import {
 } from '@/lib/studio/chatLine';
 import { createCanvasEdits } from '@/lib/studio/canvasEdits';
 import {
+    clarifyAnswer,
     clarifyFromFrame,
     clarifyNote,
     clarifyReply,
@@ -895,9 +896,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                 return;
             }
 
-            const answer = clarifyNote(clarify, answers);
+            const note = clarifyNote(clarify, answers);
 
-            resume(clarifyReply(clarify, answers), `_${answer}_`, answer);
+            resume(clarifyReply(clarify, answers), `_${note}_`, clarifyAnswer(clarify, answers));
         },
         [resume],
     );

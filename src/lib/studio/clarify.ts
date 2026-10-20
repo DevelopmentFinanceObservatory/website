@@ -222,3 +222,9 @@ export const clarifyNote = (clarify: Clarify, answers: ClarifyAnswers): string =
 
     return chosen.length > 0 ? `You chose: ${chosen.join(', ')}` : 'Left to DFO';
 };
+
+/** The user's transcript text, omitted when every question was skipped. */
+export const clarifyAnswer = (clarify: Clarify, answers: ClarifyAnswers): string | undefined =>
+    Object.values(answers).some((answer) => answer.kind !== 'skipped')
+        ? clarifyNote(clarify, answers)
+        : undefined;
