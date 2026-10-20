@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
-import type {
-    Assumption,
-    AssumptionKind,
-    EntityGroup,
-    EntityRoleKey,
-    HydratedPart,
-    Operation,
+import {
+    type Assumption,
+    type AssumptionKind,
+    type EntityGroup,
+    type EntityRoleKey,
+    type HydratedPart,
+    knownPart,
+    type Operation,
 } from './types.ts';
 
 /**
@@ -155,7 +156,7 @@ export const searchSharePart = (part: HydratedPart): Required<SearchSharePart> =
         identity: spec.identity,
         entityGroups: spec.entity_groups ?? null,
         operations: part.part?.operations ?? [],
-        assumptions: part.part?.assumptions ?? null,
+        assumptions: knownPart(part.part)?.assumptions ?? null,
         definition: spec.definition,
     };
 };

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs and open slot options as `any` and reads only the members each editor shows, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';

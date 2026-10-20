@@ -21,6 +21,7 @@ test('operationButtonLabel names each verb', () => {
             'Ask Studio for a report',
         ],
     );
+    assert.equal(operationButtonLabel('tally'), 'Open in Studio');
 });
 
 test("the rank fixture's operation names its Studio button", () => {

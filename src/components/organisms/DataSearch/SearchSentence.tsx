@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs, slots and open slot options as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -59,18 +59,20 @@ import {
 import { spliceSentence } from '@/lib/search/refine';
 import { keyRef } from '@/lib/search/searchClient';
 import { planCoverageText, planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
-import type {
-    EntityRoleKey,
-    GraphRef,
-    HydratedPart,
-    IdentityFacetAxis,
-    IdentityFacets,
-    NoDataOption,
-    ParsedPart,
-    MeasureAxisValue,
-    RoleAxis,
-    SentenceToken,
-    SpecAlternativeMeasure,
+import {
+    type EntityRoleKey,
+    type GraphRef,
+    type HydratedPart,
+    type IdentityFacetAxis,
+    type IdentityFacetBinding,
+    isKnownPart,
+    knownPart,
+    type MeasureAxisValue,
+    type NoDataOption,
+    type ParsedPart,
+    type RoleAxis,
+    type SentenceToken,
+    type SpecAlternativeMeasure,
 } from '@/lib/search/types';
 import type { WindowApplyValue } from '@/lib/search/windowState';
 import {
@@ -432,7 +434,7 @@ type SearchSentenceProps = {
         partIndex: number,
         spec: any,
         axis: A,
-        binding: IdentityFacets[A] | null,
+        binding: IdentityFacetBinding[A] | null,
     ) => void;
     // A typed phrase edit or entity_ambiguous pick's edited ParsedPart,
     // posted as a parsed entry re-resolving just this part.
@@ -1803,7 +1805,11 @@ export const SearchSentenceHeading = ({
             return <span key={index}>{token.text}</span>;
         }
 
-        const wording = ambiguousWordingGroup(token, wirePart.no_data);
+        const known = knownPart(wirePart);
+        const wording = ambiguousWordingGroup(
+            token,
+            known?.status === 'no_data' ? known.no_data : undefined,
+        );
 
         // While an edit targeting this part is in flight, its what-token (or
         // its ambiguous wordings, when the plan carries them) carries an
@@ -2069,12 +2075,13 @@ export const SearchSentenceHeading = ({
     // the page offers Studio once, since it hands over the whole question.
     const offered = new Set<string>();
     const departureItems: DepartureItem[] = answerDepartures(
-        answerParts.map((part) => ({
-            status: part.part?.status ?? 'unsupported',
-            variable_text: part.variableText,
-            departures: part.part?.departures ?? [],
-            no_data: part.part?.no_data,
-            restatement: part.part?.restatement,
+        answerParts.map(({ part, variableText }) => ({
+            status: part?.status ?? 'unsupported',
+            variable_text: variableText,
+            departures: part?.departures ?? [],
+            no_data:
+                part && isKnownPart(part) && part.status === 'no_data' ? part.no_data : undefined,
+            restatement: part?.restatement,
         })),
         rawPlan,
     ).map(({ key, prefix, departure, action }) => {
@@ -2380,7 +2387,7 @@ export const SearchSentenceBody = ({
         variableText: part.variableText,
         spec: part.hydratedSpec,
         warnings: part.part?.warnings,
-        assumptions: part.part?.assumptions,
+        assumptions: knownPart(part.part)?.assumptions,
     }));
 
     return (

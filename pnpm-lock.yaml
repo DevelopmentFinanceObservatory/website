@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@developmentfinance/client':
+        specifier: file:vendor/developmentfinance-client-0.1.0.tgz
+        version: file:vendor/developmentfinance-client-0.1.0.tgz
       '@fontsource/dm-mono':
         specifier: ^5.3.0
         version: 5.3.0
@@ -853,6 +856,16 @@ packages:
     engines: {node: '>=20.19.0'}
     peerDependencies:
       postcss-selector-parser: ^7.1.1
+
+  '@developmentfinance/client@file:vendor/developmentfinance-client-0.1.0.tgz':
+    resolution: {integrity: sha512-xATRLrOEdeK2lqQEMtKzA7G3kWfl8oWd2N2ZTDUOFW/fA+IrEjzHOFl+LbuppGxZyZ0sg3MwBlwnVZMSpIZHhQ==, tarball: file:vendor/developmentfinance-client-0.1.0.tgz}
+    version: 0.1.0
+    engines: {node: '>=22.18'}
+    peerDependencies:
+      apache-arrow: ^21.0.0
+    peerDependenciesMeta:
+      apache-arrow:
+        optional: true
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -4299,6 +4312,12 @@ packages:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
+  hyparquet-writer@0.16.10:
+    resolution: {integrity: sha512-53fpiA57kdJ2V7X97/VSAzHr8rb8Z2cr126T1pTL9TapZNOP/wNJqFh+jc7dRwwg9TpVMYeRNDMb+r5oiLqwjg==}
+
+  hyparquet@1.31.1:
+    resolution: {integrity: sha512-tF9580Xb+41+Eb+mH0av1k7m1PWl+PSKrX66Yd7UOZ760cwEXP9/enwHRMSCeVncaubRI8XPb3v580/ujYKK5w==}
+
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
     engines: {node: '>=0.10.0'}
@@ -6921,6 +6940,11 @@ snapshots:
   '@csstools/selector-specificity@6.0.0(postcss-selector-parser@7.1.5)':
     dependencies:
       postcss-selector-parser: 7.1.5
+
+  '@developmentfinance/client@file:vendor/developmentfinance-client-0.1.0.tgz':
+    dependencies:
+      hyparquet: 1.31.1
+      hyparquet-writer: 0.16.10
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -10375,6 +10399,12 @@ snapshots:
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
+
+  hyparquet-writer@0.16.10:
+    dependencies:
+      hyparquet: 1.31.1
+
+  hyparquet@1.31.1: {}
 
   iconv-lite@0.6.3:
     dependencies:

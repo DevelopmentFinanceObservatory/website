@@ -4,10 +4,27 @@
 
 import { offersStudioCallout } from './resultNotes.ts';
 import { tokenPart } from './sentencePlan.ts';
-import type { Departure, Part, SentenceSegment, SentenceToken } from './types.ts';
+import {
+    type Departure,
+    hasKey,
+    type Known,
+    type NoDataPart,
+    type Part,
+    type SentenceSegment,
+    type SentenceToken,
+} from './types.ts';
+
+type BlockSegment = Exclude<Known<SentenceSegment>, 'departure'>;
+
+const BLOCK_SEGMENTS: Record<BlockSegment, true> = {
+    coverage: true,
+    heading: true,
+    byline: true,
+    assumption: true,
+};
 
 export type SentenceBlock = {
-    segment: Exclude<SentenceSegment, 'departure'>;
+    segment: BlockSegment;
     tokens: SentenceToken[];
 };
 
@@ -27,10 +44,14 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
     for (const token of plan ?? []) {
         if (token.segment === 'departure') continue;
 
+        // A token without a segment is in the heading, the wire's default;
+        // so is one in a segment this site does not know.
+        const segment =
+            token.segment && hasKey(BLOCK_SEGMENTS, token.segment) ? token.segment : 'heading';
         const last = blocks.at(-1);
 
-        if (last?.segment === token.segment) last.tokens.push(token);
-        else blocks.push({ segment: token.segment, tokens: [token] });
+        if (last?.segment === segment) last.tokens.push(token);
+        else blocks.push({ segment, tokens: [token] });
     }
 
     return blocks
@@ -196,7 +217,7 @@ export type AnswerDeparture = {
  *  `no_data` and `restatement` decide whether its callout offers Studio. */
 export function answerDepartures(
     parts: readonly (Pick<Part, 'status' | 'variable_text' | 'departures'> &
-        Partial<Pick<Part, 'no_data' | 'restatement'>>)[],
+        Partial<Pick<Part, 'restatement'> & Pick<NoDataPart, 'no_data'>>)[],
     plan: readonly SentenceToken[] | null | undefined,
 ): AnswerDeparture[] {
     const several = parts.length > 1;

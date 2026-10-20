@@ -293,7 +293,7 @@ export const useDatasetDownload = ({
 
             // The mint answers with this definition's own options and
             // coverage, so the sheet need not ask the options door for them.
-            applyOptions(manifest as DatasetOptionsDocument | null);
+            applyOptions(manifest);
             optionsAsk.answered(specId);
 
             const artifact = artifacts.find((a) => typeof a.url === 'string') ?? null;

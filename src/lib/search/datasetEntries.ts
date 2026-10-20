@@ -20,19 +20,20 @@
  * candidate echo their reading's `reading_assumptions` list.
  */
 
-import type {
-    Assumption,
-    BaseIdentity,
-    DatasetCandidateIdentity,
-    DatasetCandidatesEntry,
-    DatasetIdentityEntry,
-    DatasetPlaceholderEntry,
-    DatasetResubmitEntry,
-    EntityGroup,
-    HydratedPart,
-    Operation,
-    Spec,
-} from './types';
+import {
+    type Assumption,
+    type BaseIdentity,
+    type DatasetCandidateIdentity,
+    type DatasetCandidatesEntry,
+    type DatasetIdentityEntry,
+    type DatasetPlaceholderEntry,
+    type DatasetResubmitEntry,
+    type EntityGroup,
+    type HydratedPart,
+    knownPart,
+    type Operation,
+    type Spec,
+} from './types.ts';
 
 /**
  * How `buildDatasetEntries` deviates from "every part's own current spec":
@@ -112,7 +113,9 @@ function readingAssumptions(
     part: HydratedPart,
     spec: Pick<Spec, 'spec_id'>,
 ): { assumptions?: Assumption[] } {
-    const assumptions = part.part?.reading_assumptions?.[spec.spec_id];
+    const known = knownPart(part.part);
+    const assumptions =
+        known?.status === 'candidates' ? known.reading_assumptions?.[spec.spec_id] : undefined;
 
     return assumptions ? { assumptions } : {};
 }
@@ -135,7 +138,8 @@ export function candidatePickEntry(part: HydratedPart, spec: Spec): DatasetIdent
 }
 
 function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
-    const candidateSet = part.part?.candidates;
+    const known = knownPart(part.part);
+    const candidateSet = known?.status === 'candidates' ? known.candidates : undefined;
     if (!candidateSet) {
         throw new Error(`buildDatasetEntries: part ${part.index} has no candidate set`);
     }
@@ -168,8 +172,10 @@ function candidatesEntryFor(part: HydratedPart): DatasetCandidatesEntry {
 function placeholderEntryFor(part: HydratedPart): DatasetPlaceholderEntry {
     const variable_text = part.variableText ?? '';
 
-    if (part.part?.status === 'no_data') {
-        const reason = part.part.no_data?.reason;
+    const known = knownPart(part.part);
+
+    if (known?.status === 'no_data') {
+        const reason = known.no_data.reason;
         return {
             entry_kind: 'placeholder',
             variable_text,
@@ -178,7 +184,7 @@ function placeholderEntryFor(part: HydratedPart): DatasetPlaceholderEntry {
         };
     }
 
-    const code = part.part?.unsupported?.code;
+    const code = known?.status === 'unsupported' ? known.unsupported.code : undefined;
     return {
         entry_kind: 'placeholder',
         variable_text,
@@ -192,7 +198,8 @@ function placeholderEntryFor(part: HydratedPart): DatasetPlaceholderEntry {
  *  no response has landed for it): a dataset_resubmit only ever posts over
  *  parts that already have content. */
 function entryForPart(part: HydratedPart): DatasetResubmitEntry {
-    switch (part.part?.status) {
+    // A part whose status this release does not know has no entry to post.
+    switch (knownPart(part.part)?.status) {
         case 'definite':
             return identityEntryFor(part);
         case 'candidates':
@@ -248,17 +255,17 @@ function withOperations(entry: DatasetResubmitEntry, part: HydratedPart): Datase
  *  no_data part assumed nothing because it answered nothing, so its edit
  *  reads fresh. */
 function withAssumptions(entry: DatasetResubmitEntry, part: HydratedPart): DatasetResubmitEntry {
-    const assumptions = part.part?.assumptions;
+    const known = knownPart(part.part);
 
     if (
         entry.entry_kind !== 'identity' ||
         entry.assumptions !== undefined ||
-        part.part?.status !== 'definite' ||
-        assumptions === undefined
+        known?.status !== 'definite' ||
+        known.assumptions === undefined
     ) {
         return entry;
     }
-    return { ...entry, assumptions };
+    return { ...entry, assumptions: known.assumptions };
 }
 
 /**

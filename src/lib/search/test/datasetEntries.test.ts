@@ -4,14 +4,16 @@ import test from 'node:test';
 import { buildDatasetEntries, candidatePickEntry, sharedRefEntry } from '../datasetEntries.ts';
 import { withEntityEdit } from '../promote.ts';
 import { normalizeResponse, restorePlaceholderParts } from '../searchClient.ts';
-import type {
-    Assumption,
-    DatasetCandidatesEntry,
-    DatasetIdentityEntry,
-    DatasetParsedEntry,
-    HydratedPart,
-    Part,
-    Resolution,
+import {
+    type Assumption,
+    type DatasetCandidatesEntry,
+    type DatasetIdentityEntry,
+    type DatasetParsedEntry,
+    type HydratedPart,
+    knownPart,
+    type Part,
+    type Resolution,
+    type Spec,
 } from '../types.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
@@ -19,15 +21,31 @@ import { fixtures, type FixtureName } from './fixtures/index.ts';
 function hydratedParts(name: FixtureName): HydratedPart[] {
     const parts: Part[] = normalizeResponse(fixtures[name]).parts;
 
-    return parts.map((part, index) => ({
-        index,
-        variableText: part.variable_text ?? null,
-        part,
-        hydratedSpec: part.status === 'definite' ? (part.spec ?? null) : null,
-        observationsPending: false,
-        phase: 'done',
-        editError: null,
-    }));
+    return parts.map((part, index) => {
+        const known = knownPart(part);
+
+        return {
+            index,
+            variableText: part.variable_text ?? null,
+            part,
+            hydratedSpec: known?.status === 'definite' ? known.spec : null,
+            observationsPending: false,
+            phase: 'done',
+            editError: null,
+        };
+    });
+}
+
+/** The assumptions a known part carries; none for an unknown one. */
+const assumptionsOf = (part: HydratedPart): Assumption[] | undefined =>
+    knownPart(part.part)?.assumptions;
+
+/** The specs of a candidates part. */
+function candidateSpecs(part: HydratedPart): Spec[] {
+    const known = knownPart(part.part);
+
+    assert.ok(known?.status === 'candidates');
+    return known.candidates.specs;
 }
 
 /** A `parsed` entry for `part`: its restatement with `dcid` pinned on the
@@ -76,8 +94,12 @@ test("the pick's answer lands at part 1 and part 0 keeps its dataset", () => {
         2,
     );
 
+    const first = knownPart(merged.parts[0]);
+    const base = knownPart(parts[0].part);
+
     assert.equal(merged.parts.length, 2);
-    assert.equal(merged.parts[0].spec?.spec_id, parts[0].part?.spec?.spec_id);
+    assert.ok(first?.status === 'definite' && base?.status === 'definite');
+    assert.equal(first.spec.spec_id, base.spec.spec_id);
     assert.equal(merged.parts[1], pick);
     assert.equal(merged.status, 'definite');
 });
@@ -115,7 +137,7 @@ test("buildDatasetEntries posts a parsed entry's part unchanged, its own operati
 
 test("buildDatasetEntries echoes a part's assumptions on its identity entry, an edit's included", () => {
     const parts = hydratedParts('broad-truncated');
-    const assumptions = parts[0].part?.assumptions;
+    const assumptions = assumptionsOf(parts[0]);
     const [own] = buildDatasetEntries(parts) as DatasetIdentityEntry[];
     const override: DatasetIdentityEntry = { ...own, assumptions: undefined };
     const [edited] = buildDatasetEntries(parts, { index: 0, entry: override });
@@ -133,7 +155,7 @@ test("an edit that carries its own echo keeps it over the part's list", () => {
         entry: { ...own, assumptions: [] },
     }) as DatasetIdentityEntry[];
 
-    assert.ok(parts[0].part?.assumptions?.length);
+    assert.ok(assumptionsOf(parts[0])?.length);
     assert.deepEqual(replayed.assumptions, []);
 });
 
@@ -193,7 +215,7 @@ function candidatesWithReadings(
     readings: (specIds: string[]) => Record<string, Assumption[]> | undefined,
 ): HydratedPart {
     const [part] = hydratedParts('multi-candidate');
-    const specIds = part.part!.candidates!.specs.map((spec) => spec.spec_id);
+    const specIds = candidateSpecs(part).map((spec) => spec.spec_id);
 
     return {
         ...part,
@@ -212,7 +234,7 @@ const twoReadings = ([first, second]: string[]) => ({
 
 test("a pick echoes the picked reading's own assumptions, not the readings' shared list", () => {
     const part = candidatesWithReadings(twoReadings);
-    const [first, second] = part.part!.candidates!.specs;
+    const [first, second] = candidateSpecs(part);
 
     for (const [spec, expected] of [
         [first, [everyProvider, everyPlace]],
@@ -242,7 +264,7 @@ test('a reading the response gives no list for posts no echo, on a pick or a can
         candidatesWithReadings(() => undefined),
         candidatesWithReadings(([first]) => ({ [first]: [] })),
     ]) {
-        const specs = part.part!.candidates!.specs;
+        const specs = candidateSpecs(part);
         const pick = candidatePickEntry(part, specs[1]);
         const [posted] = buildDatasetEntries([part], { index: 0, entry: pick });
         const [entry] = buildDatasetEntries([part]) as DatasetCandidatesEntry[];
@@ -270,16 +292,20 @@ test("an identity entry and each candidate post their own Spec's groups beside t
     const g7 = { origin: { ref: null, label: 'G7 countries' } };
     const [definite] = hydratedParts('definite-single');
     const [candidates] = hydratedParts('multi-candidate');
-    const [first, ...others] = candidates.part!.candidates!.specs;
+    const candidatesPart = knownPart(candidates.part);
+
+    assert.ok(candidatesPart?.status === 'candidates');
+
+    const [first, ...others] = candidatesPart.candidates.specs;
     const parts: HydratedPart[] = [
         { ...definite, hydratedSpec: { ...definite.hydratedSpec!, entity_groups: eu } },
         {
             ...candidates,
             index: 1,
             part: {
-                ...candidates.part!,
+                ...candidatesPart,
                 candidates: {
-                    ...candidates.part!.candidates!,
+                    ...candidatesPart.candidates,
                     specs: [{ ...first, entity_groups: g7 }, ...others],
                 },
             },
@@ -304,7 +330,7 @@ test("an identity entry and each candidate post their own Spec's groups beside t
     });
 
     assert.ok(rewritten.entry_kind === 'identity');
-    assert.deepEqual(rewritten.identity.entities.origin, ['country/DEU']);
+    assert.deepEqual(rewritten.identity.entities?.origin, ['country/DEU']);
     assert.deepEqual(rewritten.entity_groups, eu);
 });
 
@@ -347,7 +373,7 @@ test('a stored share part replays its groups beside the identity, and no member 
 test('a stored share part echoes its assumptions, [] included, and a share stored before them posts none', () => {
     const [part] = hydratedParts('broad-truncated');
     const identity = part.hydratedSpec!.identity;
-    const assumptions = part.part!.assumptions!;
+    const assumptions = assumptionsOf(part)!;
     const ref = { variableText: 'aid', identity, entityGroups: null, operations: [] };
 
     assert.ok(assumptions.length);

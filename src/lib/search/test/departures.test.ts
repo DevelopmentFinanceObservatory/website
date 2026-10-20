@@ -66,6 +66,21 @@ test('sentenceBlocks joins heading runs a departure separated -- a no_data part 
     assert.deepEqual(sentenceBlocks(null), []);
 });
 
+test('sentenceBlocks reads a token with no segment, or one it does not know, as heading', () => {
+    assert.deepEqual(
+        blockTexts([
+            { kind: 'text', text: 'Aid' },
+            { kind: 'text', text: ' to Kenya.', segment: 'aside' },
+            { kind: 'text', text: ' ' },
+            { kind: 'text', text: 'OECD.', segment: 'byline' },
+        ]),
+        [
+            ['heading', 'Aid to Kenya.'],
+            ['byline', 'OECD.'],
+        ],
+    );
+});
+
 // ---------------------------------------------------------------------------
 // The assumptions clause and the mixed-answer opener
 // ---------------------------------------------------------------------------

@@ -23,6 +23,8 @@
  * the browser client and the server routes share it.
  */
 
+import type { ProblemDetails } from '@developmentfinance/client/wire';
+
 import { apisFetch, type Fetch } from '../apisAuth.ts';
 
 export type { Fetch };
@@ -69,7 +71,7 @@ const isRetryableRefusal = async (res: Response): Promise<boolean> => {
         .json()
         .catch(() => null);
 
-    return (body as { retryable?: unknown } | null)?.retryable === true;
+    return (body as Partial<ProblemDetails> | null)?.retryable === true;
 };
 
 /** The wait a `Retry-After` header names, in seconds or as a date, in ms;

@@ -27,7 +27,7 @@ const identityEdit: PermalinkEdit = {
         variable_text: 'ODA disbursements',
         identity: {
             identity_version: 'spec1',
-            shape: {},
+            shape: { kind: 'statvar_schema' },
             slots: [],
             entities: { origin: ['country/FRA'] },
             requested_window: { kind: 'all' },
@@ -57,7 +57,7 @@ const multiEntityEdit: PermalinkEdit = {
         variable_text: 'ODA to recipients',
         identity: {
             identity_version: 'spec1',
-            shape: {},
+            shape: { kind: 'statvar_schema' },
             slots: [],
             entities: { origin: ['country/FRA'], destination: ['country/KEN', 'country/ETH'] },
             requested_window: { kind: 'all' },

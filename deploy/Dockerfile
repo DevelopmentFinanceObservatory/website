@@ -16,9 +16,10 @@ RUN npm install -g pnpm@10.5.2
 
 WORKDIR /app
 
-# Manifest + lockfile first, so the dependency layer caches across
-# source-only changes.
+# Manifest, lockfile and the vendored tarballs they name (`file:vendor/...`)
+# first, so the dependency layer caches across source-only changes.
 COPY package.json pnpm-lock.yaml ./
+COPY vendor ./vendor
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 

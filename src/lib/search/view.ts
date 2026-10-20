@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs and open slot options as `any`, each helper dereferencing only the members it names and tolerating any that is missing */
 /**
  * View helpers: flatten a resolved Spec into UI-ready rows and summaries.
  * Deliberately defensive — the engine contract is authoritative, the UI reads
@@ -16,27 +16,29 @@ import type { EntityChoiceGroup } from './parsedEdit.ts';
 import { entityOptionDcid } from './pickerState.ts';
 import type { OptionLike } from './pickerState.ts';
 import type { ApiError, EntityOption } from './searchClient';
-import type {
-    Assumption,
-    EntityOptions,
-    EntityRoleKey,
-    FacetBasis,
-    IdentityFacets,
-    NoData,
-    NoDataDenominator,
-    NoDataGate,
-    NoDataReason,
-    ObservationsOmission,
-    ObservationsOmissionReason,
-    ParsedPart,
-    Part,
-    PartyKind,
-    PlaceOptionsScope,
-    RoleAxis,
-    SentenceToken,
-    UnitAlternative,
-    Warning,
-} from './types';
+import {
+    type Assumption,
+    type EntityOptions,
+    type EntityRoleKey,
+    type FacetBasis,
+    hasKey,
+    type IdentityFacetBinding,
+    type Known,
+    type NoData,
+    type NoDataDenominator,
+    type NoDataGate,
+    type NoDataReason,
+    type ObservationsOmission,
+    type ObservationsOmissionReason,
+    type ParsedPart,
+    type Part,
+    type PartyKind,
+    type PlaceOptionsScope,
+    type RoleAxis,
+    type SentenceToken,
+    type UnitAlternative,
+    type Warning,
+} from './types.ts';
 import { keyRef, sentenceOf } from './searchClient.ts';
 import { unitWithBasis } from './unitLabel.ts';
 
@@ -1976,7 +1978,7 @@ export type MethodChoice = {
     label: string;
     checked: boolean;
     /** The facet binding a pick posts. Null drops the axis. */
-    binding: IdentityFacets['measurementMethod'] | null;
+    binding: IdentityFacetBinding['measurementMethod'] | null;
 };
 
 export type MethodPicker = { label: string; choices: MethodChoice[] };
@@ -2053,7 +2055,8 @@ export const methodPicker = (spec: any): MethodPicker | null => {
         return null;
     }
 
-    const bound: IdentityFacets['measurementMethod'] = spec?.identity?.facets?.measurementMethod;
+    const bound: IdentityFacetBinding['measurementMethod'] =
+        spec?.identity?.facets?.measurementMethod;
     const boundRefs: (string | null)[] =
         bound?.state === 'set' ? bound.refs : bound && 'ref' in bound ? [bound.ref] : [];
     const served = servedMethod(spec);
@@ -2274,7 +2277,7 @@ export const flattenPartsRows = (
 // A part's own outcome, in plain language, for its variable line and for a
 // marked unresolved phrase's hover title. Both surfaces read this one map,
 // so they say the same thing for the same reason code.
-const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
+const NO_DATA_REASON_TEXT: Record<Known<NoDataReason>, string> = {
     source_not_resolved: "We couldn't match the data source named in that query.",
     source_ambiguous: 'More than one data source matches that wording. Try naming it in full.',
     source_code_not_held: 'No source we search publishes that code for this question.',
@@ -2304,13 +2307,15 @@ const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
 };
 
 export const noDataReasonText = (reason?: NoDataReason | null): string =>
-    (reason && NO_DATA_REASON_TEXT[reason]) || 'No data matched this query.';
+    reason && hasKey(NO_DATA_REASON_TEXT, reason)
+        ? NO_DATA_REASON_TEXT[reason]
+        : 'No data matched this query.';
 
 // Names the failed gate for every reason pairing a flagged_match with one.
 // The flagged_match of role_incompatible, qualifier_not_bound and
 // denominator_not_available carries no gate since no availability verdict
 // was taken.
-const NO_DATA_GATE_TEXT: Record<NoDataGate, string> = {
+const NO_DATA_GATE_TEXT: Record<Known<NoDataGate>, string> = {
     no_member_has_data_at_place: 'That match has no data at this place.',
     no_member_asserts_bound_properties: "That match doesn't carry the condition this query needs.",
     only_alternate_has_data: 'Only a different variable has data for this request.',
@@ -2386,7 +2391,7 @@ export const noDataText = (
         if (compared) return `${base} ${compared}`;
     }
 
-    if (noData?.gate) {
+    if (noData?.gate && hasKey(NO_DATA_GATE_TEXT, noData.gate)) {
         return `${base} ${NO_DATA_GATE_TEXT[noData.gate]}`;
     }
 

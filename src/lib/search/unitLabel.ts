@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the shallow Spec the sentence menus read (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs as `any`, dereferencing only the members it names and tolerating any that is missing */
 /**
  * The unit the way the byline names it, with the price basis ("Constant 2020
  * US dollars", "Current euros"). The Spec's unit facet names the currency

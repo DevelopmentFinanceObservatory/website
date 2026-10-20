@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- holds streamed observations, facet options and slot bindings as `any`, merging members it does not read */
 'use client';
 
 /**
@@ -186,26 +186,27 @@ import {
     SearchEvent,
     SearchInput,
 } from '@/lib/search/searchClient';
-import type {
-    BaseIdentity,
-    CatalogueAnswer,
-    DatasetIdentityEntry,
-    DatasetResubmitEntry,
-    DeclinedAnswer,
-    EntityRoleKey,
-    ExpectedPart,
-    HydratedPart,
-    IdentityFacetAxis,
-    IdentityFacets,
-    IdentityUnitRequest,
-    ParsedPart,
-    PartPhase,
-    Resolution,
-    ResolveResponse,
-    RoleAxis,
-    SentenceToken,
-    Spec,
-    SpecObservations,
+import {
+    type BaseIdentity,
+    type CatalogueAnswer,
+    type DatasetIdentityEntry,
+    type DatasetResubmitEntry,
+    type DeclinedAnswer,
+    type EntityRoleKey,
+    type ExpectedPart,
+    type HydratedPart,
+    type IdentityFacetAxis,
+    type IdentityFacetBinding,
+    type IdentityUnitRequest,
+    knownPart,
+    type ParsedPart,
+    type PartPhase,
+    type Resolution,
+    type ResolveResponse,
+    type RoleAxis,
+    type SentenceToken,
+    type Spec,
+    type SpecObservations,
 } from '@/lib/search/types';
 import {
     searchPostTracker,
@@ -236,7 +237,7 @@ export type SharedEdit =
     | { axis: 'when'; window: WindowApplyValue }
     | { axis: 'entity'; role: RoleAxis; dcid: string }
     | { axis: 'unit'; request: IdentityUnitRequest }
-    | { axis: 'method'; binding: IdentityFacets['measurementMethod'] | null };
+    | { axis: 'method'; binding: IdentityFacetBinding['measurementMethod'] | null };
 
 type PartRuntime = Pick<HydratedPart, 'phase' | 'editError'>;
 
@@ -284,15 +285,19 @@ function hydrateDefiniteSpec(
  *  `replay` uses this to build its entries list from the base run's just-
  *  landed response before React has re-rendered the hook's own `parts`. */
 function partsFromResponse(response: Resolution): HydratedPart[] {
-    return response.parts.map((part, index) => ({
-        index,
-        variableText: part.variable_text ?? null,
-        part,
-        hydratedSpec: part.status === 'definite' && part.spec ? part.spec : null,
-        observationsPending: false,
-        phase: 'done',
-        editError: null,
-    }));
+    return response.parts.map((part, index) => {
+        const known = knownPart(part);
+
+        return {
+            index,
+            variableText: part.variable_text ?? null,
+            part,
+            hydratedSpec: known?.status === 'definite' ? known.spec : null,
+            observationsPending: false,
+            phase: 'done',
+            editError: null,
+        };
+    });
 }
 
 /** Ends a post's usage tracker on its own `done`: the event describes the
@@ -514,15 +519,16 @@ export const useSearchRun = () => {
 
         return Array.from({ length: count }, (_, index): HydratedPart => {
             const wirePart = response?.parts[index] ?? null;
+            const definite = knownPart(wirePart);
             const runtime = runtimes[index] ?? EMPTY_RUNTIME;
             const frozenRef =
-                wirePart?.status === 'definite' && wirePart.spec
-                    ? frozenRefSpecId(snapshotBindings, index, wirePart.spec.spec_id)
+                definite?.status === 'definite'
+                    ? frozenRefSpecId(snapshotBindings, index, definite.spec.spec_id)
                     : null;
             const hydratedSpec =
-                wirePart?.status === 'definite' && wirePart.spec
+                definite?.status === 'definite'
                     ? hydrateDefiniteSpec(
-                          wirePart.spec,
+                          definite.spec,
                           obsBySpec,
                           facetsBySpec,
                           frozenRef ? frozenObsBySpec[frozenRef] : undefined,
@@ -1149,7 +1155,7 @@ export const useSearchRun = () => {
             partIndex: number,
             fromSpec: any,
             axis: A,
-            binding: IdentityFacets[A] | null,
+            binding: IdentityFacetBinding[A] | null,
         ): DatasetEntriesOverride => {
             const identity = withFacetEdit(fromSpec.identity as BaseIdentity, axis, binding);
 
@@ -1168,7 +1174,7 @@ export const useSearchRun = () => {
             partIndex: number,
             fromSpec: any,
             axis: A,
-            binding: IdentityFacets[A] | null,
+            binding: IdentityFacetBinding[A] | null,
         ) => {
             runDatasetEdit(facetOverride(partIndex, fromSpec, axis, binding), [partIndex], 'facet');
         },

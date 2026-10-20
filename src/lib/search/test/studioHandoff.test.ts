@@ -12,22 +12,26 @@ import { EVENT_SAMPLE, searchEventName, searchEventProps } from '../searchEvents
 import { flattenSpec, normalizeResponse, unflattenSpec } from '../searchClient.ts';
 import { planSentenceText } from '../sentencePlan.ts';
 import { handoffEdited, handoffQuestion, handoffSeeds, studioHref } from '../studioHandoff.ts';
-import type { HydratedPart, Operation, Part } from '../types.ts';
+import { type HydratedPart, knownPart, type Operation, type Part } from '../types.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
 /** The fixture's normalized parts as a settled run holds them. */
 function hydratedParts(name: FixtureName): HydratedPart[] {
     const parts: Part[] = normalizeResponse(fixtures[name]).parts;
 
-    return parts.map((part, index) => ({
-        index,
-        variableText: part.variable_text ?? null,
-        part,
-        hydratedSpec: part.status === 'definite' ? (part.spec ?? null) : null,
-        observationsPending: false,
-        phase: 'done',
-        editError: null,
-    }));
+    return parts.map((part, index) => {
+        const known = knownPart(part);
+
+        return {
+            index,
+            variableText: part.variable_text ?? null,
+            part,
+            hydratedSpec: known?.status === 'definite' ? known.spec : null,
+            observationsPending: false,
+            phase: 'done',
+            editError: null,
+        };
+    });
 }
 
 const wireSpecOf = (name: FixtureName, index = 0) => (fixtures[name] as any).parts[index].spec;
@@ -89,6 +93,8 @@ test('handoffSeeds gives a folded part one seed with the operations of both', ()
             operations: [
                 { verb: 'rank', phrase: 'top 5 donors', over: 'origin' },
                 { verb: 'growth', phrase: 'change since 2015', over: null },
+                // A verb Studio's wire does not name stays out of the seed.
+                { verb: 'tally', phrase: 'tally them', over: null },
             ],
         },
     };
@@ -103,9 +109,13 @@ test('handoffSeeds gives a folded part one seed with the operations of both', ()
 
 test('handoffSeeds skips a spec with no definition, which Studio would refuse', () => {
     const [part] = hydratedParts('definite-single');
+    const definite = knownPart(part.part);
+
+    assert.ok(definite?.status === 'definite');
+
     const bare: HydratedPart = {
         ...part,
-        part: { ...part.part!, spec: { ...part.part!.spec!, definition: null } as any },
+        part: { ...definite, spec: { ...definite.spec, definition: null } },
     };
 
     assert.deepEqual(handoffSeeds([bare]), []);

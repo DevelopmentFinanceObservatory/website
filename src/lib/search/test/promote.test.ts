@@ -6,7 +6,7 @@ import type { BaseIdentity } from '../types.ts';
 
 const identity: BaseIdentity = {
     identity_version: 'spec1',
-    shape: {},
+    shape: { kind: 'statvar_schema' },
     slots: [],
     entities: { origin: ['country/FRA'] },
     requested_window: { kind: 'all' },
@@ -86,7 +86,7 @@ test('an unbound where binding drops the role from the posted identity', () => {
         'destination',
     );
 
-    assert.equal('destination' in edited.entities, false);
+    assert.equal('destination' in (edited.entities ?? {}), false);
 });
 
 test('withEntityEdit binds a picked dcid, single- or multi-select alike', () => {
@@ -129,6 +129,6 @@ test('an unbind edit -- dcid null or an empty Apply selection -- drops the role'
     for (const { description, selection } of cases) {
         const edited = withEntityEdit(identity, 'origin', selection);
 
-        assert.equal('origin' in edited.entities, false, description);
+        assert.equal('origin' in (edited.entities ?? {}), false, description);
     }
 });

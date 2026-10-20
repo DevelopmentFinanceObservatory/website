@@ -19,7 +19,7 @@ import {
     resolveSuggestion,
     type SearchEvent,
 } from '../searchClient.ts';
-import type { Warning } from '../types.ts';
+import type { SpecIdentity, Warning } from '../types.ts';
 import { fixtures } from './fixtures/index.ts';
 import {
     currentEntityDcid,
@@ -30,6 +30,14 @@ import {
     primaryStatVarLabel,
     statVarsUnreadable,
 } from '../view.ts';
+
+/** The smallest identity the options door and a definition take. */
+const OPTIONS_IDENTITY: SpecIdentity = {
+    identity_version: 'spec1',
+    shape: { kind: 'statvar_schema' },
+    slots: [],
+    requested_window: { kind: 'all' },
+};
 
 // A minimal but wire-shaped WireSpec: the definition/resolved split contract
 // v1 requires, with a well-formed `stat_vars`.
@@ -133,7 +141,7 @@ test('entityOptions posts no resolved_stat_var_dcids and asks for include_covera
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -253,7 +261,7 @@ test('entityOptions sends observationAbout in for.role when role is omitted (a n
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -275,7 +283,7 @@ test('entityOptions sends a directional role verbatim in for.role: origin', asyn
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
         role: 'origin',
     });
@@ -298,7 +306,7 @@ test('entityOptions sends a directional role verbatim in for.role: destination (
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'children',
         role: 'destination',
     });
@@ -336,7 +344,7 @@ test("entityOptions reports the door's own truncated flag from the response", as
     );
 
     const result = await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -496,29 +504,18 @@ test('entitySlotOptions reads the requested directional axis rather than assumin
     const options = [
         { value: { value_kind: 'entity' as const, ref: { ref: 'donor-1', label: 'Donor' } } },
     ];
+    const kenya = [
+        { value: { value_kind: 'entity' as const, ref: { ref: 'country/KEN', label: 'Kenya' } } },
+    ];
     const entries = {
         'spec-1': [
             { role: 'origin' as const, options, truncated: false },
-            {
-                role: 'destination' as const,
-                options: [
-                    {
-                        value: {
-                            value_kind: 'entity' as const,
-                            ref: { ref: 'country/KEN', label: 'Kenya' },
-                        },
-                    },
-                ],
-                truncated: true,
-            },
+            { role: 'destination' as const, options: kenya, truncated: true },
         ],
     };
 
     assert.deepEqual(entitySlotOptions({ spec_id: 'spec-1' }, entries, 'origin'), options);
-    assert.equal(
-        entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination')[0]?.value.ref?.ref,
-        'country/KEN',
-    );
+    assert.deepEqual(entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination'), kenya);
 });
 
 test('entitySlotOptions returns nothing when the requested directional axis is absent', () => {
@@ -839,7 +836,7 @@ test('mintDataset returns the artifacts/manifest of a synchronous 200 unchanged'
     const { artifacts, manifest } = await mintDataset({ spec_id: 'spec_1', format: 'csv' });
 
     assert.deepEqual(artifacts, [{ url: 'https://x/sync' }]);
-    assert.equal(manifest.content_version, 'cv_sync');
+    assert.equal(manifest?.content_version, 'cv_sync');
 });
 
 test('mintDataset repeats a mint the Datasets API refused as busy and retryable', async (t) => {
@@ -857,7 +854,7 @@ test('mintDataset repeats a mint the Datasets API refused as busy and retryable'
 
     const { manifest } = await mintDataset({ spec_id: 'spec_1', format: 'csv' });
 
-    assert.equal(manifest.content_version, 'cv_sync');
+    assert.equal(manifest?.content_version, 'cv_sync');
     assert.equal(fetchMock.mock.callCount(), 2);
 });
 
@@ -1195,7 +1192,7 @@ test('fetchVersionLink reads a version from its manifest and the latest data fro
         urls.push(url);
 
         return jsonResponse(200, {
-            definition: { spec_id: 'spec_a1', identity: { identity_version: 'spec1' } },
+            definition: { spec_id: 'spec_a1', identity: OPTIONS_IDENTITY },
         });
     });
 

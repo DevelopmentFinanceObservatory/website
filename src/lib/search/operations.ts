@@ -1,8 +1,8 @@
 /** The label of the button that hands a part's operations to Studio. */
 
-import type { OperationVerb } from './types.ts';
+import { hasKey, type Known, type OperationVerb } from './types.ts';
 
-const BUTTON_LABELS: Record<OperationVerb, string> = {
+const BUTTON_LABELS: Record<Known<OperationVerb>, string> = {
     rank: 'Rank in Studio',
     aggregate: 'Add up in Studio',
     growth: 'Work out the change in Studio',
@@ -12,7 +12,8 @@ const BUTTON_LABELS: Record<OperationVerb, string> = {
     report: 'Ask Studio for a report',
 };
 
-/** The Studio button, named for the verb of the operation it hands over. */
+/** The Studio button, named for the verb of the operation it hands over; a verb this release
+ *  does not know gets the plain label. */
 export function operationButtonLabel(verb: OperationVerb): string {
-    return BUTTON_LABELS[verb];
+    return hasKey(BUTTON_LABELS, verb) ? BUTTON_LABELS[verb] : 'Open in Studio';
 }

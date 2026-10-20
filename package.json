@@ -24,6 +24,7 @@
     "build:migrate": "esbuild db/migrate.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/migrate.cjs --external:pg-native"
   },
   "dependencies": {
+    "@developmentfinance/client": "file:vendor/developmentfinance-client-0.1.0.tgz",
     "@fontsource/dm-mono": "^5.3.0",
     "@fontsource/outfit": "^5.3.0",
     "@google-cloud/cloud-sql-connector": "^1.12.0",

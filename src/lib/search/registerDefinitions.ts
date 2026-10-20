@@ -8,6 +8,8 @@
  * `node --test` imports it directly.
  */
 
+import type { ProblemDetails } from '@developmentfinance/client/wire';
+
 import { apisFetch } from '../apisAuth.ts';
 
 const REGISTER_TIMEOUT_MS = 20_000;
@@ -39,7 +41,7 @@ export const registerDefinitions = async ({
         });
 
         if (!res.ok) {
-            const body: { code?: string } | null = await res.json().catch(() => null);
+            const body: Partial<ProblemDetails> | null = await res.json().catch(() => null);
 
             throw new Error(body?.code ?? `register ${res.status}`);
         }

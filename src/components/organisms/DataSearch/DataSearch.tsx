@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- holds the suggestion answer, a response body read member by member, as `any` */
 'use client';
 
 import classNames from 'classnames';
@@ -70,7 +70,7 @@ import {
     handoffSeeds,
     studioHref,
 } from '@/lib/search/studioHandoff';
-import type { SentenceToken } from '@/lib/search/types';
+import { isKnownPart, type SentenceToken } from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
 import { writeSeeds } from '@/lib/studio/seedStore';
@@ -805,7 +805,13 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const rawPlan = response?.sentence_plan ?? [];
     const isSlotted = (index: number) =>
         rawPlan.some((token) => token.kind === 'slot' && tokenPart(token, parts.length) === index);
-    const candidatesParts = parts.filter((part) => part.part?.status === 'candidates');
+    const candidatesParts = parts.flatMap((hydrated) => {
+        const { part } = hydrated;
+
+        return part && isKnownPart(part) && part.status === 'candidates'
+            ? [{ ...hydrated, part }]
+            : [];
+    });
 
     // Collapses to the first no_data part whose callout is the generic
     // 'studio' hand-off panel (identical text per part). Flagged/alternate
@@ -1139,25 +1145,22 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 />
                             ))}
 
-                            {candidatesParts.map(
-                                (part) =>
-                                    part.part && (
-                                        <ReadingCards
-                                            key={part.index}
-                                            part={part.part}
-                                            prefix={parts.length > 1 ? part.variableText : null}
-                                            onPick={(spec) => {
-                                                startAction()({
-                                                    action: 'pick_reading',
-                                                    partIndex: part.index,
-                                                    specId: spec.spec_id,
-                                                });
-                                                pickCandidate(part.index, spec);
-                                            }}
-                                            onRetry={() => submitQuery(query, 'retry')}
-                                        />
-                                    ),
-                            )}
+                            {candidatesParts.map((part) => (
+                                <ReadingCards
+                                    key={part.index}
+                                    part={part.part}
+                                    prefix={parts.length > 1 ? part.variableText : null}
+                                    onPick={(spec) => {
+                                        startAction()({
+                                            action: 'pick_reading',
+                                            partIndex: part.index,
+                                            specId: spec.spec_id,
+                                        });
+                                        pickCandidate(part.index, spec);
+                                    }}
+                                    onRetry={() => submitQuery(query, 'retry')}
+                                />
+                            ))}
 
                             {definiteParts.length > 0 && (
                                 <SearchTable

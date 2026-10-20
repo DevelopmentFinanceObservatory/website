@@ -13,51 +13,59 @@
  * `/api/download-pin` pins a downloaded version through it.
  */
 
+import type {
+    ArtifactEntryModel,
+    Manifest,
+    MintOptions,
+    PinRequest,
+    ProblemDetails,
+} from '@developmentfinance/client/wire';
+
 import { datasetsFetch } from './datasetsFetch.ts';
-import { pollOperation, type OperationEnvelope } from './operationPoll.ts';
+import { pollOperation } from './operationPoll.ts';
 import { SPEC_SHAPE, VERSION_SHAPE } from './versionLink.ts';
 
 /** The fields of a Datasets manifest this module reads. */
-export type SnapshotManifest = {
-    content_version?: string;
-    definition?: { spec_id?: string } | null;
-    artifacts?: { artifact_digest?: string; tier?: string; rendering?: object }[];
-};
+export type SnapshotManifest = Pick<Manifest, 'content_version' | 'definition' | 'artifacts'>;
 
 /** The rendering a file was made with, as a manifest lists it
  *  (`MintOptions` dumped without its unset fields). */
-export type FileRendering = { format: string; bundle: boolean };
+export type FileRendering = Required<Pick<MintOptions, 'format' | 'bundle'>>;
 
 /** What a mint without options renders (dfo-apis' `MintOptions` defaults), a
  *  CSV bundle. A snapshot capture mints and pins this rendering. */
 export const MINT_DEFAULT_RENDERING: FileRendering = { format: 'csv', bundle: true };
 
-// A rendering that carries any of these is reshaped or enriched, so it is a
-// different file from the plain one with the same format and bundle.
-const RESHAPES = ['columns', 'pivot', 'groupby'];
+// A rendering that sets any of these (every MintOptions member beside `format` and `bundle`) is
+// reshaped, enriched or cut, so it is a different file from the plain one with the same format and
+// bundle. A null or false member is unset.
+const RESHAPES = [
+    'columns',
+    'pivot',
+    'groupby',
+    'layout',
+    'without_party_totals',
+] as const satisfies readonly (keyof MintOptions)[];
 
 /**
- * The listed file made with exactly `format` and `bundle` and no reshape, or
+ * The listed file made with exactly `format` and `bundle` and no reshape or cut, or
  * undefined. A version manifest lists every rendering stored for the
  * version, so the first bundle it lists can be an xlsx or column-enriched
  * one. A statistics artifact carries no format and never matches.
  */
 export const renderingArtifact = <
-    TArtifact extends { artifact_digest?: string; rendering?: object },
+    TArtifact extends Pick<ArtifactEntryModel, 'artifact_digest' | 'rendering'>,
 >(
     artifacts: readonly TArtifact[] | undefined,
     { format, bundle }: FileRendering,
 ): TArtifact | undefined =>
-    artifacts?.find((artifact) => {
-        const rendering = (artifact.rendering ?? {}) as Record<string, unknown>;
-
-        return (
-            !!artifact.artifact_digest &&
+    artifacts?.find(
+        ({ artifact_digest, rendering }) =>
+            !!artifact_digest &&
             rendering.format === format &&
             rendering.bundle === bundle &&
-            RESHAPES.every((key) => !(key in rendering))
-        );
-    });
+            RESHAPES.every((key) => !rendering[key]),
+    );
 
 /** The pin failed or cannot be attempted, so the snapshot would expire with
  *  the working tier. POST /api/share answers this code as its `detail`. */
@@ -125,7 +133,7 @@ export const pinArtifact = async ({
 }: PinOptions): Promise<void> => {
     const pinned = await poster(base, fetchImpl)(
         `/api/datasets/${specId}/${contentVersion}/pin`,
-        { schema_version: 1, artifact_digest: artifactDigest },
+        { schema_version: 1, artifact_digest: artifactDigest } satisfies PinRequest,
         { headers: { 'x-dfo-principal': principal }, timeoutMs: DOOR_TIMEOUT_MS },
     ).catch((error: unknown) => ({ ok: false, status: 0, body: null, error }));
 
@@ -195,7 +203,7 @@ export const captureSnapshot = async ({
     // poll needs no principal.
     const manifest = (
         minted.status === 202
-            ? await pollOperation(minted.body.operation as OperationEnvelope, {
+            ? await pollOperation(minted.body.operation, {
                   fetchImpl: (url) =>
                       fetchImpl(`${base}${url}`, {
                           cache: 'no-store',
@@ -204,7 +212,7 @@ export const captureSnapshot = async ({
                   deadlineMs: pollDeadlineMs,
               })
             : minted.body
-    ) as (SnapshotManifest & { code?: string }) | null;
+    ) as (Partial<SnapshotManifest> & Partial<Pick<ProblemDetails, 'code'>>) | null;
 
     if (typeof manifest?.content_version !== 'string') {
         throw new Error(manifest?.code ?? `mint ${minted.status}`);

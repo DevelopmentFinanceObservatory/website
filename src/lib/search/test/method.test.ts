@@ -6,7 +6,12 @@ import { withFacetEdit } from '../promote.ts';
 import { METHOD_REF, refineItems, refineKey } from '../refineMenu.ts';
 import { normalizeResponse } from '../searchClient.ts';
 import { statingTokenIndex } from '../departures.ts';
-import type { BaseIdentity, IdentityFacets, SentenceToken, SpecObservations } from '../types.ts';
+import type {
+    BaseIdentity,
+    IdentityFacetBinding,
+    SentenceToken,
+    SpecObservations,
+} from '../types.ts';
 import {
     ANY_METHOD_LABEL,
     flattenRows,
@@ -486,7 +491,7 @@ test('method labels read in sentence case while the posted ref keeps the dcid', 
 // `pnpm typecheck` checks this file: each @ts-expect-error fails the build
 // if the types stop refusing the line under it.
 test('the identity types take a null ref on measurementMethod and unit only', () => {
-    const facets: IdentityFacets = {
+    const facets: Partial<IdentityFacetBinding> = {
         measurementMethod: { state: 'value', ref: null },
         unit: { state: 'value', ref: null },
         // @ts-expect-error -- every facet carries a provenance, so a null ref names nothing

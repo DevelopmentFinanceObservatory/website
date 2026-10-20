@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes parts and specs as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import classNames from 'classnames';

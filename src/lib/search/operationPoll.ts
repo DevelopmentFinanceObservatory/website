@@ -16,27 +16,21 @@
  * `fetchImpl`, a thin wrapper that resolves the envelope's own relative
  * `poll` path against wherever it needs to go (see searchClient.ts's
  * `mintDataset`, which polls through the site's own same-origin proxy,
- * and searchShare.ts's `capture`, which polls the Datasets API directly —
+ * and snapshot.ts's `captureSnapshot`, which polls the Datasets API directly —
  * a done poll needs no principal header, unlike the `pin` call next to it).
  */
 
+import type {
+    Manifest,
+    OperationEnvelope,
+    OperationProgress,
+    OperationResource,
+    ProblemDetails,
+} from '@developmentfinance/client/wire';
+
 import { datasetsFetch } from './datasetsFetch.ts';
 
-export type OperationStatus = 'pending' | 'running' | 'done' | 'failed';
-
-export type OperationProgress = {
-    rows_written: number;
-    estimate_rows: number;
-};
-
-/** The wire's OperationEnvelope, verbatim field names. */
-export type OperationEnvelope = {
-    operation_id: string;
-    status: OperationStatus;
-    poll?: string | null;
-    retry_after_ms?: number | null;
-    progress?: OperationProgress | null;
-};
+export type { OperationEnvelope, OperationProgress };
 
 export type PollResponse = { ok: boolean; status: number; json: () => Promise<unknown> };
 export type PollFetch = (url: string, signal?: AbortSignal) => Promise<PollResponse>;
@@ -145,7 +139,7 @@ export type OperationPollError = Error & {
 };
 
 const pollError = (body: unknown, status: number): OperationPollError => {
-    const record = (body ?? {}) as { detail?: string; title?: string; code?: string };
+    const record = (body ?? {}) as Partial<ProblemDetails>;
     const message = record.detail ?? record.title ?? `operations poll failed with status ${status}`;
     const err = new Error(message) as OperationPollError;
 
@@ -156,15 +150,15 @@ const pollError = (body: unknown, status: number): OperationPollError => {
 
 /**
  * Polls one operation to a terminal state, starting from the envelope a
- * `202` (or a prior poll) returned. Resolves with the done manifest, or
- * throws an `OperationPollError` on `failed`, on any non-2xx poll
+ * `202` (or a prior poll) returned. Resolves with the done manifest (null
+ * when the done poll carries none), or throws an `OperationPollError` on `failed`, on any non-2xx poll
  * response, or once `deadlineMs` has elapsed without reaching a terminal
  * state (an Error whose `code` is OPERATION_DEADLINE).
  */
 export async function pollOperation(
     envelope: OperationEnvelope,
     options: PollOperationOptions = {},
-): Promise<unknown> {
+): Promise<Manifest | null> {
     const {
         fetchImpl = defaultFetch,
         onProgress,
@@ -239,7 +233,7 @@ export async function pollOperation(
             throw pollError(body, res.status);
         }
 
-        const resource = body as { operation?: OperationEnvelope; manifest?: unknown } | null;
+        const resource = body as Partial<OperationResource> | null;
         const operation = resource?.operation;
 
         if (!operation) {
@@ -249,7 +243,9 @@ export async function pollOperation(
         }
 
         if (operation.status === 'done') {
-            return resource?.manifest ?? null;
+            // The resource types the manifest as an open object; a done poll
+            // returns the manifest a synchronous mint does.
+            return (resource?.manifest ?? null) as Manifest | null;
         }
 
         current = operation;

@@ -25,15 +25,16 @@
  */
 
 import { fitsProps } from '../events/limits.ts';
-import type {
-    DeclinedReason,
-    HydratedPart,
-    IdentityBinding,
-    OperationVerb,
-    Resolution,
-    ResolveResponse,
-    Spec,
-    SpecIdentity,
+import {
+    type DeclinedReason,
+    type HydratedPart,
+    type IdentityBinding,
+    knownPart,
+    type OperationVerb,
+    type Resolution,
+    type ResolveResponse,
+    type Spec,
+    type SpecIdentity,
 } from './types.ts';
 
 /** How many entity terms a refused part keeps. */
@@ -187,13 +188,13 @@ const askedFor = (
         measure: identity.shape,
         filters,
         entities: Object.fromEntries(
-            Object.entries(identity.entities).map(([role, members]) => {
+            Object.entries(identity.entities ?? {}).map(([role, members]) => {
                 const group = groups?.[role];
 
                 return [
                     role,
                     {
-                        group: group ? { dcid: group.ref, label: group.label } : null,
+                        group: group ? { dcid: group.ref ?? null, label: group.label } : null,
                         sample: sample(members),
                         count: members.length,
                     },
@@ -270,14 +271,19 @@ export function searchEventProps({
         });
     const refused = parts
         .filter((part) => part.part && part.part.status !== 'definite')
-        .map((part) => ({
-            variableText: part.variableText && clip(part.variableText, MAX_TERM),
-            status: part.part!.status,
-            reason: part.part!.no_data?.reason ?? part.part!.unsupported?.code ?? null,
-            entityTerms: sample(part.part!.no_data?.entity_terms ?? []).map((term) =>
-                clip(term, MAX_TERM),
-            ),
-        }));
+        .map((part) => {
+            const known = knownPart(part.part);
+            const noData = known?.status === 'no_data' ? known.no_data : undefined;
+
+            return {
+                variableText: part.variableText && clip(part.variableText, MAX_TERM),
+                status: part.part!.status,
+                reason:
+                    noData?.reason ??
+                    (known?.status === 'unsupported' ? known.unsupported.code : null),
+                entityTerms: sample(noData?.entity_terms ?? []).map((term) => clip(term, MAX_TERM)),
+            };
+        });
 
     const runProps = (rung: Rung): Partial<SearchSettleProps> => {
         if (!run) {

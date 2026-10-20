@@ -5,6 +5,8 @@ import { definitionMembersReader } from '../definitionMembers.ts';
 import type { DefinitionMembers } from '../searchClient.ts';
 
 const envelope: DefinitionMembers = {
+    schema_version: 1,
+    spec_id: 'spec_1',
     members: [
         { ref: 'dcid:Count_Person_Female', label: 'Female population', roles: [], constraints: {} },
         { ref: 'dcid:Count_Person_Male', label: null, roles: [], constraints: {} },

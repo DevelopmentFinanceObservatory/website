@@ -9,7 +9,6 @@ import { pollOperation, type OperationProgress } from '@/lib/search/operationPol
 import { artifactHref, pinDownloadedVersion } from '@/lib/search/searchClient';
 import { renderedFile } from '@/lib/search/shareDownload';
 import type { FileRendering } from '@/lib/search/snapshot';
-import type { VersionLinkDocument } from '@/lib/search/versionLink';
 
 type Stage =
     | { kind: 'preparing'; progress: OperationProgress | null }
@@ -45,7 +44,7 @@ const PreparingDownload = ({
 
         const prepare = async () => {
             try {
-                const manifest = (await pollOperation(
+                const manifest = await pollOperation(
                     {
                         operation_id: operationId,
                         status: 'pending',
@@ -55,7 +54,7 @@ const PreparingDownload = ({
                         signal: controller.signal,
                         onProgress: (progress) => setStage({ kind: 'preparing', progress }),
                     },
-                )) as VersionLinkDocument | null;
+                );
                 const file = renderedFile(manifest, { format, bundle });
 
                 if (!manifest || !file) {
