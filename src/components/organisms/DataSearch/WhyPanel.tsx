@@ -251,7 +251,7 @@ const AboutPartSection = ({
 
 /** The "About this answer" panel: one section per definite part, each with
  *  the coverage sentence, what the search matched and assumed, the
- *  variables, how each facet and defaulted slot was chosen, and the sources
+ *  variables, how each facet was chosen, and the sources
  *  with their licence. A lone part carries no title. `open` is whether the
  *  panel shows, which starts the members reads. */
 const WhyPanel = ({

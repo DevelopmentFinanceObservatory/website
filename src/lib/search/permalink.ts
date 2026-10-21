@@ -126,8 +126,9 @@ const isReplayableEditEntryKind = (kind: unknown): kind is PermalinkEdit['entry'
  *  door derived membership from the identity also carries the base it was
  *  edited from and the StatVars it served, which the door refuses. The
  *  entry's `assumptions` echo survives as stored, [] included, when Search
- *  would take it. A list it would refuse is dropped, and the engine then
- *  states the part's assumptions as for a fresh request. */
+ *  would take it. A list it would refuse is dropped, and
+ *  `buildDatasetEntries` then echoes the reloaded part's own list, as it
+ *  does for any edit. */
 const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] => {
     if (entry.entry_kind !== 'identity') return entry;
 

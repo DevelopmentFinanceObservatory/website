@@ -1323,7 +1323,7 @@ const licenceText = (spec: any): string | null =>
 
 /** The "About this answer" summary for one definite part: what the search
  *  matched (rows), the variables when there is more than one, the sources
- *  with their licence, and how each facet and defaulted slot was chosen. The
+ *  with their licence, and how each facet was chosen. The
  *  scope assumptions come from resultNotes's aboutAnswerNotes.
  *
  *  The resolved membership decides the layout (`servedMembership`).
