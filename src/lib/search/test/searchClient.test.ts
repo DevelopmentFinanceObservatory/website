@@ -22,7 +22,7 @@ import {
 import type { SlotOption, Spec as WireSpec } from '@developmentfinance/client/wire';
 
 import type { Part, SpecIdentity, Warning } from '../types.ts';
-import { definite, resolution } from './fixtures/resolution.ts';
+import { definite, readable, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import {
     currentEntityDcid,
@@ -70,11 +70,10 @@ function wireSpec(statVars: unknown): WireSpec {
 }
 
 test('flattenSpec reads a well-formed stat_vars, with the counts as the wire sends them', () => {
-    const flat = flattenSpec(
-        wireSpec({ member_count: 42, member_count_exact: true, served_count: 3 }),
+    const flat = readable(
+        flattenSpec(wireSpec({ member_count: 42, member_count_exact: true, served_count: 3 })),
     );
 
-    assert.equal(statVarsUnreadable(flat), false);
     assert.equal(flat.stat_vars.member_count, 42);
     assert.equal(flat.stat_vars.served_count, 3);
     assert.equal(

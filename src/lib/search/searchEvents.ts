@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flat page Spec, typed shallowly like the rest of the engine-contract layer */
 /**
  * The props of the search usage events (docs/analytics.md): `search.query`,
  * `search.empty`, `search.edit` and `search.studio_handoff` all describe one
@@ -27,6 +26,7 @@
 import { fitsProps } from '../events/limits.ts';
 import {
     type DeclinedReason,
+    hasDefiniteSpec,
     type HydratedPart,
     type IdentityBinding,
     knownPart,
@@ -36,6 +36,7 @@ import {
     type Spec,
     type SpecIdentity,
 } from './types.ts';
+import { statVarsUnreadable } from './view.ts';
 
 /** How many entity terms a refused part keeps. */
 export const EVENT_SAMPLE = 3;
@@ -228,9 +229,7 @@ export function searchEventProps({
     const operations = [
         ...new Set(parts.flatMap((part) => (part.part?.operations ?? []).map((op) => op.verb))),
     ];
-    const definite = parts
-        .filter((part) => part.part?.status === 'definite' && part.hydratedSpec)
-        .map((part) => part.hydratedSpec as any);
+    const definite = parts.filter(hasDefiniteSpec).map((part) => part.hydratedSpec);
     const resolve = (rung: Rung) =>
         definite.map((spec) => {
             const sources: string[] = (spec.resolution?.resolved_sources ?? []).map(
@@ -240,8 +239,11 @@ export function searchEventProps({
             const asked = askedFor(spec.identity, spec.entity_groups);
             const counts = {
                 specId: spec.spec_id,
-                // The served members once settled, else the family's count.
-                statVarCount: spec.stat_vars?.served_count ?? spec.stat_vars?.member_count ?? 0,
+                // The served members once settled, else the family's count;
+                // none for a spec the site could not read.
+                statVarCount: statVarsUnreadable(spec)
+                    ? 0
+                    : (spec.stat_vars?.served_count ?? spec.stat_vars?.member_count ?? 0),
                 entityCount: spec.resolution?.resolved_entities?.length ?? 0,
                 sourceCount: sources.length,
             };

@@ -10,6 +10,7 @@ import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
 import { type HydratedPart, knownPart, type Operation } from './types.ts';
+import { statVarsUnreadable } from './view.ts';
 
 /** Whether the answer on screen may differ from the query's own reading: a
  *  part was edited, or the answer was opened from a share link, which stores
@@ -55,11 +56,11 @@ export function handoffSeeds(parts: HydratedPart[]): Seed[] {
             continue;
         }
 
-        const block = unflattenSpec(part.spec);
-
-        if (!block.definition || block.resolved.stat_vars_unreadable) {
+        if (statVarsUnreadable(part.spec) || !part.spec.definition) {
             continue;
         }
+
+        const block = unflattenSpec(part.spec);
 
         const seed: Seed = seeds.get(block.spec_id) ?? { spec: block, operations: [] };
         const known = new Set(seed.operations.map(operationKey));

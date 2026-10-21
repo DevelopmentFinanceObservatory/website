@@ -2,10 +2,10 @@
 import {
     type Assumption,
     type AssumptionKind,
+    type DefiniteHydratedPart,
     type EntityGroup,
     type EntityRoleKey,
     hasKey,
-    type HydratedPart,
     knownPart,
     type Operation,
 } from './types.ts';
@@ -153,8 +153,8 @@ export const isSearchSharePart = (value: any): value is SearchSharePart =>
 
 /** The share part a definite part on screen posts: its Spec's identity, with
  *  the Spec's groups beside it, and the part's operations and assumptions. */
-export const searchSharePart = (part: HydratedPart): Required<SearchSharePart> => {
-    const spec = part.hydratedSpec as any;
+export const searchSharePart = (part: DefiniteHydratedPart): Required<SearchSharePart> => {
+    const spec = part.hydratedSpec;
 
     return {
         partIndex: part.index,

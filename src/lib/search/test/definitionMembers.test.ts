@@ -22,7 +22,7 @@ test('definitionMembersReader reads each spec once and hands back bare dcids', a
         calls += 1;
         return envelope;
     });
-    const spec = { spec_id: 'spec_1', definition: {}, shape: { member_digest: 'sha256:ab' } };
+    const spec = { spec_id: 'spec_1', definition: null, shape: { member_digest: 'sha256:ab' } };
 
     assert.deepEqual(await read(spec), {
         ok: true,

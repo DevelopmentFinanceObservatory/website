@@ -4,7 +4,7 @@ import test from 'node:test';
 import { flattenSpec, normalizeResponse, unflattenSpec } from '../searchClient.ts';
 import { primaryStatVarLabel, statVarsUnreadable } from '../view.ts';
 import { fixtureNames, fixtures, specFixtureNames } from './fixtures/index.ts';
-import { definite, noData, resolution } from './fixtures/resolution.ts';
+import { definite, noData, readable, resolution } from './fixtures/resolution.ts';
 import { knownPart, type Spec } from '../types.ts';
 
 /**
@@ -150,7 +150,7 @@ for (const name of specFixtureNames) {
 
     test(`${name}: unflattenSpec gives back the wire spec flattenSpec was given`, () => {
         for (const spec of rawSpecsIn(body)) {
-            assert.deepEqual(unflattenSpec(flattenSpec(spec)), spec);
+            assert.deepEqual(unflattenSpec(readable(flattenSpec(spec))), spec);
         }
     });
 }

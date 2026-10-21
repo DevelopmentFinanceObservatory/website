@@ -15,7 +15,7 @@ import {
     type Resolution,
     type Spec,
 } from '../types.ts';
-import { resolution } from './fixtures/resolution.ts';
+import { readable, resolution } from './fixtures/resolution.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
 /** The fixture's normalized parts as a settled run holds them. */
@@ -46,7 +46,7 @@ function candidateSpecs(part: HydratedPart): Spec[] {
     const known = knownPart(part.part);
 
     assert.ok(known?.status === 'candidates');
-    return known.candidates.specs;
+    return known.candidates.specs.map(readable);
 }
 
 /** A `parsed` entry for `part`: its restatement with `dcid` pinned on the

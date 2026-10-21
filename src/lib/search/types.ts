@@ -173,24 +173,38 @@ export type DatasetResubmitEntry = wire.DatasetResubmitInput['entries'][number];
  * Datasets API mints unregistered specs from it). Specs nested in `equivalent_readings` stay in
  * the wire form.
  */
-export type Spec = wire.ResolvedSpec & {
+export type Spec = Omit<wire.ResolvedSpec, 'facet_options'> & {
     spec_id: string;
     resolution: wire.ResolutionTrace;
     identity: SpecIdentity | null;
     definition: wire.SpecDefinition | null;
-    /** set by `flattenSpec` when `stat_vars` is not the wire's shape, so the page shows a failure
-     *  state */
-    stat_vars_unreadable?: true;
+    facet_options?: FacetOptionsEntry[];
 };
 
+/** One facet axis's options as the page holds them. The stream's `facet_options` event sends no
+ *  `source`. */
+export type FacetOptionsEntry = Omit<wire.FacetOptions, 'source'>;
+
+/**
+ * A wire Spec `flattenSpec` could not read: its `stat_vars` is not the wire's shape, or it lacks
+ * the definition/resolved split. It carries its `spec_id` and whichever page Spec members the body
+ * held, so the page shows a failure state in its place.
+ */
+export type UnreadableSpec = Pick<Spec, 'spec_id'> &
+    Partial<Omit<Spec, 'spec_id' | 'stat_vars'>> & { stat_vars_unreadable: true };
+
+/** A Spec as a part holds it: read, or flagged unreadable. `view.statVarsUnreadable` tells them
+ *  apart. */
+export type PartSpec = Spec | UnreadableSpec;
+
 /** A set of competing Specs, each flattened. */
-type CandidateSet = Omit<wire.CandidateSet, 'specs'> & { specs: Spec[] };
+type CandidateSet = Omit<wire.CandidateSet, 'specs'> & { specs: PartSpec[] };
 
 /** A no_data outcome with its nearest, flagged and alternate Specs flattened. */
 export type NoData = Omit<wire.NoData, 'nearest_real' | 'flagged_match' | 'alternate_match'> & {
-    nearest_real?: Spec[] | null;
-    flagged_match?: Spec | null;
-    alternate_match?: Spec | null;
+    nearest_real?: PartSpec[] | null;
+    flagged_match?: PartSpec | null;
+    alternate_match?: PartSpec | null;
 };
 
 /** The members `searchClient.flattenPart` defaults when the wire omits them. */
@@ -205,7 +219,7 @@ type PagePart<TPart, TPayload> = Omit<TPart, keyof PartDefaults | keyof TPayload
     PartDefaults &
     TPayload;
 
-type DefinitePart = PagePart<wire.DefinitePart, { spec: Spec }>;
+type DefinitePart = PagePart<wire.DefinitePart, { spec: PartSpec }>;
 export type CandidatesPart = PagePart<wire.CandidatesPart, { candidates: CandidateSet }>;
 export type NoDataPart = PagePart<wire.NoDataPart, { no_data: NoData }>;
 type UnsupportedPart = PagePart<wire.UnsupportedPart, object>;
@@ -392,7 +406,7 @@ export interface HydratedPart {
     part: Part | null;
     /** `part.spec` with its trailing observations/facet_options merged in;
      *  populated only when `part.status === 'definite'`. */
-    hydratedSpec: Spec | null;
+    hydratedSpec: PartSpec | null;
     /** True while this part's hydrated spec exists, its `observations` is
      *  still null, and one of the run's streams is open (the base run is
      *  loading, or an edit post is in flight): "the observations have not
@@ -406,6 +420,14 @@ export interface HydratedPart {
      *  of a page-level banner. Cleared on the part's next successful edit,
      *  or by a fresh raw_text run. */
     editError: string | null;
+}
+
+/** A definite part whose spec has landed. */
+export type DefiniteHydratedPart = HydratedPart & { hydratedSpec: PartSpec };
+
+/** True for a definite part whose spec has landed. */
+export function hasDefiniteSpec(part: HydratedPart): part is DefiniteHydratedPart {
+    return part.part?.status === 'definite' && part.hydratedSpec != null;
 }
 
 /** The named skeleton list a run seeds from the `interpretation` event,

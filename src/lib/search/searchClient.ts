@@ -19,16 +19,19 @@
 import type {
     ArtifactEntryModel,
     CoverageDimension,
+    DatasetResubmitInput,
     EnrichmentOptionModel,
     FormatOptionModel,
     Manifest,
     MembersEnvelope,
+    MintOptions,
     MintRequest,
     OptionsEnvelope,
     OptionsRequest,
     OutputOptionsModel,
     ProblemDetails,
     ProblemIssue,
+    RawTextInput,
     ServedMember,
     SlotKey,
     SlotOption,
@@ -48,14 +51,16 @@ import {
 import {
     type Assumption,
     type Coverage,
-    type DatasetResubmitEntry,
     type EntityGroup,
     type EntityRoleKey,
+    type FacetOptionsEntry,
     type Frame,
     isKnownPart,
+    type Known,
     type LateDepartures,
     type Operation,
     type Part,
+    type PartSpec,
     type PlaceOptionsScope,
     type Resolution,
     type ResolveResponse,
@@ -139,16 +144,14 @@ export type SearchEvent =
           options: SlotOption[];
           truncated: boolean;
       }
-    | {
+    | ({
           /** Coverage-derived facet values (unit / measurementMethod /
            *  provenance), streamed AFTER the response event — the response's
            *  own facet_options array arrives empty on SSE. */
           kind: 'facet_options';
           spec_id: string;
-          axis: string;
-          options: SlotOption[];
           truncated?: boolean;
-      }
+      } & Omit<FacetOptionsEntry, 'truncated'>)
     | {
           kind: 'entity_options';
           spec_id: string;
@@ -224,15 +227,9 @@ export function keyRef(key: SlotKey): string {
     return `${key.axis}:${key.property?.ref ?? ''}`;
 }
 
-export type SearchInput =
-    | { kind: 'raw_text'; query: string }
-    | {
-          kind: 'dataset_resubmit';
-          /** 1 to 6, in response part order; see types.ts's DatasetResubmitEntry */
-          entries: DatasetResubmitEntry[];
-          /** echo-only; the engine must not re-parse it */
-          raw_query?: string;
-      };
+/** A resolve request's input: a question in words, or 1 to 6 entries posted back in response
+ *  part order. */
+export type SearchInput = RawTextInput | DatasetResubmitInput;
 
 export function buildRequest(input: SearchInput, includeCoverage: boolean) {
     return {
@@ -297,10 +294,10 @@ function validateResolvedStatVars(value: unknown): StatVarsValidation {
     return { valid: true };
 }
 
-/** Flatten one wire Spec to the page's Spec. */
-export function flattenSpec(spec: WireSpec): Spec;
-export function flattenSpec(spec: WireSpec | null | undefined): Spec | null;
-export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
+/** Flatten one wire Spec to the page's Spec, or flag it unreadable. */
+export function flattenSpec(spec: WireSpec): PartSpec;
+export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null;
+export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null {
     if (!spec) return null;
 
     if (!spec.resolved) {
@@ -316,10 +313,8 @@ export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
             spec,
         );
         // The body broke the contract the type states, so it holds none of
-        // the resolved members. SearchCards, ReadingCards and the Studio
-        // handoff check statVarsUnreadable first; every other reader reads
-        // each member optionally.
-        return { ...spec, stat_vars_unreadable: true } as unknown as Spec;
+        // the resolved members.
+        return { ...spec, stat_vars_unreadable: true };
     }
 
     const { spec_id, definition, resolved } = spec;
@@ -353,7 +348,8 @@ export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
                     `{member_count, member_count_exact, served_count, data_date_range} shape (ResolvedStatVars) — ${validation.reason} — got`,
                 resolved.stat_vars,
             );
-            flat.stat_vars_unreadable = true;
+
+            return { ...flat, stat_vars_unreadable: true };
         }
     }
 
@@ -364,12 +360,13 @@ export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
  * spec that carried the definition/resolved split. `identity` and
  * `resolution` are the two members `flattenSpec` adds; every other member
  * came from `resolved`, `trace` included. */
-export function unflattenSpec(spec: any): {
+export function unflattenSpec(spec: Spec): {
     spec_id: string;
     definition: any;
     resolved: Record<string, any>;
 } {
-    const { spec_id, definition, ...resolved } = spec;
+    const { spec_id, definition, ...flat } = spec;
+    const resolved: Record<string, any> = flat;
 
     delete resolved.identity;
     delete resolved.resolution;
@@ -729,7 +726,7 @@ export type EntityOptionsRequest = {
     // entity_options call names 'origin'/'destination' explicitly; an
     // omitted role takes the door's own 'observationAbout' default below.
     role?: EntityRoleKey;
-    scope: 'peers' | 'children';
+    scope: PlaceOptionsScope;
 };
 
 export type EntityOption = { dcid: string; label: string; coverage?: Coverage | null };
@@ -785,7 +782,7 @@ export async function entityOptions(
 // sidecar).
 // ---------------------------------------------------------------------------
 
-export type DatasetFormat = 'csv' | 'xlsx' | 'parquet';
+export type DatasetFormat = Exclude<Known<MintOptions['format']>, undefined>;
 
 // The three formats the Datasets API and a Studio card's export route render,
 // in the order the download sheet offers them. Which of them a given dataset
@@ -860,19 +857,6 @@ export async function mintDataset(
     const manifest: Manifest | null = body;
 
     return { artifacts: manifest?.artifacts ?? [], manifest };
-}
-
-/** The Datasets API's capability document (GET /api/datasets/capabilities):
- *  deployment-mutable switches — which formats are live, and which
- *  enrichment columns (ISO codes etc.) the reshape step can populate. */
-export async function fetchDatasetCapabilities(signal?: AbortSignal): Promise<any | null> {
-    try {
-        const res = await datasetsFetch(`${SEARCH_BASE}/api/datasets/capabilities`, { signal });
-
-        return res.ok ? await res.json() : null;
-    } catch {
-        return null;
-    }
 }
 
 /** One country's search catalogue (GET /api/search/catalogue?place=): its

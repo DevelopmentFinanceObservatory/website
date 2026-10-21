@@ -17,9 +17,11 @@ import {
     knownPart,
     type Operation,
     type Part,
+    type PartSpec,
     type SentenceToken,
+    type Spec,
 } from '../types.ts';
-import { resolution } from './fixtures/resolution.ts';
+import { readable, resolution } from './fixtures/resolution.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
 /** The fixture's normalized parts as a settled run holds them. */
@@ -114,26 +116,35 @@ test('handoffSeeds gives a folded part one seed with the operations of both', ()
     );
 });
 
-test('handoffSeeds skips a spec with no definition, which Studio would refuse', () => {
-    const [part] = hydratedParts('definite-single');
-    const definite = knownPart(part.part);
+for (const [name, spec] of [
+    ['with no definition', (read: Spec): PartSpec => ({ ...read, definition: null })],
+    [
+        'the site could not read',
+        (read: Spec): PartSpec => ({ ...read, stat_vars_unreadable: true }),
+    ],
+] as const) {
+    test(`handoffSeeds skips a spec ${name}, which Studio would refuse`, () => {
+        const [part] = hydratedParts('definite-single');
+        const definite = knownPart(part.part);
 
-    assert.ok(definite?.status === 'definite');
+        assert.ok(definite?.status === 'definite');
 
-    const bare: HydratedPart = {
-        ...part,
-        part: { ...definite, spec: { ...definite.spec, definition: null } },
-    };
+        const left: HydratedPart = {
+            ...part,
+            part: { ...definite, spec: spec(readable(definite.spec)) },
+        };
 
-    assert.deepEqual(handoffSeeds([bare]), []);
-});
+        assert.equal(handoffSeeds([part]).length, 1);
+        assert.deepEqual(handoffSeeds([left]), []);
+    });
+}
 
 test('unflattenSpec keeps the trace flattenSpec also reads as `resolution`', () => {
     const wire = structuredClone(wireSpecOf('definite-single'));
 
     wire.resolved.trace = { resolved_entities: [{ ref: 'country/KEN' }] };
 
-    assert.deepEqual(unflattenSpec(flattenSpec(wire)), wire);
+    assert.deepEqual(unflattenSpec(readable(flattenSpec(wire))), wire);
 });
 
 test('studioHref carries the question, and the token when there is one', () => {

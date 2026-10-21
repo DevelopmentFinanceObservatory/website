@@ -34,6 +34,7 @@ import {
     type ObservationsOmissionReason,
     type ParsedPart,
     type Part,
+    type PartSpec,
     type PartyKind,
     type PlaceOptionsScope,
     type RoleAxis,
@@ -42,6 +43,7 @@ import {
     type SlotOption,
     type Spec,
     type UnitAlternative,
+    type UnreadableSpec,
     type Warning,
 } from './types.ts';
 import { keyRef, sentenceOf } from './searchClient.ts';
@@ -51,11 +53,14 @@ import { unitWithBasis } from './unitLabel.ts';
 export const optionLabel = (option: OptionLike | null | undefined): string =>
     option?.value?.ref?.label ?? option?.label ?? '—';
 
-/** True when searchClient.flattenSpec couldn't read this spec's `stat_vars`
- *  as the wire's ResolvedStatVars object shape — it already logged the raw
- *  value to the console at parse time. A card reading this spec's variable
- *  label should show an explicit failure state rather than an empty one. */
-export const statVarsUnreadable = (spec: any): boolean => !!spec?.stat_vars_unreadable;
+/** True when searchClient.flattenSpec couldn't read this spec — its `stat_vars`
+ *  is not the wire's ResolvedStatVars object shape, or it lacks the
+ *  definition/resolved split — and already logged the raw value to the
+ *  console at parse time. A card reading this spec's variable label should
+ *  show an explicit failure state rather than an empty one. */
+export function statVarsUnreadable(spec: PartSpec | null | undefined): spec is UnreadableSpec {
+    return !!spec && 'stat_vars_unreadable' in spec;
+}
 
 /** The resolved spec's measure, named for a card whose part carries no
  *  variable_text: its measure label, else its shape's label. Null when

@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { keyRef } from '../searchClient.ts';
 import { tokenPart } from '../sentencePlan.ts';
-import { definite, noData, resolution } from './fixtures/resolution.ts';
+import { definite, noData, readable, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
@@ -1084,7 +1084,7 @@ function kenyaFixtureSpec() {
         },
     ];
 
-    return definite(resolution(body).parts[0]).spec;
+    return readable(definite(resolution(body).parts[0]).spec);
 }
 
 const kenyaWhereToken: SentenceToken = {

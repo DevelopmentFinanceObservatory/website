@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- holds streamed observations, facet options and slot bindings as `any`, merging members it does not read */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes the edited spec and slot bindings as `any`, passing members it does not read */
 'use client';
 
 /**
@@ -166,7 +166,6 @@ import { measureSwitchEntry, type MeasurePick } from '@/lib/search/measureMenu';
 import { buildReplayPlan, nextEditsByPart } from '@/lib/search/permalinkEdits';
 import {
     bindsMethod,
-    entityOptionsEntry,
     mergeEntityOptionsEntry,
     mergePlaceOptionsEntry,
     mergeSlotOptionsEntry,
@@ -194,13 +193,14 @@ import {
     type DeclinedAnswer,
     type EntityRoleKey,
     type ExpectedPart,
+    type FacetOptionsEntry,
     type HydratedPart,
     type IdentityFacetAxis,
     type IdentityFacetBinding,
-    type IdentityUnitRequest,
     knownPart,
     type ParsedPart,
     type PartPhase,
+    type PartSpec,
     type Resolution,
     type ResolveResponse,
     type RoleAxis,
@@ -218,6 +218,7 @@ import {
 import { sharedUnitEdit } from '@/lib/search/unitPicker';
 import { unmountTeardown } from '@/lib/search/unmountTeardown';
 import type { WindowApplyValue } from '@/lib/search/windowState';
+import { type SharedEdit, sharedEditTouched, withSharedEdit } from '@/lib/search/sharedEdit';
 
 export type SearchPhase = 'idle' | 'loading' | 'done' | 'error';
 
@@ -225,19 +226,6 @@ export type SearchPhase = 'idle' | 'loading' | 'done' | 'error';
  *  point the page shows from its own catalogue carries only these. */
 export type PartlessAnswer =
     Pick<CatalogueAnswer, 'kind' | 'scope'> | Pick<DeclinedAnswer, 'kind' | 'reason' | 'scope'>;
-
-/** A hoisted where/when/source/origin/unit/method qualifier's edit, fanned
- *  out to every definite part by `editShared`: one axis, applied everywhere
- *  it hoisted. A unit request applies to every part that converts
- *  (`sharedUnitEdit`); a method binding to every part that binds a method,
- *  the parts a stated method token speaks for. */
-export type SharedEdit =
-    | { axis: 'where'; binding: any; entityRole: EntityRoleKey }
-    | { axis: 'source'; binding: any }
-    | { axis: 'when'; window: WindowApplyValue }
-    | { axis: 'entity'; role: RoleAxis; dcid: string }
-    | { axis: 'unit'; request: IdentityUnitRequest }
-    | { axis: 'method'; binding: IdentityFacetBinding['measurementMethod'] | null };
 
 type PartRuntime = Pick<HydratedPart, 'phase' | 'editError'>;
 
@@ -253,29 +241,24 @@ const addStep = (steps: string[], step: string): string[] =>
  *  entries folded in: the same merge every definite part needs, factored
  *  out so N parts hydrate identically. */
 function hydrateDefiniteSpec(
-    spec: Spec,
-    obsBySpec: Record<string, any>,
-    facetsBySpec: Record<string, Record<string, any>>,
+    spec: PartSpec,
+    obsBySpec: Record<string, SpecObservations>,
+    facetsBySpec: Record<string, Record<string, FacetOptionsEntry>>,
     frozen?: SpecObservations,
-): Spec {
+): PartSpec {
     const live = spec.observations ?? obsBySpec[spec.spec_id] ?? null;
+    // Streamed facet entries override the response's (empty on SSE) by
+    // axis; a buffered body's inline entries survive untouched.
+    const streamed = facetsBySpec[spec.spec_id] ?? {};
+    const inline = (spec.facet_options ?? []).filter((entry) => !(entry.axis in streamed));
 
     return {
         ...spec,
         // A snapshot share's captured bytes win over whatever the live
         // replay streams for the same spec.
         observations: frozen ?? live,
-        // Streamed facet entries override the response's (empty on SSE) by
-        // axis; a buffered body's inline entries survive untouched.
-        facet_options: (() => {
-            const streamed = facetsBySpec[spec.spec_id] ?? {};
-            const inline = (spec.facet_options ?? []).filter(
-                (entry: any) => !(entry?.axis in streamed),
-            );
-
-            return [...inline, ...Object.values(streamed)];
-        })(),
-    } as Spec;
+        facet_options: [...inline, ...Object.values(streamed)],
+    };
 }
 
 /** A lightweight `HydratedPart[]` view straight off a fresh `Resolution`,
@@ -345,13 +328,15 @@ export const useSearchRun = () => {
     const [expectedParts, setExpectedParts] = useState<ExpectedPart[]>([]);
     const [runtimes, setRuntimes] = useState<PartRuntime[]>([]);
     const [editsByPart, setEditsByPart] = useState<Record<number, PermalinkEdit>>({});
-    const [obsBySpec, setObsBySpec] = useState<Record<string, any>>({});
+    const [obsBySpec, setObsBySpec] = useState<Record<string, SpecObservations>>({});
     const [optionsBySpec, setOptionsBySpec] = useState<
         Record<string, Record<string, SlotOptionsEntry>>
     >({});
     // facet_options ride SSE as trailing events (the response's own array is
     // empty on the stream), collected per spec, axis-keyed.
-    const [facetsBySpec, setFacetsBySpec] = useState<Record<string, Record<string, any>>>({});
+    const [facetsBySpec, setFacetsBySpec] = useState<
+        Record<string, Record<string, FacetOptionsEntry>>
+    >({});
     const [entityOptionsBySpec, setEntityOptionsBySpec] = useState<EntityOptionsBySpec>({});
     // Trailing place_options events, spec_id- and scope-keyed: prefetched
     // observationAbout peers/children candidates so PlaceEditor can open
@@ -1402,42 +1387,14 @@ export const useSearchRun = () => {
                 return;
             }
 
-            const touched: number[] = [];
-
-            for (const part of parts) {
-                if (part.part?.status !== 'definite' || !part.hydratedSpec) continue;
-                const spec = part.hydratedSpec;
-
-                if (edit.axis === 'entity') {
-                    if (entityOptionsEntry(spec, entityOptionsBySpec, edit.role)) {
-                        touched.push(part.index);
-                    }
-                    continue;
-                }
-                if (spec.slots.some((slot) => slot.key.axis === edit.axis))
-                    touched.push(part.index);
-            }
+            const touched = sharedEditTouched(parts, edit, entityOptionsBySpec);
 
             if (touched.length === 0) return;
 
-            const rewriteIdentity = (identity: BaseIdentity, part: HydratedPart): BaseIdentity => {
-                if (!touched.includes(part.index) || !part.hydratedSpec) return identity;
-                const spec = part.hydratedSpec;
-
-                if (edit.axis === 'entity') {
-                    return withEntityEdit(identity, edit.role, [edit.dcid]);
-                }
-                if (edit.axis === 'when') {
-                    return { ...identity, requested_window: edit.window };
-                }
-                const slotIndex = spec.slots.findIndex((slot) => slot.key.axis === edit.axis);
-                return withResolvedSlotEdit(
-                    spec,
-                    slotIndex,
-                    edit.binding,
-                    edit.axis === 'where' ? edit.entityRole : 'observationAbout',
-                );
-            };
+            const rewriteIdentity = (identity: BaseIdentity, part: HydratedPart): BaseIdentity =>
+                touched.includes(part.index) && part.hydratedSpec
+                    ? withSharedEdit(identity, part.hydratedSpec, edit)
+                    : identity;
 
             runDatasetEdit({ rewriteIdentity }, touched, 'shared');
         },

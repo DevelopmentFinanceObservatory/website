@@ -15,6 +15,7 @@
  */
 
 import { fetchDefinitionMembers } from './searchClient.ts';
+import type { Spec } from './types.ts';
 
 /** A served StatVar as the panels read it: its bare dcid and label. */
 export type MemberRef = { dcid: string; label: string | null };
@@ -22,11 +23,10 @@ export type MemberRef = { dcid: string; label: string | null };
 export type MembersRead = { ok: true; members: MemberRef[] } | { ok: false };
 
 /** The part of a page Spec the reader keys on and sends. */
-export type MemberSpec = {
-    spec_id: string;
-    definition?: unknown;
-    shape?: { member_digest?: string | null } | null;
-};
+export type MemberSpec = Pick<Spec, 'spec_id'> &
+    Partial<Pick<Spec, 'definition'>> & {
+        shape?: Partial<Pick<Spec['shape'], 'member_digest'>> | null;
+    };
 
 type FetchMembers = typeof fetchDefinitionMembers;
 

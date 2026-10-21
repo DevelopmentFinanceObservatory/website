@@ -1,5 +1,6 @@
 import { normalizeResponse } from '../../searchClient.ts';
-import { knownPart, type Part, type Resolution } from '../../types.ts';
+import { knownPart, type Part, type PartSpec, type Resolution, type Spec } from '../../types.ts';
+import { statVarsUnreadable } from '../../view.ts';
 
 /** A resolve body normalised as the page reads it. Throws when the body is a
  *  catalogue or declined answer, so a test that expects a resolution fails
@@ -38,4 +39,10 @@ export function noData(part: Part | null | undefined) {
 
     if (known?.status !== 'no_data') throw statusError('no_data', part);
     return known;
+}
+
+/** `spec` as a Spec the client read; throws for one `flattenSpec` flagged unreadable. */
+export function readable(spec: PartSpec): Spec {
+    if (statVarsUnreadable(spec)) throw new Error(`expected a readable spec, got ${spec.spec_id}`);
+    return spec;
 }
