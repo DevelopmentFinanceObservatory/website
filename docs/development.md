@@ -199,11 +199,6 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 | `pnpm optimize:svg`     | SVGO over `src/assets` (run after adding)        |
 | `pnpm db:generate`      | Generate a migration from `db/schema.ts`         |
 | `pnpm db:migrate:local` | Apply migrations to the local database           |
-| `pnpm graph:types`      | Regenerate the graph types from the snapshot     |
-| `pnpm graph:schema`     | Refresh the graph schema snapshot from an apis   |
-
-`pnpm graph:schema http://localhost:8083` reads the snapshot from dev apis
-through the proxy in [Reach the dev APIs](#reach-the-dev-apis).
 
 ## Conventions
 
