@@ -1235,8 +1235,9 @@ export type AssumptionKind = 'declared_default' | 'open_role' | 'place_scope';
 export interface Assumption {
     kind: AssumptionKind;
     /** the binding whose edit replaces it: "how:<property dcid>" for a
-     *  declared default, "origin:"/"destination:" for a role, "where:" for
-     *  the place scope */
+     *  declared default, "origin:" or "where:" for an open role (the
+     *  destination shares the subject's where slot), "where:" for the place
+     *  scope */
     binding_ref: string;
     /** the value dcids a declared default bound its slot to; [] for an
      *  open role and the place scope */

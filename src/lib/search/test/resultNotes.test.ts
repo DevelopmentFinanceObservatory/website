@@ -83,7 +83,7 @@ const humanitarianAssumptions: Assumption[] = [
         refs: ['CRSTypeOfFlow10'],
         text: 'official development assistance',
     },
-    { kind: 'open_role', binding_ref: 'destination:', refs: [], text: 'every recipient' },
+    { kind: 'open_role', binding_ref: 'where:', refs: [], text: 'every recipient' },
 ];
 
 // dfo-apis src/search/engine/region/un_system.py un_unavailable_warning, for

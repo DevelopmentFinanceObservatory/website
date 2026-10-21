@@ -1186,13 +1186,11 @@ const assumptionSentence = (spec: any, assumption: Assumption): string => {
     if (kind === 'place_scope') return `No place was named, so the answer covers ${text}.`;
 
     if (kind === 'open_role') {
-        const role = ref.split(':')[0];
-        const counterpart =
-            role === 'origin' ? 'destination' : role === 'destination' ? 'origin' : null;
-        const named = counterpart ? entityLabels(spec, counterpart) : [];
-        const scope = named.length
-            ? ` ${role === 'destination' ? 'from' : 'to'} ${orList(named)}`
-            : '';
+        // An open role reads "origin:" or "where:", the slot the destination
+        // shares with the subject.
+        const origin = ref === 'origin:';
+        const named = entityLabels(spec, origin ? 'destination' : 'origin');
+        const scope = named.length ? ` ${origin ? 'to' : 'from'} ${orList(named)}` : '';
 
         return `The question left this role open, so the answer covers ${text}${scope}.`;
     }

@@ -67,7 +67,7 @@ const odaWarnings: Warning[] = [
 // The assumption the ODA answer carries for the recipient role it left open.
 const openRecipients: Assumption = {
     kind: 'open_role',
-    binding_ref: 'destination:',
+    binding_ref: 'where:',
     refs: [],
     text: 'every recipient',
 };

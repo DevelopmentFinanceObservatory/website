@@ -13,9 +13,9 @@ export type SentenceBlock = {
 
 const isSpacing = (token: SentenceToken) => token.kind === 'text' && token.text.trim() === '';
 
-/** The plan's heading, byline and assumptions clause as blocks, in plan
- *  order: each run of consecutive tokens in one segment is one block.
- *  Departure tokens are left out, since the departure list draws from
+/** The plan's coverage opener, heading, byline and assumptions clause as
+ *  blocks, in plan order: each run of consecutive tokens in one segment is
+ *  one block. Departure tokens are left out, since the departure list draws from
  *  `parts[].departures`, so heading runs a departure separated join into
  *  one block. A block's leading and trailing whitespace-only text tokens are
  *  the space between blocks and are dropped; a block left empty is dropped
