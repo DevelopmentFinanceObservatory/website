@@ -36,8 +36,6 @@ type Present<T> = Exclude<T, null | undefined>;
 // ---------------------------------------------------------------------------
 
 export type {
-    AmbiguousEntityCandidate,
-    AmbiguousEntityGroup,
     Assumption,
     BaseIdentity,
     CatalogueAnswer,
@@ -67,6 +65,8 @@ export type {
     SentenceToken,
     Shape,
     Slot,
+    SlotOption,
+    SlotOptions,
     SpecAlternativeMeasure,
     SpecObservations,
     TimeWindow,
@@ -177,6 +177,9 @@ export type Spec = wire.ResolvedSpec & {
     resolution: wire.ResolutionTrace;
     identity: SpecIdentity | null;
     definition: wire.SpecDefinition | null;
+    /** set by `flattenSpec` when `stat_vars` is not the wire's shape, so the page shows a failure
+     *  state */
+    stat_vars_unreadable?: true;
 };
 
 /** A set of competing Specs, each flattened. */
@@ -237,7 +240,7 @@ export type Resolution = Omit<wire.Resolution, 'parts'> & { parts: Part[] };
 export type ResolveResponse = Resolution | wire.CatalogueAnswer | wire.DeclinedAnswer;
 
 // ---------------------------------------------------------------------------
-// Stream payloads the OpenAPI document does not describe
+// Stream payloads, hand-written: the OpenAPI document does not describe the SSE stream
 // ---------------------------------------------------------------------------
 
 /** Departures the stream's `done` event adds to one part: facts that depend on the observations

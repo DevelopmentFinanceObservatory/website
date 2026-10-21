@@ -50,7 +50,15 @@ import {
     splitCurrentPick,
 } from '../view.ts';
 import type { EntityOptionsBySpec, PlaceOptionScopeResult, PlaceOptionsEntry } from '../view.ts';
-import type { SentenceToken } from '../types.ts';
+import type { SentenceToken, SlotOption } from '../types.ts';
+
+/** A slot option binding `ref`, or the one that binds no value. */
+const slotOption = (ref?: string, label = ref): SlotOption => ({
+    value: {
+        value_kind: 'enum_value',
+        ref: ref === undefined ? null : { ref, label: label ?? ref },
+    },
+});
 
 test('entity_options reducer preserves the SSE truncation flag for a destination', () => {
     const entries = mergeEntityOptionsEntry({}, 'spec-1', {
@@ -594,7 +602,7 @@ test('slotOptionsEntry returns an empty, non-truncated entry when the spec_id is
 
 test('slotOptionsEntry returns an empty, non-truncated entry when the spec is present but the key is absent', () => {
     const bySpec = {
-        'spec-1': { 'what:crsPurpose': { options: [{ value: {} }], truncated: true } },
+        'spec-1': { 'what:crsPurpose': { options: [slotOption()], truncated: true } },
     };
 
     assert.deepEqual(slotOptionsEntry(bySpec, 'spec-1', 'where:'), {
@@ -605,7 +613,7 @@ test('slotOptionsEntry returns an empty, non-truncated entry when the spec is pr
 
 test('slotOptionsEntry reads back a populated entry, truncated true preserved', () => {
     const entry = {
-        options: [{ value: { ref: { ref: 'country/KEN', label: 'Kenya' } } }],
+        options: [slotOption('country/KEN', 'Kenya')],
         truncated: true,
     };
     const bySpec = { 'spec-1': { 'where:': entry } };
@@ -615,7 +623,7 @@ test('slotOptionsEntry reads back a populated entry, truncated true preserved', 
 
 test('slotOptionsEntry does not leak a same-named key from a different spec_id', () => {
     const bySpec = {
-        'spec-1': { 'where:': { options: [{ value: {} }], truncated: false } },
+        'spec-1': { 'where:': { options: [slotOption()], truncated: false } },
     };
 
     assert.deepEqual(slotOptionsEntry(bySpec, 'spec-2', 'where:'), {
@@ -627,7 +635,7 @@ test('slotOptionsEntry does not leak a same-named key from a different spec_id',
 // --- mergeSlotOptionsEntry ----------------------------------------------
 
 test('mergeSlotOptionsEntry seeds a brand new spec/key pair into an empty map', () => {
-    const entry = { options: [{ value: {} }], truncated: false };
+    const entry = { options: [slotOption()], truncated: false };
 
     assert.deepEqual(mergeSlotOptionsEntry({}, 'spec-1', 'where:', entry), {
         'spec-1': { 'where:': entry },
@@ -635,8 +643,8 @@ test('mergeSlotOptionsEntry seeds a brand new spec/key pair into an empty map', 
 });
 
 test('mergeSlotOptionsEntry adds a second key under a spec without dropping a sibling key already there', () => {
-    const first = { options: [{ value: { ref: { ref: 'country/KEN' } } }], truncated: false };
-    const second = { options: [{ value: { ref: { ref: 'crsPurpose/110' } } }], truncated: true };
+    const first = { options: [slotOption('country/KEN')], truncated: false };
+    const second = { options: [slotOption('crsPurpose/110')], truncated: true };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', first);
 
     assert.deepEqual(mergeSlotOptionsEntry(bySpec, 'spec-1', 'how:crsPurpose', second), {
@@ -645,8 +653,8 @@ test('mergeSlotOptionsEntry adds a second key under a spec without dropping a si
 });
 
 test("mergeSlotOptionsEntry overwrites an existing key's entry, options and truncated both replaced", () => {
-    const stale = { options: [{ value: { ref: { ref: 'a' } } }], truncated: true };
-    const fresh = { options: [{ value: { ref: { ref: 'b' } } }], truncated: false };
+    const stale = { options: [slotOption('a')], truncated: true };
+    const fresh = { options: [slotOption('b')], truncated: false };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', stale);
 
     assert.deepEqual(mergeSlotOptionsEntry(bySpec, 'spec-1', 'where:', fresh), {
@@ -655,9 +663,9 @@ test("mergeSlotOptionsEntry overwrites an existing key's entry, options and trun
 });
 
 test("mergeSlotOptionsEntry leaves a different spec's entries untouched", () => {
-    const otherSpecEntry = { options: [{ value: {} }], truncated: false };
+    const otherSpecEntry = { options: [slotOption()], truncated: false };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', otherSpecEntry);
-    const newEntry = { options: [{ value: {} }], truncated: true };
+    const newEntry = { options: [slotOption()], truncated: true };
 
     const next = mergeSlotOptionsEntry(bySpec, 'spec-2', 'where:', newEntry);
 
@@ -708,9 +716,7 @@ test('showGroupHeadings is true for two groups', () => {
 // exactly the decision Add Criteria's shared renderer makes off it.
 
 test("a level-scoped option list stays level-scoped after slotOptionsEntry's lookup, so a shared renderer would route it through the hierarchy branch", () => {
-    const levelScoped = [
-        { value: { ref: { ref: 'crsPurpose/100' } }, relation: 'root', member_count: 12 },
-    ];
+    const levelScoped = [{ ...slotOption('crsPurpose/100'), relation: 'root', member_count: 12 }];
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'how:crsPurpose', {
         options: levelScoped,
         truncated: false,
@@ -723,7 +729,7 @@ test("a level-scoped option list stays level-scoped after slotOptionsEntry's loo
 });
 
 test("a flat option list stays flat after slotOptionsEntry's lookup, so a shared renderer would route it through the flat branch", () => {
-    const flat = [{ value: { ref: { ref: 'country/KEN' } } }];
+    const flat = [slotOption('country/KEN')];
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'where:', {
         options: flat,
         truncated: false,
@@ -733,7 +739,7 @@ test("a flat option list stays flat after slotOptionsEntry's lookup, so a shared
 });
 
 test('mergeSlotOptionsEntry then slotOptionsEntry round-trips a truncated entry exactly, not just its option list', () => {
-    const entry = { options: [{ value: { ref: { ref: 'crsTypeOfFlow/110' } } }], truncated: true };
+    const entry = { options: [slotOption('crsTypeOfFlow/110')], truncated: true };
     const bySpec = mergeSlotOptionsEntry({}, 'spec-1', 'how:crsTypeOfFlow', entry);
 
     assert.deepEqual(slotOptionsEntry(bySpec, 'spec-1', 'how:crsTypeOfFlow'), entry);
@@ -1976,7 +1982,7 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
         download: { rows: 1284, rows_exact: true },
     };
     const one = (served_rows: number | null) => ({
-        options: [{ value: { ref: { ref: 'Net' } }, served_rows }],
+        options: [{ ...slotOption('Net'), served_rows }],
         truncated: false,
     });
 
@@ -1993,7 +1999,7 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
         binding: { kind: 'set', values: dcids.map((dcid) => ({ ref: { ref: dcid } })) },
     });
     const members = (...dcids: string[]) => ({
-        options: dcids.map((dcid) => ({ value: { ref: { ref: dcid } }, served_rows: null })),
+        options: dcids.map((dcid) => ({ ...slotOption(dcid), served_rows: null })),
         truncated: false,
     });
 

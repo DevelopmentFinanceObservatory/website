@@ -146,7 +146,7 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
             identity: ref.identity,
             entityGroups: ref.entityGroups as Record<string, EntityGroup> | null,
             operations: ref.operations as Operation[],
-            assumptions: ref.assumptions as Assumption[] | null,
+            assumptions: ref.assumptions,
             contentVersion: ref.contentVersion,
             artifactDigest: ref.artifactDigest,
         })),

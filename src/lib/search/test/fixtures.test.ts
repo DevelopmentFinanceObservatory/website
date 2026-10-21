@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- these tests walk the raw wire envelope shape, pre-flatten (see searchClient.ts's own WireSpec) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- these tests walk the raw wire envelope shape, pre-flatten, which the fixtures hold as `unknown` */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { flattenSpec, normalizeResponse, unflattenSpec } from '../searchClient.ts';

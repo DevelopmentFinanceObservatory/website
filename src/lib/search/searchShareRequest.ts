@@ -4,6 +4,7 @@ import {
     type AssumptionKind,
     type EntityGroup,
     type EntityRoleKey,
+    hasKey,
     type HydratedPart,
     knownPart,
     type Operation,
@@ -87,11 +88,13 @@ const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
         ([role, group]) => ENTITY_ROLE_KEYS.includes(role) && isEntityGroup(group),
     );
 
-const ASSUMPTION_KINDS: string[] = [
-    'declared_default',
-    'open_role',
-    'place_scope',
-] satisfies AssumptionKind[];
+// Keyed by every kind the wire names, so a kind Search adds fails the type
+// check until this list takes it.
+const ASSUMPTION_KINDS: Record<AssumptionKind, true> = {
+    declared_default: true,
+    open_role: true,
+    place_scope: true,
+};
 
 // Search's own bounds on an echoed `Assumption`: a text of 1 to 200 code
 // points, at most one ref of at most 1024 characters, a binding ref of at
@@ -108,14 +111,18 @@ const isAssumption = (value: any): value is Assumption =>
     Object.keys(value).every((member) =>
         ['kind', 'binding_ref', 'refs', 'text'].includes(member),
     ) &&
-    ASSUMPTION_KINDS.includes(value.kind) &&
+    typeof value.kind === 'string' &&
+    hasKey(ASSUMPTION_KINDS, value.kind) &&
     typeof value.binding_ref === 'string' &&
     value.binding_ref.length <= ASSUMPTION_BINDING_REF_MAX_LENGTH &&
-    Array.isArray(value.refs) &&
-    value.refs.length <= ASSUMPTION_MAX_REFS &&
-    value.refs.every(
-        (ref: unknown) => typeof ref === 'string' && ref.length <= ASSUMPTION_REF_MAX_LENGTH,
-    ) &&
+    // `refs` is optional on the wire, so an item may leave it out.
+    (value.refs === undefined ||
+        (Array.isArray(value.refs) &&
+            value.refs.length <= ASSUMPTION_MAX_REFS &&
+            value.refs.every(
+                (ref: unknown) =>
+                    typeof ref === 'string' && ref.length <= ASSUMPTION_REF_MAX_LENGTH,
+            ))) &&
     typeof value.text === 'string' &&
     value.text.length > 0 &&
     // A text within the bound spans at most two UTF-16 units per code point.

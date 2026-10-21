@@ -1,3 +1,4 @@
+import type { Assumption } from '@developmentfinance/client/wire';
 import { sql } from 'drizzle-orm';
 import {
     bigint,
@@ -107,7 +108,7 @@ export const shareRef = pgTable(
         operations: jsonb('operations').notNull().default([]),
         // The part's assumptions as the response gave them, [] included,
         // which the replay echoes. Null for a share stored before the column.
-        assumptions: jsonb('assumptions'),
+        assumptions: jsonb('assumptions').$type<Assumption[]>(),
     },
     (table) => [primaryKey({ columns: [table.shareId, table.partIndex] })],
 );

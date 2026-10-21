@@ -322,7 +322,7 @@ test('sourceSlotOptions still reads only the provenance axis', () => {
     const options = sourceSlotOptions(specOf(methodUnbound));
 
     assert.deepEqual(
-        options.map((option) => option.value.ref.ref),
+        options.map((option) => option.value.ref?.ref),
         [
             'dc/base/India_NationalAccountsStatistics',
             'dc/base/India_RBIStateDomesticProduct_AggCountry',

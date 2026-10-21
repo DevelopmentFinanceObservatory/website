@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs, slots and open slot options as `any` and reads only the members it renders, tolerating any that is missing */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs, slots and options of either picker shape as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -139,6 +139,7 @@ import type {
     PlaceOptionsBySpec,
     RootGroup,
     SlotOptionsEntry,
+    SourceSlotOption,
 } from '@/lib/search/view';
 
 import type { SharedEdit } from './useSearchRun';
@@ -1042,10 +1043,10 @@ export const SearchSentenceHeading = ({
             // attribution rather than a filter: nothing to uncheck.
             const impliedDcid =
                 boundDcid ??
-                sourceOptions.find((option: any) => token.text.trim() === sourceOptionLabel(option))
+                sourceOptions.find((option) => token.text.trim() === sourceOptionLabel(option))
                     ?.value?.ref?.ref;
             const { current, rest } = splitCurrentPick(sourceOptions, impliedDcid);
-            const sourceRow = (option: any, checked?: boolean) => {
+            const sourceRow = (option: SourceSlotOption, checked?: boolean) => {
                 const dcid = option.value.ref.ref;
 
                 return (
@@ -1081,7 +1082,7 @@ export const SearchSentenceHeading = ({
                             {sourceRow(current, true)}
                         </DropdownMenu.Item>
                     )}
-                    {rest.map((option: any) => (
+                    {rest.map((option) => (
                         <DropdownMenu.Item
                             key={option.value.ref.ref}
                             asChild
@@ -1578,7 +1579,7 @@ export const SearchSentenceHeading = ({
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text)}
                 >
-                    {sourceOptions.map((option: any) => {
+                    {sourceOptions.map((option) => {
                         const dcid = option.value.ref.ref;
                         const implicit =
                             !boundDcid && token.text.trim() === sourceOptionLabel(option);

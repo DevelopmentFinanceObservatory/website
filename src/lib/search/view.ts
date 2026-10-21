@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs and open slot options as `any`, each helper dereferencing only the members it names and tolerating any that is missing */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs and options of either picker shape as `any`, each helper dereferencing only the members it names and tolerating any that is missing */
 /**
  * View helpers: flatten a resolved Spec into UI-ready rows and summaries.
  * Deliberately defensive — the engine contract is authoritative, the UI reads
@@ -21,6 +21,7 @@ import {
     type EntityOptions,
     type EntityRoleKey,
     type FacetBasis,
+    type GraphRef,
     hasKey,
     type IdentityFacetBinding,
     type Known,
@@ -36,6 +37,7 @@ import {
     type PlaceOptionsScope,
     type RoleAxis,
     type SentenceToken,
+    type SlotOption,
     type UnitAlternative,
     type Warning,
 } from './types.ts';
@@ -69,14 +71,14 @@ export const cardText = (spec: any, fallbackText?: string | null): string | unde
  *  ref, in the engine's own rank order (in-window observation count). An
  *  option with no ref (measurementMethod and unit only) stands for the
  *  facets that declare no value on the axis, and is kept once. */
-const facetAxisOptions = (spec: any, axis: string): any[] => {
+const facetAxisOptions = (spec: any, axis: string): SlotOption[] => {
     const seen = new Set<string | null>();
-    const out: any[] = [];
+    const out: SlotOption[] = [];
 
     (spec?.facet_options ?? [])
         .filter((entry: any) => entry?.axis === axis)
         .forEach((entry: any) => {
-            (entry.options ?? []).forEach((option: any) => {
+            (entry.options ?? []).forEach((option: SlotOption) => {
                 const value = option?.value;
 
                 if (!value || (value.ref && !value.ref.ref)) {
@@ -104,10 +106,14 @@ const facetAxisOptions = (spec: any, axis: string): any[] => {
  * such a ref comes back definite with the sentence gaining "according to …".
  * Reshaped to the slot-option contract so the pickers treat them uniformly.
  */
-export const sourceSlotOptions = (spec: any): any[] =>
+export const sourceSlotOptions = (spec: any): SourceSlotOption[] =>
     facetAxisOptions(spec, 'provenance').filter(
-        (option) => option.value.ref && option.value.value_kind === 'source',
+        (option): option is SourceSlotOption =>
+            !!option.value.ref && option.value.value_kind === 'source',
     );
+
+/** A source slot's option: a provenance, so its value always carries a ref. */
+export type SourceSlotOption = SlotOption & { value: { ref: GraphRef } };
 
 /**
  * Provenance labels arrive dcid-squished ("WorldDevelopmentIndicators") while
@@ -800,7 +806,7 @@ export const levelMenu = (binding: any, options: any[]): LevelMenu => {
  *  accumulate it: the whole `{options, truncated}` pair the wire event
  *  carries, not just the option list — the shape every menu renders from
  *  (see mergeSlotOptionsEntry below). */
-export type SlotOptionsEntry = { options: any[]; truncated: boolean };
+export type SlotOptionsEntry = { options: SlotOption[]; truncated: boolean };
 
 const EMPTY_OPTIONS_ENTRY: SlotOptionsEntry = { options: [], truncated: false };
 
@@ -894,7 +900,7 @@ export const servedSeriesCount = (spec: any): number | null =>
  *  that serves every row, narrows nothing. */
 export const slotOffersChoice = (slot: any, entry: SlotOptionsEntry, spec: any): boolean => {
     const bound = new Set(slotBoundDcids(slot));
-    const binds = (option: any) => bound.has(option?.value?.ref?.ref);
+    const binds = (option: SlotOption) => bound.has(option.value.ref?.ref ?? '');
 
     if (bound.size > 0 && !entry.options.every(binds)) return true;
     if (bound.size === 1) return false;
@@ -2060,7 +2066,7 @@ export const methodPicker = (spec: any): MethodPicker | null => {
     const boundRefs: (string | null)[] =
         bound?.state === 'set' ? bound.refs : bound && 'ref' in bound ? [bound.ref] : [];
     const served = servedMethod(spec);
-    const optionRef = (option: any): string | null => option.value.ref?.ref ?? null;
+    const optionRef = (option: SlotOption): string | null => option.value.ref?.ref ?? null;
 
     if (boundRefs.length === 0 && options.length === 1 && served.ref === optionRef(options[0])) {
         return null;

@@ -19,6 +19,8 @@ import {
     resolveSuggestion,
     type SearchEvent,
 } from '../searchClient.ts';
+import type { Spec as WireSpec } from '@developmentfinance/client/wire';
+
 import type { SpecIdentity, Warning } from '../types.ts';
 import { fixtures } from './fixtures/index.ts';
 import {
@@ -40,14 +42,15 @@ const OPTIONS_IDENTITY: SpecIdentity = {
 };
 
 // A minimal but wire-shaped WireSpec: the definition/resolved split contract
-// v1 requires, with a well-formed `stat_vars`.
-function wireSpec(statVars: unknown) {
+// v1 requires, carrying `statVars` as its `stat_vars`. The tests pass broken
+// values here on purpose, which is the one place a body leaves the type.
+function wireSpec(statVars: unknown): WireSpec {
     return {
         spec_id: 'spec-1',
         definition: {
             schema_version: 1,
             spec_id: 'spec-1',
-            identity: { identity_version: 'spec1' },
+            identity: OPTIONS_IDENTITY,
         },
         resolved: {
             shape: {
@@ -57,10 +60,10 @@ function wireSpec(statVars: unknown) {
                 member_count: 1,
             },
             slots: [],
-            stat_vars: statVars,
+            stat_vars: statVars as WireSpec['resolved']['stat_vars'],
             entities: [],
             coverage: { kind: 'bare', has_data: true },
-            trace: {},
+            trace: { resolved_entities: [], resolved_sources: [], slot_filters: [] },
         },
     };
 }
@@ -121,10 +124,9 @@ test('flattenSpec flags a null stat_vars as unreadable', () => {
 });
 
 test('flattenSpec flags a spec missing the definition/resolved split as unreadable, rather than passing it through as a flat pre-v1 body', () => {
-    const flat = flattenSpec({
-        spec_id: 'spec-1',
-        stat_vars: ['dcid/GdpNominal'],
-    });
+    // A flat pre-v1 body, which the wire type rules out.
+    const preV1 = { spec_id: 'spec-1', stat_vars: ['dcid/GdpNominal'] };
+    const flat = flattenSpec(preV1 as unknown as WireSpec);
 
     assert.equal(statVarsUnreadable(flat), true);
 });
@@ -413,44 +415,25 @@ test('placeOptionValues returns an empty list for an empty/absent items array', 
 });
 
 test('flattenSpec reads a SlotOptions payload carrying truncated (post-drift-correction shape)', () => {
-    const wire = {
-        spec_id: 'spec-1',
-        definition: {
-            schema_version: 1,
-            spec_id: 'spec-1',
-            identity: { identity_version: 'spec1' },
-        },
-        resolved: {
-            shape: {
-                shape_id: 'shape-1',
-                label: 'Development finance',
-                slot_keys: [],
-                member_count: 1,
+    const wire = wireSpec({ member_count: 1, member_count_exact: true, served_count: 1 });
+
+    wire.resolved.slot_options = [
+        {
+            key: {
+                axis: 'how',
+                property: { ref: 'crsPurpose', label: 'purpose' },
+                label: 'purpose',
             },
-            slots: [],
-            slot_options: [
-                {
-                    key: {
-                        axis: 'how',
-                        property: { ref: 'crsPurpose', label: 'purpose' },
-                        label: 'purpose',
-                    },
-                    options: [{ value: { value_kind: 'enum_value' } }],
-                    truncated: false,
-                    source: 'seed',
-                },
-            ],
-            stat_vars: { member_count: 1, member_count_exact: true, served_count: 1 },
-            entities: [],
-            coverage: { kind: 'bare', has_data: true },
-            trace: {},
+            options: [{ value: { value_kind: 'enum_value' } }],
+            truncated: false,
+            source: 'seed',
         },
-    };
+    ];
 
-    const flat = flattenSpec(wire);
+    const [options] = flattenSpec(wire).slot_options ?? [];
 
-    assert.equal(flat.slot_options[0].truncated, false);
-    assert.equal('complete' in flat.slot_options[0], false);
+    assert.equal(options?.truncated, false);
+    assert.ok(options && !('complete' in options));
 });
 
 test('isLevelScopedOptions is true once relation is populated on the list', () => {

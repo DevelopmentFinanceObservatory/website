@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- turns unvalidated response bodies and stream events into the page's shapes, so bodies and open slot options are `any` */
+/* eslint-disable @typescript-eslint/no-explicit-any -- turns unvalidated response bodies and stream events into the page's shapes, so bodies are `any` */
 /**
  * Browser-side search client for the /prototype gut-check page.
  *
@@ -31,6 +31,8 @@ import type {
     ProblemIssue,
     ServedMember,
     SlotKey,
+    SlotOption,
+    Spec as WireSpec,
 } from '@developmentfinance/client/wire';
 
 import { datasetsFetch } from './datasetsFetch.ts';
@@ -58,6 +60,7 @@ import {
     type ResolveStatus,
     type RoleAxis,
     type SentenceToken,
+    type Spec,
     type SpecIdentity,
     type SpecObservations,
     type Warning,
@@ -74,7 +77,7 @@ export type { SentenceToken };
 
 export type SlotOptionsData = {
     key: SlotKey;
-    options: any[];
+    options: SlotOption[];
     truncated: boolean;
     source?: 'observed' | 'seed';
 };
@@ -134,7 +137,13 @@ export type SearchEvent =
           ms?: number | null;
       }
     | { kind: 'response'; response: any }
-    | { kind: 'slot_options'; spec_id: string; key: SlotKey; options: any[]; truncated: boolean }
+    | {
+          kind: 'slot_options';
+          spec_id: string;
+          key: SlotKey;
+          options: SlotOption[];
+          truncated: boolean;
+      }
     | {
           /** Coverage-derived facet values (unit / measurementMethod /
            *  provenance), streamed AFTER the response event — the response's
@@ -261,8 +270,6 @@ export function buildRequest(input: SearchInput, includeCoverage: boolean) {
 // envelope enters: `resolved` is spread flat onto the Spec.
 // .no_data.gate needs no flattening. It's already a scalar.
 
-type WireSpec = { spec_id: string; definition?: any; resolved?: any } & Record<string, any>;
-
 /** Why `validateResolvedStatVars` rejected a value, or that it passed. A
  *  typed result rather than a bare boolean, so the one caller (below) can
  *  report what specifically didn't match instead of re-deriving it from the
@@ -296,8 +303,10 @@ function validateResolvedStatVars(value: unknown): StatVarsValidation {
 }
 
 /** Flatten one wire Spec to the page's Spec. */
-export function flattenSpec(spec: WireSpec | null | undefined): any {
-    if (!spec) return spec ?? null;
+export function flattenSpec(spec: WireSpec): Spec;
+export function flattenSpec(spec: WireSpec | null | undefined): Spec | null;
+export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
+    if (!spec) return null;
 
     if (!spec.resolved) {
         // Every deployment sends the definition/resolved split (contract
@@ -311,21 +320,22 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
                 'split (contract v1 requires both) — got',
             spec,
         );
-        return { ...spec, stat_vars_unreadable: true };
+        // The body broke the contract the type states, so it holds none of
+        // the resolved members; every reader checks statVarsUnreadable first.
+        return { ...spec, stat_vars_unreadable: true } as unknown as Spec;
     }
 
-    const { spec_id, definition, resolved, ...rest } = spec;
-    const flat = {
-        ...rest,
+    const { spec_id, definition, resolved } = spec;
+    const flat: Spec = {
         ...resolved,
         spec_id,
         // The wire's `trace` is the page's `resolution`.
-        resolution: resolved.trace ?? resolved.resolution ?? {},
+        resolution: resolved.trace,
         // The hashed identity, echoed verbatim on a dataset_resubmit entry.
-        identity: definition?.identity ?? null,
+        identity: definition.identity,
         // The canonical definition — the Datasets API mints unregistered specs
         // from it (the "sidecar").
-        definition: definition ?? null,
+        definition,
     };
 
     // Contract boundary check, deliberately not a coercion. A `stat_vars`

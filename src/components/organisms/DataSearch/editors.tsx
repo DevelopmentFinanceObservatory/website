@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs and open slot options as `any` and reads only the members each editor shows, tolerating any that is missing */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs and options of either picker shape as `any` and reads only the members each editor shows, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';

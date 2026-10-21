@@ -5,7 +5,7 @@
  * screen-reader text. Pure; no React.
  */
 
-import { refsStatedBesides, sentenceBlocks } from './departures.ts';
+import { refsStatedBesides, sentenceBlocks, tokenSegment } from './departures.ts';
 import { planSentenceText, tokenPart } from './sentencePlan.ts';
 import type { CandidateBasis, Part, SentenceToken } from './types';
 
@@ -58,7 +58,7 @@ export function readingOf(spec: { sentence_plan?: SentenceToken[] | null }): Rea
  *  assumptions clause are left out, since the answer block states them. */
 export function readingsSummary(plan: readonly SentenceToken[] | null | undefined): string {
     return (plan ?? [])
-        .filter((token) => token.segment === 'heading' || token.segment === 'byline')
+        .filter((token) => ['heading', 'byline'].includes(tokenSegment(token)))
         .map((token) => token.text)
         .join('')
         .trim();

@@ -28,6 +28,15 @@ export type SentenceBlock = {
     tokens: SentenceToken[];
 };
 
+/** The segment a token sits in as the site reads it: its own when the site
+ *  knows it, else the heading, the wire's default for a token without one. */
+export function tokenSegment(token: SentenceToken): BlockSegment | 'departure' {
+    const { segment } = token;
+
+    if (segment === 'departure') return 'departure';
+    return segment !== undefined && hasKey(BLOCK_SEGMENTS, segment) ? segment : 'heading';
+}
+
 const isSpacing = (token: SentenceToken) => token.kind === 'text' && token.text.trim() === '';
 
 /** The plan's coverage opener, heading, byline and assumptions clause as
@@ -42,12 +51,10 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
     const blocks: SentenceBlock[] = [];
 
     for (const token of plan ?? []) {
-        if (token.segment === 'departure') continue;
+        const segment = tokenSegment(token);
 
-        // A token without a segment is in the heading, the wire's default;
-        // so is one in a segment this site does not know.
-        const segment =
-            token.segment && hasKey(BLOCK_SEGMENTS, token.segment) ? token.segment : 'heading';
+        if (segment === 'departure') continue;
+
         const last = blocks.at(-1);
 
         if (last?.segment === segment) last.tokens.push(token);
