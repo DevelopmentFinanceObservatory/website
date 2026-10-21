@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { buildDatasetEntries, candidatePickEntry, sharedRefEntry } from '../datasetEntries.ts';
 import { withEntityEdit } from '../promote.ts';
-import { normalizeResponse, restorePlaceholderParts } from '../searchClient.ts';
+import { restorePlaceholderParts } from '../searchClient.ts';
 import {
     type Assumption,
     type DatasetCandidatesEntry,
@@ -15,11 +15,12 @@ import {
     type Resolution,
     type Spec,
 } from '../types.ts';
+import { resolution } from './fixtures/resolution.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
 /** The fixture's normalized parts as a settled run holds them. */
 function hydratedParts(name: FixtureName): HydratedPart[] {
-    const parts: Part[] = normalizeResponse(fixtures[name]).parts;
+    const parts: Part[] = resolution(fixtures[name]).parts;
 
     return parts.map((part, index) => {
         const known = knownPart(part);
@@ -82,8 +83,8 @@ test('a pick on part 1 of two posts the parsed entry there and keeps part 0 as i
 
 test("the pick's answer lands at part 1 and part 0 keeps its dataset", () => {
     const parts = hydratedParts('two-part-ambiguous');
-    const [pick] = normalizeResponse(fixtures['definite-rank-operation']).parts;
-    const answer: Resolution = normalizeResponse(fixtures['two-part-ambiguous']);
+    const [pick] = resolution(fixtures['definite-rank-operation']).parts;
+    const answer: Resolution = resolution(fixtures['two-part-ambiguous']);
     // The door's answer: part 0 re-resolved from its identity entry, part 1
     // resolved from the pinned parsed entry.
     const posted: Resolution = { ...answer, parts: [answer.parts[0], pick] };

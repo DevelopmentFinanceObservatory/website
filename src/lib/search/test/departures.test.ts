@@ -10,8 +10,8 @@ import {
     sentenceBlocks,
     statingTokenIndex,
 } from '../departures.ts';
-import { normalizeResponse } from '../searchClient.ts';
 import { planCoverageText, planSentenceText } from '../sentencePlan.ts';
+import { resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
@@ -66,16 +66,19 @@ test('sentenceBlocks joins heading runs a departure separated -- a no_data part 
     assert.deepEqual(sentenceBlocks(null), []);
 });
 
-test('sentenceBlocks reads a token with no segment, or one it does not know, as heading', () => {
+test('sentenceBlocks reads a token with no segment as heading, and keeps one it does not know out of the heading', () => {
     assert.deepEqual(
         blockTexts([
             { kind: 'text', text: 'Aid' },
-            { kind: 'text', text: ' to Kenya.', segment: 'aside' },
+            { kind: 'text', text: ' to Kenya.', segment: 'heading' },
             { kind: 'text', text: ' ' },
+            { kind: 'text', text: 'Figures are provisional.', segment: 'aside' },
+            { kind: 'text', text: ' ', segment: 'byline' },
             { kind: 'text', text: 'OECD.', segment: 'byline' },
         ]),
         [
             ['heading', 'Aid to Kenya.'],
+            ['aside', 'Figures are provisional.'],
             ['byline', 'OECD.'],
         ],
     );
@@ -317,7 +320,7 @@ test('answerDepartures hands an operation to Studio unless the part draws the St
     const action = (part: Parameters<typeof answerDepartures>[0][number]) =>
         answerDepartures([{ ...part, departures: [ranking] }], crs045.sentence_plan)[0].action;
     const noDataPart = (nearFields: Record<string, unknown>) =>
-        normalizeResponse(noDataResponse('variable_not_resolved', null, nearFields)).parts[0];
+        resolution(noDataResponse('variable_not_resolved', null, nearFields)).parts[0];
 
     // The generic no_data callout already offers Studio.
     assert.equal(action(noDataPart({})), null);
@@ -389,6 +392,16 @@ test('departureAction opens the token that states a ref it does not carry as its
     assert.equal(
         plan[statingTokenIndex(plan, 1, 0, 'how:crsTypeOfFlow')].text,
         'gross ODA disbursements',
+    );
+
+    // A heading token without a segment, the wire default, states it alike.
+    const unsegmented = plan.map((token): SentenceToken =>
+        token.segment === 'heading' ? { ...token, segment: undefined } : token,
+    );
+
+    assert.equal(
+        statingTokenIndex(unsegmented, 1, 0, 'how:crsTypeOfFlow'),
+        statingTokenIndex(plan, 1, 0, 'how:crsTypeOfFlow'),
     );
 });
 

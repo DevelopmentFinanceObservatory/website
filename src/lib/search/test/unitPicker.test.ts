@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildDatasetEntries } from '../datasetEntries.ts';
-import { normalizeResponse } from '../searchClient.ts';
 import { currencyName } from '../tokenAbout.ts';
 import type { HydratedPart, UnitConversion } from '../types.ts';
 import {
@@ -27,12 +26,13 @@ import {
     unitDebt,
     unitHealth,
 } from './fixtures/unit-conversion.ts';
+import { definite, resolution } from './fixtures/resolution.ts';
 
-const specOf = (body: unknown): any => normalizeResponse(body).parts[0].spec;
+const specOf = (body: unknown): any => definite(resolution(body).parts[0]).spec;
 
 /** `body`'s parts as the page hydrates them, each spec as served. */
 const hydratedParts = (body: unknown): HydratedPart[] =>
-    normalizeResponse(body).parts.map((part: any, index: number) => ({
+    resolution(body).parts.map((part: any, index: number) => ({
         index,
         variableText: part.variable_text ?? null,
         part,

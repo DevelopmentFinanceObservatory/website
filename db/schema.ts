@@ -1,4 +1,4 @@
-import type { Assumption } from '@developmentfinance/client/wire';
+import type { Assumption, EntityGroup, RequestedOperation } from '@developmentfinance/client/wire';
 import { sql } from 'drizzle-orm';
 import {
     bigint,
@@ -100,12 +100,12 @@ export const shareRef = pgTable(
         specId: text('spec_id').notNull(),
         identity: jsonb('identity').notNull(),
         // Null when no role was asked for as a group.
-        entityGroups: jsonb('entity_groups'),
+        entityGroups: jsonb('entity_groups').$type<Record<string, EntityGroup>>(),
         variableText: text('variable_text'),
         contentVersion: text('content_version'),
         // Null for a live share and for snapshots stored before the column.
         artifactDigest: text('artifact_digest'),
-        operations: jsonb('operations').notNull().default([]),
+        operations: jsonb('operations').$type<RequestedOperation[]>().notNull().default([]),
         // The part's assumptions as the response gave them, [] included,
         // which the replay echoes. Null for a share stored before the column.
         assumptions: jsonb('assumptions').$type<Assumption[]>(),

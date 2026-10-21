@@ -9,15 +9,22 @@ import test from 'node:test';
 
 import { MAX_PROPS_BYTES } from '../../events/limits.ts';
 import { EVENT_SAMPLE, searchEventName, searchEventProps } from '../searchEvents.ts';
-import { flattenSpec, normalizeResponse, unflattenSpec } from '../searchClient.ts';
+import { flattenSpec, unflattenSpec } from '../searchClient.ts';
 import { planSentenceText } from '../sentencePlan.ts';
 import { handoffEdited, handoffQuestion, handoffSeeds, studioHref } from '../studioHandoff.ts';
-import { type HydratedPart, knownPart, type Operation, type Part } from '../types.ts';
+import {
+    type HydratedPart,
+    knownPart,
+    type Operation,
+    type Part,
+    type SentenceToken,
+} from '../types.ts';
+import { resolution } from './fixtures/resolution.ts';
 import { fixtures, type FixtureName } from './fixtures/index.ts';
 
 /** The fixture's normalized parts as a settled run holds them. */
 function hydratedParts(name: FixtureName): HydratedPart[] {
-    const parts: Part[] = normalizeResponse(fixtures[name]).parts;
+    const parts: Part[] = resolution(fixtures[name]).parts;
 
     return parts.map((part, index) => {
         const known = knownPart(part);
@@ -144,7 +151,7 @@ test('a Studio click after a place and year edit hands over the edited question 
             query,
             edited: false,
             sentence: planSentenceText(
-                normalizeResponse(fixtures['definite-explain-operation']).sentence_plan,
+                resolution(fixtures['definite-explain-operation']).sentence_plan,
             ),
         }),
         query,
@@ -154,7 +161,7 @@ test('a Studio click after a place and year edit hands over the edited question 
     });
 
     // The edit's answer replaces every part; the user has an edit on record.
-    const edited = normalizeResponse(fixtures['definite-explain-edited']);
+    const edited = resolution(fixtures['definite-explain-edited']);
     const after = hydratedParts('definite-explain-edited');
     const question = handoffQuestion({
         query,
@@ -199,9 +206,9 @@ test('a Studio click on an opened share saved after an edit hands over the sente
     // original query, and the opener has made no edit of their own.
     const query = 'Why did the population of Ethiopia fall in 2023?';
     // The plan's byline stays off the question.
-    const opened = normalizeResponse(fixtures['definite-explain-edited']);
-    const plan = [
-        ...opened.sentence_plan,
+    const opened = resolution(fixtures['definite-explain-edited']);
+    const plan: SentenceToken[] = [
+        ...(opened.sentence_plan ?? []),
         { kind: 'slot', text: ' Persons.', axis: 'unit', segment: 'byline', entity_refs: [] },
     ];
     const edited = handoffEdited({ editCount: 0, fromShare: true });

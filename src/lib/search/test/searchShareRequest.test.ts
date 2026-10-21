@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeResponse } from '../searchClient.ts';
 import {
     readSearchShareRequest,
     SEARCH_SHARE_MAX_PARTS,
     searchSharePart,
 } from '../searchShareRequest.ts';
 import type { HydratedPart, Spec } from '../types.ts';
+import { definite, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 
 const part = (partIndex: number) => ({
@@ -147,12 +147,12 @@ test('a part whose identity holds entity_groups is refused', () => {
 });
 
 test("a definite part shares its Spec's groups beside the identity, and null when it has none", () => {
-    const [response] = normalizeResponse(fixtures['definite-rank-operation']).parts;
+    const response = definite(resolution(fixtures['definite-rank-operation']).parts[0]);
     const hydrated: HydratedPart = {
         index: 0,
         variableText: response.variable_text ?? null,
         part: response,
-        hydratedSpec: response.spec!,
+        hydratedSpec: response.spec,
         observationsPending: false,
         phase: 'done',
         editError: null,

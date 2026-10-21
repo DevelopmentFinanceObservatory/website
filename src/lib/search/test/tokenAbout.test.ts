@@ -8,9 +8,9 @@ import {
     singleStatVarSpec,
     tokenAbout,
 } from '../tokenAbout.ts';
-import { normalizeResponse } from '../searchClient.ts';
 import { priceBasis } from '../unitLabel.ts';
 import type { SentenceToken } from '../types.ts';
+import { definite, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 
 const slot = (fields: Partial<SentenceToken>): SentenceToken => ({
@@ -183,7 +183,7 @@ test('a continent or UN subregion group counts the countries and territories it 
 test('the served Africa region reads as its countries and territories', () => {
     const body = fixtures['region-group'] as { sentence_plan: SentenceToken[] };
     const token = body.sentence_plan.find((candidate) => candidate.axis === 'where');
-    const [{ spec }] = normalizeResponse(body).parts;
+    const { spec } = definite(resolution(body).parts[0]);
     assert.ok(token);
 
     const about = tokenAbout(token, spec);

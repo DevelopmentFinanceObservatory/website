@@ -3,39 +3,13 @@
  *  each offers. No React. */
 
 import { offersStudioCallout } from './resultNotes.ts';
-import { tokenPart } from './sentencePlan.ts';
-import {
-    type Departure,
-    hasKey,
-    type Known,
-    type NoDataPart,
-    type Part,
-    type SentenceSegment,
-    type SentenceToken,
-} from './types.ts';
-
-type BlockSegment = Exclude<Known<SentenceSegment>, 'departure'>;
-
-const BLOCK_SEGMENTS: Record<BlockSegment, true> = {
-    coverage: true,
-    heading: true,
-    byline: true,
-    assumption: true,
-};
+import { tokenPart, tokenSegment } from './sentencePlan.ts';
+import type { Departure, NoDataPart, Part, SentenceSegment, SentenceToken } from './types.ts';
 
 export type SentenceBlock = {
-    segment: BlockSegment;
+    segment: Exclude<SentenceSegment, 'departure'>;
     tokens: SentenceToken[];
 };
-
-/** The segment a token sits in as the site reads it: its own when the site
- *  knows it, else the heading, the wire's default for a token without one. */
-export function tokenSegment(token: SentenceToken): BlockSegment | 'departure' {
-    const { segment } = token;
-
-    if (segment === 'departure') return 'departure';
-    return segment !== undefined && hasKey(BLOCK_SEGMENTS, segment) ? segment : 'heading';
-}
 
 const isSpacing = (token: SentenceToken) => token.kind === 'text' && token.text.trim() === '';
 
@@ -139,7 +113,7 @@ const isVisibleSlotOf = (
 
     return (
         token.kind === 'slot' &&
-        (token.segment === 'heading' || token.segment === 'byline') &&
+        ['heading', 'byline'].includes(tokenSegment(token)) &&
         token.text.trim() !== '' &&
         (owner === partIndex || owner === null)
     );

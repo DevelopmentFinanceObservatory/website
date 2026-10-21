@@ -144,3 +144,11 @@ test('planSentenceText reads the heading alone, leaving out the byline and depar
     );
     assert.equal(planSentenceText(null), '');
 });
+
+test('planSentenceText reads a token with no segment as heading, the wire default', () => {
+    const plan = crs038.sentence_plan.map((token): SentenceToken =>
+        token.segment === 'heading' ? { ...token, segment: undefined } : token,
+    );
+
+    assert.equal(planSentenceText(plan), planSentenceText(crs038.sentence_plan));
+});

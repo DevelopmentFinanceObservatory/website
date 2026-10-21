@@ -4,7 +4,6 @@ import test from 'node:test';
 
 import { withFacetEdit } from '../promote.ts';
 import { METHOD_REF, refineItems, refineKey } from '../refineMenu.ts';
-import { normalizeResponse } from '../searchClient.ts';
 import { statingTokenIndex } from '../departures.ts';
 import type {
     BaseIdentity,
@@ -25,8 +24,9 @@ import {
 } from '../view.ts';
 import { methodBound, methodUnbound } from './fixtures/index.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
+import { definite, resolution } from './fixtures/resolution.ts';
 
-const specOf = (body: unknown): any => normalizeResponse(body).parts[0].spec;
+const specOf = (body: unknown): any => definite(resolution(body).parts[0]).spec;
 
 /** The unbound fixture's spec as a StatVar with recorded values and one
  *  projection facet would arrive. The served series' facet states no method

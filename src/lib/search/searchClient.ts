@@ -47,6 +47,7 @@ import {
 } from './versionLink.ts';
 import {
     type Assumption,
+    type Coverage,
     type DatasetResubmitEntry,
     type EntityGroup,
     type EntityRoleKey,
@@ -57,9 +58,12 @@ import {
     type Part,
     type PlaceOptionsScope,
     type Resolution,
+    type ResolveResponse,
     type ResolveStatus,
     type RoleAxis,
     type SentenceToken,
+    type Slot,
+    type SlotOptions,
     type Spec,
     type SpecIdentity,
     type SpecObservations,
@@ -68,19 +72,10 @@ import {
 
 export const SEARCH_BASE = process.env.NEXT_PUBLIC_SEARCH_API_BASE ?? '';
 
-// Deliberately shallow types: the gut-check renders whatever the engine sends,
-// so only the fields the page dereferences are typed; the rest stays `any`.
 export type { SlotKey };
 
 // The stream's sentence plans carry the same token shape as the response's.
 export type { SentenceToken };
-
-export type SlotOptionsData = {
-    key: SlotKey;
-    options: SlotOption[];
-    truncated: boolean;
-    source?: 'observed' | 'seed';
-};
 
 export type SearchEvent =
     | {
@@ -113,7 +108,7 @@ export type SearchEvent =
           label: string;
           slot_keys: SlotKey[];
           sentence_plan: SentenceToken[];
-          slot_options: SlotOptionsData[];
+          slot_options: SlotOptions[];
           refine_supported: boolean;
       }
     | {
@@ -127,7 +122,7 @@ export type SearchEvent =
           variable_index: number;
           spec_id: string;
           sentence_plan: SentenceToken[];
-          slots: any[];
+          slots: Slot[];
       }
     | {
           kind: 'step';
@@ -136,7 +131,7 @@ export type SearchEvent =
           ran: boolean;
           ms?: number | null;
       }
-    | { kind: 'response'; response: any }
+    | { kind: 'response'; response: ResolveResponse }
     | {
           kind: 'slot_options';
           spec_id: string;
@@ -151,7 +146,7 @@ export type SearchEvent =
           kind: 'facet_options';
           spec_id: string;
           axis: string;
-          options: any[];
+          options: SlotOption[];
           truncated?: boolean;
       }
     | {
@@ -161,7 +156,7 @@ export type SearchEvent =
           // their candidate list.
           entity_ref?: string | null;
           role: RoleAxis;
-          options: any[];
+          options: SlotOption[];
           truncated: boolean;
       }
     | {
@@ -184,10 +179,10 @@ export type SearchEvent =
     | {
           kind: 'observations';
           spec_id: string;
-          /** SpecObservations (see lib/search/types.ts): same shape the buffered
-           *  path embeds at Spec.observations, deferred to a trailing event on SSE
-           *  so the response isn't blocked on the observation fetch. */
-          observations: any;
+          /** The same shape the buffered path embeds at Spec.observations,
+           *  deferred to a trailing event on SSE so the response isn't blocked
+           *  on the observation fetch. */
+          observations: SpecObservations;
       }
     | {
           kind: 'done';
@@ -321,7 +316,9 @@ export function flattenSpec(spec: WireSpec | null | undefined): Spec | null {
             spec,
         );
         // The body broke the contract the type states, so it holds none of
-        // the resolved members; every reader checks statVarsUnreadable first.
+        // the resolved members. SearchCards, ReadingCards and the Studio
+        // handoff check statVarsUnreadable first; every other reader reads
+        // each member optionally.
         return { ...spec, stat_vars_unreadable: true } as unknown as Spec;
     }
 
@@ -628,7 +625,7 @@ function flattenPart(part: any): any {
  * place is an error, never a guess. resolveStream turns the throw into the
  * run's `error` event.
  */
-export function normalizeResponse(body: any): any {
+export function normalizeResponse(body: any): ResolveResponse {
     if (body?.kind === 'resolution' && Array.isArray(body.parts)) {
         return { ...body, parts: body.parts.map(flattenPart) };
     }
@@ -735,7 +732,7 @@ export type EntityOptionsRequest = {
     scope: 'peers' | 'children';
 };
 
-export type EntityOption = { dcid: string; label: string; coverage?: any };
+export type EntityOption = { dcid: string; label: string; coverage?: Coverage | null };
 
 /** `options.items` from a POST /api/search/options body, or the wire
  *  SlotOption[] a `place_options` SSE event carries (same per-item shape —
@@ -743,14 +740,12 @@ export type EntityOption = { dcid: string; label: string; coverage?: any };
  *  `items` wrapper) — reshaped to the flat client `EntityOption` PlaceEditor
  *  renders. An item missing a dcid or label is dropped rather than shown
  *  half-filled. */
-export function placeOptionValues(items: any[]): EntityOption[] {
-    return (items ?? [])
-        .filter((item) => item?.value?.ref?.ref && item?.value?.ref?.label)
-        .map((item) => ({
-            dcid: item.value.ref.ref,
-            label: item.value.ref.label,
-            coverage: item.coverage ?? undefined,
-        }));
+export function placeOptionValues(items: readonly SlotOption[]): EntityOption[] {
+    return items.flatMap(({ value, coverage }) =>
+        value.ref?.ref && value.ref.label
+            ? [{ dcid: value.ref.ref, label: value.ref.label, coverage: coverage ?? undefined }]
+            : [],
+    );
 }
 
 export async function entityOptions(
@@ -1033,7 +1028,7 @@ function readOrStall(
  *  is not one the page can render (see normalizeResponse). False on the
  *  error. */
 function emitResponse(onEvent: (ev: SearchEvent) => void, body: unknown, frame?: object): boolean {
-    let response: any;
+    let response: ResolveResponse;
     try {
         response = normalizeResponse(body);
     } catch (error) {
@@ -1156,7 +1151,7 @@ export async function resolveStream(
  * Rejects on an `error` event before the response, on a stream that ends
  * without one, and with AbortError on an abort.
  */
-export function resolveSuggestion(query: string, signal: AbortSignal): Promise<any> {
+export function resolveSuggestion(query: string, signal: AbortSignal): Promise<ResolveResponse> {
     return new Promise((resolve, reject) => {
         resolveStream(
             buildRequest({ kind: 'raw_text', query }, true),
@@ -1176,7 +1171,7 @@ export function resolveSuggestion(query: string, signal: AbortSignal): Promise<a
 export type SuggestionSlot = {
     /** The suggestion for `query`: the live stream's when it asked the same
      *  text, otherwise a new stream, which aborts the live one. */
-    suggest(query: string): Promise<any>;
+    suggest(query: string): Promise<ResolveResponse>;
     /** Aborts the live stream unless it asked `query`; null aborts it
      *  whatever it asked. */
     keepOnly(query: string | null): void;
@@ -1192,7 +1187,11 @@ export type SuggestionSlot = {
  * retries.
  */
 export function createSuggestionSlot(): SuggestionSlot {
-    let live: { query: string; controller: AbortController; response: Promise<any> } | null = null;
+    let live: {
+        query: string;
+        controller: AbortController;
+        response: Promise<ResolveResponse>;
+    } | null = null;
 
     const keepOnly = (query: string | null) => {
         if (live && live.query !== query) {

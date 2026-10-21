@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { keyRef, normalizeResponse } from '../searchClient.ts';
+import { keyRef } from '../searchClient.ts';
 import { tokenPart } from '../sentencePlan.ts';
+import { definite, noData, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
@@ -50,7 +51,8 @@ import {
     splitCurrentPick,
 } from '../view.ts';
 import type { EntityOptionsBySpec, PlaceOptionScopeResult, PlaceOptionsEntry } from '../view.ts';
-import type { SentenceToken, SlotOption } from '../types.ts';
+import type { SentenceToken, Slot, SlotOption } from '../types.ts';
+import type { EntityOption } from '../searchClient.ts';
 
 /** A slot option binding `ref`, or the one that binds no value. */
 const slotOption = (ref?: string, label = ref): SlotOption => ({
@@ -248,7 +250,7 @@ test('noDataCallout hands the flagged match the full question as editText when t
     const response = noDataResponse('role_incompatible', null, {
         flagged_match: wireSpec('spec_flagged'),
     });
-    const part = normalizeResponse(response).parts[0];
+    const part = resolution(response).parts[0];
 
     const callout = noDataCallout(part, QUESTION);
 
@@ -265,7 +267,7 @@ test('noDataCallout hands the flagged match its own rendered sentence as editTex
     const response = noDataResponse('role_incompatible', null, {
         flagged_match: wireSpec('spec_flagged', { rendered_sentence: sentence }),
     });
-    const part = normalizeResponse(response).parts[0];
+    const part = resolution(response).parts[0];
 
     const callout = noDataCallout(part, QUESTION);
 
@@ -277,7 +279,7 @@ test('noDataCallout offers the alternate match, not Studio, for an only_alternat
     const response = noDataResponse('no_matching_slice', 'only_alternate_has_data', {
         alternate_match: wireSpec('spec_alternate'),
     });
-    const part = normalizeResponse(response).parts[0];
+    const part = resolution(response).parts[0];
 
     const callout = noDataCallout(part, QUESTION);
 
@@ -287,7 +289,7 @@ test('noDataCallout offers the alternate match, not Studio, for an only_alternat
 
 test('noDataCallout falls back to Studio when neither a flagged nor alternate match exists and nearest_real is empty', () => {
     const response = noDataResponse('variable_not_resolved', null, {});
-    const part = normalizeResponse(response).parts[0];
+    const part = resolution(response).parts[0];
 
     assert.deepEqual(noDataCallout(part, QUESTION), { kind: 'studio' });
 });
@@ -296,7 +298,7 @@ test('noDataCallout is null when nearest_real is non-empty, leaving the nearest-
     const response = noDataResponse('no_observations', null, {
         nearest_real: [wireSpec('spec_near')],
     });
-    const part = normalizeResponse(response).parts[0];
+    const part = resolution(response).parts[0];
 
     assert.equal(noDataCallout(part, QUESTION), null);
 });
@@ -748,8 +750,8 @@ test('mergeSlotOptionsEntry then slotOptionsEntry round-trips a truncated entry 
 // --- optionMuted ------------------------------------------------------
 
 test('optionMuted is true for a flat option the probe confirmed has no data', () => {
-    const option = {
-        value: { ref: { ref: 'country/LVA' } },
+    const option: SlotOption = {
+        ...slotOption('country/LVA'),
         coverage: { kind: 'bare', has_data: false },
     };
 
@@ -757,25 +759,25 @@ test('optionMuted is true for a flat option the probe confirmed has no data', ()
 });
 
 test('optionMuted is false for an observed option, and false for a never-probed one', () => {
-    const observed = {
-        value: { ref: { ref: 'country/DEU' } },
+    const observed: SlotOption = {
+        ...slotOption('country/DEU'),
         coverage: { kind: 'bare', has_data: true },
     };
-    const unprobed = { value: { ref: { ref: 'country/KEN' } } };
+    const unprobed: SlotOption = slotOption('country/KEN');
 
     assert.equal(optionMuted(observed), false);
     assert.equal(optionMuted(unprobed), false);
 });
 
 test('optionMuted reads a probed-zero level-scoped parent the same way it reads a flat option (F2)', () => {
-    const options = [
+    const options: SlotOption[] = [
         {
-            value: { ref: { ref: 'crsPurpose/100' } },
+            ...slotOption('crsPurpose/100'),
             relation: 'parent',
             member_count: 40,
             coverage: { kind: 'bare', has_data: false },
         },
-        { value: { ref: { ref: 'crsPurpose/110' } }, relation: 'child', member_count: 12 },
+        { ...slotOption('crsPurpose/110'), relation: 'child', member_count: 12 },
     ];
     const partition = partitionLevelOptions(options);
 
@@ -783,10 +785,10 @@ test('optionMuted reads a probed-zero level-scoped parent the same way it reads 
 });
 
 test('optionMuted reads a probed-zero level-scoped child the same way it reads a flat option', () => {
-    const options = [
-        { value: { ref: { ref: 'crsPurpose/100' } }, relation: 'parent', member_count: 40 },
+    const options: SlotOption[] = [
+        { ...slotOption('crsPurpose/100'), relation: 'parent', member_count: 40 },
         {
-            value: { ref: { ref: 'crsPurpose/110' } },
+            ...slotOption('crsPurpose/110'),
             relation: 'child',
             member_count: 12,
             coverage: { kind: 'bare', has_data: false },
@@ -800,51 +802,48 @@ test('optionMuted reads a probed-zero level-scoped child the same way it reads a
 // --- rankOptionsByCoverage ----------------------------------------------
 
 test('rankOptionsByCoverage passes a flat list through unchanged when nothing carries a probed verdict', () => {
-    const options = [
-        { value: { ref: { ref: 'country/DEU' } } },
-        { value: { ref: { ref: 'country/KEN' } } },
-    ];
+    const options: SlotOption[] = [slotOption('country/DEU'), slotOption('country/KEN')];
 
     assert.deepEqual(rankOptionsByCoverage(options, 'country/KEN'), options);
 });
 
 test('rankOptionsByCoverage ranks a flat option list richest-first and demotes a probed-zero option to the end', () => {
-    const options = [
-        { value: { ref: { ref: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
+    const options: SlotOption[] = [
+        { ...slotOption('country/LVA'), coverage: { kind: 'bare', has_data: false } },
         {
-            value: { ref: { ref: 'country/DEU' } },
+            ...slotOption('country/DEU'),
             coverage: { kind: 'exact', has_data: true, observation_count: 18 },
         },
         {
-            value: { ref: { ref: 'country/KEN' } },
+            ...slotOption('country/KEN'),
             coverage: { kind: 'exact', has_data: true, observation_count: 5 },
         },
     ];
 
     assert.deepEqual(
-        rankOptionsByCoverage(options, null).map((o) => o.value.ref.ref),
+        rankOptionsByCoverage(options, null).map((o) => o.value.ref?.ref),
         ['country/DEU', 'country/KEN', 'country/LVA'],
     );
 });
 
 test('rankOptionsByCoverage keeps the bound option visible ahead of other probed-zero options, even when it is itself probed-zero', () => {
-    const options = [
-        { value: { ref: { ref: 'country/LVA' } }, coverage: { kind: 'bare', has_data: false } },
-        { value: { ref: { ref: 'country/CZE' } }, coverage: { kind: 'bare', has_data: false } },
+    const options: SlotOption[] = [
+        { ...slotOption('country/LVA'), coverage: { kind: 'bare', has_data: false } },
+        { ...slotOption('country/CZE'), coverage: { kind: 'bare', has_data: false } },
         {
-            value: { ref: { ref: 'country/DEU' } },
+            ...slotOption('country/DEU'),
             coverage: { kind: 'exact', has_data: true, observation_count: 18 },
         },
     ];
 
     assert.deepEqual(
-        rankOptionsByCoverage(options, 'country/CZE').map((o) => o.value.ref.ref),
+        rankOptionsByCoverage(options, 'country/CZE').map((o) => o.value.ref?.ref),
         ['country/DEU', 'country/CZE', 'country/LVA'],
     );
 });
 
 test('rankOptionsByCoverage keeps a probed-zero current pick visible on the flat EntityOption shape PlaceScopeEditor feeds it', () => {
-    const options = [
+    const options: EntityOption[] = [
         { dcid: 'country/LVA', label: 'Latvia', coverage: { kind: 'bare', has_data: false } },
         { dcid: 'country/CZE', label: 'Czechia', coverage: { kind: 'bare', has_data: false } },
         {
@@ -1085,7 +1084,7 @@ function kenyaFixtureSpec() {
         },
     ];
 
-    return normalizeResponse(body).parts[0].spec;
+    return definite(resolution(body).parts[0]).spec;
 }
 
 const kenyaWhereToken: SentenceToken = {
@@ -1676,8 +1675,8 @@ test('operationProgressText formats rows written against the estimate', () => {
 });
 
 test("a single-part entity_ambiguous plan routes its wording token to that wording's candidates", () => {
-    const response = normalizeResponse(fixtures['world-bank-ambiguous']);
-    const plan: SentenceToken[] = response.sentence_plan;
+    const response = resolution(fixtures['world-bank-ambiguous']);
+    const plan = response.sentence_plan ?? [];
     const slots = plan.filter((token) => token.kind === 'slot');
 
     assert.equal(slots.length, 1);
@@ -1687,7 +1686,7 @@ test("a single-part entity_ambiguous plan routes its wording token to that wordi
     assert.equal(partIndex, 0);
     assert.equal(wording.role, 'origin');
     assert.deepEqual(
-        ambiguousWordingGroup(wording, response.parts[0].no_data)?.options.map(
+        ambiguousWordingGroup(wording, noData(response.parts[0]).no_data)?.options.map(
             (option) => option.label,
         ),
         [
@@ -1698,7 +1697,7 @@ test("a single-part entity_ambiguous plan routes its wording token to that wordi
 });
 
 test('ambiguousWordingGroup refuses the variable slot and an entity read-back', () => {
-    const { no_data: noData } = normalizeResponse(fixtures['world-bank-ambiguous']).parts[0];
+    const { no_data: refusal } = noData(resolution(fixtures['world-bank-ambiguous']).parts[0]);
     const token: SentenceToken = {
         kind: 'slot',
         text: 'World Bank',
@@ -1706,19 +1705,23 @@ test('ambiguousWordingGroup refuses the variable slot and an entity read-back', 
         role: 'origin',
     };
 
-    assert.ok(ambiguousWordingGroup(token, noData));
-    assert.equal(ambiguousWordingGroup({ ...token, axis: 'what' }, noData), null);
-    assert.equal(ambiguousWordingGroup({ ...token, entity_refs: ['WorldBank'] }, noData), null);
-    assert.equal(ambiguousWordingGroup({ ...token, kind: 'text' }, noData), null);
-    assert.equal(ambiguousWordingGroup({ ...token, text: 'IFC' }, noData), null);
+    assert.ok(ambiguousWordingGroup(token, refusal));
+    assert.equal(ambiguousWordingGroup({ ...token, axis: 'what' }, refusal), null);
+    assert.equal(ambiguousWordingGroup({ ...token, entity_refs: ['WorldBank'] }, refusal), null);
+    assert.equal(ambiguousWordingGroup({ ...token, kind: 'text' }, refusal), null);
+    assert.equal(ambiguousWordingGroup({ ...token, text: 'IFC' }, refusal), null);
 });
 
 test("ambiguousEntityMenuTitle titles the menu by the ambiguous wording's role", () => {
-    const part = normalizeResponse(fixtures['entity-ambiguous']).parts[0];
+    const part = noData(resolution(fixtures['entity-ambiguous']).parts[0]);
+    const { restatement } = part;
+
+    assert.ok(restatement);
+
     const withRole = (roleText: string | null) => ({
         ...part,
         restatement: {
-            ...part.restatement,
+            ...restatement,
             entities: [
                 { text: 'Congo', role_text: roleText },
                 { text: 'France', role_text: 'from' },
@@ -1734,8 +1737,12 @@ test("ambiguousEntityMenuTitle titles the menu by the ambiguous wording's role",
 });
 
 test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offers', () => {
-    const part = normalizeResponse(fixtures['entity-ambiguous']).parts[0];
-    const [congo] = part.no_data.options;
+    const part = noData(resolution(fixtures['entity-ambiguous']).parts[0]);
+    const { restatement } = part;
+    const [congo] = part.no_data.options ?? [];
+
+    assert.ok(restatement && congo);
+
     const bothAmbiguous = {
         ...part,
         no_data: {
@@ -1746,7 +1753,7 @@ test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offer
             ],
         },
         restatement: {
-            ...part.restatement,
+            ...restatement,
             entities: [
                 { text: 'World Bank', role_text: 'from' },
                 { text: 'Georgia', role_text: 'to' },
@@ -1758,16 +1765,20 @@ test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offer
 });
 
 test('ambiguousEntityMenuTitle reads a restatement whose entities are null', () => {
-    const part = normalizeResponse(fixtures['entity-ambiguous']).parts[0];
-    const withoutEntities = { ...part, restatement: { ...part.restatement, entities: null } };
+    const part = noData(resolution(fixtures['entity-ambiguous']).parts[0]);
+    const { restatement } = part;
+
+    assert.ok(restatement);
+
+    const withoutEntities = { ...part, restatement: { ...restatement, entities: null } };
 
     assert.equal(ambiguousEntityMenuTitle(withoutEntities), 'Select Place');
 });
 
 // --- rootGroups ------------------------------------------------------------
 
-const levelOption = (dcid: string, relation: string, parent?: string) => ({
-    value: { ref: { ref: dcid, label: dcid } },
+const levelOption = (dcid: string, relation: string, parent?: string): SlotOption => ({
+    ...slotOption(dcid),
     relation,
     ...(parent ? { parent } : {}),
 });
@@ -1786,8 +1797,8 @@ test('rootGroups puts each child under the root its parent names, in wire order'
 
     assert.deepEqual(
         groups.map(({ root, children }) => [
-            root.value.ref.ref,
-            children.map((child) => child.value.ref.ref),
+            root.value.ref?.ref,
+            children.map((child) => child.value.ref?.ref),
         ]),
         [
             ['crsPurpose/100', ['crsPurpose/120', 'crsPurpose/110']],
@@ -1822,7 +1833,7 @@ test('rootGroups reads a root whose one child serves the same rows as that child
 
     assert.deepEqual(
         rootGroups(partitionLevelOptions(options)).map(({ root, children }) => [
-            root.value.ref.label,
+            root.value.ref?.label,
             root.served_rows,
             children.length,
         ]),
@@ -1838,15 +1849,14 @@ test('rootGroups reads a root whose one child serves the same rows as that child
 
 // --- levelMenu ---------------------------------------------------------
 
-const valueBinding = (dcid: string) => ({
+const valueBinding = (dcid: string): Slot['binding'] => ({
     kind: 'value',
     value: { value_kind: 'taxonomy', ref: { ref: dcid, label: dcid } },
 });
 
-const dcids = (options: { value: { ref: { ref: string } } }[]) =>
-    options.map((option) => option.value.ref.ref);
+const dcids = (options: SlotOption[]) => options.map((option) => option.value.ref?.ref);
 
-const boundMenu = (binding: unknown, options: unknown[]) => {
+const boundMenu = (binding: Slot['binding'], options: SlotOption[]) => {
     const menu = levelMenu(binding, options);
 
     assert.equal(menu.kind, 'bound');
@@ -1855,19 +1865,25 @@ const boundMenu = (binding: unknown, options: unknown[]) => {
 };
 
 test('levelMenu groups an unbound slot, or one bound to a set, by root', () => {
-    const options = [
+    const options: SlotOption[] = [
         levelOption('CRSPurposeCode100', 'root'),
         levelOption('CRSPurposeCode110', 'child', 'CRSPurposeCode100'),
         levelOption('CRSPurposeCode200', 'root'),
     ];
 
-    for (const binding of [{ kind: 'unbound' }, { kind: 'set', values: [] }, undefined]) {
+    const bindings: (Slot['binding'] | undefined)[] = [
+        { kind: 'unbound' },
+        { kind: 'set', values: [] },
+        undefined,
+    ];
+
+    for (const binding of bindings) {
         const menu = levelMenu(binding, options);
 
         assert.equal(menu.kind, 'unbound');
         assert.deepEqual(
             menu.kind === 'unbound' &&
-                menu.groups.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
+                menu.groups.map(({ root, children }) => [root.value.ref?.ref, dcids(children)]),
             [
                 ['CRSPurposeCode100', ['CRSPurposeCode110']],
                 ['CRSPurposeCode200', []],
@@ -1883,8 +1899,8 @@ test('levelMenu puts a bound non-root between its parent and its children', () =
         levelOption('CRSPurposeCode100', 'parent'),
     ]);
 
-    assert.equal(menu.up?.value.ref.ref, 'CRSPurposeCode100');
-    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode120');
+    assert.equal(menu.up?.value.ref?.ref, 'CRSPurposeCode100');
+    assert.equal(menu.current.value.ref?.ref, 'CRSPurposeCode120');
     assert.deepEqual(dcids(menu.down), ['CRSPurposeCode122', 'CRSPurposeCode121']);
     assert.deepEqual(menu.sideways, []);
 });
@@ -1898,10 +1914,10 @@ test('levelMenu keeps a bound root as the current pick, its children down and th
     ]);
 
     assert.equal(menu.up, null);
-    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode100');
+    assert.equal(menu.current.value.ref?.ref, 'CRSPurposeCode100');
     assert.deepEqual(dcids(menu.down), ['CRSPurposeCode110', 'CRSPurposeCode120']);
     assert.deepEqual(
-        menu.sideways.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
+        menu.sideways.map(({ root, children }) => [root.value.ref?.ref, dcids(children)]),
         [
             ['CRSPurposeCode200', []],
             ['CRSPurposeCode300', []],
@@ -1915,10 +1931,10 @@ test('levelMenu keeps a childless bound root as the current pick beside the othe
         levelOption('DAC2aAidType207', 'root'),
     ]);
 
-    assert.equal(menu.current.value.ref.ref, 'DAC2aAidType216');
+    assert.equal(menu.current.value.ref?.ref, 'DAC2aAidType216');
     assert.deepEqual(menu.down, []);
     assert.deepEqual(
-        menu.sideways.map(({ root }) => root.value.ref.ref),
+        menu.sideways.map(({ root }) => root.value.ref?.ref),
         ['DAC2aAidType206', 'DAC2aAidType207'],
     );
 });
@@ -1931,7 +1947,7 @@ test("levelMenu takes a flat code system's bound value from the list, with its r
 
     assert.equal(menu.current.served_rows, 7);
     assert.deepEqual(
-        menu.sideways.map(({ root }) => root.value.ref.ref),
+        menu.sideways.map(({ root }) => root.value.ref?.ref),
         ['crsTypeOfFlow/11'],
     );
 });
@@ -1946,10 +1962,10 @@ test('levelMenu keeps every child reachable under its root for a binding the cod
         levelOption('CRSPurposeCode210', 'child', 'CRSPurposeCode200'),
     ]);
 
-    assert.equal(menu.current.value.ref.ref, 'CRSPurposeCode999');
+    assert.equal(menu.current.value.ref?.ref, 'CRSPurposeCode999');
     assert.deepEqual(menu.down, []);
     assert.deepEqual(
-        menu.sideways.map(({ root, children }) => [root.value.ref.ref, dcids(children)]),
+        menu.sideways.map(({ root, children }) => [root.value.ref?.ref, dcids(children)]),
         [
             ['CRSPurposeCode100', ['CRSPurposeCode110']],
             ['CRSPurposeCode200', ['CRSPurposeCode210']],

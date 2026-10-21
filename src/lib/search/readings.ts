@@ -5,8 +5,8 @@
  * screen-reader text. Pure; no React.
  */
 
-import { refsStatedBesides, sentenceBlocks, tokenSegment } from './departures.ts';
-import { planSentenceText, tokenPart } from './sentencePlan.ts';
+import { refsStatedBesides, sentenceBlocks } from './departures.ts';
+import { planSentenceText, tokenPart, tokenSegment } from './sentencePlan.ts';
 import type { CandidateBasis, Part, SentenceToken } from './types';
 
 /** What one reading card shows: its heading and byline as plain text, the

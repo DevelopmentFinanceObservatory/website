@@ -54,6 +54,7 @@ import {
     entityOptionDcid,
     filterOptionsByQuery,
     optionCoverageRankingBlocked,
+    type OptionLike,
     shouldShowOptionFilter,
 } from '@/lib/search/pickerState';
 import { spliceSentence } from '@/lib/search/refine';
@@ -72,6 +73,7 @@ import {
     type ParsedPart,
     type RoleAxis,
     type SentenceToken,
+    type SlotOption,
     type SpecAlternativeMeasure,
 } from '@/lib/search/types';
 import type { WindowApplyValue } from '@/lib/search/windowState';
@@ -199,8 +201,8 @@ export const answerRefineItems = ({
         : [];
 
 // An option's info icon, when the option names a graph node.
-const optionInfo = (option: any) => {
-    const dcid = option?.value?.ref?.ref;
+const optionInfo = (option: OptionLike) => {
+    const dcid = option.value?.ref?.ref;
 
     return dcid ? <GraphInfo dcid={dcid} /> : undefined;
 };
@@ -246,10 +248,14 @@ const MethodChoices = ({
  * in this file uses, and a child pick comes back on the next response
  * already scoped to its own level.
  */
-const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) => void) => {
-    const optionItem = (option: any, direction?: 'up' | 'down') => (
+const renderLevelOptions = (
+    slot: any,
+    options: readonly SlotOption[],
+    onSelect: (binding: any) => void,
+) => {
+    const optionItem = (option: SlotOption, direction?: 'up' | 'down') => (
         <DropdownMenu.Item
-            key={option?.value?.ref?.ref ?? optionLabel(option)}
+            key={option.value.ref?.ref ?? optionLabel(option)}
             asChild
             onSelect={() => onSelect({ kind: 'value', value: option.value })}
         >
@@ -268,7 +274,7 @@ const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) 
                 optionItem(root)
             ) : (
                 <OptionSubmenu
-                    key={root?.value?.ref?.ref ?? optionLabel(root)}
+                    key={root.value.ref?.ref ?? optionLabel(root)}
                     label={optionLabel(root)}
                     meta={rowsLabel(root.served_rows, root.served_rows_exact)}
                 >
@@ -338,7 +344,7 @@ const FlatOptionList = ({
     onSelect,
 }: {
     slot: any;
-    options: any[];
+    options: SlotOption[];
     onSelect: (binding: any) => void;
 }) => {
     const [filter, setFilter] = useState('');
@@ -372,8 +378,8 @@ const FlatOptionList = ({
                     </OptionRow>
                 </DropdownMenu.Item>
             )}
-            {shown.map((option: any) => {
-                const dcid = option?.value?.ref?.ref;
+            {shown.map((option) => {
+                const dcid = option.value.ref?.ref;
                 const label = slotOptionLabel(slot, option);
 
                 return (
@@ -557,7 +563,7 @@ const EntityOptionRows = ({
     rankingBlocked,
     onApply,
 }: {
-    options: any[];
+    options: SlotOption[];
     role: RoleAxis;
     currentDcids: string[];
     rankingBlocked: boolean;
@@ -598,7 +604,7 @@ const EntityOptionRows = ({
                     />
                 </OptionFilterBar>
             )}
-            {current.map((option: any) => {
+            {current.map((option) => {
                 const dcid = entityOptionDcid(option);
 
                 return (
@@ -622,8 +628,8 @@ const EntityOptionRows = ({
                     </DropdownMenu.Item>
                 );
             })}
-            {shown.map((option: any) => {
-                const dcid = option?.value?.ref?.ref;
+            {shown.map((option) => {
+                const dcid = option.value.ref?.ref;
 
                 return (
                     <DropdownMenu.Item
@@ -1643,20 +1649,18 @@ export const SearchSentenceHeading = ({
                     title={entityMenuTitle(entityRole)}
                     ariaLabel={slotAriaLabel(entityRoleLabel(entityRole), label)}
                 >
-                    {entityOptions.map((option: any) => {
-                        const checked = currentEntities.includes(option?.value?.ref?.ref);
+                    {entityOptions.map((option) => {
+                        const dcid = option.value.ref?.ref;
+                        const checked = !!dcid && currentEntities.includes(dcid);
 
                         return (
                             <DropdownMenu.Item
-                                key={option?.value?.ref?.ref ?? optionLabel(option)}
+                                key={dcid ?? optionLabel(option)}
                                 asChild
-                                onSelect={() =>
-                                    onEditShared({
-                                        axis: 'entity',
-                                        role: entityRole,
-                                        dcid: option.value.ref.ref,
-                                    })
-                                }
+                                onSelect={() => {
+                                    if (dcid)
+                                        onEditShared({ axis: 'entity', role: entityRole, dcid });
+                                }}
                             >
                                 <OptionRow
                                     checked={checked}
@@ -2158,7 +2162,11 @@ const RefineEntry = ({
 
     if (item.kind === 'entity') {
         const { role, entry } = item;
-        const pick = (option: any) => onEditEntity(part.index, spec, role, [option.value.ref.ref]);
+        const pick = (option: SlotOption) => {
+            const dcid = option.value.ref?.ref;
+
+            if (dcid) onEditEntity(part.index, spec, role, [dcid]);
+        };
         const [only] = entry.options;
 
         if (entry.options.length === 1 && !entry.truncated) {
@@ -2173,9 +2181,9 @@ const RefineEntry = ({
 
         return (
             <OptionSubmenu label={label} open={open} onOpenChange={onOpenChange}>
-                {entry.options.map((option: any) => (
+                {entry.options.map((option) => (
                     <DropdownMenu.Item
-                        key={option?.value?.ref?.ref ?? optionLabel(option)}
+                        key={option.value.ref?.ref ?? optionLabel(option)}
                         asChild
                         onSelect={() => pick(option)}
                     >

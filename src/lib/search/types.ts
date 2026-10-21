@@ -49,6 +49,7 @@ export type {
     MeasureAxisValue,
     NoDataDenominator,
     NoDataOption,
+    ObservationSeries,
     ObservationsOmission,
     OpenConstraintAxisFact,
     ParsedPart,

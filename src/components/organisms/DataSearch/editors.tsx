@@ -27,6 +27,7 @@ import { entityOptions } from '@/lib/search/searchClient';
 import type { EntityRoleKey, IdentityWindow, PlaceOptionsScope } from '@/lib/search/types';
 import {
     buildPlaceOptionGroups,
+    observationSeries,
     optionCoverageLabel,
     optionMuted,
     placeEditorScopes,
@@ -60,10 +61,10 @@ export const WindowEditor = ({
     onApply: (value: WindowApplyValue) => void;
 }) => {
     const requestedWindow: IdentityWindow | undefined = spec?.identity?.requested_window;
-    const years = (spec?.observations?.series ?? [])
-        .flatMap((series: any) => series?.points ?? [])
-        .map((point: any) => parseInt(point?.date, 10))
-        .filter((year: number) => !Number.isNaN(year));
+    const years = observationSeries(spec)
+        .flatMap((series) => series.points)
+        .map((point) => parseInt(point.date, 10))
+        .filter((year) => !Number.isNaN(year));
     const seed = seedWindowYears({
         requestedWindow,
         coverageWindow: spec?.coverage?.window,

@@ -25,6 +25,7 @@ import {
     axisLabel,
     formatCount,
     formatWindow,
+    observationSeries,
     provenanceOrigin,
     rowsLabel,
     servedSeriesCount,
@@ -96,10 +97,8 @@ export const servedSpan = (spec: any): string | null => {
 export const latestDate = (spec: any): string | null => {
     const end: unknown = spec?.stat_vars?.data_date_range?.end;
     const ends: string[] = typeof end === 'string' && end ? [end] : [];
-    const points: string[] = (spec?.observations?.series ?? []).flatMap((series: any) =>
-        (series?.points ?? [])
-            .filter((point: any) => point?.value != null)
-            .map((point: any) => point.date),
+    const points = observationSeries(spec).flatMap((series) =>
+        series.points.filter((point) => point.value != null).map((point) => point.date),
     );
 
     return [...ends, ...points].toSorted().at(-1) ?? null;

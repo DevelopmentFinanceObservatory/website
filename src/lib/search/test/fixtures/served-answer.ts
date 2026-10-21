@@ -6,10 +6,11 @@
  * response's own lists first, then each later `slot_options` event).
  */
 
-import { keyRef, normalizeResponse } from '../../searchClient.ts';
+import { keyRef } from '../../searchClient.ts';
 import type { RefinePart } from '../../refineMenu.ts';
 import type { SentenceToken } from '../../types.ts';
 import { mergeSlotOptionsEntry, type SlotOptionsEntry } from '../../view.ts';
+import { resolution } from './resolution.ts';
 
 export type ServedAnswer = {
     plan: SentenceToken[];
@@ -19,7 +20,7 @@ export type ServedAnswer = {
 };
 
 export function servedAnswer(body: unknown, events: unknown = []): ServedAnswer {
-    const response = normalizeResponse(body);
+    const response = resolution(body);
     const parts: RefinePart[] = response.parts.flatMap((part: any, index: number) =>
         part.status === 'definite'
             ? [{ index, variableText: part.variable_text ?? null, spec: part.spec }]
@@ -40,5 +41,10 @@ export function servedAnswer(body: unknown, events: unknown = []): ServedAnswer 
         {} as Record<string, Record<string, SlotOptionsEntry>>,
     );
 
-    return { plan: response.sentence_plan, partCount: response.parts.length, parts, optionsBySpec };
+    return {
+        plan: response.sentence_plan ?? [],
+        partCount: response.parts.length,
+        parts,
+        optionsBySpec,
+    };
 }
