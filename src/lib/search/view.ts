@@ -1039,7 +1039,7 @@ export type WhySummary = {
         origin: string | null;
         licence: string | null;
     }[];
-    /** how each facet axis and each defaulted slot got its value */
+    /** how each facet axis got its value */
     chosen: WhyChoice[];
 };
 
@@ -1277,7 +1277,7 @@ const whyMembers = (members: MembersRead | null | undefined): WhyMembers => {
     };
 };
 
-// Why a facet axis or slot holds its value (ResolvedFacet.basis).
+// Why a facet axis holds its value (ResolvedFacet.basis).
 const CHOICE_REASONS: Record<FacetBasis, string> = {
     bound: 'Set by your request.',
     declared_default: 'Filled in from the default for this measure.',

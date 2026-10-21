@@ -127,8 +127,8 @@ const isReplayableEditEntryKind = (kind: unknown): kind is PermalinkEdit['entry'
  *  edited from and the StatVars it served, which the door refuses. The
  *  entry's `assumptions` echo survives as stored, [] included, when Search
  *  would take it. A list it would refuse is dropped, and
- *  `buildDatasetEntries` then echoes the reloaded part's own list, as it
- *  does for any edit. */
+ *  `buildDatasetEntries` then echoes the reloaded definite part's own list,
+ *  as it does for any edit. */
 const replayableEntry = (entry: PermalinkEdit['entry']): PermalinkEdit['entry'] => {
     if (entry.entry_kind !== 'identity') return entry;
 
