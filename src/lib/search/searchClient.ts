@@ -377,7 +377,7 @@ export function unflattenSpec(spec: Spec): {
 /** A spec's own rendered sentence + plan, when the engine computed one.
  * Null when neither is set — a spec with no sentence data at all. */
 export const sentenceOf = (
-    spec: any,
+    spec: Pick<Spec, 'rendered_sentence' | 'sentence_plan'> | null | undefined,
 ): { rendered_sentence: string; sentence_plan: SentenceToken[] } | null =>
     spec?.rendered_sentence || spec?.sentence_plan
         ? {
@@ -564,7 +564,7 @@ export function applyDoneEvent(
  * `candidates.specs`, or `no_data.nearest_real`/`no_data.flagged_match`/
  * `no_data.alternate_match`) into the page's flat Spec shape; every other
  * field rides through untouched. */
-function flattenPart(part: any): any {
+function flattenPart(part: any): Part {
     if (!part || typeof part !== 'object') return part;
     // The page Part's restatement, operations, warnings and departures are
     // required, on a part of any status; the wire's are optional. Default

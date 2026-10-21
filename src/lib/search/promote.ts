@@ -9,6 +9,7 @@ import type {
     IdentityFacetBinding,
     IdentityFacets,
     Spec,
+    SpecReading,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -131,13 +132,13 @@ export function withFacetEdit<A extends IdentityFacetAxis>(
  * onEditWindow directly.
  */
 export function withResolvedSlotEdit(
-    spec: Pick<Spec, 'identity' | 'slots'>,
+    spec: Pick<SpecReading, 'identity' | 'slots'>,
     slotIndex: number,
     binding: ResolvedBinding,
     entityRole: EntityRoleKey = 'observationAbout',
 ): BaseIdentity {
     const identity = spec.identity as BaseIdentity;
-    const slot = spec.slots[slotIndex];
+    const slot = spec.slots?.[slotIndex];
     const axis = slot?.key?.axis;
 
     if (axis === 'where') {

@@ -26,10 +26,12 @@ import {
 
 export { openAxisFactLabel };
 
+/** The members the measure menu reads. An unreadable spec may lack `slots`. */
 export type MeasureMenuSpec = Pick<
     Spec,
-    'spec_id' | 'slots' | 'alternative_measures' | 'open_axis_facts' | 'download'
->;
+    'spec_id' | 'alternative_measures' | 'open_axis_facts' | 'download'
+> &
+    Partial<Pick<Spec, 'slots'>>;
 
 /** One group of the measure menu: a slot the measure token states, with
  *  its options. */

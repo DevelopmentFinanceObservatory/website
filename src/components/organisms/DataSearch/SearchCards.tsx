@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import classNames from 'classnames';
@@ -21,12 +20,12 @@ import {
     specOrigin,
     statVarsUnreadable,
 } from '@/lib/search/view';
-import { knownPart, type ParsedPart, type Part } from '@/lib/search/types';
+import { knownPart, type ParsedPart, type Part, type PartSpec } from '@/lib/search/types';
 
 // A card's meta line, its coverage then its origin (specOrigin beside the
 // spec's own sentence, shapeOrigin beside any other title). The line clamps
 // at two lines, so the full text goes in the title attribute.
-const CardMeta = ({ spec, origin }: { spec: any; origin: string | null }) => {
+const CardMeta = ({ spec, origin }: { spec: PartSpec; origin: string | null }) => {
     const meta = [coverageSummary(spec), origin].filter(Boolean).join(' · ');
 
     return (
@@ -97,7 +96,7 @@ const SearchCards = ({
                     Multiple possible interpretations found. Select the best fit…
                 </p>
                 <div className={styles.cards}>
-                    {specs.map((spec: any, index: number) => (
+                    {specs.map((spec, index) => (
                         <button
                             key={spec.spec_id}
                             type="button"
@@ -206,7 +205,7 @@ const SearchCards = ({
             <div className={styles.cardsBlock}>
                 <p className={styles.cardsTitle}>Largest Subsets</p>
                 <div className={styles.cards}>
-                    {nearest.map((spec: any, index: number) => {
+                    {nearest.map((spec, index) => {
                         const unreadable = statVarsUnreadable(spec);
 
                         // A shape the client couldn't parse has no title to

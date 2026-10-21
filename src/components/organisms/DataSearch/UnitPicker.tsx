@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flattened wire Spec */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -10,7 +9,7 @@ import { OptionRow, stopMenuFieldTypeahead } from './SlotMenu';
 
 import Button from '@/components/atoms/Button/Button';
 import { currencyName } from '@/lib/search/tokenAbout';
-import type { IdentityUnitRequest, UnitConversion } from '@/lib/search/types';
+import type { IdentityUnitRequest, PartSpec, UnitConversion } from '@/lib/search/types';
 import {
     currencyMatches,
     currencyRequest,
@@ -44,7 +43,7 @@ export const UnitPicker = ({
     conversion,
     onPick,
 }: {
-    spec: any;
+    spec: PartSpec;
     conversion: UnitConversion;
     onPick: (request: IdentityUnitRequest) => void;
 }) => {

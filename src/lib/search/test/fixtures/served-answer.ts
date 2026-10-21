@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the raw wire fixtures */
 /**
  * A served-options fixture (served-options.ts) as the page holds it: the
  * envelope's plan, the definite parts with their flattened specs, and the
@@ -8,7 +7,7 @@
 
 import { keyRef } from '../../searchClient.ts';
 import type { RefinePart } from '../../refineMenu.ts';
-import type { SentenceToken } from '../../types.ts';
+import { knownPart, type SentenceToken, type SlotOptions } from '../../types.ts';
 import { mergeSlotOptionsEntry, type SlotOptionsEntry } from '../../view.ts';
 import { resolution } from './resolution.ts';
 
@@ -21,16 +20,19 @@ export type ServedAnswer = {
 
 export function servedAnswer(body: unknown, events: unknown = []): ServedAnswer {
     const response = resolution(body);
-    const parts: RefinePart[] = response.parts.flatMap((part: any, index: number) =>
-        part.status === 'definite'
-            ? [{ index, variableText: part.variable_text ?? null, spec: part.spec }]
-            : [],
-    );
-    const entries = [
+    const parts: RefinePart[] = response.parts.flatMap((part, index) => {
+        const known = knownPart(part);
+
+        return known?.status === 'definite'
+            ? [{ index, variableText: known.variable_text ?? null, spec: known.spec }]
+            : [];
+    });
+    // The trailing `slot_options` events carry the response's entry shape with the spec_id.
+    const entries: (SlotOptions & { spec_id: string })[] = [
         ...parts.flatMap(({ spec }) =>
-            (spec.slot_options ?? []).map((entry: any) => ({ spec_id: spec.spec_id, ...entry })),
+            (spec.slot_options ?? []).map((entry) => ({ spec_id: spec.spec_id, ...entry })),
         ),
-        ...(events as any[]),
+        ...(events as (SlotOptions & { spec_id: string })[]),
     ];
     const optionsBySpec = entries.reduce(
         (bySpec, entry) =>

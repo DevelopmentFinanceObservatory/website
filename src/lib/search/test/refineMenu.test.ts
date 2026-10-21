@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { refineItems, refineKey, type RefineItem } from '../refineMenu.ts';
-import type { SentenceToken } from '../types.ts';
+import type { PartSpec, SentenceToken } from '../types.ts';
 import type { EntityOptionsBySpec } from '../view.ts';
 import { servedAnswer, type ServedAnswer } from './fixtures/served-answer.ts';
 import {
@@ -17,6 +17,7 @@ import {
     servedMulti,
 } from './fixtures/served-options.ts';
 import { methodUnbound } from './fixtures/method-unbound.ts';
+import { partialSpec } from './fixtures/partial.ts';
 
 const refineOf = (answer: ServedAnswer, entityOptionsBySpec: EntityOptionsBySpec = {}) =>
     refineItems({ ...answer, entityOptionsBySpec });
@@ -127,7 +128,8 @@ test('refineItems lists a bound binding no token states with its current value, 
 
 test('refineItems lists a slot bound to a set whose options are that set, since one member narrows it', () => {
     const member = (dcid: string) => ({ value_kind: 'entity', ref: { ref: dcid, label: dcid } });
-    const spec = {
+    // A Refine part's spec has a spec_id, which partialSpec leaves optional; the fixture names one.
+    const spec = partialSpec({
         spec_id: 'sex-set',
         slots: [
             {
@@ -135,7 +137,7 @@ test('refineItems lists a slot bound to a set whose options are that set, since 
                 binding: { kind: 'set', values: [member('Female'), member('Male')] },
             },
         ],
-    };
+    }) as PartSpec;
     const options = [member('Female'), member('Male')].map((value) => ({ value }));
 
     assert.deepEqual(

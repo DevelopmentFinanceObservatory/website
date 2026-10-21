@@ -16,7 +16,7 @@ import {
     seriesPreviewCaptions,
     type SlotOptionsEntry,
 } from './view.ts';
-import type { Assumption, Warning } from './types.ts';
+import type { Assumption, NoDataPart, SpecReading, Warning } from './types.ts';
 
 const andList = (labels: string[]): string =>
     new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(labels);
@@ -56,7 +56,7 @@ export const ABOUT_WARNING_CODES: ReadonlySet<string> = new Set([
 
 type CaptionPart = {
     variableText: string | null;
-    spec: unknown;
+    spec: SpecReading | null;
     warnings?: Pick<Warning, 'code' | 'message' | 'params'>[];
 };
 
@@ -225,10 +225,14 @@ export function noDataCardParts<T extends { index: number; part: unknown }>(
  *  alternate callout, the nearest_real cards, a picker, and every other
  *  status offer no Studio of their own. */
 export function offersStudioCallout(part: unknown, question?: string | null): boolean {
+    const noDataPart = part as Partial<
+        Pick<NoDataPart, 'status' | 'no_data' | 'variable_text'>
+    > | null;
+
     return (
-        (part as { status?: string } | null)?.status === 'no_data' &&
+        noDataPart?.status === 'no_data' &&
         !offersAmbiguousPicker(part) &&
-        noDataCallout(part, question)?.kind === 'studio'
+        noDataCallout(noDataPart, question)?.kind === 'studio'
     );
 }
 

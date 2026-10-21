@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes the spec as `any` and reads only the members the panel renders, tolerating any that is missing */
 'use client';
 
 import classNames from 'classnames';
@@ -11,6 +10,7 @@ import { type DatasetDownloaded, useDatasetDownload } from './useDatasetDownload
 
 import Button from '@/components/atoms/Button/Button';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import type { PartSpec } from '@/lib/search/types';
 import { detailRows, downloadRowCount, formatCount } from '@/lib/search/view';
 
 import { SourceName } from './WhyPanel';
@@ -24,7 +24,7 @@ const SearchPanel = ({
     onStudio,
     onDownloadStart,
 }: {
-    spec: any;
+    spec: PartSpec;
     // Says a download may differ from the preview (resultNotes downloadNote).
     note?: string | null;
     // Mints this result's share links; the Share button is hidden without it.

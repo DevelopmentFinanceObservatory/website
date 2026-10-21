@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flattened wire Spec */
+/* eslint-disable @typescript-eslint/no-explicit-any -- edits a trimmed Kenya spec fixture in place, a deliberately partial spec */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

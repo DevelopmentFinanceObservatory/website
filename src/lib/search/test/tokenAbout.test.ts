@@ -9,9 +9,10 @@ import {
     tokenAbout,
 } from '../tokenAbout.ts';
 import { priceBasis } from '../unitLabel.ts';
-import type { SentenceToken } from '../types.ts';
+import type { SentenceToken, Spec } from '../types.ts';
 import { definite, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
+import { type DeepPartial, partialSpec } from './fixtures/partial.ts';
 
 const slot = (fields: Partial<SentenceToken>): SentenceToken => ({
     kind: 'slot',
@@ -31,7 +32,7 @@ const crsProvenance = {
 };
 
 // crs-001's measure: gross ODA disbursements over 152 StatVars, nominal.
-const grossOda = {
+const grossOdaFixture: DeepPartial<Spec> = {
     measure_label: 'gross ODA disbursements',
     measure_axis_values: [
         { axis: 'nettingBasis', value: { ref: 'Gross', label: 'gross' } },
@@ -51,6 +52,7 @@ const grossOda = {
     },
     resolution: { resolved_sources: [crsProvenance] },
 };
+const grossOda = partialSpec(grossOdaFixture);
 
 test('a measure states its unit, span and download rows, and defines the axis values no other token states', () => {
     const measure = slot({ axis: 'what', text: 'Gross ODA disbursements' });
@@ -76,7 +78,7 @@ test('a measure states its unit, span and download rows, and defines the axis va
 // "aid from Germany to Guatemala": 279 series over three varying CRS axes,
 // one of them named by no slot.
 test('the line counts the rows and the note names the axes the series vary on', () => {
-    const spec = {
+    const aidFixture: DeepPartial<Spec> = {
         slots: [
             { key: { axis: 'how', property: { ref: 'crsPurpose' }, label: 'sector' } },
             { key: { axis: 'how', property: { ref: 'crsTypeOfFinance' }, label: 'instrument' } },
@@ -96,6 +98,7 @@ test('the line counts the rows and the note names the axes the series vary on', 
         coverage: { dimensions: [{ label: 'variables', count: 279 }] },
         download: { rows: 1284, rows_exact: false },
     };
+    const spec = partialSpec(aidFixture);
     const about = tokenAbout(slot({ axis: 'what', text: 'aid' }), spec);
 
     assert.deepEqual(about.facts, ['up to 1,284 rows']);
@@ -103,14 +106,19 @@ test('the line counts the rows and the note names the axes the series vary on', 
         'One series for each sector, instrument and cooperation modality combination.',
     ]);
     assert.equal(
-        seriesReason({ ...spec, open_axis_facts: spec.open_axis_facts.slice(0, 1) }),
+        seriesReason(
+            partialSpec({
+                ...aidFixture,
+                open_axis_facts: aidFixture.open_axis_facts?.slice(0, 1),
+            }),
+        ),
         'One series for each sector.',
     );
     assert.equal(seriesReason({}), null);
 });
 
 test('a measure serving one StatVar reads it from the members door; several read nothing', () => {
-    const one = { spec_id: 'spec_1', stat_vars: { member_count: 3, served_count: 1 } };
+    const one = partialSpec({ spec_id: 'spec_1', stat_vars: { member_count: 3, served_count: 1 } });
     const about = tokenAbout(slot({ axis: 'what', text: 'inflation' }), one);
 
     assert.equal(singleStatVarSpec(one), one);
@@ -210,10 +218,13 @@ test('a group whose node is neither a continent nor a UN subregion keeps the gro
 });
 
 test('an open role counts the members with data', () => {
-    const about = tokenAbout(slot({ role: 'origin', text: '81 donors', binding_ref: 'origin:' }), {
-        entities: [{ ref: 'country/BGD', role: 'destination' }],
-        coverage: { dimensions: [{ label: 'providers', count: 81 }] },
-    });
+    const about = tokenAbout(
+        slot({ role: 'origin', text: '81 donors', binding_ref: 'origin:' }),
+        partialSpec({
+            entities: [{ ref: 'country/BGD', role: 'destination' }],
+            coverage: { dimensions: [{ label: 'providers', count: 81 }] },
+        }),
+    );
 
     assert.equal(about.title, '81 donors');
     assert.deepEqual(about.facts, ['Every provider with data']);
@@ -221,10 +232,13 @@ test('an open role counts the members with data', () => {
 });
 
 test('an open role whose title states no count keeps the count in its fact', () => {
-    const about = tokenAbout(slot({ role: 'origin', text: '', binding_ref: 'origin:' }), {
-        entities: [{ ref: 'country/BGD', role: 'destination' }],
-        coverage: { dimensions: [{ label: 'providers', count: 1234 }] },
-    });
+    const about = tokenAbout(
+        slot({ role: 'origin', text: '', binding_ref: 'origin:' }),
+        partialSpec({
+            entities: [{ ref: 'country/BGD', role: 'destination' }],
+            coverage: { dimensions: [{ label: 'providers', count: 1234 }] },
+        }),
+    );
 
     assert.equal(about.title, 'Any provider');
     assert.deepEqual(about.facts, ['Every provider with data: 1,234 providers']);
@@ -260,7 +274,7 @@ test("one place names itself and its type, and a subject place reads the spec's 
 });
 
 test('a period states the served span when it differs, and the latest date with a value', () => {
-    const spec = {
+    const spec = partialSpec({
         coverage: { window: { start_year: 2010, end_year: 2023 } },
         observations: {
             series: [
@@ -273,7 +287,7 @@ test('a period states the served span when it differs, and the latest date with 
                 { points: [{ date: '2021', value: 2 }] },
             ],
         },
-    };
+    });
 
     assert.deepEqual(tokenAbout(slot({ axis: 'when', text: 'since 2000' }), spec).facts, [
         'Data served: 2010 to 2023',
@@ -285,7 +299,9 @@ test('a period states the served span when it differs, and the latest date with 
 });
 
 test("the served span and latest date fall back to the StatVars' range when nothing else says", () => {
-    const spec = { stat_vars: { data_date_range: { start: '1985-06', end: '2022-12' } } };
+    const spec = partialSpec({
+        stat_vars: { data_date_range: { start: '1985-06', end: '2022-12' } },
+    });
 
     assert.equal(servedSpan(spec), '1985 to 2022');
     assert.equal(latestDate(spec), '2022-12');
@@ -293,10 +309,10 @@ test("the served span and latest date fall back to the StatVars' range when noth
 
 test("the latest date reads the StatVars' range past a preview that stops short", () => {
     // Germany to Kenya: 486 series end in 2024, the 20 previewed end in 2023.
-    const spec = {
+    const spec = partialSpec({
         stat_vars: { data_date_range: { start: '1973', end: '2024' } },
         observations: { series: [{ points: [{ date: '2023', value: 5 }] }] },
-    };
+    });
 
     assert.equal(latestDate(spec), '2024');
 });
@@ -307,7 +323,7 @@ test('a how code defines its bound value, labelling each when there are several'
     };
     const one = tokenAbout(
         slot({ axis: 'how', text: 'for malaria control', binding_ref: 'how:crsPurpose' }),
-        {
+        partialSpec({
             slots: [
                 {
                     ...purpose,
@@ -317,7 +333,7 @@ test('a how code defines its bound value, labelling each when there are several'
                     },
                 },
             ],
-        },
+        }),
     );
 
     assert.equal(one.kind, 'code');
@@ -326,7 +342,7 @@ test('a how code defines its bound value, labelling each when there are several'
 
     const two = tokenAbout(
         slot({ axis: 'how', text: 'for health', binding_ref: 'how:crsPurpose' }),
-        {
+        partialSpec({
             slots: [
                 {
                     ...purpose,
@@ -339,7 +355,7 @@ test('a how code defines its bound value, labelling each when there are several'
                     },
                 },
             ],
-        },
+        }),
     );
 
     assert.deepEqual(two.definitions, [
@@ -393,7 +409,7 @@ test('a unit states its currency, and notes its price basis and the conversion t
     };
     const about = tokenAbout(
         slot({ axis: 'unit', text: 'constant 2022 Kenyan shillings', segment: 'byline' }),
-        {
+        partialSpec({
             identity: {
                 facets: {
                     unit: {
@@ -409,7 +425,7 @@ test('a unit states its currency, and notes its price basis and the conversion t
                 default_base_year: 2024,
                 role_currencies: {},
             },
-        },
+        }),
     );
 
     assert.equal(about.kind, 'unit');
@@ -425,8 +441,8 @@ test('a unit states its currency, and notes its price basis and the conversion t
 test('a source names each provenance with its publisher, taking it from the resolved ref', () => {
     const about = tokenAbout(
         slot({ axis: 'source', text: 'OECD Creditor Reporting System (CRS)', segment: 'byline' }),
-        {
-            ...grossOda,
+        partialSpec({
+            ...grossOdaFixture,
             slots: [
                 {
                     key: { axis: 'source' },
@@ -436,7 +452,7 @@ test('a source names each provenance with its publisher, taking it from the reso
                     },
                 },
             ],
-        },
+        }),
     );
 
     assert.equal(about.kind, 'source');

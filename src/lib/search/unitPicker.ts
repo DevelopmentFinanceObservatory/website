@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flattened wire Spec */
 /**
  * The pure half of the unit token's picker (UnitPicker.tsx): which currency
  * and price basis the answer is in, the preset currencies to offer, the
@@ -13,12 +12,13 @@ import type { DatasetEntriesOverride } from './datasetEntries.ts';
 import { capitalise } from '../capitalise.ts';
 import { withFacetEdit } from './promote.ts';
 import { currencyName } from './tokenAbout.ts';
-import { priceBasis } from './unitLabel.ts';
+import { priceBasis, unitRequest } from './unitLabel.ts';
 import type {
     ConversionCurrency,
     EntityRoleKey,
     HydratedPart,
     IdentityUnitRequest,
+    SpecReading,
     UnitConversion,
 } from './types.ts';
 
@@ -59,8 +59,8 @@ const ROLE_NAMES: Record<EntityRoleKey, string> = {
 const REQUEST_ROLES = new Set<EntityRoleKey>(['origin', 'destination']);
 
 /** The answer's conversion offer, null when it cannot be converted. */
-export const unitConversion = (spec: any): UnitConversion | null => {
-    const conversion: UnitConversion | null | undefined = spec?.unit_conversion;
+export const unitConversion = (spec: SpecReading | null | undefined): UnitConversion | null => {
+    const conversion = spec?.unit_conversion;
 
     return conversion && conversion.currencies.length > 0 ? conversion : null;
 };
@@ -155,8 +155,8 @@ const requestCode = (
 
 /** The answer's unit: the identity's unit request when it carries one,
  *  else the served currency and the measure's price basis. */
-export const currentUnit = (spec: any): CurrentUnit => {
-    const request: IdentityUnitRequest | undefined = spec?.identity?.facets?.unit?.request;
+export const currentUnit = (spec: SpecReading | null | undefined): CurrentUnit => {
+    const request = unitRequest(spec);
     const basis = priceBasis(spec);
 
     return {
@@ -178,7 +178,10 @@ export const currentUnit = (spec: any): CurrentUnit => {
  * preset takes the preset's place under the entity's name. An entity with
  * no name is named by its role, and the row requests the role's currency.
  */
-export const unitPresets = (spec: any, conversion: UnitConversion | null): UnitPreset[] => {
+export const unitPresets = (
+    spec: SpecReading | null | undefined,
+    conversion: UnitConversion | null,
+): UnitPreset[] => {
     if (!conversion) return [];
 
     const offered = new Set(conversion.currencies.map((currency) => currency.code));
@@ -189,7 +192,7 @@ export const unitPresets = (spec: any, conversion: UnitConversion | null): UnitP
             label: capitalise(currencyName(code, conversion)),
             currency: code,
         }));
-    const entities: any[] = spec?.entities ?? [];
+    const entities = spec?.entities ?? [];
 
     for (const [role, code] of Object.entries(conversion.role_currencies ?? {}) as [
         EntityRoleKey,

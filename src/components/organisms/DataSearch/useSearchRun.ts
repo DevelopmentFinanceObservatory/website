@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes the edited spec and slot bindings as `any`, passing members it does not read */
 'use client';
 
 /**
@@ -194,6 +193,7 @@ import {
     type EntityRoleKey,
     type ExpectedPart,
     type FacetOptionsEntry,
+    hasDefiniteSpec,
     type HydratedPart,
     type IdentityFacetAxis,
     type IdentityFacetBinding,
@@ -205,6 +205,7 @@ import {
     type ResolveResponse,
     type RoleAxis,
     type SentenceToken,
+    type Slot,
     type Spec,
     type SpecObservations,
 } from '@/lib/search/types';
@@ -1079,7 +1080,7 @@ export const useSearchRun = () => {
     );
 
     const identityOverrideEntry = useCallback(
-        (partIndex: number, fromSpec: any, identity: BaseIdentity): DatasetIdentityEntry => ({
+        (partIndex: number, fromSpec: PartSpec, identity: BaseIdentity): DatasetIdentityEntry => ({
             entry_kind: 'identity',
             variable_text: parts[partIndex]?.variableText ?? '',
             identity,
@@ -1094,9 +1095,9 @@ export const useSearchRun = () => {
     const editSlot = useCallback(
         (
             partIndex: number,
-            fromSpec: any,
+            fromSpec: PartSpec,
             slotIndex: number,
-            binding: any,
+            binding: Slot['binding'],
             entityRole: EntityRoleKey = 'observationAbout',
         ) => {
             const identity = withResolvedSlotEdit(fromSpec, slotIndex, binding, entityRole);
@@ -1110,7 +1111,7 @@ export const useSearchRun = () => {
     // A null/empty dcids is the unbind row or an Apply with nothing checked,
     // which drops the role from the identity.
     const editEntity = useCallback(
-        (partIndex: number, fromSpec: any, role: RoleAxis, dcids: string[] | null) => {
+        (partIndex: number, fromSpec: PartSpec, role: RoleAxis, dcids: string[] | null) => {
             const identity = withEntityEdit(fromSpec.identity as BaseIdentity, role, dcids);
             const entry = identityOverrideEntry(partIndex, fromSpec, identity);
 
@@ -1122,7 +1123,7 @@ export const useSearchRun = () => {
     // A deliberate date edit sets identity.requested_window directly. 'when'
     // is not an identity slot, so the edit needs no slot binding at all.
     const editWindow = useCallback(
-        (partIndex: number, fromSpec: any, window: WindowApplyValue) => {
+        (partIndex: number, fromSpec: PartSpec, window: WindowApplyValue) => {
             const identity: BaseIdentity = {
                 ...(fromSpec.identity as BaseIdentity),
                 requested_window: window,
@@ -1138,7 +1139,7 @@ export const useSearchRun = () => {
     const facetOverride = useCallback(
         <A extends IdentityFacetAxis>(
             partIndex: number,
-            fromSpec: any,
+            fromSpec: PartSpec,
             axis: A,
             binding: IdentityFacetBinding[A] | null,
         ): DatasetEntriesOverride => {
@@ -1157,7 +1158,7 @@ export const useSearchRun = () => {
     const editFacet = useCallback(
         <A extends IdentityFacetAxis>(
             partIndex: number,
-            fromSpec: any,
+            fromSpec: PartSpec,
             axis: A,
             binding: IdentityFacetBinding[A] | null,
         ) => {
@@ -1358,9 +1359,9 @@ export const useSearchRun = () => {
             // One override per part, each from its own identity. Only a choice every bound part offers goes
             // out (`sharedMethodServes`), the choices the shared menu lists.
             if (edit.axis === 'method') {
-                const bound = parts.filter(
-                    (part) => part.part?.status === 'definite' && bindsMethod(part.hydratedSpec),
-                );
+                const bound = parts
+                    .filter(hasDefiniteSpec)
+                    .filter((part) => bindsMethod(part.hydratedSpec));
 
                 if (
                     bound.length === 0 ||

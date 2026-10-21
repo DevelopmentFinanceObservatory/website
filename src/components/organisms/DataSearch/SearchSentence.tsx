@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs, slots and options of either picker shape as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -73,8 +72,10 @@ import {
     type NoDataOption,
     type ParsedPart,
     type PartSpec,
+    type Resolution,
     type RoleAxis,
     type SentenceToken,
+    type Slot,
     type SlotOption,
     type SpecAlternativeMeasure,
 } from '@/lib/search/types';
@@ -251,9 +252,9 @@ const MethodChoices = ({
  * already scoped to its own level.
  */
 const renderLevelOptions = (
-    slot: any,
+    slot: Slot,
     options: readonly SlotOption[],
-    onSelect: (binding: any) => void,
+    onSelect: (binding: Slot['binding']) => void,
 ) => {
     const optionItem = (option: SlotOption, direction?: 'up' | 'down') => (
         <DropdownMenu.Item
@@ -321,7 +322,11 @@ const renderLevelOptions = (
  * total, so the hint never implies a count. Each option carries the
  * graph's definition behind an info icon.
  */
-const renderOptionMenu = (slot: any, entry: SlotOptionsEntry, onSelect: (binding: any) => void) => {
+const renderOptionMenu = (
+    slot: Slot,
+    entry: SlotOptionsEntry,
+    onSelect: (binding: Slot['binding']) => void,
+) => {
     const { options, truncated } = entry;
 
     return (
@@ -345,12 +350,12 @@ const FlatOptionList = ({
     options,
     onSelect,
 }: {
-    slot: any;
+    slot: Slot;
     options: SlotOption[];
-    onSelect: (binding: any) => void;
+    onSelect: (binding: Slot['binding']) => void;
 }) => {
     const [filter, setFilter] = useState('');
-    const boundDcid = slot.binding?.value?.ref?.ref;
+    const boundDcid = slot.binding.kind === 'value' ? slot.binding.value.ref?.ref : undefined;
     const { current, rest } = splitCurrentPick(options, boundDcid);
     const showFilter = shouldShowOptionFilter(rest.length);
     const shown = showFilter
@@ -405,7 +410,7 @@ const FlatOptionList = ({
 };
 
 type SearchSentenceProps = {
-    response: any;
+    response: Resolution | null;
     // Every part, in query order — the token routing target for a
     // part-indexed slot, and the source of the definite/candidates/no_data/
     // unsupported status a marked phrase reads.
@@ -427,13 +432,18 @@ type SearchSentenceProps = {
     baseStreamOpen: boolean;
     onEditSlot: (
         partIndex: number,
-        spec: any,
+        spec: PartSpec,
         slotIndex: number,
-        binding: any,
+        binding: Slot['binding'],
         entityRole?: EntityRoleKey,
     ) => void;
-    onEditEntity: (partIndex: number, spec: any, role: RoleAxis, dcids: string[] | null) => void;
-    onEditWindow: (partIndex: number, spec: any, window: WindowApplyValue) => void;
+    onEditEntity: (
+        partIndex: number,
+        spec: PartSpec,
+        role: RoleAxis,
+        dcids: string[] | null,
+    ) => void;
+    onEditWindow: (partIndex: number, spec: PartSpec, window: WindowApplyValue) => void;
     // An alternative measure, or a related one from the variable's group,
     // on each part a pick switches (several for a shared unit token).
     onEditMeasure: (picks: readonly MeasurePick[]) => void;
@@ -441,7 +451,7 @@ type SearchSentenceProps = {
     // price basis).
     onEditFacet: <A extends IdentityFacetAxis>(
         partIndex: number,
-        spec: any,
+        spec: PartSpec,
         axis: A,
         binding: IdentityFacetBinding[A] | null,
     ) => void;
@@ -531,7 +541,7 @@ const placeField = (token: SentenceToken): string =>
 
 /** The field an option-list slot edits ("Sector"), for its menu title and
  *  its trigger's accessible name. */
-const slotField = (slot: any): string => slot.key.label ?? 'Value';
+const slotField = (slot: Slot): string => slot.key.label ?? 'Value';
 
 // The ref a token's menu changes when it edits the one binding the token
 // carries: its binding_ref, or none.
@@ -666,8 +676,9 @@ const EntityOptionRows = ({
 /** The composed sentence as displayed, notes left out. It names the hero
  *  <h1>, which would otherwise take its name from each slot trigger's longer
  *  accessible name. */
-export const sentenceHeadingText = (response: any): string =>
-    planSentenceText(response?.sentence_plan);
+export const sentenceHeadingText = (
+    response: Pick<Resolution, 'sentence_plan'> | null | undefined,
+): string => planSentenceText(response?.sentence_plan);
 
 /** The space between two heading blocks of a plan of separate sentences. */
 const HEADING_JOIN: SentenceToken = { kind: 'text', text: ' ', segment: 'heading' };
@@ -1443,7 +1454,7 @@ export const SearchSentenceHeading = ({
         }
 
         const slot = slots[slotIndex];
-        const onSelect = (binding: any) =>
+        const onSelect = (binding: Slot['binding']) =>
             onEditSlot(partIndex, spec, slotIndex, binding, token.role ?? 'observationAbout');
         // A level-scoped constraint slot (relation populated) skips the
         // free-text escape hatch renderOptionMenu's flat branch offers —
@@ -2232,7 +2243,7 @@ const RefineEntry = ({
     }
 
     const { slot, slotIndex, entry, current } = item;
-    const onSelect = (binding: any) => onEditSlot(part.index, spec, slotIndex, binding);
+    const onSelect = (binding: Slot['binding']) => onEditSlot(part.index, spec, slotIndex, binding);
     const [only] = entry.options;
 
     // An unbound slot with one option: its row picks it.

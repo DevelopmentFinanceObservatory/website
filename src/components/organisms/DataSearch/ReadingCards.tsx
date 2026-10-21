@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes candidate specs as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import { useMemo } from 'react';
@@ -10,7 +9,7 @@ import Button from '@/components/atoms/Button/Button';
 import { isClosestMatch } from '@/lib/search/departures';
 import { basisNote, readingOf, readingsSummary } from '@/lib/search/readings';
 import { tokenAbout } from '@/lib/search/tokenAbout';
-import type { CandidatesPart } from '@/lib/search/types';
+import type { CandidatesPart, Spec } from '@/lib/search/types';
 import { statVarsUnreadable } from '@/lib/search/view';
 
 /**
@@ -32,11 +31,11 @@ const ReadingCards = ({
     part: CandidatesPart;
     // The part's variable text, when the answer has several parts.
     prefix: string | null;
-    onPick: (spec: any) => void;
+    onPick: (spec: Spec) => void;
     // Re-runs the question, for a reading the client could not read.
     onRetry: () => void;
 }) => {
-    const specs: any[] = useMemo(() => part.candidates.specs, [part]);
+    const specs = useMemo(() => part.candidates.specs, [part]);
     const readings = useMemo(
         () =>
             specs.map((spec) => {

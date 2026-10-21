@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs, slots and bindings as `any`, dereferencing only the members it names and tolerating any that is missing */
 /**
  * What Refine offers: the bindings of the answer's definite parts that no
  * visible token states (SentenceToken.states), each with something to pick:
@@ -9,7 +8,7 @@
 
 import { statingTokenIndex } from './departures.ts';
 import { keyRef } from './searchClient.ts';
-import type { RoleAxis, SentenceToken } from './types';
+import type { PartSpec, RoleAxis, SentenceToken, Slot } from './types';
 import {
     methodPicker,
     openEntityEntry,
@@ -24,7 +23,7 @@ import {
 } from './view.ts';
 
 /** A definite part as Refine reads it. */
-export type RefinePart = { index: number; variableText: string | null; spec: any };
+export type RefinePart = { index: number; variableText: string | null; spec: PartSpec };
 
 /** One Refine entry. `key` names it (`refineKey`), so a departure's action
  *  can open Refine at it. A bound slot or facet axis carries its `current`
@@ -34,7 +33,7 @@ export type RefineItem =
           kind: 'slot';
           key: string;
           part: RefinePart;
-          slot: any;
+          slot: Slot;
           slotIndex: number;
           entry: SlotOptionsEntry;
           current: string | null;
@@ -61,10 +60,10 @@ const EMPTY: SlotOptionsEntry = { options: [], truncated: false };
 
 // A bound slot's value as the reader names it: one label, or a set's
 // labels joined.
-const boundText = (binding: any): string | null => {
+const boundText = (binding: Slot['binding']): string | null => {
     if (binding?.kind === 'value') return optionLabel({ value: binding.value });
     if (binding?.kind === 'set') {
-        return (binding.values ?? []).map((value: any) => optionLabel({ value })).join(', ');
+        return (binding.values ?? []).map((value) => optionLabel({ value })).join(', ');
     }
 
     return null;
@@ -98,7 +97,7 @@ export function refineItems({
         const { spec } = part;
         const stated = (ref: string) => statingTokenIndex(plan, partCount, part.index, ref) !== -1;
 
-        const slots = (spec.slots ?? []).flatMap((slot: any, slotIndex: number): RefineItem[] => {
+        const slots = (spec.slots ?? []).flatMap((slot, slotIndex): RefineItem[] => {
             const ref = keyRef(slot.key);
             const entry: SlotOptionsEntry =
                 slot.key?.axis === 'source'

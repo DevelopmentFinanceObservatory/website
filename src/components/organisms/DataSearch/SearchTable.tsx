@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- takes the spec as `any` and reads only the members the table renders, tolerating any that is missing */
 'use client';
 
 import classNames from 'classnames';
@@ -24,12 +23,12 @@ import {
     resolveObservationsOmission,
 } from '@/lib/search/view';
 import { tableCaptionNotes } from '@/lib/search/resultNotes';
-import type { Warning } from '@/lib/search/types';
+import type { PartSpec, Warning } from '@/lib/search/types';
 
 type TablePart = {
     index: number;
     variableText: string | null;
-    spec: any;
+    spec: PartSpec;
     warnings?: Pick<Warning, 'code' | 'message' | 'params'>[];
 };
 

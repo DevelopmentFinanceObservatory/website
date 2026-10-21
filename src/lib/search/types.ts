@@ -191,11 +191,21 @@ export type FacetOptionsEntry = Omit<wire.FacetOptions, 'source'>;
  * held, so the page shows a failure state in its place.
  */
 export type UnreadableSpec = Pick<Spec, 'spec_id'> &
-    Partial<Omit<Spec, 'spec_id' | 'stat_vars'>> & { stat_vars_unreadable: true };
+    Partial<Omit<Spec, 'spec_id' | 'stat_vars'>> & {
+        stat_vars_unreadable: true;
+        /** the raw value that failed to read, when the body held one */
+        stat_vars?: unknown;
+    };
 
 /** A Spec as a part holds it: read, or flagged unreadable. `view.statVarsUnreadable` tells them
  *  apart. */
 export type PartSpec = Spec | UnreadableSpec;
+
+/** A spec as the view helpers read it: a part's spec, read or unreadable, or a copy holding only
+ *  the members its caller has. Any member may be absent, so each reader checks the ones it names.
+ *  An unreadable spec's `stat_vars` reads as `unknown` until `view.statVarsUnreadable` rules it
+ *  out. */
+export type SpecReading = Partial<Spec> | UnreadableSpec;
 
 /** A set of competing Specs, each flattened. */
 type CandidateSet = Omit<wire.CandidateSet, 'specs'> & { specs: PartSpec[] };

@@ -10,6 +10,7 @@ import {
     sourceOrigin,
     specOrigin,
 } from '../view.ts';
+import { partialSpec } from './fixtures/partial.ts';
 
 // The three Data Commons as the engine names them (dfo-apis
 // origin_catalogue.origins).
@@ -117,20 +118,21 @@ const sentenced = (
         resolved = [] as ProvenanceRef[],
         sourceText = 'X',
     } = {},
-) => ({
-    shape: shape({
-        data_commons: [upstream.data_commons!],
-        upstream: { source: upstream.source!, data_commons: upstream.data_commons! },
-    }),
-    slots: [{ key: { axis: 'source', property: null, label: 'source' }, binding }],
-    resolution: { resolved_sources: resolved },
-    sentence_plan: [
-        { kind: 'slot', text: 'Literacy rate', axis: 'what' },
-        { kind: 'text', text: ', according to ' },
-        { kind: 'slot', text: sourceText, axis: 'source' },
-        { kind: 'text', text: '.' },
-    ],
-});
+) =>
+    partialSpec({
+        shape: shape({
+            data_commons: [upstream.data_commons!],
+            upstream: { source: upstream.source!, data_commons: upstream.data_commons! },
+        }),
+        slots: [{ key: { axis: 'source', property: null, label: 'source' }, binding }],
+        resolution: { resolved_sources: resolved },
+        sentence_plan: [
+            { kind: 'slot', text: 'Literacy rate', axis: 'what' },
+            { kind: 'text', text: ', according to ' },
+            { kind: 'slot', text: sourceText, axis: 'source' },
+            { kind: 'text', text: '.' },
+        ],
+    });
 
 test('specOrigin drops the publisher that the sentence already names as its resolved source', () => {
     assert.equal(
@@ -175,7 +177,7 @@ test('specOrigin keeps the publisher when the sentence names a Dataset under it,
 });
 
 test('sourceOrigin finds a picker option by dcid in the trace, the resolved facet or a series', () => {
-    const spec = {
+    const spec = partialSpec({
         resolution: { resolved_sources: [crs] },
         facets: {
             provenance: {
@@ -187,7 +189,7 @@ test('sourceOrigin finds a picker option by dcid in the trace, the resolved face
             },
         },
         observations: { series: [{ source_refs: [sdg] }] },
-    };
+    });
 
     assert.equal(
         sourceOrigin(spec, crs.ref),
@@ -200,7 +202,9 @@ test('sourceOrigin finds a picker option by dcid in the trace, the resolved face
 
 test('the why summary notes each resolved source with its origin and the route of its document', () => {
     const unlinked = { ref: 'dc/base/Unlisted', label: 'dc/base/Unlisted' };
-    const summary = buildWhySummary({ resolution: { resolved_sources: [wdi, crs, unlinked] } });
+    const summary = buildWhySummary(
+        partialSpec({ resolution: { resolved_sources: [wdi, crs, unlinked] } }),
+    );
 
     assert.deepEqual(
         summary.sources.map((source) => [source.ref, source.origin, source.documentation]),
@@ -217,24 +221,28 @@ test('the why summary notes each resolved source with its origin and the route o
 });
 
 test('flattenRows reads the row entity and unit from the series role tuple and facet map', () => {
-    const rows = flattenRows({
-        slots: [],
-        observations: {
-            series: [
-                {
-                    stat_var: { ref: 'Count_Person' },
-                    entities: [{ role: 'observationAbout', ref: 'country/KEN', label: 'Kenya' }],
-                    points: [{ date: '2020', value: 53771300 }],
-                    total_obs: 1,
-                    source_refs: [wdi],
-                    facet: {
-                        provenance: { ref: wdi.ref, label: wdi.label, source: wdi.source },
-                        unit: { ref: 'Percent', label: 'Percent' },
+    const rows = flattenRows(
+        partialSpec({
+            slots: [],
+            observations: {
+                series: [
+                    {
+                        stat_var: { ref: 'Count_Person' },
+                        entities: [
+                            { role: 'observationAbout', ref: 'country/KEN', label: 'Kenya' },
+                        ],
+                        points: [{ date: '2020', value: 53771300 }],
+                        total_obs: 1,
+                        source_refs: [wdi],
+                        facet: {
+                            provenance: { ref: wdi.ref, label: wdi.label, source: wdi.source },
+                            unit: { ref: 'Percent', label: 'Percent' },
+                        },
                     },
-                },
-            ],
-        },
-    });
+                ],
+            },
+        }),
+    );
 
     assert.deepEqual(
         rows.map((row) => [row.year, row.cells['entity:observationAbout'], row.unit]),
