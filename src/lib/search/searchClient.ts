@@ -183,7 +183,7 @@ export type SearchEvent =
           kind: 'observations';
           spec_id: string;
           /** The same shape the buffered path embeds at Spec.observations,
-           *  deferred to a trailing event on SSE so the response isn't blocked
+           *  deferred to a trailing event on SSE so the response does not wait
            *  on the observation fetch. */
           observations: SpecObservations;
       }
@@ -568,7 +568,7 @@ function flattenPart(part: any): any {
     if (!part || typeof part !== 'object') return part;
     // The page Part's restatement, operations, warnings and departures are
     // required, on a part of any status; the wire's are optional. Default
-    // them here so a normalized Part never carries `undefined` for one.
+    // them here so a normalised Part never carries `undefined` for one.
     const defaults = {
         restatement: part.restatement ?? null,
         operations: part.operations ?? [],

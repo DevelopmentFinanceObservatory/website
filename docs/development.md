@@ -212,7 +212,7 @@ cd <website checkout>
 pnpm install
 ```
 
-A new package version packs under a new file name; point the `@developmentfinance/client` entry in `package.json` at it before re-locking. Commit the tarball and the lockfile together.
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. Commit the tarball and the lockfile together.
 
 ## Conventions
 

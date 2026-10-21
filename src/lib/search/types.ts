@@ -17,8 +17,8 @@
 import { PART_STATUSES } from '@developmentfinance/client';
 import type * as wire from '@developmentfinance/client/wire';
 
-/** The closed part of an open wire enum: the values this release names, without the `string`
- *  tail a newer server may fill. */
+/** The closed part of an open wire enum, holding the values this release names and omitting the
+ *  `string` tail a newer server may fill. */
 export type Known<T> = T extends string ? (string extends T ? never : T) : T;
 
 /** True when `key` is one of `map`'s own keys, which narrows an open wire value to the closed
@@ -168,7 +168,7 @@ export type DatasetResubmitEntry = wire.DatasetResubmitInput['entries'][number];
 // ---------------------------------------------------------------------------
 
 /**
- * A wire Spec flattened by `searchClient.flattenSpec`: `resolved` spread flat, with `spec_id`,
+ * A wire Spec flattened by `searchClient.flattenSpec`. `resolved` is spread flat, with `spec_id`,
  * the trace again as `resolution`, the definition's `identity`, and the `definition` itself (the
  * Datasets API mints unregistered specs from it). Specs nested in `equivalent_readings` stay in
  * the wire form.
@@ -186,8 +186,8 @@ export type Spec = Omit<wire.ResolvedSpec, 'facet_options'> & {
 export type FacetOptionsEntry = Omit<wire.FacetOptions, 'source'>;
 
 /**
- * A wire Spec `flattenSpec` could not read: its `stat_vars` is not the wire's shape, or it lacks
- * the definition/resolved split. It carries its `spec_id` and whichever page Spec members the body
+ * A wire Spec `flattenSpec` could not read, because its `stat_vars` is not the wire's shape or it
+ * lacks the definition/resolved split. It carries its `spec_id` and whichever page Spec members the body
  * held, so the page shows a failure state in its place.
  */
 export type UnreadableSpec = Pick<Spec, 'spec_id'> &
@@ -227,7 +227,7 @@ type UnsupportedPart = PagePart<wire.UnsupportedPart, object>;
 /** A part whose status this release knows; its `status` narrows it. */
 type KnownPart = DefinitePart | CandidatesPart | NoDataPart | UnsupportedPart;
 
-/** A part whose status this release does not know: its members pass through, with the defaults
+/** A part whose status this release does not know. Its members pass through, with the defaults
  *  `flattenPart` gives every part. */
 type UnknownPart = wire.UnknownPart & PartDefaults;
 
@@ -255,12 +255,13 @@ export type Resolution = Omit<wire.Resolution, 'parts'> & { parts: Part[] };
 export type ResolveResponse = Resolution | wire.CatalogueAnswer | wire.DeclinedAnswer;
 
 // ---------------------------------------------------------------------------
-// Stream payloads, hand-written: the OpenAPI document does not describe the SSE stream
+// Stream payloads, hand-written because the OpenAPI document does not describe the SSE stream
 // ---------------------------------------------------------------------------
 
-/** Departures the stream's `done` event adds to one part: facts that depend on the observations
- *  read, which arrive after `response`. A folded part and the part it folded into share a
- *  spec_id, so `part_index` names the part; `spec_id` confirms it still holds that part's spec. */
+/** Departures the stream's `done` event adds to one part. They are facts that depend on the
+ *  observations read, which arrive after `response`. A folded part and the part it folded into
+ *  share a spec_id, so `part_index` names the part and `spec_id` confirms it holds that part's
+ *  spec. */
 export interface LateDepartures {
     part_index: number;
     spec_id: string;
@@ -280,17 +281,17 @@ interface FrameStated<T> {
 
 /** One place the part names, keyed by the request's text for it. */
 interface FramePlace {
-    /** the request's text for the place; the dcid on the dataset_resubmit door */
+    /** the request's text for the place, or the dcid on the dataset_resubmit door */
     name: string;
     stated_by: FrameStatedBy;
     /** `both` is a place put on both axes, as a self-flow; `undirected` a place named with no
      *  axis */
     direction: 'origin' | 'destination' | 'both' | 'undirected';
-    /** whether the request's words give the place its direction; a role read off the measure,
+    /** whether the request's words give the place its direction. A role read off the measure,
      *  as in a possessive, states none */
     direction_stated: boolean;
-    /** its members each as their own place, or the default: the set's node where it has one
-     *  and its members otherwise */
+    /** its members each as their own place, or the default, which is the set's node where it
+     *  has one and its members otherwise */
     reading: 'default' | 'members';
     /** the dcid the caller pinned for the place, when it gave one */
     pin?: string | null;
@@ -338,9 +339,9 @@ interface FrameMeasure {
 interface FrameNormalisation {
     /** the normalisations the words name, sorted; "level" when they name none */
     form: FrameStated<string[]>;
-    /** the denominator the words name, as the quantity read chose it: a base the eligible shapes
-     *  divide by under its graph name, else the words that name it; null when the words name
-     *  none */
+    /** the denominator the words name, as the quantity read chose it, either a base the eligible
+     *  shapes divide by under its graph name or else the words that name it; null when the
+     *  words name none */
     denominator?: FrameStated<string> | null;
 }
 

@@ -16,7 +16,7 @@
  * `fetchImpl`, a thin wrapper that resolves the envelope's own relative
  * `poll` path against wherever it needs to go (see searchClient.ts's
  * `mintDataset`, which polls through the site's own same-origin proxy,
- * and snapshot.ts's `captureSnapshot`, which polls the Datasets API directly —
+ * and snapshot.ts's `captureSnapshot`, which polls the Datasets API directly, since
  * a done poll needs no principal header, unlike the `pin` call next to it).
  */
 

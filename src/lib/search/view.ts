@@ -53,11 +53,11 @@ import { unitWithBasis } from './unitLabel.ts';
 export const optionLabel = (option: OptionLike | null | undefined): string =>
     option?.value?.ref?.label ?? option?.label ?? '—';
 
-/** True when searchClient.flattenSpec couldn't read this spec — its `stat_vars`
- *  is not the wire's ResolvedStatVars object shape, or it lacks the
- *  definition/resolved split — and already logged the raw value to the
+/** True when searchClient.flattenSpec could not read this spec, because its `stat_vars`
+ *  is not the wire's ResolvedStatVars object shape or it lacks the
+ *  definition/resolved split, and logged the raw value to the
  *  console at parse time. A card reading this spec's variable label should
- *  show an explicit failure state rather than an empty one. */
+ *  show a failure state. */
 export function statVarsUnreadable(spec: PartSpec | null | undefined): spec is UnreadableSpec {
     return !!spec && 'stat_vars_unreadable' in spec;
 }
