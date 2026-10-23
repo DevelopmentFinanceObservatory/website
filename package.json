@@ -39,6 +39,7 @@
     "classnames": "^2.5.1",
     "disposable-email-domains-js": "^1.26.0",
     "drizzle-orm": "^0.45.2",
+    "free-email-domains": "^1.15.12",
     "html-to-image": "^1.11.13",
     "lowlight": "^3.3.0",
     "mermaid": "^12.1.0",
@@ -73,5 +74,10 @@
     "stylelint-selector-bem-pattern": "^5.0.0",
     "svgo": "^4.0.2",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "free-email-domains"
+    ]
   }
 }
