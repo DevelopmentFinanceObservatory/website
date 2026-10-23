@@ -43,8 +43,11 @@ test('the migrated database has the columns db/schema.ts declares', async (t) =>
         column_name: string;
         is_nullable: 'YES' | 'NO';
     }>(
-        `select table_name, column_name, is_nullable from information_schema.columns
-         where table_schema = 'public' and table_name <> '__drizzle_migrations'`,
+        `select table_name, column_name, is_nullable
+         from information_schema.columns
+         join information_schema.tables using (table_schema, table_name)
+         where table_schema = 'public' and table_type = 'BASE TABLE'
+           and table_name <> '__drizzle_migrations'`,
     );
     const migrated: Columns = {};
 

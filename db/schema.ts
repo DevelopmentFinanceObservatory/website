@@ -243,3 +243,14 @@ export const limitCounter = pgTable(
     },
     (table) => [index('limit_counter_window_start_idx').on(table.windowStart)],
 );
+
+/**
+ * The webmail and disposable email domains, lower case, from the
+ * `free-email-domains` package. Every migration run rewrites the table to
+ * the package's list (db/webmail-domains.ts), and the
+ * `account_daily` view (migration 0020) groups their accounts as
+ * `Personal email`.
+ */
+export const webmailDomain = pgTable('webmail_domain', {
+    domain: text('domain').primaryKey(),
+});

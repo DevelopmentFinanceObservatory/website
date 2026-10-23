@@ -81,8 +81,9 @@ set. infra defines the Job, its identity, the dataset and the schedule.
 
 The Job reads the database as its own IAM user, a member of the NOLOGIN
 role `website_export_reader`, which migration `0019_event_export_grant`
-grants `SELECT` on `event` alone. infra creates the role in every tier, so
-its apply must land before the deploy that first carries the migration.
+grants `SELECT` on `event` and migration `0020_account_daily` on the view
+`account_daily`, and on nothing else. infra creates the role in every tier,
+so its apply must land before the deploy that first carries the migration.
 
 | Env var                                                                     | What it is                                                   |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -147,6 +148,33 @@ search events still join on it. A new event name fails
 the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY`
 changes every digest, so drop the BigQuery table afterwards and let the
 next run reload it.
+
+### Accounts
+
+Each run first replaces the BigQuery table `account_daily` with every row
+of the Postgres view `account_daily` (`db/account-export.ts`), in one
+`WRITE_TRUNCATE` load job, so a failed run leaves the previous table. The
+event export still runs when it fails, and the run then fails too. A read
+with no rows fails the run and keeps the table. The view runs with the
+migrator's rights, so the Job reads accounts per day and organisation and
+no email address or user id. It holds every UTC day from the first
+account's through yesterday's, so the latest day is the last complete
+one, and a day without new accounts is one row with a null `organisation`
+and 0 `accounts`.
+
+| Column         | Type   | Value                                                                                                                                                                                                                 |
+| -------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `day`          | DATE   | the UTC date of `user.created_at`                                                                                                                                                                                     |
+| `organisation` | STRING | `Personal email` for a webmail domain, else the lower-cased domain after the last `@` once it holds at least 3 accounts, else `Other organisations`; null on a day without new accounts, whose one row has 0 accounts |
+| `accounts`     | INT64  | the accounts created that day, 0 on a day without new accounts                                                                                                                                                        |
+
+A domain in `webmail_domain` is `Personal email` whatever its count. The
+view holds no rows while that table is empty, so the run fails and keeps
+the BigQuery table. The table holds the `free-email-domains` package's
+list, which `db/migrate.ts`
+writes after the migrations on every deploy, so bumping the package
+updates it. pnpm skips the package's postinstall script, which would
+refetch the list.
 
 ## GitHub vars and secrets
 
