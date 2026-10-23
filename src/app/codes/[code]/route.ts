@@ -10,7 +10,7 @@ export const GET = (req: NextRequest, { params }: { params: Promise<{ code: stri
     params.then(({ code }) =>
         forward(req, {
             surface: 'api',
-            target: `${searchApiBase()}/codes/${encodeURIComponent(code)}`,
+            target: `${searchApiBase()}/codes/${encodeURIComponent(code)}${req.nextUrl.search}`,
             unreachable: 'The DFO APIs are unreachable.',
         }),
     );

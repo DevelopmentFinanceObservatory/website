@@ -30,8 +30,13 @@ type RequestMetadata = Pick<Request, 'url' | 'method' | 'headers'>;
 // Framework files and images and fonts by extension.
 const STATIC_ASSET = /^\/_next\/|\.(?:png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$/i;
 
+// The machine-facing paths: the site's own /api endpoints and the platform
+// proxy's routes (src/lib/proxy/forward), /api/v1/*, /mcp, /openapi.json and
+// /codes/*. Each entry matches itself and everything below it.
+const API_PATHS = ['/api', '/mcp', '/openapi.json', '/codes'];
+
 const isApiPath = (path: string): boolean =>
-    /^\/api(?:\/|$)/.test(path) || /^\/mcp(?:\/|$)/.test(path);
+    API_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 
 /**
  * What a request is, or undefined for a static asset, which is not logged.

@@ -1,8 +1,8 @@
 /**
  * `headers.ts`: which request and response headers cross the proxy. Every
- * `mcp-*` header goes either way whatever its case, and every `x-dfo-*`
- * header comes back; credentials and the caller header are never copied
- * from the client.
+ * `mcp-*` header goes either way whatever its case, and the public
+ * x-dfo-trace-id and x-dfo-commit come back; credentials, the caller header
+ * and the internal `x-dfo-*` identity headers are never copied.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -148,12 +148,15 @@ test('clientResponseHeaders: carries the Retry-After of a busy refusal', () => {
     assert.equal(out.get('retry-after'), '5');
 });
 
-test('clientResponseHeaders: carries the upstream Server-Timing and every x-dfo-* header', () => {
+test('clientResponseHeaders: carries Server-Timing and the public x-dfo-* headers, and drops the identity ones', () => {
     const out = clientResponseHeaders(
         new Headers({
             'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
             'X-DFO-Trace-Id': 'abc123',
             'x-dfo-commit': '8f4196c',
+            'x-dfo-principal': 'user:42',
+            'x-dfo-caller': 'ip:abc',
+            'x-dfo-write-token': 'w1',
             'x-request-id': 'r1',
         }),
     );
