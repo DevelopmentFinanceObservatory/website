@@ -28,6 +28,7 @@ import {
     plotHeight,
     plotShape,
 } from '@/lib/studio/chartFit';
+import { lonePoints } from '@/lib/studio/linePoints';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { ThemeDerived } from '@/lib/studio/theme';
 
@@ -218,11 +219,16 @@ const ChartCard = ({
                 data: s.values,
                 hidden: hiddenSeries.includes(si),
                 borderColor: seriesPair(theme.series, si)[0],
+                // A missing value breaks the line, so a value with a gap on
+                // both sides has no segment. It gets a dot in the solid base
+                // colour, because the dataset fill below is the weave.
+                pointRadius: lonePoints(s.values).map((lone) => (lone ? 3 * scale : 0)),
+                pointBackgroundColor: seriesPair(theme.series, si)[0],
+                pointBorderColor: seriesPair(theme.series, si)[0],
                 // The tooltip swatch — the same checkered weave as the bars,
                 // so both views' tooltips read identically.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
                 borderWidth: 2.5 * scale,
-                pointRadius: 0,
                 pointHoverRadius: 3.5 * scale,
                 pointHitRadius: 8 * scale,
             })),
