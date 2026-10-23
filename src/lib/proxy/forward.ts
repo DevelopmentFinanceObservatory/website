@@ -7,16 +7,18 @@ import { apisFetch } from '@/lib/apisAuth';
 import { limiterKeyFor, setCaller, trustedHops } from './caller';
 import { relayBody } from './compress';
 import { clientResponseHeaders, dropEncodedLength, pick, upstreamRequestHeaders } from './headers';
-import { hit, rateHeaders, type Surface } from './rateLimit';
+import { rateHeaders } from './rateHeaders';
+import { hit, type Surface } from './rateLimit';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
- * must not reach a client). An /api/* or /mcp call is rate-limited per IP
- * (src/lib/proxy/rateLimit). A call is forwarded
- * with its method, query, body, content headers and every mcp-* header
- * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
+ * must not reach a client). An /api/* or /mcp call, and a /codes call the
+ * route forwards, is rate-limited per IP (src/lib/proxy/rateLimit; the
+ * X-RateLimit-* headers go out only on a counted call). A call is forwarded
+ * with its method, query, body, content headers, user-agent and every mcp-*
+ * header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
  * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
  * or more is gzipped on the way for a client that accepts it
@@ -25,7 +27,7 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
- *   /openapi.json, /codes/*          → SEARCH_API_BASE, the same paths
+ *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths
  *   /api/v1/studio/turn|interrupt|cancel|composition
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *

@@ -3,10 +3,11 @@ import 'server-only';
 import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
-import { countHit, pruneCounters, type Verdict } from './limitCounter';
+import { countHit, pruneCounters } from './limitCounter';
+import type { RateVerdict } from './rateHeaders';
 
 /**
- * Per-IP rate limit for the platform proxy's /api/* and /mcp routes
+ * Per-IP rate limit for the platform proxy's /api/*, /codes and /mcp calls
  * (src/lib/proxy/forward): a fixed window counted in Postgres
  * (./limitCounter), shared by every instance. An IPv6 client is counted by
  * its /64 (see limiterBucket). A count runs on its own small pool
@@ -15,9 +16,14 @@ import { countHit, pruneCounters, type Verdict } from './limitCounter';
  * timed-out count fails open: the
  * platform's own doors are the backstop, and the limit is a courtesy.
  *
+ * A fail-open call gets a verdict with `counted: false`, and the response
+ * carries no X-RateLimit-* headers (see rateHeaders), so the proxy advertises
+ * a limit only while one is counted.
+ *
  * The window and the allowance per surface are env-tunable:
  *   RATE_LIMIT_WINDOW_S   (default 60)
- *   RATE_LIMIT_API        calls per window per IP on /api/* (default 120)
+ *   RATE_LIMIT_API        calls per window per IP on /api/* and /codes
+ *                         (default 120)
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
@@ -44,12 +50,12 @@ let lastPrune = 0;
 
 /**
  * Count one call for `ip` on `surface` and say whether it is within the
- * allowance. A database that fails or is slow lets the call through. Each
+ * allowance. A database that fails or is slow lets the call through, uncounted. Each
  * instance also deletes dead counters, at most once an hour, the Studio's
  * included (every Studio call passes here too). The delete uses the same
  * bounded counter pool as the counts.
  */
-export const hit = async (surface: Surface, ip: string): Promise<Verdict> => {
+export const hit = async (surface: Surface, ip: string): Promise<RateVerdict> => {
     const limit = LIMITS[surface];
 
     if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
@@ -58,17 +64,17 @@ export const hit = async (surface: Surface, ip: string): Promise<Verdict> => {
     }
 
     try {
-        return await countHit(counterDb, `${surface}:${limiterBucket(ip)}`, limit, WINDOW_S);
+        const verdict = await countHit(
+            counterDb,
+            `${surface}:${limiterBucket(ip)}`,
+            limit,
+            WINDOW_S,
+        );
+
+        return { ...verdict, counted: true };
     } catch (error) {
         console.warn('rate limit unavailable, passing', error);
 
-        return { allowed: true, limit, remaining: limit, reset: WINDOW_S };
+        return { allowed: true, counted: false, limit, remaining: limit, reset: WINDOW_S };
     }
 };
-
-/** The standard rate-limit headers for a verdict. */
-export const rateHeaders = (verdict: Verdict): Record<string, string> => ({
-    'X-RateLimit-Limit': String(verdict.limit),
-    'X-RateLimit-Remaining': String(verdict.remaining),
-    'X-RateLimit-Reset': String(verdict.reset),
-});
