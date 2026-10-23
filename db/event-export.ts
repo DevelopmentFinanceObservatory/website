@@ -406,11 +406,15 @@ export const bigQueryWarehouse = ({
         async dayCounts() {
             // An exact count that sees every finished load. It scans the
             // created_at column alone, 8 bytes a row. DATE() takes the UTC
-            // date, the day the table partitions on.
+            // date, the day the table partitions on. The job fails past
+            // 1 GB billed, 125 million rows, or past 2 minutes, well inside
+            // the Job's 1800 s task timeout, and the run fails with it.
             const [rows] = await bigquery.query({
                 query: `SELECT FORMAT_DATE('%F', DATE(created_at)) AS day, COUNT(*) AS n
                         FROM \`${projectId}.${datasetId}.event\`
                         GROUP BY day`,
+                maximumBytesBilled: String(1e9),
+                jobTimeoutMs: 120_000,
             });
 
             return new Map(

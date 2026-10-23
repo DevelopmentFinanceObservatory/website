@@ -432,7 +432,8 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
         label: string;
         held: unknown[] | null;
         read: SourceEvent[];
-        counted?: number;
+        // Source counts that differ from the rows each day reads.
+        counted?: Record<string, number>;
         calls: string[];
         short: RegExp | null;
     }[] = [
@@ -459,7 +460,7 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             label: 'a 19 October that reads none of its 3 events fails the run',
             held: null,
             read: [],
-            counted: 3,
+            counted: { '2026-10-19': 3 },
             calls: ['ensureTable', 'replace 2026-10-22', 'replace 2026-10-23'],
             short: /2026-10-19\D+0\D+3\b/,
         },
@@ -467,7 +468,7 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             label: 'a 19 October that reads 2 of its 3 events loads and fails the run',
             held: [{ id: 1 }],
             read: [at(1, '2026-10-19'), at(2, '2026-10-19')],
-            counted: 3,
+            counted: { '2026-10-19': 3 },
             calls: [
                 'ensureTable',
                 'replace 2026-10-19',
@@ -476,9 +477,17 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             ],
             short: /2026-10-19\D+2\D+3\b/,
         },
+        {
+            label: 'a read above the count, from events after it, loads today',
+            held: null,
+            read: [],
+            counted: { '2026-10-23': 0 },
+            calls: ['ensureTable', 'replace 2026-10-22', 'replace 2026-10-23'],
+            short: null,
+        },
     ];
 
-    for (const { label, held, read, counted, calls: expectedCalls, short } of cases) {
+    for (const { label, held, read, counted = {}, calls: expectedCalls, short } of cases) {
         await t.test(label, async () => {
             const partitions = new Map<string, unknown[]>(
                 Object.entries(later).map(([day, dayPages]) => [
@@ -493,11 +502,7 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
 
             const { warehouse, calls } = fakeWarehouse(partitions);
             const run = runExport({
-                source: fakeSource(
-                    { '2026-10-19': [read], ...later },
-                    null,
-                    counted === undefined ? {} : { '2026-10-19': counted },
-                ),
+                source: fakeSource({ '2026-10-19': [read], ...later }, null, counted),
                 warehouse,
                 hmacKey: KEY,
                 today: '2026-10-23',
@@ -512,6 +517,10 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             }
 
             assert.deepEqual(calls, expectedCalls);
+            assert.deepEqual(
+                partitions.get('2026-10-23'),
+                later['2026-10-23']!.flat().map((row) => exportRow(row, KEY)),
+            );
             assert.deepEqual(
                 partitions.get('2026-10-19'),
                 calls.includes('replace 2026-10-19')
