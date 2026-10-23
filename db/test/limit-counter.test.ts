@@ -2,6 +2,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { CODE_LIMITS, codeLimitKeys, takeCodeAllowance } from '../../src/lib/auth/codeLimit.ts';
 import {
     countHit,
     pruneCounters,
@@ -19,7 +20,8 @@ const DAY_S = 86_400;
 
 /**
  * The shared limiter (src/lib/proxy/limitCounter) and the Studio's prompt
- * allowances on top of it (src/lib/studio/spendPrompt), run as the runtime
+ * allowances and sign-in code caps on top of it (src/lib/studio/spendPrompt,
+ * src/lib/auth/codeLimit), run as the runtime
  * role on a migrated database, so migration 0017's table and the default
  * grants are exercised too.
  */
@@ -249,19 +251,62 @@ test('limit counters and Studio prompt allowances', async (t) => {
         assert.equal(rows[0]?.count, GUEST_PROMPTS);
     });
 
-    await t.test('a signed-in user past the daily allowance is refused', async () => {
+    await t.test('a signed-in inbox past the daily allowance is refused', async () => {
         // Signing in after the guest wall opens the user's own allowance.
-        assert.equal((await spendPrompt(db, { userId: 'user-a' })).refusal, null);
+        assert.equal((await spendPrompt(db, { email: 'ana.silva@gmail.com' })).refusal, null);
 
+        // An email code makes an account per spelling of one address; the
+        // spellings draw on one allowance.
         for (let i = 1; i < USER_DAILY_PROMPTS; i++) {
-            await spendPrompt(db, { userId: 'user-a' });
+            await spendPrompt(db, {
+                email: i % 2 ? 'AnaSilva+dfo@gmail.com' : 'ana.silva@googlemail.com',
+            });
         }
 
-        const refusal = (await spendPrompt(db, { userId: 'user-a' })).refusal;
+        const refusal = (await spendPrompt(db, { email: 'a.n.a.silva@gmail.com' })).refusal;
 
         assert.equal(refusal?.error, 'resource_exhausted');
         assert.equal(refusal?.retry, 'retry_after_delay');
         assert.ok(refusal!.retry_after_seconds! > 0 && refusal!.retry_after_seconds! <= DAY_S);
-        assert.equal((await spendPrompt(db, { userId: 'user-b' })).refusal, null);
+        assert.equal((await spendPrompt(db, { email: 'ana.silva2@gmail.com' })).refusal, null);
+
+        const { rows } = await admin.query<{ n: number }>(
+            `select count(*)::int as n from limit_counter where key like 'studio-user:%@%'`,
+        );
+        assert.equal(rows[0]?.n, 0, 'a signed-in key holds no email address');
     });
+
+    await t.test(
+        'a sign-in code past a cap is refused, and the refusal charges no key',
+        async () => {
+            const send = (email: string, ip: string) =>
+                takeCodeAllowance(db, codeLimitKeys('secret', email, ip));
+
+            for (let i = 0; i < CODE_LIMITS.address; i++) {
+                assert.deepEqual(await send('ana@one.org', '203.0.113.40'), { ok: true });
+            }
+
+            const refused = await send('ana@one.org', '203.0.113.40');
+
+            assert.equal(refused.ok, false);
+            assert.ok(
+                !refused.ok &&
+                    refused.retryAfterS > 0 &&
+                    refused.retryAfterS <= CODE_LIMITS.windowS,
+            );
+
+            // Use up one network's cap on other inboxes, then aim it at bea.
+            for (let i = 0; i < CODE_LIMITS.network; i++) {
+                await send(`user${i}@one.org`, '203.0.113.41');
+            }
+            for (let i = 0; i < CODE_LIMITS.address + 1; i++) {
+                assert.equal((await send('bea@one.org', '203.0.113.41')).ok, false);
+            }
+
+            // Those refusals left bea's inbox uncharged.
+            for (let i = 0; i < CODE_LIMITS.address; i++) {
+                assert.deepEqual(await send('bea@one.org', '203.0.113.42'), { ok: true });
+            }
+        },
+    );
 });

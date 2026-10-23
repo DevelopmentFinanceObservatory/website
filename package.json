@@ -14,7 +14,7 @@
     "lint:css": "stylelint \"src/**/*.scss\"",
     "lint:css:fix": "stylelint \"src/**/*.scss\" --fix",
     "typecheck": "tsc --noEmit",
-    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/test/*.test.ts src/lib/docs/test/*.test.ts",
+    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/auth/test/*.test.ts src/lib/mail/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/test/*.test.ts src/lib/docs/test/*.test.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,scss}\"",
     "optimize:svg": "svgo -f src/assets -r",
     "db:generate": "drizzle-kit generate",
@@ -22,6 +22,8 @@
     "build:migrate": "esbuild db/migrate.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/migrate.cjs --external:pg-native"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "3.1150.0",
+    "@aws-sdk/credential-providers": "3.1150.0",
     "@developmentfinance/client": "file:vendor/developmentfinance-client-0.1.0.tgz",
     "@fontsource/dm-mono": "^5.3.0",
     "@fontsource/outfit": "^5.3.0",
@@ -33,6 +35,7 @@
     "better-auth": "^1.6.29",
     "chart.js": "^4.5.1",
     "classnames": "^2.5.1",
+    "disposable-email-domains-js": "^1.26.0",
     "drizzle-orm": "^0.45.2",
     "html-to-image": "^1.11.13",
     "lowlight": "^3.3.0",

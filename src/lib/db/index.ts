@@ -18,10 +18,10 @@ const globalForDb = globalThis as unknown as { pool?: Pool; counterPool?: Pool }
 
 const pool = globalForDb.pool ?? buildRuntimePool();
 
-// Rate limits and Studio prompt allowances get two connections of their own
-// through buildCounterPool. They give up in 400 ms in Postgres, 500 ms in the
-// client, or 2 s while waiting for a connection. The main pool's sessions and
-// history do not queue behind counters. The connect bound is looser because it
+// Rate limits, Studio prompt allowances and sign-in code caps get two
+// connections of their own through buildCounterPool. They give up in 400 ms
+// in Postgres, 500 ms in the client, or 2 s while waiting for a connection.
+// The main pool's sessions and history do not queue behind counters. The connect bound is looser because it
 // also covers opening a connection through the Cloud SQL connector, which a
 // quiet instance does again after 30 s idle.
 const counterPool = globalForDb.counterPool ?? buildCounterPool();
@@ -32,7 +32,7 @@ globalForDb.counterPool = counterPool;
 /** Accounts, conversation history, and shares. */
 export const db = drizzle(pool, { schema });
 
-/** Per-address rate limits and Studio prompt-allowance counters. */
+/** Per-address rate limits, Studio prompt allowances and sign-in code caps. */
 export const counterDb = drizzle(counterPool, { schema });
 
 export type Db = typeof db;

@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+
+import { inboxOf } from '../auth/inbox.ts';
 import { limiterBucket } from '../proxy/caller.ts';
 import {
     refundReservation,
@@ -11,7 +14,10 @@ import type { ToolError } from './wire.ts';
 /**
  * The Studio's prompt allowances, spent by the proxy
  * (src/app/api/v1/studio/[...path]/route.ts) before it forwards a turn. A
- * signed-in user is counted by user id. A guest is counted by network
+ * signed-in user is counted by the inbox their address reaches (inboxOf).
+ * An email code makes a separate account for each spelling of an address
+ * (`ana.silva@gmail.com`, `anasilva+1@gmail.com`), and those accounts share
+ * one allowance. A guest is counted by network
  * address, an IPv6 one by its /64 (limiterBucket), so a cleared or private
  * browser starts no fresh allowance. Guests behind one shared address (an
  * office, a carrier's NAT) share its allowance and are asked to sign in
@@ -39,17 +45,22 @@ const STUDIO_ROUTES = new Set(['turn', 'interrupt', 'cancel', 'composition']);
 export const studioRoute = (path: readonly string[]): string | null =>
     path.length === 1 && STUDIO_ROUTES.has(path[0]!) ? path[0]! : null;
 
-// A signed-in user by id, or a guest by the client address the proxy
-// resolved (src/lib/proxy/forward's clientIp).
-export type Prompter = { userId: string } | { address: string };
+// A signed-in user by their account's email, or a guest by the client
+// address the proxy resolved (src/lib/proxy/forward's clientIp).
+export type Prompter = { email: string } | { address: string };
 
 export type PromptSpend =
     { receipt: Reservation; refusal: null } | { receipt: null; refusal: ToolError };
 
+// A signed-in key holds a SHA-256 digest of the inbox, so the table holds no
+// email address.
 const counterOf = (prompter: Prompter) =>
     'address' in prompter
         ? { key: `studio-guest:${limiterBucket(prompter.address)}`, allowance: GUEST_PROMPTS }
-        : { key: `studio-user:${prompter.userId}`, allowance: USER_DAILY_PROMPTS };
+        : {
+              key: `studio-user:${createHash('sha256').update(inboxOf(prompter.email)).digest('hex')}`,
+              allowance: USER_DAILY_PROMPTS,
+          };
 
 /**
  * Spend one of `prompter`'s prompts for today. An admitted spend returns its

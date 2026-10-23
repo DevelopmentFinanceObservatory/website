@@ -6,8 +6,9 @@ import { limitCounter } from '../../../db/schema.ts';
 /**
  * Fixed-window counters in Postgres (table `limit_counter`), shared by every
  * server instance: the per-address limits on /api and /mcp
- * (./rateLimit) and the Studio's daily prompt allowances
- * (src/lib/studio/spendPrompt). Each function takes the database handle
+ * (./rateLimit), the Studio's daily prompt allowances
+ * (src/lib/studio/spendPrompt) and the hourly caps on sign-in codes sent
+ * (src/lib/auth/codeLimit). Each function takes the database handle
  * first, so `node --test` runs them on a migrated test database.
  */
 export type CounterDb = Pick<NodePgDatabase, 'execute'>;

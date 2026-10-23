@@ -32,22 +32,18 @@
  * no `K_SERVICE`, so it sends every request as given).
  */
 
+import { mintIdToken, type Fetch } from './googleIdToken.ts';
 import { searchApiBase } from './searchApi.ts';
-
-export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 type Env = Record<string, string | undefined>;
 
-export const APIS_AUTH_HEADER = 'x-serverless-authorization';
+export type { Fetch };
 
-export const METADATA_IDENTITY_URL =
-    'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity';
+export const APIS_AUTH_HEADER = 'x-serverless-authorization';
 
 // A refresh this long before expiry leaves a token minted for an hour 55
 // minutes of use and covers clock skew and a slow request.
 export const REFRESH_EARLY_MS = 5 * 60_000;
-
-const METADATA_TIMEOUT_MS = 5_000;
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 5;
@@ -63,24 +59,6 @@ const urlOf = (input: string | URL | Request): string =>
 // The origin of an absolute URL, or null for a relative path, which only the
 // browser sends (to the site's own proxy).
 const originOf = (url: string): string | null => (URL.canParse(url) ? new URL(url).origin : null);
-
-// The `exp` claim of a JWT in ms, or null when the token carries none.
-const expiryMs = (token: string): number | null => {
-    const payload = token.split('.')[1];
-
-    if (!payload) {
-        return null;
-    }
-
-    try {
-        const claims: unknown = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-        const exp = (claims as { exp?: unknown } | null)?.exp;
-
-        return typeof exp === 'number' ? exp * 1000 : null;
-    } catch {
-        return null;
-    }
-};
 
 /**
  * Builds the wrapper over `fetchImpl`, which also carries the metadata call.
@@ -101,26 +79,9 @@ export const createApisFetch = ({
     const minting = new Map<string, Promise<Minted>>();
 
     const mint = async (audience: string): Promise<Minted> => {
-        const query = new URLSearchParams({ audience, format: 'full' });
-        const url = `${METADATA_IDENTITY_URL}?${query}`;
-        const res = await fetchImpl(url, {
-            headers: { 'metadata-flavor': 'Google' },
-            cache: 'no-store',
-            signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
-        });
+        const { token, expiresAt } = await mintIdToken(audience, fetchImpl);
 
-        if (!res.ok) {
-            throw new Error(`metadata server answered ${res.status}`);
-        }
-
-        const token = (await res.text()).trim();
-        const expiry = expiryMs(token);
-
-        if (expiry === null) {
-            throw new Error('metadata server answered a token without an expiry');
-        }
-
-        return { token, refreshAt: expiry - REFRESH_EARLY_MS, expiresAt: expiry };
+        return { token, refreshAt: expiresAt - REFRESH_EARLY_MS, expiresAt };
     };
 
     const tokenFor = async (audience: string): Promise<string> => {
