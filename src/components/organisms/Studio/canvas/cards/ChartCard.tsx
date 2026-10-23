@@ -215,10 +215,13 @@ const ChartCard = ({
         const dotRadius = 3 * scale;
         const hoverRadius = 3.5 * scale;
         const borderWidth = 2.5 * scale;
+        // Chart.js resolves a hovered point's ring from pointHoverBorderWidth,
+        // then hoverBorderWidth, whose point default is 1.
+        const hoverBorderWidth = 1;
         // Chart.js sizes the clip margin from the first and last points only,
-        // so an interior dot on an axis limit would be cut; clip to the
-        // largest dot or hover disc instead.
-        const clip = Math.max(dotRadius, hoverRadius) + borderWidth / 2;
+        // so an interior dot on an axis limit would be cut; clip to the outer
+        // edge of the lone dot or of the hover disc, whichever is larger.
+        const clip = Math.max(dotRadius + borderWidth / 2, hoverRadius + hoverBorderWidth / 2);
 
         return {
             labels: widget.categories,
@@ -235,7 +238,11 @@ const ChartCard = ({
                 // weave of the bars. The tooltip swatch comes from seriesPalette.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
                 borderWidth,
+                // Round joins keep a sharp dip or peak at an axis limit within
+                // half the line width, inside the clip margin.
+                borderJoinStyle: 'round' as const,
                 pointHoverRadius: hoverRadius,
+                pointHoverBorderWidth: hoverBorderWidth,
                 pointHitRadius: 8 * scale,
                 clip,
             })),
