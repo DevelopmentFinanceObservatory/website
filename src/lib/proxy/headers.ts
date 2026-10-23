@@ -10,15 +10,18 @@
  * location (a redirect, as the Datasets API's file links answer),
  * cache-control (the `no-store` on such a redirect to a signed URL, which
  * forward.ts's default `no-cache` would weaken), retry-after (on a busy
- * refusal), www-authenticate, server-timing, every `mcp-*` header and every
- * `x-dfo-*` header (the APIs' x-dfo-trace-id and x-dfo-commit). The
- * content-length is left behind when the upstream encoded the body, since
- * fetch has decoded it by then. Matching by prefix means a protocol header
- * added later needs no change here. No `x-dfo-*` header goes upstream from
- * the client: authorization and x-dfo-caller are set by forward.ts.
+ * refusal), www-authenticate, server-timing, every `mcp-*` header, and the
+ * two `x-dfo-*` headers the APIs document as public (x-dfo-trace-id and
+ * x-dfo-commit, in the docs corpus's dfo-apis/conventions.md). The rest of
+ * `x-dfo-*` names internal identity (x-dfo-principal, x-dfo-caller,
+ * x-dfo-write-token), so it stays here. The content-length is left behind
+ * when the upstream encoded the body, since fetch has decoded it by then.
+ * Matching `mcp-*` by prefix means a protocol header added later needs no
+ * change here. No `x-dfo-*` header goes upstream from the client:
+ * authorization and x-dfo-caller are set by forward.ts.
  */
 const REQUEST_PREFIXES = ['mcp-'];
-const RESPONSE_PREFIXES = ['mcp-', 'x-dfo-'];
+const RESPONSE_PREFIXES = ['mcp-'];
 
 // Request headers worth carrying upstream; everything else (cookies, the
 // site's Basic auth, hop-by-hop) stays here.
@@ -34,6 +37,8 @@ const RESPONSE_HEADERS = [
     'retry-after',
     'www-authenticate',
     'server-timing',
+    'x-dfo-trace-id',
+    'x-dfo-commit',
     'allow',
 ];
 

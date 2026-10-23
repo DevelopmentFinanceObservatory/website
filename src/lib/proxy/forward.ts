@@ -14,11 +14,12 @@ import { hit, type Surface } from './rateLimit';
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
  * the site's own domain, so one public host serves the browser and outside
  * callers alike (the engines ship no CORS headers, and the harness token
- * must not reach a client). An /api/* or /mcp call, and a /codes call the
- * route forwards, is rate-limited per IP (src/lib/proxy/rateLimit; the
- * X-RateLimit-* headers go out only on a counted call). A call is forwarded
- * with its method, query, body, content headers, user-agent and every mcp-*
- * header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
+ * must not reach a client). An /api/*, /openapi.json or /mcp call, and a
+ * /codes call the route forwards, is rate-limited per IP: /mcp on its own
+ * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
+ * headers go out only on a counted call). A call is forwarded with its
+ * method, query, body, content headers, user-agent and every mcp-* header
+ * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
  * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
  * or more is gzipped on the way for a client that accepts it
@@ -27,7 +28,9 @@ import { hit, type Surface } from './rateLimit';
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
- *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths
+ *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths; the
+ *                                    document is cut to this host's paths
+ *                                    (src/lib/proxy/openapi)
  *   /api/v1/studio/turn|interrupt|cancel|composition
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *
@@ -71,6 +74,10 @@ type ForwardOptions = {
     // Runs after the rate limit and before the upstream call; a Response it
     // returns is the answer instead (the Studio's prompt allowance).
     admit?: () => Promise<Response | null>;
+    // Reshapes the upstream response before it is relayed (/openapi.json's
+    // public document). A throw, such as a body that fails while it is read,
+    // answers as an unreachable upstream.
+    rewrite?: (upstream: Response) => Promise<Response>;
 };
 
 const unreachable = (detail: string, headers: Record<string, string>): Response =>
@@ -115,6 +122,18 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
 
     setCaller(headers, options.caller);
 
+    const earlyFailure = (error: unknown): Response => {
+        // A client that left aborted the read itself, so no one is answered.
+        if (!req.signal.aborted) {
+            console.error(
+                `relay failed before the first byte: ${new URL(options.target).pathname}`,
+                error,
+            );
+        }
+
+        return unreachable(options.unreachable, limitHeaders);
+    };
+
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
     let upstream: Response;
 
@@ -135,6 +154,14 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         return unreachable(options.unreachable, limitHeaders);
     }
 
+    if (options.rewrite) {
+        try {
+            upstream = await options.rewrite(upstream);
+        } catch (error) {
+            return earlyFailure(error);
+        }
+    }
+
     const out = clientResponseHeaders(
         upstream.headers,
         new Headers({ 'Cache-Control': 'no-cache', ...limitHeaders }),
@@ -145,17 +172,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         upstream,
         headers: out,
         compress: options.compress,
-        onEarlyFailure: (error) => {
-            // A client that left aborted the read itself, so no one is answered.
-            if (!req.signal.aborted) {
-                console.error(
-                    `relay failed before the first byte: ${new URL(options.target).pathname}`,
-                    error,
-                );
-            }
-
-            return unreachable(options.unreachable, limitHeaders);
-        },
+        onEarlyFailure: earlyFailure,
     });
 };
 
