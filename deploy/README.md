@@ -84,12 +84,12 @@ role `website_export_reader`, which migration `0019_event_export_grant`
 grants `SELECT` on `event` alone. infra creates the role in every tier, so
 its apply must land before the deploy that first carries the migration.
 
-| Env var                                                                     | What it is                                                    |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME`, `WEBSITE_DB_USER` | The database, as the service reads it; `DATABASE_URL` locally |
-| `EXPORT_BQ_PROJECT`                                                         | The BigQuery project                                          |
-| `EXPORT_BQ_DATASET`                                                         | The BigQuery dataset                                          |
-| `EXPORT_ID_HMAC_KEY`                                                        | Key for the visitor and user id digests                       |
+| Env var                                                                     | What it is                                                   |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME`, `WEBSITE_DB_USER` | The database as the service reads it, `DATABASE_URL` locally |
+| `EXPORT_BQ_PROJECT`                                                         | The BigQuery project                                         |
+| `EXPORT_BQ_DATASET`                                                         | The BigQuery dataset                                         |
+| `EXPORT_ID_HMAC_KEY`                                                        | Key for the visitor and user id digests                      |
 
 Each run replaces every UTC day from the latest day in the table minus one
 through today, so a missed run is made up by the next one. When the table
@@ -99,7 +99,7 @@ partition (`event$YYYYMMDD`, `WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so
 a column added to the schema reaches the table on the next load). A day
 that reads no rows keeps its partition, since nothing deletes `event`
 rows. The Job logs each day as it finishes, and a failure names the day
-it failed on; a failed day keeps its partition as it was.
+it failed on. A failed day keeps its partition as it was.
 
 The table is partitioned by day on `created_at`:
 

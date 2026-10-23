@@ -32,7 +32,7 @@ import { requiredEnv } from './connection.ts';
  * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, `page` loses its query
  * string, and `props` keeps only the keys PROP_RULES names for the event,
  * each only when its value passes the key's rule. POST /api/events takes
- * any props from the browser, so a value is checked, not trusted.
+ * any props from the browser, so each value is checked.
  */
 
 /** A value is kept when it passes its key's rule. */
@@ -109,7 +109,7 @@ const RUN: Record<string, PropRule> = {
     hidden: 'boolean',
 };
 
-// A settled post's fields. `byStep` is left out: a map of engine step
+// A settled post's fields. `byStep` is left out. It is a map of engine step
 // timings that `engineMs` sums up.
 const SETTLE: Record<string, PropRule> = {
     outcome: OUTCOMES,
@@ -178,7 +178,7 @@ const passes = (rule: PropRule, value: unknown): boolean => {
     }
 };
 
-/** The props an event keeps; none for a name the site no longer emits. */
+/** The props an event keeps. A name the site does not emit keeps none. */
 export const exportProps = (
     name: string,
     props: Record<string, unknown>,
@@ -236,8 +236,8 @@ export const exportRow = (row: SourceEvent, hmacKey: string): ExportRow => ({
     id: row.id,
     created_at: row.createdAt,
     name: row.name,
-    // The path alone, as the event log line keeps it (src/lib/events/eventLog.ts):
-    // feedback sends its page with the query string, which can hold a search.
+    // The path alone, as the event log line keeps it (src/lib/events/eventLog.ts).
+    // Feedback sends its page with the query string, which can hold a search.
     page: row.page?.split(/[?#]/, 1)[0] ?? null,
     signed_in: row.userId !== null,
     visitor_hash: digest(hmacKey, row.visitorId),
@@ -278,7 +278,7 @@ export const exportDays = ({
     return days;
 };
 
-/** Where the rows come from: the website database. */
+/** The website database the rows come from. */
 export type EventSource = {
     /** The UTC day of the first event, null when the table is empty. */
     firstDay(): Promise<string | null>;
@@ -286,7 +286,7 @@ export type EventSource = {
     readDay(day: string): AsyncIterable<SourceEvent[]>;
 };
 
-/** Where the rows go: the BigQuery table. */
+/** The BigQuery table the rows go to. */
 export type Warehouse = {
     /** Creates the table when it does not exist. */
     ensureTable(): Promise<void>;
@@ -380,9 +380,9 @@ export const bigQueryWarehouse = ({
 
 /**
  * One export run. Each day is written to `scratchFile` page by page, so
- * memory holds one page; the partition is replaced only once the day has
- * been read to its end. A day that reads no rows keeps its partition:
- * nothing deletes `event` rows, so an empty read is a quiet day or a
+ * memory holds one page. The partition is replaced only once the day has
+ * been read to its end. A day that reads no rows keeps its partition.
+ * Nothing deletes `event` rows, so an empty read is a quiet day or a
  * fault, and the window starts from the latest day BigQuery holds. Logs
  * each day as it is done, names the day in a failure, and returns the
  * rows read per day.
@@ -449,7 +449,7 @@ export const runExport = async ({
     return loaded;
 };
 
-/** The export's own settings; the database settings are the runtime's (db/connection.ts). */
+/** The export's own settings. The database settings are the runtime's (db/connection.ts). */
 export const readExportEnv = () => ({
     projectId: requiredEnv('EXPORT_BQ_PROJECT'),
     datasetId: requiredEnv('EXPORT_BQ_DATASET'),

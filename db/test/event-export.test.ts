@@ -148,7 +148,7 @@ test('exportDays replaces from the day before the latest loaded day through toda
     }
 });
 
-/** A warehouse in memory: each partition is the parsed lines of its last load. */
+/** An in-memory warehouse. Each partition is the parsed lines of its last load. */
 const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
     const calls: string[] = [];
     const warehouse: Warehouse = {

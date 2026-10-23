@@ -21,7 +21,7 @@ async function main(): Promise<void> {
         setCloudSqlRuntimeStream(cloudSql.stream);
     }
 
-    // One connection: the run reads one page at a time.
+    // One connection suffices, since the run reads one page at a time.
     const pool = buildRuntimePool(process.env, { max: 1 });
 
     try {
