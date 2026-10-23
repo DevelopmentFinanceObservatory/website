@@ -7,14 +7,32 @@
  * [{dcid, label, kind}]}`. The two real Congo dcids (country/COD,
  * country/COG) and the candidate labels are the ones the captures' own
  * `rendered_sentence` already names ("Congo [DRC]"/"Congo [Republic]").
+ * The "ODA to the Congo" refusal also carries `no_data.options`, one ready
+ * request per candidate, built the way dfo-apis search/engine/conjoin.py
+ * `_entity_options` builds them from the restatement. "GDP of Congo" has no
+ * restatement, so it carries none.
  */
 
-import type { NoData, ParsedPart } from '../../types.ts';
+import type { NoData, NoDataOption, ParsedPart } from '../../types.ts';
+
+const congoOption = (dcid: string, label: string): NoDataOption => ({
+    mentions: ['Congo'],
+    label,
+    data_query: {
+        kind: 'parsed',
+        parts: [
+            {
+                variable_text: 'official development assistance',
+                entities: [{ text: 'Congo', role_text: 'to', dcid }],
+            },
+        ],
+    },
+});
 
 /** "GDP of Congo": a subject-role entity_ambiguous part. `restatement` is
  *  null on this real capture (the leg's direction came from wording alone,
- *  with no door-supplied role to confirm it), so this fixture exercises the
- *  "no restatement" fallback. */
+ *  with no door-supplied role to confirm it), so the refusal carries no
+ *  options and offers no picker. */
 export const gdpOfCongoNoData: NoData = {
     reason: 'entity_ambiguous',
     entity_terms: ['Congo'],
@@ -46,6 +64,10 @@ export const odaToCongoNoData: NoData = {
                 { ref: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
             ],
         },
+    ],
+    options: [
+        congoOption('country/COD', 'Congo [DRC]'),
+        congoOption('country/COG', 'Congo [Republic]'),
     ],
     unbound_qualifiers: [],
 };

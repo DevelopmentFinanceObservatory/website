@@ -30,6 +30,7 @@ const ref = (
         identity: {},
         entityGroups: null,
         operations: [],
+        assumptions: null,
         contentVersion,
         artifactDigest,
     }) satisfies SearchShareRef;

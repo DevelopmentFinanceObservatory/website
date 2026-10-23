@@ -6,6 +6,9 @@
  * A single-part `definite` answer over a broad StatVar set: it serves all
  * 1106 members (`served_count: 1106`). The part carries the
  * `role_scope_defaulted` and `observations_series_truncated` warnings.
+ * Its open provider role, the one assumption, was added to the part's
+ * `assumptions` and as the envelope sentence's closing clause (" Assumed:
+ * every donor."), in the shape dfo-apis' render/assumptions.py writes.
  *
  * Trimmed for size; each body still validates against the API's models
  * (scripts/check-search-fixtures.mts). `slot_values` and
@@ -89,6 +92,14 @@ export const broadTruncated: unknown = {
       },
       "operations": [],
       "departures": [],
+      "assumptions": [
+        {
+          "kind": "open_role",
+          "binding_ref": "origin:",
+          "refs": [],
+          "text": "every donor"
+        }
+      ],
       "status": "definite",
       "spec": {
         "spec_id": "spec_7c8a3bcf9c627393f5b9c2177d96174f",
@@ -4020,7 +4031,7 @@ export const broadTruncated: unknown = {
       }
     }
   ],
-  "rendered_sentence": "Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+  "rendered_sentence": "Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS). Assumed: every donor.",
   "sentence_plan": [
     {
       "kind": "slot",
@@ -4207,6 +4218,34 @@ export const broadTruncated: unknown = {
       "kind": "text",
       "text": ".",
       "segment": "byline",
+      "entity_refs": [],
+      "states": []
+    },
+    {
+      "kind": "text",
+      "text": " ",
+      "segment": "assumption",
+      "entity_refs": [],
+      "states": []
+    },
+    {
+      "kind": "text",
+      "text": "Assumed: ",
+      "segment": "assumption",
+      "entity_refs": [],
+      "states": []
+    },
+    {
+      "kind": "text",
+      "text": "every donor",
+      "segment": "assumption",
+      "entity_refs": [],
+      "states": []
+    },
+    {
+      "kind": "text",
+      "text": ".",
+      "segment": "assumption",
       "entity_refs": [],
       "states": []
     }

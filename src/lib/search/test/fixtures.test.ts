@@ -191,15 +191,20 @@ test('definite-rank-operation: the definite part keeps its rank operation and fl
     assert.ok(part.spec.identity, 'flattenSpec keeps the definition identity');
 });
 
-test('entity-ambiguous: operations default to empty and data_query rides through', () => {
+test('entity-ambiguous: operations default to empty and each option rides through', () => {
     const normalized = normalizeResponse(fixtures['entity-ambiguous']);
     const [part] = normalized.parts;
 
     assert.deepEqual(part.operations, []);
     assert.equal(part.no_data.reason, 'entity_ambiguous');
     assert.deepEqual(
-        part.no_data.data_query.parts[0].entities.map((entity: any) => entity.dcid ?? null),
-        [null, 'country/FRA'],
+        part.no_data.options.map((option: any) =>
+            option.data_query.parts[0].entities.map((entity: any) => entity.dcid ?? null),
+        ),
+        [
+            ['country/COD', 'country/FRA'],
+            ['country/COG', 'country/FRA'],
+        ],
     );
     assert.deepEqual(
         part.no_data.ambiguous_entities[0].candidates.map((candidate: any) => candidate.ref),

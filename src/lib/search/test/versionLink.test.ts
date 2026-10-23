@@ -76,6 +76,7 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
                     identity,
                     entityGroups: null,
                     operations: [],
+                    assumptions: null,
                     contentVersion: 'cv_b2',
                 },
             ],

@@ -151,6 +151,7 @@ import { withEntityEdit, withFacetEdit, withResolvedSlotEdit } from '@/lib/searc
 import type { PermalinkEdit, PermalinkState } from '@/lib/search/permalink';
 import {
     buildDatasetEntries,
+    candidatePickEntry,
     sharedRefEntry,
     specEntityGroups,
     type DatasetEntriesOverride,
@@ -1174,14 +1175,19 @@ export const useSearchRun = () => {
         [facetOverride, runDatasetEdit],
     );
 
-    // Candidate promote: post the candidate's own identity verbatim.
+    // Candidate promote: post the candidate's own identity verbatim, with
+    // its reading's own assumptions.
     const pickCandidate = useCallback(
-        (partIndex: number, candidate: any) => {
-            const entry = identityOverrideEntry(partIndex, candidate, candidate.identity);
+        (partIndex: number, candidate: Spec) => {
+            const part = parts[partIndex];
+
+            if (!part) return;
+
+            const entry = candidatePickEntry(part, candidate);
 
             runDatasetEdit({ index: partIndex, entry }, [partIndex], 'pick');
         },
-        [identityOverrideEntry, runDatasetEdit],
+        [parts, runDatasetEdit],
     );
 
     // One post for every part a pick switches: a shared unit token's

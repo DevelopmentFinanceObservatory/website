@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
-import type { EntityGroup, EntityRoleKey, HydratedPart, Operation } from './types.ts';
+import type {
+    Assumption,
+    AssumptionKind,
+    EntityGroup,
+    EntityRoleKey,
+    HydratedPart,
+    Operation,
+} from './types.ts';
 
 /**
  * The shape and limits of a search share request, checked before any
@@ -23,6 +30,11 @@ export type SearchSharePart = {
     // What the question asked of the part beyond its data. The replay
     // carries them back.
     operations: Operation[];
+    // The values the answer filled that the question did not ask for, as
+    // the response gave them, [] included. The replay echoes them, so a
+    // shared answer states the same defaults. Null when the response gave
+    // none.
+    assumptions?: Assumption[] | null;
     // The canonical definition from the resolve response, which register
     // and mint take. Not stored, since the identity is enough to replay.
     definition: unknown;
@@ -74,6 +86,46 @@ const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
         ([role, group]) => ENTITY_ROLE_KEYS.includes(role) && isEntityGroup(group),
     );
 
+const ASSUMPTION_KINDS: string[] = [
+    'declared_default',
+    'open_role',
+    'place_scope',
+] satisfies AssumptionKind[];
+
+// Search's own bounds on an echoed `Assumption`: a text of 1 to 200 code
+// points, at most one ref of at most 1024 characters, a binding ref of at
+// most 1036 characters, and at most 67 items in a part's list. A share
+// storing one past them cannot open.
+const ASSUMPTION_TEXT_MAX_LENGTH = 200;
+const ASSUMPTION_MAX_REFS = 1;
+const ASSUMPTION_REF_MAX_LENGTH = 1024;
+const ASSUMPTION_BINDING_REF_MAX_LENGTH = 1036;
+const ASSUMPTIONS_MAX = 67;
+
+const isAssumption = (value: any): value is Assumption =>
+    isPlainObject(value) &&
+    Object.keys(value).every((member) =>
+        ['kind', 'binding_ref', 'refs', 'text'].includes(member),
+    ) &&
+    ASSUMPTION_KINDS.includes(value.kind) &&
+    typeof value.binding_ref === 'string' &&
+    value.binding_ref.length <= ASSUMPTION_BINDING_REF_MAX_LENGTH &&
+    Array.isArray(value.refs) &&
+    value.refs.length <= ASSUMPTION_MAX_REFS &&
+    value.refs.every(
+        (ref: unknown) => typeof ref === 'string' && ref.length <= ASSUMPTION_REF_MAX_LENGTH,
+    ) &&
+    typeof value.text === 'string' &&
+    value.text.length > 0 &&
+    // A text within the bound spans at most two UTF-16 units per code point.
+    value.text.length <= ASSUMPTION_TEXT_MAX_LENGTH * 2 &&
+    [...value.text].length <= ASSUMPTION_TEXT_MAX_LENGTH;
+
+/** A part's echoed list as Search takes it: within the item cap, every item
+ *  an `Assumption` within its bounds. */
+export const isAssumptions = (value: any): value is Assumption[] =>
+    Array.isArray(value) && value.length <= ASSUMPTIONS_MAX && value.every(isAssumption);
+
 export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !!value &&
     typeof value === 'object' &&
@@ -87,11 +139,12 @@ export const isSearchSharePart = (value: any): value is SearchSharePart =>
     !Object.hasOwn(value.identity, 'entity_groups') &&
     (value.entityGroups == null || isEntityGroups(value.entityGroups)) &&
     Array.isArray(value.operations) &&
+    (value.assumptions == null || isAssumptions(value.assumptions)) &&
     !!value.definition &&
     typeof value.definition === 'object';
 
 /** The share part a definite part on screen posts: its Spec's identity, with
- *  the Spec's groups beside it. */
+ *  the Spec's groups beside it, and the part's operations and assumptions. */
 export const searchSharePart = (part: HydratedPart): Required<SearchSharePart> => {
     const spec = part.hydratedSpec as any;
 
@@ -102,6 +155,7 @@ export const searchSharePart = (part: HydratedPart): Required<SearchSharePart> =
         identity: spec.identity,
         entityGroups: spec.entity_groups ?? null,
         operations: part.part?.operations ?? [],
+        assumptions: part.part?.assumptions ?? null,
         definition: spec.definition,
     };
 };

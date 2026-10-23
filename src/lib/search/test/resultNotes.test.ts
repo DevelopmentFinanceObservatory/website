@@ -21,7 +21,7 @@ import {
     odaToCongoNoData,
     odaToCongoRestatement,
 } from './fixtures/ambiguous-congo.ts';
-import type { Warning } from '../types.ts';
+import type { Assumption, Warning } from '../types.ts';
 
 // ---------------------------------------------------------------------------
 // The warning lines the page draws, by place
@@ -74,6 +74,18 @@ const humanitarianWarnings: Warning[] = [
     },
 ];
 
+// The part's assumptions on the same answer. They hold the recipient role it
+// left open and the flow type its code system's default filled.
+const humanitarianAssumptions: Assumption[] = [
+    {
+        kind: 'declared_default',
+        binding_ref: 'how:crsTypeOfFlow',
+        refs: ['CRSTypeOfFlow10'],
+        text: 'official development assistance',
+    },
+    { kind: 'open_role', binding_ref: 'where:', refs: [], text: 'every recipient' },
+];
+
 // dfo-apis src/search/engine/region/un_system.py un_unavailable_warning, for
 // a record holding one refused place and one failed read of two variables,
 // with each variable's label in `variable_labels`.
@@ -91,11 +103,21 @@ const unSystemWarning = (variableLabels: string[]): Warning => ({
 });
 
 test('aboutAnswerNotes holds the coverage sentence and assumptions -- humanitarian aid from Germany', () => {
-    assert.deepEqual(aboutAnswerNotes(humanitarianSpec, humanitarianWarnings, {}), {
+    const spec = {
+        ...humanitarianSpec,
+        resolution: {
+            slot_filters: [
+                { key: { axis: 'how', property: { ref: 'crsTypeOfFlow' }, label: 'Type of flow' } },
+            ],
+        },
+    };
+
+    assert.deepEqual(aboutAnswerNotes(spec, humanitarianWarnings, {}, humanitarianAssumptions), {
         coverage:
             '2024 is the latest year with data, with 155 values for 61 of the 145 recipients that have data from Germany.',
         assumptions: [
-            'No recipient was named, so every recipient with data from Germany is included.',
+            'No type of flow was named, so the answer uses official development assistance, the default for this measure.',
+            'The question left this role open, so the answer covers every recipient from Germany.',
             'No year was named, so the counts are for 2024, the latest year with data.',
         ],
         variance: [],
@@ -211,6 +233,9 @@ test('no warning a part states as a departure, or the API keeps internal, reache
         'currency_unmapped_omitted',
         'withheld_by_registry',
         'slot_defaulted',
+        // The part's assumptions state these scopes, so the warnings add no line.
+        'place_scope_defaulted',
+        'role_scope_defaulted',
         'family_total_absent',
         'date_coverage_partial',
     ];
