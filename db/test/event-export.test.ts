@@ -258,7 +258,7 @@ test('runExport backfills an empty table day by day and logs each day', async ()
     await assert.rejects(fs.access(scratchFile));
 });
 
-test('runExport keeps the partitions of days that read no rows', async () => {
+test('runExport rejects a source that reads empty and keeps every partition', async () => {
     const partitions = new Map<string, unknown[]>([
         ['2026-10-21', [{ id: 6 }]],
         ['2026-10-22', [{ id: 7 }]],
@@ -266,22 +266,26 @@ test('runExport keeps the partitions of days that read no rows', async () => {
     const before = structuredClone(partitions);
     const { warehouse, calls } = fakeWarehouse(partitions);
 
-    for (const today of ['2026-10-22', '2026-10-23']) {
-        const loaded = await runExport({
+    await assert.rejects(
+        runExport({
             source: fakeSource({}),
             warehouse,
             hmacKey: KEY,
-            today,
+            today: '2026-10-23',
             scratchFile: scratch(),
             log: () => undefined,
-        });
-
-        assert.ok(loaded.every(({ rows }) => rows === 0));
-    }
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /2026-10-21\D+0\D+1\b/);
+            assert.match(error.message, /2026-10-22\D+0\D+1\b/);
+            assert.doesNotMatch(error.message, /2026-10-23/);
+            return true;
+        },
+    );
 
     assert.deepEqual(partitions, before);
-    assert.deepEqual(calls, ['ensureTable', 'ensureTable']);
-    assert.equal(await warehouse.latestDay(), '2026-10-22');
+    assert.deepEqual(calls, ['ensureTable']);
 });
 
 test('runExport keeps a partition that holds more rows than the day reads', async () => {
@@ -289,29 +293,37 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
     const partitions = new Map<string, unknown[]>([['2026-10-22', held]]);
     const { warehouse, calls } = fakeWarehouse(partitions);
     const fresh = sourceEvent({ id: 9, createdAt: '2026-10-23T10:00:00.000000Z' });
+    const scratchFile = scratch();
     const logged: string[] = [];
 
-    const loaded = await runExport({
-        source: fakeSource({
-            '2026-10-22': [[sourceEvent({ id: 6, createdAt: '2026-10-22T10:00:00.000000Z' })]],
-            '2026-10-23': [[fresh]],
+    await assert.rejects(
+        runExport({
+            source: fakeSource({
+                '2026-10-22': [[sourceEvent({ id: 6, createdAt: '2026-10-22T10:00:00.000000Z' })]],
+                '2026-10-23': [[fresh]],
+            }),
+            warehouse,
+            hmacKey: KEY,
+            today: '2026-10-23',
+            scratchFile,
+            log: (line) => logged.push(line),
         }),
-        warehouse,
-        hmacKey: KEY,
-        today: '2026-10-23',
-        scratchFile: scratch(),
-        log: (line) => logged.push(line),
-    });
+        (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /2026-10-22\D+1\D+2\b/);
+            assert.doesNotMatch(error.message, /2026-10-2[13]/);
+            return true;
+        },
+    );
 
-    assert.deepEqual(loaded, [
-        { day: '2026-10-21', rows: 0 },
-        { day: '2026-10-22', rows: 1 },
-        { day: '2026-10-23', rows: 1 },
-    ]);
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
     assert.equal(partitions.get('2026-10-22'), held);
     assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY)]);
-    assert.match(logged[1] ?? '', /^2026-10-22: \D*1\D+2\D*$/);
+    assert.deepEqual(
+        logged.map((line) => line.slice(0, 10)),
+        ['2026-10-21', '2026-10-22', '2026-10-23'],
+    );
+    await assert.rejects(fs.access(scratchFile));
 });
 
 test('runExport names the day it failed on and leaves that day as it was', async () => {

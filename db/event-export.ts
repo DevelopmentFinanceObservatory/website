@@ -411,10 +411,11 @@ export const bigQueryWarehouse = ({
  * memory holds one page. The partition is replaced only once the day has
  * been read to its end, and only when the read holds at least as many rows
  * as the partition. Nothing deletes `event` rows, so a shorter read is a
- * fault, and a replace never shrinks a partition. A day that reads no rows
- * and holds none loads nothing. Logs
- * each day as it is done, names the day in a failure, and returns the
- * rows read per day.
+ * fault (a wrong database, an emptied table, a lagging replica). Such a day
+ * keeps its partition, the other days still load, and the run then rejects
+ * naming each short day with both counts. A day that reads no rows and
+ * holds none loads nothing. Logs each day as it is done, names the day in
+ * a failure, and returns the rows read per day.
  */
 export const runExport = async ({
     source,
@@ -440,6 +441,7 @@ export const runExport = async ({
         today,
     });
     const loaded: { day: string; rows: number }[] = [];
+    const short: string[] = [];
 
     try {
         for (const day of days) {
@@ -469,6 +471,7 @@ export const runExport = async ({
 
             if (rows < held) {
                 log(`${day}: ${rows} events read, partition holds ${held}, partition kept`);
+                short.push(`${day} read ${rows} of ${held}`);
             } else {
                 log(rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`);
             }
@@ -476,6 +479,10 @@ export const runExport = async ({
         }
     } finally {
         await fs.rm(scratchFile, { force: true });
+    }
+
+    if (short.length > 0) {
+        throw new Error(`event export read fewer rows than BigQuery holds: ${short.join(', ')}`);
     }
 
     return loaded;
