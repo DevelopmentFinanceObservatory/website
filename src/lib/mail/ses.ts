@@ -10,7 +10,7 @@ import { mintIdToken } from '../googleIdToken.ts';
  * (AssumeRoleWithWebIdentity) trades the Cloud Run runtime service
  * account's Google ID token for the credentials. The role's trust policy
  * names that service account and requires the token's audience to be
- * TOKEN_AUDIENCE.
+ * SES_TOKEN_AUDIENCE, which differs per environment.
  *
  * The SES client holds the credentials until five minutes before they
  * expire and then asks for new ones, minting a fresh ID token for each
@@ -18,9 +18,6 @@ import { mintIdToken } from '../googleIdToken.ts';
  * `credentials` function with @smithy/core's memoizeIdentityProvider). So
  * the client, and the transport over it, live as long as the process.
  */
-
-/** The audience the site requests its ID token for. The role's trust policy matches `accounts.google.com:oaud` against it. */
-export const TOKEN_AUDIENCE = 'dfo-website-ses';
 
 /** The STS role session name, which shows in the role owner's CloudTrail. */
 export const ROLE_SESSION_NAME = 'dfo-website';
@@ -39,7 +36,7 @@ export type SesDeps = {
 type CredentialOptions = Parameters<ReturnType<typeof fromWebToken>>[0];
 
 export const sesTransport = (
-    { roleArn, region }: { roleArn: string; region: string },
+    { roleArn, region, tokenAudience }: { roleArn: string; region: string; tokenAudience: string },
     {
         idToken = async (audience) => (await mintIdToken(audience)).token,
         stsEndpoint,
@@ -63,7 +60,7 @@ export const sesTransport = (
         fromWebToken({
             roleArn,
             roleSessionName: ROLE_SESSION_NAME,
-            webIdentityToken: await idToken(TOKEN_AUDIENCE),
+            webIdentityToken: await idToken(tokenAudience),
             clientConfig: { ...network, ...(stsEndpoint && { endpoint: stsEndpoint }) },
         })(options);
 

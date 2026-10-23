@@ -11,6 +11,7 @@ import { emailSignInConfig, isThrowawayAddress, signInCodeMessage } from '../ema
 const FULL = {
     SES_ROLE_ARN: 'arn:aws:iam::123456789012:role/dfo-website-dev-ses',
     SES_REGION: 'us-east-1',
+    SES_TOKEN_AUDIENCE: 'dfo-website-staging',
     AUTH_EMAIL_FROM: ' DFO Studio <studio@developmentfinance.org> ',
     TURNSTILE_SITE_KEY: 'site-key',
     TURNSTILE_SECRET_KEY: 'secret-key',
@@ -36,11 +37,12 @@ test('no mail transport and no From address: off, with both named', () => {
         ...FULL,
         SES_ROLE_ARN: undefined,
         SES_REGION: undefined,
+        SES_TOKEN_AUDIENCE: undefined,
         AUTH_EMAIL_FROM: undefined,
     };
 
     assert.deepEqual(emailSignInConfig(env), {
-        missing: ['SES_ROLE_ARN/SES_REGION or SMTP_HOST', 'AUTH_EMAIL_FROM'],
+        missing: ['SES_ROLE_ARN/SES_REGION/SES_TOKEN_AUDIENCE or SMTP_HOST', 'AUTH_EMAIL_FROM'],
     });
 });
 

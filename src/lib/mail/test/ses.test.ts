@@ -11,10 +11,11 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { createSendMail } from '../send.ts';
-import { ROLE_SESSION_NAME, TOKEN_AUDIENCE } from '../ses.ts';
+import { ROLE_SESSION_NAME } from '../ses.ts';
 
 const ROLE = 'arn:aws:iam::123456789012:role/dfo-website-dev-ses';
 const REGION = 'eu-west-2';
+const AUDIENCE = 'dfo-website-staging';
 const ACCESS_KEY_ID = 'ASIAEXAMPLESTS';
 const SESSION_TOKEN = 'session-token-from-sts';
 const FROM = 'studio@developmentfinance.org';
@@ -69,7 +70,12 @@ test('two sends: one ID token, one STS exchange, and SES requests signed with it
         const endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         const audiences: string[] = [];
         const sendMail = createSendMail(
-            { SES_ROLE_ARN: ROLE, SES_REGION: REGION, SMTP_HOST: 'smtp.example.org' },
+            {
+                SES_ROLE_ARN: ROLE,
+                SES_REGION: REGION,
+                SES_TOKEN_AUDIENCE: AUDIENCE,
+                SMTP_HOST: 'smtp.example.org',
+            },
             {
                 idToken: async (audience) => {
                     audiences.push(audience);
@@ -85,7 +91,7 @@ test('two sends: one ID token, one STS exchange, and SES requests signed with it
             await sendMail({ from: `DFO Studio <${FROM}>`, to, subject: 'Code', text: '123456' });
         }
 
-        assert.deepEqual(audiences, [TOKEN_AUDIENCE]);
+        assert.deepEqual(audiences, [AUDIENCE]);
         assert.deepEqual(
             stsCalls.map((params) => [
                 params.get('Action'),
@@ -144,7 +150,7 @@ test('an SES request that never answers fails the send after two attempts', asyn
     try {
         const endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         const sendMail = createSendMail(
-            { SES_ROLE_ARN: ROLE, SES_REGION: REGION },
+            { SES_ROLE_ARN: ROLE, SES_REGION: REGION, SES_TOKEN_AUDIENCE: AUDIENCE },
             {
                 idToken: async () => 'google-id-token',
                 stsEndpoint: endpoint,
