@@ -142,6 +142,7 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
             { refusal: { code: 'live_too_many_cards', limit: 20, count: 23 } },
         ],
         [false, { error: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
+        [false, { error: 'guest_limit' }, { refusal: { code: 'guest_limit' } }],
         // What a second try can outlive, and every answer outside the contract.
         [false, { error: 'live_check_failed' }, { refusal: { code: 'failed' } }],
         [false, { error: 'unauthorized' }, { refusal: { code: 'failed' } }],
@@ -289,14 +290,20 @@ test('a failure that asking again can fix leaves the live link standing', async 
 test('a dfo-apis refusal that says it is retryable leaves the link standing; the same code without it names the card', async () => {
     for (const [retryable, expected] of [
         [true, { status: 'ready', id: 'Live0007', mode: 'live', unchecked: 1 }],
-        [
-            false,
-            { status: 'withdrawn', withdrawal: { reason: 'cards', cards: CARDS.slice(0, 1) } },
-        ],
+        [false, { status: 'withdrawn', withdrawal: { reason: 'cards', cards: CARDS.slice(0, 1) } }],
     ] as const) {
         const { open } = site(
             { id: 'Live0007', cards: CARDS.slice(0, 1) },
-            { cmp_a: [{ body: { ...refused('release_mismatch'), ...(retryable ? { retryable } : {}) } }] },
+            {
+                cmp_a: [
+                    {
+                        body: {
+                            ...refused('release_mismatch'),
+                            ...(retryable ? { retryable } : {}),
+                        },
+                    },
+                ],
+            },
         );
 
         assert.deepEqual((await open('card', 'live', 'cmp_a')).at(-1), expected, `${retryable}`);
@@ -350,7 +357,7 @@ test('dfo-ai’s refusals decide the link: a transient one stands, a permanent o
     );
 });
 
-test('a share the site refuses to make is withdrawn or failed, with nothing to refresh or delete', async () => {
+test('a share the site refuses to make is withdrawn, failed or limited, with nothing to refresh or delete', async () => {
     const rows: [ShareMint, ShareLink][] = [
         [
             { refusal: { code: 'live_cards_blocked', cardIds: ['cmp_c', 'cmp_a'] }, cards: CARDS },
@@ -368,6 +375,7 @@ test('a share the site refuses to make is withdrawn or failed, with nothing to r
             { status: 'withdrawn', withdrawal: { reason: 'unavailable' } },
         ],
         [{ refusal: { code: 'failed' } }, { status: 'failed' }],
+        [{ refusal: { code: 'guest_limit' } }, { status: 'limited' }],
     ];
 
     for (const [mint, expected] of rows) {

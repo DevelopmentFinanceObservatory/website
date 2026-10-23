@@ -81,7 +81,7 @@ export const spendPrompt = async (db: CounterDb, prompter: Prompter): Promise<Pr
                 ? {
                       error: 'resource_exhausted',
                       retry: 'do_not_retry',
-                      detail: `This network has used today's ${GUEST_PROMPTS} free prompts. Sign in to keep exploring Studio.`,
+                      detail: `This network has used today's ${GUEST_PROMPTS} guest prompts. Sign in to keep exploring Studio. It's free.`,
                       retry_after_seconds: reservation.reset,
                   }
                 : {

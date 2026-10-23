@@ -72,8 +72,8 @@ export type StudioProps = {
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
     // from history, a fresh fork).
     openId?: string;
-    // Signed out: GUEST_PROMPTS free prompts, then the wall; nothing is saved
-    // or shareable (both need an account).
+    // Signed out: GUEST_PROMPTS prompts, then the wall; nothing is saved
+    // (that needs an account), and shares are unowned snapshots.
     guest?: boolean;
     // A gallery item: the same read-only sheet, plus the one action a
     // curated session exists for — carrying it on in your own Studio.
@@ -122,7 +122,7 @@ const Studio = ({
     const sharedSaved = shared?.saved;
 
     const readOnly = !!shared;
-    // What a signed-in user has and a guest lacks: history, saving, sharing.
+    // What a signed-in user has and a guest lacks: history and saving.
     const account = !readOnly && !guest;
     // A canvas-only or one-card share: no chat at all — the sheet takes the
     // whole width and only the filters stay above it.
@@ -678,7 +678,7 @@ const Studio = ({
                         views={doc.views}
                         onViewChange={doc.setView}
                         onShare={
-                            !account
+                            readOnly
                                 ? undefined
                                 : (id) =>
                                       modals.share.show({
@@ -704,7 +704,7 @@ const Studio = ({
                 // A share row's `live` is set either way (sharedViewOf). A
                 // gallery canvas leaves it unset and has no share link.
                 snapshot={shared?.live === false ? shared : undefined}
-                canShare={account}
+                canShare={!readOnly}
             />
 
             <Modal
@@ -732,6 +732,7 @@ const Studio = ({
                     shareData={shareData}
                     liveSharing={liveSharing}
                     createShare={save.createShare}
+                    guest={guest}
                 />
             )}
 
@@ -825,7 +826,7 @@ const Studio = ({
                         phone={phone}
                         onNewChat={startNew}
                         onCustomize={() => modals.customize.setOpen((prev) => !prev)}
-                        onShare={account ? () => modals.share.show({ kind: 'whole' }) : undefined}
+                        onShare={readOnly ? undefined : () => modals.share.show({ kind: 'whole' })}
                         note={liveCanvas ? <LiveNote live={liveCanvas} /> : undefined}
                     />
                     <ChatPanel

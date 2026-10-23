@@ -7,32 +7,31 @@ import styles from './BuildTools.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import SectionHeading from '@/components/molecules/SectionHeading/SectionHeading';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
-import { docsSectionHref } from '@/lib/docs/nav';
+import { docsPageHref, docsSectionHref } from '@/lib/docs/nav';
 
-// Python packages open the docs section holding oda_reader's pages, whatever
-// its heading; the rest open the docs home.
-const PACKAGES_HREF = docsSectionHref('oda_reader');
-
+// Each box opens its docs page by corpus id, so a moved page keeps its link and
+// a removed one fails the build. Python packages open the section holding
+// oda_reader's pages, whatever its heading.
 const boxes = [
     {
         title: 'REST API',
         text: 'Turn a plain-English question into a dataset in CSV, Excel, or Parquet, with its sources and citation. Look up names and codes.',
-        href: '/docs',
+        href: docsPageHref('dfo-apis/quickstart'),
     },
     {
         title: 'Python Packages',
         text: 'Load OECD, IMF, and TOSSD data into pandas straight from the publisher, with our open-source packages.',
-        href: PACKAGES_HREF,
+        href: docsSectionHref('oda_reader'),
     },
     {
         title: 'MCP Server',
         text: 'Connect the DFO to Claude, ChatGPT, or Gemini. Your assistant answers from DFO data and names the source of each number.',
-        href: '/docs',
+        href: docsPageHref('dfo-ai/connect'),
     },
     {
         title: 'Embed Anywhere',
         text: 'Paste iframe code from Studio into any web page to show a whole canvas or a single chart, on live data or as a snapshot.',
-        href: '/docs',
+        href: docsPageHref('hub/build/embed'),
     },
 ];
 

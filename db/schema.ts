@@ -56,7 +56,7 @@ export const share = pgTable(
     {
         // Short URL-safe id (8 chars).
         id: text('id').primaryKey(),
-        // Null for a search shared without an account (the search is public).
+        // Null for a share made without an account, search or Studio.
         userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
         // What the link shows: 'conversation' (chat + canvas), 'canvas',
         // 'card', or 'search' (a search result).
