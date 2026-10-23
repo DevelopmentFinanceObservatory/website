@@ -5,6 +5,7 @@ import type { CardInfo, Widget } from '../chat/widgets.ts';
 import { shortDateText } from '../sources/updateDates.ts';
 import type { LiveCard } from './liveBackend.ts';
 import type { Description } from './description.ts';
+import { gateOf, type Gate } from './gate.ts';
 import { cardDescription } from './infoPanel.ts';
 import { describedBy, payloadDescription, payloadProvenance } from './payload.ts';
 import { reviseWidget } from './widgets.ts';
@@ -366,35 +367,6 @@ const askOnce = async (
         // caller aborted (and then discards the answer).
         return failure(LIVE_CLIENT_CODES.network);
     }
-};
-
-type Gate = <T>(task: () => Promise<T>) => Promise<T>;
-
-// At most `max` tasks run at once. A finishing task hands its place to the
-// longest waiter, so a late caller cannot take it first.
-const gateOf = (max: number): Gate => {
-    let running = 0;
-    const waiting: (() => void)[] = [];
-
-    return async (task) => {
-        if (running < max) {
-            running += 1;
-        } else {
-            await new Promise<void>((resolve) => waiting.push(resolve));
-        }
-
-        try {
-            return await task();
-        } finally {
-            const next = waiting.shift();
-
-            if (next) {
-                next();
-            } else {
-                running -= 1;
-            }
-        }
-    };
 };
 
 // One card to its settled answer. A pending card waits out the route's
