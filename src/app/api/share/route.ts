@@ -59,6 +59,8 @@ const shareSearch = async (body: any, headers: Headers) => {
 
 // POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
 // A pruned copy of what the caller is looking at, under a short public id.
+// An account is optional, as for a search: a guest's share is unowned, so
+// nobody can switch it to snapshot or delete it.
 // `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a
 // conversation. A request that names none stores a snapshot. A live share is
 // refused when its data cards cannot all be refreshed (`liveShareRefusal` in
@@ -68,12 +70,6 @@ export const POST = async (request: Request) => {
 
     if (body?.kind === 'search') {
         return shareSearch(body, request.headers);
-    }
-
-    const user = await getUser();
-
-    if (!user) {
-        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
     const read = readStudioShareRequest(body);
@@ -88,14 +84,15 @@ export const POST = async (request: Request) => {
         return NextResponse.json(refusal.body, { status: refusal.status });
     }
 
-    const created = await createShare({ userId: user.id, ...read });
+    const user = await getUser();
+    const created = await createShare({ userId: user?.id ?? null, ...read });
 
     // Recorded after the response, so the link does not wait on analytics.
     after(() =>
         track(
             'share.create',
             shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
-            { userId: user.id, headers: request.headers },
+            { userId: user?.id ?? null, headers: request.headers },
         ),
     );
 

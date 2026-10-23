@@ -52,7 +52,7 @@ type WorkspaceToolbarProps = {
     phone: boolean;
     onNewChat: () => void;
     onCustomize: () => void;
-    // Absent for a guest (a share needs an account).
+    // Absent on a read-only share.
     onShare?: () => void;
     // A live share's caption (see LiveNote), placed after the title or alone
     // in the phone's tools row, which a canvas or card share leaves empty.

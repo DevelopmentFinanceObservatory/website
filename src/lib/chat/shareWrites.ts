@@ -36,7 +36,8 @@ export const shortId = (length = 8): string => {
 export const LIVE_CARD_TITLE = 'Live card';
 
 export type NewStudioShare = {
-    userId: string;
+    // Null for a guest's share, which no one owns.
+    userId: string | null;
     kind: StudioShareKind;
     mode: ShareMode;
     saved: SavedConversation;

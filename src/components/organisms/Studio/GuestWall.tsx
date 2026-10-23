@@ -18,8 +18,8 @@ const GuestWall = () => {
     return (
         <div className={styles.wall} role="status">
             <p className={styles.copy}>
-                You&apos;ve used your {GUEST_PROMPTS} free prompts. Sign in to keep exploring
-                Studio.
+                You&apos;ve used your {GUEST_PROMPTS} guest prompts. Sign in to keep exploring
+                Studio. It&apos;s free.
             </p>
             <Button
                 variant="dark"

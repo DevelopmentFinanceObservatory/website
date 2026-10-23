@@ -138,7 +138,8 @@ const LoginScreen = ({ next, error, providers, emailSignIn }: LoginScreenProps) 
                     style={revealIndex(2)}
                 >
                     Your canvases and conversations are saved to your account, so you can pick them
-                    up on any device. No password — sign in with an account you already have.
+                    up on any device. It&apos;s free, with no password — sign in with an account you
+                    already have.
                 </p>
 
                 <div className={styles.card} data-reveal style={revealIndex(3)}>

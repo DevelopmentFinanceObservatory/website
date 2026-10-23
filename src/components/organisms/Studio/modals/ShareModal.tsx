@@ -63,6 +63,9 @@ type ShareModalProps = {
     // has no mode choice and every link is a snapshot.
     offerLive: boolean;
     createShare: ShareLinkDeps['createShare'];
+    // The links belong to the caller, who can switch a live one to a
+    // snapshot. A guest's links are unowned and keep their mode.
+    owned: boolean;
 };
 
 const WHOLE_TABS = [
@@ -190,6 +193,7 @@ const ShareModal = ({
     data,
     offerLive,
     createShare,
+    owned,
 }: ShareModalProps) => {
     const [tab, setTab] = useState<string>(scope.kind === 'whole' ? 'conversation' : 'link');
     const [mode, setMode] = useState<ShareMode>('live');
@@ -281,7 +285,7 @@ const ShareModal = ({
     const showEmbed = scope.kind === 'whole' ? tab === 'canvas' : tab === 'embed';
     // A live link made a snapshot keeps its tab and reads as a snapshot.
     const shownMode: ShareMode = link?.status === 'ready' ? link.mode : linkMode;
-    const canSwitch = hasMode && link?.status === 'ready' && link.mode === 'live';
+    const canSwitch = owned && hasMode && link?.status === 'ready' && link.mode === 'live';
     const switchState = key ? switching[key] : undefined;
     const status = !hasMode
         ? null

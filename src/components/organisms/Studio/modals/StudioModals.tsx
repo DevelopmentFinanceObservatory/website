@@ -26,6 +26,8 @@ type StudioModalsProps = {
     // data card a share of it would carry.
     liveSharing: boolean;
     createShare: ShareLinkDeps['createShare'];
+    // Signed out: the share dialog's links are unowned.
+    guest?: boolean;
 };
 
 /**
@@ -43,6 +45,7 @@ const StudioModals = ({
     shareData,
     liveSharing,
     createShare,
+    guest = false,
 }: StudioModalsProps) => {
     const { seq } = modals;
     const editingText = modals.textCard.editingId
@@ -137,6 +140,7 @@ const StudioModals = ({
                 data={shareData}
                 offerLive={liveSharing && sharesData}
                 createShare={createShare}
+                owned={!guest}
             />
         </>
     );

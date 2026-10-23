@@ -185,6 +185,20 @@ test('Studio share writes', async (t) => {
         assert.equal(await deleteOwnedShare(db, id, 'owner'), 'not_found');
     });
 
+    await t.test('a guest’s Studio share is unowned and matches no caller', async () => {
+        const { id } = await insertStudioShare(db, {
+            userId: null,
+            kind: 'canvas',
+            mode: 'live',
+            saved,
+        });
+
+        assert.equal((await stored(id))?.userId, null);
+        assert.equal(await snapshotOwnedShare(db, id, 'owner'), 'not_found');
+        assert.equal(await deleteOwnedShare(db, id, 'owner'), 'not_found');
+        assert.equal((await stored(id))?.mode, 'live');
+    });
+
     await t.test('a search share has no owner writes', async () => {
         await db.insert(share).values([
             {
