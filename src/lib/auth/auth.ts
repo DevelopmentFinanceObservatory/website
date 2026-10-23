@@ -3,7 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 
-import { db } from '@/lib/db';
+import { counterDb, db } from '@/lib/db';
 import * as schema from '../../../db/schema';
 import { CLIENT_IP_HEADER } from '@/lib/auth/clientIp';
 import { takeCodeAllowance } from '@/lib/auth/codeLimit';
@@ -49,7 +49,7 @@ const emailOptions =
         ? null
         : emailSignInOptions(emailConfig, {
               sendMail,
-              takeAllowance: (keys) => takeCodeAllowance(db, keys),
+              takeAllowance: (keys) => takeCodeAllowance(counterDb, keys),
           });
 
 /**
@@ -121,14 +121,12 @@ export const auth = betterAuth({
                 return;
             }
 
+            const who = { userId: session.user.id, headers: ctx.headers ?? null };
+
             if (ctx.path.startsWith('/callback/')) {
-                await track(
-                    'auth.signin',
-                    { provider: ctx.params?.id ?? null },
-                    { userId: session.user.id },
-                );
+                await track('auth.signin', { provider: ctx.params?.id ?? null }, who);
             } else if (ctx.path === CODE_SIGN_IN_PATH) {
-                await track('auth.signin', { provider: 'email' }, { userId: session.user.id });
+                await track('auth.signin', { provider: 'email' }, who);
             }
         }),
     },

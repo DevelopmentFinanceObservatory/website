@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import { db } from '@/lib/db';
+import { counterDb } from '@/lib/db';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
 import {
     meterTurn,
@@ -17,8 +17,8 @@ import {
 // never reaches a client. Any non-empty token satisfies the local server.
 const STUDIO_TOKEN = process.env.STUDIO_TOKEN ?? 'dev';
 
-const giveBack = (prompter: Prompter) =>
-    refundPrompt(db, prompter).catch((error) =>
+const giveBack = (receipt: Parameters<typeof refundPrompt>[1]) =>
+    refundPrompt(counterDb, receipt).catch((error) =>
         console.error('studio: a prompt was not given back', error),
     );
 
@@ -50,7 +50,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
         const user = await getUser();
         const prompter: Prompter = user ? { email: user.email } : { address: clientIp(req) };
 
-        return { prompter, refusal: await spendPrompt(db, prompter) };
+        return spendPrompt(counterDb, prompter);
     };
 
     return meterTurn(spend, giveBack, (admit) => forward(req, { ...options, admit }));

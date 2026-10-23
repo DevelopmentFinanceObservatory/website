@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { counterDb, db } from '@/lib/db';
+import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
 import { countHit, pruneCounters, type Verdict } from './limitCounter';
@@ -10,8 +10,9 @@ import { countHit, pruneCounters, type Verdict } from './limitCounter';
  * (src/lib/proxy/forward): a fixed window counted in Postgres
  * (./limitCounter), shared by every instance. An IPv6 client is counted by
  * its /64 (see limiterBucket). A count runs on its own small pool
- * (src/lib/db's counterDb), which gives up after 500 ms on a query and 2 s
- * on a connection. A database error or a timed-out count fails open: the
+ * (src/lib/db's counterDb), which gives up after 400 ms in Postgres, 500 ms
+ * in the client, or 2 s waiting for a connection. A database error or a
+ * timed-out count fails open: the
  * platform's own doors are the backstop, and the limit is a courtesy.
  *
  * The window and the allowance per surface are env-tunable:
@@ -45,15 +46,15 @@ let lastPrune = 0;
  * Count one call for `ip` on `surface` and say whether it is within the
  * allowance. A database that fails or is slow lets the call through. Each
  * instance also deletes dead counters, at most once an hour, the Studio's
- * included (every Studio call passes here too). The delete runs on the main
- * pool, which has no timeout to cut it short.
+ * included (every Studio call passes here too). The delete uses the same
+ * bounded counter pool as the counts.
  */
 export const hit = async (surface: Surface, ip: string): Promise<Verdict> => {
     const limit = LIMITS[surface];
 
     if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
         lastPrune = Date.now();
-        pruneCounters(db).catch((error) => console.warn('limit counters not pruned', error));
+        pruneCounters(counterDb).catch((error) => console.warn('limit counters not pruned', error));
     }
 
     try {

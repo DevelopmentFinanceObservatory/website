@@ -25,6 +25,9 @@ export async function register(): Promise<void> {
 
     await import('../sentry.server.config');
 
+    const { registerRequestLogging } = await import('./lib/proxy/requestLog');
+    registerRequestLogging();
+
     const { assertTrustedHops } = await import('./lib/proxy/caller');
 
     try {

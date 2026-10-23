@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
-import { buildRuntimePool } from '../../../db/connection';
+import { buildCounterPool, buildRuntimePool } from '../../../db/connection';
 import * as schema from '../../../db/schema';
 
 /**
@@ -18,32 +18,21 @@ const globalForDb = globalThis as unknown as { pool?: Pool; counterPool?: Pool }
 
 const pool = globalForDb.pool ?? buildRuntimePool();
 
-// Every /api and /mcp call counts against its address's limit
-// (src/lib/proxy/rateLimit), so the counts get two connections of their own
-// and give up fast: a count fails, instead of running later, when it waits
-// longer than COUNTER_CONNECT_MS for a connection or COUNTER_QUERY_MS for its
-// answer. The main pool's sessions and history do not queue behind the
-// counts. The connect bound is the looser one because it also covers opening
-// a connection through the Cloud SQL connector, which a quiet instance does
-// again after 30 s idle.
-const COUNTER_CONNECT_MS = 2_000;
-const COUNTER_QUERY_MS = 500;
-
-const counterPool =
-    globalForDb.counterPool ??
-    buildRuntimePool(process.env, {
-        max: 2,
-        connectionTimeoutMillis: COUNTER_CONNECT_MS,
-        query_timeout: COUNTER_QUERY_MS,
-    });
+// Rate limits, Studio prompt allowances and sign-in code caps get two
+// connections of their own through buildCounterPool. They give up in 400 ms
+// in Postgres, 500 ms in the client, or 2 s while waiting for a connection.
+// The main pool's sessions and history do not queue behind counters. The connect bound is looser because it
+// also covers opening a connection through the Cloud SQL connector, which a
+// quiet instance does again after 30 s idle.
+const counterPool = globalForDb.counterPool ?? buildCounterPool();
 
 globalForDb.pool = pool;
 globalForDb.counterPool = counterPool;
 
-/** Accounts, conversation history, shares, the Studio's prompt allowances. */
+/** Accounts, conversation history, and shares. */
 export const db = drizzle(pool, { schema });
 
-/** The per-address rate-limit counters only. */
+/** Per-address rate limits, Studio prompt allowances and sign-in code caps. */
 export const counterDb = drizzle(counterPool, { schema });
 
 export type Db = typeof db;

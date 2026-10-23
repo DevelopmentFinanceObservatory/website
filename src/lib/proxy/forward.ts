@@ -25,6 +25,7 @@ import { hit, rateHeaders, type Surface } from './rateLimit';
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
+ *   /openapi.json, /codes/*          → SEARCH_API_BASE, the same paths
  *   /api/v1/studio/turn|interrupt|cancel|composition
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *

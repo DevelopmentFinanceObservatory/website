@@ -12,7 +12,7 @@ import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 // A search result's link: dataset references only, no numbers. The search
 // page is public, so an account is optional here (the share is simply
 // unowned without one).
-const shareSearch = async (body: any) => {
+const shareSearch = async (body: any, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
     if (!request) {
@@ -21,9 +21,14 @@ const shareSearch = async (body: any) => {
 
     const user = await getUser();
 
+    let created: { id: string };
+
     try {
-        return NextResponse.json(
-            await createSearchShare(user?.id ?? null, request.mode, request.query, request.parts),
+        created = await createSearchShare(
+            user?.id ?? null,
+            request.mode,
+            request.query,
+            request.parts,
         );
     } catch (error) {
         // The platform refused the register/mint — say which, don't store a
@@ -39,6 +44,17 @@ const shareSearch = async (body: any) => {
 
         return NextResponse.json({ error: 'platform_refused', detail: message }, { status: 502 });
     }
+
+    // Recorded after the response, so the link does not wait on analytics.
+    after(() =>
+        track(
+            'share.create',
+            shareCreateProps({ id: created.id, kind: 'search', mode: request.mode }),
+            { userId: user?.id ?? null, headers },
+        ),
+    );
+
+    return NextResponse.json(created);
 };
 
 // POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
@@ -51,7 +67,7 @@ export const POST = async (request: Request) => {
     const body = await request.json().catch(() => null);
 
     if (body?.kind === 'search') {
-        return shareSearch(body);
+        return shareSearch(body, request.headers);
     }
 
     const user = await getUser();
@@ -79,7 +95,7 @@ export const POST = async (request: Request) => {
         track(
             'share.create',
             shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
-            { userId: user.id },
+            { userId: user.id, headers: request.headers },
         ),
     );
 
