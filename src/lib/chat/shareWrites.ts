@@ -4,8 +4,10 @@ import { and, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { share } from '../../../db/schema.ts';
+import { limiterBucket } from '../proxy/caller.ts';
+import { reserveHit, type CounterDb } from '../proxy/limitCounter.ts';
 import type { SavedConversation } from './history.ts';
-import { isStudioKind, type ShareMode, type StudioShareKind } from './shareMode.ts';
+import { GUEST_SHARES, isStudioKind, type ShareMode, type StudioShareKind } from './shareMode.ts';
 import { pruneForShare } from './sharePrune.ts';
 
 /**
@@ -43,6 +45,16 @@ export type NewStudioShare = {
     saved: SavedConversation;
     cardId?: string;
 };
+
+const DAY_S = 86_400;
+
+/**
+ * Spend one of today's GUEST_SHARES for the guest at `address`, counted by
+ * network (limiterBucket) per UTC day. False when they are spent. Throws what
+ * the database throws.
+ */
+export const spendGuestShare = async (db: CounterDb, address: string): Promise<boolean> =>
+    (await reserveHit(db, `share-guest:${limiterBucket(address)}`, GUEST_SHARES, DAY_S)).admitted;
 
 export const insertStudioShare = async (
     db: ShareDb,

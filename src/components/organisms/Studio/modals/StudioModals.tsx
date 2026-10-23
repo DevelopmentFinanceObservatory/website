@@ -26,7 +26,7 @@ type StudioModalsProps = {
     // data card a share of it would carry.
     liveSharing: boolean;
     createShare: ShareLinkDeps['createShare'];
-    // Signed out: the share dialog's links are unowned.
+    // Signed out: the share dialog makes unowned snapshots only.
     guest?: boolean;
 };
 
@@ -138,9 +138,9 @@ const StudioModals = ({
                 scope={modals.share.scope}
                 title={title}
                 data={shareData}
-                offerLive={liveSharing && sharesData}
+                offerLive={liveSharing && sharesData && !guest}
                 createShare={createShare}
-                owned={!guest}
+                guest={guest}
             />
         </>
     );

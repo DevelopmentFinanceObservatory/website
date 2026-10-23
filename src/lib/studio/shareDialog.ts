@@ -31,6 +31,7 @@ export type ShareRefusal =
     | { code: 'live_cards_blocked'; cardIds: string[] }
     | { code: 'live_too_many_cards'; limit: number; count: number }
     | { code: 'live_unavailable' }
+    | { code: 'guest_limit' }
     | { code: 'failed' };
 
 /** What `POST /api/share` came to: the share's id, or the refusal. */
@@ -54,13 +55,14 @@ export type Withdrawal =
  * Its URL is not shown yet. `ready`: the link to copy, in the mode it has
  * now, with the number of cards whose check failed for a passing reason.
  * `withdrawn`: no link, and why. `failed`: the share was not made and a
- * second try may make it.
+ * second try may make it. `limited`: a guest has made today's GUEST_SHARES.
  */
 export type ShareLink =
     | { status: 'checking'; id: string; checked: number; total: number }
     | { status: 'ready'; id: string; mode: ShareMode; unchecked: number }
     | { status: 'withdrawn'; withdrawal: Withdrawal }
-    | { status: 'failed' };
+    | { status: 'failed' }
+    | { status: 'limited' };
 
 /** The dialog's key for a link, which keeps one mode's link from showing for
  *  the other mode and one card's from showing for another. */
@@ -116,7 +118,9 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
         return { refusal: { code: error, limit, count } };
     }
 
-    return error === 'live_unavailable' ? { refusal: { code: error } } : FAILED;
+    return error === 'live_unavailable' || error === 'guest_limit'
+        ? { refusal: { code: error } }
+        : FAILED;
 };
 
 /**
@@ -147,6 +151,7 @@ const withdrawalOf = (refusal: ShareRefusal, cards: SharedCard[]): Withdrawal | 
             return { reason: 'limit', limit: refusal.limit, count: refusal.count };
         case 'live_unavailable':
             return { reason: 'unavailable' };
+        case 'guest_limit':
         case 'failed':
             return null;
     }
@@ -205,7 +210,11 @@ export const openShareLink = async (
     if ('refusal' in mint) {
         const withdrawal = withdrawalOf(mint.refusal, 'cards' in mint ? mint.cards : []);
 
-        report(withdrawal ? { status: 'withdrawn', withdrawal } : { status: 'failed' });
+        report(
+            withdrawal
+                ? { status: 'withdrawn', withdrawal }
+                : { status: mint.refusal.code === 'guest_limit' ? 'limited' : 'failed' },
+        );
 
         return;
     }

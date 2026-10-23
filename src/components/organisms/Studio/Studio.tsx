@@ -73,7 +73,7 @@ export type StudioProps = {
     // from history, a fresh fork).
     openId?: string;
     // Signed out: GUEST_PROMPTS prompts, then the wall; nothing is saved
-    // (that needs an account), and shares are unowned.
+    // (that needs an account), and shares are unowned snapshots.
     guest?: boolean;
     // A gallery item: the same read-only sheet, plus the one action a
     // curated session exists for — carrying it on in your own Studio.
@@ -122,7 +122,7 @@ const Studio = ({
     const sharedSaved = shared?.saved;
 
     const readOnly = !!shared;
-    // What a signed-in user has and a guest lacks: history, saving, sharing.
+    // What a signed-in user has and a guest lacks: history and saving.
     const account = !readOnly && !guest;
     // A canvas-only or one-card share: no chat at all — the sheet takes the
     // whole width and only the filters stay above it.

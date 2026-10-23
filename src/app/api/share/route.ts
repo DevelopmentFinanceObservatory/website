@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
-import { after, NextResponse } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
-import { createShare, liveShareRefusalFor } from '@/lib/chat/shareStore';
+import { createShare, liveShareRefusalFor, spendGuestShare } from '@/lib/chat/shareStore';
+import { clientIp } from '@/lib/proxy/forward';
 import { track } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
@@ -59,13 +60,14 @@ const shareSearch = async (body: any, headers: Headers) => {
 
 // POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
 // A pruned copy of what the caller is looking at, under a short public id.
-// An account is optional, as for a search: a guest's share is unowned, so
-// nobody can switch it to snapshot or delete it.
+// An account is optional. A guest's share has no owner, so nobody can switch
+// or remove it: a guest gets snapshots only (403 `live_needs_account`), and
+// GUEST_SHARES a day per network address (429 `guest_limit`).
 // `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a
 // conversation. A request that names none stores a snapshot. A live share is
 // refused when its data cards cannot all be refreshed (`liveShareRefusal` in
 // src/lib/studio/liveShare), and the refusal names the cards in the way.
-export const POST = async (request: Request) => {
+export const POST = async (request: NextRequest) => {
     const body = await request.json().catch(() => null);
 
     if (body?.kind === 'search') {
@@ -78,13 +80,24 @@ export const POST = async (request: Request) => {
         return NextResponse.json(read, { status: 400 });
     }
 
+    const user = await getUser();
+
+    if (!user) {
+        if (read.mode === 'live') {
+            return NextResponse.json({ error: 'live_needs_account' }, { status: 403 });
+        }
+
+        if (!(await spendGuestShare(clientIp(request)))) {
+            return NextResponse.json({ error: 'guest_limit' }, { status: 429 });
+        }
+    }
+
     const refusal = read.mode === 'live' ? await liveShareRefusalFor(read) : null;
 
     if (refusal) {
         return NextResponse.json(refusal.body, { status: refusal.status });
     }
 
-    const user = await getUser();
     const created = await createShare({ userId: user?.id ?? null, ...read });
 
     // Recorded after the response, so the link does not wait on analytics.
