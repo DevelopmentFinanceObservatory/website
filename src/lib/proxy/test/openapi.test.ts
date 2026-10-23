@@ -1,8 +1,9 @@
 /**
  * `openapi.ts`: the site's /openapi.json keeps the search, datasets and
  * graph paths under /api/v1 and /codes/* where it is, drops every other path
- * and the schemas only those used, and addresses the document to its own
- * host. Anything but a 200 JSON document passes through untouched.
+ * and the schemas only those used, and drops `servers`, so a client calls
+ * the host that served it. Anything but a 200 JSON document passes through
+ * untouched.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -27,6 +28,7 @@ const op = (schema: string) => ({
 const DOCUMENT = {
     openapi: '3.1.0',
     info: { title: 'DFO APIs', version: '1' },
+    servers: [{ url: 'https://dfo-apis.example' }],
     paths: {
         '/api/search/resolve': op('Resolution'),
         '/api/datasets': op('Manifest'),
@@ -53,10 +55,10 @@ const DOCUMENT = {
     },
 };
 
-test('publicOpenApi: keeps the three surfaces under /api/v1 and /codes, addressed to its own host', () => {
+test('publicOpenApi: keeps the three surfaces under /api/v1 and /codes, and drops the upstream servers', () => {
     const out = publicOpenApi(structuredClone(DOCUMENT));
 
-    assert.deepEqual(out.servers, [{ url: '/' }]);
+    assert.equal(Object.hasOwn(out, 'servers'), false);
     assert.deepEqual(out.paths, {
         '/api/v1/search/resolve': DOCUMENT.paths['/api/search/resolve'],
         '/api/v1/datasets': DOCUMENT.paths['/api/datasets'],
@@ -111,7 +113,7 @@ test('rewriteOpenApi: rewrites a 200 JSON document with a short public cache lif
     assert.equal(out.status, 200);
     assert.equal(out.headers.get('cache-control'), OPENAPI_CACHE_CONTROL);
     assert.equal(out.headers.get('content-length'), null);
-    assert.equal(out.headers.get('x-dfo-trace-id'), null);
+    assert.equal(out.headers.get('x-dfo-trace-id'), 't1');
     assert.equal(out.headers.get('x-dfo-commit'), 'abc');
     assert.deepEqual(await out.json(), publicOpenApi(structuredClone(DOCUMENT)));
 });

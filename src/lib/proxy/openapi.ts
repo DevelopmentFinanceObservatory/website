@@ -10,13 +10,15 @@ import { SEARCH_API_SURFACES } from './surfaces.ts';
  * address. Every other path is dropped: the skills API, which the site does
  * not proxy, and the presentation API, whose component reads the site
  * proxies for the Studio (src/app/api/presentation/components/[id]) but does
- * not publish. The component schemas only those paths used go with them. `servers` is the document's own host, so a client
- * generated from it calls whichever environment served it.
+ * not publish. The component schemas only those paths used go with them.
+ * The document carries no `servers`, so a client generated from it calls the
+ * host that served it, whichever environment that is.
  */
 
 // dfo-apis deploys on its own schedule, so a cached copy goes stale in
-// minutes. dfo-apis leaves x-dfo-trace-id off a shared-cacheable response.
-export const OPENAPI_CACHE_CONTROL = 'public, max-age=300';
+// minutes. Private, since forward() adds the caller's own X-RateLimit-*
+// headers to the response.
+export const OPENAPI_CACHE_CONTROL = 'private, max-age=300';
 
 // Paths the site serves at the same address as dfo-apis.
 const ROOT_PATHS = ['/codes/'];
@@ -111,7 +113,11 @@ export const publicOpenApi = (document: OpenApiDocument): OpenApiDocument => {
             return kept ? [[kept, item]] : [];
         }),
     );
-    const out: OpenApiDocument = { ...document, servers: [{ url: '/' }], paths };
+    const out: OpenApiDocument = { ...document, paths };
+
+    // An upstream `servers` names dfo-apis's host, and a relative "/" leads
+    // some generators to `//api/v1/...`.
+    delete out.servers;
 
     if (document.components?.schemas) {
         const { schemas, ...others } = document.components;
@@ -152,9 +158,8 @@ export const rewriteOpenApi = async (upstream: Response): Promise<Response> => {
 
     const headers = new Headers(upstream.headers);
 
-    for (const name of ['content-length', 'content-encoding', 'x-dfo-trace-id']) {
-        headers.delete(name);
-    }
+    headers.delete('content-length');
+    headers.delete('content-encoding');
 
     headers.set('cache-control', OPENAPI_CACHE_CONTROL);
 
