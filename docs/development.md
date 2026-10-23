@@ -208,11 +208,20 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 | `pnpm optimize:svg`     | SVGO over `src/assets` (run after adding)        |
 | `pnpm db:generate`      | Generate a migration from `db/schema.ts`         |
 | `pnpm db:migrate:local` | Apply migrations to the local database           |
-| `pnpm graph:types`      | Regenerate the graph types from the snapshot     |
-| `pnpm graph:schema`     | Refresh the graph schema snapshot from an apis   |
 
-`pnpm graph:schema http://localhost:8083` reads the snapshot from dev apis
-through the proxy in [Reach the dev APIs](#reach-the-dev-apis).
+## API client package
+
+The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock, so `pnpm-lock.yaml` carries the new tarball's integrity:
+
+```sh
+cd <sdk checkout>/typescript
+pnpm install && pnpm run build
+pnpm pack --pack-destination <website checkout>/vendor
+cd <website checkout>
+pnpm install
+```
+
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. Commit the tarball and the lockfile together.
 
 ## Conventions
 

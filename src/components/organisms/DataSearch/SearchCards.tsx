@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs as `any` and reads only the members it renders, tolerating any that is missing */
 'use client';
 
 import classNames from 'classnames';
@@ -21,6 +21,7 @@ import {
     specOrigin,
     statVarsUnreadable,
 } from '@/lib/search/view';
+import { knownPart, type ParsedPart, type Part } from '@/lib/search/types';
 
 // A card's meta line, its coverage then its origin (specOrigin beside the
 // spec's own sentence, shapeOrigin beside any other title). The line clamps
@@ -45,21 +46,21 @@ const CardMeta = ({ spec, origin }: { spec: any; origin: string | null }) => {
 // Takes one part. The caller (DataSearch for a no_data part, or the idle
 // prompt's suggestion preview reading parts[0]) already knows which.
 const SearchCards = ({
-    part,
+    part: givenPart,
     partIndex,
     onPick,
     onEditParsed,
     onStudio,
     question,
 }: {
-    part: any;
+    part: Part | null;
     // Omitted for the idle prompt's suggestion preview, which has no part to
     // edit back into.
     partIndex?: number;
     onPick: (text?: string) => void;
     // Posts an entity_ambiguous pick as a parsed entry, the single-part
     // plan's escape hatch when there's no slot token to hang a picker off.
-    onEditParsed?: (partIndex: number, editedPart: any) => void;
+    onEditParsed?: (partIndex: number, editedPart: ParsedPart) => void;
     // Hands the question and the datasets on screen to Studio (DataSearch's
     // openStudio); the no_data Studio callout's button is hidden without it.
     onStudio?: () => void;
@@ -67,6 +68,8 @@ const SearchCards = ({
     // unreadable subset's retry.
     question?: string;
 }) => {
+    const part = knownPart(givenPart);
+
     // A definite background suggestion renders as a single pickable card.
     if (part?.status === 'definite' && part.spec) {
         const spec = part.spec;

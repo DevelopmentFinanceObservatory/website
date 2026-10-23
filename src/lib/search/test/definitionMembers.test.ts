@@ -5,6 +5,8 @@ import { definitionMembersReader } from '../definitionMembers.ts';
 import type { DefinitionMembers } from '../searchClient.ts';
 
 const envelope: DefinitionMembers = {
+    schema_version: 1,
+    spec_id: 'spec_1',
     members: [
         { ref: 'dcid:Count_Person_Female', label: 'Female population', roles: [], constraints: {} },
         { ref: 'dcid:Count_Person_Male', label: null, roles: [], constraints: {} },
@@ -20,7 +22,7 @@ test('definitionMembersReader reads each spec once and hands back bare dcids', a
         calls += 1;
         return envelope;
     });
-    const spec = { spec_id: 'spec_1', definition: {}, shape: { member_digest: 'sha256:ab' } };
+    const spec = { spec_id: 'spec_1', definition: null, shape: { member_digest: 'sha256:ab' } };
 
     assert.deepEqual(await read(spec), {
         ok: true,

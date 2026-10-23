@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import classNames from 'classnames';
@@ -70,7 +69,12 @@ import {
     handoffSeeds,
     studioHref,
 } from '@/lib/search/studioHandoff';
-import type { SentenceToken } from '@/lib/search/types';
+import {
+    hasDefiniteSpec,
+    isKnownPart,
+    type ResolveResponse,
+    type SentenceToken,
+} from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
 import { writeSeeds } from '@/lib/studio/seedStore';
@@ -233,7 +237,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // remounted — swapped-in DOM nodes the initial observer never saw.
     const sectionRef = useReveal<HTMLElement>(12, [phase, promptEpoch]);
     const [draft, setDraft] = useState('');
-    const [suggest, setSuggest] = useState<any>(null);
+    const [suggest, setSuggest] = useState<ResolveResponse | null>(null);
     const [suggestPending, setSuggestPending] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
@@ -736,19 +740,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // and would otherwise double its rows — the composed plan already drops
     // a folded part from the heading/variable lines the same way).
     const seenSpecIds = new Set<string>();
-    const definiteParts = parts
-        .filter((part) => part.part?.status === 'definite' && part.hydratedSpec)
-        .filter((part) => {
-            const specId = part.hydratedSpec!.spec_id;
+    const definiteParts = parts.filter(hasDefiniteSpec).filter((part) => {
+        const specId = part.hydratedSpec.spec_id;
 
-            if (seenSpecIds.has(specId)) {
-                return false;
-            }
+        if (seenSpecIds.has(specId)) {
+            return false;
+        }
 
-            seenSpecIds.add(specId);
+        seenSpecIds.add(specId);
 
-            return true;
-        });
+        return true;
+    });
     // True while any definite part's observations are still streaming in
     // (the base run still loading, or an edit post in flight). The preview
     // table shows its pending line instead of the omission copy while that
@@ -756,8 +758,8 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const observationsPending = definiteParts.some((part) => part.observationsPending);
     const liveNote = snapshotLiveNote(
         definiteParts.map((part) => ({
-            specId: part.hydratedSpec!.spec_id,
-            name: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
+            specId: part.hydratedSpec.spec_id,
+            name: part.variableText ?? part.hydratedSpec.shape?.label ?? '—',
         })),
         unreadableSnapshots,
     );
@@ -765,13 +767,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // Share: a link for the definite parts on screen (every one, in part
     // order — a folded part keeps its own position). No numbers leave the
     // page; the server stores the datasets they resolved to.
-    const sharedParts = parts.filter(
-        (part) => part.part?.status === 'definite' && part.hydratedSpec,
-    );
+    const sharedParts = parts.filter(hasDefiniteSpec);
     const sharedDatasets = sharedParts.map((part) => ({
         partIndex: part.index,
-        specId: part.hydratedSpec!.spec_id,
-        label: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
+        specId: part.hydratedSpec.spec_id,
+        label: part.variableText ?? part.hydratedSpec.shape?.label ?? '—',
     }));
     const createShare: CreateSearchShare = (mode) => {
         const sendAction = startAction();
@@ -805,7 +805,13 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const rawPlan = response?.sentence_plan ?? [];
     const isSlotted = (index: number) =>
         rawPlan.some((token) => token.kind === 'slot' && tokenPart(token, parts.length) === index);
-    const candidatesParts = parts.filter((part) => part.part?.status === 'candidates');
+    const candidatesParts = parts.flatMap((hydrated) => {
+        const { part } = hydrated;
+
+        return part && isKnownPart(part) && part.status === 'candidates'
+            ? [{ ...hydrated, part }]
+            : [];
+    });
 
     // Collapses to the first no_data part whose callout is the generic
     // 'studio' hand-off panel (identical text per part). Flagged/alternate
@@ -896,7 +902,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                             )}
                             {suggest && (
                                 <SearchCards
-                                    part={suggest?.parts?.[0] ?? null}
+                                    part={
+                                        suggest.kind === 'resolution'
+                                            ? (suggest.parts[0] ?? null)
+                                            : null
+                                    }
                                     onPick={applySuggestion}
                                 />
                             )}
@@ -1139,25 +1149,22 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 />
                             ))}
 
-                            {candidatesParts.map(
-                                (part) =>
-                                    part.part && (
-                                        <ReadingCards
-                                            key={part.index}
-                                            part={part.part}
-                                            prefix={parts.length > 1 ? part.variableText : null}
-                                            onPick={(spec) => {
-                                                startAction()({
-                                                    action: 'pick_reading',
-                                                    partIndex: part.index,
-                                                    specId: spec.spec_id,
-                                                });
-                                                pickCandidate(part.index, spec);
-                                            }}
-                                            onRetry={() => submitQuery(query, 'retry')}
-                                        />
-                                    ),
-                            )}
+                            {candidatesParts.map((part) => (
+                                <ReadingCards
+                                    key={part.index}
+                                    part={part.part}
+                                    prefix={parts.length > 1 ? part.variableText : null}
+                                    onPick={(spec) => {
+                                        startAction()({
+                                            action: 'pick_reading',
+                                            partIndex: part.index,
+                                            specId: spec.spec_id,
+                                        });
+                                        pickCandidate(part.index, spec);
+                                    }}
+                                    onRetry={() => submitQuery(query, 'retry')}
+                                />
+                            ))}
 
                             {definiteParts.length > 0 && (
                                 <SearchTable

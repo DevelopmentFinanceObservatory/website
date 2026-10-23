@@ -13,6 +13,7 @@
  * at most once an hour however many people open it.
  */
 
+import type { ProblemDetails } from '@developmentfinance/client/wire';
 import { unstable_cache } from 'next/cache.js';
 import { cache } from 'react';
 
@@ -139,7 +140,7 @@ const cachedGraphRead = unstable_cache(
         });
 
         if (res.status !== 200) {
-            const body = (await res.json().catch(() => null)) as { code?: string } | null;
+            const body = (await res.json().catch(() => null)) as Partial<ProblemDetails> | null;
 
             throw new GraphAnswer(res.status, body?.code);
         }

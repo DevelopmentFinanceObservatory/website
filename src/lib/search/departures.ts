@@ -3,8 +3,8 @@
  *  each offers. No React. */
 
 import { offersStudioCallout } from './resultNotes.ts';
-import { tokenPart } from './sentencePlan.ts';
-import type { Departure, Part, SentenceSegment, SentenceToken } from './types.ts';
+import { tokenPart, tokenSegment } from './sentencePlan.ts';
+import type { Departure, NoDataPart, Part, SentenceSegment, SentenceToken } from './types.ts';
 
 export type SentenceBlock = {
     segment: Exclude<SentenceSegment, 'departure'>;
@@ -25,12 +25,14 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
     const blocks: SentenceBlock[] = [];
 
     for (const token of plan ?? []) {
-        if (token.segment === 'departure') continue;
+        const segment = tokenSegment(token);
+
+        if (segment === 'departure') continue;
 
         const last = blocks.at(-1);
 
-        if (last?.segment === token.segment) last.tokens.push(token);
-        else blocks.push({ segment: token.segment, tokens: [token] });
+        if (last?.segment === segment) last.tokens.push(token);
+        else blocks.push({ segment, tokens: [token] });
     }
 
     return blocks
@@ -111,7 +113,7 @@ const isVisibleSlotOf = (
 
     return (
         token.kind === 'slot' &&
-        (token.segment === 'heading' || token.segment === 'byline') &&
+        ['heading', 'byline'].includes(tokenSegment(token)) &&
         token.text.trim() !== '' &&
         (owner === partIndex || owner === null)
     );
@@ -196,7 +198,7 @@ export type AnswerDeparture = {
  *  `no_data` and `restatement` decide whether its callout offers Studio. */
 export function answerDepartures(
     parts: readonly (Pick<Part, 'status' | 'variable_text' | 'departures'> &
-        Partial<Pick<Part, 'no_data' | 'restatement'>>)[],
+        Partial<Pick<Part, 'restatement'> & Pick<NoDataPart, 'no_data'>>)[],
     plan: readonly SentenceToken[] | null | undefined,
 ): AnswerDeparture[] {
     const several = parts.length > 1;

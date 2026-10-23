@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flat page Spec, typed shallowly like the rest of the engine-contract layer */
 /**
  * The props of the search usage events (docs/analytics.md): `search.query`,
  * `search.empty`, `search.edit` and `search.studio_handoff` all describe one
@@ -25,16 +24,19 @@
  */
 
 import { fitsProps } from '../events/limits.ts';
-import type {
-    DeclinedReason,
-    HydratedPart,
-    IdentityBinding,
-    OperationVerb,
-    Resolution,
-    ResolveResponse,
-    Spec,
-    SpecIdentity,
+import {
+    type DeclinedReason,
+    hasDefiniteSpec,
+    type HydratedPart,
+    type IdentityBinding,
+    knownPart,
+    type OperationVerb,
+    type Resolution,
+    type ResolveResponse,
+    type Spec,
+    type SpecIdentity,
 } from './types.ts';
+import { statVarsUnreadable } from './view.ts';
 
 /** How many entity terms a refused part keeps. */
 export const EVENT_SAMPLE = 3;
@@ -187,13 +189,13 @@ const askedFor = (
         measure: identity.shape,
         filters,
         entities: Object.fromEntries(
-            Object.entries(identity.entities).map(([role, members]) => {
+            Object.entries(identity.entities ?? {}).map(([role, members]) => {
                 const group = groups?.[role];
 
                 return [
                     role,
                     {
-                        group: group ? { dcid: group.ref, label: group.label } : null,
+                        group: group ? { dcid: group.ref ?? null, label: group.label } : null,
                         sample: sample(members),
                         count: members.length,
                     },
@@ -227,9 +229,7 @@ export function searchEventProps({
     const operations = [
         ...new Set(parts.flatMap((part) => (part.part?.operations ?? []).map((op) => op.verb))),
     ];
-    const definite = parts
-        .filter((part) => part.part?.status === 'definite' && part.hydratedSpec)
-        .map((part) => part.hydratedSpec as any);
+    const definite = parts.filter(hasDefiniteSpec).map((part) => part.hydratedSpec);
     const resolve = (rung: Rung) =>
         definite.map((spec) => {
             const sources: string[] = (spec.resolution?.resolved_sources ?? []).map(
@@ -239,8 +239,11 @@ export function searchEventProps({
             const asked = askedFor(spec.identity, spec.entity_groups);
             const counts = {
                 specId: spec.spec_id,
-                // The served members once settled, else the family's count.
-                statVarCount: spec.stat_vars?.served_count ?? spec.stat_vars?.member_count ?? 0,
+                // The served members once settled, else the family's count;
+                // none for a spec the site could not read.
+                statVarCount: statVarsUnreadable(spec)
+                    ? 0
+                    : (spec.stat_vars?.served_count ?? spec.stat_vars?.member_count ?? 0),
                 entityCount: spec.resolution?.resolved_entities?.length ?? 0,
                 sourceCount: sources.length,
             };
@@ -270,14 +273,19 @@ export function searchEventProps({
         });
     const refused = parts
         .filter((part) => part.part && part.part.status !== 'definite')
-        .map((part) => ({
-            variableText: part.variableText && clip(part.variableText, MAX_TERM),
-            status: part.part!.status,
-            reason: part.part!.no_data?.reason ?? part.part!.unsupported?.code ?? null,
-            entityTerms: sample(part.part!.no_data?.entity_terms ?? []).map((term) =>
-                clip(term, MAX_TERM),
-            ),
-        }));
+        .map((part) => {
+            const known = knownPart(part.part);
+            const noData = known?.status === 'no_data' ? known.no_data : undefined;
+
+            return {
+                variableText: part.variableText && clip(part.variableText, MAX_TERM),
+                status: part.part!.status,
+                reason:
+                    noData?.reason ??
+                    (known?.status === 'unsupported' ? known.unsupported.code : null),
+                entityTerms: sample(noData?.entity_terms ?? []).map((term) => clip(term, MAX_TERM)),
+            };
+        });
 
     const runProps = (rung: Rung): Partial<SearchSettleProps> => {
         if (!run) {

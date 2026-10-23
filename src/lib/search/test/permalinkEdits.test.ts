@@ -10,7 +10,7 @@ const identity: DatasetResubmitEntry = {
     variable_text: 'ODA disbursements',
     identity: {
         identity_version: 'spec1',
-        shape: {},
+        shape: { kind: 'statvar_schema' },
         slots: [],
         entities: { origin: ['country/FRA'] },
         requested_window: { kind: 'all' },
@@ -45,7 +45,7 @@ const yearEdit: DatasetResubmitEntry = {
     variable_text: 'GDP growth',
     identity: {
         identity_version: 'spec1',
-        shape: {},
+        shape: { kind: 'statvar_schema' },
         slots: [],
         entities: {},
         requested_window: { kind: 'range', start_year: 2010 },

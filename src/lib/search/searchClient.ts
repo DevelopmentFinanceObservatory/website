@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- turns unvalidated response bodies and stream events into the page's shapes, so bodies are `any` */
 /**
  * Browser-side search client for the /prototype gut-check page.
  *
@@ -10,10 +10,33 @@
  * so no CORS setup is needed. Override NEXT_PUBLIC_SEARCH_API_BASE only to hit a
  * remote engine origin directly.
  *
- * MIRROR: A deliberately-shallow type layer of the engine contract. See the
- * fuller types in `lib/search/types.ts` (source of truth: the dfo-apis Search
- * API schema). Keep this layer in sync as the contract evolves.
+ * The SSE event types below are hand-written, since the OpenAPI document does
+ * not describe the stream. The response, slot key and Datasets door types come
+ * from `@developmentfinance/client/wire`, generated from that document, through
+ * `lib/search/types.ts` or directly.
  */
+
+import type {
+    ArtifactEntryModel,
+    CoverageDimension,
+    DatasetResubmitInput,
+    EnrichmentOptionModel,
+    FormatOptionModel,
+    Manifest,
+    MembersEnvelope,
+    MintOptions,
+    MintRequest,
+    OptionsEnvelope,
+    OptionsRequest,
+    OutputOptionsModel,
+    ProblemDetails,
+    ProblemIssue,
+    RawTextInput,
+    ServedMember,
+    SlotKey,
+    SlotOption,
+    Spec as WireSpec,
+} from '@developmentfinance/client/wire';
 
 import { datasetsFetch } from './datasetsFetch.ts';
 import { pollOperation } from './operationPoll.ts';
@@ -25,43 +48,39 @@ import {
     type VersionLinkDocument,
     type VersionLinkOutcome,
 } from './versionLink.ts';
-import type {
-    Assumption,
-    DatasetResubmitEntry,
-    LateDepartures,
-    EntityGroup,
-    EntityRoleKey,
-    Frame,
-    Operation,
-    Part,
-    PlaceOptionsScope,
-    Resolution,
-    ResolveStatus,
-    RoleAxis,
-    SentenceToken,
-    SpecObservations,
-    Warning,
-} from './types';
+import {
+    type Assumption,
+    type Coverage,
+    type EntityGroup,
+    type EntityRoleKey,
+    type FacetOptionsEntry,
+    type Frame,
+    isKnownPart,
+    type Known,
+    type LateDepartures,
+    type Operation,
+    type Part,
+    type PartSpec,
+    type PlaceOptionsScope,
+    type Resolution,
+    type ResolveResponse,
+    type ResolveStatus,
+    type RoleAxis,
+    type SentenceToken,
+    type Slot,
+    type SlotOptions,
+    type Spec,
+    type SpecIdentity,
+    type SpecObservations,
+    type Warning,
+} from './types.ts';
 
 export const SEARCH_BASE = process.env.NEXT_PUBLIC_SEARCH_API_BASE ?? '';
 
-// Deliberately shallow types: the gut-check renders whatever the engine sends,
-// so only the fields the page dereferences are typed; the rest stays `any`.
-export type SlotKey = {
-    axis: string;
-    property: { ref: string; label: string } | null;
-    label: string;
-};
+export type { SlotKey };
 
 // The stream's sentence plans carry the same token shape as the response's.
 export type { SentenceToken };
-
-export type SlotOptionsData = {
-    key: SlotKey;
-    options: any[];
-    truncated: boolean;
-    source?: 'observed' | 'seed';
-};
 
 export type SearchEvent =
     | {
@@ -94,7 +113,7 @@ export type SearchEvent =
           label: string;
           slot_keys: SlotKey[];
           sentence_plan: SentenceToken[];
-          slot_options: SlotOptionsData[];
+          slot_options: SlotOptions[];
           refine_supported: boolean;
       }
     | {
@@ -108,7 +127,7 @@ export type SearchEvent =
           variable_index: number;
           spec_id: string;
           sentence_plan: SentenceToken[];
-          slots: any[];
+          slots: Slot[];
       }
     | {
           kind: 'step';
@@ -117,18 +136,22 @@ export type SearchEvent =
           ran: boolean;
           ms?: number | null;
       }
-    | { kind: 'response'; response: any }
-    | { kind: 'slot_options'; spec_id: string; key: SlotKey; options: any[]; truncated: boolean }
+    | { kind: 'response'; response: ResolveResponse }
     | {
+          kind: 'slot_options';
+          spec_id: string;
+          key: SlotKey;
+          options: SlotOption[];
+          truncated: boolean;
+      }
+    | ({
           /** Coverage-derived facet values (unit / measurementMethod /
            *  provenance), streamed AFTER the response event — the response's
            *  own facet_options array arrives empty on SSE. */
           kind: 'facet_options';
           spec_id: string;
-          axis: string;
-          options: any[];
           truncated?: boolean;
-      }
+      } & Omit<FacetOptionsEntry, 'truncated'>)
     | {
           kind: 'entity_options';
           spec_id: string;
@@ -136,7 +159,7 @@ export type SearchEvent =
           // their candidate list.
           entity_ref?: string | null;
           role: RoleAxis;
-          options: any[];
+          options: SlotOption[];
           truncated: boolean;
       }
     | {
@@ -159,10 +182,10 @@ export type SearchEvent =
     | {
           kind: 'observations';
           spec_id: string;
-          /** SpecObservations (see lib/search/types.ts): same shape the buffered
-           *  path embeds at Spec.observations, deferred to a trailing event on SSE
-           *  so the response isn't blocked on the observation fetch. */
-          observations: any;
+          /** The same shape the buffered path embeds at Spec.observations,
+           *  deferred to a trailing event on SSE so the response does not wait
+           *  on the observation fetch. */
+          observations: SpecObservations;
       }
     | {
           kind: 'done';
@@ -204,15 +227,9 @@ export function keyRef(key: SlotKey): string {
     return `${key.axis}:${key.property?.ref ?? ''}`;
 }
 
-export type SearchInput =
-    | { kind: 'raw_text'; query: string }
-    | {
-          kind: 'dataset_resubmit';
-          /** 1 to 6, in response part order; see types.ts's DatasetResubmitEntry */
-          entries: DatasetResubmitEntry[];
-          /** echo-only; the engine must not re-parse it */
-          raw_query?: string;
-      };
+/** A resolve request's input: a question in words, or 1 to 6 entries posted back in response
+ *  part order. */
+export type SearchInput = RawTextInput | DatasetResubmitInput;
 
 export function buildRequest(input: SearchInput, includeCoverage: boolean) {
     return {
@@ -244,8 +261,6 @@ export function buildRequest(input: SearchInput, includeCoverage: boolean) {
 // normalizeResponse below flattens every nested WireSpec right where the
 // envelope enters: `resolved` is spread flat onto the Spec.
 // .no_data.gate needs no flattening. It's already a scalar.
-
-type WireSpec = { spec_id: string; definition?: any; resolved?: any } & Record<string, any>;
 
 /** Why `validateResolvedStatVars` rejected a value, or that it passed. A
  *  typed result rather than a bare boolean, so the one caller (below) can
@@ -279,9 +294,11 @@ function validateResolvedStatVars(value: unknown): StatVarsValidation {
     return { valid: true };
 }
 
-/** Flatten one wire Spec to the page's Spec. */
-export function flattenSpec(spec: WireSpec | null | undefined): any {
-    if (!spec) return spec ?? null;
+/** Flatten one wire Spec to the page's Spec, or flag it unreadable. */
+export function flattenSpec(spec: WireSpec): PartSpec;
+export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null;
+export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null {
+    if (!spec) return null;
 
     if (!spec.resolved) {
         // Every deployment sends the definition/resolved split (contract
@@ -295,21 +312,22 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
                 'split (contract v1 requires both) — got',
             spec,
         );
+        // The body broke the contract the type states, so it holds none of
+        // the resolved members.
         return { ...spec, stat_vars_unreadable: true };
     }
 
-    const { spec_id, definition, resolved, ...rest } = spec;
-    const flat = {
-        ...rest,
+    const { spec_id, definition, resolved } = spec;
+    const flat: Spec = {
         ...resolved,
         spec_id,
         // The wire's `trace` is the page's `resolution`.
-        resolution: resolved.trace ?? resolved.resolution ?? {},
+        resolution: resolved.trace,
         // The hashed identity, echoed verbatim on a dataset_resubmit entry.
-        identity: definition?.identity ?? null,
+        identity: definition.identity,
         // The canonical definition — the Datasets API mints unregistered specs
         // from it (the "sidecar").
-        definition: definition ?? null,
+        definition,
     };
 
     // Contract boundary check, deliberately not a coercion. A `stat_vars`
@@ -330,7 +348,8 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
                     `{member_count, member_count_exact, served_count, data_date_range} shape (ResolvedStatVars) — ${validation.reason} — got`,
                 resolved.stat_vars,
             );
-            flat.stat_vars_unreadable = true;
+
+            return { ...flat, stat_vars_unreadable: true };
         }
     }
 
@@ -341,12 +360,13 @@ export function flattenSpec(spec: WireSpec | null | undefined): any {
  * spec that carried the definition/resolved split. `identity` and
  * `resolution` are the two members `flattenSpec` adds; every other member
  * came from `resolved`, `trace` included. */
-export function unflattenSpec(spec: any): {
+export function unflattenSpec(spec: Spec): {
     spec_id: string;
     definition: any;
     resolved: Record<string, any>;
 } {
-    const { spec_id, definition, ...resolved } = spec;
+    const { spec_id, definition, ...flat } = spec;
+    const resolved: Record<string, any> = flat;
 
     delete resolved.identity;
     delete resolved.resolution;
@@ -456,7 +476,8 @@ export function mergeLateWarnings(response: Resolution, warnings: Warning[]): Re
     if (bySpec.size === 0) return response;
 
     const parts = response.parts.map((part) => {
-        const late = part.status === 'definite' && part.spec ? bySpec.get(part.spec.spec_id) : null;
+        const late =
+            isKnownPart(part) && part.status === 'definite' ? bySpec.get(part.spec.spec_id) : null;
 
         if (!late?.length) return part;
 
@@ -510,7 +531,12 @@ export function applyLateDepartures(response: Resolution, late: LateDepartures[]
     const parts = response.parts.map((part, index) => {
         const entry = byPart.get(index);
 
-        if (!entry || part.status !== 'definite' || part.spec?.spec_id !== entry.spec_id) {
+        if (
+            !entry ||
+            !isKnownPart(part) ||
+            part.status !== 'definite' ||
+            part.spec.spec_id !== entry.spec_id
+        ) {
             return part;
         }
         changed = true;
@@ -540,20 +566,23 @@ export function applyDoneEvent(
  * field rides through untouched. */
 function flattenPart(part: any): any {
     if (!part || typeof part !== 'object') return part;
-    // Part.restatement and Part.operations are required; the wire's
-    // WirePart fields are optional. Default them here so a normalized Part
-    // never carries `undefined` for either despite its type.
-    const restatement = part.restatement ?? null;
-    const operations = part.operations ?? [];
+    // The page Part's restatement, operations, warnings and departures are
+    // required, on a part of any status; the wire's are optional. Default
+    // them here so a normalised Part never carries `undefined` for one.
+    const defaults = {
+        restatement: part.restatement ?? null,
+        operations: part.operations ?? [],
+        warnings: part.warnings ?? [],
+        departures: part.departures ?? [],
+    };
 
     if (part.spec) {
-        return { ...part, restatement, operations, spec: flattenSpec(part.spec) };
+        return { ...part, ...defaults, spec: flattenSpec(part.spec) };
     }
     if (part.candidates) {
         return {
             ...part,
-            restatement,
-            operations,
+            ...defaults,
             candidates: {
                 ...part.candidates,
                 specs: (part.candidates.specs ?? []).map(flattenSpec),
@@ -563,8 +592,7 @@ function flattenPart(part: any): any {
     if (part.no_data) {
         return {
             ...part,
-            restatement,
-            operations,
+            ...defaults,
             no_data: {
                 ...part.no_data,
                 nearest_real: Array.isArray(part.no_data.nearest_real)
@@ -575,7 +603,7 @@ function flattenPart(part: any): any {
             },
         };
     }
-    return { ...part, restatement, operations };
+    return { ...part, ...defaults };
 }
 
 /**
@@ -594,7 +622,7 @@ function flattenPart(part: any): any {
  * place is an error, never a guess. resolveStream turns the throw into the
  * run's `error` event.
  */
-export function normalizeResponse(body: any): any {
+export function normalizeResponse(body: any): ResolveResponse {
     if (body?.kind === 'resolution' && Array.isArray(body.parts)) {
         return { ...body, parts: body.parts.map(flattenPart) };
     }
@@ -647,28 +675,22 @@ function detailText(body: any, status: number): string {
 
 /** One `issues[]` entry on a refusal: what the engine objected to, and —
  *  where it can — what would have been valid instead. */
-export type ApiIssue = {
-    code?: string | null;
-    axis?: string | null;
-    pointer?: string | null;
-    detail?: string | null;
-    alternatives?: { ref: string; label?: string | null }[] | null;
-};
+export type ApiIssue = ProblemIssue;
 
 export type ApiError = Error & {
     /** the response's own HTTP status, so a console log can name it without
      *  re-deriving it from the message text. */
     status?: number;
-    code?: string | null;
-    pointer?: string | null;
+    code?: ProblemDetails['code'] | null;
+    pointer?: ProblemDetails['pointer'];
     /** `over_ceiling` only: which ceiling was hit, and the two numbers that
      *  let the message say so plainly instead of in prose. `candidate_window`
      *  counts the measures a broad family matched, so its `count` is the
      *  candidates the read listed rather than the result's size. */
-    ceilingKind?: 'member_cardinality' | 'rows' | 'bytes' | 'candidate_window' | string | null;
-    count?: number | null;
-    cap?: number | null;
-    issues?: ApiIssue[] | null;
+    ceilingKind?: ProblemDetails['ceiling_kind'];
+    count?: ProblemDetails['count'];
+    cap?: ProblemDetails['cap'];
+    issues?: ProblemDetails['issues'];
 };
 
 /** A refusal body's own `code` and RFC 9457 `pointer`, top-level fields
@@ -699,15 +721,15 @@ function apiError(body: any, status: number): ApiError {
 // ---------------------------------------------------------------------------
 
 export type EntityOptionsRequest = {
-    identity: any;
+    identity: SpecIdentity;
     // The wire's full role vocabulary (EntityRoleKey): a directional
     // entity_options call names 'origin'/'destination' explicitly; an
     // omitted role takes the door's own 'observationAbout' default below.
     role?: EntityRoleKey;
-    scope: 'peers' | 'children';
+    scope: PlaceOptionsScope;
 };
 
-export type EntityOption = { dcid: string; label: string; coverage?: any };
+export type EntityOption = { dcid: string; label: string; coverage?: Coverage | null };
 
 /** `options.items` from a POST /api/search/options body, or the wire
  *  SlotOption[] a `place_options` SSE event carries (same per-item shape —
@@ -715,14 +737,12 @@ export type EntityOption = { dcid: string; label: string; coverage?: any };
  *  `items` wrapper) — reshaped to the flat client `EntityOption` PlaceEditor
  *  renders. An item missing a dcid or label is dropped rather than shown
  *  half-filled. */
-export function placeOptionValues(items: any[]): EntityOption[] {
-    return (items ?? [])
-        .filter((item) => item?.value?.ref?.ref && item?.value?.ref?.label)
-        .map((item) => ({
-            dcid: item.value.ref.ref,
-            label: item.value.ref.label,
-            coverage: item.coverage ?? undefined,
-        }));
+export function placeOptionValues(items: readonly SlotOption[]): EntityOption[] {
+    return items.flatMap(({ value, coverage }) =>
+        value.ref?.ref && value.ref.label
+            ? [{ dcid: value.ref.ref, label: value.ref.label, coverage: coverage ?? undefined }]
+            : [],
+    );
 }
 
 export async function entityOptions(
@@ -738,7 +758,7 @@ export async function entityOptions(
             for: { role: req.role ?? 'observationAbout', scope: req.scope },
             // Per-option data footprint (observation counts / years) for the rows.
             include_coverage: true,
-        }),
+        } satisfies OptionsRequest),
         signal,
     });
     const body = await res.json().catch(() => null);
@@ -762,7 +782,7 @@ export async function entityOptions(
 // sidecar).
 // ---------------------------------------------------------------------------
 
-export type DatasetFormat = 'csv' | 'xlsx' | 'parquet';
+export type DatasetFormat = Exclude<Known<MintOptions['format']>, undefined>;
 
 // The three formats the Datasets API and a Studio card's export route render,
 // in the order the download sheet offers them. Which of them a given dataset
@@ -775,13 +795,7 @@ export const DATASET_FORMATS: readonly { id: DatasetFormat; label: string }[] = 
     { id: 'parquet', label: 'Parquet' },
 ];
 
-export type DatasetArtifact = {
-    url: string;
-    media_type?: string;
-    bytes?: number;
-    role?: string;
-    filename?: string;
-} & Record<string, any>;
+export type DatasetArtifact = ArtifactEntryModel;
 
 /** The address a browser or fetch uses for an artifact's `url`, which is
  *  root-relative (`/api/datasets/{spec}/{cv}/files/{digest}`). */
@@ -812,7 +826,7 @@ export async function mintDataset(
      *  runs as a background operation (202 only — never called on a
      *  synchronous 200). */
     onProgress?: (progress: OperationProgress) => void,
-): Promise<{ artifacts: DatasetArtifact[]; manifest: any }> {
+): Promise<{ artifacts: DatasetArtifact[]; manifest: Manifest | null }> {
     const res = await datasetsFetch(`${SEARCH_BASE}/api/datasets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -828,7 +842,7 @@ export async function mintDataset(
                 bundle: req.bundle ?? true,
                 ...(req.columns?.length ? { columns: req.columns } : {}),
             },
-        }),
+        } satisfies MintRequest),
         signal,
     });
     const body = await res.json().catch(() => null);
@@ -838,22 +852,11 @@ export async function mintDataset(
     if (res.status === 202) {
         const manifest = await pollOperation(body.operation, { onProgress, signal });
 
-        return { artifacts: ((manifest as any)?.artifacts ?? []) as DatasetArtifact[], manifest };
+        return { artifacts: manifest?.artifacts ?? [], manifest };
     }
-    return { artifacts: (body?.artifacts ?? []) as DatasetArtifact[], manifest: body };
-}
+    const manifest: Manifest | null = body;
 
-/** The Datasets API's capability document (GET /api/datasets/capabilities):
- *  deployment-mutable switches — which formats are live, and which
- *  enrichment columns (ISO codes etc.) the reshape step can populate. */
-export async function fetchDatasetCapabilities(signal?: AbortSignal): Promise<any | null> {
-    try {
-        const res = await datasetsFetch(`${SEARCH_BASE}/api/datasets/capabilities`, { signal });
-
-        return res.ok ? await res.json() : null;
-    } catch {
-        return null;
-    }
+    return { artifacts: manifest?.artifacts ?? [], manifest };
 }
 
 /** One country's search catalogue (GET /api/search/catalogue?place=): its
@@ -877,61 +880,21 @@ export async function fetchSearchCatalogue(
     }
 }
 
-/** One output option the engine advertises for a dataset. `state` is the
- *  authority: only `available` may be offered; `partial` is offerable but
- *  incomplete (see `coverage`/`missing`), anything else is off. */
-export type DatasetOptionState = 'available' | 'partial' | string;
+/** One output option's state. Only `available` may be offered; `partial` is offerable but
+ *  incomplete (see an enrichment's `coverage` and `missing`); anything else is off. */
+export type DatasetOptionState = FormatOptionModel['state'];
 
-export type DatasetEnrichment = {
-    /** the column the extra field joins onto, e.g. observationAbout */
-    column: string;
-    /** what it adds, e.g. iso3 / iso2 / label */
-    field: string;
-    /** the value to post in `options.columns`, e.g. observationAbout_iso3 */
-    token: string;
-    state: DatasetOptionState;
-    reason?: string | null;
-    coverage?: { entities?: number; covered?: number } | null;
-    missing?: { ref: string; label?: string | null }[] | null;
-};
+export type DatasetEnrichment = EnrichmentOptionModel;
 
-export type DatasetOutputOptions = {
-    capability_version?: string;
-    columns?: { name: string; kind?: string; droppable?: boolean; distinct?: number }[];
-    formats?: { name: string; state: DatasetOptionState }[];
-    bundle?: { state: DatasetOptionState } | null;
-    enrichments?: DatasetEnrichment[];
-    /** the enrichment tokens a long-layout download writes with no `columns`
-     *  option, e.g. financingRecipient_label. The extras list leaves them
-     *  out, since they are always present. Absent from an API that predates
-     *  it. */
-    long_layout_defaults?: string[];
-    /** the roles (frame column names, e.g. financingRecipient) whose total
-     *  rows a long-layout CSV or XLSX keeps out of its main table. A bundle
-     *  writes them to a second CSV, an XLSX to a second sheet, a bare CSV
-     *  leaves them out. Parquet keeps every row. Empty when no role sets rows
-     *  apart, and absent from an API that predates it. */
-    long_layout_totals?: string[];
-    pivots?: { index: string; columns: string; state: DatasetOptionState }[];
-    groupby?: unknown;
-};
+export type DatasetOutputOptions = OutputOptionsModel;
 
-/** One coverage dimension of a dataset: a frame column (or `years`) and its
- *  distinct count. `axis` names the flow direction a role column serves
- *  (financingProvider → origin) and is absent for anything else. */
-export type DatasetCoverageDimension = {
-    label: string;
-    count?: number;
-    axis?: 'origin' | 'destination' | null;
-};
+/** One coverage dimension of a dataset: a frame column (or `years`) and its distinct count.
+ *  `axis` names the flow direction a role column serves (financingProvider → origin). */
+export type DatasetCoverageDimension = CoverageDimension;
 
-/** The parts of an options document, or of a mint's manifest, that the
- *  download sheet reads: the output options and the coverage dimensions
- *  that say which role each column serves. */
-export type DatasetOptionsDocument = {
-    output_options?: DatasetOutputOptions | null;
-    coverage?: { dimensions?: DatasetCoverageDimension[] } | null;
-};
+/** The parts of an options document, or of a mint's manifest, that the download sheet reads:
+ *  the output options and the coverage whose dimensions say which role each column serves. */
+export type DatasetOptionsDocument = Pick<OptionsEnvelope, 'output_options' | 'coverage'>;
 
 /**
  * What one dataset says it can do (`/api/datasets/{spec_id}/options`):
@@ -972,27 +935,15 @@ export async function fetchDatasetOptions(
     }
 }
 
-/** One StatVar a definition serves, as the members door lists it (dfo-apis
- *  datasets_api/schema.py ServedMember): `ref` is `dcid:`-prefixed, `label`
- *  null when the graph holds none, and `constraints` maps each constraint
- *  property to its value, null when unbound. */
-export type DefinitionMember = {
-    ref: string;
-    label: string | null;
-    roles: string[];
-    constraints: Record<string, string | null>;
-};
+/** One StatVar a definition serves, as the members door lists it: `ref` is `dcid:`-prefixed,
+ *  `label` null when the graph holds none, and `constraints` maps each constraint property to its
+ *  value, null when unbound. */
+export type DefinitionMember = ServedMember;
 
-/** What the members door (`POST /api/datasets/{spec_id}/members`) answers
- *  (MembersEnvelope): every StatVar the definition serves, sorted by `ref`,
- *  the served count, and the size and digest of the family the members came
- *  from, each null when the door cannot state it. */
-export type DefinitionMembers = {
-    members: DefinitionMember[];
-    served_count: number;
-    family_member_count: number | null;
-    family_member_digest: string | null;
-};
+/** What the members door (`POST /api/datasets/{spec_id}/members`) answers: every StatVar the
+ *  definition serves, sorted by `ref`, the served count, and the size and digest of the family the
+ *  members came from, each null when the door cannot state it. */
+export type DefinitionMembers = MembersEnvelope;
 
 /**
  * The StatVars one definition serves, resolved by the Datasets members door
@@ -1061,7 +1012,7 @@ function readOrStall(
  *  is not one the page can render (see normalizeResponse). False on the
  *  error. */
 function emitResponse(onEvent: (ev: SearchEvent) => void, body: unknown, frame?: object): boolean {
-    let response: any;
+    let response: ResolveResponse;
     try {
         response = normalizeResponse(body);
     } catch (error) {
@@ -1184,7 +1135,7 @@ export async function resolveStream(
  * Rejects on an `error` event before the response, on a stream that ends
  * without one, and with AbortError on an abort.
  */
-export function resolveSuggestion(query: string, signal: AbortSignal): Promise<any> {
+export function resolveSuggestion(query: string, signal: AbortSignal): Promise<ResolveResponse> {
     return new Promise((resolve, reject) => {
         resolveStream(
             buildRequest({ kind: 'raw_text', query }, true),
@@ -1204,7 +1155,7 @@ export function resolveSuggestion(query: string, signal: AbortSignal): Promise<a
 export type SuggestionSlot = {
     /** The suggestion for `query`: the live stream's when it asked the same
      *  text, otherwise a new stream, which aborts the live one. */
-    suggest(query: string): Promise<any>;
+    suggest(query: string): Promise<ResolveResponse>;
     /** Aborts the live stream unless it asked `query`; null aborts it
      *  whatever it asked. */
     keepOnly(query: string | null): void;
@@ -1220,7 +1171,11 @@ export type SuggestionSlot = {
  * retries.
  */
 export function createSuggestionSlot(): SuggestionSlot {
-    let live: { query: string; controller: AbortController; response: Promise<any> } | null = null;
+    let live: {
+        query: string;
+        controller: AbortController;
+        response: Promise<ResolveResponse>;
+    } | null = null;
 
     const keepOnly = (query: string | null) => {
         if (live && live.query !== query) {

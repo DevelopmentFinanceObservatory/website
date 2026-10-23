@@ -18,27 +18,39 @@ const enrichment = (
     column: string,
     field: string,
     state = 'available',
-    coverage?: { entities: number; covered: number },
+    coverage = { entities: 1, covered: 1 },
 ): DatasetEnrichment => ({ column, field, token: `${column}_${field}`, state, coverage });
+
+/** An options document holding `fields`, every other member empty. */
+const outputOptions = (fields: Partial<DatasetOutputOptions>): DatasetOutputOptions => ({
+    capability_version: 'test',
+    columns: [],
+    formats: [],
+    bundle: { state: 'available' },
+    enrichments: [],
+    long_layout_defaults: [],
+    long_layout_totals: [],
+    pivots: [],
+    groupby: { state: 'available' },
+    ...fields,
+});
+
+const column = (name: string) => ({ name, kind: 'dimension', droppable: false, distinct: null });
 
 // A flow answer's options: its frame columns, and extras on both role columns
 // (the recipient side partial), as the options door for "Humanitarian aid
 // from Germany" answers them.
-const flowOptions: DatasetOutputOptions = {
-    columns: [
-        { name: 'stat_var' },
-        { name: 'financingProvider' },
-        { name: 'financingRecipient' },
-        { name: 'time_period' },
-        { name: 'value' },
-    ],
+const flowOptions = outputOptions({
+    columns: ['stat_var', 'financingProvider', 'financingRecipient', 'time_period', 'value'].map(
+        column,
+    ),
     enrichments: [
         enrichment('financingProvider', 'iso3'),
         enrichment('financingProvider', 'type'),
         enrichment('financingRecipient', 'iso3', 'partial', { entities: 145, covered: 125 }),
         enrichment('financingRecipient', 'label', 'unavailable'),
     ],
-};
+});
 
 const flowDimensions = [
     { label: 'financingProvider', count: 1, axis: 'origin' as const },
@@ -84,14 +96,14 @@ test('mintColumns posts only the remembered extras this answer offers, as tokens
 test('resolveChoices keeps a remembered format only where the answer renders it', () => {
     const remembered = { format: 'xlsx' as const, bundle: true, enrichment: [] };
     // Over Excel's row limit, with the bundle switched off for the deployment.
-    const large: DatasetOutputOptions = {
+    const large = outputOptions({
         formats: [
             { name: 'csv', state: 'available' },
             { name: 'xlsx', state: 'unavailable' },
             { name: 'parquet', state: 'available' },
         ],
         bundle: { state: 'unavailable' },
-    };
+    });
 
     const narrowed = resolveChoices(remembered, large);
 
@@ -138,7 +150,7 @@ test.describe('enrichmentGroups heading for a column without a flow axis', () =>
     for (const [name, column, entities, heading] of cases) {
         test(name, () => {
             const [group] = enrichmentGroups({
-                options: { enrichments: [enrichment(column, 'iso3')] },
+                options: outputOptions({ enrichments: [enrichment(column, 'iso3')] }),
                 dimensions: [{ label: column, count: 1 }],
                 entities,
             });
@@ -159,13 +171,13 @@ test('enrichment rows read their field in words and a partial one its coverage',
 });
 
 test('the extras list leaves out a column the long layout already writes', () => {
-    const options: DatasetOutputOptions = {
+    const options = outputOptions({
         enrichments: [
             enrichment('financingRecipient', 'party_kind'),
             enrichment('financingRecipient', 'iso3'),
         ],
         long_layout_defaults: ['financingRecipient_label', 'financingRecipient_party_kind'],
-    };
+    });
 
     assert.deepEqual(
         enrichmentGroups({ options, dimensions: flowDimensions }).flatMap((group) =>
@@ -177,17 +189,16 @@ test('the extras list leaves out a column the long layout already writes', () =>
         mintColumns(['financingRecipient_party_kind', 'financingRecipient_iso3'], options),
         ['financingRecipient_iso3'],
     );
-    // An API that predates the field offers everything it lists.
+    // A long layout that writes no defaults offers everything it lists.
     assert.equal(
-        enrichmentGroups({ options: { ...options, long_layout_defaults: undefined } })[0]?.entries
-            .length,
+        enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })[0]?.entries.length,
         2,
     );
 });
 
 test.describe('totalsNote says where the totals of the roles in long_layout_totals go', () => {
     const base = { dimensions: flowDimensions, bundleOffered: true };
-    const withTotals: DatasetOutputOptions = { long_layout_totals: ['financingRecipient'] };
+    const withTotals = outputOptions({ long_layout_totals: ['financingRecipient'] });
     const cases: [string, Parameters<typeof totalsNote>[0], RegExp | null][] = [
         [
             'a bundle',
@@ -207,10 +218,14 @@ test.describe('totalsNote says where the totals of the roles in long_layout_tota
         ['Parquet', { ...base, options: withTotals, format: 'parquet', bundle: true }, null],
         [
             'no role set apart',
-            { ...base, options: { long_layout_totals: [] }, format: 'csv', bundle: true },
+            {
+                ...base,
+                options: outputOptions({ long_layout_totals: [] }),
+                format: 'csv',
+                bundle: true,
+            },
             null,
         ],
-        ['an older API', { ...base, options: {}, format: 'csv', bundle: true }, null],
     ];
 
     for (const [name, input, expected] of cases) {

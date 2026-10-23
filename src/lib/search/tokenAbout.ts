@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the same shallow Spec the sentence menus read (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs as `any`, dereferencing only the members it names and tolerating any that is missing */
 /**
  * The About line at the top of a sentence token's panel: what the token's
  * current value is, read from the Spec the answer already carries. The line
@@ -12,13 +12,20 @@
 
 import { keyRef } from './searchClient.ts';
 import { capitalise } from '../capitalise.ts';
-import type { EntityRoleKey, SentenceToken, UnitConversion } from './types.ts';
+import {
+    type EntityRoleKey,
+    hasKey,
+    type Known,
+    type SentenceToken,
+    type UnitConversion,
+} from './types.ts';
 import { priceBasis } from './unitLabel.ts';
 import type { PriceBasis } from './unitLabel.ts';
 import {
     axisLabel,
     formatCount,
     formatWindow,
+    observationSeries,
     provenanceOrigin,
     rowsLabel,
     servedSeriesCount,
@@ -90,10 +97,8 @@ export const servedSpan = (spec: any): string | null => {
 export const latestDate = (spec: any): string | null => {
     const end: unknown = spec?.stat_vars?.data_date_range?.end;
     const ends: string[] = typeof end === 'string' && end ? [end] : [];
-    const points: string[] = (spec?.observations?.series ?? []).flatMap((series: any) =>
-        (series?.points ?? [])
-            .filter((point: any) => point?.value != null)
-            .map((point: any) => point.date),
+    const points = observationSeries(spec).flatMap((series) =>
+        series.points.filter((point) => point.value != null).map((point) => point.date),
     );
 
     return [...ends, ...points].toSorted().at(-1) ?? null;
@@ -153,7 +158,10 @@ const measureAbout = (
     };
 };
 
-const ROLE_NOUNS: Record<EntityRoleKey, { one: string; many: string; dimensions: string[] }> = {
+const ROLE_NOUNS: Record<
+    Known<EntityRoleKey>,
+    { one: string; many: string; dimensions: string[] }
+> = {
     origin: { one: 'provider', many: 'providers', dimensions: ['providers'] },
     destination: { one: 'recipient', many: 'recipients', dimensions: ['recipients'] },
     observationAbout: { one: 'place', many: 'places', dimensions: ['countries', 'places'] },
@@ -169,7 +177,8 @@ const listNames = (names: string[]): string =>
 
 const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
     const role: EntityRoleKey = token.role ?? 'observationAbout';
-    const nouns = ROLE_NOUNS[role];
+    // A role this release does not know reads as the subject role.
+    const nouns = hasKey(ROLE_NOUNS, role) ? ROLE_NOUNS[role] : ROLE_NOUNS.observationAbout;
     const entities: any[] = spec?.entities ?? [];
     const dcids: string[] = token.entity_refs?.length
         ? token.entity_refs

@@ -15,7 +15,7 @@ import {
     odaToCongoNoData,
     odaToCongoRestatement,
 } from './fixtures/ambiguous-congo.ts';
-import { normalizeResponse } from '../searchClient.ts';
+import { resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import type { NoData, ParsedPart, RoleAxis, SlotAxis } from '../types.ts';
 
@@ -202,7 +202,7 @@ test('resolveTypedEdit is null for a how token even with a restatement present',
 // ---------------------------------------------------------------------------
 
 const congoPart = () => {
-    const [part] = normalizeResponse(fixtures['entity-ambiguous']).parts;
+    const [part] = resolution(fixtures['entity-ambiguous']).parts;
 
     return part as { no_data: NoData; restatement: ParsedPart };
 };

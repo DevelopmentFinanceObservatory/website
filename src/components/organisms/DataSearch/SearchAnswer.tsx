@@ -221,7 +221,7 @@ const SearchAnswer = ({
     // Hands the question to Studio.
     onStudio: () => void;
 }) => {
-    const place = answer.scope.place;
+    const place = answer.scope.place ?? null;
 
     if (answer.kind === 'catalogue') {
         return (

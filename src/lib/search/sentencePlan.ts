@@ -6,7 +6,12 @@
  * layout. Pure; no React.
  */
 
-import type { SentenceToken } from './types';
+import type { SentenceSegment, SentenceToken } from './types';
+
+/** The segment a token sits in: its own, or the heading, the wire's default
+ *  for a token without one. A segment the site does not know stays as it is,
+ *  so no reader draws it. */
+export const tokenSegment = (token: SentenceToken): SentenceSegment => token.segment ?? 'heading';
 
 /** The part `token` belongs to, in a response of `partCount` parts. With
  *  one part (or none yet), every token is that part's, whatever indexes
@@ -52,10 +57,10 @@ export function earlySentenceTokens(
 
 const segmentText = (
     plan: readonly SentenceToken[] | null | undefined,
-    segment: SentenceToken['segment'],
+    segment: SentenceSegment,
 ): string =>
     (plan ?? [])
-        .filter((token) => token.segment === segment)
+        .filter((token) => tokenSegment(token) === segment)
         .map((token) => token.text)
         .join('')
         .trim();

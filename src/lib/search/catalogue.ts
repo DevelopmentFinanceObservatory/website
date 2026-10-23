@@ -10,57 +10,29 @@
  * no examples.
  */
 
-/** One example sentence: a checked template filled with a place. */
-export type CatalogueExample = {
-    /** the sentence to show and run, e.g. "Health aid to Ethiopia" */
-    text: string;
-    /** the template it fills, e.g. "Health aid to {place}" */
-    template: string;
-    /** the StatVar the sentence resolves to */
-    stat_var: string;
-    /** the place it is filled with */
-    place: string;
-};
+import type {
+    AidCounts,
+    CatalogueExampleSentence,
+    CatalogueResponse,
+    Counts,
+    PlaceCounts,
+} from '@developmentfinance/client/wire';
 
-/** CRS counts. `years` is null when the build holds no CRS rows. */
-export type AidCounts = {
-    donors: number;
-    recipients: number;
-    years: { first: number; last: number } | null;
-};
+/** One example sentence: a checked template filled with a place. */
+export type CatalogueExample = CatalogueExampleSentence;
 
 /** What DFO holds as a whole. `indicators` counts the StatVars search can
  *  serve and `datasets` the source datasets behind them. */
-export type CatalogueCounts = {
-    publishers: number;
-    countries: number;
-    indicators: number;
-    datasets: number;
-    aid: AidCounts;
-};
-
-/** What DFO holds at one country. For aid, `donors` (the wire name) counts the
- *  providers to the country and `recipients` the recipients of its own aid. */
-export type PlaceCounts = {
-    publishers: number;
-    variables: number;
-    aid: AidCounts;
-};
+export type CatalogueCounts = Counts;
 
 /** The whole catalogue (`GET /api/search/catalogue`). */
-export type SearchCatalogue = {
-    catalogue_version: string;
-    counts: CatalogueCounts;
-    examples: CatalogueExample[];
-};
+export type SearchCatalogue = Omit<CatalogueResponse, 'counts'> & { counts: CatalogueCounts };
 
 /** One country's catalogue (`?place=`): its counts, and the examples with
  *  data there, filled with its name. */
-export type PlaceCatalogue = {
-    catalogue_version: string;
-    counts: PlaceCounts;
-    examples: CatalogueExample[];
-};
+export type PlaceCatalogue = Omit<CatalogueResponse, 'counts'> & { counts: PlaceCounts };
+
+export type { AidCounts, PlaceCounts };
 
 /** The starting point's own question. Asked as a search, it shows the
  *  starting point from the catalogue the page already holds, with no search

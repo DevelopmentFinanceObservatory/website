@@ -12,7 +12,6 @@ import type {
     DatasetIdentityEntry,
     GraphRef,
     MeasureAxisValue,
-    OpenConstraintAxisFact,
     RelatedMeasure,
     Slot,
     Spec,
@@ -27,12 +26,10 @@ import {
 
 export { openAxisFactLabel };
 
-export type MeasureMenuSpec = {
-    spec_id: string;
-    slots: Slot[];
-    alternative_measures?: SpecAlternativeMeasure[] | null;
-    open_axis_facts?: OpenConstraintAxisFact[] | null;
-};
+export type MeasureMenuSpec = Pick<
+    Spec,
+    'spec_id' | 'slots' | 'alternative_measures' | 'open_axis_facts' | 'download'
+>;
 
 /** One group of the measure menu: a slot the measure token states, with
  *  its options. */

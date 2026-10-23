@@ -8,7 +8,9 @@ import {
     PIN_REFUSED,
     PIN_UNAVAILABLE,
     pinVersionFrame,
+    renderingArtifact,
 } from '../snapshot.ts';
+import { artifact } from './fixtures/dataset-documents.ts';
 
 // The manifest lists a statistics artifact, a Parquet frame, a
 // column-enriched CSV bundle, then the plain CSV bundle a mint without
@@ -89,6 +91,41 @@ test('captureSnapshot mints with the default options', async () => {
 
     assert.equal('options' in (calls[0]!.body as object), false);
 });
+
+// Each listed rendering sets one MintOptions member beyond format and bundle, so it is a different
+// file from the plain one listed after it. A false or null member sets nothing.
+for (const [name, listed, asked, plain] of [
+    ['columns', { columns: ['country_income'] }, { format: 'csv', bundle: true }, false],
+    ['pivot', { pivot: { index: ['year'] } }, { format: 'csv', bundle: true }, false],
+    ['groupby', { groupby: { by: ['stat_var'] } }, { format: 'csv', bundle: true }, false],
+    ['layout', { layout: 'frame' }, { format: 'parquet', bundle: false }, false],
+    [
+        'without_party_totals',
+        { without_party_totals: true },
+        { format: 'csv', bundle: true },
+        false,
+    ],
+    [
+        'a false without_party_totals',
+        { without_party_totals: false },
+        { format: 'csv', bundle: true },
+        true,
+    ],
+    ['a null layout', { layout: null }, { format: 'parquet', bundle: false }, true],
+] as const) {
+    test(`renderingArtifact ${plain ? 'takes' : 'skips'} a rendering with ${name}`, () => {
+        const withMember = artifact({
+            artifact_digest: 'sha256:member',
+            rendering: { ...asked, ...listed },
+        });
+        const bare = artifact({ artifact_digest: 'sha256:plain', rendering: { ...asked } });
+
+        assert.equal(
+            renderingArtifact([withMember, bare], asked)?.artifact_digest,
+            plain ? 'sha256:member' : 'sha256:plain',
+        );
+    });
+}
 
 test('captureSnapshot fails when the mint lists no plain CSV bundle', async () => {
     for (const listed of [[], artifacts.slice(0, 3)]) {

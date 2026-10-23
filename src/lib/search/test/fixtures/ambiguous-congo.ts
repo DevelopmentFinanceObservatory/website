@@ -2,9 +2,8 @@
  * Trimmed from two real captured `/api/search/resolve` responses, both
  * entity_ambiguous on "Congo" (DRC vs. Republic of Congo). Neither capture's
  * own deployment sends `no_data.ambiguous_entities` yet, so that field is
- * added by hand here, in the shape the API ships (models/outcomes.py's
- * AmbiguousEntityGroup/AmbiguousEntityCandidate): `{text, candidates:
- * [{dcid, label, kind}]}`. The two real Congo dcids (country/COD,
+ * added by hand here, typed by the generated `NoData`: `{text, candidates:
+ * [{ref, label, kind}]}`. The two real Congo dcids (country/COD,
  * country/COG) and the candidate labels are the ones the captures' own
  * `rendered_sentence` already names ("Congo [DRC]"/"Congo [Republic]").
  * The "ODA to the Congo" refusal also carries `no_data.options`, one ready

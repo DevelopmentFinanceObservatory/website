@@ -14,6 +14,13 @@
  * it directly.
  */
 
+import type {
+    ArtifactEntryModel,
+    BaseIdentity,
+    Manifest,
+    OptionsEnvelope,
+} from '@developmentfinance/client/wire';
+
 import type { OpenedSearchShare } from './searchClient';
 
 export type VersionLink = { specId: string; contentVersion: string | null };
@@ -42,18 +49,10 @@ export const parseVersionLink = (params: {
 export const versionLinkHref = ({ specId, contentVersion }: VersionLink): string =>
     contentVersion ? `/data?spec=${specId}&v=${contentVersion}` : `/data?spec=${specId}`;
 
-/** The fields of a version manifest or options envelope this module reads. */
-export type VersionLinkDocument = {
-    content_version?: string;
-    definition?: { spec_id?: string; identity?: unknown } | null;
-    artifacts?: {
-        artifact_digest?: string;
-        created_at?: string;
-        url?: string;
-        rendering?: { format?: string; bundle?: boolean };
-    }[];
-    citation?: { sources?: { label?: string }[] };
-};
+/** The fields of a version manifest or options envelope this module reads; the envelope lists no
+ *  artifacts and cites no sources. */
+export type VersionLinkDocument = Pick<OptionsEnvelope, 'content_version' | 'definition'> &
+    Partial<Pick<Manifest, 'artifacts' | 'citation'>>;
 
 /** A version's stored file, by the site route that redirects to its stable
  *  link; `format` is 'zip' for the bundle. */
@@ -68,19 +67,17 @@ export type VersionLinkOutcome =
 // A definition that pins its StatVars (Datasets' statvar_set and
 // source_codes inputs) names no measure family, and Search refuses to
 // resubmit it.
-const isPinnedKind = (identity: unknown): boolean =>
-    (identity as { shape?: { kind?: unknown } }).shape?.kind === 'stat_var';
+const isPinnedKind = (identity: BaseIdentity): boolean => identity.shape.kind === 'stat_var';
 
-type StoredFile = {
-    url: string;
-    artifact_digest?: string;
-    rendering: { format: string; bundle?: boolean };
-};
+/** The format a listed file was rendered in, or null for a rendering with none, such as the
+ *  series statistics. */
+const formatOf = ({ rendering }: Pick<ArtifactEntryModel, 'rendering'>): string | null =>
+    typeof rendering.format === 'string' && rendering.format ? rendering.format : null;
 
 /** The canonical frame a version manifest lists: the API's internal storage
  *  form, which the site offers in no download format. */
-export const isCanonicalFrame = (artifact: { rendering?: { format?: string } }): boolean =>
-    artifact.rendering?.format === 'frame';
+export const isCanonicalFrame = (artifact: Pick<ArtifactEntryModel, 'rendering'>): boolean =>
+    formatOf(artifact) === 'frame';
 
 /**
  * The version's file to offer, by its stable link, with its digest for a pin:
@@ -89,21 +86,27 @@ export const isCanonicalFrame = (artifact: { rendering?: { format?: string } }):
  * offered. `/api/version-download` and `/s/<id>/download` redirect to it.
  */
 export const storedDownload = (document: {
-    artifacts?: VersionLinkDocument['artifacts'];
-}): { url: string; format: string; digest: string | null } | null => {
-    const files = (document.artifacts ?? []).filter(
-        (artifact): artifact is StoredFile =>
-            !!artifact.url && !!artifact.rendering?.format && !isCanonicalFrame(artifact),
-    );
-    const bundle = files.find((artifact) => artifact.rendering.bundle);
+    artifacts?: ArtifactEntryModel[];
+}): { url: string; format: string; digest: string } | null => {
+    const files = (document.artifacts ?? []).flatMap((artifact) => {
+        const format = formatOf(artifact);
+
+        return artifact.url && format && !isCanonicalFrame(artifact)
+            ? [
+                  {
+                      url: artifact.url,
+                      format,
+                      digest: artifact.artifact_digest,
+                      bundle: artifact.rendering.bundle === true,
+                  },
+              ]
+            : [];
+    });
+    const bundle = files.find((file) => file.bundle);
     const file = bundle ?? files[0];
 
     return file
-        ? {
-              url: file.url,
-              format: bundle ? 'zip' : file.rendering.format,
-              digest: file.artifact_digest ?? null,
-          }
+        ? { url: file.url, format: bundle ? 'zip' : file.format, digest: file.digest }
         : null;
 };
 
@@ -125,7 +128,8 @@ export const outcomeFromDocument = (
     link: VersionLink,
     document: VersionLinkDocument,
 ): VersionLinkOutcome | null => {
-    const identity = document.definition?.identity;
+    // The wire types the identity as an open object; the definition holds a BaseIdentity.
+    const identity = document.definition?.identity as BaseIdentity | undefined;
 
     if (!identity) {
         return null;
@@ -144,10 +148,10 @@ export const outcomeFromDocument = (
         .map((artifact) => artifact.created_at)
         .filter((at): at is string => typeof at === 'string')
         .toSorted()[0];
-    const specId = document.definition?.spec_id ?? link.specId;
+    const specId = document.definition.spec_id;
     const sources = (document.citation?.sources ?? [])
         .map((source) => source.label)
-        .filter((label): label is string => !!label);
+        .filter((label) => label !== '');
 
     const shared: OpenedSearchShare = {
         id: specId,

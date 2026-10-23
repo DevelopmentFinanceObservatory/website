@@ -131,8 +131,8 @@ export const sharedOffer = (offers: UnitConversion[]): UnitConversion | null => 
         (currency) => sharedCurrency(currency, others) ?? [],
     );
     const roleCurrencies = Object.fromEntries(
-        Object.entries(first.role_currencies).filter(([role, code]) =>
-            others.every((offer) => offer.role_currencies[role as EntityRoleKey] === code),
+        Object.entries(first.role_currencies ?? {}).filter(([role, code]) =>
+            others.every((offer) => offer.role_currencies?.[role] === code),
         ),
     );
 
@@ -150,7 +150,7 @@ const requestCode = (
     if (!currency) return null;
     if (typeof currency === 'string') return currency;
 
-    return conversion?.role_currencies[currency.role] ?? null;
+    return conversion?.role_currencies?.[currency.role] ?? null;
 };
 
 /** The answer's unit: the identity's unit request when it carries one,
@@ -191,7 +191,7 @@ export const unitPresets = (spec: any, conversion: UnitConversion | null): UnitP
         }));
     const entities: any[] = spec?.entities ?? [];
 
-    for (const [role, code] of Object.entries(conversion.role_currencies) as [
+    for (const [role, code] of Object.entries(conversion.role_currencies ?? {}) as [
         EntityRoleKey,
         string | undefined,
     ][]) {

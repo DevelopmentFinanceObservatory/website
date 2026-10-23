@@ -83,6 +83,15 @@ test('readingsSummary reads the whole summary plan, byline included', () => {
     );
 });
 
+test('readingsSummary reads a token with no segment as heading, the wire default', () => {
+    const [lead, ...rest] = summaryPlan();
+
+    assert.equal(
+        readingsSummary([{ ...lead, segment: undefined }, ...rest]),
+        readingsSummary(summaryPlan()),
+    );
+});
+
 test("foldReadings folds a candidates part's summary into one what-token named by its variable text", () => {
     const folded = foldReadings(summaryPlan(0), [
         { status: 'candidates', variable_text: 'poverty reduction grants' },

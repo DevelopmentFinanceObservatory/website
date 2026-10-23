@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- takes specs and options of either picker shape as `any` and reads only the members each editor shows, tolerating any that is missing */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -27,6 +27,7 @@ import { entityOptions } from '@/lib/search/searchClient';
 import type { EntityRoleKey, IdentityWindow, PlaceOptionsScope } from '@/lib/search/types';
 import {
     buildPlaceOptionGroups,
+    observationSeries,
     optionCoverageLabel,
     optionMuted,
     placeEditorScopes,
@@ -60,10 +61,10 @@ export const WindowEditor = ({
     onApply: (value: WindowApplyValue) => void;
 }) => {
     const requestedWindow: IdentityWindow | undefined = spec?.identity?.requested_window;
-    const years = (spec?.observations?.series ?? [])
-        .flatMap((series: any) => series?.points ?? [])
-        .map((point: any) => parseInt(point?.date, 10))
-        .filter((year: number) => !Number.isNaN(year));
+    const years = observationSeries(spec)
+        .flatMap((series) => series.points)
+        .map((point) => parseInt(point.date, 10))
+        .filter((year) => !Number.isNaN(year));
     const seed = seedWindowYears({
         requestedWindow,
         coverageWindow: spec?.coverage?.window,

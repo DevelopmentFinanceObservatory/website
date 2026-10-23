@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs and options of either picker shape as `any`, each helper dereferencing only the members it names and tolerating any that is missing */
 /**
  * View helpers: flatten a resolved Spec into UI-ready rows and summaries.
  * Deliberately defensive — the engine contract is authoritative, the UI reads
@@ -16,39 +16,51 @@ import type { EntityChoiceGroup } from './parsedEdit.ts';
 import { entityOptionDcid } from './pickerState.ts';
 import type { OptionLike } from './pickerState.ts';
 import type { ApiError, EntityOption } from './searchClient';
-import type {
-    Assumption,
-    EntityOptions,
-    EntityRoleKey,
-    FacetBasis,
-    IdentityFacets,
-    NoData,
-    NoDataDenominator,
-    NoDataGate,
-    NoDataReason,
-    ObservationsOmission,
-    ObservationsOmissionReason,
-    ParsedPart,
-    Part,
-    PartyKind,
-    PlaceOptionsScope,
-    RoleAxis,
-    SentenceToken,
-    UnitAlternative,
-    Warning,
-} from './types';
+import {
+    type Assumption,
+    type EntityOptions,
+    type EntityRoleKey,
+    type FacetBasis,
+    type ObservationSeries,
+    type GraphRef,
+    hasKey,
+    type IdentityFacetBinding,
+    type Known,
+    type NoData,
+    type NoDataDenominator,
+    type NoDataGate,
+    type NoDataReason,
+    type ObservationsOmission,
+    type ObservationsOmissionReason,
+    type ParsedPart,
+    type Part,
+    type PartSpec,
+    type PartyKind,
+    type PlaceOptionsScope,
+    type RoleAxis,
+    type SentenceToken,
+    type Slot,
+    type SlotOption,
+    type Spec,
+    type UnitAlternative,
+    type UnreadableSpec,
+    type Warning,
+} from './types.ts';
 import { keyRef, sentenceOf } from './searchClient.ts';
 import { unitWithBasis } from './unitLabel.ts';
 
 /** Display label of a slot/entity option, wherever the engine put it. */
-export const optionLabel = (option: any): string =>
+export const optionLabel = (option: OptionLike | null | undefined): string =>
     option?.value?.ref?.label ?? option?.label ?? '—';
 
-/** True when searchClient.flattenSpec couldn't read this spec's `stat_vars`
- *  as the wire's ResolvedStatVars object shape — it already logged the raw
- *  value to the console at parse time. A card reading this spec's variable
- *  label should show an explicit failure state rather than an empty one. */
-export const statVarsUnreadable = (spec: any): boolean => !!spec?.stat_vars_unreadable;
+/** True when searchClient.flattenSpec could not read this spec, because its `stat_vars`
+ *  is not the wire's ResolvedStatVars object shape or it lacks the
+ *  definition/resolved split, and logged the raw value to the
+ *  console at parse time. A card reading this spec's variable label should
+ *  show a failure state. */
+export function statVarsUnreadable(spec: PartSpec | null | undefined): spec is UnreadableSpec {
+    return !!spec && 'stat_vars_unreadable' in spec;
+}
 
 /** The resolved spec's measure, named for a card whose part carries no
  *  variable_text: its measure label, else its shape's label. Null when
@@ -67,17 +79,20 @@ export const cardText = (spec: any, fallbackText?: string | null): string | unde
  *  ref, in the engine's own rank order (in-window observation count). An
  *  option with no ref (measurementMethod and unit only) stands for the
  *  facets that declare no value on the axis, and is kept once. */
-const facetAxisOptions = (spec: any, axis: string): any[] => {
+const facetAxisOptions = (
+    spec: Pick<Spec, 'facet_options'> | null | undefined,
+    axis: string,
+): SlotOption[] => {
     const seen = new Set<string | null>();
-    const out: any[] = [];
+    const out: SlotOption[] = [];
 
     (spec?.facet_options ?? [])
-        .filter((entry: any) => entry?.axis === axis)
-        .forEach((entry: any) => {
-            (entry.options ?? []).forEach((option: any) => {
-                const value = option?.value;
+        .filter((entry) => entry.axis === axis)
+        .forEach((entry) => {
+            entry.options.forEach((option) => {
+                const { value } = option;
 
-                if (!value || (value.ref && !value.ref.ref)) {
+                if (value.ref && !value.ref.ref) {
                     return;
                 }
 
@@ -102,16 +117,20 @@ const facetAxisOptions = (spec: any, axis: string): any[] => {
  * such a ref comes back definite with the sentence gaining "according to …".
  * Reshaped to the slot-option contract so the pickers treat them uniformly.
  */
-export const sourceSlotOptions = (spec: any): any[] =>
+export const sourceSlotOptions = (spec: any): SourceSlotOption[] =>
     facetAxisOptions(spec, 'provenance').filter(
-        (option) => option.value.ref && option.value.value_kind === 'source',
+        (option): option is SourceSlotOption =>
+            !!option.value.ref && option.value.value_kind === 'source',
     );
+
+/** A source slot's option: a provenance, so its value always carries a ref. */
+export type SourceSlotOption = SlotOption & { value: { ref: GraphRef } };
 
 /**
  * Provenance labels arrive dcid-squished ("WorldDevelopmentIndicators") while
  * the engine's own rendered sentence spaces them out — mirror that spacing.
  */
-export const sourceOptionLabel = (option: any): string =>
+export const sourceOptionLabel = (option: OptionLike | null | undefined): string =>
     optionLabel(option)
         .replace(/_/g, ' ')
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2');
@@ -250,13 +269,11 @@ export const sharedEntityOptions = (
     if (completeEntries.length === 0 || completeEntries.length !== entries.length) return undefined;
 
     const [first, ...rest] = completeEntries;
-    const options = first.options.filter((option: any) => {
-        const dcid = option?.value?.ref?.ref;
+    const options = first.options.filter((option) => {
+        const dcid = option.value.ref?.ref;
         return (
             dcid &&
-            rest.every((entry) =>
-                entry.options.some((other: any) => other?.value?.ref?.ref === dcid),
-            )
+            rest.every((entry) => entry.options.some((other) => other.value.ref?.ref === dcid))
         );
     });
 
@@ -647,28 +664,24 @@ export const planPlaceOptions = (
  * the years dimension ("24 yrs"), else nothing. Slot options read
  * `optionSeriesLabel` instead.
  */
-export const optionCoverageLabel = (option: any): string | null => {
-    if (typeof option?.obs_count === 'number') {
-        return `${formatCount(option.obs_count)} obs`;
-    }
-
+export const optionCoverageLabel = (option: OptionLike | null | undefined): string | null => {
     const coverage = option?.coverage;
 
     if (!coverage) {
         return null;
     }
 
-    const dims: any[] = coverage.dimensions ?? [];
+    const dims = (coverage.kind === 'bare' ? null : coverage.dimensions) ?? [];
     const obs =
-        typeof coverage.observation_count === 'number'
+        coverage.kind === 'exact'
             ? coverage.observation_count
-            : dims.find((d) => d?.label === 'observations')?.count;
+            : dims.find((d) => d.label === 'observations')?.count;
 
     if (typeof obs === 'number') {
         return `${formatCount(obs)} obs`;
     }
 
-    const years = dims.find((d) => d?.label === 'years')?.count;
+    const years = dims.find((d) => d.label === 'years')?.count;
 
     if (typeof years === 'number') {
         return `${formatCount(years)} yrs`;
@@ -683,7 +696,7 @@ export const optionCoverageLabel = (option: any): string | null => {
  * (dfo-apis src/search/models/options.py) is populated on every option or
  * none for a given list, so checking one option settles it for the rest.
  */
-export const isLevelScopedOptions = (options: any[]): boolean =>
+export const isLevelScopedOptions = (options: readonly SlotOption[]): boolean =>
     options.length > 0 && options[0]?.relation != null;
 
 /**
@@ -697,12 +710,12 @@ export const isLevelScopedOptions = (options: any[]): boolean =>
  * parent, child, or root option.
  */
 export type LevelPartition = {
-    parent: any | null;
-    children: any[];
-    roots: any[];
+    parent: SlotOption | null;
+    children: SlotOption[];
+    roots: SlotOption[];
 };
 
-export const partitionLevelOptions = (options: any[]): LevelPartition => ({
+export const partitionLevelOptions = (options: readonly SlotOption[]): LevelPartition => ({
     parent: options.find((option) => option?.relation === 'parent') ?? null,
     children: options.filter((option) => option?.relation === 'child'),
     roots: options.filter((option) => option?.relation === 'root'),
@@ -710,7 +723,7 @@ export const partitionLevelOptions = (options: any[]): LevelPartition => ({
 
 /** One root of an unbound level-scoped slot's two-level menu, with the
  *  children the wire sent under it. */
-export type RootGroup = { root: any; children: any[] };
+export type RootGroup = { root: SlotOption; children: SlotOption[] };
 
 /**
  * An unbound hierarchical slot's roots, each with its children grouped by
@@ -721,10 +734,10 @@ export type RootGroup = { root: any; children: any[] };
  * served count is that child alone.
  */
 export const rootGroups = (partition: LevelPartition): RootGroup[] => {
-    const byParent = new Map<string, any[]>();
+    const byParent = new Map<string, SlotOption[]>();
 
     for (const child of partition.children) {
-        const parent: string | undefined = child?.parent;
+        const { parent } = child;
 
         if (!parent) continue;
 
@@ -738,7 +751,7 @@ export const rootGroups = (partition: LevelPartition): RootGroup[] => {
     }
 
     return partition.roots.map((root) => {
-        const dcid: string | undefined = root?.value?.ref?.ref;
+        const dcid = root.value.ref?.ref;
         const children = dcid ? (byParent.get(dcid) ?? []) : [];
         const [only] = children;
 
@@ -746,7 +759,7 @@ export const rootGroups = (partition: LevelPartition): RootGroup[] => {
         // pick twice ("project-type intervention (group)" and "project-type
         // intervention"): the child stands for both.
         return children.length === 1 &&
-            root?.served_rows != null &&
+            root.served_rows != null &&
             only?.served_rows === root.served_rows
             ? { root: only, children: [] }
             : { root, children };
@@ -769,17 +782,26 @@ export const rootGroups = (partition: LevelPartition): RootGroup[] => {
  */
 export type LevelMenu =
     | { kind: 'unbound'; groups: RootGroup[] }
-    | { kind: 'bound'; up: any | null; current: any; down: any[]; sideways: RootGroup[] };
+    | {
+          kind: 'bound';
+          up: SlotOption | null;
+          current: SlotOption;
+          down: SlotOption[];
+          sideways: RootGroup[];
+      };
 
-export const levelMenu = (binding: any, options: any[]): LevelMenu => {
+export const levelMenu = (
+    binding: Slot['binding'] | null | undefined,
+    options: readonly SlotOption[],
+): LevelMenu => {
     const partition = partitionLevelOptions(options);
     const boundValue = binding?.kind === 'value' ? binding.value : null;
-    const boundDcid: string | undefined = boundValue?.ref?.ref;
+    const boundDcid = boundValue?.ref?.ref;
 
-    if (!boundDcid) return { kind: 'unbound', groups: rootGroups(partition) };
+    if (!boundValue || !boundDcid) return { kind: 'unbound', groups: rootGroups(partition) };
 
     const { current, rest } = splitCurrentPick(partition.roots, boundDcid);
-    const isDown = (child: any) => child?.parent === boundDcid;
+    const isDown = (child: SlotOption) => child.parent === boundDcid;
 
     return {
         kind: 'bound',
@@ -798,7 +820,7 @@ export const levelMenu = (binding: any, options: any[]): LevelMenu => {
  *  accumulate it: the whole `{options, truncated}` pair the wire event
  *  carries, not just the option list — the shape every menu renders from
  *  (see mergeSlotOptionsEntry below). */
-export type SlotOptionsEntry = { options: any[]; truncated: boolean };
+export type SlotOptionsEntry = { options: SlotOption[]; truncated: boolean };
 
 const EMPTY_OPTIONS_ENTRY: SlotOptionsEntry = { options: [], truncated: false };
 
@@ -831,7 +853,7 @@ export const mergeSlotOptionsEntry = (
  *  reads the taxonomy label directly. The one check both a bound slot's
  *  menu and Add Criteria's submenu need, so the same slot doesn't gain a
  *  different label depending on which entry point rendered it. */
-export const slotOptionLabel = (slot: any, option: any): string =>
+export const slotOptionLabel = (slot: any, option: OptionLike): string =>
     slot?.key?.axis === 'source' ? sourceOptionLabel(option) : optionLabel(option);
 
 /** "1,284 rows", or "up to 1,284 rows" when `exact` is false, for a count
@@ -892,7 +914,7 @@ export const servedSeriesCount = (spec: any): number | null =>
  *  that serves every row, narrows nothing. */
 export const slotOffersChoice = (slot: any, entry: SlotOptionsEntry, spec: any): boolean => {
     const bound = new Set(slotBoundDcids(slot));
-    const binds = (option: any) => bound.has(option?.value?.ref?.ref);
+    const binds = (option: SlotOption) => bound.has(option.value.ref?.ref ?? '');
 
     if (bound.size > 0 && !entry.options.every(binds)) return true;
     if (bound.size === 1) return false;
@@ -909,7 +931,7 @@ export const slotOffersChoice = (slot: any, entry: SlotOptionsEntry, spec: any):
 /** True once the engine confirmed no data for an entity option
  *  (optionCoverage's 'probed-zero'): the row stays in its menu but reads
  *  muted rather than vanishing, whether or not it's also the current pick. */
-export const optionMuted = (option: any): boolean =>
+export const optionMuted = (option: OptionLike | null | undefined): boolean =>
     coverageState(option?.coverage) === 'probed-zero';
 
 /**
@@ -924,10 +946,13 @@ export const optionMuted = (option: any): boolean =>
  * shape (`value.ref.ref`) or PlaceScopeEditor's flat EntityOption shape
  * (`dcid`).
  */
-export const rankOptionsByCoverage = (options: any[], boundDcid?: string | null): any[] => {
+export const rankOptionsByCoverage = <T extends OptionLike>(
+    options: T[],
+    boundDcid?: string | null,
+): T[] => {
     const { main, hidden } = partitionOptions(options, {
-        state: (option) => coverageState(option?.coverage),
-        richness: (option) => coverageRichness(option?.coverage),
+        state: (option) => coverageState(option.coverage),
+        richness: (option) => coverageRichness(option.coverage),
         label: (option) => optionLabel(option),
         isPinned: (option) => boundDcid != null && entityOptionDcid(option) === boundDcid,
     });
@@ -1706,7 +1731,7 @@ const LEGACY_SLOT_HEADINGS: Record<string, string> = { how: 'Sector', what: 'Typ
 // The cells of one series' rows: one per entity role and one per axis
 // property, or, without axes, the subject entity and the how and what
 // slots' bound values.
-const seriesCells = (s: any, spec: any, axes: boolean): Record<string, string> => {
+const seriesCells = (s: ObservationSeries, spec: any, axes: boolean): Record<string, string> => {
     if (!axes) {
         const subject = seriesEntity(s);
 
@@ -1878,7 +1903,7 @@ export const previewColumns = (parts: { spec: any }[]): PreviewColumn[] => {
 };
 
 // A series' party kind per entity column.
-const seriesKinds = (s: any): Record<string, PartyKind> => {
+const seriesKinds = (s: ObservationSeries): Record<string, PartyKind> => {
     const kinds: Record<string, PartyKind> = {};
 
     for (const entity of s?.entities ?? []) {
@@ -1944,26 +1969,31 @@ export const previewCellText = (
 // `conversion` record), where the Spec's identity states the basis the
 // values were converted to. A preview that could not apply the conversion
 // keeps the unit the points are in.
-const seriesUnit = (series: any, spec: any): string | null =>
+const seriesUnit = (series: ObservationSeries, spec: any): string | null =>
     (series?.conversion ? unitWithBasis(spec) : null) ??
     formatUnit(series?.facet?.unit) ??
     formatUnit(spec?.facets?.unit);
 
+/** The observation series a Spec carries; none before its observations
+ *  arrive. */
+export const observationSeries = (
+    spec: Pick<Spec, 'observations'> | null | undefined,
+): ObservationSeries[] => spec?.observations?.series ?? [];
+
 export const flattenRows = (spec: any): ResultRow[] => {
-    const series = spec?.observations?.series ?? [];
     const axes = carriesAxes(spec);
 
-    const rows: ResultRow[] = series.flatMap((s: any) => {
+    const rows: ResultRow[] = observationSeries(spec).flatMap((s) => {
         const cells = seriesCells(s, spec, axes);
         const kinds = seriesKinds(s);
 
-        return (s?.points ?? []).map((point: any) => ({
-            year: String(point?.date ?? '—'),
+        return s.points.map((point) => ({
+            year: point.date,
             cells,
             kinds,
-            value: typeof point?.value === 'number' ? point.value : null,
+            value: point.value,
             unit: seriesUnit(s, spec),
-            method: formatMethod(s?.facet?.measurementMethod),
+            method: formatMethod(s.facet?.measurementMethod),
         }));
     });
 
@@ -1976,7 +2006,7 @@ export type MethodChoice = {
     label: string;
     checked: boolean;
     /** The facet binding a pick posts. Null drops the axis. */
-    binding: IdentityFacets['measurementMethod'] | null;
+    binding: IdentityFacetBinding['measurementMethod'] | null;
 };
 
 export type MethodPicker = { label: string; choices: MethodChoice[] };
@@ -2053,11 +2083,12 @@ export const methodPicker = (spec: any): MethodPicker | null => {
         return null;
     }
 
-    const bound: IdentityFacets['measurementMethod'] = spec?.identity?.facets?.measurementMethod;
+    const bound: IdentityFacetBinding['measurementMethod'] =
+        spec?.identity?.facets?.measurementMethod;
     const boundRefs: (string | null)[] =
         bound?.state === 'set' ? bound.refs : bound && 'ref' in bound ? [bound.ref] : [];
     const served = servedMethod(spec);
-    const optionRef = (option: any): string | null => option.value.ref?.ref ?? null;
+    const optionRef = (option: SlotOption): string | null => option.value.ref?.ref ?? null;
 
     if (boundRefs.length === 0 && options.length === 1 && served.ref === optionRef(options[0])) {
         return null;
@@ -2274,7 +2305,7 @@ export const flattenPartsRows = (
 // A part's own outcome, in plain language, for its variable line and for a
 // marked unresolved phrase's hover title. Both surfaces read this one map,
 // so they say the same thing for the same reason code.
-const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
+const NO_DATA_REASON_TEXT: Record<Known<NoDataReason>, string> = {
     source_not_resolved: "We couldn't match the data source named in that query.",
     source_ambiguous: 'More than one data source matches that wording. Try naming it in full.',
     source_code_not_held: 'No source we search publishes that code for this question.',
@@ -2304,13 +2335,15 @@ const NO_DATA_REASON_TEXT: Record<NoDataReason, string> = {
 };
 
 export const noDataReasonText = (reason?: NoDataReason | null): string =>
-    (reason && NO_DATA_REASON_TEXT[reason]) || 'No data matched this query.';
+    reason && hasKey(NO_DATA_REASON_TEXT, reason)
+        ? NO_DATA_REASON_TEXT[reason]
+        : 'No data matched this query.';
 
 // Names the failed gate for every reason pairing a flagged_match with one.
 // The flagged_match of role_incompatible, qualifier_not_bound and
 // denominator_not_available carries no gate since no availability verdict
 // was taken.
-const NO_DATA_GATE_TEXT: Record<NoDataGate, string> = {
+const NO_DATA_GATE_TEXT: Record<Known<NoDataGate>, string> = {
     no_member_has_data_at_place: 'That match has no data at this place.',
     no_member_asserts_bound_properties: "That match doesn't carry the condition this query needs.",
     only_alternate_has_data: 'Only a different variable has data for this request.',
@@ -2386,7 +2419,7 @@ export const noDataText = (
         if (compared) return `${base} ${compared}`;
     }
 
-    if (noData?.gate) {
+    if (noData?.gate && hasKey(NO_DATA_GATE_TEXT, noData.gate)) {
         return `${base} ${NO_DATA_GATE_TEXT[noData.gate]}`;
     }
 

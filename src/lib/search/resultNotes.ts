@@ -108,6 +108,11 @@ export function downloadNote(
         : null;
 }
 
+/** A warning param that holds a list of strings, or [] for one that holds a number or a
+ *  string. */
+const listParam = (value: number | string | string[] | undefined): string[] =>
+    Array.isArray(value) ? value : [];
+
 /** The "Data not available" line for a part's failed UN reads, read from
  *  the `variables` and `variable_labels` params of its
  *  `un_system_unavailable` warnings (dfo-apis un_system.py
@@ -134,9 +139,9 @@ export function unSystemFailedReads(
     // Each variable's label, empty where the warning holds none.
     const labels = new Map(
         unavailable.flatMap((warning) => {
-            const names = warning.params?.variable_labels ?? [];
+            const names = listParam(warning.params?.variable_labels);
 
-            return (warning.params?.variables ?? []).map(
+            return listParam(warning.params?.variables).map(
                 (dcid, at) => [dcid, names[at] ?? ''] as const,
             );
         }),

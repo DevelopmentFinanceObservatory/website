@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeResponse } from '../searchClient.ts';
 import {
     readSearchShareRequest,
     SEARCH_SHARE_MAX_PARTS,
     searchSharePart,
 } from '../searchShareRequest.ts';
 import type { HydratedPart, Spec } from '../types.ts';
+import { definite, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 
 const part = (partIndex: number) => ({
@@ -105,8 +105,11 @@ test('a part reads with its assumptions, [] and null included, and a malformed o
         text: 'official development assistance',
     };
     const scope = { kind: 'place_scope', binding_ref: 'where:', refs: [], text: 'every country' };
+    // The wire's `refs` is optional, so an item without it reads.
+    const donors = { kind: 'open_role', binding_ref: 'origin:', text: 'every donor' };
 
     assert.deepEqual(reads([oda, scope])?.assumptions, [oda, scope]);
+    assert.deepEqual(reads([donors])?.assumptions, [donors]);
     assert.deepEqual(reads([])?.assumptions, []);
     assert.equal(reads(null)?.assumptions, null);
     assert.ok(reads(undefined));
@@ -115,6 +118,7 @@ test('a part reads with its assumptions, [] and null included, and a malformed o
         oda,
         [{ ...oda, kind: 'guess' }],
         [{ ...oda, refs: [27] }],
+        [{ ...oda, refs: null }],
         [{ ...oda, text: null }],
         [{ ...oda, note: 'extra' }],
         [{ ...oda, text: '' }],
@@ -143,12 +147,12 @@ test('a part whose identity holds entity_groups is refused', () => {
 });
 
 test("a definite part shares its Spec's groups beside the identity, and null when it has none", () => {
-    const [response] = normalizeResponse(fixtures['definite-rank-operation']).parts;
+    const response = definite(resolution(fixtures['definite-rank-operation']).parts[0]);
     const hydrated: HydratedPart = {
         index: 0,
         variableText: response.variable_text ?? null,
         part: response,
-        hydratedSpec: response.spec!,
+        hydratedSpec: response.spec,
         observationsPending: false,
         phase: 'done',
         editError: null,

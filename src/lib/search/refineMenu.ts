@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs, slots and bindings as `any`, dereferencing only the members it names and tolerating any that is missing */
 /**
  * What Refine offers: the bindings of the answer's definite parts that no
  * visible token states (SentenceToken.states), each with something to pick:
