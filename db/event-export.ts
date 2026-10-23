@@ -29,10 +29,10 @@ import { requiredEnv } from './connection.ts';
  * read leaves BigQuery as it was.
  *
  * Rows keep no raw ids and no free text. `visitor_id` and `user_id` become
- * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, `page` loses its query
- * string, and `props` keeps only the keys PROP_RULES names for the event,
+ * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, `page` keeps a site path
+ * only (PAGE_PATH), and `props` keeps only the keys PROP_RULES names for the event,
  * each only when its value passes the key's rule. POST /api/events takes
- * any props from the browser, so each value is checked.
+ * any page and props from the browser, so each value is checked.
  */
 
 /** A value is kept when it passes its key's rule. */
@@ -229,6 +229,21 @@ export const EXPORT_SCHEMA: TableField[] = [
     { name: 'props', type: 'JSON', mode: 'REQUIRED' },
 ];
 
+// A path on the site: a slash, then letters, digits and `_ - . : /`, up to
+// the 300 characters POST /api/events keeps. The routes under src/app use
+// fixed names plus dcids (/data/sources/<dcid>), doc slugs, gallery slugs,
+// UUIDs (/studio/<id>) and share ids (/s/<id>, /embed/<id>), all within
+// that set. Spaces, `@`, `,` and `%` escapes are refused, so text a visitor
+// typed does not pass.
+const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;
+
+/** The page's path without its query string or fragment, null unless it is a site path. */
+const exportPage = (page: string | null): string | null => {
+    const path = page?.split(/[?#]/, 1)[0];
+
+    return path !== undefined && PAGE_PATH.test(path) ? path : null;
+};
+
 const digest = (key: string, id: string | null): string | null =>
     id === null ? null : createHmac('sha256', key).update(id).digest('hex');
 
@@ -236,9 +251,8 @@ export const exportRow = (row: SourceEvent, hmacKey: string): ExportRow => ({
     id: row.id,
     created_at: row.createdAt,
     name: row.name,
-    // The path alone, as the event log line keeps it (src/lib/events/eventLog.ts).
     // Feedback sends its page with the query string, which can hold a search.
-    page: row.page?.split(/[?#]/, 1)[0] ?? null,
+    page: exportPage(row.page),
     signed_in: row.userId !== null,
     visitor_hash: digest(hmacKey, row.visitorId),
     user_hash: digest(hmacKey, row.userId),
@@ -292,6 +306,8 @@ export type Warehouse = {
     ensureTable(): Promise<void>;
     /** The latest UTC day the table holds, null when it is empty. */
     latestDay(): Promise<string | null>;
+    /** The rows the day's partition holds. */
+    dayRows(day: string): Promise<number>;
     /** Replaces the day's partition with the rows in `file`, one JSON object a line. */
     replaceDay(day: string, file: string): Promise<void>;
 };
@@ -365,6 +381,18 @@ export const bigQueryWarehouse = ({
 
             return (rows[0]?.day as string | null | undefined) ?? null;
         },
+        async dayRows(day) {
+            // A range on created_at, so the query scans the one partition.
+            const [rows] = await bigquery.query({
+                query: `SELECT COUNT(*) AS n
+                        FROM \`${projectId}.${datasetId}.event\`
+                        WHERE created_at >= TIMESTAMP(@day)
+                          AND created_at < TIMESTAMP_ADD(TIMESTAMP(@day), INTERVAL 1 DAY)`,
+                params: { day },
+            });
+
+            return Number(rows[0]?.n ?? 0);
+        },
         async replaceDay(day, file) {
             // Resolves once the load job is done, and throws if it failed.
             await dataset.table(`event$${day.replaceAll('-', '')}`).load(file, {
@@ -381,9 +409,10 @@ export const bigQueryWarehouse = ({
 /**
  * One export run. Each day is written to `scratchFile` page by page, so
  * memory holds one page. The partition is replaced only once the day has
- * been read to its end. A day that reads no rows keeps its partition.
- * Nothing deletes `event` rows, so an empty read is a quiet day or a
- * fault, and the window starts from the latest day BigQuery holds. Logs
+ * been read to its end, and only when the read holds at least as many rows
+ * as the partition. Nothing deletes `event` rows, so a shorter read is a
+ * fault, and a replace never shrinks a partition. A day that reads no rows
+ * and holds none loads nothing. Logs
  * each day as it is done, names the day in a failure, and returns the
  * rows read per day.
  */
@@ -415,6 +444,7 @@ export const runExport = async ({
     try {
         for (const day of days) {
             let rows = 0;
+            let held = 0;
 
             try {
                 await fs.writeFile(scratchFile, '');
@@ -426,7 +456,9 @@ export const runExport = async ({
                     rows += page.length;
                 }
 
-                if (rows > 0) {
+                held = await warehouse.dayRows(day);
+
+                if (rows > 0 && rows >= held) {
                     await warehouse.replaceDay(day, scratchFile);
                 }
             } catch (error) {
@@ -435,11 +467,11 @@ export const runExport = async ({
                 throw new Error(`event export ${day}: ${message}`, { cause: error });
             }
 
-            log(
-                rows > 0
-                    ? `${day}: ${rows} events loaded`
-                    : `${day}: no events read, partition kept`,
-            );
+            if (rows < held) {
+                log(`${day}: ${rows} events read, partition holds ${held}, partition kept`);
+            } else {
+                log(rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`);
+            }
             loaded.push({ day, rows });
         }
     } finally {

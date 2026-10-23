@@ -96,23 +96,31 @@ through today, so a missed run is made up by the next one. When the table
 is empty or missing, the Job creates it and loads every day from the first
 event. Each day is read in pages into a scratch file, then loaded into its
 partition (`event$YYYYMMDD`, `WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so
-a column added to the schema reaches the table on the next load). A day
-that reads no rows keeps its partition, since nothing deletes `event`
-rows. The Job logs each day as it finishes, and a failure names the day
+a column added to the schema reaches the table on the next load). A
+replace never shrinks a partition. Before the load the Job counts the
+rows the partition holds, and when the day read fewer it keeps the
+partition and logs the day with both counts, since nothing deletes
+`event` rows. A day that reads no rows and holds none loads nothing. The
+Job logs each day as it finishes, and a failure names the day
 it failed on. A failed day keeps its partition as it was.
 
 The table is partitioned by day on `created_at`:
 
-| Column         | Type      | Value                                             |
-| -------------- | --------- | ------------------------------------------------- |
-| `id`           | INT64     | `event.id`                                        |
-| `created_at`   | TIMESTAMP | `event.created_at`                                |
-| `name`         | STRING    | `event.name`                                      |
-| `page`         | STRING    | `event.page` without its query string or fragment |
-| `signed_in`    | BOOL      | whether `user_id` is set                          |
-| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one |
-| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one    |
-| `props`        | JSON      | the event's allow-listed props                    |
+| Column         | Type      | Value                                                      |
+| -------------- | --------- | ---------------------------------------------------------- |
+| `id`           | INT64     | `event.id`                                                 |
+| `created_at`   | TIMESTAMP | `event.created_at`                                         |
+| `name`         | STRING    | `event.name`                                               |
+| `page`         | STRING    | `event.page` without its query string or fragment, or null |
+| `signed_in`    | BOOL      | whether `user_id` is set                                   |
+| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one          |
+| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one             |
+| `props`        | JSON      | the event's allow-listed props                             |
+
+`page` keeps a path only when it is a slash followed by letters, digits
+and `_ - . : /`, up to 300 characters, the characters the site's routes
+use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser
+posts as its page exports as null.
 
 `PROP_RULES` in `db/event-export.ts` lists the props each event keeps:
 enums, booleans, counts and ids, each checked against its rule, since the

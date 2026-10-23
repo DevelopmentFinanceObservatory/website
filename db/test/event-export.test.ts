@@ -116,6 +116,34 @@ test('exportRow leaves the hashes null for a guest without consent', () => {
     assert.equal(row.page, '/topics/health');
 });
 
+test('exportRow keeps a site path as the page and refuses other text', async (t) => {
+    const cases: [string, string | null, string | null][] = [
+        ['a fixed route', '/data', '/data'],
+        ['the home page', '/', '/'],
+        ['a source page', '/data/sources/dc/base/OECD_CRS', '/data/sources/dc/base/OECD_CRS'],
+        [
+            'a studio conversation',
+            '/studio/0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+            '/studio/0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+        ],
+        ['a share', '/s/aB3dE5fG7h', '/s/aB3dE5fG7h'],
+        ['an embed', '/embed/aB3dE5fG7h', '/embed/aB3dE5fG7h'],
+        ['a doc with its query string', '/docs/methods?tab=log#top', '/docs/methods'],
+        ['no page', null, null],
+        ['a name', 'Ana Silva', null],
+        ['an email', '/ana@example.org', null],
+        ['a path with spaces', '/my name is Ana', null],
+        ['an escaped space', '/my%20name', null],
+        ['a path longer than the route keeps', `/${'a'.repeat(300)}`, null],
+    ];
+
+    for (const [label, page, kept] of cases) {
+        await t.test(label, () => {
+            assert.equal(exportRow(sourceEvent({ page }), KEY).page, kept);
+        });
+    }
+});
+
 test('exportDays replaces from the day before the latest loaded day through today', async (t) => {
     const cases: [string, Parameters<typeof exportDays>[0], string[]][] = [
         ['no event at all', { latest: null, first: null, today: '2026-10-23' }, []],
@@ -157,6 +185,9 @@ const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
         },
         async latestDay() {
             return [...partitions.keys()].sort().at(-1) ?? null;
+        },
+        async dayRows(day) {
+            return partitions.get(day)?.length ?? 0;
         },
         async replaceDay(day, file) {
             calls.push(`replace ${day}`);
@@ -251,6 +282,36 @@ test('runExport keeps the partitions of days that read no rows', async () => {
     assert.deepEqual(partitions, before);
     assert.deepEqual(calls, ['ensureTable', 'ensureTable']);
     assert.equal(await warehouse.latestDay(), '2026-10-22');
+});
+
+test('runExport keeps a partition that holds more rows than the day reads', async () => {
+    const held = [{ id: 5 }, { id: 6 }];
+    const partitions = new Map<string, unknown[]>([['2026-10-22', held]]);
+    const { warehouse, calls } = fakeWarehouse(partitions);
+    const fresh = sourceEvent({ id: 9, createdAt: '2026-10-23T10:00:00.000000Z' });
+    const logged: string[] = [];
+
+    const loaded = await runExport({
+        source: fakeSource({
+            '2026-10-22': [[sourceEvent({ id: 6, createdAt: '2026-10-22T10:00:00.000000Z' })]],
+            '2026-10-23': [[fresh]],
+        }),
+        warehouse,
+        hmacKey: KEY,
+        today: '2026-10-23',
+        scratchFile: scratch(),
+        log: (line) => logged.push(line),
+    });
+
+    assert.deepEqual(loaded, [
+        { day: '2026-10-21', rows: 0 },
+        { day: '2026-10-22', rows: 1 },
+        { day: '2026-10-23', rows: 1 },
+    ]);
+    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
+    assert.equal(partitions.get('2026-10-22'), held);
+    assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY)]);
+    assert.match(logged[1] ?? '', /^2026-10-22: \D*1\D+2\D*$/);
 });
 
 test('runExport names the day it failed on and leaves that day as it was', async () => {
