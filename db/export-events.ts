@@ -21,8 +21,11 @@ async function main(): Promise<void> {
         setCloudSqlRuntimeStream(cloudSql.stream);
     }
 
-    // One connection suffices, since the run reads one page at a time.
-    const pool = buildRuntimePool(process.env, { max: 1 });
+    // One connection suffices, since the run reads one page at a time. A
+    // page read that runs past 5 minutes fails the run, well inside the
+    // Job's 1800 s task timeout, so a hung read ends before the next hourly
+    // run starts.
+    const pool = buildRuntimePool(process.env, { max: 1, statement_timeout: 300_000 });
 
     try {
         await runExport({

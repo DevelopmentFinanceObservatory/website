@@ -126,8 +126,9 @@ test('exportRow keeps a site path as the page and refuses other text', async (t)
             '/studio/0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
             '/studio/0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
         ],
-        ['a share', '/s/aB3dE5fG7h', '/s/aB3dE5fG7h'],
-        ['an embed', '/embed/aB3dE5fG7h', '/embed/aB3dE5fG7h'],
+        ['a share', '/s/aB3dE5fG7h', '/s/:id'],
+        ['a page under a share', '/s/aB3dE5fG7h/download/preparing', '/s/:id/download/preparing'],
+        ['an embed', '/embed/aB3dE5fG7h?theme=dark', '/embed/:id'],
         ['a doc with its query string', '/docs/methods?tab=log#top', '/docs/methods'],
         ['no page', null, null],
         ['a name', 'Ana Silva', null],
@@ -142,6 +143,28 @@ test('exportRow keeps a site path as the page and refuses other text', async (t)
             assert.equal(exportRow(sourceEvent({ page }), KEY).page, kept);
         });
     }
+});
+
+test('exportRow exports a share id as its digest, so share events still join', () => {
+    const shareId = 'aB3dE5fG7h';
+    const hashed = createHmac('sha256', KEY).update(shareId).digest('hex');
+    const events: [string, Record<string, unknown>][] = [
+        ['share.create', { shareId, kind: 'card', mode: 'live' }],
+        ['share.open', { shareId, kind: 'card', mode: 'live' }],
+        ['embed.view', { shareId, kind: 'card' }],
+        ['search.action', { shareId, action: 'share' }],
+    ];
+
+    for (const [name, props] of events) {
+        assert.equal(exportRow(sourceEvent({ name, props }), KEY).props.shareId, hashed, name);
+    }
+
+    const refused = exportRow(
+        sourceEvent({ name: 'share.open', props: { shareId: 'not a share id' } }),
+        KEY,
+    );
+
+    assert.deepEqual(refused.props, {});
 });
 
 test('exportDays replaces from the day before the latest loaded day through today', async (t) => {
@@ -366,6 +389,37 @@ test('runExport names the day it failed on and leaves that day as it was', async
     assert.deepEqual(partitions.get('2026-10-21'), [exportRow(fresh, KEY)]);
     assert.equal(partitions.get('2026-10-22'), kept);
     await assert.rejects(fs.access(scratchFile));
+});
+
+test('runExport names the short days read before the day it failed on', async () => {
+    const partitions = new Map<string, unknown[]>([['2026-10-21', [{ id: 5 }, { id: 6 }]]]);
+    const { warehouse, calls } = fakeWarehouse(partitions);
+
+    await assert.rejects(
+        runExport({
+            source: fakeSource(
+                {
+                    '2026-10-21': [[sourceEvent({ id: 6 })]],
+                    '2026-10-22': [[sourceEvent({ id: 9 })]],
+                },
+                '2026-10-22',
+            ),
+            warehouse,
+            hmacKey: KEY,
+            today: '2026-10-22',
+            scratchFile: scratch(),
+            log: () => undefined,
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /^event export 2026-10-22: /);
+            assert.match(error.message, /2026-10-21\D+1\D+2\b/);
+            return true;
+        },
+    );
+
+    assert.deepEqual(calls, ['ensureTable']);
+    assert.equal(partitions.get('2026-10-21')?.length, 2);
 });
 
 test('bigQueryWarehouse loads a day into its partition and lets the schema gain columns', async () => {

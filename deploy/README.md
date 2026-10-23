@@ -103,31 +103,36 @@ that reads fewer is a fault, such as a wrong database, an emptied table
 or a lagging replica. That day keeps its partition, the other days still
 load, and the run then fails naming each short day with both counts. A
 day that reads no rows and holds none loads nothing. The Job logs each
-day as it finishes, and a failure names the day
-it failed on. A failed day keeps its partition as it was.
+day as it finishes. A failure names the day it failed on and any short
+day before it, and that day keeps its partition as it was. A database
+read that runs past 5 minutes fails the run (`statement_timeout` on the
+Job's pool), well inside the Job's 1800 s task timeout.
 
 The table is partitioned by day on `created_at`:
 
-| Column         | Type      | Value                                                      |
-| -------------- | --------- | ---------------------------------------------------------- |
-| `id`           | INT64     | `event.id`                                                 |
-| `created_at`   | TIMESTAMP | `event.created_at`                                         |
-| `name`         | STRING    | `event.name`                                               |
-| `page`         | STRING    | `event.page` without its query string or fragment, or null |
-| `signed_in`    | BOOL      | whether `user_id` is set                                   |
-| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one          |
-| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one             |
-| `props`        | JSON      | the event's allow-listed props                             |
+| Column         | Type      | Value                                                                           |
+| -------------- | --------- | ------------------------------------------------------------------------------- |
+| `id`           | INT64     | `event.id`                                                                      |
+| `created_at`   | TIMESTAMP | `event.created_at`                                                              |
+| `name`         | STRING    | `event.name`                                                                    |
+| `page`         | STRING    | `event.page` without its query string or fragment, a share id as `:id`, or null |
+| `signed_in`    | BOOL      | whether `user_id` is set                                                        |
+| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one                               |
+| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one                                  |
+| `props`        | JSON      | the event's allow-listed props, `shareId` as its HMAC-SHA256 hex                |
 
 `page` keeps a path only when it is a slash followed by letters, digits
 and `_ - . : /`, up to 300 characters, the characters the site's routes
 use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser
-posts as its page exports as null.
+posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and
+the pages under them exports as `:id`, since a share id opens its share.
 
 `PROP_RULES` in `db/event-export.ts` lists the props each event keeps:
 enums, booleans, counts and ids, each checked against its rule, since the
 browser posts its own props. Search query text, refused terms, card units
-and every list or nested object stay in Postgres. A new event name fails
+and every list or nested object stay in Postgres. `shareId` exports as
+its HMAC-SHA256 hex under `EXPORT_ID_HMAC_KEY`, so share, embed and
+search events still join on it. A new event name fails
 the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY`
 changes every digest, so drop the BigQuery table afterwards and let the
 next run reload it.

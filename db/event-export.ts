@@ -29,9 +29,11 @@ import { requiredEnv } from './connection.ts';
  * read leaves BigQuery as it was.
  *
  * Rows keep no raw ids and no free text. `visitor_id` and `user_id` become
- * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, `page` keeps a site path
- * only (PAGE_PATH), and `props` keeps only the keys PROP_RULES names for the event,
- * each only when its value passes the key's rule. POST /api/events takes
+ * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, as does the `shareId` prop,
+ * since a share id opens its share. `page` keeps a site path only
+ * (PAGE_PATH), with the share id in /s/<id> and /embed/<id> written `:id`.
+ * `props` keeps only the keys PROP_RULES names for the event, each only
+ * when its value passes the key's rule. POST /api/events takes
  * any page and props from the browser, so each value is checked.
  */
 
@@ -44,6 +46,8 @@ type PropRule =
     // one id or code without spaces: a UUID, a share or spec id, a dcid, a
     // problem code, a hostname
     | 'token'
+    // a token that leaves as its HMAC-SHA256 digest
+    | 'digest'
     // one of these strings
     | readonly string[];
 
@@ -145,7 +149,7 @@ export const PROP_RULES = {
         format: DATASET_FORMATS,
         bundle: 'boolean',
         mode: SHARE_MODES,
-        shareId: 'token',
+        shareId: 'digest',
     },
     'studio.prompt': {
         turn: 'count',
@@ -159,11 +163,14 @@ export const PROP_RULES = {
     'auth.signin': { provider: 'token' },
     'guest.wall_hit': { prompts: 'count' },
     'feedback.submit': { kind: ['chat', 'widget'] },
-    'embed.view': { shareId: 'token', kind: SHARE_KINDS, host: 'token' },
-    'share.create': { shareId: 'token', kind: SHARE_KINDS, mode: SHARE_MODES },
-    'share.open': { shareId: 'token', kind: SHARE_KINDS, mode: SHARE_MODES, host: 'token' },
+    'embed.view': { shareId: 'digest', kind: SHARE_KINDS, host: 'token' },
+    'share.create': { shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES },
+    'share.open': { shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES, host: 'token' },
     'gallery.open': { slug: 'token', kind: GALLERY_KINDS },
 } satisfies Record<EventName, Record<string, PropRule>>;
+
+const digest = (key: string, id: string | null): string | null =>
+    id === null ? null : createHmac('sha256', key).update(id).digest('hex');
 
 const passes = (rule: PropRule, value: unknown): boolean => {
     switch (rule) {
@@ -172,6 +179,7 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'count':
             return Number.isSafeInteger(value) && (value as number) >= 0;
         case 'token':
+        case 'digest':
             return typeof value === 'string' && TOKEN.test(value);
         default:
             return typeof value === 'string' && rule.includes(value);
@@ -182,6 +190,7 @@ const passes = (rule: PropRule, value: unknown): boolean => {
 export const exportProps = (
     name: string,
     props: Record<string, unknown>,
+    hmacKey: string,
 ): Record<string, unknown> => {
     const rules: Record<string, PropRule> = Object.hasOwn(PROP_RULES, name)
         ? PROP_RULES[name as EventName]
@@ -190,7 +199,10 @@ export const exportProps = (
     return Object.fromEntries(
         Object.entries(rules)
             .filter(([key, rule]) => Object.hasOwn(props, key) && passes(rule, props[key]))
-            .map(([key]) => [key, props[key]]),
+            .map(([key, rule]) => [
+                key,
+                rule === 'digest' ? digest(hmacKey, String(props[key])) : props[key],
+            ]),
     );
 };
 
@@ -237,15 +249,19 @@ export const EXPORT_SCHEMA: TableField[] = [
 // typed does not pass.
 const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;
 
-/** The page's path without its query string or fragment, null unless it is a site path. */
+// The share pages and everything under them, /s/<id>/download/preparing
+// included. The id segment opens the share.
+const SHARE_PATH = /^\/(s|embed)\/[^/]+/;
+
+/**
+ * The page's path without its query string or fragment and with any share
+ * id written `:id`, null unless it is a site path.
+ */
 const exportPage = (page: string | null): string | null => {
     const path = page?.split(/[?#]/, 1)[0];
 
-    return path !== undefined && PAGE_PATH.test(path) ? path : null;
+    return path !== undefined && PAGE_PATH.test(path) ? path.replace(SHARE_PATH, '/$1/:id') : null;
 };
-
-const digest = (key: string, id: string | null): string | null =>
-    id === null ? null : createHmac('sha256', key).update(id).digest('hex');
 
 export const exportRow = (row: SourceEvent, hmacKey: string): ExportRow => ({
     id: row.id,
@@ -256,7 +272,7 @@ export const exportRow = (row: SourceEvent, hmacKey: string): ExportRow => ({
     signed_in: row.userId !== null,
     visitor_hash: digest(hmacKey, row.visitorId),
     user_hash: digest(hmacKey, row.userId),
-    props: exportProps(row.name, row.props),
+    props: exportProps(row.name, row.props, hmacKey),
 });
 
 const DAY_MS = 86_400_000;
@@ -440,8 +456,9 @@ export const runExport = async ({
         first: latest === null ? await source.firstDay() : null,
         today,
     });
-    const loaded: { day: string; rows: number }[] = [];
+    const read: { day: string; rows: number }[] = [];
     const short: string[] = [];
+    const shortDays = () => `read fewer rows than BigQuery holds: ${short.join(', ')}`;
 
     try {
         for (const day of days) {
@@ -465,8 +482,9 @@ export const runExport = async ({
                 }
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
+                const earlier = short.length > 0 ? `; earlier days ${shortDays()}` : '';
 
-                throw new Error(`event export ${day}: ${message}`, { cause: error });
+                throw new Error(`event export ${day}: ${message}${earlier}`, { cause: error });
             }
 
             if (rows < held) {
@@ -475,17 +493,17 @@ export const runExport = async ({
             } else {
                 log(rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`);
             }
-            loaded.push({ day, rows });
+            read.push({ day, rows });
         }
     } finally {
         await fs.rm(scratchFile, { force: true });
     }
 
     if (short.length > 0) {
-        throw new Error(`event export read fewer rows than BigQuery holds: ${short.join(', ')}`);
+        throw new Error(`event export ${shortDays()}`);
     }
 
-    return loaded;
+    return read;
 };
 
 /** The export's own settings. The database settings are the runtime's (db/connection.ts). */
