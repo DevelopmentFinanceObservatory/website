@@ -1,16 +1,21 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
-import { IncomingMessage } from 'node:http';
+import { IncomingMessage, ServerResponse } from 'node:http';
+
+import { isbot } from 'isbot';
 
 import { requestCaller } from './caller.ts';
 
 /**
- * One JSON line on stdout per visitor request, registered at server startup, so
- * Cloud Logging can count visitors by caller. Cloud Run's own request log
- * records Cloudflare's edge address, so it cannot.
+ * One JSON line on stdout per visitor request, written when its response
+ * finishes, so Cloud Logging can count visitors by caller. Cloud Run's own
+ * request log records Cloudflare's edge address, so it cannot. A response
+ * that never finishes, such as an abandoned page render or an `/mcp` event
+ * stream the client closes, writes no line.
  *
  * `caller` is the same `ip:<digest>` the /mcp proxy sends as x-dfo-caller
- * (see caller.ts). The line holds no raw address, query string, cookie or
- * auth header.
+ * (see caller.ts). `status` is the response's status code. `bot` is true
+ * when the User-Agent header is missing, empty or one isbot flags. The line
+ * holds no raw address, query string, cookie, auth header or user agent.
  */
 export type RequestKind = 'page' | 'api' | 'rsc' | 'prefetch';
 
@@ -22,7 +27,8 @@ export type RequestLogEntry = {
     path: string;
     host: string | null;
     kind: RequestKind;
-    userAgent: string | null;
+    status: number;
+    bot: boolean;
 };
 
 type RequestMetadata = Pick<Request, 'url' | 'method' | 'headers'>;
@@ -40,7 +46,8 @@ const isApiPath = (path: string): boolean =>
 
 /**
  * What a request is, or undefined for a static asset, which is not logged.
- * The HTTP diagnostic event carries headers before Next.js normalises them.
+ * `headers` are the request's raw headers, which keep the RSC and prefetch
+ * headers Next.js removes from `request.headers`.
  */
 export const requestKind = (path: string, headers: Headers): RequestKind | undefined => {
     if (STATIC_ASSET.test(path)) {
@@ -60,10 +67,14 @@ export const requestKind = (path: string, headers: Headers): RequestKind | undef
     return headers.get('rsc') === '1' ? 'rsc' : 'page';
 };
 
+/** A request with no user agent comes from a script, so it counts as a bot. */
+const isBot = (userAgent: string | null): boolean => !userAgent || isbot(userAgent);
+
 /** The log entry for a request, or undefined when it is not logged. */
 export const requestLogEntry = (
     request: RequestMetadata,
     caller: string | undefined,
+    status: number,
 ): RequestLogEntry | undefined => {
     const path = new URL(request.url).pathname;
     const kind = requestKind(path, request.headers);
@@ -80,7 +91,8 @@ export const requestLogEntry = (
         path,
         host: request.headers.get('host'),
         kind,
-        userAgent: request.headers.get('user-agent'),
+        status,
+        bot: isBot(request.headers.get('user-agent')),
     };
 };
 
@@ -113,10 +125,10 @@ const requestMetadata = (request: RequestMetadata | IncomingMessage): RequestMet
 };
 
 /** Write the request's log line. Never throws: a logging fault must not fail the request. */
-export const logRequest = (request: RequestMetadata | IncomingMessage): void => {
+export const logRequest = (request: RequestMetadata | IncomingMessage, status: number): void => {
     try {
         const metadata = requestMetadata(request);
-        const entry = requestLogEntry(metadata, requestCaller(metadata.headers));
+        const entry = requestLogEntry(metadata, requestCaller(metadata.headers), status);
 
         if (entry) {
             console.log(JSON.stringify(entry));
@@ -127,38 +139,35 @@ export const logRequest = (request: RequestMetadata | IncomingMessage): void => 
     }
 };
 
-const REQUEST_CHANNELS = ['http.server.request.start', 'http.server.response.finish'];
+const RESPONSE_FINISH = 'http.server.response.finish';
 
-// Share the subscriber and request set across Next dev reloads.
+// Share the subscriber across Next dev reloads.
 const globalForRequestLog = globalThis as typeof globalThis & {
     dfoRequestLogSubscriber?: (message: unknown) => void;
-    dfoLoggedRequests?: WeakSet<IncomingMessage>;
 };
-const loggedRequests = (globalForRequestLog.dfoLoggedRequests ??= new WeakSet());
 
-const onServerRequest = (message: unknown): void => {
+const onResponseFinish = (message: unknown): void => {
     if (
         typeof message === 'object' &&
         message !== null &&
         'request' in message &&
         message.request instanceof IncomingMessage &&
-        !loggedRequests.has(message.request)
+        'response' in message &&
+        message.response instanceof ServerResponse
     ) {
-        loggedRequests.add(message.request);
-        logRequest(message.request);
+        logRequest(message.request, message.response.statusCode);
     }
 };
 
-/** Observe HTTP headers without reading or buffering a request body. */
+/**
+ * Observe HTTP headers without reading or buffering a request body. A request
+ * accepted before this runs is still logged, since its response finishes after.
+ */
 export const registerRequestLogging = (): void => {
-    for (const channel of REQUEST_CHANNELS) {
-        if (globalForRequestLog.dfoRequestLogSubscriber) {
-            unsubscribe(channel, globalForRequestLog.dfoRequestLogSubscriber);
-        }
-
-        // Finish catches a request accepted before instrumentation registered.
-        subscribe(channel, onServerRequest);
+    if (globalForRequestLog.dfoRequestLogSubscriber) {
+        unsubscribe(RESPONSE_FINISH, globalForRequestLog.dfoRequestLogSubscriber);
     }
 
-    globalForRequestLog.dfoRequestLogSubscriber = onServerRequest;
+    subscribe(RESPONSE_FINISH, onResponseFinish);
+    globalForRequestLog.dfoRequestLogSubscriber = onResponseFinish;
 };
