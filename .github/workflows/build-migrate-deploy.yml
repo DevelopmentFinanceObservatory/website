@@ -146,3 +146,17 @@ jobs:
             --region="${{ vars.REGION }}" \
             --project="${{ vars.PROJECT_ID }}" \
             --quiet
+
+      # The event export Job (db/export-events.ts, `node
+      # dist/export-events.cjs`) runs on the image the service runs, so it
+      # moves only once the migrations that grant it its reads have run.
+      # infra defines the Job in production alone and sets
+      # EXPORT_JOB_WEBSITE only there, so dev skips this step.
+      - name: Point the event export job at the new image
+        if: vars.EXPORT_JOB_WEBSITE != ''
+        run: |
+          gcloud run jobs update "${{ vars.EXPORT_JOB_WEBSITE }}" \
+            --image="${{ steps.pinned.outputs.image }}" \
+            --region="${{ vars.REGION }}" \
+            --project="${{ vars.PROJECT_ID }}" \
+            --quiet

@@ -111,3 +111,31 @@ jobs:
                     exit 1
                     ;;
                   esac
+
+            - name: Build event export bundle
+              run: pnpm build:export-events
+
+            # The same check for the event export Job's bundle: with no
+            # environment it must load and fail naming its first setting.
+            - name: Smoke test event export bundle
+              run: |
+                  set +e
+                  stderr_output=$(node dist/export-events.cjs 2>&1 >/dev/null)
+                  status=$?
+                  set -e
+
+                  echo "$stderr_output"
+
+                  if [ "$status" -eq 0 ]; then
+                    echo "::error::event export bundle exited 0 with no environment configured; expected it to fail naming the missing EXPORT_BQ_PROJECT env var."
+                    exit 1
+                  fi
+
+                  case "$stderr_output" in
+                  *"missing required environment variable EXPORT_BQ_PROJECT"*)
+                    ;;
+                  *)
+                    echo "::error::event export bundle's stderr did not mention the missing EXPORT_BQ_PROJECT env var -- it may have failed to load at all rather than failing its env check."
+                    exit 1
+                    ;;
+                  esac

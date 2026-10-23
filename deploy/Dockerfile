@@ -37,6 +37,10 @@ RUN pnpm build
 # pruned or otherwise.
 RUN pnpm run build:migrate
 
+# The event export Job's command (db/export-events.ts), bundled the same way
+# and for the same reason.
+RUN pnpm run build:export-events
+
 FROM node:24-slim AS runtime
 
 # node:24-slim already ships a `node` user at UID 1000, so let useradd pick
@@ -59,6 +63,10 @@ COPY --from=builder --chown=app:app /app/public ./public
 # bundle.
 COPY --from=builder --chown=app:app /app/dist/migrate.cjs ./dist/migrate.cjs
 COPY --from=builder --chown=app:app /app/db/migrations ./db/migrations
+
+# The event export Job's `command` override runs this bundle. It reads no
+# file at runtime, so the bundle travels alone.
+COPY --from=builder --chown=app:app /app/dist/export-events.cjs ./dist/export-events.cjs
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

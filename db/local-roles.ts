@@ -61,6 +61,24 @@ async function ensureRole(client: Client, roleName: string, password: string): P
     }
 }
 
+/**
+ * The NOLOGIN role the event export reads `event` through (migration
+ * 0019). It is cluster-wide, so parallel test databases share it, and a
+ * concurrent create is not an error.
+ */
+export const EXPORT_READER_ROLE = 'website_export_reader';
+
+async function ensureExportReaderRole(client: Client): Promise<void> {
+    await client.query(`
+        DO $$
+        BEGIN
+            CREATE ROLE ${quoteIdentifier(EXPORT_READER_ROLE)} NOLOGIN;
+        EXCEPTION WHEN duplicate_object OR unique_violation THEN
+            NULL;
+        END
+        $$`);
+}
+
 async function ensureDatabaseExists(client: Client, databaseName: string): Promise<void> {
     const { rows } = await client.query('select 1 from pg_database where datname = $1', [
         databaseName,
@@ -81,7 +99,8 @@ async function ensureDatabaseExists(client: Client, databaseName: string): Promi
  * uses), and CREATE + USAGE on schema `public` for the migrator plus USAGE
  * for the runtime role (migration 0000's ALTER DEFAULT PRIVILEGES then
  * extends the runtime role's read/write down to every table the migrator
- * creates).
+ * creates). The NOLOGIN `website_export_reader` gets CONNECT and USAGE, as
+ * the website stack's provision scripts give it.
  *
  * `adminConnection` authenticates as a superuser (the `db-up` container's
  * `postgres` role) -- callers never need a database name for it because
@@ -102,12 +121,16 @@ export async function ensureDatabaseRoles(
     try {
         await ensureRole(bootstrap, migratorUser, migratorPassword);
         await ensureRole(bootstrap, runtimeUser, runtimePassword);
+        await ensureExportReaderRole(bootstrap);
         await ensureDatabaseExists(bootstrap, databaseName);
         await bootstrap.query(
             `grant connect, create on database ${quoteIdentifier(databaseName)} to ${quoteIdentifier(migratorUser)}`,
         );
         await bootstrap.query(
             `grant connect on database ${quoteIdentifier(databaseName)} to ${quoteIdentifier(runtimeUser)}`,
+        );
+        await bootstrap.query(
+            `grant connect on database ${quoteIdentifier(databaseName)} to ${quoteIdentifier(EXPORT_READER_ROLE)}`,
         );
         await bootstrap.query(
             `revoke connect on database ${quoteIdentifier(databaseName)} from public`,
@@ -125,6 +148,9 @@ export async function ensureDatabaseRoles(
         );
         await withinDatabase.query(
             `grant usage on schema public to ${quoteIdentifier(runtimeUser)}`,
+        );
+        await withinDatabase.query(
+            `grant usage on schema public to ${quoteIdentifier(EXPORT_READER_ROLE)}`,
         );
     } finally {
         await withinDatabase.end();
