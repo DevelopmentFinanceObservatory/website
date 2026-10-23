@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads specs and options of either picker shape as `any`, each helper dereferencing only the members it names and tolerating any that is missing */
 /**
  * View helpers: flatten a resolved Spec into UI-ready rows and summaries.
  * Deliberately defensive — the engine contract is authoritative, the UI reads
@@ -16,6 +15,16 @@ import type { EntityChoiceGroup } from './parsedEdit.ts';
 import { entityOptionDcid } from './pickerState.ts';
 import type { OptionLike } from './pickerState.ts';
 import type { ApiError, EntityOption } from './searchClient';
+import type {
+    BreadthDim,
+    DateRange,
+    DownloadFacts,
+    ProvenanceRef,
+    ResolvedFacet,
+    ResolvedStatVars,
+    ShapeUpstream,
+} from '@developmentfinance/client/wire';
+
 import {
     type Assumption,
     type EntityOptions,
@@ -25,10 +34,12 @@ import {
     type GraphRef,
     hasKey,
     type IdentityFacetBinding,
+    knownPart,
     type Known,
     type NoData,
     type NoDataDenominator,
     type NoDataGate,
+    type NoDataPart,
     type NoDataReason,
     type ObservationsOmission,
     type ObservationsOmissionReason,
@@ -39,9 +50,12 @@ import {
     type PlaceOptionsScope,
     type RoleAxis,
     type SentenceToken,
+    type Shape,
     type Slot,
     type SlotOption,
     type Spec,
+    type SpecReading,
+    type TimeWindow,
     type UnitAlternative,
     type UnreadableSpec,
     type Warning,
@@ -53,12 +67,15 @@ import { unitWithBasis } from './unitLabel.ts';
 export const optionLabel = (option: OptionLike | null | undefined): string =>
     option?.value?.ref?.label ?? option?.label ?? '—';
 
+/** True for a non-empty string, which drops the refs a list leaves absent. */
+const isRef = (ref: string | null | undefined): ref is string => !!ref;
+
 /** True when searchClient.flattenSpec could not read this spec, because its `stat_vars`
  *  is not the wire's ResolvedStatVars object shape or it lacks the
  *  definition/resolved split, and logged the raw value to the
  *  console at parse time. A card reading this spec's variable label should
  *  show a failure state. */
-export function statVarsUnreadable(spec: PartSpec | null | undefined): spec is UnreadableSpec {
+export function statVarsUnreadable(spec: SpecReading | null | undefined): spec is UnreadableSpec {
     return !!spec && 'stat_vars_unreadable' in spec;
 }
 
@@ -66,13 +83,13 @@ export function statVarsUnreadable(spec: PartSpec | null | undefined): spec is U
  *  variable_text: its measure label, else its shape's label. Null when
  *  neither is stated — check statVarsUnreadable first to tell an unread
  *  spec from an unnamed one. */
-export const primaryStatVarLabel = (spec: any): string | null =>
+export const primaryStatVarLabel = (spec: SpecReading): string | null =>
     spec?.measure_label ?? spec?.shape?.label ?? null;
 
 /** A part's own variable_text for a card standing in for that part, or the
  *  full original question when the fallback needs more than the bare
  *  variable. */
-export const cardText = (spec: any, fallbackText?: string | null): string | undefined =>
+export const cardText = (spec: SpecReading, fallbackText?: string | null): string | undefined =>
     sentenceOf(spec)?.rendered_sentence ?? fallbackText ?? undefined;
 
 /** One facet axis's observed choices off `spec.facet_options`, deduped by
@@ -117,7 +134,7 @@ const facetAxisOptions = (
  * such a ref comes back definite with the sentence gaining "according to …".
  * Reshaped to the slot-option contract so the pickers treat them uniformly.
  */
-export const sourceSlotOptions = (spec: any): SourceSlotOption[] =>
+export const sourceSlotOptions = (spec: SpecReading): SourceSlotOption[] =>
     facetAxisOptions(spec, 'provenance').filter(
         (option): option is SourceSlotOption =>
             !!option.value.ref && option.value.value_kind === 'source',
@@ -141,19 +158,29 @@ export const sourceOptionLabel = (option: OptionLike | null | undefined): string
  *  beside its own label. Reads any ref carrying `source` and `data_commons`
  *  (a ProvenanceRef, a series' facet.provenance, resolved.facets.provenance,
  *  a ShapeUpstream). */
-export const provenanceOrigin = (provenance: any): string | null =>
-    originLine(provenance?.ref, provenance?.source, provenance?.data_commons);
+export const provenanceOrigin = (
+    provenance:
+        | Pick<ResolvedFacet, 'ref' | 'label' | 'source' | 'data_commons'>
+        | ShapeUpstream
+        | null
+        | undefined,
+): string | null =>
+    originLine(
+        provenance && 'ref' in provenance ? provenance.ref : null,
+        provenance?.source,
+        provenance?.data_commons,
+    );
 
 /** A candidate's origin before any series is read, from its shape: the one
  *  upstream source when there is one, else the Data Commons holding its
  *  variables. Null when DFO is among them, because at a place both hold the
  *  series serves DFO's data. */
-export const shapeOrigin = (shape: any): string | null => {
+export const shapeOrigin = (shape: Shape | null | undefined): string | null => {
     if (shape?.upstream) {
         return provenanceOrigin(shape.upstream);
     }
 
-    const origins: any[] = shape?.data_commons ?? [];
+    const origins = shape?.data_commons ?? [];
 
     if (origins.some((origin) => origin?.id === 'dfo')) {
         return null;
@@ -167,24 +194,24 @@ export const shapeOrigin = (shape: any): string | null => {
 /** The provenance dcids a spec's own sentence names in its source slot: the
  *  bound source values, else the resolved sources the engine renders when
  *  the slot is unbound. Empty when the sentence names no source. */
-const sentenceSourceRefs = (spec: any): string[] => {
+const sentenceSourceRefs = (spec: SpecReading): string[] => {
     const named = (spec?.sentence_plan ?? []).some(
-        (token: any) => token?.kind === 'slot' && token.axis === 'source' && token.text,
+        (token) => token?.kind === 'slot' && token.axis === 'source' && token.text,
     );
 
     if (!named) {
         return [];
     }
 
-    const binding = (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === 'source')?.binding;
-    const refs: any[] =
+    const binding = (spec?.slots ?? []).find((slot) => slot?.key?.axis === 'source')?.binding;
+    const refs: (GraphRef | null | undefined)[] =
         binding?.kind === 'value'
             ? [binding.value?.ref]
             : binding?.kind === 'set'
-              ? binding.values.map((value: any) => value?.ref)
+              ? binding.values.map((value) => value?.ref)
               : (spec?.resolution?.resolved_sources ?? []);
 
-    return refs.map((ref) => ref?.ref).filter(Boolean);
+    return refs.map((ref) => ref?.ref).filter(isRef);
 };
 
 /** The origin beside a title built from the spec's own sentence (a
@@ -192,7 +219,7 @@ const sentenceSourceRefs = (spec: any): string[] => {
  *  when the sentence's source slot already names it. A UN agency answer
  *  reads "... according to United Nations Children's Fund", so its line is
  *  "via UN System Data Commons" alone. */
-export const specOrigin = (spec: any): string | null => {
+export const specOrigin = (spec: SpecReading): string | null => {
     const upstream = spec?.shape?.upstream;
 
     if (upstream && sentenceSourceRefs(spec).includes(upstream.source?.ref)) {
@@ -206,11 +233,11 @@ export const specOrigin = (spec: any): string | null => {
  *  provenance refs the spec carries: the trace's resolved_sources,
  *  resolved.facets.provenance, then each series' source_refs. The source
  *  picker's options are bare GraphRefs, so this is how they get theirs. */
-export const sourceOrigin = (spec: any, dcid: string): string | null => {
-    const refs: any[] = [
+export const sourceOrigin = (spec: SpecReading, dcid: string): string | null => {
+    const refs: (ProvenanceRef | ResolvedFacet | undefined)[] = [
         ...(spec?.resolution?.resolved_sources ?? []),
         spec?.facets?.provenance,
-        ...(spec?.observations?.series ?? []).flatMap((series: any) => series?.source_refs ?? []),
+        ...(spec?.observations?.series ?? []).flatMap((series) => series?.source_refs ?? []),
     ];
 
     return provenanceOrigin(refs.find((ref) => ref?.ref === dcid));
@@ -225,6 +252,9 @@ export type EntityOptionsEntry = Pick<
 >;
 
 export type EntityOptionsBySpec = Record<string, EntityOptionsEntry[]>;
+
+/** A spec as the spec_id-keyed option maps look it up. */
+type KeyedSpec = Pick<Spec, 'spec_id'> | null | undefined;
 
 /** Fold one trailing entity_options event into its spec-keyed map without
  * losing the event's truncation state. */
@@ -241,14 +271,14 @@ export const mergeEntityOptionsEntry = (
  * Sentence tokens carry the authoritative role, including an open
  * destination that identity.entities does not yet contain. */
 export const entityOptionsEntry = (
-    spec: any,
+    spec: KeyedSpec,
     entityOptionsBySpec: EntityOptionsBySpec,
     role: RoleAxis,
 ): EntityOptionsEntry | undefined =>
-    (entityOptionsBySpec[spec?.spec_id] ?? []).find((entry) => entry.role === role);
+    ((spec && entityOptionsBySpec[spec.spec_id]) ?? []).find((entry) => entry.role === role);
 
 export const entitySlotOptions = (
-    spec: any,
+    spec: KeyedSpec,
     entityOptionsBySpec: EntityOptionsBySpec,
     role: RoleAxis,
 ) => entityOptionsEntry(spec, entityOptionsBySpec, role)?.options ?? [];
@@ -257,7 +287,7 @@ export const entitySlotOptions = (
  * shared directional token. A representative part may offer a recipient the
  * others cannot accept, so a hoisted menu may only expose the intersection. */
 export const sharedEntityOptions = (
-    specs: any[],
+    specs: KeyedSpec[],
     entityOptionsBySpec: EntityOptionsBySpec,
     role: RoleAxis,
 ): EntityOptionsEntry | undefined => {
@@ -298,14 +328,14 @@ export const sharedDirectionalEditRoute = (
 };
 
 /** The dcid of a spec's currently-bound entity for a directional role. */
-export const currentEntityDcid = (spec: any, role: EntityRoleKey): string | undefined =>
-    (spec?.entities ?? []).find((entity: any) => entity.role === role)?.ref;
+export const currentEntityDcid = (spec: SpecReading, role: EntityRoleKey): string | undefined =>
+    (spec?.entities ?? []).find((entity) => entity.role === role)?.ref;
 
 /** An open directional axis has no entity_ref but still exposes its own
  * candidate set. Add Criteria uses this for the origin axis, whose sentence
  * plan deliberately has no token while it is open. */
 export const openEntityEntry = (
-    spec: any,
+    spec: KeyedSpec,
     entityOptionsBySpec: EntityOptionsBySpec,
     role: RoleAxis,
 ): EntityOptionsEntry | undefined => {
@@ -316,20 +346,19 @@ export const openEntityEntry = (
 /** A set binding reads its first value as a representative anchor good
  *  enough to gate "is anything bound". currentEntityDcids is the one to
  *  read for the full bound set. */
-export const anchorDcid = (token: SentenceToken, spec: any): string | undefined => {
+export const anchorDcid = (token: SentenceToken, spec: SpecReading): string | undefined => {
     if (token.entity_refs?.length) return token.entity_refs[0];
 
     if (token.axis !== 'where') return undefined;
 
-    const binding = (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === 'where')?.binding;
+    const binding = (spec?.slots ?? []).find((slot) => slot?.key?.axis === 'where')?.binding;
 
     if (binding?.kind === 'value' && binding.value?.value_kind === 'entity') {
         return binding.value?.ref?.ref;
     }
 
     if (binding?.kind === 'set') {
-        return (binding.values ?? []).find((value: any) => value?.value_kind === 'entity')?.ref
-            ?.ref;
+        return (binding.values ?? []).find((value) => value?.value_kind === 'entity')?.ref?.ref;
     }
 
     return undefined;
@@ -337,16 +366,18 @@ export const anchorDcid = (token: SentenceToken, spec: any): string | undefined 
 
 /** Plural sibling of currentEntityDcid (which stops at the first match),
  *  used wherever more than one entity can be bound to a role at once. */
-export const currentEntityDcids = (spec: any, role: EntityRoleKey): string[] =>
+export const currentEntityDcids = (spec: SpecReading, role: EntityRoleKey): string[] =>
     (spec?.entities ?? [])
-        .filter((entity: any) => entity.role === role)
-        .map((entity: any) => entity.ref)
+        .filter((entity) => entity.role === role)
+        .map((entity) => entity.ref)
         .filter((ref: unknown): ref is string => typeof ref === 'string' && ref.length > 0);
 
 /** BindingSet is illegal at length 1, so a single ref renders as a plain
  *  value and only two or more become a set. Zero clears the slot the same
  *  way "Any place" already does. */
-export const entitySlotBindingForRefs = (refs: { dcid: string; label: string }[]): any => {
+export const entitySlotBindingForRefs = (
+    refs: { dcid: string; label: string }[],
+): Slot['binding'] => {
     if (refs.length === 0) return { kind: 'unbound' };
 
     const values = refs.map((ref) => ({
@@ -371,7 +402,7 @@ export const entitySlotBindingForRefs = (refs: { dcid: string; label: string }[]
  */
 export const placeEditorPickRoute = (
     token: SentenceToken,
-    spec: any,
+    spec: SpecReading,
 ):
     | { kind: 'entity'; role: RoleAxis }
     | { kind: 'where'; whereIndex: number }
@@ -380,7 +411,7 @@ export const placeEditorPickRoute = (
         return { kind: 'entity', role: token.role };
     }
 
-    const whereIndex = (spec?.slots ?? []).findIndex((slot: any) => slot?.key?.axis === 'where');
+    const whereIndex = (spec?.slots ?? []).findIndex((slot) => slot?.key?.axis === 'where');
 
     // No where slot to bind: the pick falls back to the typed-text path.
     return whereIndex === -1 ? { kind: 'text' } : { kind: 'where', whereIndex };
@@ -438,10 +469,10 @@ export type PlaceOptionsBySpec = Record<
  *  spec no event has named yet (the trailing events haven't arrived, or this
  *  spec binds no observationAbout place at all). */
 export const placeOptionsForSpec = (
-    spec: any,
+    spec: KeyedSpec,
     placeOptionsBySpec: PlaceOptionsBySpec,
 ): Partial<Record<PlaceOptionsScope, PlaceOptionsEntry>> | undefined =>
-    placeOptionsBySpec[spec?.spec_id];
+    spec ? placeOptionsBySpec[spec.spec_id] : undefined;
 
 /** Fold one trailing place_options event into its spec-keyed map. Unlike
  *  mergeEntityOptionsEntry's append, a (spec_id, scope) pair has at most one
@@ -853,8 +884,10 @@ export const mergeSlotOptionsEntry = (
  *  reads the taxonomy label directly. The one check both a bound slot's
  *  menu and Add Criteria's submenu need, so the same slot doesn't gain a
  *  different label depending on which entry point rendered it. */
-export const slotOptionLabel = (slot: any, option: OptionLike): string =>
-    slot?.key?.axis === 'source' ? sourceOptionLabel(option) : optionLabel(option);
+export const slotOptionLabel = (
+    slot: Pick<Slot, 'key'> | null | undefined,
+    option: OptionLike,
+): string => (slot?.key?.axis === 'source' ? sourceOptionLabel(option) : optionLabel(option));
 
 /** "1,284 rows", or "up to 1,284 rows" when `exact` is false, for a count
  *  in the terms of `DownloadFacts.rows`: a slot option's or measure
@@ -868,16 +901,20 @@ export const rowsLabel = (
 
 /** The dcids a slot binds: one for a value, each member's for a set, none
  *  when unbound. */
-const slotBoundDcids = (slot: any): string[] => {
+const slotBoundDcids = (slot: Pick<Slot, 'binding'> | null | undefined): string[] => {
     const binding = slot?.binding;
 
-    if (binding?.kind === 'value') return [binding.value?.ref?.ref].filter(Boolean);
+    if (binding?.kind === 'value') return [binding.value?.ref?.ref].filter(isRef);
     if (binding?.kind === 'set') {
-        return (binding.values ?? []).map((value: any) => value?.ref?.ref).filter(Boolean);
+        return (binding.values ?? []).map((value) => value?.ref?.ref).filter(isRef);
     }
 
     return [];
 };
+
+/** A spec's StatVar membership; none for a spec whose `stat_vars` failed to read. */
+export const readStatVars = (spec: SpecReading): ResolvedStatVars | undefined =>
+    statVarsUnreadable(spec) ? undefined : spec.stat_vars;
 
 /** The StatVars a Spec serves, counted from its resolved membership: the
  *  members door's list once it names any (`listed`), else
@@ -887,10 +924,10 @@ const slotBoundDcids = (slot: any): string[] => {
  *  dimension counts the variables with data in the answer's rows, so it
  *  takes no part. */
 const servedMembership = (
-    spec: any,
+    spec: SpecReading,
     listed?: MemberRef[] | null,
 ): { count: number; exact: boolean } | null => {
-    const statVars = spec?.stat_vars;
+    const statVars = readStatVars(spec);
     const served: number | null = listed?.length || (statVars?.served_count ?? null);
 
     if (served != null) return { count: served, exact: true };
@@ -901,7 +938,7 @@ const servedMembership = (
 
 /** How many StatVars the answer serves: the settled served count, else the
  *  family's count. */
-export const servedSeriesCount = (spec: any): number | null =>
+export const servedSeriesCount = (spec: SpecReading): number | null =>
     servedMembership(spec)?.count ?? null;
 
 /** Whether a slot's menu offers anything but what the answer already
@@ -912,7 +949,11 @@ export const servedSeriesCount = (spec: any): number | null =>
  *  two or more spanned options, or one counted option that serves fewer
  *  rows than `spec` (the answer) downloads. One uncounted option, or one
  *  that serves every row, narrows nothing. */
-export const slotOffersChoice = (slot: any, entry: SlotOptionsEntry, spec: any): boolean => {
+export const slotOffersChoice = (
+    slot: Pick<Slot, 'binding'> | null | undefined,
+    entry: SlotOptionsEntry,
+    spec: SpecReading,
+): boolean => {
     const bound = new Set(slotBoundDcids(slot));
     const binds = (option: SlotOption) => bound.has(option.value.ref?.ref ?? '');
 
@@ -1069,9 +1110,13 @@ export type WhySummary = {
 };
 
 // A time window as the user would say it: "since 2015", "2015 to 2020", "2023".
-export const formatWindow = (window: any): string | null => {
-    const start = window?.start_year ?? null;
-    const end = window?.end_year ?? null;
+export const formatWindow = (window: TimeWindow | 'latest' | null | undefined): string | null => {
+    if (window == null || window === 'latest') {
+        return null;
+    }
+
+    const start = window.start_year ?? null;
+    const end = window.end_year ?? null;
 
     if (start == null && end == null) {
         return null;
@@ -1104,7 +1149,7 @@ const orList = (labels: string[]): string =>
     new Intl.ListFormat('en-GB', { type: 'disjunction' }).format(labels);
 
 // The years a DateRange spans.
-const dateRange = (range: any): string | null => {
+const dateRange = (range: DateRange | null | undefined): string | null => {
     const start = range?.start?.slice(0, 4) ?? null;
     const end = range?.end?.slice(0, 4) ?? null;
 
@@ -1118,7 +1163,7 @@ const dateRange = (range: any): string | null => {
 // Years in order of precedence: the window the query named, the coverage
 // window, the span of the served variables' data, then the year a broad
 // answer counts.
-const yearsText = (spec: any): string | null => {
+const yearsText = (spec: SpecReading): string | null => {
     const named = formatWindow(spec.resolution?.requested_window);
 
     if (named) {
@@ -1131,7 +1176,7 @@ const yearsText = (spec: any): string | null => {
         return covered;
     }
 
-    const served = dateRange(spec.stat_vars?.data_date_range);
+    const served = dateRange(readStatVars(spec)?.data_date_range);
 
     if (served) {
         return served;
@@ -1157,21 +1202,27 @@ const variablesSummary = (count: number, exact: boolean, shapeLabel?: string | n
 };
 
 // The labels of the entities a spec binds to one role.
-const entityLabels = (spec: any, role: EntityRoleKey): string[] =>
+const entityLabels = (spec: SpecReading, role: EntityRoleKey): string[] =>
     (spec.entities ?? [])
-        .filter((entity: any) => entity?.role === role)
-        .map((entity: any) => entity?.label ?? entity?.ref)
+        .filter((entity) => entity?.role === role)
+        .map((entity) => entity?.label ?? entity?.ref)
         .filter(Boolean);
 
 // A coverage dimension's count ("recipients", "places"), null when absent.
-const dimensionCount = (spec: any, label: string): number | null =>
-    (spec?.coverage?.dimensions ?? []).find((dimension: any) => dimension?.label === label)
-        ?.count ?? null;
+export const dimensionCount = (spec: SpecReading, label: string): number | null =>
+    coverageDimensions(spec).find((dimension) => dimension?.label === label)?.count ?? null;
+
+// A spec's coverage dimensions; a bare coverage counts none.
+const coverageDimensions = (spec: SpecReading): BreadthDim[] => {
+    const coverage = spec?.coverage;
+
+    return (coverage && 'dimensions' in coverage ? coverage.dimensions : null) ?? [];
+};
 
 // The scope of a no-place answer. The API narrows one whose full place list
 // is too large to the countries with data, and its coverage then counts
 // "countries" where a full answer counts "places".
-const placeScope = (spec: any): { noun: string; many: string; count: number | null } => {
+const placeScope = (spec: SpecReading): { noun: string; many: string; count: number | null } => {
     const countries = dimensionCount(spec, 'countries');
 
     return countries != null
@@ -1181,11 +1232,11 @@ const placeScope = (spec: any): { noun: string; many: string; count: number | nu
 
 // The roles a spec leaves open: each role whose options came back with
 // nothing bound to it, and the place when no place was named.
-const openRoles = (spec: any, codes: Set<string>): EntityRoleKey[] => {
-    const bound = new Set((spec.entities ?? []).map((entity: any) => entity?.role));
+const openRoles = (spec: SpecReading, codes: Set<string>): EntityRoleKey[] => {
+    const bound = new Set((spec.entities ?? []).map((entity) => entity?.role));
     const open = (spec.entity_options ?? [])
-        .map((entry: any) => entry?.role)
-        .filter((role: any): role is EntityRoleKey => role in ROLE_WORDS && !bound.has(role));
+        .map((entry) => entry?.role)
+        .filter((role): role is EntityRoleKey => role in ROLE_WORDS && !bound.has(role));
 
     if (codes.has('place_scope_defaulted') && !bound.has('observationAbout')) {
         open.push('observationAbout');
@@ -1196,16 +1247,16 @@ const openRoles = (spec: any, codes: Set<string>): EntityRoleKey[] => {
 
 // The label of the slot `bindingRef` names on `spec` ("Type of flow"),
 // null when neither its trace nor its slots carry one.
-const slotLabelOf = (spec: any, bindingRef: string): string | null =>
+const slotLabelOf = (spec: SpecReading, bindingRef: string): string | null =>
     [...(spec.resolution?.slot_filters ?? []), ...(spec.slots ?? [])].find(
-        (entry: any) => entry?.key && keyRef(entry.key) === bindingRef,
+        (entry) => entry?.key && keyRef(entry.key) === bindingRef,
     )?.key?.label ?? null;
 
 const lowerFirst = (text: string): string =>
     /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 
 // One assumption as the panel states it, in the words of its own `text`.
-const assumptionSentence = (spec: any, assumption: Assumption): string => {
+const assumptionSentence = (spec: SpecReading, assumption: Assumption): string => {
     const { kind, binding_ref: ref, text } = assumption;
 
     if (kind === 'place_scope') return `No place was named, so the answer covers ${text}.`;
@@ -1235,7 +1286,7 @@ const assumptionSentence = (spec: any, assumption: Assumption): string => {
  *  role-bearing answer can say no year was named without sending that
  *  warning. */
 export const scopeAssumptions = (
-    spec: any,
+    spec: SpecReading,
     assumptions: readonly Assumption[] | null | undefined,
     warnings?: readonly Pick<Warning, 'code'>[] | null,
 ): string[] => {
@@ -1263,21 +1314,28 @@ const BREAKDOWN_VALUES = 5;
 // The served variables counted by each value of every axis they differ on,
 // from open_axis_facts[].values, which the API counts over the distinct
 // served members.
-const variablesBreakdown = (spec: any): WhyBreakdown[] =>
-    (spec.open_axis_facts ?? [])
-        .filter((fact: any) => fact?.varies && fact.values?.length > 0)
-        .map((fact: any) => ({
-            title: `By ${axisLabel(spec, fact.property)}`,
-            values: fact.values.slice(0, BREAKDOWN_VALUES).map((entry: any) => ({
-                label: capitalise(entry.value?.label ?? entry.value?.ref ?? ''),
-                count: entry.count,
-            })),
-            more: Math.max(fact.values.length - BREAKDOWN_VALUES, 0),
-        }));
+const variablesBreakdown = (spec: SpecReading): WhyBreakdown[] =>
+    (spec.open_axis_facts ?? []).flatMap(({ property, varies, values }) =>
+        varies && values?.length
+            ? [
+                  {
+                      title: `By ${axisLabel(spec, property)}`,
+                      values: values.slice(0, BREAKDOWN_VALUES).map((entry) => ({
+                          label: capitalise(entry.value?.label ?? entry.value?.ref ?? ''),
+                          count: entry.count,
+                      })),
+                      more: Math.max(values.length - BREAKDOWN_VALUES, 0),
+                  },
+              ]
+            : [],
+    );
 
 // "This answer uses 1 of at least 3 variables.", null when
 // the answer serves every member stat_vars.member_count counts.
-const familyNote = (served: number, statVars: any): string | null => {
+const familyNote = (
+    served: number,
+    statVars: Partial<Pick<ResolvedStatVars, 'member_count' | 'member_count_exact'>>,
+): string | null => {
     const members = statVars.member_count;
 
     if (members == null || members <= served) {
@@ -1316,7 +1374,7 @@ const FACET_CHOICE_AXES = [
     ['unit', 'Unit'],
 ] as const;
 
-const facetChoiceValue = (axis: string, facet: any): string | null => {
+const facetChoiceValue = (axis: string, facet: ResolvedFacet): string | null => {
     if (facet.selection === 'per_series') {
         return 'Differs by series';
     }
@@ -1333,17 +1391,17 @@ const facetChoiceValue = (axis: string, facet: any): string | null => {
 // How each facet axis got its value (`resolved.facets[axis].basis`). A
 // slot a declared default filled is one of the part's `assumptions`, which
 // "What we assumed" states (scopeAssumptions).
-const whyChoices = (spec: any): WhyChoice[] =>
+const whyChoices = (spec: SpecReading): WhyChoice[] =>
     FACET_CHOICE_AXES.flatMap(([axis, label]) => {
         const facet = spec.facets?.[axis];
         const reason: string | undefined = facet && CHOICE_REASONS[facet.basis as FacetBasis];
-        const value = reason ? facetChoiceValue(axis, facet) : null;
+        const value = facet && reason ? facetChoiceValue(axis, facet) : null;
 
         return reason && value ? [{ label, value, reason }] : [];
     });
 
 // The licence label of the one source the answer serves, in words.
-const licenceText = (spec: any): string | null =>
+const licenceText = (spec: SpecReading): string | null =>
     spec?.download?.licence?.label ? spaceCamel(spec.download.licence.label) : null;
 
 /** The "About this answer" summary for one definite part: what the search
@@ -1366,17 +1424,17 @@ const licenceText = (spec: any): string | null =>
  *  Coverage's "variables" dimension counts the variables with data in the
  *  answer's rows and chooses nothing here. */
 export const buildWhySummary = (
-    spec: any,
+    spec: SpecReading,
     part?: Pick<Part, 'warnings' | 'variable_text'> | null,
     members?: MembersRead | null,
 ): WhySummary => {
-    const statVars = spec.stat_vars ?? {};
+    const statVars = readStatVars(spec) ?? {};
     const listed = members?.ok ? members.members : null;
     const { count, exact } = servedMembership(spec, listed) ?? { count: 0, exact: true };
     const single = exact && count === 1;
     const member = single && listed?.length === 1 ? listed[0] : null;
     const codes = new Set((part?.warnings ?? []).map((warning) => warning?.code));
-    const sources: any[] = spec.resolution?.resolved_sources ?? [];
+    const sources = spec.resolution?.resolved_sources ?? [];
 
     const name = member
         ? (member.label ?? member.dcid)
@@ -1449,7 +1507,7 @@ export const buildWhySummary = (
         rows,
         family: count > 0 ? familyNote(count, statVars) : null,
         variables,
-        sources: sources.map((ref: any) => ({
+        sources: sources.map((ref) => ({
             ref: ref.ref,
             label: ref.label ?? ref.ref,
             documentation: ref.documentation ?? null,
@@ -1494,7 +1552,7 @@ const roleScope = (count: number, members: number | null, noun: string): string 
  *  scope: the year the counts are for, the values in that year, and each
  *  open role's count against the members with data in any year. A named
  *  provider or recipient closes the sentence. Null without a headline. */
-export const coverageSentence = (spec: any): string | null => {
+export const coverageSentence = (spec: SpecReading): string | null => {
     const headline = spec?.headline;
 
     if (headline?.year == null || headline.observations == null) {
@@ -1548,7 +1606,7 @@ export const coverageSentence = (spec: any): string | null => {
 export const seriesPreviewCaptions = (
     parts: {
         variableText: string | null;
-        spec: any;
+        spec: SpecReading | null | undefined;
         warnings?: Pick<Warning, 'code' | 'params'>[];
     }[],
 ): string[] =>
@@ -1605,7 +1663,9 @@ const UNIT_SYMBOLS: Record<string, string> = {
     Percentage: '%',
 };
 
-export const formatUnit = (unit: any): string | null => {
+export const formatUnit = (
+    unit: { ref?: string | null; label?: string | null } | null | undefined,
+): string | null => {
     const ref: string | null = unit?.ref ?? null;
     const label: string | null = unit?.label ?? null;
 
@@ -1626,7 +1686,9 @@ export const formatUnit = (unit: any): string | null => {
  *  an unlabelled node, so it counts as no label. Null when there is no
  *  method. The picker, its trigger and the Method column all read method
  *  text through here; the posted binding keeps the dcid. */
-export const formatMethod = (method: any): string | null => {
+export const formatMethod = (
+    method: { ref?: string | null; label?: string | null } | null | undefined,
+): string | null => {
     const label: string | null = method?.label !== method?.ref ? (method?.label ?? null) : null;
     const raw: string | null = label ?? method?.ref?.split('/').at(-1) ?? null;
 
@@ -1636,12 +1698,12 @@ export const formatMethod = (method: any): string | null => {
 /** The spec-level unit (resolved.facets.unit), when the engine resolved one:
  *  a currency with its price basis as the byline states it ("Constant 2020
  *  US dollars"), any other unit by its symbol or label. */
-export const specUnit = (spec: any): string | null =>
+export const specUnit = (spec: SpecReading): string | null =>
     unitWithBasis(spec) ?? formatUnit(spec?.facets?.unit);
 
 // The unit in words ("Constant 2020 US dollars", "Percentage"), as the Why
 // panel and the download details name it.
-const unitText = (spec: any): string | null => {
+const unitText = (spec: SpecReading): string | null => {
     const unit = spec?.facets?.unit;
     const text = unit?.label ?? unit?.ref ?? null;
 
@@ -1659,8 +1721,8 @@ export const openAxisFactLabel = (property: string): string => {
 
 /** A constraint property's name for a reader: its slot's label
  *  ("instrument"), else `openAxisFactLabel`. */
-export const axisLabel = (spec: any, property: string): string =>
-    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.ref === property)?.key?.label ??
+export const axisLabel = (spec: SpecReading, property: string): string =>
+    (spec?.slots ?? []).find((slot) => slot?.key?.property?.ref === property)?.key?.label ??
     openAxisFactLabel(property);
 
 // The cell of a row whose part has no such column.
@@ -1672,19 +1734,19 @@ const ROLE_ORDER: string[] = ['origin', 'destination', 'observationAbout'];
 const entityKey = (role: string): string => `entity:${role}`;
 const axisKey = (property: string): string => `axis:${property}`;
 
-const slotOnAxis = (spec: any, axis: string): any =>
-    (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === axis);
+const slotOnAxis = (spec: SpecReading, axis: string): Slot | undefined =>
+    (spec?.slots ?? []).find((slot) => slot?.key?.axis === axis);
 
-const slotOnProperty = (spec: any, property: string): any =>
-    (spec?.slots ?? []).find((slot: any) => slot?.key?.property?.ref === property);
+const slotOnProperty = (spec: SpecReading, property: string): Slot | undefined =>
+    (spec?.slots ?? []).find((slot) => slot?.key?.property?.ref === property);
 
 // The one value ref a slot binds, null for an unbound slot or a set.
-const boundRef = (slot: any): string | null =>
+const boundRef = (slot: Slot | null | undefined): string | null =>
     slot?.binding?.kind === 'value' ? (slot.binding.value?.ref?.ref ?? null) : null;
 
 // Provider and Recipient head their role's column. A single-role series'
 // entity takes the where slot's own label ("Place").
-const roleHeading = (spec: any, role: string): string =>
+const roleHeading = (spec: SpecReading, role: string): string =>
     role === 'origin' || role === 'destination'
         ? ROLE_WORDS[role].one
         : capitalise(slotOnAxis(spec, 'where')?.key?.label ?? ROLE_WORDS.observationAbout.one);
@@ -1696,21 +1758,21 @@ type PartColumn = PreviewColumn & { bound: string | null; named: boolean };
 
 // Whether some series carries `ObservationSeries.axes`. A table from an API
 // that predates the field, or from a share saved before it, has none.
-const carriesAxes = (spec: any): boolean =>
-    (spec?.observations?.series ?? []).some((s: any) => Array.isArray(s?.axes));
+const carriesAxes = (spec: SpecReading): boolean =>
+    (spec?.observations?.series ?? []).some((s) => Array.isArray(s?.axes));
 
 // A series' subject entity for a table without axes: the observationAbout
 // entry of its role tuple, else its first entity.
-const seriesEntity = (s: any): { role: string; label: string | null } => {
+const seriesEntity = (s: ObservationSeries): { role: string; label: string | null } => {
     const about =
-        (s?.entities ?? []).find((e: any) => e?.role === 'observationAbout') ?? s?.entities?.[0];
+        (s?.entities ?? []).find((e) => e?.role === 'observationAbout') ?? s?.entities?.[0];
 
     return { role: about?.role ?? 'observationAbout', label: about?.label ?? null };
 };
 
 // A slot's bound value labels, the text a table without axes shows in its
 // how and what columns.
-const slotLabel = (spec: any, axis: string): string => {
+const slotLabel = (spec: SpecReading, axis: string): string => {
     const binding = slotOnAxis(spec, axis)?.binding;
 
     if (binding?.kind === 'value') {
@@ -1718,7 +1780,7 @@ const slotLabel = (spec: any, axis: string): string => {
     }
 
     if (binding?.kind === 'set') {
-        const labels = (binding.values ?? []).map((v: any) => v?.ref?.label).filter(Boolean);
+        const labels = (binding.values ?? []).map((v) => v?.ref?.label).filter(Boolean);
 
         return labels.length ? labels.join(', ') : NO_CELL;
     }
@@ -1731,7 +1793,11 @@ const LEGACY_SLOT_HEADINGS: Record<string, string> = { how: 'Sector', what: 'Typ
 // The cells of one series' rows: one per entity role and one per axis
 // property, or, without axes, the subject entity and the how and what
 // slots' bound values.
-const seriesCells = (s: ObservationSeries, spec: any, axes: boolean): Record<string, string> => {
+const seriesCells = (
+    s: ObservationSeries,
+    spec: SpecReading,
+    axes: boolean,
+): Record<string, string> => {
     if (!axes) {
         const subject = seriesEntity(s);
 
@@ -1757,7 +1823,7 @@ const seriesCells = (s: ObservationSeries, spec: any, axes: boolean): Record<str
 
 // A series' refs per column: its entities' dcids by role and its axis
 // values by property.
-const seriesRefs = (s: any): Record<string, string> => {
+const seriesRefs = (s: ObservationSeries): Record<string, string> => {
     const refs: Record<string, string> = {};
 
     for (const entity of s?.entities ?? []) {
@@ -1775,8 +1841,8 @@ const seriesRefs = (s: any): Record<string, string> => {
 // the Spec's slot order and by property dcid after that. Without axes, the
 // subject entity and the how and what slots, none of them hidden for a
 // shared value.
-const partColumns = (spec: any): PartColumn[] => {
-    const series: any[] = spec?.observations?.series ?? [];
+const partColumns = (spec: SpecReading): PartColumn[] => {
+    const series = spec?.observations?.series ?? [];
 
     if (!carriesAxes(spec)) {
         const roles = [...new Set(series.map((s) => seriesEntity(s).role))];
@@ -1802,23 +1868,23 @@ const partColumns = (spec: any): PartColumn[] => {
     }
 
     const roles = [
-        ...new Set<string>(series.flatMap((s) => (s?.entities ?? []).map((e: any) => e.role))),
+        ...new Set<string>(series.flatMap((s) => (s?.entities ?? []).map((e) => e.role))),
     ].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
     // A role the Spec names one entity for binds that entity.
     const namedRef = (role: string): string | null => {
-        const refs = (spec?.entities ?? []).filter((e: any) => e?.role === role);
+        const refs = (spec?.entities ?? []).filter((e) => e?.role === role);
 
         return refs.length === 1 ? (refs[0].ref ?? null) : null;
     };
     const slotIndex = (property: string): number => {
         const index = (spec?.slots ?? []).findIndex(
-            (slot: any) => slot?.key?.property?.ref === property,
+            (slot) => slot?.key?.property?.ref === property,
         );
 
         return index === -1 ? Infinity : index;
     };
     const properties = [
-        ...new Set<string>(series.flatMap((s) => (s?.axes ?? []).map((a: any) => a.property))),
+        ...new Set<string>(series.flatMap((s) => (s?.axes ?? []).map((a) => a.property))),
     ].sort((a, b) => slotIndex(a) - slotIndex(b) || (a < b ? -1 : a > b ? 1 : 0));
 
     return [
@@ -1856,7 +1922,7 @@ const partColumns = (spec: any): PartColumn[] => {
  * stay distinguishable, and a constant unbound axis still shows. A column
  * with no text on any row is hidden too.
  */
-export const previewColumns = (parts: { spec: any }[]): PreviewColumn[] => {
+export const previewColumns = (parts: { spec: SpecReading }[]): PreviewColumn[] => {
     // Per column, the ref every part that offers it restates (null once one
     // does not, or two disagree) and whether any row has text for it.
     const offered = new Map<string, PartColumn & { restated: string | null; filled: boolean }>();
@@ -1870,7 +1936,7 @@ export const previewColumns = (parts: { spec: any }[]): PreviewColumn[] => {
 
         // The series behind the rows, those with points.
         const refs: Record<string, string>[] = (spec?.observations?.series ?? [])
-            .filter((s: any) => (s?.points ?? []).length > 0)
+            .filter((s) => (s?.points ?? []).length > 0)
             .map(seriesRefs);
 
         for (const column of partColumns(spec)) {
@@ -1922,7 +1988,9 @@ const seriesKinds = (s: ObservationSeries): Record<string, PartyKind> => {
  * total, across the rows of every part. A total beside a single party is
  * summed with nothing, so it stays unmarked.
  */
-export const markedTotalColumns = (parts: { spec: any }[]): ReadonlySet<string> => {
+export const markedTotalColumns = (
+    parts: { spec: SpecReading | null | undefined }[],
+): ReadonlySet<string> => {
     const parties = new Map<string, Set<string>>();
     const totals = new Set<string>();
 
@@ -1969,7 +2037,7 @@ export const previewCellText = (
 // `conversion` record), where the Spec's identity states the basis the
 // values were converted to. A preview that could not apply the conversion
 // keeps the unit the points are in.
-const seriesUnit = (series: ObservationSeries, spec: any): string | null =>
+const seriesUnit = (series: ObservationSeries, spec: SpecReading): string | null =>
     (series?.conversion ? unitWithBasis(spec) : null) ??
     formatUnit(series?.facet?.unit) ??
     formatUnit(spec?.facets?.unit);
@@ -1980,7 +2048,7 @@ export const observationSeries = (
     spec: Pick<Spec, 'observations'> | null | undefined,
 ): ObservationSeries[] => spec?.observations?.series ?? [];
 
-export const flattenRows = (spec: any): ResultRow[] => {
+export const flattenRows = (spec: SpecReading): ResultRow[] => {
     const axes = carriesAxes(spec);
 
     const rows: ResultRow[] = observationSeries(spec).flatMap((s) => {
@@ -2028,14 +2096,16 @@ export const methodCellText = (row: ResultRow): string => row.method ?? NO_METHO
  * a snapshot whose captured rows replace the replay's observations.
  * `resolved.facets.measurementMethod` stands in until series arrive.
  */
-const servedMethod = (spec: any): { ref?: string | null; label: string } => {
+const servedMethod = (
+    spec: SpecReading | null | undefined,
+): { ref?: string | null; label: string } => {
     const shown = (spec?.observations?.series ?? []).filter(
-        (series: any) => (series?.points ?? []).length > 0,
+        (series) => (series?.points ?? []).length > 0,
     );
 
     if (shown.length > 0) {
         const refs = new Set<string | null>(
-            shown.map((series: any) => series?.facet?.measurementMethod?.ref ?? null),
+            shown.map((series) => series?.facet?.measurementMethod?.ref ?? null),
         );
 
         if (refs.size > 1) {
@@ -2076,15 +2146,14 @@ const methodRefKey = (ref: string | null): string => ref ?? NO_METHOD_LABEL;
  * The trigger label names the bound method, else the one the table's
  * series were read from (`servedMethod`).
  */
-export const methodPicker = (spec: any): MethodPicker | null => {
+export const methodPicker = (spec: SpecReading | null | undefined): MethodPicker | null => {
     const options = facetAxisOptions(spec, 'measurementMethod');
 
     if (options.length === 0) {
         return null;
     }
 
-    const bound: IdentityFacetBinding['measurementMethod'] =
-        spec?.identity?.facets?.measurementMethod;
+    const bound = spec?.identity?.facets?.measurementMethod;
     const boundRefs: (string | null)[] =
         bound?.state === 'set' ? bound.refs : bound && 'ref' in bound ? [bound.ref] : [];
     const served = servedMethod(spec);
@@ -2123,7 +2192,7 @@ export const methodPicker = (spec: any): MethodPicker | null => {
 
 /** Whether a spec binds a method: the parts a shared method token speaks
  *  for, so the parts its menu reads and its pick applies to. */
-export const bindsMethod = (spec: any): boolean =>
+export const bindsMethod = (spec: SpecReading | null | undefined): boolean =>
     Boolean(spec?.identity?.facets?.measurementMethod);
 
 /** The choice key for a method binding: '' for Any method, else
@@ -2140,7 +2209,9 @@ const methodChoiceKey = (binding: MethodChoice['binding']): string | null => {
  * part offers. Any method is always kept; a part with no picker offers only
  * it. Null when no part has a picker.
  */
-export const sharedMethodPicker = (specs: any[]): MethodPicker | null => {
+export const sharedMethodPicker = (
+    specs: (SpecReading | null | undefined)[],
+): MethodPicker | null => {
     const pickers = specs.map(methodPicker);
     const first = pickers.find((picker) => picker !== null);
 
@@ -2159,7 +2230,10 @@ export const sharedMethodPicker = (specs: any[]): MethodPicker | null => {
 
 /** Whether every part in `specs` offers `binding`: the shared method menu
  *  lists it (`sharedMethodPicker`). */
-export const sharedMethodServes = (specs: any[], binding: MethodChoice['binding']): boolean => {
+export const sharedMethodServes = (
+    specs: (SpecReading | null | undefined)[],
+    binding: MethodChoice['binding'],
+): boolean => {
     const key = methodChoiceKey(binding);
 
     return (
@@ -2293,7 +2367,7 @@ export const observationsOmissionText = (
  * part's existing sort within it — nothing is re-sorted across parts.
  */
 export const flattenPartsRows = (
-    parts: { variableText: string | null; spec: any }[],
+    parts: { variableText: string | null; spec: SpecReading }[],
 ): PartResultRow[] =>
     parts.flatMap(({ variableText, spec }) =>
         flattenRows(spec).map((row) => ({
@@ -2439,11 +2513,14 @@ export const noDataText = (
  *  hands off when nothing close enough exists. Null when nearest_real is
  *  non-empty, which keeps its own cards branch instead. */
 export type NoDataCallout =
-    | { kind: 'flagged'; spec: any; text: string | undefined; editText: string | undefined }
-    | { kind: 'alternate'; spec: any; text: string | undefined; pickText: string | undefined }
+    | { kind: 'flagged'; spec: PartSpec; text: string | undefined; editText: string | undefined }
+    | { kind: 'alternate'; spec: PartSpec; text: string | undefined; pickText: string | undefined }
     | { kind: 'studio' };
 
-export const noDataCallout = (part: any, question?: string | null): NoDataCallout | null => {
+export const noDataCallout = (
+    part: Partial<Pick<NoDataPart, 'no_data' | 'variable_text'>> | null | undefined,
+    question?: string | null,
+): NoDataCallout | null => {
     const nearest = part?.no_data?.nearest_real ?? [];
 
     if (nearest.length > 0) {
@@ -2474,17 +2551,19 @@ export const noDataCallout = (part: any, question?: string | null): NoDataCallou
 
 /** A part's own status, in plain language, for a candidates/no_data/
  *  unsupported part — null for a definite (resolved) part. */
-export const unresolvedPartText = (part: any): string | null => {
-    if (part?.status === 'candidates') {
+export const unresolvedPartText = (part: Part | null | undefined): string | null => {
+    const known = knownPart(part);
+
+    if (known?.status === 'candidates') {
         return 'Needs a choice';
     }
 
-    if (part?.status === 'no_data') {
-        return noDataText(part.no_data);
+    if (known?.status === 'no_data') {
+        return noDataText(known.no_data);
     }
 
-    if (part?.status === 'unsupported') {
-        return part.unsupported?.detail ?? 'This query isn’t supported yet.';
+    if (known?.status === 'unsupported') {
+        return known.unsupported?.detail ?? 'This query isn’t supported yet.';
     }
 
     return null;
@@ -2563,28 +2642,29 @@ export const formatCount = (value: number | null | undefined): string =>
 // Best-available observation count: exact coverage carries observation_count,
 // breadth/bare coverage only carries dimensions (an 'observations' entry when
 // the engine could count them).
-export const observationCount = (spec: any): number | null => {
-    const direct = spec?.coverage?.observation_count ?? spec?.observations?.total_obs;
+export const observationCount = (spec: SpecReading): number | null => {
+    const coverage = spec?.coverage;
+    const direct =
+        (coverage && 'observation_count' in coverage ? coverage.observation_count : null) ??
+        spec?.observations?.total_obs;
 
     if (direct != null) {
         return direct;
     }
 
-    const dims = spec?.coverage?.dimensions ?? [];
-
-    return dims.find((d: any) => d?.label === 'observations')?.count ?? null;
+    return coverageDimensions(spec).find((d) => d?.label === 'observations')?.count ?? null;
 };
 
 // Card meta line: observations when countable, otherwise the widest dimension
 // the engine reported ("36 donors"), otherwise a plain has-data note.
-export const coverageSummary = (spec: any): string => {
+export const coverageSummary = (spec: SpecReading): string => {
     const count = observationCount(spec);
 
     if (count != null) {
         return `${formatCount(count)} observations`;
     }
 
-    const first = (spec?.coverage?.dimensions ?? [])[0];
+    const first = coverageDimensions(spec)[0];
 
     if (first?.count != null && first?.label) {
         return `${formatCount(first.count)} ${first.label}`;
@@ -2598,7 +2678,7 @@ export const coverageSummary = (spec: any): string => {
  *  main table of a long CSV or Excel download, which sets totals apart.
  *  `upTo` when the count is an upper bound. Null when the API could not count them without
  *  understating, or sent no download facts (a merged answer). */
-export const downloadRowCount = (spec: any): { rows: number; upTo: boolean } | null => {
+export const downloadRowCount = (spec: SpecReading): { rows: number; upTo: boolean } | null => {
     const download = spec?.download;
 
     return download?.rows != null
@@ -2626,16 +2706,15 @@ export const formatBytes = (bytes: number): string => {
  *  (`rows_exact` false, a conversion that drops the rows a rate table
  *  lacks), the years are one too, so a closed range reads "within 1973 to
  *  2024" and an open one, which cannot say that, is left out. */
-const detailYears = (download: any): string | null => {
-    const years = formatWindow(download?.window);
+const detailYears = (download: DownloadFacts | null | undefined): string | null => {
+    const window = download?.window;
+    const years = formatWindow(window);
 
-    if (!years || download.rows_exact !== false) {
+    if (!years || download?.rows_exact !== false) {
         return years;
     }
 
-    return download.window.start_year != null && download.window.end_year != null
-        ? `within ${years}`
-        : null;
+    return window?.start_year != null && window.end_year != null ? `within ${years}` : null;
 };
 
 /** One row of the panel's Details list. `source` names the provenance whose
@@ -2654,7 +2733,7 @@ export type DetailRow = {
  *  download has measured it, and the gaps in a broad answer, each open axis
  *  that some variables state no value for. The licence links to the page of
  *  the one source the answer serves. */
-export const detailRows = (spec: any, fileBytes: number | null = null): DetailRow[] => {
+export const detailRows = (spec: SpecReading, fileBytes: number | null = null): DetailRow[] => {
     const download = spec?.download;
     const rows: DetailRow[] = [];
     const years = detailYears(download);
@@ -2697,9 +2776,9 @@ export const detailRows = (spec: any, fileBytes: number | null = null): DetailRo
     }
 
     const gaps = (spec?.open_axis_facts ?? [])
-        .filter((fact: any) => fact?.distinct_count > 0 && fact.undeclared_count > 0)
+        .filter((fact) => fact?.distinct_count > 0 && fact.undeclared_count > 0)
         .map(
-            (fact: any) =>
+            (fact) =>
                 `${countNoun(fact.undeclared_count, 'variable')} ${
                     fact.undeclared_count === 1 ? 'states' : 'state'
                 } no ${axisLabel(spec, fact.property)}`,

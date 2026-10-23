@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { Assumption, Warning } from '../types.ts';
+import { tokenAbout } from '../tokenAbout.ts';
+import type { Assumption, SentenceToken, UnreadableSpec, Warning } from '../types.ts';
 import { buildWhySummary, scopeAssumptions } from '../view.ts';
+import { partialSpec } from './fixtures/partial.ts';
 
 // Trimmed from dev API answers: inflation in Pakistan (one variable) and ODA
 // from Germany (1,626 variables, the recipient role open).
-const inflation = {
+const inflation = partialSpec({
     stat_vars: {
         member_count: 1,
         member_count_exact: false,
@@ -18,7 +20,7 @@ const inflation = {
     facets: { unit: { ref: 'SDG_PERCENT', label: 'Percentage' } },
     coverage: { kind: 'exact', observation_count: 23, dimensions: [] },
     resolution: {},
-};
+});
 
 // The members door's answer for inflation, as definitionMembersReader
 // returns it: its one StatVar.
@@ -36,7 +38,7 @@ const odaMembers = {
     })),
 };
 
-const oda = {
+const oda = partialSpec({
     stat_vars: { member_count: 1626, member_count_exact: true, served_count: 1626 },
     measure_label: 'gross disbursements (nominal)',
     shape: { label: 'gross disbursements (nominal, official development assistance)' },
@@ -52,7 +54,7 @@ const oda = {
         ],
     },
     resolution: {},
-};
+});
 
 const odaWarnings: Warning[] = [
     { code: 'retrieval_score_weak', severity: 'info', message: 'weak' },
@@ -77,6 +79,30 @@ const placeScope = (text: string): Assumption => ({
     binding_ref: 'where:',
     refs: [],
     text,
+});
+
+test('an unreadable spec counts no StatVars in the measure About or the Why panel', () => {
+    // flattenSpec keeps the stat_vars that failed to read; served_count alone looks valid.
+    const spec: UnreadableSpec = {
+        spec_id: 'spec_unreadable',
+        stat_vars_unreadable: true,
+        stat_vars: { served_count: 3, member_count: '3' },
+        measure_label: 'gross disbursements',
+        open_axis_facts: [
+            { property: 'crsPurpose', varies: true, distinct_count: 3, undeclared_count: 0 },
+        ],
+    };
+    const measure: SentenceToken = {
+        kind: 'slot',
+        axis: 'what',
+        text: 'gross disbursements',
+        segment: 'heading',
+    };
+    const summary = buildWhySummary(spec);
+
+    assert.deepEqual(tokenAbout(measure, spec).notes, []);
+    assert.equal(summary.variables, null);
+    assert.equal(summary.family, null);
 });
 
 test('one variable: the Measure row carries its code and no Variables group appears', () => {
@@ -153,7 +179,11 @@ test('the resolved membership chooses the layout over the coverage variables cou
         unsettled,
         { member_count: 3, member_count_exact: true, served_count: 3 },
     ]) {
-        const summary = buildWhySummary({ ...oda, stat_vars, coverage: variables(1) }, part, three);
+        const summary = buildWhySummary(
+            partialSpec({ ...oda, stat_vars, coverage: variables(1) }),
+            part,
+            three,
+        );
 
         assert.equal(summary.variables?.count, 3);
         assert.equal(summary.variables?.exact, true);
@@ -169,11 +199,11 @@ test('the resolved membership chooses the layout over the coverage variables cou
 
     // Coverage reports three, the members door lists one.
     const single = buildWhySummary(
-        {
+        partialSpec({
             ...oda,
             stat_vars: { member_count: 3, member_count_exact: true, served_count: 1 },
             coverage: variables(3),
-        },
+        }),
         part,
         one,
     );
@@ -188,7 +218,10 @@ test('the resolved membership chooses the layout over the coverage variables cou
 
     // Membership unsettled and the members still being read: the family's
     // floor fills the Variables group, whatever coverage counts.
-    const pending = buildWhySummary({ ...oda, stat_vars: unsettled, coverage: variables(1) }, part);
+    const pending = buildWhySummary(
+        partialSpec({ ...oda, stat_vars: unsettled, coverage: variables(1) }),
+        part,
+    );
 
     assert.equal(pending.variables?.count, 3);
     assert.equal(pending.variables?.exact, false);
@@ -200,47 +233,55 @@ test('many variables: the breakdown counts the variables by each value of an axi
         value: { ref: dcid, label },
         count,
     });
-    const summary = buildWhySummary({
-        ...oda,
-        stat_vars: { member_count: 39, member_count_exact: true, served_count: 39 },
-        slots: [
-            { key: { axis: 'how', property: { ref: 'crsTypeOfFinance' }, label: 'instrument' } },
-        ],
-        open_axis_facts: [
-            {
-                property: 'crsTypeOfFinance',
-                varies: true,
-                distinct_count: 2,
-                undeclared_count: 0,
-                values: [
-                    value('CRSTypeOfFinance110', 'standard grant', 35),
-                    value('CRSTypeOfFinance421', 'standard loan', 4),
-                ],
-            },
-            {
-                property: 'crsCooperationModality',
-                varies: true,
-                distinct_count: 7,
-                undeclared_count: 8,
-                values: [
-                    value('C01', 'project-type intervention', 6),
-                    value('B03', 'contribution to a pooled fund', 5),
-                    value('B01', 'core support to NGOs', 5),
-                    value('H01', 'development awareness', 5),
-                    value('D02', 'other technical assistance', 4),
-                    value('G01', 'administrative costs', 4),
-                    value('E01', 'scholarships', 2),
-                ],
-            },
-            {
-                property: 'crsChannel',
-                varies: false,
-                distinct_count: 1,
-                undeclared_count: 0,
-                values: [value('Channel1', 'public sector', 39)],
-            },
-        ],
-    });
+    const summary = buildWhySummary(
+        partialSpec({
+            ...oda,
+            stat_vars: { member_count: 39, member_count_exact: true, served_count: 39 },
+            slots: [
+                {
+                    key: {
+                        axis: 'how',
+                        property: { ref: 'crsTypeOfFinance' },
+                        label: 'instrument',
+                    },
+                },
+            ],
+            open_axis_facts: [
+                {
+                    property: 'crsTypeOfFinance',
+                    varies: true,
+                    distinct_count: 2,
+                    undeclared_count: 0,
+                    values: [
+                        value('CRSTypeOfFinance110', 'standard grant', 35),
+                        value('CRSTypeOfFinance421', 'standard loan', 4),
+                    ],
+                },
+                {
+                    property: 'crsCooperationModality',
+                    varies: true,
+                    distinct_count: 7,
+                    undeclared_count: 8,
+                    values: [
+                        value('C01', 'project-type intervention', 6),
+                        value('B03', 'contribution to a pooled fund', 5),
+                        value('B01', 'core support to NGOs', 5),
+                        value('H01', 'development awareness', 5),
+                        value('D02', 'other technical assistance', 4),
+                        value('G01', 'administrative costs', 4),
+                        value('E01', 'scholarships', 2),
+                    ],
+                },
+                {
+                    property: 'crsChannel',
+                    varies: false,
+                    distinct_count: 1,
+                    undeclared_count: 0,
+                    values: [value('Channel1', 'public sector', 39)],
+                },
+            ],
+        }),
+    );
 
     assert.deepEqual(summary.variables?.breakdown, [
         {
@@ -271,7 +312,7 @@ test('many variables: the breakdown counts the variables by each value of an axi
 const singleOfFamily = [
     {
         description: 'life expectancy in Ethiopia',
-        spec: {
+        spec: partialSpec({
             stat_vars: {
                 member_count: 3,
                 member_count_exact: false,
@@ -290,7 +331,7 @@ const singleOfFamily = [
                 ],
             },
             headline: null,
-        },
+        }),
         member: { dcid: 'LifeExpectancy_Person', label: 'Life Expectancy' },
         rows: [
             { label: 'Measure', value: 'Life Expectancy', code: 'LifeExpectancy_Person' },
@@ -302,7 +343,7 @@ const singleOfFamily = [
     },
     {
         description: 'GDP of Kenya',
-        spec: {
+        spec: partialSpec({
             stat_vars: {
                 member_count: 38,
                 member_count_exact: false,
@@ -320,7 +361,7 @@ const singleOfFamily = [
                 ],
             },
             headline: null,
-        },
+        }),
         member: {
             dcid: 'Amount_EconomicActivity_GrossDomesticProduction_Nominal',
             label: 'Nominal gross domestic product',
@@ -469,7 +510,7 @@ test('each assumption becomes one sentence, and each scope warning names its row
 });
 
 test('chosen: each facet axis gives its value and why, in source, method, unit order', () => {
-    const spec = {
+    const spec = partialSpec({
         facets: {
             unit: { ref: 'CurrencyUSD', label: 'US Dollar', basis: 'fallback' },
             provenance: {
@@ -479,7 +520,7 @@ test('chosen: each facet axis gives its value and why, in source, method, unit o
             },
             measurementMethod: { selection: 'per_series', basis: 'declared_default' },
         },
-    };
+    });
 
     assert.deepEqual(buildWhySummary(spec).chosen, [
         { label: 'Source', value: 'World Development Indicators', reason: 'Set by your request.' },
@@ -503,7 +544,7 @@ test('a slot a declared default filled is stated once, as an assumption; no prov
         refs: [{ ref, label: ref }],
         provenance,
     });
-    const spec = {
+    const spec = partialSpec({
         resolution: {
             slot_filters: [
                 filter('declared_default', 'type of flow', 'ODA'),
@@ -511,7 +552,7 @@ test('a slot a declared default filled is stated once, as an assumption; no prov
                 filter('measure_elected', 'finance type', 'Grant'),
             ],
         },
-    };
+    });
 
     const defaulted: Assumption = {
         kind: 'declared_default',
@@ -535,15 +576,17 @@ test('sources carry the licence only when the answer serves one source', () => {
     const download = { licence: { label: 'CCBY4' } };
 
     assert.equal(
-        buildWhySummary({ download, resolution: { resolved_sources: [source('a')] } }).sources[0]
-            ?.licence,
+        buildWhySummary(partialSpec({ download, resolution: { resolved_sources: [source('a')] } }))
+            .sources[0]?.licence,
         'CCBY4',
     );
     assert.deepEqual(
-        buildWhySummary({
-            download,
-            resolution: { resolved_sources: [source('a'), source('b')] },
-        }).sources.map((entry) => entry.licence),
+        buildWhySummary(
+            partialSpec({
+                download,
+                resolution: { resolved_sources: [source('a'), source('b')] },
+            }),
+        ).sources.map((entry) => entry.licence),
         [null, null],
     );
 });

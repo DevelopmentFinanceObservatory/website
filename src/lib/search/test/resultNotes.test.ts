@@ -21,7 +21,9 @@ import {
     odaToCongoNoData,
     odaToCongoRestatement,
 } from './fixtures/ambiguous-congo.ts';
-import type { Assumption, Warning } from '../types.ts';
+import type { MeasureMenuSpec } from '../measureMenu.ts';
+import type { Assumption, Spec, Warning } from '../types.ts';
+import { type DeepPartial, partialSpec } from './fixtures/partial.ts';
 
 // ---------------------------------------------------------------------------
 // The warning lines the page draws, by place
@@ -29,7 +31,7 @@ import type { Assumption, Warning } from '../types.ts';
 
 // Humanitarian aid from Germany on the dev API, with observations: three
 // warnings and the 20-series preview cap.
-const humanitarianSpec = {
+const humanitarianFixture: DeepPartial<Spec> = {
     spec_id: 'spec_880',
     slots: [],
     headline: {
@@ -49,8 +51,11 @@ const humanitarianSpec = {
             { label: 'variables', count: 39 },
         ],
     },
-    observations: { series: Array.from({ length: 20 }, (_, index) => ({ index })) },
+    observations: {
+        series: Array.from({ length: 20 }, (_, index) => ({ stat_var: { ref: `sv/${index}` } })),
+    },
 };
+const humanitarianSpec = partialSpec(humanitarianFixture);
 const humanitarianWarnings: Warning[] = [
     {
         code: 'retrieval_score_weak',
@@ -103,14 +108,15 @@ const unSystemWarning = (variableLabels: string[]): Warning => ({
 });
 
 test('aboutAnswerNotes holds the coverage sentence and assumptions -- humanitarian aid from Germany', () => {
-    const spec = {
-        ...humanitarianSpec,
+    // aboutAnswerNotes takes a spec_id, which partialSpec leaves optional; the fixture names one.
+    const spec = partialSpec({
+        ...humanitarianFixture,
         resolution: {
             slot_filters: [
                 { key: { axis: 'how', property: { ref: 'crsTypeOfFlow' }, label: 'Type of flow' } },
             ],
         },
-    };
+    }) as MeasureMenuSpec;
 
     assert.deepEqual(aboutAnswerNotes(spec, humanitarianWarnings, {}, humanitarianAssumptions), {
         coverage:
@@ -144,7 +150,13 @@ for (const [name, labels, line] of [
 ] as const) {
     test(`aboutAnswerNotes names the failed UN reads ${name}, and leaves the refused places to the departure`, () => {
         assert.deepEqual(
-            aboutAnswerNotes(humanitarianSpec, [unSystemWarning([...labels])], {}).unavailable,
+            // aboutAnswerNotes takes a spec_id, which partialSpec leaves optional; the fixture
+            // names one.
+            aboutAnswerNotes(
+                humanitarianSpec as MeasureMenuSpec,
+                [unSystemWarning([...labels])],
+                {},
+            ).unavailable,
             [line],
         );
     });
@@ -482,7 +494,9 @@ test('tableCaptionNotes adds the do-not-sum line only when the table marks a tot
     });
     const part = (kinds: [string, string][]) => ({
         variableText: 'aid',
-        spec: { observations: { series: kinds.map(([ref, kind]) => series(ref, kind)) } },
+        spec: partialSpec({
+            observations: { series: kinds.map(([ref, kind]) => series(ref, kind)) },
+        }),
     });
 
     assert.deepEqual(

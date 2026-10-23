@@ -51,8 +51,9 @@ import {
     splitCurrentPick,
 } from '../view.ts';
 import type { EntityOptionsBySpec, PlaceOptionScopeResult, PlaceOptionsEntry } from '../view.ts';
-import type { SentenceToken, Slot, SlotOption } from '../types.ts';
+import type { SentenceToken, Slot, SlotOption, Spec } from '../types.ts';
 import type { EntityOption } from '../searchClient.ts';
+import { type DeepPartial, partialSlot, partialSpec } from './fixtures/partial.ts';
 
 /** A slot option binding `ref`, or the one that binds no value. */
 const slotOption = (ref?: string, label = ref): SlotOption => ({
@@ -318,7 +319,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
         role_counts: { financingProvider: provider, financingRecipient: recipient },
     });
     const dimensions = (recipients: number) => ({
-        kind: 'breadth',
+        kind: 'breadth' as const,
         dimensions: [
             { label: 'recipients', count: recipients },
             { label: 'variables', count: 39 },
@@ -326,27 +327,43 @@ test('coverageSentence names the scope of every count, with singular nouns for o
     });
     const cases = [
         {
-            spec: { headline: latest(155, 1, 61), entities: germany, coverage: dimensions(145) },
+            spec: partialSpec({
+                headline: latest(155, 1, 61),
+                entities: germany,
+                coverage: dimensions(145),
+            }),
             sentence:
                 '2024 is the latest year with data, with 155 values for 61 of the 145 recipients that have data from Germany.',
         },
         {
-            spec: { headline: latest(157, 34, 1), entities: nigeria, coverage: { dimensions: [] } },
+            spec: partialSpec({
+                headline: latest(157, 34, 1),
+                entities: nigeria,
+                coverage: { dimensions: [] },
+            }),
             sentence:
                 '2024 is the latest year with data, with 157 values from 34 providers to Nigeria.',
         },
         {
-            spec: { headline: latest(5, 4, 2), entities: [], coverage: dimensions(42) },
+            spec: partialSpec({
+                headline: latest(5, 4, 2),
+                entities: [],
+                coverage: dimensions(42),
+            }),
             sentence:
                 '2024 is the latest year with data, with 5 values from 4 providers for 2 of the 42 recipients that have data.',
         },
         {
-            spec: { headline: latest(1, 1, 1), entities: germany, coverage: dimensions(1) },
+            spec: partialSpec({
+                headline: latest(1, 1, 1),
+                entities: germany,
+                coverage: dimensions(1),
+            }),
             sentence:
                 '2024 is the latest year with data, with 1 value for the one recipient that has data from Germany.',
         },
         {
-            spec: {
+            spec: partialSpec({
                 headline: {
                     ...latest(30, 1, 30),
                     year: 2020,
@@ -355,11 +372,11 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 },
                 entities: germany,
                 coverage: dimensions(30),
-            },
+            }),
             sentence: '2020 has 30 values for all 30 recipients that have data from Germany.',
         },
         {
-            spec: {
+            spec: partialSpec({
                 headline: {
                     ...latest(157, 34, 1),
                     year: 2020,
@@ -368,7 +385,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 },
                 entities: nigeria,
                 coverage: { dimensions: [] },
-            },
+            }),
             sentence:
                 '2020 is the latest year with data in the years asked, with 157 values from 34 providers to Nigeria.',
         },
@@ -378,13 +395,16 @@ test('coverageSentence names the scope of every count, with singular nouns for o
         assert.equal(coverageSentence(spec), sentence);
     }
 
-    assert.equal(coverageSentence({ coverage: dimensions(145) }), null);
+    assert.equal(coverageSentence(partialSpec({ coverage: dimensions(145) })), null);
 });
 
 test('seriesPreviewCaptions counts the series a truncated preview holds, labelled per part', () => {
-    const series = Array.from({ length: 20 }, (_, index) => ({ series_key: String(index) }));
+    const series = Array.from({ length: 20 }, (_, index) => ({ stat_var: { ref: `sv/${index}` } }));
     const truncated = [{ code: 'observations_series_truncated' }];
-    const part = { variableText: 'humanitarian aid', spec: { observations: { series } } };
+    const part = {
+        variableText: 'humanitarian aid',
+        spec: partialSpec({ observations: { series } }),
+    };
 
     assert.deepEqual(seriesPreviewCaptions([{ ...part, warnings: truncated }]), [
         'Showing 20 series, in no particular order',
@@ -423,7 +443,7 @@ test('seriesPreviewCaptions counts the series a truncated preview holds, labelle
     const withOrder = (order: 'ranked' | 'fixed', warningOrder: string) => [
         {
             ...part,
-            spec: { observations: { series, order } },
+            spec: partialSpec({ observations: { series, order } }),
             warnings: [
                 {
                     code: 'observations_series_truncated',
@@ -445,7 +465,7 @@ test('seriesPreviewCaptions counts the series a truncated preview holds, labelle
 
 // ODA from Germany on the local API: the download facts, unit, source and
 // open axes behind the right panel.
-const odaPanelSpec = {
+const odaPanelSpec = partialSpec({
     download: {
         rows: 152601,
         rows_exact: true,
@@ -480,7 +500,7 @@ const odaPanelSpec = {
     ],
     confidence: 'medium',
     coverage: { kind: 'breadth', dimensions: [{ label: 'recipients', count: 191 }] },
-};
+});
 
 test('downloadRowCount reads the rows in the file, an upper bound as up to, and nothing it cannot count', () => {
     assert.deepEqual(downloadRowCount(odaPanelSpec), { rows: 152601, upTo: false });
@@ -490,7 +510,7 @@ test('downloadRowCount reads the rows in the file, an upper bound as up to, and 
     });
     assert.equal(downloadRowCount({ download: { rows: null, rows_exact: false } }), null);
     // A breadth answer's one-year count is no stand-in for the file.
-    assert.equal(downloadRowCount({ coverage: { observation_count: 7618 } }), null);
+    assert.equal(downloadRowCount(partialSpec({ coverage: { observation_count: 7618 } })), null);
 });
 
 test('detailRows describes the file: years, series, unit, licence linked to its source, size once measured, and gaps', () => {
@@ -512,7 +532,7 @@ test('detailRows describes the file: years, series, unit, licence linked to its 
 });
 
 test('detailRows leaves out what the API did not send, and links no licence for an answer over several sources', () => {
-    const inflation = {
+    const inflation = partialSpec({
         download: {
             rows: 23,
             rows_exact: true,
@@ -521,7 +541,7 @@ test('detailRows leaves out what the API did not send, and links no licence for 
             licence: { label: 'PublicDomain' },
         },
         resolution: { resolved_sources: [{ ref: 'a' }, { ref: 'b' }] },
-    };
+    });
 
     assert.deepEqual(detailRows(inflation), [
         { label: 'Years', value: '2000 to 2022' },
@@ -678,7 +698,7 @@ test("mergeSlotOptionsEntry leaves a different spec's entries untouched", () => 
 // --- slotOptionLabel ------------------------------------------------------
 
 test('slotOptionLabel reshapes a source-axis option through sourceOptionLabel (de-camelcased)', () => {
-    const slot = { key: { axis: 'source' } };
+    const slot = partialSlot({ key: { axis: 'source' } });
     const option = {
         value: { ref: { ref: 'WorldDevelopmentIndicators', label: 'WorldDevelopmentIndicators' } },
     };
@@ -687,7 +707,7 @@ test('slotOptionLabel reshapes a source-axis option through sourceOptionLabel (d
 });
 
 test('slotOptionLabel reads the plain optionLabel for a non-source axis', () => {
-    const slot = { key: { axis: 'how' } };
+    const slot = partialSlot({ key: { axis: 'how' } });
     const option = { value: { ref: { ref: 'crsPurpose/110', label: 'Education' } } };
 
     assert.equal(slotOptionLabel(slot, option), 'Education');
@@ -696,7 +716,7 @@ test('slotOptionLabel reads the plain optionLabel for a non-source axis', () => 
 test('slotOptionLabel falls back to optionLabel rather than throwing when the slot has no key at all', () => {
     const option = { value: { ref: { ref: 'crsPurpose/110', label: 'Education' } } };
 
-    assert.equal(slotOptionLabel({}, option), 'Education');
+    assert.equal(slotOptionLabel(partialSlot({}), option), 'Education');
 });
 
 // --- showGroupHeadings ----------------------------------------------------
@@ -1978,7 +1998,7 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
     const aid = servedAnswer(servedAid);
     const choice = ({ parts, optionsBySpec }: typeof aid, ref: string) => {
         const { spec } = parts[0];
-        const slot = spec.slots.find(
+        const slot = (spec.slots ?? []).find(
             (candidate: { key: Parameters<typeof keyRef>[0] }) => keyRef(candidate.key) === ref,
         );
 
@@ -1992,11 +2012,12 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
 
     // An unbound slot with one option narrows only when that option is
     // counted and serves fewer rows than the answer downloads.
-    const unbound = { key: { axis: 'how' }, binding: { kind: 'unbound' } };
-    const spec = {
+    const unbound = partialSlot({ key: { axis: 'how' }, binding: { kind: 'unbound' } });
+    const rowsFixture: DeepPartial<Spec> = {
         coverage: { dimensions: [{ label: 'variables', count: 279 }] },
         download: { rows: 1284, rows_exact: true },
     };
+    const spec = partialSpec(rowsFixture);
     const one = (served_rows: number | null) => ({
         options: [{ ...slotOption('Net'), served_rows }],
         truncated: false,
@@ -2005,15 +2026,23 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
     assert.equal(slotOffersChoice(unbound, one(279), spec), true);
     assert.equal(slotOffersChoice(unbound, one(1284), spec), false);
     assert.equal(slotOffersChoice(unbound, one(null), spec), false);
-    assert.equal(slotOffersChoice(unbound, one(279), { ...spec, download: { rows: null } }), false);
+    assert.equal(
+        slotOffersChoice(
+            unbound,
+            one(279),
+            partialSpec({ ...rowsFixture, download: { rows: null } }),
+        ),
+        false,
+    );
 
     // A slot bound to a set spans its members the way an unbound slot spans
     // every option: two members narrow, as does one counted member that
     // serves fewer rows than the answer. A set of one reads as a value.
-    const set = (...dcids: string[]) => ({
-        key: { axis: 'how' },
-        binding: { kind: 'set', values: dcids.map((dcid) => ({ ref: { ref: dcid } })) },
-    });
+    const set = (...dcids: string[]) =>
+        partialSlot({
+            key: { axis: 'how' },
+            binding: { kind: 'set', values: dcids.map((dcid) => ({ ref: { ref: dcid } })) },
+        });
     const members = (...dcids: string[]) => ({
         options: dcids.map((dcid) => ({ ...slotOption(dcid), served_rows: null })),
         truncated: false,

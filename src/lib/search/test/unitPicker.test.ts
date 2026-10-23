@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flattened wire Spec */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildDatasetEntries } from '../datasetEntries.ts';
 import { currencyName } from '../tokenAbout.ts';
-import type { HydratedPart, UnitConversion } from '../types.ts';
+import { type HydratedPart, knownPart, type UnitConversion } from '../types.ts';
 import {
     currencyMatches,
     currencyRequest,
@@ -26,17 +25,18 @@ import {
     unitDebt,
     unitHealth,
 } from './fixtures/unit-conversion.ts';
-import { definite, resolution } from './fixtures/resolution.ts';
+import { partialSpec } from './fixtures/partial.ts';
+import { definite, readable, resolution } from './fixtures/resolution.ts';
 
-const specOf = (body: unknown): any => definite(resolution(body).parts[0]).spec;
+const specOf = (body: unknown) => readable(definite(resolution(body).parts[0]).spec);
 
 /** `body`'s parts as the page hydrates them, each spec as served. */
 const hydratedParts = (body: unknown): HydratedPart[] =>
-    resolution(body).parts.map((part: any, index: number) => ({
+    resolution(body).parts.map((part, index) => ({
         index,
         variableText: part.variable_text ?? null,
         part,
-        hydratedSpec: part.spec ?? null,
+        hydratedSpec: knownPart(part)?.status === 'definite' ? definite(part).spec : null,
         observationsPending: false,
         phase: 'done',
         editError: null,
@@ -77,7 +77,7 @@ test('unitPresets names role currencies by their entity and dedupes by code', ()
 });
 
 test("unitPresets keeps a row for the answer's own currency", () => {
-    const yen = {
+    const yen = partialSpec({
         ...aidEuroConstant,
         identity: {
             ...aidEuroConstant.identity,
@@ -88,7 +88,7 @@ test("unitPresets keeps a row for the answer's own currency", () => {
                 },
             },
         },
-    };
+    });
 
     assert.deepEqual(unitPresets(yen, unitConversion(yen)).at(-1), {
         code: 'JPY',
@@ -99,7 +99,7 @@ test("unitPresets keeps a row for the answer's own currency", () => {
 });
 
 test('unitPresets falls back to the role request when the role names no single entity', () => {
-    const spec = { ...aid, entities: aid.entities.filter((e: any) => e.role !== 'destination') };
+    const spec = { ...aid, entities: (aid.entities ?? []).filter((e) => e.role !== 'destination') };
     const recipient = unitPresets(spec, unitConversion(spec)).find(
         (preset) => preset.code === 'GTQ',
     );
@@ -294,20 +294,22 @@ test('a currency with no current-price years offers constant prices alone', () =
 });
 
 test('a pick on the shared unit token applies to every part that converts', () => {
-    const body: any = unitAidLoans;
-    const unitTokens = body.sentence_plan.filter((token: any) => token.axis === 'unit');
+    const body = resolution(unitAidLoans);
+    const unitTokens = (body.sentence_plan ?? []).filter((token) => token.axis === 'unit');
 
     // The fixture's premise: one hoisted unit token over two convertible parts.
     assert.deepEqual(
-        unitTokens.map((token: any) => token.part_index ?? null),
+        unitTokens.map((token) => token.part_index ?? null),
         [null],
     );
 
-    const parts = hydratedParts(body);
+    const parts = hydratedParts(unitAidLoans);
     const request = { currency: 'EUR', prices: 'constant', base_year: 2020 } as const;
     const edit = sharedUnitEdit(parts, request)!;
     const units = (rows: HydratedPart[], override = edit.override) =>
-        buildDatasetEntries(rows, override).map((entry: any) => entry.identity.facets?.unit);
+        buildDatasetEntries(rows, override).map((entry) =>
+            entry.entry_kind === 'identity' ? entry.identity.facets?.unit : undefined,
+        );
 
     assert.deepEqual(edit.touched, [0, 1]);
     assert.deepEqual(units(parts), [

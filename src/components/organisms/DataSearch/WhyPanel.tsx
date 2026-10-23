@@ -10,7 +10,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
-import type { Assumption, Warning } from '@/lib/search/types';
+import type { Assumption, PartSpec, Warning } from '@/lib/search/types';
 import {
     buildWhySummary,
     formatCount,
@@ -149,7 +149,7 @@ const NoteGroup = ({ title, notes }: { title: string; notes: string[] }) =>
 export type AboutPart = {
     index: number;
     variableText: string | null;
-    spec: Parameters<typeof buildWhySummary>[0];
+    spec: PartSpec;
     warnings?: Warning[];
     assumptions?: Assumption[];
 };
