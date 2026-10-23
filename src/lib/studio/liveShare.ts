@@ -6,6 +6,7 @@ import { isLiveStudioShare } from '../chat/shareMode.ts';
 import type { ShareDb } from '../chat/shareWrites.ts';
 import type { CardRef, Widget } from '../chat/widgets.ts';
 import { dropEncodedLength, pick } from '../proxy/headers.ts';
+import { gateOf } from './gate.ts';
 import {
     BackendError,
     bounded,
@@ -69,8 +70,15 @@ export type LiveDeps = {
 // cost to this many back-end refreshes per window.
 export const LIVE_SHARE_MAX_DATA_CARDS = 20;
 
-// The component reads that vet a new live share share this deadline.
+// The component reads that vet a new live share share this deadline, which
+// covers the whole check: 20 cards four at a time is five rounds of reads
+// that take about 25 milliseconds each.
 const CREATE_CHECK_DEADLINE_MS = 15_000;
+
+// How many component reads one check has in flight at once: the dfo-apis
+// default for `PRESENTATION_COMPONENTS_MAX_CONCURRENCY`. dfo-apis answers each
+// read past its limit with an immediate 503.
+export const LIVE_CHECK_CONCURRENCY = 4;
 
 const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
@@ -157,11 +165,12 @@ export const liveShareRefusal = async (
     }
 
     const limited = bounded(backend, CREATE_CHECK_DEADLINE_MS);
+    const gate = gateOf(LIVE_CHECK_CONCURRENCY);
 
     try {
-        const blocked = (await Promise.all(cards.map((card) => blockOf(limited, card)))).filter(
-            (block) => block !== null,
-        );
+        const blocked = (
+            await Promise.all(cards.map((card) => gate(() => blockOf(limited, card))))
+        ).filter((block) => block !== null);
 
         return blocked.length
             ? { status: 400, body: { error: 'live_cards_blocked', cards: blocked } }
