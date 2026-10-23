@@ -95,6 +95,39 @@ test("a part's groups hold role keys only, each a label of 1 to 120 characters a
     assert.equal(reads({ origin: { label: 'EU', members: ['country/DEU'] } }), false);
 });
 
+test('a part reads with its assumptions, [] and null included, and a malformed one is refused', () => {
+    const reads = (assumptions: unknown) =>
+        readSearchShareRequest({ ...body(1), parts: [{ ...part(0), assumptions }] })?.parts[0];
+    const oda = {
+        kind: 'declared_default',
+        binding_ref: 'how:flowType',
+        refs: ['ODA'],
+        text: 'official development assistance',
+    };
+    const scope = { kind: 'place_scope', binding_ref: 'where:', refs: [], text: 'every country' };
+
+    assert.deepEqual(reads([oda, scope])?.assumptions, [oda, scope]);
+    assert.deepEqual(reads([])?.assumptions, []);
+    assert.equal(reads(null)?.assumptions, null);
+    assert.ok(reads(undefined));
+
+    for (const malformed of [
+        oda,
+        [{ ...oda, kind: 'guess' }],
+        [{ ...oda, refs: [27] }],
+        [{ ...oda, text: null }],
+        [{ ...oda, note: 'extra' }],
+        [{ ...oda, text: '' }],
+        [{ ...oda, text: 'a'.repeat(201) }],
+        [{ ...oda, refs: ['ODA', 'OOF'] }],
+        [{ ...oda, refs: ['r'.repeat(1025)] }],
+        [{ ...oda, binding_ref: 'b'.repeat(1037) }],
+        Array.from({ length: 68 }, () => scope),
+    ]) {
+        assert.equal(reads(malformed), undefined, JSON.stringify(malformed));
+    }
+});
+
 test('a part whose identity holds entity_groups is refused', () => {
     const withIdentity = (identity: unknown) => ({
         ...body(1),
@@ -136,6 +169,7 @@ test("a definite part shares its Spec's groups beside the identity, and null whe
         identity: spec.identity,
         entityGroups: groups,
         operations: response.operations,
+        assumptions: response.assumptions ?? null,
         definition: spec.definition,
     });
     assert.equal(

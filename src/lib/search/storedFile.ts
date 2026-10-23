@@ -3,7 +3,8 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { clientIp } from '@/lib/proxy/forward';
-import { hit, rateHeaders } from '@/lib/proxy/rateLimit';
+import { rateHeaders } from '@/lib/proxy/rateHeaders';
+import { hit } from '@/lib/proxy/rateLimit';
 import { datasetsFetch } from '@/lib/search/datasetsFetch';
 import { artifactHref } from '@/lib/search/searchClient';
 import { storedDownload, type VersionLinkDocument } from '@/lib/search/versionLink';
@@ -21,8 +22,9 @@ const VERSION_READ_TIMEOUT_MS = 20_000;
 
 /**
  * Counts the call against the proxy's `api` allowance, the one every
- * Datasets API call through the site shares. The headers go on the
- * response either way, with `Retry-After` added when the call is over it.
+ * Datasets API call through the site shares. The X-RateLimit-* headers go
+ * on the response whenever the call was counted, with `Retry-After` added
+ * when the call is over it.
  */
 export const downloadAllowance = async (
     req: NextRequest,

@@ -2,28 +2,30 @@
  * Which headers cross the platform proxy (src/lib/proxy/forward). Kept apart
  * from forward.ts, which imports server-only, so `node --test` can load it.
  *
- * A request carries its content headers and every `mcp-*` header (the MCP
+ * A request carries its content headers, the caller's user-agent (the API
+ * logs it to tell client families apart) and every `mcp-*` header (the MCP
  * transport defines mcp-method, mcp-name, mcp-session-id and
  * mcp-protocol-version, and validates the first two against the body). A
- * response carries its content headers, location (a redirect, as the
- * Datasets API's file links answer), cache-control (the `no-store` on such a
- * redirect to a signed URL, which forward.ts's default `no-cache` would
- * weaken), retry-after (on a busy refusal), www-authenticate, server-timing,
- * every `mcp-*` header, and the two `x-dfo-*` headers the APIs document as
- * public (x-dfo-trace-id and x-dfo-commit, in the docs corpus's
- * dfo-apis/conventions.md). The rest of `x-dfo-*` names internal identity
- * (x-dfo-principal, x-dfo-caller, x-dfo-write-token), so it stays here. The
- * content-length is left behind when the upstream encoded the body, since
- * fetch has decoded it by then. Matching `mcp-*` by prefix means a protocol
- * header added later needs no change here. No `x-dfo-*` header goes upstream
- * from the client: authorization and x-dfo-caller are set by forward.ts.
+ * response carries its content headers, allow (the methods of a 405),
+ * location (a redirect, as the Datasets API's file links answer),
+ * cache-control (the `no-store` on such a redirect to a signed URL, which
+ * forward.ts's default `no-cache` would weaken), retry-after (on a busy
+ * refusal), www-authenticate, server-timing, every `mcp-*` header, and the
+ * two `x-dfo-*` headers the APIs document as public (x-dfo-trace-id and
+ * x-dfo-commit, in the docs corpus's dfo-apis/conventions.md). The rest of
+ * `x-dfo-*` names internal identity (x-dfo-principal, x-dfo-caller,
+ * x-dfo-write-token), so it stays here. The content-length is left behind
+ * when the upstream encoded the body, since fetch has decoded it by then.
+ * Matching `mcp-*` by prefix means a protocol header added later needs no
+ * change here. No `x-dfo-*` header goes upstream from the client:
+ * authorization and x-dfo-caller are set by forward.ts.
  */
 const REQUEST_PREFIXES = ['mcp-'];
 const RESPONSE_PREFIXES = ['mcp-'];
 
 // Request headers worth carrying upstream; everything else (cookies, the
 // site's Basic auth, hop-by-hop) stays here.
-const REQUEST_HEADERS = ['content-type', 'accept'];
+const REQUEST_HEADERS = ['content-type', 'accept', 'user-agent'];
 // Response headers worth carrying back; the rest is the upstream's own
 // business (server, date, transfer-encoding…).
 const RESPONSE_HEADERS = [
@@ -37,6 +39,7 @@ const RESPONSE_HEADERS = [
     'server-timing',
     'x-dfo-trace-id',
     'x-dfo-commit',
+    'allow',
 ];
 
 // Copy the named headers present on `source` onto `into`.

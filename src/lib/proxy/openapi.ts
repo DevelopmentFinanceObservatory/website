@@ -17,7 +17,7 @@ import { SEARCH_API_SURFACES } from './surfaces.ts';
 
 // dfo-apis deploys on its own schedule, so a cached copy goes stale in
 // minutes. Private, since forward() adds the caller's own X-RateLimit-*
-// headers to the response.
+// headers to a counted call.
 export const OPENAPI_CACHE_CONTROL = 'private, max-age=300';
 
 // Paths the site serves at the same address as dfo-apis.

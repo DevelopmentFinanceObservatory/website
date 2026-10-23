@@ -26,6 +26,7 @@ import {
     type VersionLinkOutcome,
 } from './versionLink.ts';
 import type {
+    Assumption,
     DatasetResubmitEntry,
     LateDepartures,
     EntityGroup,
@@ -1272,6 +1273,10 @@ export type OpenedSearchShare = {
          *  replay. Null when it had none. */
         entityGroups: Record<string, EntityGroup> | null;
         operations: Operation[];
+        /** The part's assumptions as the shared response gave them, echoed
+         *  on replay. Null for a share stored without them and for a
+         *  version link. */
+        assumptions: Assumption[] | null;
         contentVersion: string | null;
     }[];
     /** Set when the view opened from a version link (lib/search/versionLink)

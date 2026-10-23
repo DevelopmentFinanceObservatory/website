@@ -10,7 +10,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
-import type { Warning } from '@/lib/search/types';
+import type { Assumption, Warning } from '@/lib/search/types';
 import {
     buildWhySummary,
     formatCount,
@@ -151,6 +151,7 @@ export type AboutPart = {
     variableText: string | null;
     spec: Parameters<typeof buildWhySummary>[0];
     warnings?: Warning[];
+    assumptions?: Assumption[];
 };
 
 const AboutSection = ({
@@ -243,14 +244,14 @@ const AboutPartSection = ({
                 { warnings: part.warnings ?? [], variable_text: part.variableText },
                 members,
             )}
-            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec)}
+            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec, part.assumptions)}
         />
     );
 };
 
 /** The "About this answer" panel: one section per definite part, each with
  *  the coverage sentence, what the search matched and assumed, the
- *  variables, how each facet and defaulted slot was chosen, and the sources
+ *  variables, how each facet was chosen, and the sources
  *  with their licence. A lone part carries no title. `open` is whether the
  *  panel shows, which starts the members reads. */
 const WhyPanel = ({

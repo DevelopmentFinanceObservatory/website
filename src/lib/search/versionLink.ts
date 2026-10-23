@@ -166,6 +166,7 @@ export const outcomeFromDocument = (
                 // A dataset document holds the definition alone.
                 entityGroups: null,
                 operations: [],
+                assumptions: null,
                 contentVersion: link.contentVersion,
             },
         ],

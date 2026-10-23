@@ -1681,8 +1681,13 @@ test("a single-part entity_ambiguous plan routes its wording token to that wordi
     assert.equal(partIndex, 0);
     assert.equal(wording.role, 'origin');
     assert.deepEqual(
-        ambiguousWordingGroup(wording, response.parts[0].no_data)?.candidates.map((c) => c.ref),
-        ['InternationalBankForReconstructionAndDevelopment', 'InternationalDevelopmentAssociation'],
+        ambiguousWordingGroup(wording, response.parts[0].no_data)?.options.map(
+            (option) => option.label,
+        ),
+        [
+            'International Bank for Reconstruction and Development',
+            'International Development Association',
+        ],
     );
 });
 
@@ -1724,14 +1729,14 @@ test("ambiguousEntityMenuTitle titles the menu by the ambiguous wording's role",
 
 test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offers', () => {
     const part = normalizeResponse(fixtures['entity-ambiguous']).parts[0];
-    const [congo] = part.no_data.ambiguous_entities;
+    const [congo] = part.no_data.options;
     const bothAmbiguous = {
         ...part,
         no_data: {
             ...part.no_data,
-            ambiguous_entities: [
-                { ...congo, text: 'World Bank' },
-                { ...congo, text: 'Georgia' },
+            options: [
+                { ...congo, mentions: ['World Bank'] },
+                { ...congo, mentions: ['Georgia'] },
             ],
         },
         restatement: {

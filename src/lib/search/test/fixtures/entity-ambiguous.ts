@@ -4,8 +4,8 @@
  * one `no_data` part with reason `entity_ambiguous`.
  *
  * "Congo" names both the Democratic Republic of the Congo and the Republic
- * of the Congo. `no_data.data_query` is the part's parsed form with France
- * pinned and Congo's dcid left empty, ready for a pick to fill. The part
+ * of the Congo. `no_data.options` holds one ready request per candidate: the
+ * part's parsed form with France pinned and Congo pinned to that candidate. The part
  * omits `operations`, which the wire allows, so normalization must default
  * it to empty.
  */
@@ -69,27 +69,62 @@ export const entityAmbiguous: unknown = {
             ]
           }
         ],
-        "data_query": {
-          "kind": "parsed",
-          "parts": [
-            {
-              "variable_text": "ODA",
-              "entities": [
+        "options": [
+          {
+            "mentions": [
+              "Congo"
+            ],
+            "label": "Congo [DRC]",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
                 {
-                  "text": "Congo",
-                  "role_text": "to"
-                },
-                {
-                  "text": "France",
-                  "role_text": "from",
-                  "dcid": "country/FRA"
+                  "variable_text": "ODA",
+                  "entities": [
+                    {
+                      "text": "Congo",
+                      "role_text": "to",
+                      "dcid": "country/COD"
+                    },
+                    {
+                      "text": "France",
+                      "role_text": "from",
+                      "dcid": "country/FRA"
+                    }
+                  ],
+                  "time_text": "2022"
                 }
-              ],
-              "time_text": "2022"
+              ]
             }
-          ],
-          "raw_query": "ODA to Congo from France in 2022"
-        },
+          },
+          {
+            "mentions": [
+              "Congo"
+            ],
+            "label": "Congo [Republic]",
+            "data_query": {
+              "kind": "parsed",
+              "parts": [
+                {
+                  "variable_text": "ODA",
+                  "entities": [
+                    {
+                      "text": "Congo",
+                      "role_text": "to",
+                      "dcid": "country/COG"
+                    },
+                    {
+                      "text": "France",
+                      "role_text": "from",
+                      "dcid": "country/FRA"
+                    }
+                  ],
+                  "time_text": "2022"
+                }
+              ]
+            }
+          }
+        ],
         "unbound_qualifiers": [],
         "nearest_real": null,
         "flagged_match": null
