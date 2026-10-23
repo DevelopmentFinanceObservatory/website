@@ -220,13 +220,11 @@ const ChartCard = ({
                 hidden: hiddenSeries.includes(si),
                 borderColor: seriesPair(theme.series, si)[0],
                 // A missing value breaks the line, so a value with a gap on
-                // both sides has no segment. It gets a dot in the solid base
-                // colour, because the dataset fill below is the weave.
+                // both sides has no segment. It gets a dot, which Chart.js
+                // fills from the dataset colours below, like the hover disc.
                 pointRadius: lonePoints(s.values).map((lone) => (lone ? 3 * scale : 0)),
-                pointBackgroundColor: seriesPair(theme.series, si)[0],
-                pointBorderColor: seriesPair(theme.series, si)[0],
-                // The tooltip swatch — the same checkered weave as the bars,
-                // so both views' tooltips read identically.
+                // The point fill (hover disc and lone dots): the checkered
+                // weave of the bars. The tooltip swatch comes from seriesPalette.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
                 borderWidth: 2.5 * scale,
                 pointHoverRadius: 3.5 * scale,

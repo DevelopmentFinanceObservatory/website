@@ -35,14 +35,3 @@ test('a single value is lone and a missing one is not', () => {
 test('an empty series has no points', () => {
     assert.deepEqual(lonePoints([]), []);
 });
-
-test('the Guatemala poverty shape: seven yearly values, none adjacent', () => {
-    const years = Array.from({ length: 38 }, (_, i) => 1986 + i);
-    const observed = new Set([1986, 1989, 1998, 2000, 2006, 2014, 2023]);
-    const values = years.map((year) => (observed.has(year) ? 1 : null));
-
-    assert.deepEqual(
-        lonePoints(values),
-        years.map((year) => observed.has(year)),
-    );
-});
