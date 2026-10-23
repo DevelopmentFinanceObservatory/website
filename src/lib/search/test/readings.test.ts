@@ -83,6 +83,15 @@ test('readingsSummary reads the whole summary plan, byline included', () => {
     );
 });
 
+test('readingsSummary reads a token with no segment as heading, the wire default', () => {
+    const [lead, ...rest] = summaryPlan();
+
+    assert.equal(
+        readingsSummary([{ ...lead, segment: undefined }, ...rest]),
+        readingsSummary(summaryPlan()),
+    );
+});
+
 test("foldReadings folds a candidates part's summary into one what-token named by its variable text", () => {
     const folded = foldReadings(summaryPlan(0), [
         { status: 'candidates', variable_text: 'poverty reduction grants' },
@@ -126,6 +135,37 @@ test('foldReadings falls back to the summary heading and leaves other parts and 
             ['text', '.', null],
         ],
     );
+});
+
+test("foldReadings keeps a candidates part's assumptions clause, and readingsSummary leaves it to the answer block", () => {
+    const clause = (text: string): SentenceToken => ({
+        kind: 'text',
+        text,
+        segment: 'assumption',
+        part_index: 0,
+    });
+    const plan = [
+        ...summaryPlan(0),
+        clause(' '),
+        clause('Assumed: '),
+        clause('every provider'),
+        clause('.'),
+    ];
+    const folded = foldReadings(plan, [
+        { status: 'candidates', variable_text: 'poverty reduction grants' },
+    ]);
+
+    assert.deepEqual(
+        folded.map((token) => [token.segment, token.text]),
+        [
+            ['heading', 'poverty reduction grants'],
+            ['assumption', ' '],
+            ['assumption', 'Assumed: '],
+            ['assumption', 'every provider'],
+            ['assumption', '.'],
+        ],
+    );
+    assert.equal(readingsSummary(plan), readingsSummary(summaryPlan(0)));
 });
 
 test('foldReadings returns the plan itself when no part is a candidates part', () => {

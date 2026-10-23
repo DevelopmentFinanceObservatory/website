@@ -6,8 +6,10 @@ import type {
     IdentityBinding,
     IdentityFacetAxis,
     IdentityFacetRefBinding,
+    IdentityFacetBinding,
     IdentityFacets,
     Spec,
+    SpecReading,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -21,41 +23,33 @@ import type {
 // `{kind, value:{ref:{ref,label}}}` — these adapters bridge the two without
 // asking the editors to know about the identity wire shape at all.
 
+/** A slot's binding in the engine's resolved shape. */
+type ResolvedBinding = Spec['slots'][number]['binding'];
+
 /** The bound dcid a resolved binding carries, or null when it binds nothing
- *  (unbound, or a shape this adapter doesn't recognise). */
-function resolvedBindingDcid(binding: unknown): string | null {
-    const b = binding as { kind?: string; value?: { ref?: { ref?: string } } } | null | undefined;
-    if (!b || b.kind === 'unbound') return null;
-    return b.value?.ref?.ref ?? null;
+ *  (unbound, or a set, which names no single dcid). */
+function resolvedBindingDcid(binding: ResolvedBinding | null | undefined): string | null {
+    return binding?.kind === 'value' ? (binding.value.ref?.ref ?? null) : null;
 }
 
-/** One dcid for value, every member's for set. None for unbound/absent or
- *  an unrecognised shape. */
-function resolvedBindingDcids(binding: unknown): string[] {
-    const b = binding as
-        | {
-              kind?: string;
-              value?: { ref?: { ref?: string } };
-              values?: { ref?: { ref?: string } }[];
-          }
-        | null
-        | undefined;
-
-    if (!b) return [];
-
-    if (b.kind === 'set') {
-        return (b.values ?? [])
-            .map((value) => value?.ref?.ref)
-            .filter((dcid): dcid is string => !!dcid);
+/** One dcid for value, every member's for set. None for unbound or absent. */
+function resolvedBindingDcids(binding: ResolvedBinding | null | undefined): string[] {
+    switch (binding?.kind) {
+        case 'set':
+            return binding.values.flatMap((value) => value.ref?.ref ?? []);
+        case 'value':
+            return binding.value.ref?.ref ? [binding.value.ref.ref] : [];
+        default:
+            return [];
     }
-
-    return b.value?.ref?.ref ? [b.value.ref.ref] : [];
 }
 
 /** Convert a resolved what/how slot binding to its identity-slot form. Every
  *  shape-declared slot is dense (always present, `unbound` if nothing is
  *  bound), so — unlike facets/entities — there is no "drop" case here. */
-export function toIdentitySlotBinding(binding: unknown): IdentityBinding {
+export function toIdentitySlotBinding(
+    binding: ResolvedBinding | null | undefined,
+): IdentityBinding {
     const dcid = resolvedBindingDcid(binding);
     return dcid ? { state: 'value', ref: dcid } : { state: 'unbound' };
 }
@@ -63,7 +57,9 @@ export function toIdentitySlotBinding(binding: unknown): IdentityBinding {
 /** Convert a resolved binding to a facet binding, or null when it should be
  *  dropped from the sparse `facets` map entirely (the facet union has no
  *  `unbound` state — an unconstrained axis is simply absent). */
-function toIdentityFacetBinding(binding: unknown): IdentityFacetRefBinding | null {
+function toIdentityFacetBinding(
+    binding: ResolvedBinding | null | undefined,
+): IdentityFacetRefBinding | null {
     const dcid = resolvedBindingDcid(binding);
     return dcid ? { state: 'value', ref: dcid } : null;
 }
@@ -114,7 +110,7 @@ export function withEntityEdit(
 export function withFacetEdit<A extends IdentityFacetAxis>(
     identity: BaseIdentity,
     axis: A,
-    binding: IdentityFacets[A] | null,
+    binding: IdentityFacetBinding[A] | null,
 ): BaseIdentity {
     const facets: IdentityFacets = { ...identity.facets };
 
@@ -136,13 +132,13 @@ export function withFacetEdit<A extends IdentityFacetAxis>(
  * onEditWindow directly.
  */
 export function withResolvedSlotEdit(
-    spec: Pick<Spec, 'identity' | 'slots'>,
+    spec: Pick<SpecReading, 'identity' | 'slots'>,
     slotIndex: number,
-    binding: unknown,
+    binding: ResolvedBinding,
     entityRole: EntityRoleKey = 'observationAbout',
 ): BaseIdentity {
     const identity = spec.identity as BaseIdentity;
-    const slot = spec.slots[slotIndex];
+    const slot = spec.slots?.[slotIndex];
     const axis = slot?.key?.axis;
 
     if (axis === 'where') {

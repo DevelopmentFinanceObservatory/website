@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -40,6 +39,7 @@ import Button from '@/components/atoms/Button/Button';
 import { capitalise } from '@/lib/capitalise';
 import {
     answerDepartures,
+    assumptionClauses,
     isClosestMatch,
     refsStatedBesides,
     sentenceBlocks,
@@ -53,24 +53,31 @@ import {
     entityOptionDcid,
     filterOptionsByQuery,
     optionCoverageRankingBlocked,
+    type OptionLike,
     shouldShowOptionFilter,
 } from '@/lib/search/pickerState';
 import { spliceSentence } from '@/lib/search/refine';
 import { keyRef } from '@/lib/search/searchClient';
-import { planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
-import type {
-    AmbiguousEntityCandidate,
-    AmbiguousEntityGroup,
-    EntityRoleKey,
-    GraphRef,
-    HydratedPart,
-    IdentityFacetAxis,
-    IdentityFacets,
-    ParsedPart,
-    MeasureAxisValue,
-    RoleAxis,
-    SentenceToken,
-    SpecAlternativeMeasure,
+import { planCoverageText, planSentenceText, tokenPart } from '@/lib/search/sentencePlan';
+import {
+    type EntityRoleKey,
+    type GraphRef,
+    hasDefiniteSpec,
+    type HydratedPart,
+    type IdentityFacetAxis,
+    type IdentityFacetBinding,
+    isKnownPart,
+    knownPart,
+    type MeasureAxisValue,
+    type NoDataOption,
+    type ParsedPart,
+    type PartSpec,
+    type Resolution,
+    type RoleAxis,
+    type SentenceToken,
+    type Slot,
+    type SlotOption,
+    type SpecAlternativeMeasure,
 } from '@/lib/search/types';
 import type { WindowApplyValue } from '@/lib/search/windowState';
 import {
@@ -84,7 +91,8 @@ import {
     type UnitSwitch,
 } from '@/lib/search/measureMenu';
 import {
-    buildAmbiguousPickPart,
+    entityChoiceGroups,
+    entityChoicePart,
     offersAmbiguousPicker,
     resolveTypedEdit,
 } from '@/lib/search/parsedEdit';
@@ -136,9 +144,10 @@ import type {
     PlaceOptionsBySpec,
     RootGroup,
     SlotOptionsEntry,
+    SourceSlotOption,
 } from '@/lib/search/view';
 
-import type { SharedEdit } from './useSearchRun';
+import type { SharedEdit } from '@/lib/search/sharedEdit';
 
 /** The values each row of a measure or unit menu defines through its info
  *  mark: the current measure's first, then each alternative's, each row
@@ -195,8 +204,8 @@ export const answerRefineItems = ({
         : [];
 
 // An option's info icon, when the option names a graph node.
-const optionInfo = (option: any) => {
-    const dcid = option?.value?.ref?.ref;
+const optionInfo = (option: OptionLike) => {
+    const dcid = option.value?.ref?.ref;
 
     return dcid ? <GraphInfo dcid={dcid} /> : undefined;
 };
@@ -242,10 +251,14 @@ const MethodChoices = ({
  * in this file uses, and a child pick comes back on the next response
  * already scoped to its own level.
  */
-const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) => void) => {
-    const optionItem = (option: any, direction?: 'up' | 'down') => (
+const renderLevelOptions = (
+    slot: Slot,
+    options: readonly SlotOption[],
+    onSelect: (binding: Slot['binding']) => void,
+) => {
+    const optionItem = (option: SlotOption, direction?: 'up' | 'down') => (
         <DropdownMenu.Item
-            key={option?.value?.ref?.ref ?? optionLabel(option)}
+            key={option.value.ref?.ref ?? optionLabel(option)}
             asChild
             onSelect={() => onSelect({ kind: 'value', value: option.value })}
         >
@@ -264,7 +277,7 @@ const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) 
                 optionItem(root)
             ) : (
                 <OptionSubmenu
-                    key={root?.value?.ref?.ref ?? optionLabel(root)}
+                    key={root.value.ref?.ref ?? optionLabel(root)}
                     label={optionLabel(root)}
                     meta={rowsLabel(root.served_rows, root.served_rows_exact)}
                 >
@@ -309,7 +322,11 @@ const renderLevelOptions = (slot: any, options: any[], onSelect: (binding: any) 
  * total, so the hint never implies a count. Each option carries the
  * graph's definition behind an info icon.
  */
-const renderOptionMenu = (slot: any, entry: SlotOptionsEntry, onSelect: (binding: any) => void) => {
+const renderOptionMenu = (
+    slot: Slot,
+    entry: SlotOptionsEntry,
+    onSelect: (binding: Slot['binding']) => void,
+) => {
     const { options, truncated } = entry;
 
     return (
@@ -333,12 +350,12 @@ const FlatOptionList = ({
     options,
     onSelect,
 }: {
-    slot: any;
-    options: any[];
-    onSelect: (binding: any) => void;
+    slot: Slot;
+    options: SlotOption[];
+    onSelect: (binding: Slot['binding']) => void;
 }) => {
     const [filter, setFilter] = useState('');
-    const boundDcid = slot.binding?.value?.ref?.ref;
+    const boundDcid = slot.binding.kind === 'value' ? slot.binding.value.ref?.ref : undefined;
     const { current, rest } = splitCurrentPick(options, boundDcid);
     const showFilter = shouldShowOptionFilter(rest.length);
     const shown = showFilter
@@ -368,8 +385,8 @@ const FlatOptionList = ({
                     </OptionRow>
                 </DropdownMenu.Item>
             )}
-            {shown.map((option: any) => {
-                const dcid = option?.value?.ref?.ref;
+            {shown.map((option) => {
+                const dcid = option.value.ref?.ref;
                 const label = slotOptionLabel(slot, option);
 
                 return (
@@ -393,7 +410,7 @@ const FlatOptionList = ({
 };
 
 type SearchSentenceProps = {
-    response: any;
+    response: Resolution | null;
     // Every part, in query order — the token routing target for a
     // part-indexed slot, and the source of the definite/candidates/no_data/
     // unsupported status a marked phrase reads.
@@ -415,13 +432,18 @@ type SearchSentenceProps = {
     baseStreamOpen: boolean;
     onEditSlot: (
         partIndex: number,
-        spec: any,
+        spec: PartSpec,
         slotIndex: number,
-        binding: any,
+        binding: Slot['binding'],
         entityRole?: EntityRoleKey,
     ) => void;
-    onEditEntity: (partIndex: number, spec: any, role: RoleAxis, dcids: string[] | null) => void;
-    onEditWindow: (partIndex: number, spec: any, window: WindowApplyValue) => void;
+    onEditEntity: (
+        partIndex: number,
+        spec: PartSpec,
+        role: RoleAxis,
+        dcids: string[] | null,
+    ) => void;
+    onEditWindow: (partIndex: number, spec: PartSpec, window: WindowApplyValue) => void;
     // An alternative measure, or a related one from the variable's group,
     // on each part a pick switches (several for a shared unit token).
     onEditMeasure: (picks: readonly MeasurePick[]) => void;
@@ -429,9 +451,9 @@ type SearchSentenceProps = {
     // price basis).
     onEditFacet: <A extends IdentityFacetAxis>(
         partIndex: number,
-        spec: any,
+        spec: PartSpec,
         axis: A,
-        binding: IdentityFacets[A] | null,
+        binding: IdentityFacetBinding[A] | null,
     ) => void;
     // A typed phrase edit or entity_ambiguous pick's edited ParsedPart,
     // posted as a parsed entry re-resolving just this part.
@@ -519,7 +541,7 @@ const placeField = (token: SentenceToken): string =>
 
 /** The field an option-list slot edits ("Sector"), for its menu title and
  *  its trigger's accessible name. */
-const slotField = (slot: any): string => slot.key.label ?? 'Value';
+const slotField = (slot: Slot): string => slot.key.label ?? 'Value';
 
 // The ref a token's menu changes when it edits the one binding the token
 // carries: its binding_ref, or none.
@@ -553,7 +575,7 @@ const EntityOptionRows = ({
     rankingBlocked,
     onApply,
 }: {
-    options: any[];
+    options: SlotOption[];
     role: RoleAxis;
     currentDcids: string[];
     rankingBlocked: boolean;
@@ -594,7 +616,7 @@ const EntityOptionRows = ({
                     />
                 </OptionFilterBar>
             )}
-            {current.map((option: any) => {
+            {current.map((option) => {
                 const dcid = entityOptionDcid(option);
 
                 return (
@@ -618,8 +640,8 @@ const EntityOptionRows = ({
                     </DropdownMenu.Item>
                 );
             })}
-            {shown.map((option: any) => {
-                const dcid = option?.value?.ref?.ref;
+            {shown.map((option) => {
+                const dcid = option.value.ref?.ref;
 
                 return (
                     <DropdownMenu.Item
@@ -654,8 +676,9 @@ const EntityOptionRows = ({
 /** The composed sentence as displayed, notes left out. It names the hero
  *  <h1>, which would otherwise take its name from each slot trigger's longer
  *  accessible name. */
-export const sentenceHeadingText = (response: any): string =>
-    planSentenceText(response?.sentence_plan);
+export const sentenceHeadingText = (
+    response: Pick<Resolution, 'sentence_plan'> | null | undefined,
+): string => planSentenceText(response?.sentence_plan);
 
 /** The space between two heading blocks of a plan of separate sentences. */
 const HEADING_JOIN: SentenceToken = { kind: 'text', text: ' ', segment: 'heading' };
@@ -672,11 +695,14 @@ const lowerFirst = (text: string): string =>
     /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 
 // The answer block over every part of the resolve response, from the
-// envelope's own composed `sentence_plan`: a muted "Closest match" lead when
+// envelope's own composed `sentence_plan`: a muted coverage lead ("Answered
+// 1 of 2 parts.") on a mixed answer, a muted "Closest match" lead when
 // a part shows the nearest measure, the heading tokens inside the page's one
-// <h1>, the byline (unit and source) in a <p> after it, and every part's
-// departures as a list, each with the one action it offers. The plan's own
-// departure tokens are skipped, since the list reads `parts[].departures`. A
+// <h1>, the byline (unit and source) in a <p> after it, every part's
+// departures as a list, each with the one action it offers, and the
+// assumptions clause ("Assumed: every provider.") in a closing <p>. The
+// plan's own departure tokens are skipped, since the list reads
+// `parts[].departures`. A
 // part-indexed what/how token routes its menu to that part's own spec; a
 // part-indexed where/when/source/role token routes to that same part's
 // slot, window, or provider menu; a shared where/when/source token (part_index
@@ -766,7 +792,7 @@ export const SearchSentenceHeading = ({
     const tokenPanel = (
         index: number,
         token: SentenceToken,
-        spec: any,
+        spec: PartSpec,
         changes: readonly string[],
     ) => ({
         ...tokenMenu(index, changes),
@@ -782,7 +808,7 @@ export const SearchSentenceHeading = ({
     const aboutPanel = (
         index: number,
         token: SentenceToken,
-        spec: any,
+        spec: PartSpec,
         variable?: string | null,
     ) => {
         const field = tokenField(token);
@@ -804,7 +830,7 @@ export const SearchSentenceHeading = ({
     const unitSwitchMenu = (
         index: number,
         token: SentenceToken,
-        spec: any,
+        spec: PartSpec,
         switches: readonly UnitSwitch[],
         variable?: string | null,
     ) => {
@@ -841,15 +867,13 @@ export const SearchSentenceHeading = ({
         );
     };
 
-    const definiteParts = parts.filter(
-        (part) => part.part?.status === 'definite' && part.hydratedSpec,
-    );
+    const definiteParts = parts.filter(hasDefiniteSpec);
 
     // A hoisted qualifier's own current value/options come from a
     // representative definite part — by hoisting's own definition every
     // contributing part agrees, so any one of them reads the same.
     const representativePart = definiteParts[0] ?? null;
-    const representative: any = representativePart?.hydratedSpec ?? null;
+    const representative: PartSpec | null = representativePart?.hydratedSpec ?? null;
 
     // The entity_ambiguous parts with a picker whose ambiguous wordings ride
     // the plan as their own slot tokens: each carries its menu and its
@@ -882,12 +906,15 @@ export const SearchSentenceHeading = ({
         token: SentenceToken,
         index: number,
         partIndex: number,
-        spec: any,
+        spec: PartSpec,
         restatement: ParsedPart | null,
     ) => {
         // Named in each trigger's accessible name when several parts share
         // the sentence.
         const variable = parts.length > 1 ? parts[partIndex]?.variableText : null;
+        // A spec flagged unreadable may carry no slots; its tokens then bind none.
+        const slots = spec.slots ?? [];
+        const measureSpec = { ...spec, slots };
         // Called only where a menu is drawn, with the refs it can change:
         // by default the slot the token binds.
         const panel = (changes: readonly string[] = ownRef(token)) =>
@@ -965,7 +992,8 @@ export const SearchSentenceHeading = ({
         // one.
         const states = tokenStates(token);
         const alternatives = token.axis === 'what' ? measureAlternatives(spec) : [];
-        const groups = token.axis === 'what' ? measureSlotGroups(spec, states, optionsBySpec) : [];
+        const groups =
+            token.axis === 'what' ? measureSlotGroups(measureSpec, states, optionsBySpec) : [];
 
         if (alternatives.length > 0 || groups.length > 0) {
             const rowValues = menuRowValues(spec, alternatives);
@@ -976,7 +1004,9 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel(measureMenuRefs(spec, states, groups, alternatives.length > 0))}
+                    {...panel(
+                        measureMenuRefs(measureSpec, states, groups, alternatives.length > 0),
+                    )}
                     label={token.text}
                     title="Select Measure"
                     ariaLabel={slotAriaLabel('Measure', token.text, variable)}
@@ -1018,15 +1048,15 @@ export const SearchSentenceHeading = ({
 
         if (token.axis === 'source') {
             const sourceOptions = sourceSlotOptions(spec);
-            const sourceSlotIndex = (spec.slots ?? []).findIndex(
-                (slot: any) => slot?.key?.axis === 'source',
-            );
+            const sourceSlotIndex = slots.findIndex((slot) => slot.key.axis === 'source');
 
             if (sourceSlotIndex === -1 || sourceOptions.length === 0) {
                 return aboutPanel(index, token, spec, variable);
             }
 
-            const boundDcid = spec.slots[sourceSlotIndex]?.binding?.value?.ref?.ref;
+            const sourceBinding = slots[sourceSlotIndex]?.binding;
+            const boundDcid =
+                sourceBinding?.kind === 'value' ? sourceBinding.value.ref?.ref : undefined;
 
             // A lone source opens the menu too, its row the current pick.
             //
@@ -1036,10 +1066,10 @@ export const SearchSentenceHeading = ({
             // attribution rather than a filter: nothing to uncheck.
             const impliedDcid =
                 boundDcid ??
-                sourceOptions.find((option: any) => token.text.trim() === sourceOptionLabel(option))
+                sourceOptions.find((option) => token.text.trim() === sourceOptionLabel(option))
                     ?.value?.ref?.ref;
             const { current, rest } = splitCurrentPick(sourceOptions, impliedDcid);
-            const sourceRow = (option: any, checked?: boolean) => {
+            const sourceRow = (option: SourceSlotOption, checked?: boolean) => {
                 const dcid = option.value.ref.ref;
 
                 return (
@@ -1059,7 +1089,7 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel([keyRef(spec.slots[sourceSlotIndex].key)])}
+                    {...panel([keyRef(slots[sourceSlotIndex].key)])}
                     label={token.text}
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text, variable)}
@@ -1075,7 +1105,7 @@ export const SearchSentenceHeading = ({
                             {sourceRow(current, true)}
                         </DropdownMenu.Item>
                     )}
-                    {rest.map((option: any) => (
+                    {rest.map((option) => (
                         <DropdownMenu.Item
                             key={option.value.ref.ref}
                             asChild
@@ -1217,9 +1247,7 @@ export const SearchSentenceHeading = ({
 
         // what/how/where, or anything else the engine binds to an option
         // list, joined by binding_ref.
-        const slotIndex = (spec.slots ?? []).findIndex(
-            (slot: any) => keyRef(slot.key) === token.binding_ref,
-        );
+        const slotIndex = slots.findIndex((slot) => keyRef(slot.key) === token.binding_ref);
         const optionsEntry = token.binding_ref
             ? slotOptionsEntry(optionsBySpec, spec.spec_id, token.binding_ref)
             : { options: [], truncated: false };
@@ -1245,7 +1273,7 @@ export const SearchSentenceHeading = ({
             token.binding_ref &&
             awaitingSlotOptions(optionsBySpec, spec.spec_id, token.binding_ref, baseStreamOpen)
         ) {
-            const field = slotField(spec.slots[slotIndex]);
+            const field = slotField(slots[slotIndex]);
 
             return (
                 <SlotMenu
@@ -1265,7 +1293,7 @@ export const SearchSentenceHeading = ({
         if (
             slotIndex !== -1 &&
             optionsEntry.options.length > 0 &&
-            !slotOffersChoice(spec.slots[slotIndex], optionsEntry, spec)
+            !slotOffersChoice(slots[slotIndex], optionsEntry, spec)
         ) {
             return aboutPanel(index, token, spec, variable);
         }
@@ -1283,7 +1311,7 @@ export const SearchSentenceHeading = ({
                 return (
                     <SlotMenu
                         key={index}
-                        {...panel(measureMenuRefs(spec, states, [], true))}
+                        {...panel(measureMenuRefs(measureSpec, states, [], true))}
                         label={token.text}
                         title={related.title ? 'Select Measure' : 'About this measure'}
                         ariaLabel={slotAriaLabel('Measure', token.text, variable)}
@@ -1383,9 +1411,7 @@ export const SearchSentenceHeading = ({
             // the where slot is right there — the peers surface lists every
             // country with data, and a pick binds the slot directly.
             if (token.axis === 'where') {
-                const whereIndex = (spec.slots ?? []).findIndex(
-                    (slot: any) => slot?.key?.axis === 'where',
-                );
+                const whereIndex = slots.findIndex((slot) => slot.key.axis === 'where');
 
                 if (whereIndex !== -1) {
                     return (
@@ -1427,8 +1453,8 @@ export const SearchSentenceHeading = ({
             );
         }
 
-        const slot = spec.slots[slotIndex];
-        const onSelect = (binding: any) =>
+        const slot = slots[slotIndex];
+        const onSelect = (binding: Slot['binding']) =>
             onEditSlot(partIndex, spec, slotIndex, binding, token.role ?? 'observationAbout');
         // A level-scoped constraint slot (relation populated) skips the
         // free-text escape hatch renderOptionMenu's flat branch offers —
@@ -1555,12 +1581,12 @@ export const SearchSentenceHeading = ({
 
         if (token.axis === 'source') {
             const sourceOptions = sourceSlotOptions(representative);
-            const sourceSlotIndex = (representative?.slots ?? []).findIndex(
-                (slot: any) => slot?.key?.axis === 'source',
-            );
             const sourceSlot =
-                sourceSlotIndex !== -1 ? representative.slots[sourceSlotIndex] : null;
-            const boundDcid = sourceSlot?.binding?.value?.ref?.ref;
+                (representative?.slots ?? []).find((slot) => slot.key.axis === 'source') ?? null;
+            const boundDcid =
+                sourceSlot?.binding.kind === 'value'
+                    ? sourceSlot.binding.value.ref?.ref
+                    : undefined;
 
             // A lone source opens the menu here too — see the per-part
             // branch above.
@@ -1572,7 +1598,7 @@ export const SearchSentenceHeading = ({
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text)}
                 >
-                    {sourceOptions.map((option: any) => {
+                    {sourceOptions.map((option) => {
                         const dcid = option.value.ref.ref;
                         const implicit =
                             !boundDcid && token.text.trim() === sourceOptionLabel(option);
@@ -1636,20 +1662,18 @@ export const SearchSentenceHeading = ({
                     title={entityMenuTitle(entityRole)}
                     ariaLabel={slotAriaLabel(entityRoleLabel(entityRole), label)}
                 >
-                    {entityOptions.map((option: any) => {
-                        const checked = currentEntities.includes(option?.value?.ref?.ref);
+                    {entityOptions.map((option) => {
+                        const dcid = option.value.ref?.ref;
+                        const checked = !!dcid && currentEntities.includes(dcid);
 
                         return (
                             <DropdownMenu.Item
-                                key={option?.value?.ref?.ref ?? optionLabel(option)}
+                                key={dcid ?? optionLabel(option)}
                                 asChild
-                                onSelect={() =>
-                                    onEditShared({
-                                        axis: 'entity',
-                                        role: entityRole,
-                                        dcid: option.value.ref.ref,
-                                    })
-                                }
+                                onSelect={() => {
+                                    if (dcid)
+                                        onEditShared({ axis: 'entity', role: entityRole, dcid });
+                                }}
                             >
                                 <OptionRow
                                     checked={checked}
@@ -1799,7 +1823,11 @@ export const SearchSentenceHeading = ({
             return <span key={index}>{token.text}</span>;
         }
 
-        const wording = ambiguousWordingGroup(token, wirePart.no_data);
+        const known = knownPart(wirePart);
+        const wording = ambiguousWordingGroup(
+            token,
+            known?.status === 'no_data' ? known.no_data : undefined,
+        );
 
         // While an edit targeting this part is in flight, its what-token (or
         // its ambiguous wordings, when the plan carries them) carries an
@@ -1831,21 +1859,17 @@ export const SearchSentenceHeading = ({
                 );
             }
 
-            // An entity_ambiguous pick pins the candidate's dcid onto the
-            // restatement entity whose text is the picked wording and posts
-            // a parsed entry, a no-op if no entity carries that text.
-            // Reachable only when the response carried ambiguous_entities
-            // and a restatement to edit from. A wording the plan carries as
-            // its own slot token opens a menu of the nodes it could name; a
-            // part whose plan carries none opens one menu over every
-            // wording on its what-token.
+            // An entity_ambiguous pick posts the refusal's option for it
+            // unchanged as a parsed entry (entityChoicePart). A wording the
+            // plan carries as its own slot token opens a menu of the options
+            // that settle it; a part whose plan carries none opens one menu
+            // over every wording on its what-token.
             if (wirePart.status === 'no_data' && offersAmbiguousPicker(wirePart)) {
-                const groups = wirePart.no_data.ambiguous_entities;
-                const restatement = wirePart.restatement;
-                const pick = (group: AmbiguousEntityGroup, candidate: AmbiguousEntityCandidate) => {
-                    const edited = buildAmbiguousPickPart(restatement, group.text, candidate);
+                const groups = entityChoiceGroups(wirePart.no_data);
+                const pick = (option: NoDataOption) => {
+                    const posted = entityChoicePart(option);
 
-                    if (edited) onEditParsed(partIndex, edited);
+                    if (posted) onEditParsed(partIndex, posted);
                 };
 
                 if (wording) {
@@ -1860,13 +1884,13 @@ export const SearchSentenceHeading = ({
                             )}
                             marked
                         >
-                            {wording.candidates.map((candidate) => (
+                            {wording.options.map((option, optionIndex) => (
                                 <DropdownMenu.Item
-                                    key={candidate.ref}
+                                    key={optionIndex}
                                     asChild
-                                    onSelect={() => pick(wording, candidate)}
+                                    onSelect={() => pick(option)}
                                 >
-                                    <OptionRow>{candidate.label}</OptionRow>
+                                    <OptionRow>{option.label}</OptionRow>
                                 </DropdownMenu.Item>
                             ))}
                         </SlotMenu>,
@@ -1883,16 +1907,16 @@ export const SearchSentenceHeading = ({
                             marked
                         >
                             {groups.flatMap((group) =>
-                                group.candidates.map((candidate) => (
+                                group.options.map((option, optionIndex) => (
                                     <DropdownMenu.Item
-                                        key={`${group.text}:${candidate.ref}`}
+                                        key={`${group.text}:${optionIndex}`}
                                         asChild
-                                        onSelect={() => pick(group, candidate)}
+                                        onSelect={() => pick(option)}
                                     >
                                         {/* Two ambiguous wordings share one
                                             menu, each row naming its own. */}
                                         <OptionRow detail={groups.length > 1 ? group.text : null}>
-                                            {candidate.label}
+                                            {option.label}
                                         </OptionRow>
                                     </DropdownMenu.Item>
                                 )),
@@ -1981,10 +2005,15 @@ export const SearchSentenceHeading = ({
 
     // Before the response lands the block is the <h1> alone.
     const answerParts = response ? parts : [];
+    const clauses = assumptionClauses(
+        rawPlan,
+        parts.map((part) => part.variableText ?? null),
+    );
     // A candidates part's lead sits above its reading cards instead.
     const closestParts = answerParts.filter(
         (part) => part.part?.status !== 'candidates' && isClosestMatch(part.part),
     );
+    const coverageLead = response ? planCoverageText(rawPlan) : '';
     const closestLead =
         closestParts.length === 0
             ? null
@@ -1995,7 +2024,7 @@ export const SearchSentenceHeading = ({
     // A slot's label on part `partIndex`'s spec ("Type of flow").
     const slotLabel = (partIndex: number, bindingRef: string): string | null =>
         (parts[partIndex]?.hydratedSpec?.slots ?? []).find(
-            (slot: any) => keyRef(slot.key) === bindingRef,
+            (slot) => keyRef(slot.key) === bindingRef,
         )?.key?.label ?? null;
 
     // The action naming the departure's ref when it is a slot ("Change
@@ -2064,12 +2093,13 @@ export const SearchSentenceHeading = ({
     // the page offers Studio once, since it hands over the whole question.
     const offered = new Set<string>();
     const departureItems: DepartureItem[] = answerDepartures(
-        answerParts.map((part) => ({
-            status: part.part?.status ?? 'unsupported',
-            variable_text: part.variableText,
-            departures: part.part?.departures ?? [],
-            no_data: part.part?.no_data,
-            restatement: part.part?.restatement,
+        answerParts.map(({ part, variableText }) => ({
+            status: part?.status ?? 'unsupported',
+            variable_text: variableText,
+            departures: part?.departures ?? [],
+            no_data:
+                part && isKnownPart(part) && part.status === 'no_data' ? part.no_data : undefined,
+            restatement: part?.restatement,
         })),
         rawPlan,
     ).map(({ key, prefix, departure, action }) => {
@@ -2092,6 +2122,7 @@ export const SearchSentenceHeading = ({
 
     return (
         <>
+            {coverageLead && <p className={styles.coverageLead}>{coverageLead}</p>}
             {closestLead && <p className={styles.closestLead}>{closestLead}</p>}
             <h1
                 className={styles.sentence}
@@ -2101,6 +2132,17 @@ export const SearchSentenceHeading = ({
             </h1>
             {bylineNodes.length > 0 && <p className={styles.byline}>{bylineNodes}</p>}
             {departureItems.length > 0 && <DepartureList items={departureItems} />}
+            {clauses.length > 0 && (
+                <p className={styles.assumptions}>
+                    {clauses.map(({ key, prefix, text }) => (
+                        <span key={key}>
+                            {key > 0 && ' '}
+                            {prefix && `${prefix}: `}
+                            {text}
+                        </span>
+                    ))}
+                </p>
+            )}
         </>
     );
 };
@@ -2133,7 +2175,11 @@ const RefineEntry = ({
 
     if (item.kind === 'entity') {
         const { role, entry } = item;
-        const pick = (option: any) => onEditEntity(part.index, spec, role, [option.value.ref.ref]);
+        const pick = (option: SlotOption) => {
+            const dcid = option.value.ref?.ref;
+
+            if (dcid) onEditEntity(part.index, spec, role, [dcid]);
+        };
         const [only] = entry.options;
 
         if (entry.options.length === 1 && !entry.truncated) {
@@ -2148,9 +2194,9 @@ const RefineEntry = ({
 
         return (
             <OptionSubmenu label={label} open={open} onOpenChange={onOpenChange}>
-                {entry.options.map((option: any) => (
+                {entry.options.map((option) => (
                     <DropdownMenu.Item
-                        key={option?.value?.ref?.ref ?? optionLabel(option)}
+                        key={option.value.ref?.ref ?? optionLabel(option)}
                         asChild
                         onSelect={() => pick(option)}
                     >
@@ -2197,7 +2243,7 @@ const RefineEntry = ({
     }
 
     const { slot, slotIndex, entry, current } = item;
-    const onSelect = (binding: any) => onEditSlot(part.index, spec, slotIndex, binding);
+    const onSelect = (binding: Slot['binding']) => onEditSlot(part.index, spec, slotIndex, binding);
     const [only] = entry.options;
 
     // An unbound slot with one option: its row picks it.
@@ -2338,9 +2384,7 @@ export const SearchSentenceBody = ({
     const [whyOpen, setWhyOpen] = useState(false);
     const aboutId = useId();
 
-    const definiteParts = parts.filter(
-        (part) => part.part?.status === 'definite' && part.hydratedSpec,
-    );
+    const definiteParts = parts.filter(hasDefiniteSpec);
 
     const editNotes = [
         ...new Set(
@@ -2363,6 +2407,7 @@ export const SearchSentenceBody = ({
         variableText: part.variableText,
         spec: part.hydratedSpec,
         warnings: part.part?.warnings,
+        assumptions: knownPart(part.part)?.assumptions,
     }));
 
     return (

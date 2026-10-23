@@ -1,36 +1,38 @@
-/** Pure logic behind the answer block: the heading and byline blocks of a
- *  sentence plan and the departures under them with the action each offers.
- *  No React. */
+/** Pure logic behind the answer block: the heading, byline and assumptions
+ *  blocks of a sentence plan and the departures under them with the action
+ *  each offers. No React. */
 
 import { offersStudioCallout } from './resultNotes.ts';
-import { tokenPart } from './sentencePlan.ts';
-import type { Departure, Part, SentenceToken } from './types.ts';
+import { tokenPart, tokenSegment } from './sentencePlan.ts';
+import type { Departure, NoDataPart, Part, SentenceSegment, SentenceToken } from './types.ts';
 
 export type SentenceBlock = {
-    segment: 'heading' | 'byline';
+    segment: Exclude<SentenceSegment, 'departure'>;
     tokens: SentenceToken[];
 };
 
 const isSpacing = (token: SentenceToken) => token.kind === 'text' && token.text.trim() === '';
 
-/** The plan's heading and byline as blocks, in plan order: each run of
- *  consecutive tokens in one segment is one block. Departure tokens are
- *  left out, since the departure list draws from `parts[].departures`, so
- *  heading runs a departure separated join into one block. A block's
- *  leading and trailing whitespace-only text tokens are the space between
- *  blocks and are dropped; a block left empty is dropped too. A plan of
- *  several separate sentences (one per part) reads heading, byline,
- *  heading, byline. */
+/** The plan's coverage opener, heading, byline and assumptions clause as
+ *  blocks, in plan order: each run of consecutive tokens in one segment is
+ *  one block. Departure tokens are left out, since the departure list draws from
+ *  `parts[].departures`, so heading runs a departure separated join into
+ *  one block. A block's leading and trailing whitespace-only text tokens are
+ *  the space between blocks and are dropped; a block left empty is dropped
+ *  too. A plan of several separate sentences (one per part) reads heading,
+ *  byline, assumption, heading, byline, assumption. */
 export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined): SentenceBlock[] {
     const blocks: SentenceBlock[] = [];
 
     for (const token of plan ?? []) {
-        if (token.segment === 'departure') continue;
+        const segment = tokenSegment(token);
+
+        if (segment === 'departure') continue;
 
         const last = blocks.at(-1);
 
-        if (last?.segment === token.segment) last.tokens.push(token);
-        else blocks.push({ segment: token.segment, tokens: [token] });
+        if (last?.segment === segment) last.tokens.push(token);
+        else blocks.push({ segment, tokens: [token] });
     }
 
     return blocks
@@ -41,6 +43,43 @@ export function sentenceBlocks(plan: readonly SentenceToken[] | null | undefined
             return { segment, tokens: start === -1 ? [] : tokens.slice(start, end + 1) };
         })
         .filter((block) => block.tokens.length > 0);
+}
+
+/** One assumptions clause the answer block draws after the byline and
+ *  departures: "Assumed: official development assistance; every provider." */
+export type AssumptionClause = {
+    key: number;
+    /** the variable text of the part the clause belongs to, set only in a
+     *  response of several parts */
+    prefix: string | null;
+    text: string;
+};
+
+/** The plan's assumptions clauses as text, in plan order. In a response of
+ *  several parts a clause carries as `prefix` the variable text
+ *  (`variableTexts`, by part index) of the part that owns its lead token
+ *  ("Assumed: "). dfo-apis' render/envelope.py `_clause` gives the lead to
+ *  the one part every item of the clause belongs to, or to no part when the
+ *  items' owners differ, so a clause naming several parts' items carries no
+ *  prefix. Empty when the answer assumed nothing. */
+export function assumptionClauses(
+    plan: readonly SentenceToken[] | null | undefined,
+    variableTexts: readonly (string | null)[],
+): AssumptionClause[] {
+    const partCount = variableTexts.length;
+
+    return sentenceBlocks(plan)
+        .filter((block) => block.segment === 'assumption')
+        .map((block, key) => {
+            const lead = block.tokens[0];
+            const owner = partCount > 1 && lead ? tokenPart(lead, partCount) : null;
+
+            return {
+                key,
+                prefix: owner != null ? (variableTexts[owner] ?? null) : null,
+                text: block.tokens.map((token) => token.text).join(''),
+            };
+        });
 }
 
 /** What a departure's one action does: open the menu of the visible token
@@ -74,7 +113,7 @@ const isVisibleSlotOf = (
 
     return (
         token.kind === 'slot' &&
-        token.segment !== 'departure' &&
+        ['heading', 'byline'].includes(tokenSegment(token)) &&
         token.text.trim() !== '' &&
         (owner === partIndex || owner === null)
     );
@@ -159,7 +198,7 @@ export type AnswerDeparture = {
  *  `no_data` and `restatement` decide whether its callout offers Studio. */
 export function answerDepartures(
     parts: readonly (Pick<Part, 'status' | 'variable_text' | 'departures'> &
-        Partial<Pick<Part, 'no_data' | 'restatement'>>)[],
+        Partial<Pick<Part, 'restatement'> & Pick<NoDataPart, 'no_data'>>)[],
     plan: readonly SentenceToken[] | null | undefined,
 ): AnswerDeparture[] {
     const several = parts.length > 1;

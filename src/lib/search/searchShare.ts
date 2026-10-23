@@ -3,7 +3,7 @@ import { asc, eq } from 'drizzle-orm';
 import { searchShareMode } from '@/lib/chat/shareMode';
 import { shortId } from '@/lib/chat/shareStore';
 import { db } from '@/lib/db';
-import type { EntityGroup, Operation } from '@/lib/search/types';
+import type { Assumption, EntityGroup, Operation } from '@/lib/search/types';
 import { searchApiBase } from '@/lib/searchApi';
 import { share, shareRef } from '../../../db/schema';
 import { registerDefinitions } from './registerDefinitions.ts';
@@ -34,6 +34,8 @@ export type SearchShareRef = {
     identity: unknown;
     entityGroups: Record<string, EntityGroup> | null;
     operations: Operation[];
+    // Null for a share stored without assumptions.
+    assumptions: Assumption[] | null;
     contentVersion: string | null;
     // The file a snapshot captured and pinned. Null for a live share, and
     // for a snapshot stored before digests were kept.
@@ -109,6 +111,7 @@ export const createSearchShare = async (
                 entityGroups: part.entityGroups ?? null,
                 variableText: part.variableText,
                 operations: part.operations,
+                assumptions: part.assumptions ?? null,
                 contentVersion: captured?.[index]?.contentVersion ?? null,
                 artifactDigest: captured?.[index]?.artifactDigest ?? null,
             })),
@@ -141,8 +144,9 @@ export const getSearchShare = async (id: string): Promise<SearchShare | null> =>
             variableText: ref.variableText,
             specId: ref.specId,
             identity: ref.identity,
-            entityGroups: ref.entityGroups as Record<string, EntityGroup> | null,
-            operations: ref.operations as Operation[],
+            entityGroups: ref.entityGroups,
+            operations: ref.operations,
+            assumptions: ref.assumptions,
             contentVersion: ref.contentVersion,
             artifactDigest: ref.artifactDigest,
         })),

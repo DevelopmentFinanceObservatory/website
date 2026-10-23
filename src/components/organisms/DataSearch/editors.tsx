@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -20,13 +19,20 @@ import Button from '@/components/atoms/Button/Button';
 import {
     filterOptionsByQuery,
     mergeEntitySeedWithFetch,
+    type OptionLike,
     shouldShowOptionFilter,
 } from '@/lib/search/pickerState';
 import type { ApiError, EntityOption } from '@/lib/search/searchClient';
 import { entityOptions } from '@/lib/search/searchClient';
-import type { EntityRoleKey, IdentityWindow, PlaceOptionsScope } from '@/lib/search/types';
+import type {
+    EntityRoleKey,
+    IdentityWindow,
+    PartSpec,
+    PlaceOptionsScope,
+} from '@/lib/search/types';
 import {
     buildPlaceOptionGroups,
+    observationSeries,
     optionCoverageLabel,
     optionMuted,
     placeEditorScopes,
@@ -55,18 +61,18 @@ export const WindowEditor = ({
     label,
     onApply,
 }: {
-    spec: any;
+    spec: PartSpec;
     label?: string;
     onApply: (value: WindowApplyValue) => void;
 }) => {
     const requestedWindow: IdentityWindow | undefined = spec?.identity?.requested_window;
-    const years = (spec?.observations?.series ?? [])
-        .flatMap((series: any) => series?.points ?? [])
-        .map((point: any) => parseInt(point?.date, 10))
-        .filter((year: number) => !Number.isNaN(year));
+    const years = observationSeries(spec)
+        .flatMap((series) => series.points)
+        .map((point) => parseInt(point.date, 10))
+        .filter((year) => !Number.isNaN(year));
     const seed = seedWindowYears({
         requestedWindow,
-        coverageWindow: spec?.coverage?.window,
+        coverageWindow: spec?.coverage?.window ?? undefined,
         label,
         observationYears: years,
     });
@@ -205,7 +211,7 @@ const failureMessage = (error: ApiError): string => {
 
 type PlaceEditorState =
     | { phase: 'loading' }
-    | { phase: 'loaded'; groups: { title: string; options: any[] }[] }
+    | { phase: 'loaded'; groups: { title: string; options: EntityOption[] }[] }
     | { phase: 'failed'; error: ApiError };
 
 /** One PlaceEditor mount's decisions for its current (spec, anchor, role,
@@ -270,7 +276,7 @@ export const PlaceEditor = ({
     role,
     baseStreamOpen,
 }: {
-    spec: any;
+    spec: PartSpec;
     /** Keys this editor's reactive prefetch effect. Read boundDcids for the
      *  full pinned/checked set, this is never more than its first member. */
     anchorDcid: string;
@@ -378,7 +384,9 @@ export const PlaceEditor = ({
     const hasIdentity = !!spec.identity;
 
     useEffect(() => {
-        if (!hasIdentity) return;
+        const { identity } = spec;
+
+        if (!identity) return;
 
         const key = `${spec.spec_id}::${anchorDcid}::${role ?? ''}::${retryToken}`;
 
@@ -472,9 +480,7 @@ export const PlaceEditor = ({
             // latency to the second group. Group order (Similar places,
             // then Within) comes from `scopes`, not settle order.
             void Promise.allSettled(
-                scopesToFetch.map((scope) =>
-                    entityOptions({ identity: spec.identity, scope, role }),
-                ),
+                scopesToFetch.map((scope) => entityOptions({ identity, scope, role })),
             ).then((settled) => {
                 if (!current()) return;
 
@@ -559,7 +565,7 @@ export const PlaceEditor = ({
     const seenPinned = new Set<string>();
     const pinnedOptions = groupSplits
         .flatMap((group) => group.current)
-        .filter((option: any) => {
+        .filter((option) => {
             if (seenPinned.has(option.dcid)) return false;
             seenPinned.add(option.dcid);
             return true;
@@ -570,7 +576,7 @@ export const PlaceEditor = ({
     const filteredGroups = unfilteredGroups
         .map((group) => ({
             ...group,
-            options: filterOptionsByQuery(group.options, filter, (option: any) => option.label),
+            options: filterOptionsByQuery(group.options, filter, (option) => option.label),
         }))
         .filter((group) => group.options.length > 0);
     const unbindLabel = unbindRoleLabel(role);
@@ -579,7 +585,7 @@ export const PlaceEditor = ({
     // names a visible row would just duplicate that row's own click, so the
     // row is enough and the Search action stays hidden.
     const listedLabels = new Set(
-        [...pinnedOptions, ...filteredGroups.flatMap((group) => group.options)].map((option: any) =>
+        [...pinnedOptions, ...filteredGroups.flatMap((group) => group.options)].map((option) =>
             option.label.toLowerCase(),
         ),
     );
@@ -651,7 +657,7 @@ export const PlaceEditor = ({
                 closes the menu, same as any other row. */}
             {hasIdentity &&
                 state.phase === 'loaded' &&
-                pinnedOptions.map((option: any) => (
+                pinnedOptions.map((option) => (
                     <DropdownMenu.Item
                         key={option.dcid}
                         asChild
@@ -682,7 +688,7 @@ export const PlaceEditor = ({
                         {showGroupHeadings(unfilteredGroups) && (
                             <p className={styles.slotGroupTitle}>{group.title}</p>
                         )}
-                        {group.options.map((option: any) => (
+                        {group.options.map((option) => (
                             <DropdownMenu.Item
                                 key={option.dcid}
                                 asChild
@@ -736,7 +742,7 @@ export const PlaceEditor = ({
                     onApply={() => {
                         const labelByDcid = new Map(
                             loadedGroups.flatMap((group) =>
-                                group.options.map((option: any) => [option.dcid, option.label]),
+                                group.options.map((option) => [option.dcid, option.label]),
                             ),
                         );
 
@@ -773,7 +779,7 @@ const placeRoleLabel = (role: EntityRoleKey): string => {
 };
 
 const seededState = (
-    seed: { options: any[]; truncated: boolean } | undefined,
+    seed: { options: OptionLike[]; truncated: boolean } | undefined,
 ): PlaceScopeEditorState =>
     seed
         ? {
@@ -793,7 +799,7 @@ export const PlaceScopeEditor = ({
     rankingBlocked,
     offerAny,
 }: {
-    spec: any;
+    spec: PartSpec;
     role: EntityRoleKey;
     /** Multi-select mode: see PlaceEditor's own onApply/onSelect doc above.
      *  Exactly one of the two is passed by any caller. */
@@ -801,7 +807,7 @@ export const PlaceScopeEditor = ({
     /** Single-pick mode: a row click posts immediately and closes the menu,
      *  no toggle state, no Apply button. */
     onSelect?: (ref: { dcid: string; label: string }) => void;
-    seed?: { options: any[]; truncated: boolean };
+    seed?: { options: OptionLike[]; truncated: boolean };
     /** Split out of the merged list and shown once, above it, checked/
      *  pinned. Omitted (or []) for an unbound axis with no current pick to
      *  protect. */

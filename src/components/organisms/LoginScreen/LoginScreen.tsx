@@ -1,14 +1,16 @@
 'use client';
 
 import classNames from 'classnames';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
+import EmailSignIn from './EmailSignIn';
 import styles from './LoginScreen.module.scss';
 // The landing's stage (eyebrow/title/lead) is reused as-is — the sign-in
 // page is the same house.
 import canvas from '@/components/organisms/Studio/Studio.module.scss';
 import landing from '@/components/organisms/Studio/landing/StudioLanding.module.scss';
 
+import Button from '@/components/atoms/Button/Button';
 import GridPattern, { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import Header from '@/components/organisms/Header/Header';
 import { useGridCell } from '@/hooks/useGridCell';
@@ -23,15 +25,19 @@ import Microsoft from '@/assets/svg/microsoft.svg';
 /**
  * Sign-in for the Studio — our own page (no hosted/iframe UI): the studio
  * bar, the light grid, the landing's copy stack and one card with a button
- * per provider. There is no form: the first sign-in through a provider IS
- * the account. `next` is where the visitor was headed (proxy.ts sets it);
- * a failed OAuth round-trip lands back here with `error`.
+ * per provider. Where it is configured, email sign-in by code sits under a
+ * quiet "Use email instead", so a provider stays the way people are steered
+ * in. There is no sign-up. The first sign-in through a provider or a code IS
+ * the account. `next` is where the visitor was headed (proxy.ts sets it); a
+ * failed OAuth round-trip lands back here with `error`.
  */
 type LoginScreenProps = {
     next: string;
     error?: string;
     // The providers this deployment has keys for (lib/auth/auth.ts).
     providers: Provider[];
+    // Email sign-in's settings, or null when this deployment has it off.
+    emailSignIn: { turnstileSiteKey: string; codeMinutes: number } | null;
 };
 
 const PROVIDERS: Record<Provider, { label: string; Mark: React.ComponentType }> = {
@@ -51,7 +57,7 @@ const OAUTH_ERRORS: Record<string, string> = {
 // convention).
 const FILL_SHADES = ['#ffffff', '#eceada', '#dedcc6', '#cfceb6'];
 
-const LoginScreen = ({ next, error, providers }: LoginScreenProps) => {
+const LoginScreen = ({ next, error, providers, emailSignIn }: LoginScreenProps) => {
     const sectionRef = useReveal<HTMLElement>();
     const gridCell = useGridCell();
     const gridScale = gridCell / GRID_CELL;
@@ -61,6 +67,18 @@ const LoginScreen = ({ next, error, providers }: LoginScreenProps) => {
     const [failed, setFailed] = useState<string | null>(
         error ? (OAUTH_ERRORS[error] ?? 'Sign-in failed — please try again.') : null,
     );
+    // Email sign-in folds away under the providers. With no provider it is
+    // the only way in, so it starts open. It mounts on first open, so the
+    // Turnstile script loads only for visitors who choose email.
+    const emailOnly = providers.length === 0;
+    const [emailOpen, setEmailOpen] = useState(emailOnly);
+    const [emailMounted, setEmailMounted] = useState(emailOnly);
+    const emailPanelId = useId();
+
+    const toggleEmail = () => {
+        setEmailMounted(true);
+        setEmailOpen((open) => !open);
+    };
 
     const withProvider = async (provider: Provider) => {
         setBusy(provider);
@@ -120,7 +138,8 @@ const LoginScreen = ({ next, error, providers }: LoginScreenProps) => {
                     style={revealIndex(2)}
                 >
                     Your canvases and conversations are saved to your account, so you can pick them
-                    up on any device. No password — sign in with an account you already have.
+                    up on any device. It&apos;s free and needs no password. Sign in with an account
+                    you already have.
                 </p>
 
                 <div className={styles.card} data-reveal style={revealIndex(3)}>
@@ -145,7 +164,46 @@ const LoginScreen = ({ next, error, providers }: LoginScreenProps) => {
                         );
                     })}
 
-                    {providers.length === 0 && (
+                    {emailSignIn && !emailOnly && (
+                        <Button
+                            variant="plain"
+                            icon="chevron-down"
+                            className={styles.emailToggle}
+                            data-open={emailOpen}
+                            aria-expanded={emailOpen}
+                            aria-controls={emailPanelId}
+                            onClick={toggleEmail}
+                            disabled={busy !== null}
+                        >
+                            Use email instead
+                        </Button>
+                    )}
+
+                    {emailSignIn && (
+                        <div
+                            id={emailPanelId}
+                            className={classNames(
+                                styles.accordion,
+                                emailOpen && styles.accordionOpen,
+                            )}
+                            inert={!emailOpen}
+                        >
+                            <div className={styles.accordionInner}>
+                                {emailMounted && (
+                                    <EmailSignIn
+                                        next={next}
+                                        turnstileSiteKey={emailSignIn.turnstileSiteKey}
+                                        codeMinutes={emailSignIn.codeMinutes}
+                                        disabled={busy !== null}
+                                        open={emailOpen}
+                                        focusWhenOpened={!emailOnly}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {providers.length === 0 && !emailSignIn && (
                         <p className={styles.error} role="alert">
                             Sign-in isn’t configured on this deployment yet.
                         </p>

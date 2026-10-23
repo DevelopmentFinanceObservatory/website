@@ -6,8 +6,10 @@ import {
     parseVersionLink,
     storedDownload,
     versionLinkHref,
+    type VersionLinkDocument,
     type VersionLinkOutcome,
 } from '../versionLink.ts';
+import { artifact, definition } from './fixtures/dataset-documents.ts';
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -52,12 +54,18 @@ const sharedOf = (outcome: VersionLinkOutcome | null) =>
 test('outcomeFromDocument opens a version as a snapshot share dated by its earliest artifact', () => {
     const link = { specId: 'spec_a1', contentVersion: 'cv_b2' };
     const outcome = outcomeFromDocument(link, {
-        definition: { spec_id: 'spec_a1', identity },
-        citation: { sources: [{ label: 'OECD CRS' }, { label: 'IMF WEO' }] },
+        content_version: 'cv_b2',
+        definition: definition(identity),
+        citation: {
+            text: '',
+            sources: [
+                { ref: 'dcid:oecd', label: 'OECD CRS' },
+                { ref: 'dcid:imf', label: 'IMF WEO' },
+            ],
+        },
         artifacts: [
-            { created_at: '2026-10-03T12:00:00Z' },
-            { created_at: '2026-10-02T09:00:00Z' },
-            {},
+            artifact({ created_at: '2026-10-03T12:00:00Z', rendering: {} }),
+            artifact({ created_at: '2026-10-02T09:00:00Z', rendering: {} }),
         ],
     });
 
@@ -76,6 +84,7 @@ test('outcomeFromDocument opens a version as a snapshot share dated by its earli
                     identity,
                     entityGroups: null,
                     operations: [],
+                    assumptions: null,
                     contentVersion: 'cv_b2',
                 },
             ],
@@ -88,9 +97,7 @@ test('outcomeFromDocument opens a latest-data link live', () => {
     const shared = sharedOf(
         outcomeFromDocument(
             { specId: 'spec_a1', contentVersion: null },
-            {
-                definition: { spec_id: 'spec_a1', identity },
-            },
+            { content_version: 'cv_b2', definition: definition(identity) },
         ),
     );
 
@@ -102,35 +109,37 @@ test('outcomeFromDocument opens a latest-data link live', () => {
 test('outcomeFromDocument refuses a document without a definition identity', () => {
     const link = { specId: 'spec_a1', contentVersion: 'cv_b2' };
 
-    assert.equal(outcomeFromDocument(link, { definition: { spec_id: 'spec_a1' } }), null);
-    assert.equal(outcomeFromDocument(link, { definition: null }), null);
+    for (const body of [{ definition: { spec_id: 'spec_a1' } }, { definition: null }]) {
+        assert.equal(outcomeFromDocument(link, body as unknown as VersionLinkDocument), null);
+    }
 });
 
 const pinned = { identity_version: 'spec1', shape: { kind: 'stat_var' } };
 const stored = [
-    { url: '/api/datasets/spec_a1/cv_b2/files/sha256:s0', rendering: { statistics: 'series' } },
-    {
-        url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
+    artifact({
+        artifact_digest: 'sha256:s0',
+        rendering: { statistics: 'series' },
+    }),
+    artifact({
+        artifact_digest: 'sha256:f1',
         rendering: { format: 'csv', bundle: false },
-    },
-    {
-        url: '/api/datasets/spec_a1/cv_b2/files/sha256:b1',
+    }),
+    artifact({
         artifact_digest: 'sha256:b1',
         rendering: { format: 'csv', bundle: true },
-    },
+    }),
 ];
-const frame = {
-    url: '/api/datasets/spec_a1/cv_b2/files/sha256:fr',
+const frame = artifact({
     artifact_digest: 'sha256:fr',
     media_type: 'application/vnd.apache.parquet',
     rendering: { format: 'frame' },
-};
+});
 
 test('outcomeFromDocument offers a pinned-StatVar version as its stored bundle', () => {
     assert.deepEqual(
         outcomeFromDocument(
             { specId: 'spec_a1', contentVersion: 'cv_b2' },
-            { definition: { spec_id: 'spec_a1', identity: pinned }, artifacts: stored },
+            { content_version: 'cv_b2', definition: definition(pinned), artifacts: stored },
         ),
         {
             kind: 'download_only',
@@ -143,7 +152,11 @@ test('outcomeFromDocument offers a data file when a pinned-StatVar version has n
     assert.deepEqual(
         outcomeFromDocument(
             { specId: 'spec_a1', contentVersion: 'cv_b2' },
-            { definition: { spec_id: 'spec_a1', identity: pinned }, artifacts: stored.slice(0, 2) },
+            {
+                content_version: 'cv_b2',
+                definition: definition(pinned),
+                artifacts: stored.slice(0, 2),
+            },
         ),
         {
             kind: 'download_only',
@@ -168,7 +181,8 @@ for (const [name, link, artifacts] of [
     test(`outcomeFromDocument offers no download for a pinned-StatVar ${name}`, () => {
         assert.deepEqual(
             outcomeFromDocument(link, {
-                definition: { spec_id: 'spec_a1', identity: pinned },
+                content_version: 'cv_b2',
+                definition: definition(pinned),
                 artifacts: [...artifacts],
             }),
             { kind: 'download_only', download: null },
@@ -185,7 +199,7 @@ test('storedDownload picks the bundle, else the first data file, by its stable l
     assert.deepEqual(storedDownload({ artifacts: stored.slice(0, 2) }), {
         url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
         format: 'csv',
-        digest: null,
+        digest: 'sha256:f1',
     });
     assert.equal(storedDownload({ artifacts: stored.slice(0, 1) }), null);
 });
@@ -195,6 +209,6 @@ test('storedDownload skips the canonical frame', () => {
     assert.deepEqual(storedDownload({ artifacts: [stored[1], frame, stored[0]] }), {
         url: '/api/datasets/spec_a1/cv_b2/files/sha256:f1',
         format: 'csv',
-        digest: null,
+        digest: 'sha256:f1',
     });
 });

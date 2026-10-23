@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import classNames from 'classnames';
@@ -6,7 +5,11 @@ import classNames from 'classnames';
 import styles from './DataSearch.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
-import { buildAmbiguousPickPart, offersAmbiguousPicker } from '@/lib/search/parsedEdit';
+import {
+    entityChoiceGroups,
+    entityChoicePart,
+    offersAmbiguousPicker,
+} from '@/lib/search/parsedEdit';
 import {
     cardText,
     coverageSummary,
@@ -17,11 +20,12 @@ import {
     specOrigin,
     statVarsUnreadable,
 } from '@/lib/search/view';
+import { knownPart, type ParsedPart, type Part, type PartSpec } from '@/lib/search/types';
 
 // A card's meta line, its coverage then its origin (specOrigin beside the
 // spec's own sentence, shapeOrigin beside any other title). The line clamps
 // at two lines, so the full text goes in the title attribute.
-const CardMeta = ({ spec, origin }: { spec: any; origin: string | null }) => {
+const CardMeta = ({ spec, origin }: { spec: PartSpec; origin: string | null }) => {
     const meta = [coverageSummary(spec), origin].filter(Boolean).join(' · ');
 
     return (
@@ -41,21 +45,21 @@ const CardMeta = ({ spec, origin }: { spec: any; origin: string | null }) => {
 // Takes one part. The caller (DataSearch for a no_data part, or the idle
 // prompt's suggestion preview reading parts[0]) already knows which.
 const SearchCards = ({
-    part,
+    part: givenPart,
     partIndex,
     onPick,
     onEditParsed,
     onStudio,
     question,
 }: {
-    part: any;
+    part: Part | null;
     // Omitted for the idle prompt's suggestion preview, which has no part to
     // edit back into.
     partIndex?: number;
     onPick: (text?: string) => void;
     // Posts an entity_ambiguous pick as a parsed entry, the single-part
     // plan's escape hatch when there's no slot token to hang a picker off.
-    onEditParsed?: (partIndex: number, editedPart: any) => void;
+    onEditParsed?: (partIndex: number, editedPart: ParsedPart) => void;
     // Hands the question and the datasets on screen to Studio (DataSearch's
     // openStudio); the no_data Studio callout's button is hidden without it.
     onStudio?: () => void;
@@ -63,6 +67,8 @@ const SearchCards = ({
     // unreadable subset's retry.
     question?: string;
 }) => {
+    const part = knownPart(givenPart);
+
     // A definite background suggestion renders as a single pickable card.
     if (part?.status === 'definite' && part.spec) {
         const spec = part.spec;
@@ -90,7 +96,7 @@ const SearchCards = ({
                     Multiple possible interpretations found. Select the best fit…
                 </p>
                 <div className={styles.cards}>
-                    {specs.map((spec: any, index: number) => (
+                    {specs.map((spec, index) => (
                         <button
                             key={spec.spec_id}
                             type="button"
@@ -110,36 +116,30 @@ const SearchCards = ({
     }
 
     if (part?.status === 'no_data') {
-        // The single-part escape hatch for entity_ambiguous picking (see
-        // module doc). A pick pins the candidate's dcid onto the matching
-        // restatement entity and posts a parsed entry, a no-op if no entity
-        // matches.
+        // The entity_ambiguous picker of a part with no slot token to hang
+        // it off. A pick posts the refusal's option for it unchanged as a
+        // parsed entry (entityChoicePart).
         if (offersAmbiguousPicker(part) && onEditParsed && partIndex !== undefined) {
-            const restatement = part.restatement;
-            const groups = part.no_data.ambiguous_entities ?? [];
+            const groups = entityChoiceGroups(part.no_data);
 
             return (
                 <div className={styles.cardsBlock}>
                     <p className={styles.cardsTitle}>Choose a Match</p>
                     <div className={styles.cards}>
-                        {groups.flatMap((group: any) =>
-                            group.candidates.map((candidate: any, index: number) => (
+                        {groups.flatMap((group) =>
+                            group.options.map((option, index) => (
                                 <button
-                                    key={`${group.text}:${candidate.ref}`}
+                                    key={`${group.text}:${index}`}
                                     type="button"
                                     className={styles.card}
                                     style={{ '--i': index } as React.CSSProperties}
                                     onClick={() => {
-                                        const edited = buildAmbiguousPickPart(
-                                            restatement,
-                                            group.text,
-                                            candidate,
-                                        );
+                                        const posted = entityChoicePart(option);
 
-                                        if (edited) onEditParsed(partIndex, edited);
+                                        if (posted) onEditParsed(partIndex, posted);
                                     }}
                                 >
-                                    <span className={styles.cardTitle}>{candidate.label}</span>
+                                    <span className={styles.cardTitle}>{option.label}</span>
                                 </button>
                             )),
                         )}
@@ -205,7 +205,7 @@ const SearchCards = ({
             <div className={styles.cardsBlock}>
                 <p className={styles.cardsTitle}>Largest Subsets</p>
                 <div className={styles.cards}>
-                    {nearest.map((spec: any, index: number) => {
+                    {nearest.map((spec, index) => {
                         const unreadable = statVarsUnreadable(spec);
 
                         // A shape the client couldn't parse has no title to

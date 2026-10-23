@@ -6,10 +6,11 @@
  * all describe the data the user sees.
  */
 
-import type { Seed } from '../studio/wire.ts';
+import type { Seed, SeedOperation } from '../studio/wire.ts';
 
 import { unflattenSpec } from './searchClient.ts';
-import type { HydratedPart, Operation } from './types.ts';
+import { type HydratedPart, knownPart, type Operation } from './types.ts';
+import { statVarsUnreadable } from './view.ts';
 
 /** Whether the answer on screen may differ from the query's own reading: a
  *  part was edited, or the answer was opened from a share link, which stores
@@ -48,26 +49,53 @@ export function handoffQuestion({
 export function handoffSeeds(parts: HydratedPart[]): Seed[] {
     const seeds = new Map<string, Seed>();
 
-    for (const { part } of parts) {
-        if (part?.status !== 'definite' || !part.spec) {
+    for (const hydrated of parts) {
+        const part = knownPart(hydrated.part);
+
+        if (part?.status !== 'definite') {
+            continue;
+        }
+
+        if (statVarsUnreadable(part.spec) || !part.spec.definition) {
             continue;
         }
 
         const block = unflattenSpec(part.spec);
 
-        if (!block.definition || block.resolved.stat_vars_unreadable) {
-            continue;
-        }
-
         const seed: Seed = seeds.get(block.spec_id) ?? { spec: block, operations: [] };
         const known = new Set(seed.operations.map(operationKey));
 
-        seed.operations.push(...part.operations.filter((op) => !known.has(operationKey(op))));
+        seed.operations.push(
+            ...part.operations.filter(isSeedOperation).filter((op) => !known.has(operationKey(op))),
+        );
         seeds.set(block.spec_id, seed);
     }
 
     return [...seeds.values()];
 }
+
+const SEED_VERBS: Record<SeedOperation['verb'], true> = {
+    rank: true,
+    aggregate: true,
+    growth: true,
+    share_of: true,
+    explain: true,
+    forecast: true,
+    report: true,
+};
+
+const SEED_AXES: Record<NonNullable<SeedOperation['over']>, true> = {
+    place: true,
+    origin: true,
+    destination: true,
+    category: true,
+    year: true,
+};
+
+/** True for an operation Studio reads: one whose verb and axis Studio's wire names. A verb or
+ *  axis the Search API adds before Studio knows it stays out of the handoff. */
+const isSeedOperation = (op: Operation): op is Operation & SeedOperation =>
+    Object.hasOwn(SEED_VERBS, op.verb) && (op.over == null || Object.hasOwn(SEED_AXES, op.over));
 
 const operationKey = ({ verb, phrase, over, target_year }: Operation): string =>
     JSON.stringify([verb, phrase, over ?? null, target_year ?? null]);

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { operationButtonLabel } from '../operations.ts';
-import { normalizeResponse } from '../searchClient.ts';
 import type { Part } from '../types.ts';
+import { resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 
 test('operationButtonLabel names each verb', () => {
@@ -21,10 +21,11 @@ test('operationButtonLabel names each verb', () => {
             'Ask Studio for a report',
         ],
     );
+    assert.equal(operationButtonLabel('tally'), 'Open in Studio');
 });
 
 test("the rank fixture's operation names its Studio button", () => {
-    const [part]: Part[] = normalizeResponse(fixtures['definite-rank-operation']).parts;
+    const [part]: Part[] = resolution(fixtures['definite-rank-operation']).parts;
 
     assert.equal(part.status, 'definite');
     assert.equal(operationButtonLabel(part.operations[0].verb), 'Rank in Studio');

@@ -1,9 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- these tests walk the raw wire envelope shape, pre-flatten (see searchClient.ts's own WireSpec) */
+/* eslint-disable @typescript-eslint/no-explicit-any -- these tests walk the raw wire envelope shape, pre-flatten, which the fixtures hold as `unknown` */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { flattenSpec, normalizeResponse, unflattenSpec } from '../searchClient.ts';
 import { primaryStatVarLabel, statVarsUnreadable } from '../view.ts';
 import { fixtureNames, fixtures, specFixtureNames } from './fixtures/index.ts';
+import { definite, noData, readable, resolution } from './fixtures/resolution.ts';
+import { knownPart, type Spec } from '../types.ts';
 
 /**
  * Fixture-set invariant tests: real captured `/api/search/resolve`
@@ -41,8 +43,8 @@ for (const name of fixtureNames) {
     test(`${name}: only a resolution carries parts, and every normalized part carries operations`, () => {
         const normalized = normalizeResponse(body);
 
-        if (body.kind !== 'resolution') {
-            assert.equal(normalized.parts, undefined);
+        if (normalized.kind !== 'resolution') {
+            assert.equal('parts' in normalized, false);
             return;
         }
         assert.ok(normalized.parts.length > 0);
@@ -122,14 +124,16 @@ for (const name of specFixtureNames) {
     });
 
     test(`${name}: flattenSpec reads every spec without setting stat_vars_unreadable`, () => {
-        const normalized = normalizeResponse(body);
+        const normalized = resolution(body);
         for (const part of normalized.parts) {
+            const known = knownPart(part);
             const specs = [
-                part.spec,
-                ...(part.candidates?.specs ?? []),
-                ...(part.no_data?.nearest_real ?? []),
-                part.no_data?.flagged_match,
-            ].filter(Boolean);
+                known?.status === 'definite' ? known.spec : null,
+                ...(known?.status === 'candidates' ? known.candidates.specs : []),
+                ...(known?.status === 'no_data'
+                    ? [...(known.no_data.nearest_real ?? []), known.no_data.flagged_match]
+                    : []),
+            ].filter((spec): spec is Spec => !!spec);
 
             assert.ok(specs.length > 0);
             for (const spec of specs) {
@@ -146,7 +150,7 @@ for (const name of specFixtureNames) {
 
     test(`${name}: unflattenSpec gives back the wire spec flattenSpec was given`, () => {
         for (const spec of rawSpecsIn(body)) {
-            assert.deepEqual(unflattenSpec(flattenSpec(spec)), spec);
+            assert.deepEqual(unflattenSpec(readable(flattenSpec(spec))), spec);
         }
     });
 }
@@ -167,7 +171,7 @@ test('declined-out-of-scope: normalizes to the same body, reason and empty scope
     const normalized = normalizeResponse(body);
 
     assert.equal(normalized, body);
-    assert.equal(normalized.kind, 'declined');
+    assert.ok(normalized.kind === 'declined');
     assert.equal(normalized.reason, 'out_of_scope');
     assert.deepEqual(normalized.scope, { place: null });
 });
@@ -177,32 +181,36 @@ test('catalogue-kenya: normalizes to the same body, scoped to the confirmed coun
     const normalized = normalizeResponse(body);
 
     assert.equal(normalized, body);
-    assert.equal(normalized.kind, 'catalogue');
+    assert.ok(normalized.kind === 'catalogue');
     assert.deepEqual(normalized.scope.place, { ref: 'country/KEN', label: 'Kenya' });
 });
 
 test('definite-rank-operation: the definite part keeps its rank operation and flattens its spec', () => {
-    const normalized = normalizeResponse(fixtures['definite-rank-operation']);
-    const [part] = normalized.parts;
+    const normalized = resolution(fixtures['definite-rank-operation']);
+    const part = definite(normalized.parts[0]);
 
-    assert.equal(part.status, 'definite');
     assert.deepEqual(part.operations, [{ verb: 'rank', phrase: 'top 5 donors', over: 'origin' }]);
-    assert.equal(part.spec.resolved, undefined, 'flattenSpec spreads `resolved` flat');
+    assert.equal('resolved' in part.spec, false, 'flattenSpec spreads `resolved` flat');
     assert.ok(part.spec.identity, 'flattenSpec keeps the definition identity');
 });
 
-test('entity-ambiguous: operations default to empty and data_query rides through', () => {
-    const normalized = normalizeResponse(fixtures['entity-ambiguous']);
-    const [part] = normalized.parts;
+test('entity-ambiguous: operations default to empty and each option rides through', () => {
+    const normalized = resolution(fixtures['entity-ambiguous']);
+    const part = noData(normalized.parts[0]);
 
     assert.deepEqual(part.operations, []);
     assert.equal(part.no_data.reason, 'entity_ambiguous');
     assert.deepEqual(
-        part.no_data.data_query.parts[0].entities.map((entity: any) => entity.dcid ?? null),
-        [null, 'country/FRA'],
+        part.no_data.options?.map((option) =>
+            option.data_query.parts[0]?.entities?.map((entity) => entity.dcid ?? null),
+        ),
+        [
+            ['country/COD', 'country/FRA'],
+            ['country/COG', 'country/FRA'],
+        ],
     );
     assert.deepEqual(
-        part.no_data.ambiguous_entities[0].candidates.map((candidate: any) => candidate.ref),
+        part.no_data.ambiguous_entities?.[0]?.candidates.map((candidate) => candidate.ref),
         ['country/COD', 'country/COG'],
     );
 });

@@ -1,34 +1,34 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the flattened wire Spec */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeResponse } from '../searchClient.ts';
-import type { SentenceToken } from '../types.ts';
-import { unitWithBasis } from '../unitLabel.ts';
+import type { Spec } from '../types.ts';
+import { unitRequest, unitWithBasis } from '../unitLabel.ts';
 import { detailRows, flattenRows } from '../view.ts';
+import { partialSpec } from './fixtures/partial.ts';
+import { definite, readable, resolution } from './fixtures/resolution.ts';
 import { unitAid, unitAidEuroConstant, unitHealth } from './fixtures/unit-conversion.ts';
 
-const envelopeOf = (body: unknown): any => normalizeResponse(body);
-const specOf = (body: unknown): any => envelopeOf(body).parts[0].spec;
+const specOf = (body: unknown) => readable(definite(resolution(body).parts[0]).spec);
 const bylineUnit = (body: unknown): string | undefined =>
-    envelopeOf(body).sentence_plan.find(
-        (token: SentenceToken) => token.axis === 'unit' && token.segment === 'byline',
+    resolution(body).sentence_plan?.find(
+        (token) => token.axis === 'unit' && token.segment === 'byline',
     )?.text;
 
 const conversion = { recipe_id: 'r', exchange_rate_table_version: '1' };
 
-const withSeries = (spec: any, unit: unknown, converted = true): any => ({
-    ...spec,
-    observations: {
-        series: [
-            {
-                points: [{ date: '2020', value: 1 }],
-                facet: unit ? { unit } : {},
-                ...(converted ? { conversion } : {}),
-            },
-        ],
-    },
-});
+const withSeries = (spec: Spec, unit: unknown, converted = true) =>
+    partialSpec({
+        ...spec,
+        observations: {
+            series: [
+                {
+                    points: [{ date: '2020', value: 1 }],
+                    facet: unit ? { unit } : {},
+                    ...(converted ? { conversion } : {}),
+                },
+            ],
+        },
+    });
 
 for (const [name, body, text] of [
     ['native', unitAid, 'Current US dollars'],
@@ -44,7 +44,7 @@ for (const [name, body, text] of [
             [{ label: 'Unit', value: text }],
         );
         assert.deepEqual(
-            flattenRows(withSeries(spec, spec.facets.unit)).map((row) => row.unit),
+            flattenRows(withSeries(spec, spec.facets?.unit)).map((row) => row.unit),
             [text],
         );
     });
@@ -64,7 +64,7 @@ test('the byline unit token on the spec wins over the composed text', () => {
 test('a preview with no conversion record keeps the series unit although the identity asks for one', () => {
     const spec = specOf(unitAidEuroConstant);
 
-    assert.equal(spec.identity.facets.unit.request.prices, 'constant');
+    assert.equal(unitRequest(spec)?.prices, 'constant');
     assert.deepEqual(
         flattenRows(withSeries(spec, { ref: 'CurrencyUSD', label: 'US Dollar' }, false)).map(
             (row) => row.unit,

@@ -6,6 +6,38 @@ export type ShareKind = 'conversation' | 'canvas' | 'card' | 'search';
 const pick = <T>(record: Record<string, T> | undefined, id: string): Record<string, T> =>
     record && id in record ? { [id]: record[id]! } : {};
 
+// Every field of a saved conversation. A share stores these and no other, so
+// a request cannot carry extra fields into the table. Keyed by the type, so a
+// new field fails to compile until it is listed here.
+const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
+    id: true,
+    sessionId: true,
+    componentRefs: true,
+    title: true,
+    updatedAt: true,
+    messages: true,
+    widgets: true,
+    activity: true,
+    turnCount: true,
+    canvas: true,
+    pinnedIds: true,
+    removedIds: true,
+    graceIds: true,
+    graceTurn: true,
+    layout: true,
+    theme: true,
+    views: true,
+    textCards: true,
+    titles: true,
+    notes: true,
+    shareMarks: true,
+};
+
+const savedFields = (saved: SavedConversation): SavedConversation =>
+    Object.fromEntries(
+        Object.entries(saved).filter(([key]) => Object.hasOwn(SAVED_FIELDS, key)),
+    ) as SavedConversation;
+
 /**
  * The part of a conversation a share of `kind` exposes. No kind carries the
  * owner's `sessionId`: it is the harness conversation id, so a viewer who read
@@ -18,11 +50,11 @@ export const pruneForShare = (
     cardId?: string,
 ): SavedConversation => {
     if (kind === 'conversation') {
-        return { ...saved, sessionId: null, componentRefs: [] };
+        return { ...savedFields(saved), sessionId: null, componentRefs: [] };
     }
 
     const base: SavedConversation = {
-        ...saved,
+        ...savedFields(saved),
         sessionId: null,
         componentRefs: [],
         messages: [],

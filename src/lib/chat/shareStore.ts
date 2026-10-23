@@ -5,12 +5,13 @@ import { pruneForShare, shareForViewer, type ShareKind } from './sharePrune';
 import {
     deleteOwnedShare,
     insertStudioShare,
+    spendGuestShare as spendGuestShareIn,
     type NewStudioShare,
     type OwnerWriteResult,
 } from './shareWrites';
 
 import { apisFetch } from '@/lib/apisAuth';
-import { db } from '@/lib/db';
+import { counterDb, db } from '@/lib/db';
 import { liveShareRefusal, type LiveShareRefusal } from '@/lib/studio/liveShare';
 import { snapshotLiveShare } from '@/lib/studio/liveShareResults';
 import { share } from '../../../db/schema';
@@ -39,6 +40,10 @@ export { shortId } from './shareWrites';
 
 export const createShare = (input: NewStudioShare): Promise<{ id: string; title: string }> =>
     insertStudioShare(db, input);
+
+/** Spend one of today's guest shares for `address`; false when spent. */
+export const spendGuestShare = (address: string): Promise<boolean> =>
+    spendGuestShareIn(counterDb, address);
 
 /** Why the copy this request would store cannot be a live share, or null
  *  when it can. */

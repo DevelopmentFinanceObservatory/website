@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- reads the same shallow Spec the sentence menus read (see lib/search/types.ts for the full mirror) */
 /**
  * The About line at the top of a sentence token's panel: what the token's
  * current value is, read from the Spec the answer already carries. The line
@@ -12,14 +11,26 @@
 
 import { keyRef } from './searchClient.ts';
 import { capitalise } from '../capitalise.ts';
-import type { EntityRoleKey, SentenceToken, UnitConversion } from './types.ts';
+import {
+    type EntityRoleKey,
+    type GraphRef,
+    hasKey,
+    type Known,
+    type ProvenanceRef,
+    type SentenceToken,
+    type SpecReading,
+    type UnitConversion,
+} from './types.ts';
 import { priceBasis } from './unitLabel.ts';
 import type { PriceBasis } from './unitLabel.ts';
 import {
     axisLabel,
+    dimensionCount,
     formatCount,
     formatWindow,
+    observationSeries,
     provenanceOrigin,
+    readStatVars,
     rowsLabel,
     servedSeriesCount,
     specUnit,
@@ -61,10 +72,6 @@ const typeWords = (type: string): string =>
             .toLowerCase(),
     );
 
-const dimensionCount = (spec: any, label: string): number | null =>
-    (spec?.coverage?.dimensions ?? []).find((dimension: any) => dimension?.label === label)
-        ?.count ?? null;
-
 const yearOf = (date: unknown): string | null =>
     typeof date === 'string' && date.length >= 4 ? date.slice(0, 4) : null;
 
@@ -73,12 +80,12 @@ const span = (start: string | null, end: string | null): string | null =>
 
 /** The years the served data spans: the coverage window, else the Spec's
  *  `stat_vars.data_date_range` over its served StatVars. */
-export const servedSpan = (spec: any): string | null => {
+export const servedSpan = (spec: SpecReading): string | null => {
     const covered = formatWindow(spec?.coverage?.window);
 
     if (covered) return covered;
 
-    const range = spec?.stat_vars?.data_date_range;
+    const range = readStatVars(spec)?.data_date_range;
 
     return span(yearOf(range?.start), yearOf(range?.end));
 };
@@ -87,13 +94,11 @@ export const servedSpan = (spec: any): string | null => {
  *  and the observation points that hold a value. The range spans every
  *  year; the points are a preview of a few series, so they only add a
  *  date when the range is missing or stops short of them. */
-export const latestDate = (spec: any): string | null => {
-    const end: unknown = spec?.stat_vars?.data_date_range?.end;
+export const latestDate = (spec: SpecReading): string | null => {
+    const end: unknown = readStatVars(spec)?.data_date_range?.end;
     const ends: string[] = typeof end === 'string' && end ? [end] : [];
-    const points: string[] = (spec?.observations?.series ?? []).flatMap((series: any) =>
-        (series?.points ?? [])
-            .filter((point: any) => point?.value != null)
-            .map((point: any) => point.date),
+    const points = observationSeries(spec).flatMap((series) =>
+        series.points.filter((point) => point.value != null).map((point) => point.date),
     );
 
     return [...ends, ...points].toSorted().at(-1) ?? null;
@@ -102,10 +107,10 @@ export const latestDate = (spec: any): string | null => {
 /** Why the measure serves several series: the axes on which the served
  *  series differ ("One series for each sector, instrument and modality
  *  combination."). Null when no axis is known to vary. */
-export const seriesReason = (spec: any): string | null => {
+export const seriesReason = (spec: SpecReading): string | null => {
     const axes: string[] = (spec?.open_axis_facts ?? [])
-        .filter((fact: any) => fact?.varies && typeof fact.property === 'string')
-        .map((fact: any) => axisLabel(spec, fact.property));
+        .filter((fact) => fact?.varies && typeof fact.property === 'string')
+        .map((fact) => axisLabel(spec, fact.property));
 
     if (axes.length === 0) return null;
 
@@ -117,15 +122,16 @@ export const seriesReason = (spec: any): string | null => {
 /** The Spec whose members a measure's About reads from the members door
  *  (`useDefinitionMembers`) to define its one StatVar: the Spec itself when
  *  the answer serves one StatVar, else null. */
-export const singleStatVarSpec = (spec: any): any =>
-    spec && servedSeriesCount(spec) === 1 ? spec : null;
+export const singleStatVarSpec = <TSpec extends SpecReading>(
+    spec: TSpec | null | undefined,
+): TSpec | null => (spec && servedSeriesCount(spec) === 1 ? spec : null);
 
 // A measure's About leaves out the axis values another visible token
 // states (`statedElsewhere`, refs such as "axis:measurementQualifier" the
 // unit token states), since that token's own panel describes them.
 const measureAbout = (
     token: SentenceToken,
-    spec: any,
+    spec: SpecReading,
     statedElsewhere: ReadonlySet<string>,
 ): TokenAboutModel => {
     const count = servedSeriesCount(spec);
@@ -136,8 +142,8 @@ const measureAbout = (
     ].filter((fact): fact is string => !!fact);
     const reason = count != null && count > 1 ? seriesReason(spec) : null;
     const values: AboutDefinition[] = (spec?.measure_axis_values ?? [])
-        .filter((entry: any) => entry?.value?.ref && !statedElsewhere.has(`axis:${entry.axis}`))
-        .map((entry: any) => ({
+        .filter((entry) => entry?.value?.ref && !statedElsewhere.has(`axis:${entry.axis}`))
+        .map((entry) => ({
             label: capitalise(entry.value.label ?? entry.value.ref),
             dcid: entry.value.ref,
         }));
@@ -153,7 +159,10 @@ const measureAbout = (
     };
 };
 
-const ROLE_NOUNS: Record<EntityRoleKey, { one: string; many: string; dimensions: string[] }> = {
+const ROLE_NOUNS: Record<
+    Known<EntityRoleKey>,
+    { one: string; many: string; dimensions: string[] }
+> = {
     origin: { one: 'provider', many: 'providers', dimensions: ['providers'] },
     destination: { one: 'recipient', many: 'recipients', dimensions: ['recipients'] },
     observationAbout: { one: 'place', many: 'places', dimensions: ['countries', 'places'] },
@@ -167,10 +176,11 @@ const listNames = (names: string[]): string =>
         ? `${names.slice(0, LISTED_MEMBERS).join(', ')} and ${formatCount(names.length - LISTED_MEMBERS)} more`
         : names.join(', ');
 
-const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
+const entityAbout = (token: SentenceToken, spec: SpecReading): TokenAboutModel => {
     const role: EntityRoleKey = token.role ?? 'observationAbout';
-    const nouns = ROLE_NOUNS[role];
-    const entities: any[] = spec?.entities ?? [];
+    // A role this release does not know reads as the subject role.
+    const nouns = hasKey(ROLE_NOUNS, role) ? ROLE_NOUNS[role] : ROLE_NOUNS.observationAbout;
+    const entities = spec?.entities ?? [];
     const dcids: string[] = token.entity_refs?.length
         ? token.entity_refs
         : entities.filter((entity) => entity?.role === role).map((entity) => entity.ref);
@@ -202,13 +212,17 @@ const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
 
     const names = dcids.map((dcid) => byDcid.get(dcid)?.label ?? dcid);
     const types = [
-        ...new Set(dcids.map((dcid) => byDcid.get(dcid)?.entity_type).filter(Boolean)),
+        ...new Set(
+            dcids
+                .map((dcid) => byDcid.get(dcid)?.entity_type)
+                .filter((type): type is string => !!type),
+        ),
     ].map(typeWords);
     const typeFact = types.length > 0 ? types.join(', ') : null;
 
     if (group) {
         const count = formatCount(dcids.length);
-        const fact = REGION_GROUP_TYPES.has(group.entity_type)
+        const fact = REGION_GROUP_TYPES.has(group.entity_type ?? '')
             ? `${count} ${dcids.length === 1 ? 'country or territory' : 'countries and territories'}`
             : `Group of ${count} ${dcids.length === 1 ? 'member' : 'members'}${typeFact ? ` (${typeFact.toLowerCase()})` : ''}`;
 
@@ -245,7 +259,7 @@ const entityAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
     };
 };
 
-const periodAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
+const periodAbout = (token: SentenceToken, spec: SpecReading): TokenAboutModel => {
     const title = token.text.trim();
     const served = servedSpan(spec);
     const latest = latestDate(spec);
@@ -263,16 +277,16 @@ const periodAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
     };
 };
 
-const codeAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
-    const slot = (spec?.slots ?? []).find((s: any) => keyRef(s.key) === token.binding_ref);
+const codeAbout = (token: SentenceToken, spec: SpecReading): TokenAboutModel => {
+    const slot = (spec?.slots ?? []).find((s) => keyRef(s.key) === token.binding_ref);
     const binding = slot?.binding;
-    const refs: any[] =
+    const refs: (GraphRef | null | undefined)[] =
         binding?.kind === 'value'
             ? [binding.value?.ref]
             : binding?.kind === 'set'
-              ? (binding.values ?? []).map((value: any) => value?.ref)
+              ? (binding.values ?? []).map((value) => value?.ref)
               : [];
-    const codes = refs.filter((ref) => typeof ref?.ref === 'string');
+    const codes = refs.filter((ref): ref is GraphRef => typeof ref?.ref === 'string');
 
     return {
         kind: 'code',
@@ -308,8 +322,8 @@ export const currencyName = (code: string, conversion: UnitConversion | null): s
 
 /** The exchange-rate and deflator tables behind the converted series, one
  *  line per table, each named once. */
-const conversionTables = (spec: any): string[] => {
-    const lines = (spec?.observations?.series ?? []).flatMap((series: any) => {
+const conversionTables = (spec: SpecReading): string[] => {
+    const lines = (spec?.observations?.series ?? []).flatMap((series) => {
         const conversion = series?.conversion;
 
         if (!conversion) return [];
@@ -328,7 +342,7 @@ const conversionTables = (spec: any): string[] => {
     return [...new Set<string>(lines)];
 };
 
-const unitAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
+const unitAbout = (token: SentenceToken, spec: SpecReading): TokenAboutModel => {
     const basis = priceBasis(spec);
     const unit = spec?.facets?.unit;
     const code: string | null = unit?.currency ?? null;
@@ -346,25 +360,25 @@ const unitAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
 
 /** The provenances the source token names: the source slot's bound values,
  *  else the sources the engine resolved. */
-const sourceRefs = (spec: any): any[] => {
-    const binding = (spec?.slots ?? []).find((slot: any) => slot?.key?.axis === 'source')?.binding;
+const sourceRefs = (spec: SpecReading): (GraphRef | ProvenanceRef)[] => {
+    const binding = (spec?.slots ?? []).find((slot) => slot?.key?.axis === 'source')?.binding;
     const bound =
         binding?.kind === 'value'
             ? [binding.value?.ref]
             : binding?.kind === 'set'
-              ? (binding.values ?? []).map((value: any) => value?.ref)
+              ? (binding.values ?? []).map((value) => value?.ref)
               : [];
-    const resolved: any[] = spec?.resolution?.resolved_sources ?? [];
-    const refs = bound.filter((ref: any) => ref?.ref);
+    const resolved = spec?.resolution?.resolved_sources ?? [];
+    const refs = bound.filter((ref): ref is GraphRef => !!ref?.ref);
 
     // A bound ref carries no publisher, so take the resolved one's when it
     // names the same provenance.
     return refs.length > 0
-        ? refs.map((ref: any) => resolved.find((r) => r?.ref === ref.ref) ?? ref)
+        ? refs.map((ref) => resolved.find((r) => r?.ref === ref.ref) ?? ref)
         : resolved;
 };
 
-const sourceAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
+const sourceAbout = (token: SentenceToken, spec: SpecReading): TokenAboutModel => {
     const sources: AboutSource[] = sourceRefs(spec).map((ref) => ({
         dcid: ref.ref,
         label: ref.label ?? ref.ref,
@@ -388,7 +402,7 @@ const sourceAbout = (token: SentenceToken, spec: any): TokenAboutModel => {
  *  list) reads as a code. */
 export const tokenAbout = (
     token: SentenceToken,
-    spec: any,
+    spec: SpecReading,
     statedElsewhere: ReadonlySet<string> = new Set(),
 ): TokenAboutModel => {
     if (token.axis === 'what') return measureAbout(token, spec, statedElsewhere);

@@ -3,13 +3,16 @@ import test from 'node:test';
 
 import {
     answerDepartures,
+    assumptionClauses,
     departureAction,
     isClosestMatch,
     refsStatedBesides,
     sentenceBlocks,
     statingTokenIndex,
 } from '../departures.ts';
-import { normalizeResponse } from '../searchClient.ts';
+import { planCoverageText, planSentenceText } from '../sentencePlan.ts';
+import { resolution } from './fixtures/resolution.ts';
+import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
 import { servedAid } from './fixtures/served-options.ts';
@@ -63,6 +66,211 @@ test('sentenceBlocks joins heading runs a departure separated -- a no_data part 
     assert.deepEqual(sentenceBlocks(null), []);
 });
 
+test('sentenceBlocks reads a token with no segment as heading, and keeps one it does not know out of the heading', () => {
+    assert.deepEqual(
+        blockTexts([
+            { kind: 'text', text: 'Aid' },
+            { kind: 'text', text: ' to Kenya.', segment: 'heading' },
+            { kind: 'text', text: ' ' },
+            { kind: 'text', text: 'Figures are provisional.', segment: 'aside' },
+            { kind: 'text', text: ' ', segment: 'byline' },
+            { kind: 'text', text: 'OECD.', segment: 'byline' },
+        ]),
+        [
+            ['heading', 'Aid to Kenya.'],
+            ['aside', 'Figures are provisional.'],
+            ['byline', 'OECD.'],
+        ],
+    );
+});
+
+// ---------------------------------------------------------------------------
+// The assumptions clause and the mixed-answer opener
+// ---------------------------------------------------------------------------
+
+const token = (
+    text: string,
+    segment: SentenceToken['segment'],
+    part_index?: number | null,
+): SentenceToken => ({ kind: 'text', text, segment, part_index });
+
+test('sentenceBlocks closes the plan with the assumptions clause, apart from the heading and byline', () => {
+    const plan = (fixtures['broad-truncated'] as { sentence_plan: SentenceToken[] }).sentence_plan;
+
+    assert.deepEqual(blockTexts(plan), [
+        ['heading', 'Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024.'],
+        ['byline', 'Current US dollars · OECD Creditor Reporting System (CRS).'],
+        ['assumption', 'Assumed: every donor.'],
+    ]);
+    assert.deepEqual(assumptionClauses(plan, ['ODA']), [
+        { key: 0, prefix: null, text: 'Assumed: every donor.' },
+    ]);
+    // The <h1>'s accessible name is the heading alone.
+    assert.equal(
+        planSentenceText(plan),
+        'Gross ODA disbursements to Kenya from 86 donors, 2015 to 2024.',
+    );
+});
+
+test('the clause follows the departures, which the departure list draws', () => {
+    const plan = [
+        token('Aid to Kenya.', 'heading'),
+        token(' ', 'byline'),
+        token('OECD.', 'byline'),
+        token(' The data holds no values for 2024.', 'departure'),
+        token(' ', 'assumption'),
+        token('Assumed: ', 'assumption'),
+        token('official development assistance', 'assumption'),
+        token('; ', 'assumption'),
+        token('every provider', 'assumption'),
+        token('.', 'assumption'),
+    ];
+
+    assert.deepEqual(
+        blockTexts(plan).map(([segment]) => segment),
+        ['heading', 'byline', 'assumption'],
+    );
+    assert.deepEqual(assumptionClauses(plan, ['aid']), [
+        {
+            key: 0,
+            prefix: null,
+            text: 'Assumed: official development assistance; every provider.',
+        },
+    ]);
+});
+
+test("assumptionClauses names each part's own clause when the plan is written part by part", () => {
+    const sentence = (partIndex: number, item: string) => [
+        token('Aid.', 'heading', partIndex),
+        token(' ', 'byline', partIndex),
+        token('OECD.', 'byline', partIndex),
+        token(' ', 'assumption', partIndex),
+        token('Assumed: ', 'assumption', partIndex),
+        token(item, 'assumption', partIndex),
+        token('.', 'assumption', partIndex),
+    ];
+    const plan = [
+        ...sentence(0, 'every provider'),
+        token(' ', 'heading', null),
+        ...sentence(1, 'every country'),
+    ];
+
+    assert.deepEqual(assumptionClauses(plan, ['aid', 'debt']), [
+        { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+    // A part with no clause beside one that states its own. The clause still names its part.
+    const onlySecond = [
+        token('Aid.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+        token(' ', 'heading', null),
+        ...sentence(1, 'every country'),
+    ];
+
+    assert.deepEqual(assumptionClauses(onlySecond, ['aid', 'debt']), [
+        { key: 0, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+    // One joined clause over two parts, an item two parts share unowned, takes no prefix.
+    const joined = [
+        token('Aid and debt.', 'heading', null),
+        token(' ', 'assumption', null),
+        token('Assumed: ', 'assumption', null),
+        token('every provider', 'assumption', 0),
+        token('; ', 'assumption', null),
+        token('every country', 'assumption', null),
+        token('.', 'assumption', null),
+    ];
+
+    assert.deepEqual(assumptionClauses(joined, ['aid', 'debt']), [
+        { key: 0, prefix: null, text: 'Assumed: every provider; every country.' },
+    ]);
+    assert.deepEqual(assumptionClauses(null, []), []);
+});
+
+test('assumptionClauses labels a clause by the owner of its lead token', () => {
+    // A definite part beside a candidates part gives one byline and two owned clauses.
+    const definiteAndCandidates = [
+        token('Answered 1 of 2 parts.', 'coverage', null),
+        token(' ', 'coverage', null),
+        token('Aid to Kenya', 'heading', 0),
+        token('.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+        token(' ', 'assumption', 0),
+        token('Assumed: ', 'assumption', 0),
+        token('every provider', 'assumption', 0),
+        token('.', 'assumption', 0),
+        token(' ', 'heading', null),
+        token('debt', 'heading', 1),
+        token(' ', 'assumption', 1),
+        token('Assumed: ', 'assumption', 1),
+        token('every country', 'assumption', 1),
+        token('.', 'assumption', 1),
+    ];
+
+    assert.deepEqual(assumptionClauses(definiteAndCandidates, ['aid', 'debt']), [
+        { key: 0, prefix: 'aid', text: 'Assumed: every provider.' },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+    // Parts 0 and 1 fold into one sentence. The folded clause's lead has no owner, though
+    // one of its items is part 1's, so only part 2's clause takes a label.
+    const folded = [
+        token('Aid to Kenya.', 'heading', null),
+        token(' ', 'byline', null),
+        token('OECD.', 'byline', null),
+        token(' ', 'assumption', null),
+        token('Assumed: ', 'assumption', null),
+        token('official development assistance', 'assumption', null),
+        token('; ', 'assumption', null),
+        token('every provider', 'assumption', 1),
+        token('.', 'assumption', null),
+        token(' ', 'heading', null),
+        token('Debt.', 'heading', 2),
+        token(' ', 'byline', 2),
+        token('World Bank.', 'byline', 2),
+        token(' ', 'assumption', 2),
+        token('Assumed: ', 'assumption', 2),
+        token('every country', 'assumption', 2),
+        token('.', 'assumption', 2),
+    ];
+
+    assert.deepEqual(assumptionClauses(folded, ['aid', 'aid to Uganda', 'debt']), [
+        {
+            key: 0,
+            prefix: null,
+            text: 'Assumed: official development assistance; every provider.',
+        },
+        { key: 1, prefix: 'debt', text: 'Assumed: every country.' },
+    ]);
+});
+
+test("a mixed answer's coverage line is its own block, left out of the heading text", () => {
+    const plan = [
+        token('Answered 1 of 2 parts.', 'coverage', null),
+        token(' ', 'coverage', null),
+        { kind: 'slot', text: 'Aid to Kenya', axis: 'what', segment: 'heading', part_index: 0 },
+        token('.', 'heading', 0),
+        token(' ', 'byline', 0),
+        token('OECD.', 'byline', 0),
+    ] satisfies SentenceToken[];
+
+    assert.deepEqual(
+        sentenceBlocks(plan).map(({ segment, tokens }) => [
+            segment,
+            tokens.map(({ text }) => text).join(''),
+        ]),
+        [
+            ['coverage', 'Answered 1 of 2 parts.'],
+            ['heading', 'Aid to Kenya.'],
+            ['byline', 'OECD.'],
+        ],
+    );
+    assert.equal(planSentenceText(plan), 'Aid to Kenya.');
+    assert.equal(planCoverageText(plan), 'Answered 1 of 2 parts.');
+    assert.equal(planCoverageText(plan.slice(2)), '');
+});
+
 // ---------------------------------------------------------------------------
 // departureAction and answerDepartures
 // ---------------------------------------------------------------------------
@@ -112,7 +320,7 @@ test('answerDepartures hands an operation to Studio unless the part draws the St
     const action = (part: Parameters<typeof answerDepartures>[0][number]) =>
         answerDepartures([{ ...part, departures: [ranking] }], crs045.sentence_plan)[0].action;
     const noDataPart = (nearFields: Record<string, unknown>) =>
-        normalizeResponse(noDataResponse('variable_not_resolved', null, nearFields)).parts[0];
+        resolution(noDataResponse('variable_not_resolved', null, nearFields)).parts[0];
 
     // The generic no_data callout already offers Studio.
     assert.equal(action(noDataPart({})), null);
@@ -184,6 +392,16 @@ test('departureAction opens the token that states a ref it does not carry as its
     assert.equal(
         plan[statingTokenIndex(plan, 1, 0, 'how:crsTypeOfFlow')].text,
         'gross ODA disbursements',
+    );
+
+    // A heading token without a segment, the wire default, states it alike.
+    const unsegmented = plan.map((token): SentenceToken =>
+        token.segment === 'heading' ? { ...token, segment: undefined } : token,
+    );
+
+    assert.equal(
+        statingTokenIndex(unsegmented, 1, 0, 'how:crsTypeOfFlow'),
+        statingTokenIndex(plan, 1, 0, 'how:crsTypeOfFlow'),
     );
 });
 

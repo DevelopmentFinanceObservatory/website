@@ -98,7 +98,14 @@ export type DatasetDownloadTarget = {
     // The answer's bound entities, whose type heads the observationAbout
     // group of extra columns ("Country").
     entities?: { role?: string; entity_type?: string | null }[] | null;
+    // Called as a download starts. The function it returns is called once
+    // the file opens, with what was rendered, so a caller can bind the
+    // record to what was on screen when the visitor clicked.
+    onDownloadStart?: () => (downloaded: DatasetDownloaded) => void;
 };
+
+/** A download that reached its file: the spec and the choices it used. */
+export type DatasetDownloaded = { specId: string; format: DatasetFormat; bundle: boolean };
 
 /**
  * The state behind the Datasets API download sheet: format, bundle and
@@ -106,7 +113,12 @@ export type DatasetDownloadTarget = {
  * document, and the mint → manifest → signed URL download. Search's panel
  * uses it, through DatasetDownload.
  */
-export const useDatasetDownload = ({ specId, definition, entities }: DatasetDownloadTarget) => {
+export const useDatasetDownload = ({
+    specId,
+    definition,
+    entities,
+    onDownloadStart,
+}: DatasetDownloadTarget) => {
     const choices = useSyncExternalStore(subscribeChoices, readChoices, serverChoices);
     const [optionsOpen, setOptionsOpen] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -227,6 +239,7 @@ export const useDatasetDownload = ({ specId, definition, entities }: DatasetDown
         }
 
         const controller = new AbortController();
+        const downloaded = onDownloadStart?.();
 
         downloadAbortRef.current = controller;
         setDownloading(true);
@@ -280,7 +293,7 @@ export const useDatasetDownload = ({ specId, definition, entities }: DatasetDown
 
             // The mint answers with this definition's own options and
             // coverage, so the sheet need not ask the options door for them.
-            applyOptions(manifest as DatasetOptionsDocument | null);
+            applyOptions(manifest);
             optionsAsk.answered(specId);
 
             const artifact = artifacts.find((a) => typeof a.url === 'string') ?? null;
@@ -308,6 +321,7 @@ export const useDatasetDownload = ({ specId, definition, entities }: DatasetDown
             }
 
             window.location.assign(artifactHref(artifact.url));
+            downloaded?.({ specId, format, bundle });
         } catch (caught) {
             if (controller.signal.aborted) {
                 return;

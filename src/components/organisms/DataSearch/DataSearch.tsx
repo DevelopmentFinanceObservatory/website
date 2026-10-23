@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import classNames from 'classnames';
@@ -22,6 +21,7 @@ import {
     type RefineOpen,
 } from './SearchSentence';
 import SearchTable from './SearchTable';
+import type { DatasetDownloaded } from './useDatasetDownload';
 import { useSearchRun } from './useSearchRun';
 
 import Button from '@/components/atoms/Button/Button';
@@ -40,10 +40,11 @@ import { decodePermalinkState, encodePermalinkState } from '@/lib/search/permali
 import { track } from '@/lib/events/client';
 import {
     createSearchShare,
+    createSuggestionSlot,
     fetchSearchShare,
     fetchVersionLink,
     type OpenedSearchShare,
-    resolveBuffered,
+    type SearchShareMode,
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
 import { searchSharePart } from '@/lib/search/searchShareRequest';
@@ -54,7 +55,13 @@ import {
     snapshotLiveNote,
     studioHandoffParts,
 } from '@/lib/search/resultNotes';
-import { searchEventName, searchEventProps } from '@/lib/search/searchEvents';
+import {
+    HANDOFF_SOURCE_PARAM,
+    handoffSource,
+    searchEventProps,
+    startSearchAction,
+    type SearchSource,
+} from '@/lib/search/searchEvents';
 import { earlySentenceTokens, tokenPart } from '@/lib/search/sentencePlan';
 import {
     handoffEdited,
@@ -62,7 +69,12 @@ import {
     handoffSeeds,
     studioHref,
 } from '@/lib/search/studioHandoff';
-import type { SentenceToken } from '@/lib/search/types';
+import {
+    hasDefiniteSpec,
+    isKnownPart,
+    type ResolveResponse,
+    type SentenceToken,
+} from '@/lib/search/types';
 import { parseVersionLink, type VersionLink, versionLinkHref } from '@/lib/search/versionLink';
 import { observationsPendingText } from '@/lib/search/view';
 import { writeSeeds } from '@/lib/studio/seedStore';
@@ -111,6 +123,12 @@ const EarlySentenceHeading = ({
 // `catalogue` is the search catalogue the page loaded on the server, or null
 // when the API serves none: the idle chips, the stat tiles and the starting
 // point read it.
+/** What a visitor did with a search answer, sent as `search.action`. */
+type SearchAction =
+    | { action: 'pick_reading'; partIndex: number; specId: string }
+    | ({ action: 'download'; partIndex: number } & DatasetDownloaded)
+    | { action: 'share'; mode: SearchShareMode; shareId: string };
+
 const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -152,6 +170,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         editParsed,
         editShared,
         editFacet,
+        searchIds,
     } = useSearchRun();
     // A version link runs with no question of its own: the resolved sentence
     // stands in for it wherever the page needs text (the Studio handoff, a
@@ -163,17 +182,22 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const refine = answerRefineItems({ response, parts, optionsBySpec, entityOptionsBySpec });
     const [refineOpen, setRefineOpen] = useState<RefineOpen | null>(null);
 
+    const [suggestionSlot] = useState(createSuggestionSlot);
+
     // A query as text: the starting point's own question shows the catalogue
-    // the page holds, with no search call; any other text is a search.
+    // the page holds, with no search call, and records `search.start_point`.
+    // Other text is a search, whose events useSearchRun sends. Every run
+    // keeps only the live suggestion stream for the same text.
     const runQuery = useCallback(
-        (text: string) => {
+        (text: string, source: SearchSource) => {
+            suggestionSlot.keepOnly(text);
             if (text === STARTING_POINT_QUERY) {
-                showStartingPoint(text);
+                showStartingPoint(text, source);
             } else {
-                run({ kind: 'raw_text', query: text }, text);
+                run({ kind: 'raw_text', query: text }, text, source);
             }
         },
-        [run, showStartingPoint],
+        [suggestionSlot, run, showStartingPoint],
     );
 
     // Latest `runQuery`/`replay`/`openShare`/`reset`, read (not watched) by the
@@ -213,7 +237,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // remounted — swapped-in DOM nodes the initial observer never saw.
     const sectionRef = useReveal<HTMLElement>(12, [phase, promptEpoch]);
     const [draft, setDraft] = useState('');
-    const [suggest, setSuggest] = useState<any>(null);
+    const [suggest, setSuggest] = useState<ResolveResponse | null>(null);
     const [suggestPending, setSuggestPending] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [shareOpen, setShareOpen] = useState(false);
@@ -236,16 +260,16 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     }, []);
     // Opens a share, or a link read as one, and keeps it as the view's
     // origin until the user moves on from it.
-    const enterShare = useCallback((shared: OpenedSearchShare) => {
+    const enterShare = useCallback((shared: OpenedSearchShare, source: SearchSource) => {
         openedShareRef.current = shared;
         setOpenedShare(shared);
-        openShareRef.current(shared);
+        openShareRef.current(shared, source);
     }, []);
 
     const submitQuery = useCallback(
-        (text: string) => {
+        (text: string, source: SearchSource) => {
             leaveShare();
-            runQuery(text);
+            runQuery(text, source);
         },
         [runQuery, leaveShare],
     );
@@ -255,9 +279,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // empty sentence and drop the link.
     const retry = useCallback(() => {
         if (openedShareRef.current) {
-            enterShare(openedShareRef.current);
+            enterShare(openedShareRef.current, 'retry');
         } else {
-            submitQuery(query);
+            submitQuery(query, 'retry');
         }
     }, [enterShare, submitQuery, query]);
 
@@ -279,6 +303,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
         });
         const seeds = handoffSeeds(parts);
         const token = writeSeeds(() => window.sessionStorage, seeds);
+        const { searchId, traceId } = searchIds();
 
         track(
             'search.studio_handoff',
@@ -289,13 +314,33 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 reason: answerReason,
                 parts,
                 seeds: token ? seeds.length : 0,
+                run: { ...(searchId && { searchId }), traceId },
             }),
         );
         router.push(studioHref(question, token));
-    }, [router, query, edits.length, openedShare, response, parts, answerKind, answerReason]);
+    }, [
+        router,
+        query,
+        edits.length,
+        openedShare,
+        response,
+        parts,
+        answerKind,
+        answerReason,
+        searchIds,
+    ]);
 
-    // Live suggestions: a debounced background resolve (no observations — faster)
-    // renders interpretation cards under the prompt while the user is still typing.
+    // A visitor's action on the answer on screen (docs/analytics.md): the
+    // ids are read as the visitor acts, and the returned sender records it.
+    const startAction = useCallback(
+        () => startSearchAction<SearchAction>(searchIds, track, location.pathname),
+        [searchIds],
+    );
+
+    // Live suggestions: a debounced background resolve renders interpretation
+    // cards under the prompt while the user is still typing. It posts the
+    // submit's own request (see createSuggestionSlot), so submitting the same
+    // text can be served from the search API's response cache.
     const handleDraft = useCallback((value: string) => {
         setDraft(value);
         setSuggest(null);
@@ -316,34 +361,27 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     useEffect(() => {
         const text = draft.trim();
 
+        // Other text supersedes the live suggestion. Leaving idle does not:
+        // a submit of the same text is answered by that stream.
+        suggestionSlot.keepOnly(text);
+
         if (phase !== 'idle' || text.length < 8) {
             return;
         }
 
-        const controller = new AbortController();
+        let current = true;
         const timer = window.setTimeout(() => {
             setSuggestPending(true);
-            resolveBuffered(
-                {
-                    schema_version: 1,
-                    input: { kind: 'raw_text', query: text },
-                    // include_observations: without it the engine skips the
-                    // materialise pass and coverage counts come back empty.
-                    response_options: {
-                        include_option_coverage: false,
-                        include_observations: true,
-                    },
-                },
-                controller.signal,
-            )
+            suggestionSlot
+                .suggest(text)
                 .then((body) => {
-                    if (!controller.signal.aborted) {
+                    if (current) {
                         setSuggest(body);
                         setSuggestPending(false);
                     }
                 })
                 .catch(() => {
-                    if (!controller.signal.aborted) {
+                    if (current) {
                         setSuggestPending(false);
                     }
                 });
@@ -351,9 +389,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
         return () => {
             window.clearTimeout(timer);
-            controller.abort();
+            current = false;
         };
-    }, [draft, phase]);
+    }, [draft, phase, suggestionSlot]);
+
+    useEffect(() => () => suggestionSlot.keepOnly(null), [suggestionSlot]);
 
     // A share link (/s/<id> lands here as ?share=<id>): load its references
     // and replay them — live, or over the snapshot's captured data.
@@ -378,7 +418,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 return;
             }
 
-            enterShare(shared);
+            enterShare(shared, 'share');
         });
         // `openShare` is deliberately absent for the same reason `run` and
         // `replay` are off the permalink effect's array below: watching a
@@ -417,7 +457,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
             }
 
             if (result.kind === 'opened') {
-                enterShare(result.shared);
+                enterShare(result.shared, 'version_link');
             } else {
                 setLinkRefusal({ link, result });
             }
@@ -437,7 +477,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
             if (shared) {
                 startedRef.current = `spec:${href}`;
-                enterShare({ ...shared, mode: 'live', link: latest });
+                enterShare({ ...shared, mode: 'live', link: latest }, 'version_link');
             }
 
             window.history.replaceState(null, '', href);
@@ -446,6 +486,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     );
 
     // Permalink / homepage handoff: ?q= (and ?s=) auto-runs once per value.
+    // The homepage prompt adds `via` (typed or example). It is read here and
+    // stripped at once, so the address bar never offers it for copying and a
+    // pasted link records `permalink`.
     useEffect(() => {
         const q = searchParams.get('q');
         const s = searchParams.get('s') ?? '';
@@ -457,8 +500,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
         startedRef.current = key;
 
+        const source = handoffSource(searchParams.get(HANDOFF_SOURCE_PARAM));
+
+        if (searchParams.has(HANDOFF_SOURCE_PARAM)) {
+            const rest = new URLSearchParams(searchParams);
+
+            rest.delete(HANDOFF_SOURCE_PARAM);
+            window.history.replaceState(null, '', `/data?${rest}`);
+        }
+
         if (!s) {
-            runRef.current(q);
+            runRef.current(q, source);
 
             return;
         }
@@ -479,9 +531,9 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                 // URL-sync effect below must not read that transient empty
                 // state as "no edits" and strip `s=` before they land.
                 suppressEmptyEditWriteRef.current = true;
-                replayRef.current(state);
+                replayRef.current(state, source);
             } else {
-                runRef.current(q);
+                runRef.current(q, source);
             }
         });
         // `run` and `replay` are deliberately absent. Watching either would
@@ -578,34 +630,6 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
             cancelled = true;
         };
     }, [phase, query, edits, parts, answer]);
-
-    // Usage event, once per query, when the run has settled: every part for
-    // a resolution, the run itself for a catalogue or declined answer, which
-    // has no parts. `search.empty` when nothing answered (searchEvents.ts).
-    const trackedQueryRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        const settled =
-            phase === 'done' &&
-            (answer !== null ||
-                (parts.length > 0 && parts.every((part) => part.phase !== 'loading')));
-
-        if (!settled || !query || trackedQueryRef.current === query) {
-            return;
-        }
-
-        trackedQueryRef.current = query;
-
-        const props = searchEventProps({
-            query,
-            edited: edits.length > 0,
-            kind: answerKind,
-            reason: answerReason,
-            parts,
-        });
-
-        track(searchEventName(props), props);
-    }, [phase, answer, answerKind, answerReason, parts, query, edits.length]);
 
     // Read, not watched: startNew's identity changes with reset(), and
     // watching it would re-run the effect below on internal state.
@@ -716,19 +740,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // and would otherwise double its rows — the composed plan already drops
     // a folded part from the heading/variable lines the same way).
     const seenSpecIds = new Set<string>();
-    const definiteParts = parts
-        .filter((part) => part.part?.status === 'definite' && part.hydratedSpec)
-        .filter((part) => {
-            const specId = part.hydratedSpec!.spec_id;
+    const definiteParts = parts.filter(hasDefiniteSpec).filter((part) => {
+        const specId = part.hydratedSpec.spec_id;
 
-            if (seenSpecIds.has(specId)) {
-                return false;
-            }
+        if (seenSpecIds.has(specId)) {
+            return false;
+        }
 
-            seenSpecIds.add(specId);
+        seenSpecIds.add(specId);
 
-            return true;
-        });
+        return true;
+    });
     // True while any definite part's observations are still streaming in
     // (the base run still loading, or an edit post in flight). The preview
     // table shows its pending line instead of the omission copy while that
@@ -736,8 +758,8 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const observationsPending = definiteParts.some((part) => part.observationsPending);
     const liveNote = snapshotLiveNote(
         definiteParts.map((part) => ({
-            specId: part.hydratedSpec!.spec_id,
-            name: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
+            specId: part.hydratedSpec.spec_id,
+            name: part.variableText ?? part.hydratedSpec.shape?.label ?? '—',
         })),
         unreadableSnapshots,
     );
@@ -745,20 +767,29 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     // Share: a link for the definite parts on screen (every one, in part
     // order — a folded part keeps its own position). No numbers leave the
     // page; the server stores the datasets they resolved to.
-    const sharedParts = parts.filter(
-        (part) => part.part?.status === 'definite' && part.hydratedSpec,
-    );
+    const sharedParts = parts.filter(hasDefiniteSpec);
     const sharedDatasets = sharedParts.map((part) => ({
         partIndex: part.index,
-        specId: part.hydratedSpec!.spec_id,
-        label: part.variableText ?? part.hydratedSpec?.shape?.label ?? '—',
+        specId: part.hydratedSpec.spec_id,
+        label: part.variableText ?? part.hydratedSpec.shape?.label ?? '—',
     }));
-    const createShare: CreateSearchShare = (mode) =>
-        createSearchShare({
+    const createShare: CreateSearchShare = (mode) => {
+        const sendAction = startAction();
+
+        return createSearchShare({
             mode,
             query,
             parts: sharedParts.map(searchSharePart),
-        }).then((result) => ('id' in result ? { ...result, datasets: sharedDatasets } : result));
+        }).then((result) => {
+            if (!('id' in result)) {
+                return result;
+            }
+
+            sendAction({ action: 'share', mode, shareId: result.id });
+
+            return { ...result, datasets: sharedDatasets };
+        });
+    };
     // A part whose question asked for more than search does carries an
     // operation_not_applied departure, whose action hands it to Studio;
     // without one, the side panel offers Studio itself, so a page shows one
@@ -774,7 +805,13 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
     const rawPlan = response?.sentence_plan ?? [];
     const isSlotted = (index: number) =>
         rawPlan.some((token) => token.kind === 'slot' && tokenPart(token, parts.length) === index);
-    const candidatesParts = parts.filter((part) => part.part?.status === 'candidates');
+    const candidatesParts = parts.flatMap((hydrated) => {
+        const { part } = hydrated;
+
+        return part && isKnownPart(part) && part.status === 'candidates'
+            ? [{ ...hydrated, part }]
+            : [];
+    });
 
     // Collapses to the first no_data part whose callout is the generic
     // 'studio' hand-off panel (identical text per part). Flagged/alternate
@@ -865,7 +902,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                             )}
                             {suggest && (
                                 <SearchCards
-                                    part={suggest?.parts?.[0] ?? null}
+                                    part={
+                                        suggest.kind === 'resolution'
+                                            ? (suggest.parts[0] ?? null)
+                                            : null
+                                    }
                                     onPick={applySuggestion}
                                 />
                             )}
@@ -936,7 +977,10 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                                 }
 
                                                 leaveShare();
-                                                openShare({ ...openedShare, mode: 'live' });
+                                                openShare(
+                                                    { ...openedShare, mode: 'live' },
+                                                    'share',
+                                                );
                                             }}
                                         >
                                             View latest
@@ -973,9 +1017,11 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 <SearchAnswer
                                     answer={answer}
                                     catalogue={catalogue}
-                                    onRun={submitQuery}
+                                    onRun={(text) => submitQuery(text, 'example')}
                                     onStartNew={startNew}
-                                    onShowCatalogue={() => submitQuery(STARTING_POINT_QUERY)}
+                                    onShowCatalogue={() =>
+                                        submitQuery(STARTING_POINT_QUERY, 'catalogue')
+                                    }
                                     onStudio={openStudio}
                                 />
                             </div>
@@ -1022,7 +1068,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     onEditFacet={editFacet}
                                     onEditParsed={editParsed}
                                     onEditShared={editShared}
-                                    onRefine={submitQuery}
+                                    onRefine={(text) => submitQuery(text, 'refine')}
                                     onStudio={openStudio}
                                     refine={refine}
                                     onRefineOpen={setRefineOpen}
@@ -1073,6 +1119,17 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                     note={downloadNote(definiteParts[0].part?.warnings)}
                                     createShare={createShare}
                                     onStudio={studioDeparture ? undefined : openStudio}
+                                    onDownloadStart={() => {
+                                        const sendAction = startAction();
+                                        const partIndex = definiteParts[0].index;
+
+                                        return (downloaded) =>
+                                            sendAction({
+                                                action: 'download',
+                                                partIndex,
+                                                ...downloaded,
+                                            });
+                                    }}
                                 />
                             )}
                         </div>
@@ -1092,18 +1149,22 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 />
                             ))}
 
-                            {candidatesParts.map(
-                                (part) =>
-                                    part.part && (
-                                        <ReadingCards
-                                            key={part.index}
-                                            part={part.part}
-                                            prefix={parts.length > 1 ? part.variableText : null}
-                                            onPick={(spec) => pickCandidate(part.index, spec)}
-                                            onRetry={() => submitQuery(query)}
-                                        />
-                                    ),
-                            )}
+                            {candidatesParts.map((part) => (
+                                <ReadingCards
+                                    key={part.index}
+                                    part={part.part}
+                                    prefix={parts.length > 1 ? part.variableText : null}
+                                    onPick={(spec) => {
+                                        startAction()({
+                                            action: 'pick_reading',
+                                            partIndex: part.index,
+                                            specId: spec.spec_id,
+                                        });
+                                        pickCandidate(part.index, spec);
+                                    }}
+                                    onRetry={() => submitQuery(query, 'retry')}
+                                />
+                            ))}
 
                             {definiteParts.length > 0 && (
                                 <SearchTable

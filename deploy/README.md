@@ -31,8 +31,7 @@ pushed image's digest rather than the tag.
 Every deploy also runs a Cloud Run Job that applies the website
 database's schema migrations before the service moves to the new image:
 `build-migrate-deploy.yml` points the Job at the image it just pushed,
-executes it with `--wait`, and only updates the service once the Job exits
-0. A failed migration fails the deploy and leaves the service on its current
+executes it with `--wait`, and only updates the service once the Job exits 0. A failed migration fails the deploy and leaves the service on its current
 image. infra defines each environment's Job (named by
 `MIGRATE_JOB_WEBSITE`, `dfo-dev-website-staging-migrate` on dev) and the
 migrator identity it runs as. This repo owns the migrate entrypoint and the
@@ -70,12 +69,91 @@ against, and sequencing the schema change and the code change across the
 right number of deploys, is the responsibility of whoever authors the
 migration.
 
+## Event export
+
+In production a Cloud Run Job, `dfo-prod-website-export`, copies the
+`event` table into the BigQuery table `event` in `EXPORT_BQ_DATASET`
+(`website_export`) every hour. It runs the website image with the command
+`node dist/export-events.cjs` (`db/export-events.ts`, bundled by
+`pnpm build:export-events`). `build-migrate-deploy.yml` points it at each
+new image after the service update, only where `EXPORT_JOB_WEBSITE` is
+set. infra defines the Job, its identity, the dataset and the schedule.
+
+The Job reads the database as its own IAM user, a member of the NOLOGIN
+role `website_export_reader`, which migration `0019_event_export_grant`
+grants `SELECT` on `event` alone. infra creates the role in every tier, so
+its apply must land before the deploy that first carries the migration.
+
+| Env var                                                                     | What it is                                                   |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME`, `WEBSITE_DB_USER` | The database as the service reads it, `DATABASE_URL` locally |
+| `EXPORT_BQ_PROJECT`                                                         | The BigQuery project                                         |
+| `EXPORT_BQ_DATASET`                                                         | The BigQuery dataset                                         |
+| `EXPORT_ID_HMAC_KEY`                                                        | Key for the visitor and user id digests                      |
+
+Each run replaces every UTC day from the latest day in the table minus one
+through today, so a missed run is made up by the next one. When the table
+is empty or missing, the Job creates it and loads every day from the first
+event. The run also replaces every earlier day whose count of `event` rows
+differs from its partition's row count. It takes both counts per day up
+front, one `GROUP BY` over the whole `event` table and one over the
+BigQuery table's `created_at` column. Each day is read in pages into a
+scratch file, then loaded into its partition (`event$YYYYMMDD`,
+`WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so a column added to the schema
+reaches the table on the next load). A replace never shrinks a partition.
+Nothing deletes `event` rows, and they carry no foreign key to `user`, so
+deleting an account leaves them in place. A day that reads fewer rows than
+its partition holds is therefore a fault, such as a wrong database, an
+emptied table or a lagging replica. That day keeps its partition, the
+other days still load, and the run then fails naming each short day with
+both counts, as it does for a day that reads fewer rows than its source
+count from the start of the run, whatever its partition holds. Its counts
+still differ, so the day stays in every later run, however many later days
+load, and fails each one until it matches. The Job's failure alert
+therefore fires on every run until the export is complete. A day that
+reads no rows and holds none loads nothing. The Job logs each day as it
+finishes. A failure names the day it failed on and any short day before
+it, and that day keeps its partition as it was. A database query that runs
+past 5 minutes fails the run (`statement_timeout` on the Job's pool), and
+so does a BigQuery count job that bills more than 1 GB, about 125 million
+rows, or runs past 2 minutes (`maximumBytesBilled` and `jobTimeoutMs`),
+all well inside the Job's 1800 s task timeout.
+
+The table is partitioned by day on `created_at`:
+
+| Column         | Type      | Value                                                                           |
+| -------------- | --------- | ------------------------------------------------------------------------------- |
+| `id`           | INT64     | `event.id`                                                                      |
+| `created_at`   | TIMESTAMP | `event.created_at`                                                              |
+| `name`         | STRING    | `event.name`                                                                    |
+| `page`         | STRING    | `event.page` without its query string or fragment, a share id as `:id`, or null |
+| `signed_in`    | BOOL      | whether `user_id` is set                                                        |
+| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one                               |
+| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one                                  |
+| `props`        | JSON      | the event's allow-listed props, `shareId` as its HMAC-SHA256 hex                |
+
+`page` keeps a path only when it is a slash followed by letters, digits
+and `_ - . : /`, up to 300 characters, the characters the site's routes
+use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser
+posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and
+the pages under them exports as `:id`, since a share id opens its share.
+
+`PROP_RULES` in `db/event-export.ts` lists the props each event keeps:
+enums, booleans, counts and ids, each checked against its rule, since the
+browser posts its own props. Search query text, refused terms, card units
+and every list or nested object stay in Postgres. `shareId` exports as
+its HMAC-SHA256 hex under `EXPORT_ID_HMAC_KEY`, so share, embed and
+search events still join on it. A new event name fails
+the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY`
+changes every digest, so drop the BigQuery table afterwards and let the
+next run reload it.
+
 ## GitHub vars and secrets
 
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the
 deploy
 target (`dev`, `production`). Configure the same variable and secret
-*names* in each environment with per-environment values. The workflow YAML
+_names_ in each environment with per-environment values. The workflow YAML
 doesn't change between environments, only the environment it targets does.
 These are the same names `ai` uses, except the service and migration Job
 vars, so the `infra` foundation outputs slot into both repos the same way.
@@ -89,6 +167,7 @@ vars, so the `infra` foundation outputs slot into both repos the same way.
 | `AR_REPO`             | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
 | `SERVICE_WEBSITE`     | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
 | `MIGRATE_JOB_WEBSITE` | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
+| `EXPORT_JOB_WEBSITE`  | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
 
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
@@ -102,10 +181,10 @@ For dev, infra has set up:
   Workload Identity Federation pool and provider that already serves
   `ai` (foundation), with the per-repo restriction at the SA binding.
 - That deployer service account, with:
-  - `roles/run.developer` (update Cloud Run services)
-  - `roles/artifactregistry.writer` to push images
-  - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
-    that's a separate identity)
+    - `roles/run.developer` (update Cloud Run services)
+    - `roles/artifactregistry.writer` to push images
+    - `roles/iam.serviceAccountUser` (act as the Cloud Run runtime SA, if
+      that's a separate identity)
 - The Cloud Run service for the `dfo-website` image, including its runtime
   service account, scaling config, env vars, and secrets. This repo's
   workflows only ever update the `--image` on the service that already
@@ -124,27 +203,26 @@ service, and migration Job with its migrator identity.
 
 The app defines the definitive contract once it exists. Known so far:
 
-| Name (provisional)                    | What it is                                                                                                                                                                  |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                      |
-| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                           |
-| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                       |
-| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                 |
-| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                  |
-| `REDIS_URL`                           | Redis behind the per-address rate limits on `/api` and `/mcp`; unset, both are off and startup logs a warning                                                               |
-| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                    |
-| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                         |
-| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                             |
-| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                        |
-| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                           |
-| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
-| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                               |
-| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                     |
-| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                 |
-| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                        |
-| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                    |
-| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                               |
-| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                           |
+| Name (provisional)                    | What it is                                                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STUDIO_API_BASE`                     | The `dfo-ai` harness the `/api/studio/*` proxy forwards to; plain env var set by infra                                                                                                                  |
+| `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                       |
+| `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                   |
+| `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                             |
+| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                                              |
+| `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                |
+| `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
+| `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
+| `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                                                    |
+| `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                       |
+| `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                           |
+| `WEBSITE_DB_USER`                     | Runtime IAM database user; set by infra                                                                                                                                                                 |
+| `WEBSITE_DB_NAME`                     | Database name; set by infra                                                                                                                                                                             |
+| `BETTER_AUTH_SECRET`                  | Signs auth sessions; generated and stored in Secret Manager by infra                                                                                                                                    |
+| `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                |
+| `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
+| `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the
@@ -163,7 +241,7 @@ every client under one shared address, each with one error logged.
 
 ## Repo-side prerequisites
 
-- The application itself, following the conventions in the root README
+- The application itself, following the conventions in `docs/development.md`
   (pnpm, `output: 'standalone'`, the `lint`/`typecheck`/`test`/`build`
   script contract).
 - The migrate entrypoint and its migrations, both under `db/`. The

@@ -13,6 +13,8 @@
  * Pure, so `node --test` imports it directly.
  */
 
+import type { Part, Spec } from './types.ts';
+
 /** The ref spec_id a replayed definite part was bound to, with the spec_id the
  *  replay returned for it. `refSpecId` is null when the response does not carry
  *  one part per ref, so no ref owns the part. Null for a part that is not
@@ -20,7 +22,7 @@
 export type SnapshotBinding = { replayedSpecId: string; refSpecId: string | null } | null;
 
 /** The slice of a replayed part this module reads; a `Resolution` part fits. */
-type ReplayedPart = { status: string; spec?: { spec_id: string } };
+type ReplayedPart = Pick<Part, 'status'> & { spec?: Pick<Spec, 'spec_id'> };
 
 /** Binds each definite replayed part to its share ref by position. When the
  *  response does not carry one part per ref, position proves nothing: every

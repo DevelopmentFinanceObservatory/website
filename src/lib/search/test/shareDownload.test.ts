@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { SearchShareRef } from '../searchShare';
+import { artifact } from './fixtures/dataset-documents.ts';
 import {
     acceptsHtml,
     createWaitGate,
@@ -30,6 +31,7 @@ const ref = (
         identity: {},
         entityGroups: null,
         operations: [],
+        assumptions: null,
         contentVersion,
         artifactDigest,
     }) satisfies SearchShareRef;
@@ -152,15 +154,27 @@ function statusOf(outcome: ReturnType<typeof selectShareDownload>): number | nul
 // A version manifest lists every rendering stored for the version: here an
 // xlsx bundle and a column-enriched CSV bundle ahead of the plain CSV bundle.
 const versionFiles = [
-    { artifact_digest: 'sha256:stats', url: 'u-stats', rendering: { statistics: 'series' } },
-    { artifact_digest: 'sha256:xlsx', url: 'u-xlsx', rendering: { format: 'xlsx', bundle: true } },
-    {
+    artifact({
+        artifact_digest: 'sha256:stats',
+        url: 'u-stats',
+        rendering: { statistics: 'series' },
+    }),
+    artifact({
+        artifact_digest: 'sha256:xlsx',
+        url: 'u-xlsx',
+        rendering: { format: 'xlsx', bundle: true },
+    }),
+    artifact({
         artifact_digest: 'sha256:cols',
         url: 'u-cols',
         rendering: { format: 'csv', bundle: true, columns: ['country_income'] },
-    },
-    { artifact_digest: 'sha256:csv', url: 'u-csv', rendering: CSV_BUNDLE },
-    { artifact_digest: 'sha256:file', url: 'u-file', rendering: { format: 'csv', bundle: false } },
+    }),
+    artifact({ artifact_digest: 'sha256:csv', url: 'u-csv', rendering: CSV_BUNDLE }),
+    artifact({
+        artifact_digest: 'sha256:file',
+        url: 'u-file',
+        rendering: { format: 'csv', bundle: false },
+    }),
 ];
 
 test('a snapshot link serves the file its capture pinned, by digest', () => {
@@ -297,7 +311,7 @@ const serveLive = ({
     waitMs?: number;
     now?: () => number;
 }) => {
-    const pinned: (string | null)[] = [];
+    const pinned: string[] = [];
     const answer = serveLiveDownload({
         shareId: 'abc',
         target: liveTarget(rendering),
@@ -390,7 +404,7 @@ test('a client that disconnects mid-poll ends its wait quietly and frees its slo
     const errors = t.mock.method(console, 'error', () => {});
     const gate = createWaitGate(1);
     const client = new AbortController();
-    const pinned: (string | null)[] = [];
+    const pinned: string[] = [];
     let polls = 0;
     const fetchImpl = (async (url: string) => {
         if (!url.includes('/operations/')) {

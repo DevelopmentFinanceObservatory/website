@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import { useMemo } from 'react';
@@ -10,7 +9,7 @@ import Button from '@/components/atoms/Button/Button';
 import { isClosestMatch } from '@/lib/search/departures';
 import { basisNote, readingOf, readingsSummary } from '@/lib/search/readings';
 import { tokenAbout } from '@/lib/search/tokenAbout';
-import type { Part } from '@/lib/search/types';
+import type { CandidatesPart, Spec } from '@/lib/search/types';
 import { statVarsUnreadable } from '@/lib/search/view';
 
 /**
@@ -29,14 +28,14 @@ const ReadingCards = ({
     onPick,
     onRetry,
 }: {
-    part: Part;
+    part: CandidatesPart;
     // The part's variable text, when the answer has several parts.
     prefix: string | null;
-    onPick: (spec: any) => void;
+    onPick: (spec: Spec) => void;
     // Re-runs the question, for a reading the client could not read.
     onRetry: () => void;
 }) => {
-    const specs: any[] = useMemo(() => part.candidates?.specs ?? [], [part]);
+    const specs = useMemo(() => part.candidates.specs, [part]);
     const readings = useMemo(
         () =>
             specs.map((spec) => {

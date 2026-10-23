@@ -6,7 +6,7 @@
  */
 
 import { refsStatedBesides, sentenceBlocks } from './departures.ts';
-import { planSentenceText, tokenPart } from './sentencePlan.ts';
+import { planSentenceText, tokenPart, tokenSegment } from './sentencePlan.ts';
 import type { CandidateBasis, Part, SentenceToken } from './types';
 
 /** What one reading card shows: its heading and byline as plain text, the
@@ -54,10 +54,11 @@ export function readingOf(spec: { sentence_plan?: SentenceToken[] | null }): Rea
 }
 
 /** A candidates part's summary plan read as one line, for screen readers:
- *  "2 readings." and each reading's heading and byline. */
+ *  "2 readings." and each reading's heading and byline. Its departures and
+ *  assumptions clause are left out, since the answer block states them. */
 export function readingsSummary(plan: readonly SentenceToken[] | null | undefined): string {
     return (plan ?? [])
-        .filter((token) => token.segment !== 'departure')
+        .filter((token) => ['heading', 'byline'].includes(tokenSegment(token)))
         .map((token) => token.text)
         .join('')
         .trim();
@@ -68,8 +69,9 @@ export function readingsSummary(plan: readonly SentenceToken[] | null | undefine
  * token, at the place of that part's first token: a what-token whose text
  * is the part's variable text ("debt flows to Ghana"), or the summary's own
  * heading when the part has none. The heading draws it as a marked phrase
- * and the reading cards below carry the choice. Returns `plan` itself when
- * no part is a candidates part.
+ * and the reading cards below carry the choice. The part's assumption
+ * tokens stay as they are, since the clause states what every reading
+ * assumed alike. Returns `plan` itself when no part is a candidates part.
  */
 export function foldReadings(
     plan: readonly SentenceToken[],
@@ -86,7 +88,9 @@ export function foldReadings(
     return plan.flatMap((token): SentenceToken[] => {
         const partIndex = tokenPart(token, partCount);
 
-        if (partIndex == null || !isReadings(partIndex)) return [token];
+        if (partIndex == null || !isReadings(partIndex) || token.segment === 'assumption') {
+            return [token];
+        }
         if (folded.has(partIndex)) return [];
 
         folded.add(partIndex);

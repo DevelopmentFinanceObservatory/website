@@ -4,7 +4,7 @@ import {
     IpAddressTypes,
     type DriverOptions,
 } from '@google-cloud/cloud-sql-connector';
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 
 /**
  * The env var contract the migrate entrypoint and dfo-infra's Terraform
@@ -21,7 +21,7 @@ export interface MigratorEnv {
     instanceConnectionName: string;
 }
 
-function requiredEnv(name: string): string {
+export function requiredEnv(name: string): string {
     const value = process.env[name];
 
     if (!value) {
@@ -214,21 +214,52 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
  *   import or build.
  * - URL: `connectionString` may be `undefined` here (no env at build); pg
  *   only fails to connect with it later.
+ *
+ * `sizing` overrides the pool size and adds timeouts, for a pool that must
+ * give up fast (src/lib/db/index.ts's counter pool).
+ *
+ * Every pool gets an `'error'` listener. pg-pool emits `'error'` when an
+ * idle client fails (Cloud SQL or a proxy dropping the connection), and an
+ * emitter with no listener throws, which would crash the server. pg-pool
+ * has already removed the dead client by then, so the listener only logs.
+ * The next query opens a fresh connection.
  */
-export function buildRuntimePool(env: EnvLike = process.env): Pool {
-    if (isCloudSqlConfigured(env)) {
-        return new Pool({
-            stream: () => getCloudSqlRuntimeStream()(),
-            user: env.WEBSITE_DB_USER,
-            database: env.WEBSITE_DB_NAME,
-            max: 5,
-            idleTimeoutMillis: 30_000,
-        });
-    }
+export function buildRuntimePool(
+    env: EnvLike = process.env,
+    sizing: Pick<
+        PoolConfig,
+        'max' | 'connectionTimeoutMillis' | 'query_timeout' | 'statement_timeout'
+    > = {},
+): Pool {
+    const pool = isCloudSqlConfigured(env)
+        ? new Pool({
+              stream: () => getCloudSqlRuntimeStream()(),
+              user: env.WEBSITE_DB_USER,
+              database: env.WEBSITE_DB_NAME,
+              max: 5,
+              idleTimeoutMillis: 30_000,
+              ...sizing,
+          })
+        : new Pool({
+              connectionString: env.DATABASE_URL,
+              max: 5,
+              idleTimeoutMillis: 30_000,
+              ...sizing,
+          });
 
-    return new Pool({
-        connectionString: env.DATABASE_URL,
-        max: 5,
-        idleTimeoutMillis: 30_000,
+    pool.on('error', (error) => {
+        console.error('idle database client failed:', error);
+    });
+
+    return pool;
+}
+
+/** A small, bounded pool for rate and allowance counters. */
+export function buildCounterPool(env: EnvLike = process.env): Pool {
+    return buildRuntimePool(env, {
+        max: 2,
+        connectionTimeoutMillis: 2_000,
+        query_timeout: 500,
+        statement_timeout: 400,
     });
 }

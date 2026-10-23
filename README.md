@@ -1,103 +1,54 @@
-# dfo-website
+# DFO website
 
-The public site of the Development Finance Observatory (DFO). A single
-Next.js application serves the frontend (chat and canvas workspace,
-reference pages) and acts as the backend proxy for **all** API traffic to
-the platform, including MCP. This is not the DFO brochure website, the small
-live site that gets archived at launch.
+The Next.js application behind [developmentfinance.org](https://developmentfinance.org): the data search, the Studio (a chat and canvas workspace for building charts and tables), reference pages, and user accounts. It also acts as the proxy that carries all outside traffic, including MCP, to the platform APIs.
 
-## Status: in progress
+It is part of the [Development Finance Observatory](https://github.com/DevelopmentFinanceObservatory), an initiative of [ONE Data](https://data.one.org) built on [Google Data Commons](https://datacommons.org).
 
-The application code lands in slices as Ode builds it; the homepage, the
-data search, the Studio and user accounts are in.
-Around it:
+This repository is under active development. Interfaces, schemas, and data may change without notice.
 
-- `deploy/` holds the Dockerfile pattern and the division of responsibility
-  with `infra`. They define the Cloud Run service, and this repo's CI
-  only swaps images onto it.
-- `db/` holds the schema migration runner: a Cloud Run Job connects to the
-  website databases as an IAM service account through the Cloud SQL
-  connector and applies forward-only migrations before each deploy moves
-  the service to a new image.
-- `.github/workflows/` holds the CI and deploy workflows. CI runs `lint`,
-  `typecheck`, `test`, and `build` on every PR that is not a draft, and on
-  each push to `dev`. The deploy workflow runs on pushes to `dev`
-  that touch the image's inputs.
-- `docs/development.md` — how to run the app locally and the conventions
-  the code follows (styles, components, animation system).
-- `docs/feedback.md` — the feedback endpoint (`POST /api/feedback`): the
-  frontend contract, the storage/Slack/email sinks and their config, and
-  the local dev loop.
-- `docs/analytics.md` — usage events (the `event` table and what each
-  surface records), Sentry, and the guest Studio limit.
+## What's inside
 
-## Repo map
+- `src/` holds the application: the App Router pages and API routes in `src/app`, atomic components in `src/components`, and the proxy, search, Studio, auth and feedback code in `src/lib`.
+- `db/` holds the Drizzle schema, the forward-only migrations and the runner that applies them.
+- `deploy/` holds the Dockerfile and the deploy notes.
+- `.github/workflows/` holds CI and the deploy workflows.
+- `docs/` holds the maintainer and endpoint documentation.
 
-| Repo                                                                    | What it is                                                                                                                                                           |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dcp`](https://github.com/DevelopmentFinanceObservatory/dcp)           | The knowledge graph engine, ONE's fork of Data Commons, serving the graph over the mixer and SDMX APIs.                                                              |
-| [`apis`](https://github.com/DevelopmentFinanceObservatory/apis)         | The Search, Datasets, Graph, and Presentation APIs. The Search, Datasets, and Graph APIs read from the `dcp` graph, and the Presentation API persists to PostgreSQL. |
-| [`ai`](https://github.com/DevelopmentFinanceObservatory/ai)             | The agent harness and the DFO's MCP servers, deployed as one Cloud Run service.                                                                                      |
-| [`spec-kit`](https://github.com/DevelopmentFinanceObservatory/spec-kit) | Shared spec models (spec-id hashing, materialisation, manifest and component-spec schemas) that publish the TS types this app renders from [forthcoming].            |
-| [`website`](https://github.com/DevelopmentFinanceObservatory/website)   | This repo, the public Next.js site and the proxy that fronts the platform for external traffic.                                                                      |
-| [`skills`](https://github.com/DevelopmentFinanceObservatory/skills)     | The open repository of domain-knowledge packages agents load dynamically at runtime [forthcoming].                                                                   |
-| [`infra`](https://github.com/DevelopmentFinanceObservatory/infra)       | Infrastructure as code: the Cloud Run service definitions, service accounts, scaling, and secrets.                                                                   |
+The site talks to three neighbouring repositories: [`apis`](https://github.com/DevelopmentFinanceObservatory/apis) for search, datasets and graph queries, [`ai`](https://github.com/DevelopmentFinanceObservatory/ai) for the Studio agent and MCP servers, and [`infra`](https://github.com/DevelopmentFinanceObservatory/infra) for the Cloud Run services that run it. The org profile has the [full repository map](https://github.com/DevelopmentFinanceObservatory).
 
-## Deployed services
+## Getting started
 
-All services run in the `dev-fin-observatory` GCP project, region
-`northamerica-northeast1`.
+You need Node 22.18 or newer and pnpm. `just doctor` checks both, and `just setup` installs dependencies and creates `.env.local` from `.env.example`.
 
-| Repo      | Service                                                                                                          |
-| --------- | ---------------------------------------------------------------------------------------------------------------- |
-| `website` | https://dfo-dev-website-staging-zms5lj4zhq-nn.a.run.app                                                          |
-| `apis`    | https://dfo-dev-apis-zms5lj4zhq-nn.a.run.app/docs (needs an invoker identity; reach it through the gcloud proxy) |
-| `ai`      | https://dfo-dev-ai-zms5lj4zhq-nn.a.run.app/docs                                                                  |
-| `dcp`     | https://dfo-dev-dc-datacommons-service-zms5lj4zhq-nn.a.run.app                                                   |
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm dev
+```
 
-`website`'s service is the one `dev` deploys to. `apis`, `ai`, and `dcp`
-run their own dev services. `apis` and `ai` return 404 at the root and
-serve Swagger UI at `/docs`. The website service is reachable by anyone
-with the URL.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Conventions
+Only the dev apis proxy below needs access to ONE's Google Cloud project (`dev-fin-observatory`). What runs depends on which back ends you can reach:
 
-Changing any of these is fine — change the workflows and `deploy/Dockerfile`
-in the same PR.
+- The static pages, `pnpm lint` and `pnpm typecheck` run with no configuration.
+- The data search and graph pages call the DFO apis service at `SEARCH_API_BASE`. `.env.example` points it at `http://localhost:8083`, where ONE maintainers run a `gcloud run services proxy` to the dev deployment; that proxy needs an account with invoker access in `dev-fin-observatory`, as `docs/development.md` describes. Without that access, point it at your own `apis` instance.
+- The Studio needs an `ai` harness at `STUDIO_API_BASE` (default `http://localhost:8080`) and a `STUDIO_TOKEN`, which ONE issues for its own deployments. Run the `ai` repository locally to use it.
+- Accounts and saved conversations need local Postgres (`just db-up && just db-migrate`, which requires Docker) and your own OAuth client credentials for at least one sign-in provider.
+- `pnpm test` needs the local Postgres but nothing from the cloud.
 
-- **pnpm** as the package manager, with a committed `pnpm-lock.yaml` and a
-  `packageManager` field in `package.json`. `ci.yml`'s pnpm setup reads its
-  version from that field and fails without it.
-- **TypeScript, strict**, Next.js App Router.
-- `package.json` defines `lint`, `typecheck`, `test`, and `build` scripts.
-  That is the contract `ci.yml` runs.
-- `next.config.*` sets `output: 'standalone'`, so `deploy/Dockerfile` can
-  copy the standalone server into the runtime image.
+Without `DATABASE_URL`, the dev server logs a warning and keeps serving the pages that do not use the database. `docs/development.md` lists every variable and the full command set.
 
-## Deploys
+## Documentation
 
-GitHub Actions builds the `dfo-website` image and updates the Cloud Run
-dev service automatically on every push to `dev`. `main` is the
-production release branch. A push to `main` builds and deploys production
-through the `production` GitHub Environment, which needs approval from the
-release reviewers.
-`infra` owns the Cloud Run service _definition_ (service account,
-scaling, secrets, env vars). This repo's CI only swaps images on the
-service `infra` already defined. See `deploy/README.md` for the
-vars/secrets and prerequisites.
+- [`docs/development.md`](docs/development.md): running locally, the database, code conventions, branches, releases and the deployed services.
+- [`docs/feedback.md`](docs/feedback.md): the feedback endpoint (`POST /api/feedback`), its sinks and the local development loop.
+- [`docs/analytics.md`](docs/analytics.md): usage events, Sentry and the Studio prompt allowance.
+- [`deploy/README.md`](deploy/README.md): the image build, migrations on deploy, GitHub variables and the runtime environment contract.
 
 ## Contributing
 
-`dev` is the default branch. Branch off it and open a pull request
-into it. The `ci` check has to pass before the PR merges, and force-pushes
-are blocked. Each merge deploys to the dev service.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-`main` is production, the same model `apis` uses. To release:
+## Licence
 
-1. Confirm the `dev` commit you want is deployed and validated on the
-   dev service.
-1. Open a pull request from `dev` into `main`. `main` requires one approval
-   and the `ci` check, and blocks force-pushes and deletion.
-1. Merge it. `deploy-prod.yml` builds and deploys that commit once the
-   release reviewers approve the `production` environment.
-1. Tag it: `git tag prod-YYYY-MM-DD <sha> && git push origin prod-YYYY-MM-DD`.
+MIT. See [LICENSE](LICENSE).

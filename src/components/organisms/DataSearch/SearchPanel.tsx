@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- deliberately shallow engine-contract layer (see lib/search/types.ts for the full mirror) */
 'use client';
 
 import classNames from 'classnames';
@@ -7,10 +6,11 @@ import { useEffect, useRef, useState } from 'react';
 import DatasetDownload from './DatasetDownload';
 import styles from './DataSearch.module.scss';
 import SearchShare, { type CreateSearchShare } from './SearchShare';
-import { useDatasetDownload } from './useDatasetDownload';
+import { type DatasetDownloaded, useDatasetDownload } from './useDatasetDownload';
 
 import Button from '@/components/atoms/Button/Button';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import type { PartSpec } from '@/lib/search/types';
 import { detailRows, downloadRowCount, formatCount } from '@/lib/search/view';
 
 import { SourceName } from './WhyPanel';
@@ -22,8 +22,9 @@ const SearchPanel = ({
     note,
     createShare,
     onStudio,
+    onDownloadStart,
 }: {
-    spec: any;
+    spec: PartSpec;
     // Says a download may differ from the preview (resultNotes downloadNote).
     note?: string | null;
     // Mints this result's share links; the Share button is hidden without it.
@@ -32,6 +33,8 @@ const SearchPanel = ({
     // hidden without it, as it is while an operation_not_applied departure
     // offers Studio.
     onStudio?: () => void;
+    // Called as a download starts; records it once it reaches its file.
+    onDownloadStart?: () => (downloaded: DatasetDownloaded) => void;
 }) => {
     const [detailsOpen, setDetailsOpen] = useState(false);
     // The share box pops like the other menus here: 'closed' keeps it mounted
@@ -71,6 +74,7 @@ const SearchPanel = ({
         specId: spec?.spec_id,
         definition: spec?.definition,
         entities: spec?.entities,
+        onDownloadStart,
     });
 
     const rowCount = downloadRowCount(spec);

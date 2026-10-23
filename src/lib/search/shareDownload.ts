@@ -30,9 +30,11 @@
  * `node --test` imports it directly.
  */
 
+import type { OperationResource, ProblemDetails } from '@developmentfinance/client/wire';
+
 import { datasetsFetch } from './datasetsFetch.ts';
 import { DEFAULT_DOWNLOAD_CHOICES } from './downloadOptions.ts';
-import { OPERATION_DEADLINE, pollOperation, type OperationEnvelope } from './operationPoll.ts';
+import { OPERATION_DEADLINE, pollOperation } from './operationPoll.ts';
 import { artifactHref, DATASET_FORMATS } from './searchClient.ts';
 import type { SearchShare } from './searchShare';
 import { MINT_DEFAULT_RENDERING, renderingArtifact, type FileRendering } from './snapshot.ts';
@@ -338,7 +340,7 @@ const busy = (retryAfter: string | null = null): DownloadAnswer =>
 export type PinServed = (served: {
     manifest: VersionLinkDocument;
     specId: string;
-    digest: string | null;
+    digest: string;
 }) => Promise<void>;
 
 type LiveDownload = {
@@ -418,7 +420,7 @@ export const serveLiveDownload = async ({
         }
 
         if (res.status === 202) {
-            const operation = (body as { operation?: OperationEnvelope } | null)?.operation;
+            const operation = (body as Partial<OperationResource> | null)?.operation;
 
             if (operation && OPERATION_SHAPE.test(operation.operation_id)) {
                 return html
@@ -481,7 +483,7 @@ const awaitOperation = async ({
     now,
     log,
 }: {
-    operation: OperationEnvelope;
+    operation: OperationResource['operation'];
     target: Extract<ShareDownload, { kind: 'live' }>;
     base: string;
     pin: PinServed;
@@ -498,7 +500,7 @@ const awaitOperation = async ({
     let manifest: VersionLinkDocument | null;
 
     try {
-        manifest = (await pollOperation(
+        manifest = await pollOperation(
             { ...operation, poll: pollUrl },
             {
                 fetchImpl: (_path, attempt) =>
@@ -511,7 +513,7 @@ const awaitOperation = async ({
                 ...(sleep ? { sleep } : {}),
                 ...(now ? { now } : {}),
             },
-        )) as VersionLinkDocument | null;
+        );
     } catch (error) {
         if (signal?.aborted) {
             return CANCELLED;
@@ -563,7 +565,7 @@ const doorRefusal = ({
     body: unknown;
     log: (message: string, fields: Record<string, unknown>) => void;
 }): DownloadAnswer => {
-    const problem = body as { code?: string; detail?: string } | null;
+    const problem = body as Partial<ProblemDetails> | null;
     const detail = problem?.detail ? ` ${problem.detail}` : '';
 
     if (res.status === 404 || res.status === 410) {

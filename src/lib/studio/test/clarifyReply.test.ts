@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { clarifyFromFrame, clarifyNote, clarifyReply, type Clarify } from '../clarify.ts';
+import {
+    clarifyAnswer,
+    clarifyFromFrame,
+    clarifyNote,
+    clarifyReply,
+    type Clarify,
+} from '../clarify.ts';
 import { recordAnswer, startStepper, stepperAnswers } from '../clarifyStepper.ts';
 import type { ElicitationRequest, InterruptResponse } from '../wire.ts';
 
@@ -130,6 +136,37 @@ test('the note lists answered labels and typed text in question order', () => {
 test('the note reads Left to DFO when every question was skipped', () => {
     assert.equal(
         clarifyNote(several, { q1: { kind: 'skipped' }, q2: { kind: 'skipped' } }),
+        'Left to DFO',
+    );
+});
+
+test('skipping every question sends the reply without a transcript answer', () => {
+    let stepper = startStepper();
+
+    stepper = recordAnswer(several, stepper, { kind: 'skipped' });
+    stepper = recordAnswer(several, stepper, { kind: 'skipped' });
+
+    const answers = stepperAnswers(several, stepper);
+
+    assert.ok(answers);
+    assert.deepEqual(clarifyReply(several, answers), { decision: 'answer', answers });
+    assert.equal(clarifyNote(several, answers), 'Left to DFO');
+    assert.equal(clarifyAnswer(several, answers), undefined);
+});
+
+test('a selected option among skipped questions keeps its transcript answer', () => {
+    assert.equal(
+        clarifyAnswer(several, {
+            q1: { kind: 'skipped' },
+            q2: { kind: 'option', option_id: 'gross' },
+        }),
+        'You chose: Gross disbursements',
+    );
+});
+
+test("typing the skip status text still records the user's words", () => {
+    assert.equal(
+        clarifyAnswer(single, { q1: { kind: 'text', text: 'Left to DFO' } }),
         'Left to DFO',
     );
 });

@@ -6,7 +6,12 @@
  * layout. Pure; no React.
  */
 
-import type { SentenceToken } from './types';
+import type { SentenceSegment, SentenceToken } from './types';
+
+/** The segment a token sits in: its own, or the heading, the wire's default
+ *  for a token without one. A segment the site does not know stays as it is,
+ *  so no reader draws it. */
+export const tokenSegment = (token: SentenceToken): SentenceSegment => token.segment ?? 'heading';
 
 /** The part `token` belongs to, in a response of `partCount` parts. With
  *  one part (or none yet), every token is that part's, whatever indexes
@@ -50,14 +55,27 @@ export function earlySentenceTokens(
     return tokens;
 }
 
-/** The heading a plan reads as: its heading tokens joined verbatim, since
- *  the engine's tokens carry their own spacing, and trimmed. The byline
- *  (unit and source) and departure tokens are left out. Empty for a
- *  missing plan. */
-export function planSentenceText(plan: readonly SentenceToken[] | null | undefined): string {
-    return (plan ?? [])
-        .filter((token) => token.segment === 'heading')
+const segmentText = (
+    plan: readonly SentenceToken[] | null | undefined,
+    segment: SentenceSegment,
+): string =>
+    (plan ?? [])
+        .filter((token) => tokenSegment(token) === segment)
         .map((token) => token.text)
         .join('')
         .trim();
+
+/** The heading a plan reads as: its heading tokens joined verbatim, since
+ *  the engine's tokens carry their own spacing, and trimmed. The coverage
+ *  line, byline (unit and source), departure and assumption tokens are left
+ *  out. Empty for a missing plan. */
+export function planSentenceText(plan: readonly SentenceToken[] | null | undefined): string {
+    return segmentText(plan, 'heading');
+}
+
+/** The coverage line a mixed answer's plan opens with ("Answered 1 of 2
+ *  parts."), its coverage tokens joined and trimmed. Empty when the plan has
+ *  none. */
+export function planCoverageText(plan: readonly SentenceToken[] | null | undefined): string {
+    return segmentText(plan, 'coverage');
 }

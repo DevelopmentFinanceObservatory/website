@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
     applyDoneEvent,
     artifactHref,
+    buildRequest,
+    createSuggestionSlot,
     entityOptions,
     fetchDatasetOptions,
     fetchDefinitionMembers,
@@ -14,9 +16,13 @@ import {
     pinDownloadedVersion,
     placeOptionValues,
     resolveStream,
+    resolveSuggestion,
     type SearchEvent,
 } from '../searchClient.ts';
-import type { Warning } from '../types.ts';
+import type { SlotOption, Spec as WireSpec } from '@developmentfinance/client/wire';
+
+import type { Part, SpecIdentity, Warning } from '../types.ts';
+import { definite, readable, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import {
     currentEntityDcid,
@@ -28,15 +34,24 @@ import {
     statVarsUnreadable,
 } from '../view.ts';
 
+/** The smallest identity the options door and a definition take. */
+const OPTIONS_IDENTITY: SpecIdentity = {
+    identity_version: 'spec1',
+    shape: { kind: 'statvar_schema' },
+    slots: [],
+    requested_window: { kind: 'all' },
+};
+
 // A minimal but wire-shaped WireSpec: the definition/resolved split contract
-// v1 requires, with a well-formed `stat_vars`.
-function wireSpec(statVars: unknown) {
+// v1 requires, carrying `statVars` as its `stat_vars`. The tests pass broken
+// values here on purpose, which is the one place a body leaves the type.
+function wireSpec(statVars: unknown): WireSpec {
     return {
         spec_id: 'spec-1',
         definition: {
             schema_version: 1,
             spec_id: 'spec-1',
-            identity: { identity_version: 'spec1' },
+            identity: OPTIONS_IDENTITY,
         },
         resolved: {
             shape: {
@@ -46,20 +61,19 @@ function wireSpec(statVars: unknown) {
                 member_count: 1,
             },
             slots: [],
-            stat_vars: statVars,
+            stat_vars: statVars as WireSpec['resolved']['stat_vars'],
             entities: [],
             coverage: { kind: 'bare', has_data: true },
-            trace: {},
+            trace: { resolved_entities: [], resolved_sources: [], slot_filters: [] },
         },
     };
 }
 
 test('flattenSpec reads a well-formed stat_vars, with the counts as the wire sends them', () => {
-    const flat = flattenSpec(
-        wireSpec({ member_count: 42, member_count_exact: true, served_count: 3 }),
+    const flat = readable(
+        flattenSpec(wireSpec({ member_count: 42, member_count_exact: true, served_count: 3 })),
     );
 
-    assert.equal(statVarsUnreadable(flat), false);
     assert.equal(flat.stat_vars.member_count, 42);
     assert.equal(flat.stat_vars.served_count, 3);
     assert.equal(
@@ -110,10 +124,9 @@ test('flattenSpec flags a null stat_vars as unreadable', () => {
 });
 
 test('flattenSpec flags a spec missing the definition/resolved split as unreadable, rather than passing it through as a flat pre-v1 body', () => {
-    const flat = flattenSpec({
-        spec_id: 'spec-1',
-        stat_vars: ['dcid/GdpNominal'],
-    });
+    // A flat pre-v1 body, which the wire type rules out.
+    const preV1 = { spec_id: 'spec-1', stat_vars: ['dcid/GdpNominal'] };
+    const flat = flattenSpec(preV1 as unknown as WireSpec);
 
     assert.equal(statVarsUnreadable(flat), true);
 });
@@ -130,7 +143,7 @@ test('entityOptions posts no resolved_stat_var_dcids and asks for include_covera
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -250,7 +263,7 @@ test('entityOptions sends observationAbout in for.role when role is omitted (a n
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -272,7 +285,7 @@ test('entityOptions sends a directional role verbatim in for.role: origin', asyn
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
         role: 'origin',
     });
@@ -295,7 +308,7 @@ test('entityOptions sends a directional role verbatim in for.role: destination (
     );
 
     await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'children',
         role: 'destination',
     });
@@ -333,7 +346,7 @@ test("entityOptions reports the door's own truncated flag from the response", as
     );
 
     const result = await entityOptions({
-        identity: { identity_version: 'spec1' },
+        identity: OPTIONS_IDENTITY,
         scope: 'peers',
     });
 
@@ -342,18 +355,10 @@ test("entityOptions reports the door's own truncated flag from the response", as
 
 // --- placeOptionValues (the place_options SSE event's own "parse" step) --
 
-// Shaped from dfo-apis events.py's PlaceOptionsEvent.options: list[SlotOption]
-// (models/options.py's SlotOption -- value: SlotValue, coverage), SlotValue's
-// own ref: GraphRef (models/grammar.py -- {ref, label}). A captured
-// place_options frame for "Population of Kenya" would carry Kenya's own
-// peers this way, coverage populated (the event always sets include_coverage
-// true).
-const capturedPlaceOptionsEvent = {
-    kind: 'place_options',
-    spec_id: 'spec-1',
-    role: 'observationAbout',
-    scope: 'peers',
-    anchor_ref: 'country/KEN',
+// A place_options frame for "Population of Kenya" carries Kenya's peers as
+// wire SlotOptions, coverage populated (the event always sets
+// include_coverage true).
+const capturedPlaceOptionsEvent: { options: SlotOption[]; truncated: boolean } = {
     options: [
         {
             value: { ref: { ref: 'country/GHA', label: 'Ghana' }, value_kind: 'entity' },
@@ -402,55 +407,46 @@ test('placeOptionValues returns an empty list for an empty/absent items array', 
 });
 
 test('flattenSpec reads a SlotOptions payload carrying truncated (post-drift-correction shape)', () => {
-    const wire = {
-        spec_id: 'spec-1',
-        definition: {
-            schema_version: 1,
-            spec_id: 'spec-1',
-            identity: { identity_version: 'spec1' },
-        },
-        resolved: {
-            shape: {
-                shape_id: 'shape-1',
-                label: 'Development finance',
-                slot_keys: [],
-                member_count: 1,
+    const wire = wireSpec({ member_count: 1, member_count_exact: true, served_count: 1 });
+
+    wire.resolved.slot_options = [
+        {
+            key: {
+                axis: 'how',
+                property: { ref: 'crsPurpose', label: 'purpose' },
+                label: 'purpose',
             },
-            slots: [],
-            slot_options: [
-                {
-                    key: {
-                        axis: 'how',
-                        property: { ref: 'crsPurpose', label: 'purpose' },
-                        label: 'purpose',
-                    },
-                    options: [{ value: { value_kind: 'enum_value' } }],
-                    truncated: false,
-                    source: 'seed',
-                },
-            ],
-            stat_vars: { member_count: 1, member_count_exact: true, served_count: 1 },
-            entities: [],
-            coverage: { kind: 'bare', has_data: true },
-            trace: {},
+            options: [{ value: { value_kind: 'enum_value' } }],
+            truncated: false,
+            source: 'seed',
         },
-    };
+    ];
 
-    const flat = flattenSpec(wire);
+    const [options] = flattenSpec(wire).slot_options ?? [];
 
-    assert.equal(flat.slot_options[0].truncated, false);
-    assert.equal('complete' in flat.slot_options[0], false);
+    assert.equal(options?.truncated, false);
+    assert.ok(options && !('complete' in options));
 });
 
 test('isLevelScopedOptions is true once relation is populated on the list', () => {
     assert.equal(
-        isLevelScopedOptions([{ value: { ref: { ref: 'x', label: 'X' } }, relation: 'root' }]),
+        isLevelScopedOptions([
+            {
+                value: { value_kind: 'enum_value', ref: { ref: 'x', label: 'X' } },
+                relation: 'root',
+            },
+        ]),
         true,
     );
 });
 
 test('isLevelScopedOptions is false for a flat/seed option list (relation absent)', () => {
-    assert.equal(isLevelScopedOptions([{ value: { ref: { ref: 'x', label: 'X' } } }]), false);
+    assert.equal(
+        isLevelScopedOptions([
+            { value: { value_kind: 'enum_value', ref: { ref: 'x', label: 'X' } } },
+        ]),
+        false,
+    );
 });
 
 test('isLevelScopedOptions is false for an empty option list', () => {
@@ -458,13 +454,16 @@ test('isLevelScopedOptions is false for an empty option list', () => {
 });
 
 test("partitionLevelOptions splits a bound node's neighbours into one parent and its children", () => {
-    const parent = {
-        value: { ref: { ref: 'infectious', label: 'Infectious disease control' } },
+    const parent: SlotOption = {
+        value: {
+            value_kind: 'enum_value',
+            ref: { ref: 'infectious', label: 'Infectious disease control' },
+        },
         relation: 'parent',
         member_count: 1204,
     };
-    const child = {
-        value: { ref: { ref: 'tb', label: 'Tuberculosis control' } },
+    const child: SlotOption = {
+        value: { value_kind: 'enum_value', ref: { ref: 'tb', label: 'Tuberculosis control' } },
         relation: 'child',
         member_count: 88,
     };
@@ -477,9 +476,17 @@ test("partitionLevelOptions splits a bound node's neighbours into one parent and
 });
 
 test('partitionLevelOptions reads every entry as a root when the slot is unbound or its code system is flat', () => {
-    const roots = [
-        { value: { ref: { ref: 'a', label: 'A' } }, relation: 'root', member_count: 5 },
-        { value: { ref: { ref: 'b', label: 'B' } }, relation: 'root', member_count: 2 },
+    const roots: SlotOption[] = [
+        {
+            value: { value_kind: 'enum_value', ref: { ref: 'a', label: 'A' } },
+            relation: 'root',
+            member_count: 5,
+        },
+        {
+            value: { value_kind: 'enum_value', ref: { ref: 'b', label: 'B' } },
+            relation: 'root',
+            member_count: 2,
+        },
     ];
 
     const partition = partitionLevelOptions(roots);
@@ -493,29 +500,18 @@ test('entitySlotOptions reads the requested directional axis rather than assumin
     const options = [
         { value: { value_kind: 'entity' as const, ref: { ref: 'donor-1', label: 'Donor' } } },
     ];
+    const kenya = [
+        { value: { value_kind: 'entity' as const, ref: { ref: 'country/KEN', label: 'Kenya' } } },
+    ];
     const entries = {
         'spec-1': [
             { role: 'origin' as const, options, truncated: false },
-            {
-                role: 'destination' as const,
-                options: [
-                    {
-                        value: {
-                            value_kind: 'entity' as const,
-                            ref: { ref: 'country/KEN', label: 'Kenya' },
-                        },
-                    },
-                ],
-                truncated: true,
-            },
+            { role: 'destination' as const, options: kenya, truncated: true },
         ],
     };
 
     assert.deepEqual(entitySlotOptions({ spec_id: 'spec-1' }, entries, 'origin'), options);
-    assert.equal(
-        entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination')[0]?.value.ref?.ref,
-        'country/KEN',
-    );
+    assert.deepEqual(entitySlotOptions({ spec_id: 'spec-1' }, entries, 'destination'), kenya);
 });
 
 test('entitySlotOptions returns nothing when the requested directional axis is absent', () => {
@@ -555,8 +551,8 @@ test('currentEntityDcid is undefined with no entity in the requested role', () =
 });
 
 test('mergeLateWarnings attaches a done event warning to the definite part carrying its spec_id', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['definite-single']);
+    const specId = definite(response.parts[0]).spec.spec_id;
 
     const merged = mergeLateWarnings(response, [
         {
@@ -581,12 +577,12 @@ test('mergeLateWarnings attaches a done event warning to the definite part carry
 });
 
 test('mergeLateWarnings attaches a late warning to a definite part whose warnings key is missing', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['definite-single']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     // Part.warnings is typed as required, but the wire can leave the key off a
     // definite part. Deleting the key exercises that path. An empty array
     // would not.
-    delete response.parts[0].warnings;
+    delete (response.parts[0] as Partial<Part>).warnings;
     const warning = {
         code: 'observations_timed_out',
         severity: 'warn' as const,
@@ -600,8 +596,8 @@ test('mergeLateWarnings attaches a late warning to a definite part whose warning
 });
 
 test("mergeLateWarnings keeps a part's existing warnings and appends the late one to them", () => {
-    const response = normalizeResponse(fixtures['broad-truncated']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['broad-truncated']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     const before = response.parts[0].warnings.length;
 
     const merged = mergeLateWarnings(response, [
@@ -622,8 +618,8 @@ test("mergeLateWarnings keeps a part's existing warnings and appends the late on
 });
 
 test('mergeLateWarnings dedupes a done warning identical (code + message + spec_id) to one the part already carries', () => {
-    const response = normalizeResponse(fixtures['broad-truncated']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['broad-truncated']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     const before: Warning[] = response.parts[0].warnings;
     const shipped = before.find((warning) => warning.code === 'observations_series_truncated');
 
@@ -636,8 +632,8 @@ test('mergeLateWarnings dedupes a done warning identical (code + message + spec_
 });
 
 test('mergeLateWarnings still appends a done warning sharing a code with one already on the part, when its message differs', () => {
-    const response = normalizeResponse(fixtures['broad-truncated']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['broad-truncated']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     const before = response.parts[0].warnings.length;
 
     const merged = mergeLateWarnings(response, [
@@ -661,7 +657,7 @@ test('mergeLateWarnings still appends a done warning sharing a code with one alr
 });
 
 test('mergeLateWarnings drops a warning naming a spec_id no definite part carries (a candidates part, here)', () => {
-    const response = normalizeResponse(fixtures['multi-candidate']);
+    const response = resolution(fixtures['multi-candidate']);
 
     const merged = mergeLateWarnings(response, [
         {
@@ -676,8 +672,8 @@ test('mergeLateWarnings drops a warning naming a spec_id no definite part carrie
 });
 
 test('mergeLateWarnings dedupes two structurally identical warnings arriving in the same done batch', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['definite-single']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     const warning = {
         code: 'observations_timed_out',
         severity: 'warn' as const,
@@ -691,7 +687,7 @@ test('mergeLateWarnings dedupes two structurally identical warnings arriving in 
 });
 
 test('mergeLateWarnings is a no-op, returning the same response instance, when no warning carries a spec_id', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
+    const response = resolution(fixtures['definite-single']);
 
     const merged = mergeLateWarnings(response, [
         { code: 'run_level_signal', severity: 'info', message: 'no spec_id here' },
@@ -701,8 +697,8 @@ test('mergeLateWarnings is a no-op, returning the same response instance, when n
 });
 
 test('mergeLateWarnings keeps two warnings distinct whose code/message boundary would collide under a space separator', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['definite-single']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     // Under a single-space separator both identities would be "a b c <specId>":
     // first_pair = "a" + " " + "b c", second_pair = "a b" + " " + "c". The real
     // separator is `\u0000`, so the two stay distinct.
@@ -722,8 +718,8 @@ const modelledLate = {
 };
 
 test('applyDoneEvent folds late warnings into the definite part carrying the spec_id and sets its late departures', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
-    const specId = response.parts[0].spec.spec_id;
+    const response = resolution(fixtures['definite-single']);
+    const specId = definite(response.parts[0]).spec.spec_id;
     const warning = {
         code: 'observations_timed_out',
         severity: 'warn' as const,
@@ -742,8 +738,8 @@ test('applyDoneEvent folds late warnings into the definite part carrying the spe
 });
 
 test('applyDoneEvent replaces the shipped departures with the late list, whole', () => {
-    const single = normalizeResponse(fixtures['definite-single']);
-    const specId = single.parts[0].spec.spec_id;
+    const single = resolution(fixtures['definite-single']);
+    const specId = definite(single.parts[0]).spec.spec_id;
     const shipped = {
         code: 'entity_unavailable' as const,
         binding_ref: null,
@@ -761,9 +757,9 @@ test('applyDoneEvent replaces the shipped departures with the late list, whole',
 });
 
 test('applyDoneEvent gives each part sharing a spec_id its own late list', () => {
-    const single = normalizeResponse(fixtures['definite-single']);
+    const single = resolution(fixtures['definite-single']);
     const response = { ...single, parts: [single.parts[0], { ...single.parts[0] }] };
-    const specId = single.parts[0].spec.spec_id;
+    const specId = definite(single.parts[0]).spec.spec_id;
     const unavailable = {
         code: 'entity_unavailable' as const,
         binding_ref: null,
@@ -785,13 +781,17 @@ test('applyDoneEvent gives each part sharing a spec_id its own late list', () =>
 });
 
 test('applyDoneEvent touches only the part at part_index when parts share a spec_id', () => {
-    const single = normalizeResponse(fixtures['definite-single']);
+    const single = resolution(fixtures['definite-single']);
     const response = { ...single, parts: [single.parts[0], { ...single.parts[0] }] };
 
     const merged = applyDoneEvent(response, {
         warnings: [],
         late_departures: [
-            { part_index: 1, spec_id: single.parts[0].spec.spec_id, departures: [modelledLate] },
+            {
+                part_index: 1,
+                spec_id: definite(single.parts[0]).spec.spec_id,
+                departures: [modelledLate],
+            },
         ],
     });
 
@@ -800,7 +800,7 @@ test('applyDoneEvent touches only the part at part_index when parts share a spec
 });
 
 test('applyDoneEvent returns the same response when no late departure names a definite part', () => {
-    const response = normalizeResponse(fixtures['definite-single']);
+    const response = resolution(fixtures['definite-single']);
 
     assert.equal(applyDoneEvent(response, { warnings: [] }), response);
     assert.equal(
@@ -810,7 +810,7 @@ test('applyDoneEvent returns the same response when no late departure names a de
                 { part_index: 0, spec_id: 'spec_elsewhere', departures: [modelledLate] },
                 {
                     part_index: 5,
-                    spec_id: response.parts[0].spec.spec_id,
+                    spec_id: definite(response.parts[0]).spec.spec_id,
                     departures: [modelledLate],
                 },
             ],
@@ -836,7 +836,7 @@ test('mintDataset returns the artifacts/manifest of a synchronous 200 unchanged'
     const { artifacts, manifest } = await mintDataset({ spec_id: 'spec_1', format: 'csv' });
 
     assert.deepEqual(artifacts, [{ url: 'https://x/sync' }]);
-    assert.equal(manifest.content_version, 'cv_sync');
+    assert.equal(manifest?.content_version, 'cv_sync');
 });
 
 test('mintDataset repeats a mint the Datasets API refused as busy and retryable', async (t) => {
@@ -854,7 +854,7 @@ test('mintDataset repeats a mint the Datasets API refused as busy and retryable'
 
     const { manifest } = await mintDataset({ spec_id: 'spec_1', format: 'csv' });
 
-    assert.equal(manifest.content_version, 'cv_sync');
+    assert.equal(manifest?.content_version, 'cv_sync');
     assert.equal(fetchMock.mock.callCount(), 2);
 });
 
@@ -987,6 +987,124 @@ async function streamEvents(body: unknown, before: SearchEvent[] = []): Promise<
     }
 }
 
+/** What resolveSuggestion sent and settled with for `query`, against a
+ *  fetch that answers with `frames` as an event stream. */
+async function suggestion(query: string, frames: string, signal = new AbortController().signal) {
+    const realFetch = globalThis.fetch;
+    let sent: RequestInit | undefined;
+    globalThis.fetch = async (_url, init) => {
+        sent = init;
+        signal.throwIfAborted();
+        return new Response(frames, { headers: { 'content-type': 'text/event-stream' } });
+    };
+    try {
+        const settled = await resolveSuggestion(query, signal).then(
+            (response) => ({ response }),
+            (error: Error) => ({ error }),
+        );
+        return { sent, settled };
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+}
+
+// The search API's response cache serves a submit from a suggestion's run
+// only when the suggestion streamed the submit's exact body: a buffered entry,
+// or one keyed on other options, never matches the submit's key.
+test("resolveSuggestion streams the submit's request and settles on its response", async () => {
+    const declined = fixtures['declined-out-of-scope'];
+    const { sent, settled } = await suggestion(
+        'fertility rate in Kenya',
+        `event: response\ndata: ${JSON.stringify({ kind: 'response', response: declined })}\n\n` +
+            `event: done\ndata: ${JSON.stringify({ kind: 'done', warnings: [] })}\n\n`,
+    );
+
+    assert.equal(new Headers(sent?.headers).get('accept'), 'text/event-stream');
+    assert.equal(
+        sent?.body,
+        JSON.stringify(buildRequest({ kind: 'raw_text', query: 'fertility rate in Kenya' }, true)),
+    );
+    assert.deepEqual(settled, { response: declined });
+});
+
+test('resolveSuggestion rejects on a stream error and on an abort', async () => {
+    const failed = await suggestion(
+        'fertility rate in Kenya',
+        `event: error\ndata: ${JSON.stringify({ kind: 'error', detail: 'boom', code: null })}\n\n`,
+    );
+    assert.equal('error' in failed.settled && failed.settled.error.message, 'boom');
+
+    const controller = new AbortController();
+    controller.abort();
+    const aborted = await suggestion('fertility rate in Kenya', '', controller.signal);
+    assert.equal('error' in aborted.settled && aborted.settled.error.name, 'AbortError');
+});
+
+/** A fetch that answers every resolve with `frame` and then holds the
+ *  stream open until the request's signal aborts, recording each signal. */
+function holdingFetch(frame: object) {
+    const signals: AbortSignal[] = [];
+    const fetch = async (_url: unknown, init?: RequestInit) => {
+        const signal = init!.signal!;
+        signals.push(signal);
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    new TextEncoder().encode(
+                        `event: ${(frame as { kind: string }).kind}\ndata: ${JSON.stringify(frame)}\n\n`,
+                    ),
+                );
+                signal.addEventListener('abort', () => controller.error(signal.reason));
+            },
+        });
+        return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+    };
+    return { fetch: fetch as typeof globalThis.fetch, signals };
+}
+
+// The search API single-flights identical requests: a submit of the
+// suggestion's text joins the live stream, so only other text may abort it.
+test('a suggestion slot keeps the live stream for its own text and aborts it for any other', async () => {
+    const realFetch = globalThis.fetch;
+    const declined = fixtures['declined-out-of-scope'];
+    const held = holdingFetch({ kind: 'response', response: declined });
+    globalThis.fetch = held.fetch;
+    const slot = createSuggestionSlot();
+    try {
+        assert.deepEqual(await slot.suggest('fertility rate in Kenya'), declined);
+        slot.keepOnly('fertility rate in Kenya');
+        assert.deepEqual(await slot.suggest('fertility rate in Kenya'), declined);
+        assert.equal(held.signals.length, 1);
+        assert.equal(held.signals[0]!.aborted, false);
+
+        slot.keepOnly('fertility rate in Ghana');
+        assert.equal(held.signals[0]!.aborted, true);
+
+        await slot.suggest('fertility rate in Ghana');
+        assert.equal(held.signals.length, 2);
+        slot.keepOnly(null);
+        assert.equal(held.signals[1]!.aborted, true);
+    } finally {
+        slot.keepOnly(null);
+        globalThis.fetch = realFetch;
+    }
+});
+
+test('a suggestion slot asks again after a failed stream', async () => {
+    const realFetch = globalThis.fetch;
+    const held = holdingFetch({ kind: 'error', detail: 'boom', code: null });
+    globalThis.fetch = held.fetch;
+    const slot = createSuggestionSlot();
+    try {
+        await assert.rejects(slot.suggest('fertility rate in Kenya'), /boom/);
+        await assert.rejects(slot.suggest('fertility rate in Kenya'), /boom/);
+        assert.equal(held.signals.length, 2);
+    } finally {
+        slot.keepOnly(null);
+        globalThis.fetch = realFetch;
+    }
+});
+
 test('resolveStream ends on the run error for a response with an unknown kind', async () => {
     const events = await streamEvents({
         schema_version: 1,
@@ -1038,7 +1156,7 @@ for (const name of ['catalogue-kenya', 'declined-out-of-scope'] as const) {
 }
 
 test('mintDataset posts the spec id and definition and no StatVar list', async (t) => {
-    const spec = normalizeResponse(fixtures['definite-single']).parts[0].spec;
+    const spec = definite(resolution(fixtures['definite-single']).parts[0]).spec;
     const fetchMock = t.mock.method(
         globalThis,
         'fetch',
@@ -1074,7 +1192,7 @@ test('fetchVersionLink reads a version from its manifest and the latest data fro
         urls.push(url);
 
         return jsonResponse(200, {
-            definition: { spec_id: 'spec_a1', identity: { identity_version: 'spec1' } },
+            definition: { spec_id: 'spec_a1', identity: OPTIONS_IDENTITY },
         });
     });
 

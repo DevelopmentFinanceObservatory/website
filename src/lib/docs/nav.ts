@@ -38,6 +38,17 @@ export const DOCS_MENU: { label: string; href: string }[] = (manifest.nav as Nav
     },
 );
 
+/**
+ * The link to the docs page `pageId`. Throws when the corpus has no such page,
+ * so a corpus change fails the build.
+ */
+export const docsPageHref = (pageId: string): string => {
+    const path = pagePath.get(pageId);
+    if (path === undefined) throw new Error(`No docs page ${pageId}`);
+
+    return docsHref(path);
+};
+
 const holds = (node: NavNode, pageId: string): boolean =>
     node.id === pageId ||
     node.page_id === pageId ||

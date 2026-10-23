@@ -1,3 +1,4 @@
+import type { Assumption, EntityGroup, RequestedOperation } from '@developmentfinance/client/wire';
 import { sql } from 'drizzle-orm';
 import {
     bigint,
@@ -55,7 +56,7 @@ export const share = pgTable(
     {
         // Short URL-safe id (8 chars).
         id: text('id').primaryKey(),
-        // Null for a search shared without an account (the search is public).
+        // Null for a share made without an account, search or Studio.
         userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
         // What the link shows: 'conversation' (chat + canvas), 'canvas',
         // 'card', or 'search' (a search result).
@@ -99,12 +100,15 @@ export const shareRef = pgTable(
         specId: text('spec_id').notNull(),
         identity: jsonb('identity').notNull(),
         // Null when no role was asked for as a group.
-        entityGroups: jsonb('entity_groups'),
+        entityGroups: jsonb('entity_groups').$type<Record<string, EntityGroup>>(),
         variableText: text('variable_text'),
         contentVersion: text('content_version'),
         // Null for a live share and for snapshots stored before the column.
         artifactDigest: text('artifact_digest'),
-        operations: jsonb('operations').notNull().default([]),
+        operations: jsonb('operations').$type<RequestedOperation[]>().notNull().default([]),
+        // The part's assumptions as the response gave them, [] included,
+        // which the replay echoes. Null for a share stored before the column.
+        assumptions: jsonb('assumptions').$type<Assumption[]>(),
     },
     (table) => [primaryKey({ columns: [table.shareId, table.partIndex] })],
 );
@@ -220,3 +224,22 @@ export const event = pgTable(
 );
 
 export type EventRow = typeof event.$inferSelect;
+
+/**
+ * One counter per limiter key (src/lib/proxy/limitCounter): the per-address
+ * limits on /api and /mcp, the Studio's daily prompt allowances and the
+ * hourly caps on sign-in codes sent. `key` names the allowance and the
+ * caller (`api:203.0.113.7`, `studio-user:<inbox digest>`,
+ * `sign-in-code:<digest>`); `count` is the hits in the window that started
+ * at `windowStart`. The next hit after the window ends starts the row over,
+ * and rows idle for two days are deleted.
+ */
+export const limitCounter = pgTable(
+    'limit_counter',
+    {
+        key: text('key').primaryKey(),
+        windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+        count: integer('count').notNull(),
+    },
+    (table) => [index('limit_counter_window_start_idx').on(table.windowStart)],
+);

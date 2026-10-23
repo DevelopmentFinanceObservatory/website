@@ -3,6 +3,21 @@ import test from 'node:test';
 
 import { decodePermalinkState, encodePermalinkState, encodeSearchState } from '../permalink.ts';
 import type { PermalinkEdit, PermalinkState } from '../permalink.ts';
+import type { Assumption } from '../types.ts';
+
+const declaredDefault: Assumption = {
+    kind: 'declared_default',
+    binding_ref: 'how:typeofflow',
+    refs: ['TypeOfFlow_ODA'],
+    text: 'official development assistance',
+};
+
+const openProviders: Assumption = {
+    kind: 'open_role',
+    binding_ref: 'origin:',
+    refs: [],
+    text: 'every provider',
+};
 
 const identityEdit: PermalinkEdit = {
     part: 0,
@@ -12,7 +27,7 @@ const identityEdit: PermalinkEdit = {
         variable_text: 'ODA disbursements',
         identity: {
             identity_version: 'spec1',
-            shape: {},
+            shape: { kind: 'statvar_schema' },
             slots: [],
             entities: { origin: ['country/FRA'] },
             requested_window: { kind: 'all' },
@@ -42,7 +57,7 @@ const multiEntityEdit: PermalinkEdit = {
         variable_text: 'ODA to recipients',
         identity: {
             identity_version: 'spec1',
-            shape: {},
+            shape: { kind: 'statvar_schema' },
             slots: [],
             entities: { origin: ['country/FRA'], destination: ['country/KEN', 'country/ETH'] },
             requested_window: { kind: 'all' },
@@ -58,6 +73,22 @@ test('a PermalinkState round-trips through encode/decode -- a multi-dcid identit
             edit: multiEntityEdit,
         },
         { description: 'a parsed-only edit', query: 'donor spending', edit: parsedEdit },
+        {
+            description: "a reloaded pick's assumptions echo",
+            query: 'ODA disbursements',
+            edit: {
+                ...identityEdit,
+                entry: { ...identityEdit.entry, assumptions: [declaredDefault, openProviders] },
+            } as PermalinkEdit,
+        },
+        {
+            description: 'an empty assumptions echo, which states no default',
+            query: 'ODA disbursements',
+            edit: {
+                ...identityEdit,
+                entry: { ...identityEdit.entry, assumptions: [] },
+            } as PermalinkEdit,
+        },
         {
             description: 'an old identity-only ?s= payload',
             query: 'ODA disbursements',
@@ -114,4 +145,26 @@ test('an identity edit stored with its base and StatVars decodes to the identity
     const decoded = await decodePermalinkState(await encodeSearchState(stored));
 
     assert.deepEqual(decoded, { query: stored.query, edits: [identityEdit] });
+});
+
+test('an assumptions echo Search would refuse is dropped and the edit still replays', async () => {
+    const tooMany = Array.from({ length: 68 }, () => declaredDefault);
+    const refused = [
+        { description: 'an unknown kind', echo: [{ ...declaredDefault, kind: 'guess' }] },
+        { description: 'a missing text', echo: [{ ...declaredDefault, text: '' }] },
+        { description: 'an extra member', echo: [{ ...declaredDefault, extra: 1 }] },
+        { description: 'a list past the cap', echo: tooMany },
+        { description: 'a list that is not an array', echo: declaredDefault },
+        { description: 'a null echo', echo: null },
+    ];
+
+    for (const { description, echo } of refused) {
+        const stored = {
+            query: 'ODA disbursements',
+            edits: [{ ...identityEdit, entry: { ...identityEdit.entry, assumptions: echo } }],
+        };
+        const decoded = await decodePermalinkState(await encodeSearchState(stored));
+
+        assert.deepEqual(decoded, { query: stored.query, edits: [identityEdit] }, description);
+    }
 });

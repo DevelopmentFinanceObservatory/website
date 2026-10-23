@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # Cloud Run image for the DFO website: the Next.js app in standalone output
-# mode (next.config.ts sets `output: 'standalone'`, per the root README's
-# conventions).
+# mode (next.config.ts sets `output: 'standalone'`, per the conventions in
+# docs/development.md).
 #
 # Build from the REPO ROOT, not from deploy/:
 #
@@ -16,9 +16,10 @@ RUN npm install -g pnpm@10.5.2
 
 WORKDIR /app
 
-# Manifest + lockfile first, so the dependency layer caches across
-# source-only changes.
+# Manifest, lockfile and the vendored tarballs they name (`file:vendor/...`)
+# first, so the dependency layer caches across source-only changes.
 COPY package.json pnpm-lock.yaml ./
+COPY vendor ./vendor
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -35,6 +36,10 @@ RUN pnpm build
 # one file, so the runtime stage below needs no node_modules for it at all,
 # pruned or otherwise.
 RUN pnpm run build:migrate
+
+# The event export Job's command (db/export-events.ts), bundled the same way
+# and for the same reason.
+RUN pnpm run build:export-events
 
 FROM node:24-slim AS runtime
 
@@ -58,6 +63,10 @@ COPY --from=builder --chown=app:app /app/public ./public
 # bundle.
 COPY --from=builder --chown=app:app /app/dist/migrate.cjs ./dist/migrate.cjs
 COPY --from=builder --chown=app:app /app/db/migrations ./db/migrations
+
+# The event export Job's `command` override runs this bundle. It reads no
+# file at runtime, so the bundle travels alone.
+COPY --from=builder --chown=app:app /app/dist/export-events.cjs ./dist/export-events.cjs
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

@@ -15,7 +15,7 @@ import type { Coverage, Warning } from './types.ts';
  *  view.ts's splitCurrentPick<T> can bound its generic to it, rather than
  *  taking unconstrained options and forcing a cast here. */
 export interface OptionLike {
-    value?: { ref?: { ref?: string; label?: string } };
+    value?: { ref?: { ref?: string; label?: string } | null };
     dcid?: string;
     label?: string;
     coverage?: Coverage | null;
