@@ -36,6 +36,12 @@ for (const kind of kinds) {
         assert.equal(shared.sessionId, null);
         assert.deepEqual(shared.componentRefs, []);
     });
+
+    test(`pruneForShare: a ${kind} share keeps no field outside SavedConversation`, () => {
+        const sent = { ...saved, padding: 'x'.repeat(1024) } as SavedConversation;
+
+        assert.equal('padding' in pruneForShare(sent, kind, 'note-1'), false);
+    });
 }
 
 test('pruneForShare: a conversation share keeps the chat and the canvas', () => {

@@ -5,9 +5,13 @@ import { getUser } from '@/lib/auth/session';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
 import { createShare, liveShareRefusalFor, spendGuestShare } from '@/lib/chat/shareStore';
 import { clientIp } from '@/lib/proxy/forward';
+import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { track } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
+
+// The largest share request read, in bytes; a larger one gets 413.
+const MAX_SHARE_BODY = 10_000_000;
 
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
@@ -68,7 +72,19 @@ const shareSearch = async (body: any, headers: Headers) => {
 // refused when its data cards cannot all be refreshed (`liveShareRefusal` in
 // src/lib/studio/liveShare), and the refusal names the cards in the way.
 export const POST = async (request: NextRequest) => {
-    const body = await request.json().catch(() => null);
+    const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
+
+    if (text === null) {
+        return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+    }
+
+    const body = (() => {
+        try {
+            return JSON.parse(text);
+        } catch {
+            return null;
+        }
+    })();
 
     if (body?.kind === 'search') {
         return shareSearch(body, request.headers);
