@@ -3,9 +3,14 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 
-import { db } from '@/lib/db';
+import { counterDb, db } from '@/lib/db';
 import * as schema from '../../../db/schema';
+import { CLIENT_IP_HEADER } from '@/lib/auth/clientIp';
+import { takeCodeAllowance } from '@/lib/auth/codeLimit';
+import { emailSignInConfig } from '@/lib/auth/emailSignIn';
+import { CODE_SIGN_IN_PATH, emailSignInOptions } from '@/lib/auth/emailSignInOptions';
 import { track } from '@/lib/events/track';
+import { sendMail } from '@/lib/mail/send';
 
 /** The sign-in providers, in the order the login page lists them. */
 export type Provider = 'google' | 'github' | 'microsoft';
@@ -29,12 +34,32 @@ export const providersEnabled: Provider[] = [
     ...(microsoft ? (['microsoft'] as const) : []),
 ];
 
+const emailConfig = emailSignInConfig(process.env);
+
+if ('missing' in emailConfig && process.env.AUTH_EMAIL_FROM) {
+    console.warn(`Email sign-in is off: ${emailConfig.missing.join(', ')} unset.`);
+}
+
+/** What /login needs to offer email sign-in, or null when it is off (see lib/auth/emailSignIn). */
+export const emailSignIn =
+    'missing' in emailConfig ? null : { turnstileSiteKey: emailConfig.turnstileSiteKey };
+
+const emailOptions =
+    'missing' in emailConfig
+        ? null
+        : emailSignInOptions(emailConfig, {
+              sendMail,
+              takeAllowance: (keys) => takeCodeAllowance(counterDb, keys),
+          });
+
 /**
  * Server-side auth (Better Auth on our own Postgres via Drizzle). Sign-in is
- * social only — Google, GitHub or Microsoft; there is no password, so
- * nothing to reset, verify or leak. Accounts still live in OUR database
- * (the `user` row plus one `account` row per provider); sessions are
- * httpOnly cookies handled by the /api/auth/* route.
+ * through Google, GitHub or Microsoft or, where it is configured, with a
+ * six-digit code sent by email. There is no password, so nothing to reset
+ * or leak. Accounts live in OUR database (the `user` row plus one
+ * `account` row per provider); sessions are httpOnly cookies handled by
+ * the /api/auth/* route. The email code's plugins and safeguards are in
+ * lib/auth/emailSignInOptions.
  */
 export const auth = betterAuth({
     database: drizzleAdapter(db, { provider: 'pg', schema }),
@@ -57,15 +82,16 @@ export const auth = betterAuth({
     account: {
         // The same person arriving through a second provider, or someone who
         // once had a password account under this email, gets the one user
-        // row, not a duplicate. Google and GitHub return only verified emails,
-        // so they link on email alone. Microsoft under 'common' passes through
-        // whatever address an Entra tenant admin set, which can be anyone's,
-        // so it links only when its ID token marks the email verified
-        // (verified_primary_email / verified_secondary_email). Otherwise the
-        // sign-in fails with account_not_linked.
+        // row, not a duplicate. A provider links to an existing user only
+        // when it marks the address verified (Google's email_verified,
+        // GitHub's verified flag from its emails API, Microsoft's
+        // verified_primary_email / verified_secondary_email). Otherwise the
+        // sign-in fails with account_not_linked. An email code proves the
+        // inbox, so it signs in to the user row with that address. When that
+        // row's email was never verified, Better Auth first revokes the
+        // access that never proved it.
         accountLinking: {
             enabled: true,
-            trustedProviders: ['google', 'github'],
         },
     },
     user: {
@@ -79,23 +105,37 @@ export const auth = betterAuth({
     session: {
         cookieCache: { enabled: false },
     },
+    // The client IP for rate limits, Turnstile and session rows, set by the
+    // /api/auth route from the trusted X-Forwarded-For entry.
+    advanced: {
+        ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+    },
+    disabledPaths: emailOptions?.disabledPaths ?? [],
     hooks: {
-        // A provider callback that ended in a session is a sign-in — the
-        // usage event carries the provider, nothing else.
+        // A provider callback or an email code that ended in a session is a
+        // sign-in. The usage event carries the provider only.
         after: createAuthMiddleware(async (ctx) => {
             const session = ctx.context.newSession;
 
-            if (session && ctx.path.startsWith('/callback/')) {
-                await track(
-                    'auth.signin',
-                    { provider: ctx.params?.id ?? null },
-                    { userId: session.user.id, headers: ctx.headers ?? null },
-                );
+            if (!session) {
+                return;
+            }
+
+            const who = { userId: session.user.id, headers: ctx.headers ?? null };
+
+            if (ctx.path.startsWith('/callback/')) {
+                await track('auth.signin', { provider: ctx.params?.id ?? null }, who);
+            } else if (ctx.path === CODE_SIGN_IN_PATH) {
+                await track('auth.signin', { provider: 'email' }, who);
             }
         }),
     },
-    // Lets server actions / route handlers set the session cookie.
-    plugins: [nextCookies()],
+    plugins: [
+        ...(emailOptions?.plugins ?? []),
+        // Lets server actions / route handlers set the session cookie. Last,
+        // as Better Auth asks.
+        nextCookies(),
+    ],
 });
 
 export type Session = typeof auth.$Infer.Session;

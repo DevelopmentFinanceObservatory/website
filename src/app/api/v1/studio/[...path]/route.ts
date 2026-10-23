@@ -48,7 +48,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
 
     const spend = async () => {
         const user = await getUser();
-        const prompter: Prompter = user ? { userId: user.id } : { address: clientIp(req) };
+        const prompter: Prompter = user ? { email: user.email } : { address: clientIp(req) };
 
         return spendPrompt(counterDb, prompter);
     };

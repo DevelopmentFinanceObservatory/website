@@ -19,7 +19,16 @@ Copy `.env.example` to `.env.local`. The static pages run without it. The
 data search and graph pages need `SEARCH_API_BASE`, which the sample points
 at the proxy in [Reach the dev APIs](#reach-the-dev-apis); the Studio needs a harness at
 `STUDIO_API_BASE` and a `STUDIO_TOKEN`; accounts need `DATABASE_URL` and
-`BETTER_AUTH_SECRET`. To open the dev server from a
+`BETTER_AUTH_SECRET`. Email sign-in also needs a mail transport,
+`AUTH_EMAIL_FROM` and the two Turnstile keys (`.env.example` has
+Cloudflare's test keys for local use). Deployed, mail goes through the
+Amazon SES API with `SES_ROLE_ARN`, `SES_REGION` and `SES_TOKEN_AUDIENCE`,
+on temporary AWS credentials traded for the service account's Google ID
+token minted for that audience. The role sends only as the address its
+policy names, `studio@developmentfinance.org`, so `AUTH_EMAIL_FROM` and
+`FEEDBACK_FROM` use that address in the same case, with or without a
+display name. Locally, `SMTP_HOST` and the other SMTP settings point mail
+at a mail catcher. To open the dev server from a
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 
