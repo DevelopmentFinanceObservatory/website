@@ -211,8 +211,16 @@ const ChartCard = ({
         }),
         [widget, scale, hiddenSeries, theme, barCap],
     );
-    const lineData = useMemo(
-        () => ({
+    const lineData = useMemo(() => {
+        const dotRadius = 3 * scale;
+        const hoverRadius = 3.5 * scale;
+        const borderWidth = 2.5 * scale;
+        // Chart.js sizes the clip margin from the first and last points only,
+        // so an interior dot on an axis limit would be cut; clip to the
+        // largest dot or hover disc instead.
+        const clip = Math.max(dotRadius, hoverRadius) + borderWidth / 2;
+
+        return {
             labels: widget.categories,
             datasets: widget.series.map((s, si) => ({
                 label: s.label,
@@ -222,17 +230,17 @@ const ChartCard = ({
                 // A missing value breaks the line, so a value with a gap on
                 // both sides has no segment. It gets a dot, which Chart.js
                 // fills from the dataset colours below, like the hover disc.
-                pointRadius: lonePoints(s.values).map((lone) => (lone ? 3 * scale : 0)),
+                pointRadius: lonePoints(s.values).map((lone) => (lone ? dotRadius : 0)),
                 // The point fill (hover disc and lone dots): the checkered
                 // weave of the bars. The tooltip swatch comes from seriesPalette.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
-                borderWidth: 2.5 * scale,
-                pointHoverRadius: 3.5 * scale,
+                borderWidth,
+                pointHoverRadius: hoverRadius,
                 pointHitRadius: 8 * scale,
+                clip,
             })),
-        }),
-        [widget, scale, hiddenSeries, theme],
-    );
+        };
+    }, [widget, scale, hiddenSeries, theme]);
 
     // What a screen reader is told the canvas shows: Chart.js marks it
     // role="img" and leaves it unnamed, and the card's title is a separate
