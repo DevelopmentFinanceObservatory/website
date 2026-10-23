@@ -21,7 +21,7 @@ export interface MigratorEnv {
     instanceConnectionName: string;
 }
 
-function requiredEnv(name: string): string {
+export function requiredEnv(name: string): string {
     const value = process.env[name];
 
     if (!value) {

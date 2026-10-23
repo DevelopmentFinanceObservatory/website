@@ -23,7 +23,7 @@ just db-up    # local Postgres 18 on port 5433, needed by the tests
 just check    # lint, typecheck, test, build
 ```
 
-`just check` runs what the `ci` workflow runs (ESLint, Stylelint, `tsc`, the tests and the build), apart from the migration bundle build. Run `just format` to apply Prettier and Stylelint fixes.
+`just check` runs what the `ci` workflow runs (ESLint, Stylelint, `tsc`, the tests and the build), apart from the migration and event export bundle builds and their smoke tests. Run `just format` to apply Prettier and Stylelint fixes.
 
 A pull request needs:
 

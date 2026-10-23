@@ -69,6 +69,59 @@ against, and sequencing the schema change and the code change across the
 right number of deploys, is the responsibility of whoever authors the
 migration.
 
+## Event export
+
+In production a Cloud Run Job, `dfo-prod-website-export`, copies the
+`event` table into the BigQuery table `event` in `EXPORT_BQ_DATASET`
+(`website_export`) every hour. It runs the website image with the command
+`node dist/export-events.cjs` (`db/export-events.ts`, bundled by
+`pnpm build:export-events`). `build-migrate-deploy.yml` points it at each
+new image after the service update, only where `EXPORT_JOB_WEBSITE` is
+set. infra defines the Job, its identity, the dataset and the schedule.
+
+The Job reads the database as its own IAM user, a member of the NOLOGIN
+role `website_export_reader`, which migration `0019_event_export_grant`
+grants `SELECT` on `event` alone. infra creates the role in every tier, so
+its apply must land before the deploy that first carries the migration.
+
+| Env var                                                                     | What it is                                                    |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME`, `WEBSITE_DB_USER` | The database, as the service reads it; `DATABASE_URL` locally |
+| `EXPORT_BQ_PROJECT`                                                         | The BigQuery project                                          |
+| `EXPORT_BQ_DATASET`                                                         | The BigQuery dataset                                          |
+| `EXPORT_ID_HMAC_KEY`                                                        | Key for the visitor and user id digests                       |
+
+Each run replaces every UTC day from the latest day in the table minus one
+through today, so a missed run is made up by the next one. When the table
+is empty or missing, the Job creates it and loads every day from the first
+event. Each day is read in pages into a scratch file, then loaded into its
+partition (`event$YYYYMMDD`, `WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so
+a column added to the schema reaches the table on the next load). A day
+that reads no rows keeps its partition, since nothing deletes `event`
+rows. The Job logs each day as it finishes, and a failure names the day
+it failed on; a failed day keeps its partition as it was.
+
+The table is partitioned by day on `created_at`:
+
+| Column         | Type      | Value                                             |
+| -------------- | --------- | ------------------------------------------------- |
+| `id`           | INT64     | `event.id`                                        |
+| `created_at`   | TIMESTAMP | `event.created_at`                                |
+| `name`         | STRING    | `event.name`                                      |
+| `page`         | STRING    | `event.page` without its query string or fragment |
+| `signed_in`    | BOOL      | whether `user_id` is set                          |
+| `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one |
+| `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one    |
+| `props`        | JSON      | the event's allow-listed props                    |
+
+`PROP_RULES` in `db/event-export.ts` lists the props each event keeps:
+enums, booleans, counts and ids, each checked against its rule, since the
+browser posts its own props. Search query text, refused terms, card units
+and every list or nested object stay in Postgres. A new event name fails
+the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY`
+changes every digest, so drop the BigQuery table afterwards and let the
+next run reload it.
+
 ## GitHub vars and secrets
 
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the
@@ -88,6 +141,7 @@ vars, so the `infra` foundation outputs slot into both repos the same way.
 | `AR_REPO`             | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
 | `SERVICE_WEBSITE`     | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
 | `MIGRATE_JOB_WEBSITE` | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
+| `EXPORT_JOB_WEBSITE`  | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
 
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
