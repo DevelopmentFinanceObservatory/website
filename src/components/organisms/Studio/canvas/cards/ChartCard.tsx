@@ -211,8 +211,19 @@ const ChartCard = ({
         }),
         [widget, scale, hiddenSeries, theme, barCap],
     );
-    const lineData = useMemo(
-        () => ({
+    const lineData = useMemo(() => {
+        const dotRadius = 3 * scale;
+        const hoverRadius = 3.5 * scale;
+        const borderWidth = 2.5 * scale;
+        // Chart.js resolves a hovered point's ring from pointHoverBorderWidth,
+        // then hoverBorderWidth, whose point default is 1.
+        const hoverBorderWidth = 1;
+        // Chart.js sizes the clip margin from the first and last points only,
+        // so an interior dot on an axis limit would be cut; clip to the outer
+        // edge of the lone dot or of the hover disc, whichever is larger.
+        const clip = Math.max(dotRadius + borderWidth / 2, hoverRadius + hoverBorderWidth / 2);
+
+        return {
             labels: widget.categories,
             datasets: widget.series.map((s, si) => ({
                 label: s.label,
@@ -222,17 +233,21 @@ const ChartCard = ({
                 // A missing value breaks the line, so a value with a gap on
                 // both sides has no segment. It gets a dot, which Chart.js
                 // fills from the dataset colours below, like the hover disc.
-                pointRadius: lonePoints(s.values).map((lone) => (lone ? 3 * scale : 0)),
+                pointRadius: lonePoints(s.values).map((lone) => (lone ? dotRadius : 0)),
                 // The point fill (hover disc and lone dots): the checkered
                 // weave of the bars. The tooltip swatch comes from seriesPalette.
                 backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
-                borderWidth: 2.5 * scale,
-                pointHoverRadius: 3.5 * scale,
+                borderWidth,
+                // Round joins keep a sharp dip or peak at an axis limit within
+                // half the line width, inside the clip margin.
+                borderJoinStyle: 'round' as const,
+                pointHoverRadius: hoverRadius,
+                pointHoverBorderWidth: hoverBorderWidth,
                 pointHitRadius: 8 * scale,
+                clip,
             })),
-        }),
-        [widget, scale, hiddenSeries, theme],
-    );
+        };
+    }, [widget, scale, hiddenSeries, theme]);
 
     // What a screen reader is told the canvas shows: Chart.js marks it
     // role="img" and leaves it unnamed, and the card's title is a separate
