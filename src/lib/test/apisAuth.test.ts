@@ -7,12 +7,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-    APIS_AUTH_HEADER,
-    createApisFetch,
-    METADATA_IDENTITY_URL,
-    REFRESH_EARLY_MS,
-} from '../apisAuth.ts';
+import { APIS_AUTH_HEADER, createApisFetch, REFRESH_EARLY_MS } from '../apisAuth.ts';
+import { METADATA_IDENTITY_URL } from '../googleIdToken.ts';
 
 const APIS = 'https://apis.example.org';
 const STUDIO = 'https://ai.example.org';
@@ -268,6 +264,7 @@ for (const [label, metadata] of [
 
         assert.equal(sent.length, 0);
         assert.equal(logged.length, 2);
+        assert.ok(logged.every((error) => error instanceof Error && error.name === 'IdTokenError'));
         // A failed mint is not held, so the next request asks again.
         assert.equal(mints.length, 2);
     });

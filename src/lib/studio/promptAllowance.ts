@@ -8,5 +8,5 @@
 // Free prompts a day for a signed-out visitor, per network address.
 export const GUEST_PROMPTS = 5;
 
-// Prompts a day for a signed-in user.
+// Prompts a day for a signed-in user, shared by every account on one inbox.
 export const USER_DAILY_PROMPTS = 75;

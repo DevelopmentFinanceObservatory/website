@@ -21,6 +21,6 @@ export const GET = async (req: NextRequest, { params }: { params: Promise<{ code
     return forward(req, {
         surface: 'api',
         target,
-        unreachable: 'The Search API is unreachable.',
+        unreachable: 'The DFO APIs are unreachable.',
     });
 };

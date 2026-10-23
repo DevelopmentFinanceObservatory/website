@@ -1,7 +1,8 @@
 /**
  * `headers.ts`: which request and response headers cross the proxy. Every
- * `mcp-*` header goes either way whatever its case; credentials and the
- * caller header are never copied from the client.
+ * `mcp-*` header goes either way whatever its case, and every `x-dfo-*`
+ * header comes back; credentials and the caller header are never copied
+ * from the client.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -47,11 +48,12 @@ test("upstreamRequestHeaders: carries the caller's user-agent", () => {
     assert.deepEqual(Object.fromEntries(out), { 'user-agent': 'dfo-python/0.4.1' });
 });
 
-test('upstreamRequestHeaders: drops credentials, caller and other headers', () => {
+test('upstreamRequestHeaders: drops credentials, x-dfo-* and other headers', () => {
     const out = upstreamRequestHeaders(
         new Headers({
             authorization: 'Bearer client',
             'x-dfo-caller': 'ip:spoofed',
+            'x-dfo-trace-id': 'spoofed',
             cookie: 'a=b',
             connection: 'keep-alive',
             'x-mcp-method': 'no',
@@ -152,29 +154,27 @@ test('clientResponseHeaders: carries the Retry-After of a busy refusal', () => {
     assert.equal(out.get('retry-after'), '5');
 });
 
-test('clientResponseHeaders: carries the upstream Server-Timing and trace id', () => {
+test('clientResponseHeaders: carries the upstream Server-Timing and every x-dfo-* header', () => {
     const out = clientResponseHeaders(
         new Headers({
             'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
             'X-DFO-Trace-Id': 'abc123',
+            'x-dfo-commit': '8f4196c',
+            'x-request-id': 'r1',
         }),
     );
 
     assert.deepEqual(Object.fromEntries(out), {
         'server-timing': 'snapshot_state;dur=28.1, mint;dur=60',
+        'x-dfo-commit': '8f4196c',
         'x-dfo-trace-id': 'abc123',
     });
 });
 
-test('clientResponseHeaders: carries the upstream x-dfo-commit and the Allow of a 405', () => {
-    const out = clientResponseHeaders(
-        new Headers({ 'X-DFO-Commit': '0eb97117', Allow: 'GET, HEAD' }),
-    );
+test('clientResponseHeaders: carries the Allow of a 405', () => {
+    const out = clientResponseHeaders(new Headers({ Allow: 'GET, HEAD' }));
 
-    assert.deepEqual(Object.fromEntries(out), {
-        allow: 'GET, HEAD',
-        'x-dfo-commit': '0eb97117',
-    });
+    assert.deepEqual(Object.fromEntries(out), { allow: 'GET, HEAD' });
 });
 
 test('clientResponseHeaders: leaves the content-length of an encoded body behind', () => {

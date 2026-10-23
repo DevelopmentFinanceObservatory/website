@@ -4,7 +4,7 @@ import { slackConfigured, sendFeedbackSlack } from '@/lib/feedback/slack';
 import { storageConfigured, storeFeedback } from '@/lib/feedback/store';
 import { track } from '@/lib/events/track';
 
-// Feedback intake (POST /api/feedback). Three independent sinks, each active only when configured: storage in the website tenant database, a Slack channel via incoming webhook, and email over SMTP. Any subset is a valid deployment phase.
+// Feedback intake (POST /api/feedback). Three independent sinks, each active only when configured: storage in the website tenant database, a Slack channel via incoming webhook, and email through the site's mail transport (src/lib/mail). Any subset is a valid deployment phase.
 // The frontend contract is documented in docs/feedback.md. Responses mirror the brochure site's newsletter endpoint's { ok, message } shape so form code can treat them alike.
 
 export const runtime = 'nodejs';
