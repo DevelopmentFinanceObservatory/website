@@ -134,6 +134,13 @@
       "when": 1792762398950,
       "tag": "0019_event_export_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792794247981,
+      "tag": "0020_account_daily",
+      "breakpoints": true
     }
   ]
 }

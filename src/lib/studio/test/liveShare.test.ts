@@ -421,6 +421,33 @@ test('liveShareRefusal: names every card that blocks a live link', async () => {
     });
 });
 
+test('liveShareRefusal: holds at most four component reads in flight', async () => {
+    // dfo-apis answers a fifth concurrent read on the component door with an
+    // immediate 503, so a stub that refuses the same way fails a wider check.
+    const stub = stubBackend({ components: { cmp_data: DATASET_FRAME } });
+    let inFlight = 0;
+    let peak = 0;
+    const gated: typeof fetch = async (input, init) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 2));
+
+            return inFlight > 4
+                ? json({ code: 'service_unavailable' }, 503)
+                : await stub.fetch(input, init);
+        } finally {
+            inFlight -= 1;
+        }
+    };
+    const cards = Array.from({ length: 12 }, (_, index) => chart(`card-${index}`, REF));
+
+    assert.equal(await liveShareRefusal({ env: ENV, fetch: gated }, canvas(cards)), null);
+    assert.equal(stub.calls.length, 12);
+    assert.ok(peak > 1 && peak <= 4, `peak ${peak}`);
+});
+
 test('liveShareRefusal: more data cards than the cap, before any read', async () => {
     const stub = stubBackend({ components: { cmp_data: DATASET_FRAME } });
     const count = LIVE_SHARE_MAX_DATA_CARDS + 1;

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import { applyMigrations } from './apply-migrations.ts';
 import { ensureDatabaseRoles, type AdminConnection } from './local-roles.ts';
+import { syncWebmailDomains } from './webmail-domains.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, 'migrations');
 
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
             runtimeDbUser: RUNTIME_USER,
             migratorDbUser: MIGRATOR_USER,
         });
+        await syncWebmailDomains(migratorPool);
 
         console.log('local migrations applied');
     } finally {

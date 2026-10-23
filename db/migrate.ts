@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { applyMigrations } from './apply-migrations';
 import { buildMigratorPool, readMigratorEnv } from './connection';
+import { syncWebmailDomains } from './webmail-domains';
 
 // Resolved from cwd, not `__dirname`. The compiled bundle
 // (dist/migrate.cjs) and the migrations directory (db/migrations) are
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
             runtimeDbUser: env.runtimeDbUser,
             migratorDbUser: env.migratorDbUser,
         });
+        await syncWebmailDomains(pool);
 
         console.log('migrations applied');
     } finally {
