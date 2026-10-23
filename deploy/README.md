@@ -94,19 +94,27 @@ its apply must land before the deploy that first carries the migration.
 Each run replaces every UTC day from the latest day in the table minus one
 through today, so a missed run is made up by the next one. When the table
 is empty or missing, the Job creates it and loads every day from the first
-event. Each day is read in pages into a scratch file, then loaded into its
-partition (`event$YYYYMMDD`, `WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so
-a column added to the schema reaches the table on the next load). A
-replace never shrinks a partition. Before the load the Job counts the
-rows the partition holds, and since nothing deletes `event` rows, a day
-that reads fewer is a fault, such as a wrong database, an emptied table
-or a lagging replica. That day keeps its partition, the other days still
-load, and the run then fails naming each short day with both counts. A
-day that reads no rows and holds none loads nothing. The Job logs each
-day as it finishes. A failure names the day it failed on and any short
-day before it, and that day keeps its partition as it was. A database
-read that runs past 5 minutes fails the run (`statement_timeout` on the
-Job's pool), well inside the Job's 1800 s task timeout.
+event. The run also replaces every earlier day whose count of `event` rows
+differs from its partition's row count. It takes both counts per day up
+front, one `GROUP BY` over the whole `event` table and one over the
+BigQuery table's `created_at` column. Each day is read in pages into a
+scratch file, then loaded into its partition (`event$YYYYMMDD`,
+`WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so a column added to the schema
+reaches the table on the next load). A replace never shrinks a partition.
+Nothing deletes `event` rows, and they carry no foreign key to `user`, so
+deleting an account leaves them in place. A day that reads fewer rows
+than its partition holds is therefore a fault, such as a wrong database,
+an emptied table or a lagging replica. That day keeps its partition, the
+other days still load, and the run then fails naming each short day with
+both counts, as it does for a day that reads fewer rows than its source
+count from the start of the run, whatever its partition holds. Its counts still differ, so the day stays in every later
+run, however many later days load, and fails each one until it matches.
+The Job's failure alert therefore fires on every run until the export is
+complete. A day that reads no rows and holds none loads nothing. The Job
+logs each day as it finishes. A failure names the day it failed on and
+any short day before it, and that day keeps its partition as it was. A
+database query that runs past 5 minutes fails the run (`statement_timeout`
+on the Job's pool), well inside the Job's 1800 s task timeout.
 
 The table is partitioned by day on `created_at`:
 

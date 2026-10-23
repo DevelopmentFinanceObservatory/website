@@ -24,9 +24,10 @@ import { requiredEnv } from './connection.ts';
  * The event export (db/export-events.ts): copies the `event` table into the
  * BigQuery table `event`, one day partition per UTC day of `created_at`.
  * Each run replaces every day from the latest day in BigQuery minus one
- * through today, and every day from the first event on when the table is
- * empty. A day is read whole before its partition is replaced, so a failed
- * read leaves BigQuery as it was.
+ * through today, every day from the first event on when the table is
+ * empty, and every earlier day whose event count differs from its
+ * partition's row count. A day is read whole before its partition is
+ * replaced, so a failed read leaves BigQuery as it was.
  *
  * Rows keep no raw ids and no free text. `visitor_id` and `user_id` become
  * HMAC-SHA256 digests under EXPORT_ID_HMAC_KEY, as does the `shareId` prop,
@@ -279,39 +280,50 @@ const DAY_MS = 86_400_000;
 
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
+/** Rows per UTC day (`YYYY-MM-DD`). A day without rows is absent. */
+export type DayCounts = ReadonlyMap<string, number>;
+
 /**
- * The UTC days a run replaces, oldest first: from the day before `latest`
- * (the latest day in BigQuery) through `today`, or from `first` (the first
- * event's day) when BigQuery holds nothing. None when there is no event.
+ * The UTC days a run replaces, oldest first. They run from the day before
+ * the latest day BigQuery holds through `today`, or from the first event's
+ * day when BigQuery holds nothing, and add every day whose `events` count
+ * differs from its `partitions` count. A day that loaded short thus stays
+ * in every run until it matches, however many later days load. None when
+ * there is no event and BigQuery holds nothing.
  */
 export const exportDays = ({
-    latest,
-    first,
     today,
+    events,
+    partitions,
 }: {
-    latest: string | null;
-    first: string | null;
     today: string;
+    events: DayCounts;
+    partitions: DayCounts;
 }): string[] => {
-    const start = latest !== null ? dayOf(Date.parse(latest) - DAY_MS) : first;
+    const latest = [...partitions.keys()].sort().at(-1);
+    const start =
+        latest !== undefined ? dayOf(Date.parse(latest) - DAY_MS) : [...events.keys()].sort()[0];
+    const days = new Set<string>();
 
-    if (start === null) {
-        return [];
+    if (start !== undefined) {
+        for (let ms = Date.parse(start); ms <= Date.parse(today); ms += DAY_MS) {
+            days.add(dayOf(ms));
+        }
     }
 
-    const days: string[] = [];
-
-    for (let ms = Date.parse(start); ms <= Date.parse(today); ms += DAY_MS) {
-        days.push(dayOf(ms));
+    for (const day of new Set([...events.keys(), ...partitions.keys()])) {
+        if ((events.get(day) ?? 0) !== (partitions.get(day) ?? 0)) {
+            days.add(day);
+        }
     }
 
-    return days;
+    return [...days].sort();
 };
 
 /** The website database the rows come from. */
 export type EventSource = {
-    /** The UTC day of the first event, null when the table is empty. */
-    firstDay(): Promise<string | null>;
+    /** The events per UTC day of `created_at`, over the whole table. */
+    dayCounts(): Promise<DayCounts>;
     /** One UTC day's events in id order, a page at a time. */
     readDay(day: string): AsyncIterable<SourceEvent[]>;
 };
@@ -320,10 +332,8 @@ export type EventSource = {
 export type Warehouse = {
     /** Creates the table when it does not exist. */
     ensureTable(): Promise<void>;
-    /** The latest UTC day the table holds, null when it is empty. */
-    latestDay(): Promise<string | null>;
-    /** The rows the day's partition holds. */
-    dayRows(day: string): Promise<number>;
+    /** The rows each day's partition holds. */
+    dayCounts(): Promise<DayCounts>;
     /** Replaces the day's partition with the rows in `file`, one JSON object a line. */
     replaceDay(day: string, file: string): Promise<void>;
 };
@@ -331,12 +341,16 @@ export type Warehouse = {
 const PAGE_SIZE = 5_000;
 
 export const pgEventSource = (pool: Pool, pageSize = PAGE_SIZE): EventSource => ({
-    async firstDay() {
-        const { rows } = await pool.query<{ day: string | null }>(
-            `SELECT to_char(min(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day FROM event`,
+    async dayCounts() {
+        // The UTC date of created_at, the same day readDay's range bounds.
+        const { rows } = await pool.query<{ day: string; n: number }>(
+            `SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+                    count(*)::int AS n
+             FROM event
+             GROUP BY 1`,
         );
 
-        return rows[0]?.day ?? null;
+        return new Map(rows.map(({ day, n }) => [day, n]));
     },
     async *readDay(day) {
         const from = `${day}T00:00:00Z`;
@@ -389,25 +403,19 @@ export const bigQueryWarehouse = ({
                 });
             }
         },
-        async latestDay() {
+        async dayCounts() {
+            // An exact count that sees every finished load. It scans the
+            // created_at column alone, 8 bytes a row. DATE() takes the UTC
+            // date, the day the table partitions on.
             const [rows] = await bigquery.query({
-                query: `SELECT FORMAT_DATE('%F', DATE(MAX(created_at))) AS day
-                        FROM \`${projectId}.${datasetId}.event\``,
-            });
-
-            return (rows[0]?.day as string | null | undefined) ?? null;
-        },
-        async dayRows(day) {
-            // A range on created_at, so the query scans the one partition.
-            const [rows] = await bigquery.query({
-                query: `SELECT COUNT(*) AS n
+                query: `SELECT FORMAT_DATE('%F', DATE(created_at)) AS day, COUNT(*) AS n
                         FROM \`${projectId}.${datasetId}.event\`
-                        WHERE created_at >= TIMESTAMP(@day)
-                          AND created_at < TIMESTAMP_ADD(TIMESTAMP(@day), INTERVAL 1 DAY)`,
-                params: { day },
+                        GROUP BY day`,
             });
 
-            return Number(rows[0]?.n ?? 0);
+            return new Map(
+                rows.map((row: { day: string; n: unknown }) => [row.day, Number(row.n)]),
+            );
         },
         async replaceDay(day, file) {
             // Resolves once the load job is done, and throws if it failed.
@@ -423,15 +431,22 @@ export const bigQueryWarehouse = ({
 };
 
 /**
- * One export run. Each day is written to `scratchFile` page by page, so
- * memory holds one page. The partition is replaced only once the day has
- * been read to its end, and only when the read holds at least as many rows
- * as the partition. Nothing deletes `event` rows, so a shorter read is a
- * fault (a wrong database, an emptied table, a lagging replica). Such a day
- * keeps its partition, the other days still load, and the run then rejects
- * naming each short day with both counts. A day that reads no rows and
- * holds none loads nothing. Logs each day as it is done, names the day in
- * a failure, and returns the rows read per day.
+ * One export run over the days exportDays picks. Each day is written to
+ * `scratchFile` page by page, so memory holds one page. The partition is
+ * replaced only once the day has been read to its end, and only when the
+ * read holds at least as many rows as the partition. Nothing deletes
+ * `event` rows, and they carry no foreign key to `user`, so deleting an
+ * account leaves them. A shorter read is therefore a fault (a wrong
+ * database, an emptied table, a lagging replica). Such a day keeps its
+ * partition, the other days still load, and the run then rejects naming
+ * each short day with both counts. Its counts still differ, so the day
+ * stays in every later run and fails it until it matches. A read below
+ * the day's source count from `source.dayCounts()` is a fault too,
+ * whatever the partition holds: the day loads by the rule above, and the
+ * run then rejects naming it with both counts. Today's count is taken
+ * before its read, so a read above the count is normal. A day that reads
+ * no rows and holds none loads nothing. Logs each day as it is done,
+ * names the day in a failure, and returns the rows read per day.
  */
 export const runExport = async ({
     source,
@@ -450,20 +465,17 @@ export const runExport = async ({
 }): Promise<{ day: string; rows: number }[]> => {
     await warehouse.ensureTable();
 
-    const latest = await warehouse.latestDay();
-    const days = exportDays({
-        latest,
-        first: latest === null ? await source.firstDay() : null,
-        today,
-    });
+    const [events, partitions] = await Promise.all([source.dayCounts(), warehouse.dayCounts()]);
+    const days = exportDays({ today, events, partitions });
     const read: { day: string; rows: number }[] = [];
     const short: string[] = [];
-    const shortDays = () => `read fewer rows than BigQuery holds: ${short.join(', ')}`;
+    const shortDays = () => `short days: ${short.join(', ')}`;
 
     try {
         for (const day of days) {
             let rows = 0;
-            let held = 0;
+            const held = partitions.get(day) ?? 0;
+            const counted = events.get(day) ?? 0;
 
             try {
                 await fs.writeFile(scratchFile, '');
@@ -475,8 +487,6 @@ export const runExport = async ({
                     rows += page.length;
                 }
 
-                held = await warehouse.dayRows(day);
-
                 if (rows > 0 && rows >= held) {
                     await warehouse.replaceDay(day, scratchFile);
                 }
@@ -487,11 +497,21 @@ export const runExport = async ({
                 throw new Error(`event export ${day}: ${message}${earlier}`, { cause: error });
             }
 
+            const belowSource = rows < counted ? `, source counts ${counted}` : '';
+
             if (rows < held) {
-                log(`${day}: ${rows} events read, partition holds ${held}, partition kept`);
-                short.push(`${day} read ${rows} of ${held}`);
+                log(
+                    `${day}: ${rows} events read, partition holds ${held}, partition kept${belowSource}`,
+                );
+                short.push(`${day} read ${rows} of ${held} in BigQuery`);
             } else {
-                log(rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`);
+                log(
+                    `${rows > 0 ? `${day}: ${rows} events loaded` : `${day}: no events`}${belowSource}`,
+                );
+            }
+
+            if (rows < counted) {
+                short.push(`${day} read ${rows} of source ${counted}`);
             }
             read.push({ day, rows });
         }

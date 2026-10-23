@@ -167,27 +167,49 @@ test('exportRow exports a share id as its digest, so share events still join', (
     assert.deepEqual(refused.props, {});
 });
 
+const counts = (days: Record<string, number>) => new Map(Object.entries(days));
+
 test('exportDays replaces from the day before the latest loaded day through today', async (t) => {
     const cases: [string, Parameters<typeof exportDays>[0], string[]][] = [
-        ['no event at all', { latest: null, first: null, today: '2026-10-23' }, []],
+        [
+            'no event at all',
+            { today: '2026-10-23', events: counts({}), partitions: counts({}) },
+            [],
+        ],
         [
             'an empty table backfills from the first event',
-            { latest: null, first: '2026-10-21', today: '2026-10-23' },
+            {
+                today: '2026-10-23',
+                events: counts({ '2026-10-21': 2, '2026-10-23': 1 }),
+                partitions: counts({}),
+            },
             ['2026-10-21', '2026-10-22', '2026-10-23'],
         ],
         [
             'a run after an outage reloads every missed day',
-            { latest: '2026-10-19', first: null, today: '2026-10-22' },
+            {
+                today: '2026-10-22',
+                events: counts({ '2026-10-19': 4, '2026-10-21': 1 }),
+                partitions: counts({ '2026-10-19': 3 }),
+            },
             ['2026-10-18', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22'],
         ],
         [
             'a run on a loaded day',
-            { latest: '2026-10-23', first: null, today: '2026-10-23' },
+            {
+                today: '2026-10-23',
+                events: counts({ '2026-10-20': 2, '2026-10-23': 1 }),
+                partitions: counts({ '2026-10-20': 2, '2026-10-23': 1 }),
+            },
             ['2026-10-22', '2026-10-23'],
         ],
         [
             'a month boundary',
-            { latest: '2026-03-01', first: null, today: '2026-03-01' },
+            {
+                today: '2026-03-01',
+                events: counts({ '2026-03-01': 1 }),
+                partitions: counts({ '2026-03-01': 1 }),
+            },
             ['2026-02-28', '2026-03-01'],
         ],
     ];
@@ -199,6 +221,50 @@ test('exportDays replaces from the day before the latest loaded day through toda
     }
 });
 
+test('exportDays adds every earlier day whose counts differ', async (t) => {
+    const loaded = { '2026-10-20': 3, '2026-10-21': 1, '2026-10-22': 2, '2026-10-23': 1 };
+    const cases: [string, Record<string, number>, Record<string, number>, string[]][] = [
+        [
+            'a short day stays once later days load',
+            { '2026-10-19': 5, ...loaded },
+            { '2026-10-19': 4, ...loaded },
+            ['2026-10-19', '2026-10-22', '2026-10-23'],
+        ],
+        [
+            'a day missing from BigQuery',
+            { '2026-10-15': 2, ...loaded },
+            loaded,
+            ['2026-10-15', '2026-10-22', '2026-10-23'],
+        ],
+        [
+            'a day BigQuery holds more of than the source',
+            { '2026-10-17': 2, ...loaded },
+            { '2026-10-17': 3, ...loaded },
+            ['2026-10-17', '2026-10-22', '2026-10-23'],
+        ],
+        [
+            'a day BigQuery holds that the source lacks',
+            loaded,
+            { '2026-10-16': 1, ...loaded },
+            ['2026-10-16', '2026-10-22', '2026-10-23'],
+        ],
+        ['days that match', loaded, loaded, ['2026-10-22', '2026-10-23']],
+    ];
+
+    for (const [label, events, partitions, days] of cases) {
+        await t.test(label, () => {
+            assert.deepEqual(
+                exportDays({
+                    today: '2026-10-23',
+                    events: counts(events),
+                    partitions: counts(partitions),
+                }),
+                days,
+            );
+        });
+    }
+});
+
 /** An in-memory warehouse. Each partition is the parsed lines of its last load. */
 const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
     const calls: string[] = [];
@@ -206,11 +272,8 @@ const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
         async ensureTable() {
             calls.push('ensureTable');
         },
-        async latestDay() {
-            return [...partitions.keys()].sort().at(-1) ?? null;
-        },
-        async dayRows(day) {
-            return partitions.get(day)?.length ?? 0;
+        async dayCounts() {
+            return new Map([...partitions].map(([day, rows]) => [day, rows.length]));
         },
         async replaceDay(day, file) {
             calls.push(`replace ${day}`);
@@ -231,9 +294,16 @@ const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
 const fakeSource = (
     pages: Record<string, SourceEvent[][]>,
     failOn: string | null = null,
+    // Source counts that differ from the rows a day reads.
+    counted: Record<string, number> = {},
 ): EventSource => ({
-    async firstDay() {
-        return Object.keys(pages).sort()[0] ?? null;
+    async dayCounts() {
+        return new Map([
+            ...Object.entries(pages).map(
+                ([day, dayPages]) => [day, dayPages.flat().length] as const,
+            ),
+            ...Object.entries(counted),
+        ]);
     },
     async *readDay(day) {
         for (const page of pages[day] ?? []) {
@@ -347,6 +417,109 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
         ['2026-10-21', '2026-10-22', '2026-10-23'],
     );
     await assert.rejects(fs.access(scratchFile));
+});
+
+test('runExport rechecks an earlier day whose counts differ until they match', async (t) => {
+    const at = (id: number, day: string) =>
+        sourceEvent({ id, createdAt: `${day}T10:00:00.000000Z` });
+    const later: Record<string, SourceEvent[][]> = Object.fromEntries(
+        ['2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23'].map((day, i) => [
+            day,
+            [[at(20 + i, day)]],
+        ]),
+    );
+    const cases: {
+        label: string;
+        held: unknown[] | null;
+        read: SourceEvent[];
+        counted?: number;
+        calls: string[];
+        short: RegExp | null;
+    }[] = [
+        {
+            label: 'a short 19 October fails the run after 23 October loads',
+            held: [{ id: 1 }, { id: 2 }],
+            read: [at(2, '2026-10-19')],
+            calls: ['ensureTable', 'replace 2026-10-22', 'replace 2026-10-23'],
+            short: /2026-10-19\D+1\D+2\b/,
+        },
+        {
+            label: 'a 19 October missing from BigQuery loads after 23 October loads',
+            held: null,
+            read: [at(1, '2026-10-19'), at(2, '2026-10-19')],
+            calls: [
+                'ensureTable',
+                'replace 2026-10-19',
+                'replace 2026-10-22',
+                'replace 2026-10-23',
+            ],
+            short: null,
+        },
+        {
+            label: 'a 19 October that reads none of its 3 events fails the run',
+            held: null,
+            read: [],
+            counted: 3,
+            calls: ['ensureTable', 'replace 2026-10-22', 'replace 2026-10-23'],
+            short: /2026-10-19\D+0\D+3\b/,
+        },
+        {
+            label: 'a 19 October that reads 2 of its 3 events loads and fails the run',
+            held: [{ id: 1 }],
+            read: [at(1, '2026-10-19'), at(2, '2026-10-19')],
+            counted: 3,
+            calls: [
+                'ensureTable',
+                'replace 2026-10-19',
+                'replace 2026-10-22',
+                'replace 2026-10-23',
+            ],
+            short: /2026-10-19\D+2\D+3\b/,
+        },
+    ];
+
+    for (const { label, held, read, counted, calls: expectedCalls, short } of cases) {
+        await t.test(label, async () => {
+            const partitions = new Map<string, unknown[]>(
+                Object.entries(later).map(([day, dayPages]) => [
+                    day,
+                    dayPages.flat().map((row) => exportRow(row, KEY)),
+                ]),
+            );
+
+            if (held !== null) {
+                partitions.set('2026-10-19', held);
+            }
+
+            const { warehouse, calls } = fakeWarehouse(partitions);
+            const run = runExport({
+                source: fakeSource(
+                    { '2026-10-19': [read], ...later },
+                    null,
+                    counted === undefined ? {} : { '2026-10-19': counted },
+                ),
+                warehouse,
+                hmacKey: KEY,
+                today: '2026-10-23',
+                scratchFile: scratch(),
+                log: () => undefined,
+            });
+
+            if (short === null) {
+                await run;
+            } else {
+                await assert.rejects(run, short);
+            }
+
+            assert.deepEqual(calls, expectedCalls);
+            assert.deepEqual(
+                partitions.get('2026-10-19'),
+                calls.includes('replace 2026-10-19')
+                    ? read.map((row) => exportRow(row, KEY))
+                    : (held ?? undefined),
+            );
+        });
+    }
 });
 
 test('runExport names the day it failed on and leaves that day as it was', async () => {
@@ -528,6 +701,9 @@ test('the export reader reads every row of each UTC day and no other table', asy
         expected.map(({ count }) => count),
         [1, 3, 1, 3],
     );
-    assert.equal(await source.firstDay(), '2026-10-19');
+    assert.deepEqual(
+        await source.dayCounts(),
+        new Map(expected.map(({ day, count }) => [day, count])),
+    );
     await assert.rejects(readerPool.query('select 1 from feedback'), /permission denied/);
 });
