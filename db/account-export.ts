@@ -6,11 +6,11 @@ import type { Pool } from 'pg';
 /**
  * The account export, which the event export Job (db/export-events.ts) runs
  * before the event export: copies the Postgres view `account_daily`
- * (migration 0020) into the BigQuery table `account_daily`, replacing the
- * whole table in one load job, so a failed run leaves the previous table.
- * The view counts new accounts per UTC day and organisation, for every day
- * from the first account's through yesterday's, and the rows hold no email
- * address or user id.
+ * (migrations 0020 and 0021) into the BigQuery table `account_daily`,
+ * replacing the whole table in one load job, so a failed run leaves the
+ * previous table. The view counts new accounts per UTC day and
+ * organisation, for every day from the first account's through
+ * yesterday's, and the rows hold no email address or user id.
  */
 
 /** One `account_daily` row. */
@@ -45,15 +45,48 @@ export const ACCOUNT_SCHEMA: TableField[] = [
     },
 ];
 
-/** Every row of the view, oldest day first. */
-export const readAccountDaily = async (pool: Pool): Promise<AccountRow[]> => {
-    const { rows } = await pool.query<AccountRow>(
-        `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
-         FROM account_daily
-         ORDER BY day, organisation`,
-    );
+/**
+ * What one read of the view returns. `accounts` and `webmailDomains` come
+ * from the view `account_daily_source`: whether the user table holds any
+ * account, and whether `webmail_domain` holds any domain.
+ */
+export type AccountRead = {
+    rows: AccountRow[];
+    accounts: boolean;
+    webmailDomains: boolean;
+};
 
-    return rows;
+/**
+ * Every row of the view, oldest day first, with the facts that say why it
+ * holds none. One read-only transaction reads both, so they share one
+ * `now()` and one snapshot.
+ */
+export const readAccountDaily = async (pool: Pool): Promise<AccountRead> => {
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+
+        const { rows } = await client.query<AccountRow>(
+            `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
+             FROM account_daily
+             ORDER BY day, organisation`,
+        );
+        const { rows: source } = await client.query<{
+            accounts: boolean;
+            webmailDomains: boolean;
+        }>(`SELECT accounts, webmail_domains AS "webmailDomains" FROM account_daily_source`);
+
+        await client.query('COMMIT');
+        client.release();
+
+        return { rows, ...source[0]! };
+    } catch (error) {
+        // A failed query leaves the transaction open, and a release with
+        // the error discards the connection and the transaction with it.
+        client.release(error instanceof Error ? error : true);
+        throw error;
+    }
 };
 
 /** Replaces the BigQuery table `account_daily` with the rows in `file`, one JSON object a line. */
@@ -74,10 +107,13 @@ export const bigQueryAccountTable =
 
 /**
  * One account export run. Writes every row to `scratchFile`, then replaces
- * the table with it. The view holds a row for every day since the first
- * account's, so a read with no rows is a fault (a wrong database, an
- * emptied table) unless every account is from today, and rejects with the
- * table kept.
+ * the table with it. The view holds a row for every day from the first
+ * account's through yesterday's while `webmail_domain` holds any domain,
+ * so a read with no rows means one of three things. While `webmail_domain`
+ * is empty, or while the user table holds no account (a wrong database, an
+ * emptied table), the run rejects with the table kept. When every account
+ * is from today, the table is replaced with no rows, so an account deleted
+ * since the last run, and the organisation it named, leave the export.
  */
 export const runAccountExport = async ({
     read,
@@ -85,15 +121,21 @@ export const runAccountExport = async ({
     scratchFile,
     log,
 }: {
-    read: () => Promise<AccountRow[]>;
+    read: () => Promise<AccountRead>;
     replace: (file: string) => Promise<void>;
     scratchFile: string;
     log: (line: string) => void;
 }): Promise<void> => {
-    const rows = await read();
+    const { rows, accounts, webmailDomains } = await read();
 
-    if (rows.length === 0) {
-        throw new Error('account export: account_daily read no rows, table kept');
+    if (rows.length === 0 && !webmailDomains) {
+        throw new Error(
+            'account export: account_daily read no rows, webmail_domain is empty, table kept',
+        );
+    }
+
+    if (rows.length === 0 && !accounts) {
+        throw new Error('account export: account_daily read no accounts, table kept');
     }
 
     try {

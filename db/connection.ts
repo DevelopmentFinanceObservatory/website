@@ -97,9 +97,8 @@ type EnvLike = Record<string, string | undefined>;
 /**
  * Non-throwing check for which pool kind the runtime should build. Shared
  * by `resolveRuntimeConnection` below (full validation, safe to throw --
- * called from instrumentation.ts's `register()` at server start) and
- * src/lib/db/index.ts (must never throw at import, including during
- * `next build` with no env at all).
+ * called at process start) and src/lib/db/index.ts (must never throw at
+ * import, including during `next build` with no env at all).
  */
 export function isCloudSqlConfigured(env: EnvLike = process.env): boolean {
     return !!env.WEBSITE_DB_INSTANCE_CONNECTION_NAME;
@@ -107,10 +106,11 @@ export function isCloudSqlConfigured(env: EnvLike = process.env): boolean {
 
 /**
  * Resolves which database the runtime pool should connect to. Cloud SQL
- * (deployed services) wins whenever its instance var is set; a local
- * Postgres via DATABASE_URL is the fallback. Throws a clear error naming
- * the missing variable(s) otherwise -- safe here because this is only
- * called from instrumentation.ts's `register()` at server start, never at
+ * (deployed services and the event export Job) wins whenever its instance
+ * var is set; a local Postgres via DATABASE_URL is the fallback. Throws a
+ * clear error naming the missing variable(s) otherwise -- safe here
+ * because its callers, instrumentation.ts's `register()` at server start
+ * and db/export-events.ts's `main()`, call it at process start, never at
  * module import time.
  */
 export function resolveRuntimeConnection(env: EnvLike = process.env): RuntimeConnection {
@@ -145,10 +145,11 @@ export function resolveRuntimeConnection(env: EnvLike = process.env): RuntimeCon
  * Opens one `Connector` for the runtime pool's lifetime and resolves the
  * stream factory pg's `Pool` uses to dial Cloud SQL over PSC with IAM auth
  * -- the same path `buildMigratorPool` uses for the migrator role, just
- * authenticating as the runtime IAM database user instead. Called once
- * from instrumentation.ts's `register()`; the `Connector` is intentionally
- * never closed here (SIGTERM exits the process, same as the migrator's
- * shutdown note above but there is no request to await first).
+ * authenticating as the connection's IAM database user instead. Called
+ * once per process, from instrumentation.ts's `register()` and from
+ * db/export-events.ts's `main()`. The caller owns the `Connector`: the
+ * server leaves it open until SIGTERM exits the process, and the export
+ * Job closes it after ending its pool.
  */
 export async function connectCloudSqlRuntime(
     connection: CloudSqlRuntimeConnection,
@@ -170,18 +171,19 @@ interface CloudSqlRuntimeGlobal {
 const globalForCloudSqlRuntime = globalThis as unknown as CloudSqlRuntimeGlobal;
 
 /**
- * Stores the stream factory `instrumentation.ts`'s `register()` resolved,
- * so src/lib/db/index.ts's pool can read it lazily at connect time without
- * importing the connector itself (index.ts must stay import-safe during
- * `next build`, and the connector is only ever constructed once, in
- * `register()`).
+ * Stores the stream factory `connectCloudSqlRuntime` resolved, so a pool
+ * from `buildRuntimePool` (src/lib/db/index.ts's, the export Job's) can
+ * read it lazily at connect time without importing the connector itself
+ * (index.ts must stay import-safe during `next build`, and the connector
+ * is constructed once per process, in `register()` or the export Job's
+ * `main()`).
  */
 export function setCloudSqlRuntimeStream(stream: DriverOptions['stream']): void {
     globalForCloudSqlRuntime.cloudSqlRuntimeStream = stream;
 }
 
 /**
- * Reads the stream factory `register()` stored. Throws only when actually
+ * Reads the stored stream factory. Throws only when actually
  * called -- i.e. when pg attempts a connection -- never at import, so a
  * misconfigured deploy still builds and starts; it just fails the first
  * request that touches the database.
@@ -200,23 +202,23 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
 }
 
 /**
- * Builds the one runtime `pg.Pool`, shared by src/lib/db/index.ts and
- * db/test/runtime-pool.test.ts so both exercise the same construction
- * path. Picks the pool kind from `isCloudSqlConfigured` alone -- a
+ * Builds a runtime `pg.Pool`, shared by src/lib/db/index.ts, the export
+ * Job (db/export-events.ts) and db/test/runtime-pool.test.ts so all
+ * exercise the same construction path. Picks the pool kind from `isCloudSqlConfigured` alone -- a
  * non-throwing check -- rather than the full, throwing
  * `resolveRuntimeConnection`, because this must never throw when called at
  * module import time (`next build` runs with no DB env at all):
  *
  * - Cloud SQL: `stream` is a function pg only calls when it actually opens
- *   a connection. It reads the factory `instrumentation.ts`'s `register()`
- *   stored on globalThis at that point, not now -- a clear error surfaces
- *   on the first connection attempt if `register()` never ran, not at
- *   import or build.
+ *   a connection. It reads the factory `setCloudSqlRuntimeStream` stored
+ *   on globalThis at that point, not now -- a clear error surfaces on the
+ *   first connection attempt if none was stored, not at import or build.
  * - URL: `connectionString` may be `undefined` here (no env at build); pg
  *   only fails to connect with it later.
  *
- * `sizing` overrides the pool size and adds timeouts, for a pool that must
- * give up fast (src/lib/db/index.ts's counter pool).
+ * `sizing` overrides the pool size and adds timeouts: src/lib/db/index.ts's
+ * counter pool gives up fast, and the export Job's pool holds one
+ * connection with a 5-minute `statement_timeout`.
  *
  * Every pool gets an `'error'` listener. pg-pool emits `'error'` when an
  * idle client fails (Cloud SQL or a proxy dropping the connection), and an
