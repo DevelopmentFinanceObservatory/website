@@ -248,9 +248,9 @@ const fakeBigQuery = () => {
     const bigquery = {
         dataset: (dataset: string) => ({
             table: (table: string) => ({
-                load: async (file: string, metadata: Record<string, unknown>) => {
+                createLoadJob: async (file: string, metadata: Record<string, unknown>) => {
                     loads.push({ table: `${dataset}.${table}`, file, metadata });
-                    return [{}];
+                    return [{ promise: async () => [{}] }];
                 },
             }),
         }),
@@ -277,6 +277,35 @@ test('bigQueryAccountTable replaces the whole table in one load', async () => {
     ]);
     assert.ok(ACCOUNT_SCHEMA.every((field) => field.description));
 });
+
+test(
+    'readAccountDaily fails a read that hangs past its bound and destroys its client',
+    { timeout: 5_000 },
+    async () => {
+        const queries: string[] = [];
+        const released: unknown[] = [];
+        const pool = {
+            connect: async () => ({
+                // BEGIN answers, and the view's read never does, as over a stalled tunnel.
+                query: (text: string) => {
+                    queries.push(text.trim().split(/\s/, 1)[0]!);
+                    return text.startsWith('BEGIN')
+                        ? Promise.resolve({ rows: [] })
+                        : new Promise(() => undefined);
+                },
+                release: (error?: unknown) => released.push(error),
+            }),
+        } as unknown as Pool;
+
+        await assert.rejects(
+            readAccountDaily(pool, { timeoutMs: 20 }),
+            /account read ran past 0.02 s/,
+        );
+        assert.deepEqual(queries, ['BEGIN', 'SELECT']);
+        assert.equal(released.length, 1);
+        assert.ok(released[0] instanceof Error);
+    },
+);
 
 const ROWS: AccountRow[] = [
     { day: '2026-10-20', organisation: 'Personal email', accounts: 4 },

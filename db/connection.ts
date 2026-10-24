@@ -194,7 +194,8 @@ export function getCloudSqlRuntimeStream(): DriverOptions['stream'] {
     if (!stream) {
         throw new Error(
             "Cloud SQL stream factory is not set on globalThis -- instrumentation.ts's " +
-                'register() must run before the runtime pool connects.',
+                "register() or, in the export Job, db/export-events.ts's main() must set it " +
+                'before the runtime pool connects.',
         );
     }
 

@@ -14,9 +14,13 @@ import {
     exportDays,
     type ExportField,
     exportRow,
+    type ExportRow,
     exportRules,
     pgEventSource,
     runExport,
+    ROW_SHAPE,
+    ROW_SHAPE_VERSION,
+    runAndExit,
     runExportJob,
     type SourceEvent,
     type Warehouse,
@@ -96,6 +100,19 @@ test('exportRow keeps allow-listed props that pass their rule and drops the rest
 test('exportRules changes with the HMAC key', () => {
     assert.equal(exportRules(KEY), RULES);
     assert.notEqual(exportRules('rotated-key'), RULES);
+});
+
+test('exportRules changes with the SQL that reads a day', () => {
+    // The reader test checks that readDay sends ROW_SHAPE.READ_DAY_SQL.
+    const sql = ROW_SHAPE.READ_DAY_SQL;
+
+    ROW_SHAPE.READ_DAY_SQL = `${sql} `;
+
+    try {
+        assert.notEqual(exportRules(KEY), RULES);
+    } finally {
+        ROW_SHAPE.READ_DAY_SQL = sql;
+    }
 });
 
 test('exportRow drops a value its rule refuses', async (t) => {
@@ -184,6 +201,111 @@ test('exportRow exports a share id as its digest, so share events still join', (
     assert.deepEqual(refused.props, {});
 });
 
+// A fixed sample that reaches every rule and branch of exportRow.
+const GOLDEN_SAMPLE: SourceEvent[] = [
+    sourceEvent({
+        id: 1,
+        name: 'search.query',
+        userId: 'user-1',
+        visitorId: 'visitor-1',
+        page: '/data?q=aid%20to%20kenya#top',
+        props: {
+            searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+            post: 0,
+            source: 'typed',
+            edited: false,
+            ms: 812,
+            outcome: 'definite',
+            kind: 'resolution',
+            query: 'aid to kenya',
+            engineMs: -1,
+            traceId: 'two words',
+        },
+    }),
+    sourceEvent({
+        id: 2,
+        createdAt: '2026-10-21T00:00:00.000001Z',
+        name: 'share.open',
+        visitorId: 'visitor-2',
+        page: '/s/aB3dE5fG7h/download/preparing',
+        props: { shareId: 'aB3dE5fG7h', kind: 'card', mode: 'snapshot', host: 'example.org' },
+    }),
+    sourceEvent({ id: 3, name: 'feedback.submit', page: '/a page', props: { kind: 'widget' } }),
+    sourceEvent({ id: 4, name: 'retired.event', page: '/embed/x1', props: { kind: 'card' } }),
+];
+
+// Each ROW_SHAPE_VERSION's rows for GOLDEN_SAMPLE under KEY, with rules
+// `r`. A change to the rows adds the next version with its rows, and an
+// entry never changes.
+const GOLDEN_ROWS: Record<number, ExportRow[]> = {
+    1: [
+        {
+            id: 1,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'search.query',
+            page: '/data',
+            signed_in: true,
+            visitor_hash: '77a3c0b044582bfb514a3a3ad8521316635e2256261861c83b7498ee2e420f65',
+            user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
+            props: {
+                searchId: '0b7c6f1e-2d4a-4f7e-9a51-3c1d2e4f5a6b',
+                post: 0,
+                source: 'typed',
+                edited: false,
+                ms: 812,
+                outcome: 'definite',
+                kind: 'resolution',
+            },
+            export_rules: 'r',
+        },
+        {
+            id: 2,
+            created_at: '2026-10-21T00:00:00.000001Z',
+            name: 'share.open',
+            page: '/s/:id/download/preparing',
+            signed_in: false,
+            visitor_hash: '656d62821b3df7e629e0d8af562ac6a21302f71aeed8fa018b46c7fa00d54f88',
+            user_hash: null,
+            props: {
+                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+                kind: 'card',
+                mode: 'snapshot',
+                host: 'example.org',
+            },
+            export_rules: 'r',
+        },
+        {
+            id: 3,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'feedback.submit',
+            page: null,
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            props: { kind: 'widget' },
+            export_rules: 'r',
+        },
+        {
+            id: 4,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'retired.event',
+            page: '/embed/:id',
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            props: {},
+            export_rules: 'r',
+        },
+    ],
+};
+
+test('exportRow writes the rows pinned to the current ROW_SHAPE_VERSION', () => {
+    assert.deepEqual(
+        GOLDEN_SAMPLE.map((row) => exportRow(row, KEY, 'r')),
+        GOLDEN_ROWS[ROW_SHAPE_VERSION],
+    );
+});
+
 const counts = (days: Record<string, number>) => new Map(Object.entries(days));
 
 test('exportDays replaces from the day before the latest loaded day through today', async (t) => {
@@ -228,7 +350,17 @@ test('exportDays replaces from the day before the latest loaded day through toda
                 partitions: counts({ '2026-10-17': 1, '2026-10-20': 2, '2026-10-23': 1 }),
                 stale: new Set(['2026-10-17', '2026-10-20']),
             },
-            ['2026-10-17', '2026-10-20', '2026-10-22', '2026-10-23'],
+            ['2026-10-22', '2026-10-23', '2026-10-17', '2026-10-20'],
+        ],
+        [
+            'a backlog of stale and mismatched days, oldest first, after the window',
+            {
+                today: '2026-10-23',
+                events: counts({ '2026-10-15': 2, '2026-10-20': 2, '2026-10-23': 1 }),
+                partitions: counts({ '2026-10-15': 1, '2026-10-20': 2, '2026-10-23': 1 }),
+                stale: new Set(['2026-10-20', '2026-10-12', '2026-10-23']),
+            },
+            ['2026-10-22', '2026-10-23', '2026-10-12', '2026-10-15', '2026-10-20'],
         ],
         [
             'a month boundary',
@@ -255,25 +387,25 @@ test('exportDays adds every earlier day whose counts differ', async (t) => {
             'a short day stays once later days load',
             { '2026-10-19': 5, ...loaded },
             { '2026-10-19': 4, ...loaded },
-            ['2026-10-19', '2026-10-22', '2026-10-23'],
+            ['2026-10-22', '2026-10-23', '2026-10-19'],
         ],
         [
             'a day missing from BigQuery',
             { '2026-10-15': 2, ...loaded },
             loaded,
-            ['2026-10-15', '2026-10-22', '2026-10-23'],
+            ['2026-10-22', '2026-10-23', '2026-10-15'],
         ],
         [
             'a day BigQuery holds more of than the source',
             { '2026-10-17': 2, ...loaded },
             { '2026-10-17': 3, ...loaded },
-            ['2026-10-17', '2026-10-22', '2026-10-23'],
+            ['2026-10-22', '2026-10-23', '2026-10-17'],
         ],
         [
             'a day BigQuery holds that the source lacks',
             loaded,
             { '2026-10-16': 1, ...loaded },
-            ['2026-10-16', '2026-10-22', '2026-10-23'],
+            ['2026-10-22', '2026-10-23', '2026-10-16'],
         ],
         ['days that match', loaded, loaded, ['2026-10-22', '2026-10-23']],
     ];
@@ -306,19 +438,19 @@ const fakeWarehouse = (
         async ensureTable() {
             calls.push('ensureTable');
         },
-        async dayCounts() {
-            return new Map([...partitions].map(([day, rows]) => [day, rows.length]));
-        },
-        async staleDays(rules) {
-            return new Set(
-                [...partitions]
-                    .filter(([, rows]) =>
-                        rows.some(
-                            (row) => (row as { export_rules?: string }).export_rules !== rules,
-                        ),
-                    )
-                    .map(([day]) => day),
-            );
+        async days(rules) {
+            return {
+                counts: new Map([...partitions].map(([day, rows]) => [day, rows.length])),
+                stale: new Set(
+                    [...partitions]
+                        .filter(([, rows]) =>
+                            rows.some(
+                                (row) => (row as { export_rules?: string }).export_rules !== rules,
+                            ),
+                        )
+                        .map(([day]) => day),
+                ),
+            };
         },
         async replaceDay(day, file) {
             if (failLoad.includes(day)) {
@@ -502,9 +634,9 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             read: [at(1, '2026-10-19'), at(2, '2026-10-19')],
             calls: [
                 'ensureTable',
-                'replace 2026-10-19',
                 'replace 2026-10-22',
                 'replace 2026-10-23',
+                'replace 2026-10-19',
             ],
             short: null,
         },
@@ -523,9 +655,9 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             counted: { '2026-10-19': 3 },
             calls: [
                 'ensureTable',
-                'replace 2026-10-19',
                 'replace 2026-10-22',
                 'replace 2026-10-23',
+                'replace 2026-10-19',
             ],
             short: /2026-10-19\D+2\D+3\b/,
         },
@@ -671,9 +803,9 @@ test('runExport reloads the days holding rows under other rules, and retries a f
     );
     assert.deepEqual(first.calls, [
         'ensureTable',
-        'replace 2026-10-20',
         'replace 2026-10-21',
         'replace 2026-10-22',
+        'replace 2026-10-20',
     ]);
     assert.deepEqual(partitions.get('2026-10-20'), [exportRow(at(3, '2026-10-20'), KEY, RULES)]);
 
@@ -689,9 +821,9 @@ test('runExport reloads the days holding rows under other rules, and retries a f
     });
     assert.deepEqual(second.calls, [
         'ensureTable',
-        'replace 2026-10-18',
         'replace 2026-10-21',
         'replace 2026-10-22',
+        'replace 2026-10-18',
     ]);
 });
 
@@ -726,54 +858,111 @@ test('runExport names the short days beside a failed day', async () => {
     assert.equal(partitions.get('2026-10-21')?.length, 2);
 });
 
-test('runExport starts no new day past its budget and fails naming the days it did not reach', async () => {
-    const partitions = new Map<string, unknown[]>();
-    const { warehouse, calls } = fakeWarehouse(partitions, { failLoad: ['2026-10-21'] });
-    const clock = { ms: 0 };
-    const source = fakeSource({
-        '2026-10-20': [[sourceEvent({ id: 1, createdAt: '2026-10-20T08:00:00.000000Z' })]],
-        '2026-10-21': [[sourceEvent({ id: 2, createdAt: '2026-10-21T08:00:00.000000Z' })]],
-        '2026-10-22': [[sourceEvent({ id: 3, createdAt: '2026-10-22T08:00:00.000000Z' })]],
-        '2026-10-23': [[sourceEvent({ id: 4, createdAt: '2026-10-23T08:00:00.000000Z' })]],
-    });
+test(
+    'a page query that hangs past the read deadline fails its day, destroys its client, and the next day loads',
+    { timeout: 5_000 },
+    async () => {
+        const partitions = new Map<string, unknown[]>();
+        const { warehouse, calls } = fakeWarehouse(partitions);
+        // Each client's queries by text, and what it was released with.
+        const clients: { queries: string[]; released?: Error | 'reused' }[] = [];
+        const pool = {
+            options: {},
+            connect: async () => {
+                const client: (typeof clients)[number] = { queries: [] };
+                clients.push(client);
 
-    await assert.rejects(
-        runExport({
-            source: {
-                ...source,
-                // Each day read costs 4 minutes of the injected clock.
-                readDay: (day) => {
-                    clock.ms += 240_000;
-                    return source.readDay(day);
-                },
+                return {
+                    query: (text: string, values?: unknown[]) => {
+                        client.queries.push(text.split(/\s/, 1)[0]!);
+
+                        if (text.includes('count(*)')) {
+                            return Promise.resolve({
+                                rows: [
+                                    { day: '2026-10-21', n: 1 },
+                                    { day: '2026-10-22', n: 1 },
+                                ],
+                            });
+                        }
+
+                        if (text !== ROW_SHAPE.READ_DAY_SQL) {
+                            return Promise.resolve({ rows: [] });
+                        }
+
+                        // 21 October's page never answers, as over a stalled tunnel.
+                        return String(values?.[0]).startsWith('2026-10-21')
+                            ? new Promise(() => undefined)
+                            : Promise.resolve({
+                                  rows: [
+                                      sourceEvent({
+                                          id: 2,
+                                          createdAt: '2026-10-22T08:00:00.000000Z',
+                                      }),
+                                  ],
+                              });
+                    },
+                    release: (error?: Error) => {
+                        client.released = error ?? 'reused';
+                    },
+                };
             },
-            warehouse,
-            hmacKey: KEY,
-            today: '2026-10-23',
-            scratchFile: scratch(),
-            log: () => undefined,
-            budgetMs: 600_000,
-            now: () => clock.ms,
-        }),
-        (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.match(error.message, /2026-10-21: load job failed/);
-            assert.match(error.message, /not reached\D+10 minute budget: 2026-10-23$/);
-            return true;
-        },
-    );
+        } as unknown as Pool;
+        const started = Date.now();
 
-    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-20', 'replace 2026-10-22']);
-});
+        await assert.rejects(
+            runExport({
+                source: pgEventSource(pool, { readMs: 50, graceMs: 20 }),
+                warehouse,
+                hmacKey: KEY,
+                today: '2026-10-22',
+                scratchFile: scratch(),
+                log: () => undefined,
+            }),
+            /event export 2026-10-21: read ran past its 0.05 s deadline$/,
+        );
+
+        // The 50 ms deadline plus the 20 ms grace, with room for a slow machine.
+        assert.ok(Date.now() - started < 1_000);
+        // The day counts' client, then each day's.
+        assert.deepEqual(clients[0], { queries: ['SELECT'], released: 'reused' });
+        assert.deepEqual(clients[1]?.queries, ['SELECT']);
+        assert.ok(clients[1]?.released instanceof Error);
+        assert.deepEqual(clients[2], { queries: ['SELECT'], released: 'reused' });
+        assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-22']);
+    },
+);
+
+test(
+    'pgEventSource dayCounts fails a count that hangs past its bound and destroys its client',
+    { timeout: 5_000 },
+    async () => {
+        const released: unknown[] = [];
+        const pool = {
+            options: { statement_timeout: 20 },
+            connect: async () => ({
+                // The count never answers, as over a stalled tunnel.
+                query: () => new Promise(() => undefined),
+                release: (error?: unknown) => released.push(error),
+            }),
+        } as unknown as Pool;
+
+        await assert.rejects(
+            pgEventSource(pool, { graceMs: 20 }).dayCounts(),
+            /day counts ran past 0.04 s/,
+        );
+        assert.equal(released.length, 1);
+        assert.ok(released[0] instanceof Error);
+    },
+);
 
 test('bigQueryWarehouse loads a day into its partition and lets the schema gain columns', async () => {
     const loads: { table: string; file: string; metadata: Record<string, unknown> }[] = [];
-    const fake = {
+    const bigquery = {
         dataset: () => ({
             table: (table: string) => ({
-                load: async (file: string, metadata: Record<string, unknown>) => {
+                createLoadJob: async (file: string, metadata: Record<string, unknown>) => {
                     loads.push({ table, file, metadata });
-                    return [{}];
+                    return [{ promise: async () => [{}] }];
                 },
             }),
         }),
@@ -781,7 +970,7 @@ test('bigQueryWarehouse loads a day into its partition and lets the schema gain 
     const warehouse = bigQueryWarehouse({
         projectId: 'p',
         datasetId: 'd',
-        bigquery: fake as unknown as BigQuery,
+        bigquery: bigquery as unknown as BigQuery,
     });
 
     await warehouse.replaceDay('2026-10-22', '/tmp/day.ndjson');
@@ -801,7 +990,7 @@ test('EXPORT_SCHEMA admits a REQUIRED column only among those the table was crea
     assert.ok(required && nullable);
 });
 
-test('bigQueryWarehouse creates the table, finds stale days and counts from partition metadata', async (t) => {
+test('bigQueryWarehouse creates the table, and counts rows and finds stale days per day', async (t) => {
     const fakeTable = ({ exists, fields = [] }: { exists: boolean; fields?: string[] }) => {
         const calls: unknown[] = [];
         const table = {
@@ -817,15 +1006,15 @@ test('bigQueryWarehouse creates the table, finds stale days and counts from part
                 },
             }),
             query: async ({ query, params }: { query: string; params?: unknown }) => {
-                calls.push(['query', params]);
-                return query.includes('PARTITIONS')
-                    ? [
-                          [
-                              { partition_id: '20261021', total_rows: 3 },
-                              { partition_id: '20261022', total_rows: '1434' },
-                          ],
-                      ]
-                    : [[{ day: '2026-10-21' }]];
+                // The table itself, so each count is exact.
+                calls.push(['query', query.match(/FROM `([^`]+)`/)?.[1], params]);
+                const stale = fields.includes('export_rules') ? [true, false] : [true, true];
+                return [
+                    [
+                        { day: '2026-10-21', n: 3, stale: stale[0] },
+                        { day: '2026-10-22', n: 1434, stale: stale[1] },
+                    ],
+                ];
             },
         };
         const warehouse = bigQueryWarehouse({
@@ -836,6 +1025,10 @@ test('bigQueryWarehouse creates the table, finds stale days and counts from part
 
         return { warehouse, calls };
     };
+    const counts = new Map([
+        ['2026-10-21', 3],
+        ['2026-10-22', 1434],
+    ]);
 
     await t.test('a missing table is created with the schema', async () => {
         const { warehouse, calls } = fakeTable({ exists: false });
@@ -844,18 +1037,24 @@ test('bigQueryWarehouse creates the table, finds stale days and counts from part
         assert.deepEqual(calls, [['createTable', 'event', { fields: EXPORT_SCHEMA }]]);
     });
 
-    await t.test('staleDays queries the days whose rows carry other rules', async () => {
+    await t.test('one query over the table counts each day and finds the stale ones', async () => {
         const { warehouse, calls } = fakeTable({ exists: true, fields: ['id', 'export_rules'] });
 
-        assert.deepEqual(await warehouse.staleDays('r1'), new Set(['2026-10-21']));
-        assert.deepEqual(calls, [['query', { rules: 'r1' }]]);
+        assert.deepEqual(await warehouse.days('r1'), {
+            counts,
+            stale: new Set(['2026-10-21']),
+        });
+        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
     });
 
     await t.test('a table without export_rules is stale on every day', async () => {
-        assert.deepEqual(
-            await fakeTable({ exists: true, fields: ['id'] }).warehouse.staleDays('r1'),
-            new Set(['2026-10-21', '2026-10-22']),
-        );
+        const { warehouse, calls } = fakeTable({ exists: true, fields: ['id'] });
+
+        assert.deepEqual(await warehouse.days('r1'), {
+            counts,
+            stale: new Set(['2026-10-21', '2026-10-22']),
+        });
+        assert.deepEqual(calls, [['query', 'p.d.event', { rules: 'r1' }]]);
     });
 
     await t.test('a query over the bytes-billed cap fails naming the cap', async () => {
@@ -875,45 +1074,156 @@ test('bigQueryWarehouse creates the table, finds stale days and counts from part
             bigquery: bigquery as unknown as BigQuery,
         });
 
-        await assert.rejects(warehouse.staleDays('r1'), /maximumBytesBilled cap/);
-    });
-
-    await t.test('dayCounts reads each partition_id as its day', async () => {
-        assert.deepEqual(
-            await fakeTable({ exists: true }).warehouse.dayCounts(),
-            new Map([
-                ['2026-10-21', 3],
-                ['2026-10-22', 1434],
-            ]),
-        );
+        await assert.rejects(warehouse.days('r1'), /maximumBytesBilled cap/);
     });
 });
 
-test('runExportJob runs the event export after a failed account export, then fails', async () => {
-    const ran: string[] = [];
-    const logged: unknown[] = [];
+test('runExportJob runs the event export after a failed account export, then fails with every failure', async (t) => {
     const accountError = new Error('bigquery down');
-
-    await assert.rejects(
-        runExportJob({
-            exportAccounts: async () => {
-                ran.push('accounts');
-                throw accountError;
+    const eventError = new Error('event export 2026-10-21: load job failed');
+    const cases: [string, () => Promise<void>, RegExp, number][] = [
+        [
+            'the account export alone',
+            async () => undefined,
+            /^account export failed: bigquery down$/,
+            1,
+        ],
+        [
+            'both',
+            async () => {
+                throw eventError;
             },
-            exportEvents: async () => {
-                ran.push('events');
-            },
-            logError: (error) => logged.push(error),
-        }),
-        (error: unknown) => {
-            assert.ok(error instanceof Error);
-            assert.equal(error.cause, accountError);
-            return true;
-        },
-    );
+            /^account export failed: bigquery down; event export 2026-10-21: load job failed$/,
+            2,
+        ],
+    ];
 
-    assert.deepEqual(ran, ['accounts', 'events']);
-    assert.deepEqual(logged, [accountError]);
+    for (const [label, exportEvents, message, causes] of cases) {
+        await t.test(label, async () => {
+            const ran: string[] = [];
+
+            await assert.rejects(
+                runExportJob({
+                    exportAccounts: async () => {
+                        ran.push('accounts');
+                        throw accountError;
+                    },
+                    exportEvents: async () => {
+                        ran.push('events');
+                        await exportEvents();
+                    },
+                }),
+                (error: unknown) => {
+                    assert.ok(error instanceof Error);
+                    assert.match(error.message, message);
+                    assert.equal(error instanceof AggregateError ? error.errors.length : 1, causes);
+                    return true;
+                },
+            );
+            assert.deepEqual(ran, ['accounts', 'events']);
+        });
+    }
+});
+
+test(
+    'runAndExit stops a run hung past its deadline, names the phase and exits 1',
+    { timeout: 5_000 },
+    async (t) => {
+        const hang = () => new Promise<never>(() => undefined);
+        const source = fakeSource({
+            '2026-10-21': [[sourceEvent({ id: 1, createdAt: '2026-10-21T08:00:00.000000Z' })]],
+            '2026-10-22': [[sourceEvent({ id: 2 })]],
+            '2026-10-23': [[sourceEvent({ id: 3 })]],
+        });
+        const cases: [string, Parameters<typeof runAndExit>[0], RegExp][] = [
+            [
+                'a hung account export',
+                (progress) =>
+                    runExportJob({
+                        exportAccounts: hang,
+                        exportEvents: async () => undefined,
+                        progress,
+                    }),
+                /deadline, 0.02 s from its start, during the account export$/,
+            ],
+            [
+                "a hung day's read after a failed day",
+                (progress) =>
+                    runExport({
+                        source: {
+                            ...source,
+                            async *readDay(day) {
+                                if (day === '2026-10-22') {
+                                    yield await hang();
+                                }
+
+                                yield* source.readDay(day);
+                            },
+                        },
+                        warehouse: fakeWarehouse(new Map(), { failLoad: ['2026-10-21'] }).warehouse,
+                        hmacKey: KEY,
+                        today: '2026-10-23',
+                        scratchFile: scratch(),
+                        log: () => undefined,
+                        progress,
+                    }),
+                /during the read of 2026-10-22; days not started: 2026-10-23; 2026-10-21: load job failed$/,
+            ],
+        ];
+
+        for (const [label, main, message] of cases) {
+            // A run with no watchdog never ends, so each case is bounded.
+            await t.test(label, { timeout: 2_000 }, async () => {
+                const exits: number[] = [];
+                const logged: unknown[] = [];
+
+                await runAndExit(main, {
+                    deadlineMs: 20,
+                    exit: (code) => exits.push(code),
+                    logError: (error) => logged.push(error),
+                });
+
+                assert.deepEqual(exits, [1]);
+                assert.equal(logged.length, 1);
+                assert.match(String((logged[0] as Error).message), message);
+            });
+        }
+    },
+);
+
+test('runAndExit exits with 0 after main resolves, and with 1 after one line naming the phase when it rejects', async (t) => {
+    const failure = new Error('table check failed');
+    const cases: [string, Parameters<typeof runAndExit>[0], number, string[]][] = [
+        ['a run that succeeds', async () => undefined, 0, []],
+        [
+            'a run that fails',
+            async (progress) => {
+                progress.phase = 'the event table check and day counts';
+                throw failure;
+            },
+            1,
+            ['export Job failed during the event table check and day counts: table check failed'],
+        ],
+    ];
+
+    for (const [label, main, code, messages] of cases) {
+        await t.test(label, async () => {
+            const exits: number[] = [];
+            const logged: Error[] = [];
+
+            await runAndExit(main, {
+                exit: (exitCode) => exits.push(exitCode),
+                logError: (error) => logged.push(error as Error),
+            });
+
+            assert.deepEqual(exits, [code]);
+            assert.deepEqual(
+                logged.map(({ message }) => message),
+                messages,
+            );
+            assert.ok(logged.every(({ cause }) => cause === failure));
+        });
+    }
 });
 
 /**
@@ -922,7 +1232,7 @@ test('runExportJob runs the event export after a failed account export, then fai
  * against Postgres's own per-day count. The page size is 2, so every day
  * spans pages, rows sit either side of a midnight, three rows share one
  * time across a page boundary, and each row's props hold a key no event
- * keeps.
+ * keeps. A short page ends a day's read without a further query.
  */
 test('the export reader reads every row of each UTC day and no other table', async (t) => {
     const database = await createTestDatabase();
@@ -974,7 +1284,26 @@ test('the export reader reads every row of each UTC day and no other table', asy
         max: 1,
     });
 
-    const source = pgEventSource(readerPool, 2);
+    const pool = readerPool;
+    // The page queries readDay sends, by text.
+    const pageQueries: string[] = [];
+    const source = pgEventSource(
+        {
+            options: pool.options,
+            connect: async () => {
+                const client = await pool.connect();
+
+                return {
+                    query: (text: string, values?: unknown[]) => {
+                        pageQueries.push(text);
+                        return client.query(text, values);
+                    },
+                    release: (error?: Error) => client.release(error),
+                };
+            },
+        } as unknown as Pool,
+        { pageSize: 2 },
+    );
     const { rows: expected } = await admin.query<{ day: string; count: number }>(
         `select to_char(date_trunc('day', created_at at time zone 'UTC'), 'YYYY-MM-DD') as day,
                 count(*)::int as count
@@ -997,6 +1326,10 @@ test('the export reader reads every row of each UTC day and no other table', asy
     }
 
     assert.deepEqual(read, expected);
+    // Days of 1, 3, 1 and 3 rows take 1, 2, 1 and 2 page queries, each the
+    // SQL the export_rules digest covers.
+    assert.equal(pageQueries.length, 6);
+    assert.ok(pageQueries.every((text) => text === ROW_SHAPE.READ_DAY_SQL));
     // The three rows that share 05:00 on 22 October span two pages.
     assert.deepEqual(ids, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(

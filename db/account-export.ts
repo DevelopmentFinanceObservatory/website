@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 
 import type { BigQuery, TableField } from '@google-cloud/bigquery';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+
+import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './bounded.ts';
 
 /**
  * The account export, which the event export Job (db/export-events.ts) runs
@@ -56,53 +58,76 @@ export type AccountRead = {
     webmailDomains: boolean;
 };
 
+const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+
+    const { rows } = await client.query<AccountRow>(
+        `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
+         FROM account_daily
+         ORDER BY day, organisation`,
+    );
+    const { rows: source } = await client.query<{
+        accounts: boolean;
+        webmailDomains: boolean;
+    }>(`SELECT accounts, webmail_domains AS "webmailDomains" FROM account_daily_source`);
+
+    await client.query('COMMIT');
+
+    return { rows, ...source[0]! };
+};
+
+/** How long the account read may take: its two queries at the statement timeout, then the grace. */
+const ACCOUNT_READ_MS = 2 * STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS;
+
 /**
  * Every row of the view, oldest day first, with the facts that say why it
  * holds none. One read-only transaction reads both, so they share one
- * `now()` and one snapshot.
+ * `now()` and one snapshot. A read still running at `timeoutMs`, as over a
+ * connection that stalls past Postgres's timeout, throws.
  */
-export const readAccountDaily = async (pool: Pool): Promise<AccountRead> => {
+export const readAccountDaily = async (
+    pool: Pool,
+    { timeoutMs = ACCOUNT_READ_MS }: { timeoutMs?: number } = {},
+): Promise<AccountRead> => {
     const client = await pool.connect();
 
     try {
-        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-
-        const { rows } = await client.query<AccountRow>(
-            `SELECT to_char(day, 'YYYY-MM-DD') AS day, organisation, accounts
-             FROM account_daily
-             ORDER BY day, organisation`,
+        const read = await callWithin(
+            readInTransaction(client),
+            timeoutMs,
+            () => new Error(`account read ran past ${timeoutMs / 1000} s`),
         );
-        const { rows: source } = await client.query<{
-            accounts: boolean;
-            webmailDomains: boolean;
-        }>(`SELECT accounts, webmail_domains AS "webmailDomains" FROM account_daily_source`);
 
-        await client.query('COMMIT');
         client.release();
 
-        return { rows, ...source[0]! };
+        return read;
     } catch (error) {
-        // A failed query leaves the transaction open, and a release with
-        // the error discards the connection and the transaction with it.
+        // A failed or timed-out read leaves the transaction open, or a query
+        // in flight, and a release with the error discards the connection
+        // with it.
         client.release(error instanceof Error ? error : true);
         throw error;
     }
 };
 
-/** Replaces the BigQuery table `account_daily` with the rows in `file`, one JSON object a line. */
+/**
+ * Replaces the BigQuery table `account_daily` with the rows in `file`, one
+ * JSON object a line. A load past its timeout is cancelled and throws
+ * (loadWithin).
+ */
 export const bigQueryAccountTable =
     ({ datasetId, bigquery }: { datasetId: string; bigquery: BigQuery }) =>
     async (file: string): Promise<void> => {
-        // Creates the table when it does not exist. Resolves once the load
-        // job is done, and throws if it failed.
-        await bigquery
-            .dataset(datasetId)
-            .table('account_daily')
-            .load(file, {
+        // Creates the table when it does not exist.
+        await loadWithin({
+            table: bigquery.dataset(datasetId).table('account_daily'),
+            file,
+            metadata: {
                 sourceFormat: 'NEWLINE_DELIMITED_JSON',
                 writeDisposition: 'WRITE_TRUNCATE',
                 schema: { fields: ACCOUNT_SCHEMA },
-            });
+            },
+        });
     };
 
 /**

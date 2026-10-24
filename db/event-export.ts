@@ -20,6 +20,14 @@ import type {
 import type { SearchShareMode } from '../src/lib/search/searchShareRequest.ts';
 import type { DeclinedReason, Known, ResolveResponse } from '../src/lib/search/types.ts';
 
+import {
+    callWithin,
+    loadWithin,
+    QUERY_GRACE_MS,
+    STATEMENT_TIMEOUT_MS,
+    TIMED_OUT,
+    within,
+} from './bounded.ts';
 import { requiredEnv } from './connection.ts';
 
 /**
@@ -292,25 +300,52 @@ const exportPage = (page: string | null): string | null => {
 
 // The version of the code that shapes a row: digest, passes, exportProps,
 // exportPage and exportRow. Bumped by hand with any change to them, so the
-// change reaches every day (exportRules).
-const ROW_SHAPE_VERSION = 1;
+// change reaches every day (exportRules). READ_DAY_SQL, which shapes the
+// rows they take, enters the digest as its text and needs no bump. The
+// golden rows in db/test/event-export.test.ts pin each version's output.
+export const ROW_SHAPE_VERSION = 1;
 
 /**
- * The digest every row carries in `export_rules`: SHA-256 over PROP_RULES,
- * TOKEN, PAGE_PATH, SHARE_PATH, EXPORT_SCHEMA, ROW_SHAPE_VERSION and an
- * HMAC of a fixed string under `hmacKey`, so a new key changes it too. A
- * day holding a row with another digest, or none, reloads (exportDays).
+ * One page of a UTC day's events (pgEventSource's readDay), with
+ * `created_at` as UTC text to the microsecond, the id as a JSON number, and
+ * `props` cut to the keys in $4. Parameters: the page's lower bound, the
+ * next midnight, the id of the last row read, the kept prop keys, the page
+ * size.
+ */
+const READ_DAY_SQL = `SELECT id::float8 AS id,
+        to_char(created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+        name, user_id AS "userId", visitor_id AS "visitorId", page,
+        coalesce((SELECT jsonb_object_agg(key, value)
+                  FROM jsonb_each(props)
+                  WHERE key = ANY($4::text[])), '{}') AS props
+ FROM event
+ WHERE created_at >= $1 AND created_at < $2 AND (created_at, id) > ($1, $3)
+ ORDER BY created_at, id
+ LIMIT $5`;
+
+/** What shapes a row, the input exportRules digests. */
+export const ROW_SHAPE = {
+    PROP_RULES,
+    TOKEN: TOKEN.source,
+    PAGE_PATH: PAGE_PATH.source,
+    SHARE_PATH: SHARE_PATH.source,
+    EXPORT_SCHEMA,
+    READ_DAY_SQL,
+    ROW_SHAPE_VERSION,
+};
+
+/**
+ * The digest every row carries in `export_rules`: SHA-256 over ROW_SHAPE
+ * and an HMAC of a fixed string under `hmacKey`, so a new key changes it
+ * too. A day holding a row with another digest, or none, reloads
+ * (exportDays).
  */
 export const exportRules = (hmacKey: string): string =>
     createHash('sha256')
         .update(
             JSON.stringify({
-                PROP_RULES,
-                TOKEN: TOKEN.source,
-                PAGE_PATH: PAGE_PATH.source,
-                SHARE_PATH: SHARE_PATH.source,
-                EXPORT_SCHEMA,
-                ROW_SHAPE_VERSION,
+                ...ROW_SHAPE,
                 key: createHmac('sha256', hmacKey).update('export_rules').digest('hex'),
             }),
         )
@@ -338,18 +373,37 @@ export const exportRow = (row: SourceEvent, hmacKey: string, rules: string): Exp
 
 const DAY_MS = 86_400_000;
 
+/** How long one BigQuery query may run. */
+const BIGQUERY_TIMEOUT_MS = 2 * 60_000;
+
 /**
- * How long a run starts new days for, 20 minutes, well inside the Job's
- * 1800 s task timeout, so a run that has many days each waiting out a
- * statement timeout ends and reports before the platform kills it.
+ * How long the Job waits for one BigQuery call, a query or a table read or
+ * create, before it gives up on it: BIGQUERY_TIMEOUT_MS plus the grace.
  */
-export const EXPORT_BUDGET_MS = 20 * 60_000;
+const BIGQUERY_CALL_MS = BIGQUERY_TIMEOUT_MS + QUERY_GRACE_MS;
+
+/** The `connectionTimeoutMillis` of the export Job's pool (db/export-events.ts). */
+export const CONNECTION_TIMEOUT_MS = 30_000;
+
+/**
+ * How long the page queries of one day may take together, from the day's
+ * start, so the wait for its connection counts too. A read past it fails
+ * its day (pgEventSource).
+ */
+const DAY_READ_MS = 5 * 60_000;
+
+/**
+ * When runAndExit stops a Job run, 28 minutes from its start, two before
+ * the Job's 1800 s task timeout, so its report is out before the platform
+ * kills it. The days not reached by then wait for the next hourly run.
+ */
+export const JOB_DEADLINE_MS = 28 * 60_000;
 
 /** The most one BigQuery query may bill (`maximumBytesBilled`). */
 const MAX_BYTES_BILLED = 1e9;
 
-/** What the staleDays scan bills per event row, from its two columns. */
-const STALE_BYTES_PER_ROW = 74;
+/** What the days query bills per event row, from its two columns. */
+const DAYS_BYTES_PER_ROW = 74;
 
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
@@ -357,13 +411,15 @@ const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 export type DayCounts = ReadonlyMap<string, number>;
 
 /**
- * The UTC days a run replaces, oldest first. They run from the day before
- * the latest day BigQuery holds through `today`, or from the first event's
- * day when BigQuery holds nothing, and add every day whose `events` count
- * differs from its `partitions` count and every `stale` day. A day that
- * loaded short, or failed to load under new rules, thus stays in every run
- * until it matches, however many later days load. None when there is no
- * event and BigQuery holds nothing.
+ * The UTC days a run replaces. First the window, oldest first: the day
+ * before the latest day BigQuery holds through `today`, or the first
+ * event's day through `today` when BigQuery holds nothing. Then the
+ * backlog, oldest first: every other day whose `events` count differs from
+ * its `partitions` count, and every other `stale` day. A day that loaded
+ * short, or failed to load under new rules, thus stays in every run until
+ * it matches, however many later days load, and a long backlog runs only
+ * after yesterday and today. None when there is no event and BigQuery holds
+ * nothing.
  */
 export const exportDays = ({
     today,
@@ -379,21 +435,20 @@ export const exportDays = ({
     const latest = [...partitions.keys()].sort().at(-1);
     const start =
         latest !== undefined ? dayOf(Date.parse(latest) - DAY_MS) : [...events.keys()].sort()[0];
-    const days = new Set<string>(stale);
+    const window = new Set<string>();
 
     if (start !== undefined) {
         for (let ms = Date.parse(start); ms <= Date.parse(today); ms += DAY_MS) {
-            days.add(dayOf(ms));
+            window.add(dayOf(ms));
         }
     }
 
-    for (const day of new Set([...events.keys(), ...partitions.keys()])) {
-        if ((events.get(day) ?? 0) !== (partitions.get(day) ?? 0)) {
-            days.add(day);
-        }
-    }
+    const mismatched = [...new Set([...events.keys(), ...partitions.keys()])].filter(
+        (day) => (events.get(day) ?? 0) !== (partitions.get(day) ?? 0),
+    );
+    const backlog = new Set([...stale, ...mismatched].filter((day) => !window.has(day)));
 
-    return [...days].sort();
+    return [...window, ...[...backlog].sort()];
 };
 
 /** The website database the rows come from. */
@@ -408,27 +463,57 @@ export type EventSource = {
 export type Warehouse = {
     /** Creates the table when it does not exist. */
     ensureTable(): Promise<void>;
-    /** The rows each day's partition holds. */
-    dayCounts(): Promise<DayCounts>;
-    /** The days holding a row whose `export_rules` is not `rules`, NULL included. */
-    staleDays(rules: string): Promise<ReadonlySet<string>>;
+    /**
+     * The rows each day's partition holds, and the days holding a row whose
+     * `export_rules` is not `rules`, NULL included.
+     */
+    days(rules: string): Promise<{ counts: DayCounts; stale: ReadonlySet<string> }>;
     /** Replaces the day's partition with the rows in `file`, one JSON object a line. */
     replaceDay(day: string, file: string): Promise<void>;
 };
 
 const PAGE_SIZE = 5_000;
 
-export const pgEventSource = (pool: Pool, pageSize = PAGE_SIZE): EventSource => ({
+/**
+ * The event table over `pool`. Each query has a client-side bound: the day
+ * counts the pool's `statement_timeout` plus `graceMs`, and a day's pages
+ * together `readMs` plus `graceMs`. A client whose query runs past its
+ * bound is still mid-query, so it is released with the error, which
+ * destroys it.
+ */
+export const pgEventSource = (
+    pool: Pool,
+    {
+        pageSize = PAGE_SIZE,
+        readMs = DAY_READ_MS,
+        graceMs = QUERY_GRACE_MS,
+    }: { pageSize?: number; readMs?: number; graceMs?: number } = {},
+): EventSource => ({
     async dayCounts() {
-        // The UTC date of created_at, the same day readDay's range bounds.
-        const { rows } = await pool.query<{ day: string; n: number }>(
-            `SELECT to_char(day, 'YYYY-MM-DD') AS day, n
-             FROM (SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*)::int AS n
-                   FROM event
-                   GROUP BY 1) AS days`,
-        );
+        const client = await pool.connect();
+        const boundMs = Number(pool.options.statement_timeout ?? STATEMENT_TIMEOUT_MS) + graceMs;
 
-        return new Map(rows.map(({ day, n }) => [day, n]));
+        try {
+            // The UTC date of created_at, the same day readDay's range bounds.
+            const { rows } = await callWithin(
+                client.query<{ day: string; n: number }>(
+                    `SELECT to_char(day, 'YYYY-MM-DD') AS day, n
+                     FROM (SELECT (created_at AT TIME ZONE 'UTC')::date AS day, count(*)::int AS n
+                           FROM event
+                           GROUP BY 1) AS days`,
+                ),
+                boundMs,
+                () => new Error(`the day counts ran past ${boundMs / 1000} s`),
+            );
+
+            client.release();
+
+            return new Map(rows.map(({ day, n }) => [day, n]));
+        } catch (error) {
+            // Destroyed, since a query that ran past its bound is still in flight.
+            client.release(error instanceof Error ? error : true);
+            throw error;
+        }
     },
     async *readDay(day) {
         const to = `${dayOf(Date.parse(day) + DAY_MS)}T00:00:00Z`;
@@ -437,29 +522,40 @@ export const pgEventSource = (pool: Pool, pageSize = PAGE_SIZE): EventSource => 
         // (midnight, 0) precedes the day's first row. `props` keeps only the keys some
         // event keeps; exportProps picks each event's own.
         let after = { createdAt: `${day}T00:00:00Z`, id: 0 };
+        const deadline = Date.now() + readMs;
+        const client = await pool.connect();
+        let failure: Error | undefined;
 
-        for (;;) {
-            const { rows } = await pool.query<SourceEvent>(
-                `SELECT id::float8 AS id,
-                        to_char(created_at AT TIME ZONE 'UTC',
-                                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
-                        name, user_id AS "userId", visitor_id AS "visitorId", page,
-                        coalesce((SELECT jsonb_object_agg(key, value)
-                                  FROM jsonb_each(props)
-                                  WHERE key = ANY($4::text[])), '{}') AS props
-                 FROM event
-                 WHERE created_at >= $1 AND created_at < $2 AND (created_at, id) > ($1, $3)
-                 ORDER BY created_at, id
-                 LIMIT $5`,
-                [after.createdAt, to, after.id, KEPT_PROPS, pageSize],
-            );
+        try {
+            for (;;) {
+                const { rows } = await callWithin(
+                    client.query<SourceEvent>(READ_DAY_SQL, [
+                        after.createdAt,
+                        to,
+                        after.id,
+                        KEPT_PROPS,
+                        pageSize,
+                    ]),
+                    deadline - Date.now() + graceMs,
+                    () => new Error(`read ran past its ${readMs / 1000} s deadline`),
+                );
 
-            if (rows.length === 0) {
-                return;
+                if (rows.length > 0) {
+                    yield rows;
+                }
+
+                // A short page is the day's last.
+                if (rows.length < pageSize) {
+                    return;
+                }
+
+                after = rows[rows.length - 1]!;
             }
-
-            yield rows;
-            after = rows[rows.length - 1]!;
+        } catch (error) {
+            failure = error instanceof Error ? error : new Error(String(error));
+            throw error;
+        } finally {
+            client.release(failure);
         }
     },
 });
@@ -476,23 +572,34 @@ export const bigQueryWarehouse = ({
     const dataset = bigquery.dataset(datasetId);
     const table = dataset.table('event');
 
-    // A query job fails past 1 GB billed or past 2 minutes, well inside the
-    // Job's 1800 s task timeout, and the run fails with it.
+    // A query job fails past 1 GB billed or past BIGQUERY_TIMEOUT_MS, and
+    // the run fails with it.
+    // The client takes no overall timeout for a call, so the Job stops
+    // waiting at BIGQUERY_CALL_MS.
+    const call = <T>(work: Promise<T>): Promise<T> =>
+        callWithin(
+            work,
+            BIGQUERY_CALL_MS,
+            () => new Error(`a BigQuery call ran past ${BIGQUERY_CALL_MS / 1000} s`),
+        );
+
     const query = async <T>(sql: string, params?: Record<string, string>): Promise<T[]> => {
         try {
-            const [rows] = await bigquery.query({
-                query: sql,
-                params,
-                maximumBytesBilled: String(MAX_BYTES_BILLED),
-                jobTimeoutMs: 120_000,
-            });
+            const [rows] = await call(
+                bigquery.query({
+                    query: sql,
+                    params,
+                    maximumBytesBilled: String(MAX_BYTES_BILLED),
+                    jobTimeoutMs: BIGQUERY_TIMEOUT_MS,
+                }),
+            );
 
             return rows;
         } catch (error) {
             if (/bytes billed/i.test(messageOf(error))) {
                 throw new Error(
                     `a query exceeded the ${MAX_BYTES_BILLED / 1e9} GB maximumBytesBilled cap, ` +
-                        `which staleDays reaches at about ${(MAX_BYTES_BILLED / STALE_BYTES_PER_ROW / 1e6).toFixed(1)} million event rows`,
+                        `which the days query reaches at about ${(MAX_BYTES_BILLED / DAYS_BYTES_PER_ROW / 1e6).toFixed(1)} million event rows`,
                     { cause: error },
                 );
             }
@@ -501,69 +608,57 @@ export const bigQueryWarehouse = ({
         }
     };
 
-    const dayCounts = async (): Promise<DayCounts> => {
-        // Each partition's row count from the table's metadata, which a
-        // finished load updates, so the query scans no table data.
-        // partition_id is the UTC day as YYYYMMDD, and the pattern leaves
-        // out the special partitions such as __NULL__.
-        const rows = await query<{ partition_id: string; total_rows: unknown }>(
-            `SELECT partition_id, total_rows
-             FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.PARTITIONS\`
-             WHERE table_name = 'event' AND total_rows > 0
-               AND REGEXP_CONTAINS(partition_id, r'^\\d{8}$')`,
-        );
-
-        return new Map(
-            rows.map((row) => [
-                row.partition_id.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3'),
-                Number(row.total_rows),
-            ]),
-        );
-    };
-
     return {
         async ensureTable() {
-            const [exists] = await table.exists();
+            const [exists] = await call(table.exists());
 
             if (!exists) {
-                await dataset.createTable('event', {
-                    schema: { fields: EXPORT_SCHEMA },
-                    timePartitioning: { type: 'DAY', field: 'created_at' },
-                });
+                await call(
+                    dataset.createTable('event', {
+                        schema: { fields: EXPORT_SCHEMA },
+                        timePartitioning: { type: 'DAY', field: 'created_at' },
+                    }),
+                );
             }
         },
-        dayCounts,
-        async staleDays(rules) {
-            const [metadata] = await table.getMetadata();
+        async days(rules) {
+            const [metadata] = await call(table.getMetadata());
             const fields: TableField[] = metadata.schema?.fields ?? [];
-
             // A table created without the column holds no digest, so every
             // day with rows is stale. The next load adds the column.
-            if (!fields.some((field) => field.name === 'export_rules')) {
-                return new Set((await dayCounts()).keys());
-            }
+            const stale = fields.some((field) => field.name === 'export_rules')
+                ? 'LOGICAL_OR(export_rules IS DISTINCT FROM @rules)'
+                : 'TRUE';
 
-            // Scans the created_at and export_rules columns, about
-            // STALE_BYTES_PER_ROW bytes a row.
-            const rows = await query<{ day: string }>(
-                `SELECT FORMAT_DATE('%F', DATE(created_at)) AS day
+            // Counts the rows themselves, one group per partition day, and
+            // scans the created_at and export_rules columns, about
+            // DAYS_BYTES_PER_ROW bytes a row.
+            const rows = await query<{ day: string; n: unknown; stale: boolean }>(
+                `SELECT FORMAT_DATE('%F', DATE(created_at)) AS day,
+                        COUNT(*) AS n,
+                        ${stale} AS stale
                  FROM \`${projectId}.${datasetId}.event\`
-                 WHERE export_rules IS DISTINCT FROM @rules
                  GROUP BY day`,
                 { rules },
             );
 
-            return new Set(rows.map(({ day }) => day));
+            return {
+                counts: new Map(rows.map(({ day, n }) => [day, Number(n)])),
+                stale: new Set(rows.filter((row) => row.stale).map(({ day }) => day)),
+            };
         },
         async replaceDay(day, file) {
-            // Resolves once the load job is done, and throws if it failed.
-            await dataset.table(`event$${day.replaceAll('-', '')}`).load(file, {
-                sourceFormat: 'NEWLINE_DELIMITED_JSON',
-                writeDisposition: 'WRITE_TRUNCATE',
-                schema: { fields: EXPORT_SCHEMA },
-                // A NULLABLE column added to EXPORT_SCHEMA reaches the table
-                // on the next load (ExportField).
-                schemaUpdateOptions: ['ALLOW_FIELD_ADDITION'],
+            await loadWithin({
+                table: dataset.table(`event$${day.replaceAll('-', '')}`),
+                file,
+                metadata: {
+                    sourceFormat: 'NEWLINE_DELIMITED_JSON',
+                    writeDisposition: 'WRITE_TRUNCATE',
+                    schema: { fields: EXPORT_SCHEMA },
+                    // A NULLABLE column added to EXPORT_SCHEMA reaches the
+                    // table on the next load (ExportField).
+                    schemaUpdateOptions: ['ALLOW_FIELD_ADDITION'],
+                },
             });
         },
     };
@@ -571,6 +666,20 @@ export const bigQueryWarehouse = ({
 
 const messageOf = (error: unknown): string =>
     error instanceof Error ? error.message : String(error);
+
+/**
+ * What a Job run has in flight, which runAndExit names when its deadline
+ * fires: the phase, the days the event export has yet to start, and the
+ * faults so far.
+ */
+export type JobProgress = {
+    phase: string;
+    unstarted: readonly string[];
+    /** The failed and short days so far, as the run's report names them. */
+    faults: () => readonly string[];
+};
+
+const jobProgress = (): JobProgress => ({ phase: 'the start', unstarted: [], faults: () => [] });
 
 /**
  * One export run over the days exportDays picks. Each day is written to
@@ -593,11 +702,10 @@ const messageOf = (error: unknown): string =>
  * days still load, and the run then rejects naming every such day with its
  * error. Each row carries the run's exportRules digest, so a day that
  * fails under new rules still holds the old digest and is the one day the
- * next run reloads for them. A run starts no new day once `budgetMs` has
- * passed since it began (`now` is its clock); it ends the day in hand, then
- * rejects naming the days it did not reach as well as the failed and short
- * ones, and the next run picks those days up. Logs each day as it is done
- * and returns the rows read per day.
+ * next run reloads for them. A read or load past its bound fails its day
+ * the same way. `progress` names the phase in flight, the days not yet
+ * started and the faults so far, for runAndExit's deadline. Logs each day
+ * as it is done and returns the rows read per day.
  */
 export const runExport = async ({
     source,
@@ -606,8 +714,7 @@ export const runExport = async ({
     today,
     scratchFile,
     log,
-    budgetMs = EXPORT_BUDGET_MS,
-    now = Date.now,
+    progress = jobProgress(),
 }: {
     source: EventSource;
     warehouse: Warehouse;
@@ -615,38 +722,41 @@ export const runExport = async ({
     today: string;
     scratchFile: string;
     log: (line: string) => void;
-    budgetMs?: number;
-    now?: () => number;
+    progress?: JobProgress;
 }): Promise<{ day: string; rows: number }[]> => {
-    const startedAt = now();
     const rules = exportRules(hmacKey);
 
+    progress.phase = 'the event table check and day counts';
     await warehouse.ensureTable();
 
-    const [events, partitions, stale] = await Promise.all([
+    const [events, { counts: partitions, stale }] = await Promise.all([
         source.dayCounts(),
-        warehouse.dayCounts(),
-        warehouse.staleDays(rules),
+        warehouse.days(rules),
     ]);
     const days = exportDays({ today, events, partitions, stale });
     const read: { day: string; rows: number }[] = [];
     const failed: { day: string; error: unknown }[] = [];
     const short: string[] = [];
-    const unreached: string[] = [];
+    const faultsSoFar = () => [
+        ...failed.map(({ day, error }) => `${day}: ${messageOf(error)}`),
+        ...(short.length > 0 ? [`short days: ${short.join(', ')}`] : []),
+    ];
+    const earlierFaults = progress.faults;
+
+    progress.faults = () => [...earlierFaults(), ...faultsSoFar()];
 
     try {
-        for (const day of days) {
-            if (now() - startedAt >= budgetMs) {
-                unreached.push(day);
-                continue;
-            }
-
+        for (const [index, day] of days.entries()) {
+            progress.unstarted = days.slice(index + 1);
             let rows = 0;
             const held = partitions.get(day) ?? 0;
             const counted = events.get(day) ?? 0;
 
             try {
-                await fs.writeFile(scratchFile, '');
+                // Unlinked, so a load that ran past its timeout and still
+                // uploads keeps reading the day before's file.
+                await fs.rm(scratchFile, { force: true });
+                progress.phase = `the read of ${day}`;
 
                 for await (const page of source.readDay(day)) {
                     const lines = page.map(
@@ -658,6 +768,7 @@ export const runExport = async ({
                 }
 
                 if (rows > 0 && rows >= held) {
+                    progress.phase = `the load of ${day}`;
                     await warehouse.replaceDay(day, scratchFile);
                 }
             } catch (error) {
@@ -685,18 +796,12 @@ export const runExport = async ({
             read.push({ day, rows });
         }
     } finally {
+        progress.phase = "the run's report";
+        progress.unstarted = [];
         await fs.rm(scratchFile, { force: true });
     }
 
-    const faults = [
-        ...failed.map(({ day, error }) => `${day}: ${messageOf(error)}`),
-        ...(short.length > 0 ? [`short days: ${short.join(', ')}`] : []),
-        ...(unreached.length > 0
-            ? [
-                  `days not reached in the ${budgetMs / 60_000} minute budget: ${unreached.join(', ')}`,
-              ]
-            : []),
-    ];
+    const faults = faultsSoFar();
 
     if (faults.length > 0) {
         throw new Error(`event export ${faults.join('; ')}`, {
@@ -712,34 +817,97 @@ export const runExport = async ({
 
 /**
  * The export Job's run (db/export-events.ts): the account export, then the
- * event export, which runs whether or not the account export failed. Logs
- * an account export failure as it happens and rejects with it once the
- * event export is done, so a failing one leaves the other's tables
- * current. An event export failure rejects as it is.
+ * event export, which runs whether or not the account export failed, so a
+ * failing one leaves the other's tables current. Rejects once both are
+ * done with the one that failed, or with both in one AggregateError.
  */
 export const runExportJob = async ({
     exportAccounts,
     exportEvents,
-    logError,
+    progress = jobProgress(),
 }: {
     exportAccounts: () => Promise<void>;
     exportEvents: () => Promise<unknown>;
-    logError: (error: unknown) => void;
+    progress?: JobProgress;
 }): Promise<void> => {
     let accountFailure: Error | null = null;
+
+    progress.phase = 'the account export';
+    progress.faults = () => (accountFailure !== null ? [accountFailure.message] : []);
 
     try {
         await exportAccounts();
     } catch (error) {
-        accountFailure = new Error('account export failed', { cause: error });
-        logError(error);
+        accountFailure = new Error(`account export failed: ${messageOf(error)}`, { cause: error });
     }
 
-    await exportEvents();
+    try {
+        await exportEvents();
+    } catch (error) {
+        throw accountFailure === null
+            ? error
+            : new AggregateError(
+                  [accountFailure, error],
+                  `${accountFailure.message}; ${messageOf(error)}`,
+              );
+    }
+
+    progress.phase = "the run's report";
 
     if (accountFailure !== null) {
         throw accountFailure;
     }
+};
+
+/**
+ * Runs the Job's `main`, then exits the process with 0, or with 1 after
+ * logging one error that names the phase, so a socket left open, such as a
+ * load upload past its timeout or the pool's own connections, cannot hold
+ * the Job to its task timeout. A rejection is logged with the phase it
+ * left. A `main` still running at `deadlineMs` is stopped: the error names
+ * the phase in flight, the days not started and the faults so far, after
+ * the lines each finished day logged. Cloud Run's stdout and stderr are
+ * pipes, which Node writes synchronously on Linux, so every logged line is
+ * out before the exit.
+ */
+export const runAndExit = async (
+    main: (progress: JobProgress) => Promise<unknown>,
+    {
+        deadlineMs = JOB_DEADLINE_MS,
+        exit = process.exit,
+        logError,
+    }: {
+        deadlineMs?: number;
+        exit?: (code: number) => void;
+        logError: (error: unknown) => void;
+    },
+): Promise<void> => {
+    const progress = jobProgress();
+    let code = 0;
+
+    try {
+        if ((await within(main(progress), deadlineMs)) === TIMED_OUT) {
+            const report = [
+                `export Job stopped at its deadline, ${deadlineMs / 1000} s from its start, during ${progress.phase}`,
+                ...(progress.unstarted.length > 0
+                    ? [`days not started: ${progress.unstarted.join(', ')}`]
+                    : []),
+                ...progress.faults(),
+            ];
+
+            logError(new Error(report.join('; ')));
+            code = 1;
+        }
+    } catch (error) {
+        logError(
+            new Error(`export Job failed during ${progress.phase}: ${messageOf(error)}`, {
+                cause: error,
+            }),
+        );
+        code = 1;
+    }
+
+    exit(code);
 };
 
 /** The export's own settings. The database settings are the runtime's (db/connection.ts). */
