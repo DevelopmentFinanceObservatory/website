@@ -3,7 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { clientIp } from '@/lib/proxy/forward';
-import { rateHeaders } from '@/lib/proxy/rateHeaders';
+import { rateHeaders, type RateVerdict } from '@/lib/proxy/rateHeaders';
 import { hit } from '@/lib/proxy/rateLimit';
 import { datasetsFetch } from '@/lib/search/datasetsFetch';
 import { artifactHref } from '@/lib/search/searchClient';
@@ -28,11 +28,12 @@ const VERSION_READ_TIMEOUT_MS = 20_000;
  */
 export const downloadAllowance = async (
     req: NextRequest,
-): Promise<{ allowed: boolean; headers: Record<string, string> }> => {
+): Promise<{ allowed: boolean; verdict: RateVerdict; headers: Record<string, string> }> => {
     const verdict = await hit('api', clientIp(req));
 
     return {
         allowed: verdict.allowed,
+        verdict,
         headers: verdict.allowed
             ? rateHeaders(verdict)
             : { ...rateHeaders(verdict), 'Retry-After': String(verdict.reset) },

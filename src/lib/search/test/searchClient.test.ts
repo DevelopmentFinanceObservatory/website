@@ -4,6 +4,7 @@ import {
     applyDoneEvent,
     artifactHref,
     buildRequest,
+    createSearchShare,
     createSuggestionSlot,
     entityOptions,
     fetchDatasetOptions,
@@ -1249,6 +1250,53 @@ test('pinDownloadedVersion posts the downloaded version to the site pin route an
         definition: { spec_id: 'spec_a1' },
     });
 });
+
+for (const [name, status, document, refused] of [
+    [
+        'a platform_refused problem gives the platform code',
+        502,
+        {
+            code: 'platform_refused',
+            detail: 'The data platform refused.',
+            platform_code: 'over_ceiling',
+        },
+        'over_ceiling',
+    ],
+    [
+        'a request_invalid problem with a detail gives no code',
+        400,
+        { code: 'request_invalid', detail: 'The request is not a search share.' },
+        null,
+    ],
+    [
+        'a payload_too_large problem with a detail gives no code',
+        413,
+        { code: 'payload_too_large', detail: 'The request body is over 1 bytes.' },
+        null,
+    ],
+    [
+        'a platform_code on another code is not read',
+        502,
+        { code: 'transient_unavailable', platform_code: 'over_ceiling' },
+        null,
+    ],
+] as const) {
+    test(`createSearchShare: ${name}`, async (t) => {
+        t.mock.method(
+            globalThis,
+            'fetch',
+            async () =>
+                new Response(JSON.stringify(document), {
+                    status,
+                    headers: { 'content-type': 'application/problem+json' },
+                }),
+        );
+
+        assert.deepEqual(await createSearchShare({ mode: 'snapshot', query: 'q', parts: [] }), {
+            refused,
+        });
+    });
+}
 
 test('artifactHref prefixes the Datasets API origin onto a root-relative artifact link', () => {
     const url = '/api/datasets/spec_a1/cv_b2/files/sha256:abc';

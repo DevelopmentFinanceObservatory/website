@@ -2406,6 +2406,8 @@ const NO_DATA_REASON_TEXT: Record<Known<NoDataReason>, string> = {
         'The matching series disagree about who gives and receives, so no single answer fits.',
     qualifier_not_bound:
         'A category or condition in that query could not be applied to the matching series.',
+    timed_out:
+        'The search ran out of time before it answered this. Ask again, or ask a narrower question.',
 };
 
 export const noDataReasonText = (reason?: NoDataReason | null): string =>

@@ -2,10 +2,11 @@
 import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
+import { GUEST_SHARES, readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
 import { createShare, liveShareRefusalFor, spendGuestShare } from '@/lib/chat/shareStore';
 import { clientIp } from '@/lib/proxy/forward';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
+import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { track } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
@@ -21,7 +22,7 @@ const shareSearch = async (body: any, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
     if (!request) {
-        return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+        return requestInvalidProblem('The request is not a search share.');
     }
 
     const user = await getUser();
@@ -47,7 +48,14 @@ const shareSearch = async (body: any, headers: Headers) => {
             cause: cause instanceof Error ? cause.message : undefined,
         });
 
-        return NextResponse.json({ error: 'platform_refused', detail: message }, { status: 502 });
+        return problem({
+            status: 502,
+            code: 'platform_refused',
+            detail: 'The data platform could not capture this result.',
+            retryable: false,
+            // The platform's own code, which the share box words for the viewer.
+            extra: { platform_code: message },
+        });
     }
 
     // Recorded after the response, so the link does not wait on analytics.
@@ -71,11 +79,17 @@ const shareSearch = async (body: any, headers: Headers) => {
 // conversation. A request that names none stores a snapshot. A live share is
 // refused when its data cards cannot all be refreshed (`liveShareRefusal` in
 // src/lib/studio/liveShare), and the refusal names the cards in the way.
+// Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
     const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
 
     if (text === null) {
-        return NextResponse.json({ error: 'payload_too_large' }, { status: 413 });
+        return problem({
+            status: 413,
+            code: 'payload_too_large',
+            detail: `The request body is over ${MAX_SHARE_BODY} bytes.`,
+            retryable: false,
+        });
     }
 
     const body = (() => {
@@ -92,26 +106,36 @@ export const POST = async (request: NextRequest) => {
 
     const read = readStudioShareRequest(body);
 
-    if ('error' in read) {
-        return NextResponse.json(read, { status: 400 });
+    if (read instanceof Response) {
+        return read;
     }
 
     const user = await getUser();
 
     if (!user) {
         if (read.mode === 'live') {
-            return NextResponse.json({ error: 'live_needs_account' }, { status: 403 });
+            return problem({
+                status: 403,
+                code: 'live_needs_account',
+                detail: 'Sign in to make a live share. Without an account, a share is a snapshot.',
+                retryable: false,
+            });
         }
 
         if (!(await spendGuestShare(clientIp(request)))) {
-            return NextResponse.json({ error: 'guest_limit' }, { status: 429 });
+            return problem({
+                status: 429,
+                code: 'guest_limit',
+                detail: `This network has made today's ${GUEST_SHARES} guest shares. Sign in to make more.`,
+                retryable: false,
+            });
         }
     }
 
     const refusal = read.mode === 'live' ? await liveShareRefusalFor(read) : null;
 
     if (refusal) {
-        return NextResponse.json(refusal.body, { status: refusal.status });
+        return refusal;
     }
 
     const created = await createShare({ userId: user?.id ?? null, ...read });

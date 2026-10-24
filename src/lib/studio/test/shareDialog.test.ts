@@ -128,7 +128,8 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
         [
             false,
             {
-                error: 'live_cards_blocked',
+                code: 'live_cards_blocked',
+                retryable: false,
                 cards: [
                     { id: 'cmp_b', reason: 'missing_ref' },
                     { id: 'cmp_c', reason: 'unsupported_frame' },
@@ -138,15 +139,21 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
         ],
         [
             false,
-            { error: 'live_too_many_cards', limit: 20, count: 23 },
+            { code: 'live_too_many_cards', retryable: false, limit: 20, count: 23 },
             { refusal: { code: 'live_too_many_cards', limit: 20, count: 23 } },
         ],
-        [false, { error: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
-        [false, { error: 'guest_limit' }, { refusal: { code: 'guest_limit' } }],
+        [false, { code: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
+        [false, { code: 'guest_limit' }, { refusal: { code: 'guest_limit' } }],
         // What a second try can outlive, and every answer outside the contract.
-        [false, { error: 'live_check_failed' }, { refusal: { code: 'failed' } }],
-        [false, { error: 'unauthorized' }, { refusal: { code: 'failed' } }],
-        [false, { error: 'live_cards_blocked', cards: [] }, { refusal: { code: 'failed' } }],
+        [
+            false,
+            { code: 'transient_unavailable', retryable: true },
+            { refusal: { code: 'failed' } },
+        ],
+        [false, { code: 'unauthorized' }, { refusal: { code: 'failed' } }],
+        // The old `{ error }` body is no longer read.
+        [false, { error: 'guest_limit' }, { refusal: { code: 'failed' } }],
+        [false, { code: 'live_cards_blocked', cards: [] }, { refusal: { code: 'failed' } }],
         [false, null, { refusal: { code: 'failed' } }],
         [true, { title: 'no id' }, { refusal: { code: 'failed' } }],
     ];
@@ -248,7 +255,7 @@ test('a card that can never refresh withdraws the live link: named, deleted, nev
         {
             cmp_a: [{ body: READY }],
             cmp_b: [{ body: refused('recipe_missing') }],
-            cmp_c: [{ status: 404, body: { error: 'not_found' } }],
+            cmp_c: [{ status: 404, body: { code: 'not_found', retryable: false } }],
         },
     );
     const reported = await open('canvas', 'live');

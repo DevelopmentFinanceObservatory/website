@@ -207,7 +207,7 @@ for (const [name, response, code, retryAfterS] of [
     [
         'a refresh in progress, the wait in Retry-After',
         () =>
-            new Response(JSON.stringify({ status: 'pending', retry_after_s: 6 }), {
+            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
                 status: 503,
                 headers: { 'retry-after': '7' },
             }),
@@ -217,14 +217,16 @@ for (const [name, response, code, retryAfterS] of [
     [
         'a refresh in progress, the wait in the body alone',
         () =>
-            new Response(JSON.stringify({ status: 'pending', retry_after_s: 6 }), { status: 503 }),
+            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
+                status: 503,
+            }),
         DOWNLOAD_PENDING,
         6,
     ],
     [
         'a refusal of the format',
         () =>
-            new Response(JSON.stringify({ status: 'error', code: 'request_invalid' }), {
+            new Response(JSON.stringify({ code: 'request_invalid', retryable: false }), {
                 status: 400,
             }),
         'request_invalid',
@@ -233,7 +235,7 @@ for (const [name, response, code, retryAfterS] of [
     [
         'a back end out of reach',
         () =>
-            new Response(JSON.stringify({ status: 'error', code: 'backend_unreachable' }), {
+            new Response(JSON.stringify({ code: 'backend_unreachable', retryable: true }), {
                 status: 502,
             }),
         'backend_unreachable',
@@ -241,7 +243,8 @@ for (const [name, response, code, retryAfterS] of [
     ],
     [
         'a share that no longer holds the card',
-        () => new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }),
+        () =>
+            new Response(JSON.stringify({ code: 'not_found', retryable: false }), { status: 404 }),
         'not_found',
         null,
     ],
@@ -259,12 +262,12 @@ for (const [name, response, code, retryAfterS] of [
     });
 }
 
-test('fetchCardData: off a live share, a 503 or an `error` key is not read as the share route', async (t) => {
+test('fetchCardData: off a live share, the wait of a pending 503 is not read as the share route', async (t) => {
     t.mock.method(
         globalThis,
         'fetch',
         async () =>
-            new Response(JSON.stringify({ status: 'pending', error: 'not_found' }), {
+            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
                 status: 503,
                 headers: { 'retry-after': '7' },
             }),
@@ -273,7 +276,9 @@ test('fetchCardData: off a live share, a 503 or an `error` key is not read as th
     await assert.rejects(
         fetchCardData(REF, { format: 'csv', bundle: true }),
         (error: unknown) =>
-            error instanceof CardDownloadError && error.code === null && error.retryAfterS === null,
+            error instanceof CardDownloadError &&
+            error.code === 'refresh_pending' &&
+            error.retryAfterS === null,
     );
 });
 

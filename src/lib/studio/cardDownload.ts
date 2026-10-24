@@ -136,18 +136,18 @@ const wholeSeconds = (value: unknown): number | null => {
         : null;
 };
 
-// The share route's answer when it serves no file is a 503 while a refresh
-// is in progress (the wait in `Retry-After` and the body's `retry_after_s`),
-// and otherwise the refusal's `code`, or `error` on its own 404.
+// The share route's answer when it serves no file is a problem document: 503
+// `refresh_pending` while a refresh is in progress (the wait in `Retry-After`
+// and the document's `retry_after_s`), and otherwise its `code`.
 const liveRefusal = (res: Response, body: Record<string, unknown> | null): CardDownloadError => {
-    if (res.status === 503 && body?.['status'] === 'pending') {
+    const code = body?.['code'];
+
+    if (res.status === 503 && code === DOWNLOAD_PENDING) {
         return new CardDownloadError(
             DOWNLOAD_PENDING,
-            wholeSeconds(res.headers.get('retry-after')) ?? wholeSeconds(body['retry_after_s']),
+            wholeSeconds(res.headers.get('retry-after')) ?? wholeSeconds(body?.['retry_after_s']),
         );
     }
-
-    const code = body?.['code'] ?? body?.['error'];
 
     return new CardDownloadError(typeof code === 'string' ? code : null);
 };

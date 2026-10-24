@@ -7,6 +7,7 @@ import {
     upsertConversation,
 } from '@/lib/chat/conversationStore';
 import type { SavedConversation } from '@/lib/chat/history';
+import { missingProblem, requestInvalidProblem, unauthorizedProblem } from '@/lib/proxy/problem';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,14 +18,14 @@ export const GET = async (_request: Request, { params }: Params) => {
     const user = await getUser();
 
     if (!user) {
-        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        return unauthorizedProblem();
     }
 
     const { id } = await params;
     const saved = await getConversation(user.id, id);
 
     if (!saved) {
-        return NextResponse.json({ error: 'not_found' }, { status: 404 });
+        return missingProblem('There is no such conversation.');
     }
 
     return NextResponse.json({ conversation: saved });
@@ -34,7 +35,7 @@ export const PUT = async (request: Request, { params }: Params) => {
     const user = await getUser();
 
     if (!user) {
-        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        return unauthorizedProblem();
     }
 
     const { id } = await params;
@@ -46,7 +47,9 @@ export const PUT = async (request: Request, { params }: Params) => {
         typeof body.title !== 'string' ||
         !Array.isArray(body.messages)
     ) {
-        return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+        return requestInvalidProblem(
+            'The body needs the conversation id from the path, a title, and a list of messages.',
+        );
     }
 
     await upsertConversation(user.id, body);
@@ -58,7 +61,7 @@ export const DELETE = async (_request: Request, { params }: Params) => {
     const user = await getUser();
 
     if (!user) {
-        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        return unauthorizedProblem();
     }
 
     const { id } = await params;

@@ -8,6 +8,7 @@ import {
     type CounterDb,
     type Reservation,
 } from '../proxy/limitCounter.ts';
+import { problem } from '../proxy/problem.ts';
 import { GUEST_PROMPTS, USER_DAILY_PROMPTS } from './promptAllowance.ts';
 import type { ToolError } from './wire.ts';
 
@@ -124,22 +125,25 @@ export const admitTurn = async (
     } catch (error) {
         console.error('studio: the prompt allowance could not be read', error);
 
-        const unavailable: ToolError = {
-            error: 'transient_unavailable',
-            retry: 'retry_after_delay',
+        return problem({
+            status: 503,
+            code: 'transient_unavailable',
             detail: 'Studio cannot check your prompt allowance right now. Try again in a minute.',
-        };
-
-        return Response.json(unavailable, { status: 503 });
+            retryable: true,
+        });
     } finally {
         clearTimeout(timer);
     }
 
     return (
         refusal &&
-        Response.json(refusal, {
+        problem({
             status: 429,
+            code: refusal.error,
+            detail: refusal.detail,
+            retryable: refusal.retry === 'retry_after_delay',
             headers: { 'Retry-After': String(refusal.retry_after_seconds) },
+            extra: { retry_after_seconds: refusal.retry_after_seconds },
         })
     );
 };

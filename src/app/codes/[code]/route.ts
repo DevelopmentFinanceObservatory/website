@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 
 import { codeTarget } from '@/lib/proxy/codes';
 import { forward } from '@/lib/proxy/forward';
+import { notFoundProblem } from '@/lib/proxy/problem';
 import { searchApiBase } from '@/lib/searchApi';
 
 // The API's refusal-code registry (GET /codes/{code}), served at the same
@@ -12,10 +13,7 @@ export const GET = async (req: NextRequest, { params }: { params: Promise<{ code
     const target = codeTarget(searchApiBase(), code, req.nextUrl.search);
 
     if (!target) {
-        return Response.json(
-            { error: 'not_found', retry: 'do_not_retry', detail: 'There is no such refusal code.' },
-            { status: 404 },
-        );
+        return notFoundProblem(req.nextUrl.pathname);
     }
 
     return forward(req, {
