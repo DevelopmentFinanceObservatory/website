@@ -10,7 +10,7 @@
  * `node --test` can load it.
  */
 
-const TITLES = {
+export const TITLES = {
     400: 'Bad Request',
     401: 'Unauthorized',
     403: 'Forbidden',
@@ -29,7 +29,7 @@ export type ProblemStatus = keyof typeof TITLES;
  * `proxy-codes.json` holds, so `/codes/<code>` resolves to a page. Any other
  * code the site refuses with is its own, and its `type` is `about:blank`.
  */
-const REGISTRY_CODES = [
+export const REGISTRY_CODES = [
     'request_invalid',
     'not_found',
     'rate_limited',
