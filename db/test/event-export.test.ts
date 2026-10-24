@@ -9,11 +9,15 @@ import { Pool } from 'pg';
 import { applyMigrations } from '../apply-migrations.ts';
 import {
     bigQueryWarehouse,
+    EXPORT_SCHEMA,
     type EventSource,
     exportDays,
+    type ExportField,
     exportRow,
+    exportRules,
     pgEventSource,
     runExport,
+    runExportJob,
     type SourceEvent,
     type Warehouse,
 } from '../event-export.ts';
@@ -22,6 +26,7 @@ import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 const KEY = 'test-key';
+const RULES = exportRules(KEY);
 
 const sourceEvent = (overrides: Partial<SourceEvent>): SourceEvent => ({
     id: 1,
@@ -61,6 +66,7 @@ test('exportRow keeps allow-listed props that pass their rule and drops the rest
             },
         }),
         KEY,
+        RULES,
     );
 
     assert.deepEqual(row, {
@@ -83,7 +89,13 @@ test('exportRow keeps allow-listed props that pass their rule and drops the rest
             timedOut: false,
             kind: 'resolution',
         },
+        export_rules: RULES,
     });
+});
+
+test('exportRules changes with the HMAC key', () => {
+    assert.equal(exportRules(KEY), RULES);
+    assert.notEqual(exportRules('rotated-key'), RULES);
 });
 
 test('exportRow drops a value its rule refuses', async (t) => {
@@ -102,13 +114,13 @@ test('exportRow drops a value its rule refuses', async (t) => {
 
     for (const [label, overrides] of cases) {
         await t.test(label, () => {
-            assert.deepEqual(exportRow(sourceEvent(overrides), KEY).props, {});
+            assert.deepEqual(exportRow(sourceEvent(overrides), KEY, RULES).props, {});
         });
     }
 });
 
 test('exportRow leaves the hashes null for a guest without consent', () => {
-    const row = exportRow(sourceEvent({ page: '/topics/health' }), KEY);
+    const row = exportRow(sourceEvent({ page: '/topics/health' }), KEY, RULES);
 
     assert.equal(row.signed_in, false);
     assert.equal(row.visitor_hash, null);
@@ -140,7 +152,7 @@ test('exportRow keeps a site path as the page and refuses other text', async (t)
 
     for (const [label, page, kept] of cases) {
         await t.test(label, () => {
-            assert.equal(exportRow(sourceEvent({ page }), KEY).page, kept);
+            assert.equal(exportRow(sourceEvent({ page }), KEY, RULES).page, kept);
         });
     }
 });
@@ -156,12 +168,17 @@ test('exportRow exports a share id as its digest, so share events still join', (
     ];
 
     for (const [name, props] of events) {
-        assert.equal(exportRow(sourceEvent({ name, props }), KEY).props.shareId, hashed, name);
+        assert.equal(
+            exportRow(sourceEvent({ name, props }), KEY, RULES).props.shareId,
+            hashed,
+            name,
+        );
     }
 
     const refused = exportRow(
         sourceEvent({ name: 'share.open', props: { shareId: 'not a share id' } }),
         KEY,
+        RULES,
     );
 
     assert.deepEqual(refused.props, {});
@@ -202,6 +219,16 @@ test('exportDays replaces from the day before the latest loaded day through toda
                 partitions: counts({ '2026-10-20': 2, '2026-10-23': 1 }),
             },
             ['2026-10-22', '2026-10-23'],
+        ],
+        [
+            'days holding rows under other export rules',
+            {
+                today: '2026-10-23',
+                events: counts({ '2026-10-17': 1, '2026-10-20': 2, '2026-10-23': 1 }),
+                partitions: counts({ '2026-10-17': 1, '2026-10-20': 2, '2026-10-23': 1 }),
+                stale: new Set(['2026-10-17', '2026-10-20']),
+            },
+            ['2026-10-17', '2026-10-20', '2026-10-22', '2026-10-23'],
         ],
         [
             'a month boundary',
@@ -265,8 +292,15 @@ test('exportDays adds every earlier day whose counts differ', async (t) => {
     }
 });
 
-/** An in-memory warehouse. Each partition is the parsed lines of its last load. */
-const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
+/**
+ * An in-memory warehouse. Each partition is the parsed lines of its last
+ * load, and a day is stale while any of its rows carries an `export_rules`
+ * other than the run's. A load of a day in `failLoad` throws.
+ */
+const fakeWarehouse = (
+    partitions: Map<string, unknown[]>,
+    { failLoad = [] }: { failLoad?: string[] } = {},
+) => {
     const calls: string[] = [];
     const warehouse: Warehouse = {
         async ensureTable() {
@@ -275,7 +309,22 @@ const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
         async dayCounts() {
             return new Map([...partitions].map(([day, rows]) => [day, rows.length]));
         },
+        async staleDays(rules) {
+            return new Set(
+                [...partitions]
+                    .filter(([, rows]) =>
+                        rows.some(
+                            (row) => (row as { export_rules?: string }).export_rules !== rules,
+                        ),
+                    )
+                    .map(([day]) => day),
+            );
+        },
         async replaceDay(day, file) {
+            if (failLoad.includes(day)) {
+                throw new Error('load job failed');
+            }
+
             calls.push(`replace ${day}`);
             const text = await fs.readFile(file, 'utf8');
             partitions.set(
@@ -293,7 +342,7 @@ const fakeWarehouse = (partitions: Map<string, unknown[]>) => {
 
 const fakeSource = (
     pages: Record<string, SourceEvent[][]>,
-    failOn: string | null = null,
+    failOn: readonly string[] = [],
     // Source counts that differ from the rows a day reads.
     counted: Record<string, number> = {},
 ): EventSource => ({
@@ -310,7 +359,7 @@ const fakeSource = (
             yield page;
         }
 
-        if (day === failOn) {
+        if (failOn.includes(day)) {
             throw new Error('connection lost');
         }
     },
@@ -346,8 +395,11 @@ test('runExport backfills an empty table day by day and logs each day', async ()
         logged.map((line) => line.slice(0, 10)),
         ['2026-10-20', '2026-10-21', '2026-10-22'],
     );
-    assert.deepEqual(partitions.get('2026-10-20'), [exportRow(first, KEY), exportRow(second, KEY)]);
-    assert.deepEqual(partitions.get('2026-10-22'), [exportRow(third, KEY)]);
+    assert.deepEqual(partitions.get('2026-10-20'), [
+        exportRow(first, KEY, RULES),
+        exportRow(second, KEY, RULES),
+    ]);
+    assert.deepEqual(partitions.get('2026-10-22'), [exportRow(third, KEY, RULES)]);
     await assert.rejects(fs.access(scratchFile));
 });
 
@@ -411,7 +463,7 @@ test('runExport keeps a partition that holds more rows than the day reads', asyn
 
     assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
     assert.equal(partitions.get('2026-10-22'), held);
-    assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY)]);
+    assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY, RULES)]);
     assert.deepEqual(
         logged.map((line) => line.slice(0, 10)),
         ['2026-10-21', '2026-10-22', '2026-10-23'],
@@ -492,7 +544,7 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             const partitions = new Map<string, unknown[]>(
                 Object.entries(later).map(([day, dayPages]) => [
                     day,
-                    dayPages.flat().map((row) => exportRow(row, KEY)),
+                    dayPages.flat().map((row) => exportRow(row, KEY, RULES)),
                 ]),
             );
 
@@ -502,7 +554,7 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
 
             const { warehouse, calls } = fakeWarehouse(partitions);
             const run = runExport({
-                source: fakeSource({ '2026-10-19': [read], ...later }, null, counted),
+                source: fakeSource({ '2026-10-19': [read], ...later }, [], counted),
                 warehouse,
                 hmacKey: KEY,
                 today: '2026-10-23',
@@ -519,61 +571,131 @@ test('runExport rechecks an earlier day whose counts differ until they match', a
             assert.deepEqual(calls, expectedCalls);
             assert.deepEqual(
                 partitions.get('2026-10-23'),
-                later['2026-10-23']!.flat().map((row) => exportRow(row, KEY)),
+                later['2026-10-23']!.flat().map((row) => exportRow(row, KEY, RULES)),
             );
             assert.deepEqual(
                 partitions.get('2026-10-19'),
                 calls.includes('replace 2026-10-19')
-                    ? read.map((row) => exportRow(row, KEY))
+                    ? read.map((row) => exportRow(row, KEY, RULES))
                     : (held ?? undefined),
             );
         });
     }
 });
 
-test('runExport names the day it failed on and leaves that day as it was', async () => {
+test('runExport loads the days after a failed one, then names every failed day', async () => {
     const kept = [{ id: 7 }];
     const partitions = new Map<string, unknown[]>([
         ['2026-10-21', [{ id: 6 }]],
         ['2026-10-22', kept],
     ]);
-    const { warehouse, calls } = fakeWarehouse(partitions);
-    const fresh = sourceEvent({ id: 8, createdAt: '2026-10-21T10:00:00.000000Z' });
+    const before = structuredClone(partitions);
+    const { warehouse, calls } = fakeWarehouse(partitions, { failLoad: ['2026-10-22'] });
+    const fresh = sourceEvent({ id: 9, createdAt: '2026-10-23T10:00:00.000000Z' });
     const scratchFile = scratch();
     const logged: string[] = [];
 
     await assert.rejects(
         runExport({
             source: fakeSource(
-                { '2026-10-21': [[fresh]], '2026-10-22': [[sourceEvent({ id: 9 })]] },
-                '2026-10-22',
+                {
+                    '2026-10-21': [[sourceEvent({ id: 6 })]],
+                    '2026-10-22': [[sourceEvent({ id: 7 })]],
+                    '2026-10-23': [[fresh]],
+                },
+                ['2026-10-21'],
             ),
             warehouse,
             hmacKey: KEY,
-            today: '2026-10-22',
+            today: '2026-10-23',
             scratchFile,
             log: (line) => logged.push(line),
         }),
         (error: unknown) => {
             assert.ok(error instanceof Error);
-            assert.match(error.message, /^event export 2026-10-22: /);
-            assert.ok(error.cause instanceof Error);
-            assert.equal(error.cause.message, 'connection lost');
+            assert.equal(
+                error.message,
+                'event export 2026-10-21: connection lost; 2026-10-22: load job failed',
+            );
+            assert.ok(error.cause instanceof AggregateError);
+            assert.deepEqual(
+                error.cause.errors.map((cause: Error) => cause.message),
+                ['connection lost', 'load job failed'],
+            );
             return true;
         },
     );
 
-    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-21']);
+    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-23']);
     assert.deepEqual(
         logged.map((line) => line.slice(0, 10)),
-        ['2026-10-21'],
+        ['2026-10-21', '2026-10-22', '2026-10-23'],
     );
-    assert.deepEqual(partitions.get('2026-10-21'), [exportRow(fresh, KEY)]);
+    assert.deepEqual(partitions.get('2026-10-21'), before.get('2026-10-21'));
     assert.equal(partitions.get('2026-10-22'), kept);
+    assert.deepEqual(partitions.get('2026-10-23'), [exportRow(fresh, KEY, RULES)]);
     await assert.rejects(fs.access(scratchFile));
 });
 
-test('runExport names the short days read before the day it failed on', async () => {
+test('runExport reloads the days holding rows under other rules, and retries a failed one alone', async () => {
+    const at = (id: number, day: string) =>
+        sourceEvent({ id, createdAt: `${day}T10:00:00.000000Z` });
+    const pages = Object.fromEntries(
+        ['2026-10-18', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22'].map((day, i) => [
+            day,
+            [[at(i + 1, day)]],
+        ]),
+    );
+    // 18 and 20 October hold rows under old rules, 19 October under these.
+    const partitions = new Map<string, unknown[]>(
+        Object.entries(pages).map(([day, dayPages]) => [
+            day,
+            dayPages.flat().map((row) => ({
+                ...exportRow(row, KEY, RULES),
+                ...(day === '2026-10-19' ? {} : { export_rules: 'old-rules' }),
+            })),
+        ]),
+    );
+    const first = fakeWarehouse(partitions);
+
+    await assert.rejects(
+        runExport({
+            source: fakeSource(pages, ['2026-10-18']),
+            warehouse: first.warehouse,
+            hmacKey: KEY,
+            today: '2026-10-22',
+            scratchFile: scratch(),
+            log: () => undefined,
+        }),
+        /event export 2026-10-18: connection lost$/,
+    );
+    assert.deepEqual(first.calls, [
+        'ensureTable',
+        'replace 2026-10-20',
+        'replace 2026-10-21',
+        'replace 2026-10-22',
+    ]);
+    assert.deepEqual(partitions.get('2026-10-20'), [exportRow(at(3, '2026-10-20'), KEY, RULES)]);
+
+    const second = fakeWarehouse(partitions);
+
+    await runExport({
+        source: fakeSource(pages),
+        warehouse: second.warehouse,
+        hmacKey: KEY,
+        today: '2026-10-22',
+        scratchFile: scratch(),
+        log: () => undefined,
+    });
+    assert.deepEqual(second.calls, [
+        'ensureTable',
+        'replace 2026-10-18',
+        'replace 2026-10-21',
+        'replace 2026-10-22',
+    ]);
+});
+
+test('runExport names the short days beside a failed day', async () => {
     const partitions = new Map<string, unknown[]>([['2026-10-21', [{ id: 5 }, { id: 6 }]]]);
     const { warehouse, calls } = fakeWarehouse(partitions);
 
@@ -584,7 +706,7 @@ test('runExport names the short days read before the day it failed on', async ()
                     '2026-10-21': [[sourceEvent({ id: 6 })]],
                     '2026-10-22': [[sourceEvent({ id: 9 })]],
                 },
-                '2026-10-22',
+                ['2026-10-22'],
             ),
             warehouse,
             hmacKey: KEY,
@@ -602,6 +724,46 @@ test('runExport names the short days read before the day it failed on', async ()
 
     assert.deepEqual(calls, ['ensureTable']);
     assert.equal(partitions.get('2026-10-21')?.length, 2);
+});
+
+test('runExport starts no new day past its budget and fails naming the days it did not reach', async () => {
+    const partitions = new Map<string, unknown[]>();
+    const { warehouse, calls } = fakeWarehouse(partitions, { failLoad: ['2026-10-21'] });
+    const clock = { ms: 0 };
+    const source = fakeSource({
+        '2026-10-20': [[sourceEvent({ id: 1, createdAt: '2026-10-20T08:00:00.000000Z' })]],
+        '2026-10-21': [[sourceEvent({ id: 2, createdAt: '2026-10-21T08:00:00.000000Z' })]],
+        '2026-10-22': [[sourceEvent({ id: 3, createdAt: '2026-10-22T08:00:00.000000Z' })]],
+        '2026-10-23': [[sourceEvent({ id: 4, createdAt: '2026-10-23T08:00:00.000000Z' })]],
+    });
+
+    await assert.rejects(
+        runExport({
+            source: {
+                ...source,
+                // Each day read costs 4 minutes of the injected clock.
+                readDay: (day) => {
+                    clock.ms += 240_000;
+                    return source.readDay(day);
+                },
+            },
+            warehouse,
+            hmacKey: KEY,
+            today: '2026-10-23',
+            scratchFile: scratch(),
+            log: () => undefined,
+            budgetMs: 600_000,
+            now: () => clock.ms,
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /2026-10-21: load job failed/);
+            assert.match(error.message, /not reached\D+10 minute budget: 2026-10-23$/);
+            return true;
+        },
+    );
+
+    assert.deepEqual(calls, ['ensureTable', 'replace 2026-10-20', 'replace 2026-10-22']);
 });
 
 test('bigQueryWarehouse loads a day into its partition and lets the schema gain columns', async () => {
@@ -631,11 +793,136 @@ test('bigQueryWarehouse loads a day into its partition and lets the schema gain 
     assert.deepEqual(loads[0]?.metadata.schemaUpdateOptions, ['ALLOW_FIELD_ADDITION']);
 });
 
+test('EXPORT_SCHEMA admits a REQUIRED column only among those the table was created with', () => {
+    // @ts-expect-error ALLOW_FIELD_ADDITION adds NULLABLE columns only.
+    const required: ExportField = { name: 'added', type: 'STRING', mode: 'REQUIRED' };
+    const nullable: ExportField = { name: 'added', type: 'STRING' };
+
+    assert.ok(required && nullable);
+});
+
+test('bigQueryWarehouse creates the table, finds stale days and counts from partition metadata', async (t) => {
+    const fakeTable = ({ exists, fields = [] }: { exists: boolean; fields?: string[] }) => {
+        const calls: unknown[] = [];
+        const table = {
+            exists: async () => [exists],
+            getMetadata: async () => [{ schema: { fields: fields.map((name) => ({ name })) } }],
+        };
+        const bigquery = {
+            dataset: () => ({
+                table: () => table,
+                createTable: async (name: string, options: { schema: unknown }) => {
+                    calls.push(['createTable', name, options.schema]);
+                    return [table];
+                },
+            }),
+            query: async ({ query, params }: { query: string; params?: unknown }) => {
+                calls.push(['query', params]);
+                return query.includes('PARTITIONS')
+                    ? [
+                          [
+                              { partition_id: '20261021', total_rows: 3 },
+                              { partition_id: '20261022', total_rows: '1434' },
+                          ],
+                      ]
+                    : [[{ day: '2026-10-21' }]];
+            },
+        };
+        const warehouse = bigQueryWarehouse({
+            projectId: 'p',
+            datasetId: 'd',
+            bigquery: bigquery as unknown as BigQuery,
+        });
+
+        return { warehouse, calls };
+    };
+
+    await t.test('a missing table is created with the schema', async () => {
+        const { warehouse, calls } = fakeTable({ exists: false });
+
+        await warehouse.ensureTable();
+        assert.deepEqual(calls, [['createTable', 'event', { fields: EXPORT_SCHEMA }]]);
+    });
+
+    await t.test('staleDays queries the days whose rows carry other rules', async () => {
+        const { warehouse, calls } = fakeTable({ exists: true, fields: ['id', 'export_rules'] });
+
+        assert.deepEqual(await warehouse.staleDays('r1'), new Set(['2026-10-21']));
+        assert.deepEqual(calls, [['query', { rules: 'r1' }]]);
+    });
+
+    await t.test('a table without export_rules is stale on every day', async () => {
+        assert.deepEqual(
+            await fakeTable({ exists: true, fields: ['id'] }).warehouse.staleDays('r1'),
+            new Set(['2026-10-21', '2026-10-22']),
+        );
+    });
+
+    await t.test('a query over the bytes-billed cap fails naming the cap', async () => {
+        const bigquery = {
+            dataset: () => ({
+                table: () => ({
+                    getMetadata: async () => [{ schema: { fields: [{ name: 'export_rules' }] } }],
+                }),
+            }),
+            query: async () => {
+                throw new Error('Query exceeded limit for bytes billed: 1000000000.');
+            },
+        };
+        const warehouse = bigQueryWarehouse({
+            projectId: 'p',
+            datasetId: 'd',
+            bigquery: bigquery as unknown as BigQuery,
+        });
+
+        await assert.rejects(warehouse.staleDays('r1'), /maximumBytesBilled cap/);
+    });
+
+    await t.test('dayCounts reads each partition_id as its day', async () => {
+        assert.deepEqual(
+            await fakeTable({ exists: true }).warehouse.dayCounts(),
+            new Map([
+                ['2026-10-21', 3],
+                ['2026-10-22', 1434],
+            ]),
+        );
+    });
+});
+
+test('runExportJob runs the event export after a failed account export, then fails', async () => {
+    const ran: string[] = [];
+    const logged: unknown[] = [];
+    const accountError = new Error('bigquery down');
+
+    await assert.rejects(
+        runExportJob({
+            exportAccounts: async () => {
+                ran.push('accounts');
+                throw accountError;
+            },
+            exportEvents: async () => {
+                ran.push('events');
+            },
+            logError: (error) => logged.push(error),
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.equal(error.cause, accountError);
+            return true;
+        },
+    );
+
+    assert.deepEqual(ran, ['accounts', 'events']);
+    assert.deepEqual(logged, [accountError]);
+});
+
 /**
  * Reads a migrated database as a login member of `website_export_reader`,
  * the way the Job's IAM user reads it, and checks each UTC day's rows
  * against Postgres's own per-day count. The page size is 2, so every day
- * spans pages, and rows sit either side of a midnight.
+ * spans pages, rows sit either side of a midnight, three rows share one
+ * time across a page boundary, and each row's props hold a key no event
+ * keeps.
  */
 test('the export reader reads every row of each UTC day and no other table', async (t) => {
     const database = await createTestDatabase();
@@ -661,7 +948,8 @@ test('the export reader reads every row of each UTC day and no other table', asy
     );
     await database.runtimePool().query(
         `insert into event (name, created_at, user_id, visitor_id, page, props)
-         select 'search.query', ts::timestamptz, null, 'v', '/data', '{"post": 0}'
+         select 'search.query', ts::timestamptz, null, 'v', '/data',
+                '{"post": 0, "query": "aid to kenya"}'
          from unnest($1::text[]) ts`,
         [
             [
@@ -671,8 +959,8 @@ test('the export reader reads every row of each UTC day and no other table', asy
                 '2026-10-20T23:59:59.999999Z',
                 '2026-10-21T00:00:00.000001Z',
                 '2026-10-22T05:00:00Z',
-                '2026-10-22T06:00:00Z',
-                '2026-10-22T07:00:00Z',
+                '2026-10-22T05:00:00Z',
+                '2026-10-22T05:00:00Z',
             ],
         ],
     );
@@ -693,19 +981,24 @@ test('the export reader reads every row of each UTC day and no other table', asy
          from event group by 1 order by 1`,
     );
     const read: { day: string; count: number }[] = [];
+    const ids: number[] = [];
 
     for (const { day } of expected) {
         let count = 0;
 
         for await (const page of source.readDay(day)) {
             assert.ok(page.every((row) => row.createdAt.startsWith(day)));
+            assert.ok(page.every((row) => Object.keys(row.props).join() === 'post'));
             count += page.length;
+            ids.push(...page.map((row) => row.id));
         }
 
         read.push({ day, count });
     }
 
     assert.deepEqual(read, expected);
+    // The three rows that share 05:00 on 22 October span two pages.
+    assert.deepEqual(ids, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(
         expected.map(({ count }) => count),
         [1, 3, 1, 3],
