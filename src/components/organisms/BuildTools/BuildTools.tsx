@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import styles from './BuildTools.module.scss';
 
@@ -35,24 +35,32 @@ const boxes = [
     },
 ];
 
-const renderBox = (index: number, go: (href: string) => void) => {
+const renderBox = (index: number) => {
     const { title, text, href } = boxes[index]!;
 
     return (
+        // The zone is the box: hovering anywhere on it flies the button's arrow
+        // (see the Button atom), and the link fills it.
         <article className={styles.box} data-reveal-group="soft" data-button-zone>
-            <h3 className={styles.boxTitle} data-reveal="text" style={revealIndex(0)}>
-                {title}
-            </h3>
-            <p className={styles.boxText} data-reveal="text" style={revealIndex(1)}>
-                {text}
-            </p>
+            <Link href={href} className={styles.boxLink}>
+                <h3 className={styles.boxTitle} data-reveal="text" style={revealIndex(0)}>
+                    {title}
+                </h3>
+                <p className={styles.boxText} data-reveal="text" style={revealIndex(1)}>
+                    {text}
+                </p>
+            </Link>
+            {/* Beside the link, since an anchor cannot hold another one. The box
+                is the link, so this copy stays out of the tab order and the
+                accessibility tree. */}
             <Button
+                href={href}
                 className={styles.boxButton}
                 icon="arrow"
-                aria-label={`Learn more about ${title}`}
+                tabIndex={-1}
+                aria-hidden
                 data-reveal
                 style={revealIndex(2)}
-                onClick={() => go(href)}
             />
         </article>
     );
@@ -60,8 +68,6 @@ const renderBox = (index: number, go: (href: string) => void) => {
 
 const BuildTools = () => {
     const sectionRef = useReveal<HTMLElement>();
-    const router = useRouter();
-    const go = (href: string) => router.push(href);
 
     return (
         <section
@@ -72,12 +78,12 @@ const BuildTools = () => {
         >
             <div className={styles.grid}>
                 <div className={styles.column}>
-                    {renderBox(0, go)}
-                    {renderBox(1, go)}
+                    {renderBox(0)}
+                    {renderBox(1)}
                 </div>
                 <div className={styles.column}>
-                    {renderBox(2, go)}
-                    {renderBox(3, go)}
+                    {renderBox(2)}
+                    {renderBox(3)}
                 </div>
             </div>
             <SectionHeading
