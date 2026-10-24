@@ -83,6 +83,21 @@ const canvas = (widgets: Widget[], removedIds: string[] = []): SavedConversation
         layout: {},
     }) as SavedConversation;
 
+// A refusal as the share route sends it: a problem document, reduced to its
+// status and the members a reader acts on.
+const refusalOf = async (res: Response | null) => {
+    if (!res) {
+        return null;
+    }
+
+    assert.equal(res.headers.get('content-type'), 'application/problem+json');
+
+    const body = await res.json();
+    const members = ['code', 'retryable', 'cards', 'limit', 'count'].filter((key) => key in body);
+
+    return { status: res.status, ...Object.fromEntries(members.map((key) => [key, body[key]])) };
+};
+
 test('refreshCard: a dataset card whose frame stands is the stored revision’s read', async () => {
     const { stub, backend } = backendOver({
         components: { cmp_data: DATASET_FRAME },
@@ -336,10 +351,14 @@ test('a stored ref outside the service’s id form is a missing ref and reaches 
 
         // Creating the share refuses the card before any read.
         assert.deepEqual(
-            await liveShareRefusal({ env: ENV, fetch: stub.fetch }, canvas([chart('c', ref)])),
+            await refusalOf(
+                await liveShareRefusal({ env: ENV, fetch: stub.fetch }, canvas([chart('c', ref)])),
+            ),
             {
                 status: 400,
-                body: { error: 'live_cards_blocked', cards: [{ id: 'c', reason: 'missing_ref' }] },
+                code: 'live_cards_blocked',
+                retryable: false,
+                cards: [{ id: 'c', reason: 'missing_ref' }],
             },
             JSON.stringify(ref),
         );
@@ -408,17 +427,19 @@ test('liveShareRefusal: names every card that blocks a live link', async () => {
         chart('odd-frame', { component_id: 'cmp_odd', revision: 1 }),
     ]);
 
-    assert.deepEqual(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, saved), {
-        status: 400,
-        body: {
-            error: 'live_cards_blocked',
+    assert.deepEqual(
+        await refusalOf(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, saved)),
+        {
+            status: 400,
+            code: 'live_cards_blocked',
+            retryable: false,
             cards: [
                 { id: 'no-ref', reason: 'missing_ref' },
                 { id: 'unknown', reason: 'unknown_component' },
                 { id: 'odd-frame', reason: 'unsupported_frame' },
             ],
         },
-    });
+    );
 });
 
 test('liveShareRefusal: holds at most four component reads in flight', async () => {
@@ -453,10 +474,16 @@ test('liveShareRefusal: more data cards than the cap, before any read', async ()
     const count = LIVE_SHARE_MAX_DATA_CARDS + 1;
     const cards = Array.from({ length: count }, (_, index) => chart(`card-${index}`, REF));
 
-    assert.deepEqual(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, canvas(cards)), {
-        status: 400,
-        body: { error: 'live_too_many_cards', limit: LIVE_SHARE_MAX_DATA_CARDS, count },
-    });
+    assert.deepEqual(
+        await refusalOf(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, canvas(cards))),
+        {
+            status: 400,
+            code: 'live_too_many_cards',
+            retryable: false,
+            limit: LIVE_SHARE_MAX_DATA_CARDS,
+            count,
+        },
+    );
     assert.equal(stub.calls.length, 0);
     assert.equal(
         await liveShareRefusal({ env: ENV, fetch: stub.fetch }, canvas(cards.slice(1))),
@@ -492,13 +519,15 @@ test('liveShareRefusal: counts and checks only the cards the canvas shows', asyn
         pinnedIds: ['pinned-no-ref'],
     };
 
-    assert.deepEqual(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, withPinned), {
-        status: 400,
-        body: {
-            error: 'live_cards_blocked',
+    assert.deepEqual(
+        await refusalOf(await liveShareRefusal({ env: ENV, fetch: stub.fetch }, withPinned)),
+        {
+            status: 400,
+            code: 'live_cards_blocked',
+            retryable: false,
             cards: [{ id: 'pinned-no-ref', reason: 'missing_ref' }],
         },
-    });
+    );
 });
 
 test('liveShareRefusal: no credential, or a back end that cannot answer', async () => {
@@ -506,11 +535,13 @@ test('liveShareRefusal: no credential, or a back end that cannot answer', async 
     const saved = canvas([chart('a', REF)]);
 
     assert.deepEqual(
-        await liveShareRefusal(
-            { env: { ...ENV, LIVE_REFRESH_PRINCIPAL: '' }, fetch: stub.fetch },
-            saved,
+        await refusalOf(
+            await liveShareRefusal(
+                { env: { ...ENV, LIVE_REFRESH_PRINCIPAL: '' }, fetch: stub.fetch },
+                saved,
+            ),
         ),
-        { status: 503, body: { error: 'live_unavailable' } },
+        { status: 503, code: 'live_unavailable', retryable: false },
     );
     assert.equal(stub.calls.length, 0);
 
@@ -518,9 +549,10 @@ test('liveShareRefusal: no credential, or a back end that cannot answer', async 
         throw new TypeError('fetch failed');
     };
 
-    assert.deepEqual(await liveShareRefusal({ env: ENV, fetch: down }, saved), {
+    assert.deepEqual(await refusalOf(await liveShareRefusal({ env: ENV, fetch: down }, saved)), {
         status: 502,
-        body: { error: 'live_check_failed' },
+        code: 'transient_unavailable',
+        retryable: true,
     });
 });
 

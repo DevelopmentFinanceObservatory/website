@@ -32,6 +32,7 @@ const BASIS_NOTES: Record<CandidateBasis, string> = {
     nominated: 'Another reading of your words',
     twin: 'An equivalent series that holds data',
     direction: 'The same measure, read in the other direction',
+    breakdown: 'The same measure, broken down another way',
 };
 
 /** The line a reading card leads with, saying why the part offers it.

@@ -221,7 +221,7 @@ cd <website checkout>
 pnpm install
 ```
 
-A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. Commit the tarball and the lockfile together.
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. A rebuilt tarball keeps its file name, so a local re-vendor needs the client's directory under `node_modules/.pnpm` deleted before `pnpm install --frozen-lockfile` picks it up. Commit the tarball and the lockfile together.
 
 ## Conventions
 

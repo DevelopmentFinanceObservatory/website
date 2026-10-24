@@ -67,25 +67,39 @@ test('readStudioShareRequest: a request that names no mode asks for a snapshot',
     }
 });
 
-test('readStudioShareRequest: a live conversation share is refused', () => {
-    assert.deepEqual(readStudioShareRequest({ kind: 'conversation', mode: 'live', conversation }), {
-        error: 'live_unsupported_kind',
-    });
+// The refusal a request came to: its status and problem members.
+const refusalOf = async (read: unknown) => {
+    assert.ok(read instanceof Response, 'a refusal is a problem document');
+    assert.equal(read.headers.get('content-type'), 'application/problem+json');
+
+    const { status, code, pointer, retryable } = await read.json();
+
+    return { status, code, pointer, retryable };
+};
+
+test('readStudioShareRequest: a live conversation share is refused', async () => {
+    assert.deepEqual(
+        await refusalOf(
+            readStudioShareRequest({ kind: 'conversation', mode: 'live', conversation }),
+        ),
+        { status: 400, code: 'live_unsupported_kind', pointer: undefined, retryable: false },
+    );
     assert.deepEqual(
         readStudioShareRequest({ kind: 'conversation', mode: 'snapshot', conversation }),
         { kind: 'conversation', mode: 'snapshot', saved: conversation, cardId: undefined },
     );
 });
 
-test('readStudioShareRequest: an unknown mode is refused', () => {
+test('readStudioShareRequest: an unknown mode is refused, pointing at the mode', async () => {
     for (const mode of ['frozen', '', 1, true, ['live'], { mode: 'live' }]) {
-        assert.deepEqual(readStudioShareRequest({ kind: 'canvas', mode, conversation }), {
-            error: 'invalid_mode',
-        });
+        assert.deepEqual(
+            await refusalOf(readStudioShareRequest({ kind: 'canvas', mode, conversation })),
+            { status: 400, code: 'request_invalid', pointer: '/mode', retryable: false },
+        );
     }
 });
 
-test('readStudioShareRequest: a request without a kind, a conversation, or a card id is refused', () => {
+test('readStudioShareRequest: a request without a kind, a conversation, or a card id is refused', async () => {
     const refused = [
         null,
         {},
@@ -98,7 +112,12 @@ test('readStudioShareRequest: a request without a kind, a conversation, or a car
     ];
 
     for (const body of refused) {
-        assert.deepEqual(readStudioShareRequest(body), { error: 'bad_request' });
+        assert.deepEqual(await refusalOf(readStudioShareRequest(body)), {
+            status: 400,
+            code: 'request_invalid',
+            pointer: undefined,
+            retryable: false,
+        });
     }
 });
 

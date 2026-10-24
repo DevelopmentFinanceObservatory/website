@@ -1240,8 +1240,9 @@ export type OpenedSearchShare = {
 };
 
 /** Mints a share link for the definite parts on screen: its id, or the
- *  platform's refusal code (`over_ceiling`, …) — `null` code when the
- *  request itself failed. */
+ *  platform's refusal code (`over_ceiling`, …), read from the
+ *  `platform_code` of a `platform_refused` problem document — `null` code
+ *  for any other failure of the request. */
 export async function createSearchShare(req: {
     mode: SearchShareMode;
     query: string;
@@ -1263,9 +1264,17 @@ export async function createSearchShare(req: {
         });
         const body = await res.json().catch(() => null);
 
-        return res.ok && typeof body?.id === 'string'
-            ? { id: body.id }
-            : { refused: typeof body?.detail === 'string' ? body.detail : null };
+        if (res.ok && typeof body?.id === 'string') {
+            return { id: body.id };
+        }
+
+        // Only a `platform_refused` problem carries the platform's code.
+        return {
+            refused:
+                body?.code === 'platform_refused' && typeof body.platform_code === 'string'
+                    ? body.platform_code
+                    : null,
+        };
     } catch {
         return { refused: null };
     }

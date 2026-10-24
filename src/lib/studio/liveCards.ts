@@ -311,9 +311,12 @@ const readAnswer = (ok: boolean, body: unknown): Answer => {
     }
 
     if (!ok) {
-        const { error } = body;
+        const { code, retryable } = body;
 
-        return failure(typeof error === 'string' && error ? error : LIVE_CLIENT_CODES.failed);
+        return {
+            ...failure(typeof code === 'string' && code ? code : LIVE_CLIENT_CODES.failed),
+            ...(retryable === true ? { retryable: true } : {}),
+        };
     }
 
     const { status, card, code } = body;

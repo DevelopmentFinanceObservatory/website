@@ -31,9 +31,14 @@ test('admitTurn answers a turn from its allowance', async (t) => {
     await t.test('a spent allowance is refused with 429 and Retry-After', async () => {
         const response = await admitTurn(async () => REFUSAL);
 
+        const body = await response?.json();
+
         assert.equal(response?.status, 429);
         assert.equal(response?.headers.get('retry-after'), '120');
-        assert.equal(((await response?.json()) as ToolError).error, 'resource_exhausted');
+        assert.equal(response?.headers.get('content-type'), 'application/problem+json');
+        assert.equal(body.code, 'resource_exhausted');
+        assert.equal(body.retryable, false);
+        assert.equal(body.retry_after_seconds, 120);
     });
 
     await t.test('an allowance that cannot be read refuses the turn with 503', async () => {
@@ -44,8 +49,12 @@ test('admitTurn answers a turn from its allowance', async (t) => {
         const stalled = await admitTurn(() => new Promise<null>(() => {}), 20);
 
         for (const response of [failed, stalled]) {
+            const body = await response?.json();
+
             assert.equal(response?.status, 503);
-            assert.equal(((await response?.json()) as ToolError).error, 'transient_unavailable');
+            assert.equal(response?.headers.get('content-type'), 'application/problem+json');
+            assert.equal(body.code, 'transient_unavailable');
+            assert.equal(body.retryable, true);
         }
         assert.equal(error.mock.callCount(), 2);
     });

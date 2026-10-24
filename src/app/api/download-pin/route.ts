@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server';
 
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { clientIp } from '@/lib/proxy/forward';
+import { problem, rateLimitedProblem, requestInvalidProblem } from '@/lib/proxy/problem';
+import { rateHeaders } from '@/lib/proxy/rateHeaders';
 import { hit } from '@/lib/proxy/rateLimit';
 import { MAX_DOWNLOAD_PIN_BODY, parseDownloadPin, pinVersionFrame } from '@/lib/search/snapshot';
 import { needsPin, pinVersionOnce } from '@/lib/search/versionPin';
@@ -23,13 +25,13 @@ const CAPTURE_POLL_DEADLINE_MS = 50_000;
 // 413 as soon as the count passes it, chunked or not, and a malformed one
 // fails parseDownloadPin. A pin the door refuses, or cannot take right now, is
 // logged with the door's detail and left unpinned for a later download to
-// retry.
+// retry. Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (req: NextRequest) => {
     // A pin can mint, so it has its own small allowance.
     const verdict = await hit('pin', clientIp(req));
 
     if (!verdict.allowed) {
-        return Response.json({ error: 'rate_limited' }, { status: 429 });
+        return rateLimitedProblem(verdict, rateHeaders(verdict));
     }
 
     const text = await readBoundedText(req.body, MAX_DOWNLOAD_PIN_BODY).catch((error: unknown) => {
@@ -42,17 +44,22 @@ export const POST = async (req: NextRequest) => {
     });
 
     if (text === undefined) {
-        return Response.json({ error: 'bad_request' }, { status: 400 });
+        return requestInvalidProblem('The request body could not be read.');
     }
 
     if (text === null) {
-        return Response.json({ error: 'payload_too_large' }, { status: 413 });
+        return problem({
+            status: 413,
+            code: 'payload_too_large',
+            detail: `The request body is over ${MAX_DOWNLOAD_PIN_BODY} bytes.`,
+            retryable: false,
+        });
     }
 
     const body = parseDownloadPin(text);
 
     if (!body) {
-        return Response.json({ error: 'bad_request' }, { status: 400 });
+        return requestInvalidProblem('The request body is not a download pin.');
     }
 
     if (!needsPin(body)) {
@@ -86,6 +93,11 @@ export const POST = async (req: NextRequest) => {
             cause: cause instanceof Error ? cause.message : undefined,
         });
 
-        return Response.json({ error: 'pin_refused' }, { status: 502 });
+        return problem({
+            status: 502,
+            code: 'pin_refused',
+            detail: 'The version could not be pinned. A later download tries again.',
+            retryable: false,
+        });
     }
 };

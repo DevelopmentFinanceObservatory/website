@@ -12,7 +12,7 @@ import {
 
 import { apisFetch } from '@/lib/apisAuth';
 import { counterDb, db } from '@/lib/db';
-import { liveShareRefusal, type LiveShareRefusal } from '@/lib/studio/liveShare';
+import { liveShareRefusal } from '@/lib/studio/liveShare';
 import { snapshotLiveShare } from '@/lib/studio/liveShareResults';
 import { share } from '../../../db/schema';
 
@@ -51,7 +51,7 @@ export const liveShareRefusalFor = ({
     saved,
     kind,
     cardId,
-}: StudioShareRequest): Promise<LiveShareRefusal | null> =>
+}: StudioShareRequest): Promise<Response | null> =>
     liveShareRefusal({ env: process.env, fetch: apisFetch }, pruneForShare(saved, kind, cardId));
 
 export const getShare = async (id: string) => {

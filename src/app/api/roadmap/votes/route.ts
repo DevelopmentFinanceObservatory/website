@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { UPCOMING } from '@/components/organisms/Roadmap/roadmapData';
 import { getUser } from '@/lib/auth/session';
 import { db } from '@/lib/db';
+import { requestInvalidProblem, unauthorizedProblem } from '@/lib/proxy/problem';
 import { roadmapVote } from '../../../../../db/schema';
 
 // Only entries still under consideration take votes.
@@ -39,14 +40,14 @@ export const POST = async (request: Request) => {
     const user = await getUser();
 
     if (!user) {
-        return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+        return unauthorizedProblem();
     }
 
     const body = (await request.json().catch(() => null)) as { entryId?: unknown } | null;
     const entryId = typeof body?.entryId === 'string' ? body.entryId : '';
 
     if (!VOTABLE.has(entryId)) {
-        return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+        return requestInvalidProblem('The entry does not take votes.', '/entryId');
     }
 
     const where = and(eq(roadmapVote.userId, user.id), eq(roadmapVote.entryId, entryId));

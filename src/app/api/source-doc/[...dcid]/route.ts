@@ -1,3 +1,4 @@
+import { missingProblem, unreachableProblem } from '@/lib/proxy/problem';
 import { loadSourceDoc } from '@/lib/sources/graph';
 
 // The graph's own words for one source (the same documentation door the
@@ -15,11 +16,11 @@ export const GET = async (
         // loadSourceDoc throws on a 5xx from the graph or a failed request.
         console.error('source-doc: the graph read failed', error);
 
-        return Response.json({ detail: 'The graph is unavailable' }, { status: 502 });
+        return unreachableProblem('The graph is unavailable.', {});
     }
 
     if (!doc) {
-        return Response.json({ detail: 'Not found' }, { status: 404 });
+        return missingProblem('The graph holds no documentation for this source.');
     }
 
     return Response.json({
