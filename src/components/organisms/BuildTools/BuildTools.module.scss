@@ -58,6 +58,14 @@
     padding: rem(20) rem(10) rem(48);
     color: inherit;
     text-decoration: none;
+    border-radius: inherit;
+
+    // The link is each box's only tab stop, and the global reset drops the
+    // focus outline.
+    &:focus-visible {
+        outline: 2px solid var(--color-step-text);
+        outline-offset: 2px;
+    }
 }
 
 .boxTitle {
