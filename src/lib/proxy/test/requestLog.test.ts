@@ -4,50 +4,87 @@
  * raw address, query string or user agent.
  */
 import assert from 'node:assert/strict';
-import { createHash, createHmac } from 'node:crypto';
+import crypto, { createHash, createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, IncomingMessage, request as httpRequest } from 'node:http';
 import { Socket } from 'node:net';
 import test from 'node:test';
+import { syncBuiltinESMExports } from 'node:module';
 
 // caller.ts reads its settings at import, so set them before loading it.
 process.env.CALLER_HMAC_KEY = 'test-key';
 process.env.TRUSTED_PROXY_HOPS = '2';
 
-const { logRequest, registerRequestLogging, requestKind, requestLogEntry } =
+const { isStaticAsset, logRequest, registerRequestLogging, requestLogEntry } =
     await import('../requestLog.ts');
 
 const VISITOR = '203.0.113.7';
 const CHROME =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';
 
-test('requestKind: pages, API calls, RSC and prefetch requests', () => {
-    const cases: [string, Record<string, string>, string | undefined][] = [
-        ['/', {}, 'page'],
-        ['/embed/abc123', {}, 'page'],
-        ['/docs/guide.md', {}, 'page'],
-        ['/api/v1/search', {}, 'api'],
-        ['/api', {}, 'api'],
-        ['/mcp', {}, 'api'],
-        ['/openapi.json', {}, 'api'],
-        ['/codes/rate_limited', {}, 'api'],
-        ['/apiary', {}, 'page'],
-        ['/codes', {}, 'api'],
-        ['/codesign', {}, 'page'],
-        ['/openapi.jsonx', {}, 'page'],
-        ['/studio', { rsc: '1' }, 'rsc'],
-        ['/studio', { rsc: '1', 'next-router-prefetch': '1' }, 'prefetch'],
-        ['/studio', { 'sec-purpose': 'prefetch;prerender' }, 'prefetch'],
-        ['/studio', { purpose: 'prefetch' }, 'prefetch'],
-        ['/_next/static/chunks/main.js', {}, undefined],
-        ['/_next/image', {}, undefined],
-        ['/favicon.ico', {}, undefined],
-        ['/images/logo.SVG', {}, undefined],
-        ['/fonts/outfit.woff2', {}, undefined],
+test('requestLogEntry: kind and prerender for pages, API calls, RSC, prefetch and prerender requests', () => {
+    const cases: [string, Record<string, string>, string, boolean][] = [
+        ['/', {}, 'page', false],
+        ['/embed/abc123', {}, 'page', false],
+        ['/docs/guide.md', {}, 'page', false],
+        ['/api/v1/search', {}, 'api', false],
+        ['/api', {}, 'api', false],
+        ['/mcp', {}, 'api', false],
+        ['/openapi.json', {}, 'api', false],
+        ['/codes/rate_limited', {}, 'api', false],
+        ['/apiary', {}, 'page', false],
+        ['/codes', {}, 'api', false],
+        ['/codesign', {}, 'page', false],
+        ['/openapi.jsonx', {}, 'page', false],
+        ['/mcp', { 'sec-purpose': 'prefetch;prerender' }, 'api', false],
+        ['/studio', { rsc: '1' }, 'rsc', false],
+        ['/studio', { rsc: '1', 'next-router-prefetch': '1' }, 'prefetch', false],
+        ['/studio', { 'sec-purpose': 'prefetch' }, 'prefetch', false],
+        ['/studio', { purpose: 'prefetch' }, 'prefetch', false],
+        ['/studio', { 'sec-purpose': 'prefetch;prerender' }, 'page', true],
+        ['/studio', { 'sec-purpose': 'prefetch; prerender' }, 'page', true],
+        ['/studio', { rsc: '1', 'sec-purpose': 'prefetch;prerender' }, 'rsc', false],
+        ['/studio', { rsc: '1', 'sec-purpose': 'prefetch' }, 'rsc', false],
+        [
+            '/studio',
+            { 'next-router-prefetch': '1', 'sec-purpose': 'prefetch;prerender' },
+            'prefetch',
+            false,
+        ],
     ];
 
-    for (const [path, headers, kind] of cases) {
-        assert.equal(requestKind(path, new Headers(headers)), kind, path);
+    for (const [path, headers, kind, prerender] of cases) {
+        const entry = requestLogEntry(
+            { path, method: 'GET', headers: new Headers(headers) },
+            undefined,
+            {
+                status: 200,
+                finished: true,
+            },
+        );
+
+        assert.deepEqual(
+            { kind: entry.kind, prerender: entry.prerender },
+            { kind, prerender },
+            `${path} ${JSON.stringify(headers)}`,
+        );
+    }
+});
+
+test('isStaticAsset: framework files, images and fonts', () => {
+    const cases: [string, boolean][] = [
+        ['/_next/static/chunks/main.js', true],
+        ['/_next/image', true],
+        ['/favicon.ico', true],
+        ['/images/logo.SVG', true],
+        ['/fonts/outfit.woff2', true],
+        ['/', false],
+        ['/docs/guide.md', false],
+        ['/api/v1/search', false],
+    ];
+
+    for (const [path, expected] of cases) {
+        assert.equal(isStaticAsset(path), expected, path);
     }
 });
 
@@ -131,24 +168,33 @@ test('requestLogEntry: bot is true for crawlers, tools and a missing user agent,
 
     for (const [userAgent, bot] of cases) {
         const headers = new Headers(userAgent === undefined ? {} : { 'user-agent': userAgent });
-        const entry = requestLogEntry(
-            { url: 'https://developmentfinance.org/', method: 'GET', headers },
-            undefined,
-            200,
-        );
+        const entry = requestLogEntry({ path: '/', method: 'GET', headers }, undefined, {
+            status: 200,
+            finished: true,
+        });
 
-        assert.equal(entry?.bot, bot, String(userAgent));
+        assert.equal(entry.bot, bot, String(userAgent));
     }
 });
 
-const captureLog = (request: Request, status = 200): unknown[] => {
+// A server request as the HTTP parser hands it over: a raw target and raw headers.
+const serverRequest = (target: string, headers: Record<string, string> = {}): IncomingMessage => {
+    const request = new IncomingMessage(new Socket());
+    request.url = target;
+    request.method = 'GET';
+    request.rawHeaders = Object.entries(headers).flat();
+
+    return request;
+};
+
+const captureLog = (request: IncomingMessage, status = 200): unknown[] => {
     const lines: unknown[] = [];
     const original = console.log;
 
     console.log = (line: string) => lines.push(JSON.parse(line));
 
     try {
-        logRequest(request, status);
+        logRequest(request, { status, finished: true });
     } finally {
         console.log = original;
     }
@@ -158,15 +204,13 @@ const captureLog = (request: Request, status = 200): unknown[] => {
 
 test('logRequest: one line with the caller digest and no address or query', () => {
     const raw = 'q=secret+search&token=abc';
-    const request = new Request(`https://developmentfinance.org/embed/abc123?${raw}`, {
-        headers: {
-            host: 'developmentfinance.org',
-            'user-agent': CHROME,
-            'x-forwarded-for': `${VISITOR}, 198.51.100.1, 192.0.2.1`,
-            'cf-connecting-ip': VISITOR,
-            cookie: 'session=s3cret',
-            authorization: 'Bearer t0ken',
-        },
+    const request = serverRequest(`/embed/abc123?${raw}`, {
+        host: 'developmentfinance.org',
+        'user-agent': CHROME,
+        'x-forwarded-for': `${VISITOR}, 198.51.100.1, 192.0.2.1`,
+        'cf-connecting-ip': VISITOR,
+        cookie: 'session=s3cret',
+        authorization: 'Bearer t0ken',
     });
     const digest = createHmac('sha256', 'test-key').update(VISITOR).digest('hex').slice(0, 32);
 
@@ -182,7 +226,9 @@ test('logRequest: one line with the caller digest and no address or query', () =
             host: 'developmentfinance.org',
             kind: 'page',
             status: 404,
+            finished: true,
             bot: false,
+            prerender: false,
         },
     ]);
 
@@ -193,23 +239,86 @@ test('logRequest: one line with the caller digest and no address or query', () =
     }
 });
 
-test('logRequest: a static asset writes nothing', () => {
-    assert.deepEqual(captureLog(new Request('https://developmentfinance.org/icon.svg')), []);
-});
-
 test('logRequest: no client address logs a null caller', () => {
-    const [line] = captureLog(new Request('https://developmentfinance.org/api/events'));
+    const [line] = captureLog(serverRequest('/api/events'));
 
     assert.equal((line as { caller: unknown }).caller, null);
 });
 
-test('logRequest: malformed raw URLs keep the query out of error output', (t) => {
+test('logRequest: the path is the target without its query, resolved, with //mcp kept as a path, * as itself and any other target as a placeholder', () => {
+    // [target, logged path or null for a dropped static asset, kind]
+    const cases: [string, string | null, string][] = [
+        ['//mcp', '//mcp', 'page'],
+        ['//api/v1/search?q=secret', '//api/v1/search', 'page'],
+        ['/api/v1/search?q=secret#frag', '/api/v1/search', 'api'],
+        ['/embed/abc123', '/embed/abc123', 'page'],
+        ['/a/../mcp', '/mcp', 'api'],
+        ['/x/../_next/static/a.js', null, 'page'],
+        ['http://host/_next/static/x.js', null, 'page'],
+        ['https://host/api/v1/search?q=secret', '/api/v1/search', 'api'],
+        ['*', '*', 'page'],
+        ['http://[bad/path?q=secret#frag', '/:unparsable', 'page'],
+        ['http://user:pw@203.0.113.7:99999/x?q=secret', '/:unparsable', 'page'],
+        ['ftp://user:pw@203.0.113.7/x?q=secret', '/:unparsable', 'page'],
+        ['ws://user:pw@203.0.113.7/mcp', '/:unparsable', 'page'],
+        ['file:///etc/passwd', '/:unparsable', 'page'],
+        ['mailto:a@b', '/:unparsable', 'page'],
+        ['example.com:443', '/:unparsable', 'page'],
+    ];
+
+    for (const [target, path, kind] of cases) {
+        const lines = captureLog(serverRequest(target, { host: 'developmentfinance.org' }));
+
+        assert.deepEqual(
+            lines.map((line) => ({
+                path: (line as { path: string }).path,
+                kind: (line as { kind: string }).kind,
+            })),
+            path === null ? [] : [{ path, kind }],
+            target,
+        );
+    }
+});
+
+test('logRequest: a static asset reads no headers and computes no caller digest', (t) => {
+    const hmac = t.mock.method(crypto, 'createHmac');
+    syncBuiltinESMExports();
+    t.after(() => {
+        hmac.mock.restore();
+        syncBuiltinESMExports();
+    });
+    const headers = { 'X-Forwarded-For': `${VISITOR}, 198.51.100.1, 192.0.2.1` };
+    const asset = serverRequest('/_next/static/chunks/main.js', headers);
+    let headerReads = 0;
+    Object.defineProperty(asset, 'rawHeaders', {
+        get: () => {
+            headerReads += 1;
+            return [];
+        },
+    });
+
+    assert.deepEqual(captureLog(asset), []);
+    assert.equal(headerReads, 0);
+    assert.equal(hmac.mock.callCount(), 0);
+
+    // Control: a logged request makes the same mock count the digest.
+    assert.equal(captureLog(serverRequest('/studio', headers)).length, 1);
+    assert.equal(hmac.mock.callCount(), 1);
+});
+
+test('logRequest: a logging fault does not throw and keeps request data out of the error', (t) => {
     const errors: unknown[][] = [];
     t.mock.method(console, 'error', (...args: unknown[]) => errors.push(args));
-    const request = new IncomingMessage(new Socket());
-    request.url = '//%zz/path?token=private-query';
+    t.mock.method(console, 'log', () => {
+        throw new Error('GET /studio?token=private-query');
+    });
 
-    assert.doesNotThrow(() => logRequest(request, 200));
+    assert.doesNotThrow(() =>
+        logRequest(serverRequest('/studio?token=private-query'), {
+            status: 200,
+            finished: true,
+        }),
+    );
     assert.deepEqual(errors, [['request log failed']]);
 });
 
@@ -220,7 +329,7 @@ test('server logging catches a request accepted during startup with its original
         // Next.js may normalise these headers before a startup request finishes.
         delete request.headers.rsc;
         delete request.headers['x-forwarded-for'];
-        registerRequestLogging();
+        t.after(registerRequestLogging());
         response.statusCode = 404;
         response.end('ok');
     });
@@ -261,8 +370,8 @@ test(
         // A dev reload evaluates the module again, so its subscriber is a new function.
         const reloadedModule = '../requestLog.ts?reload';
         const reloaded = (await import(reloadedModule)) as typeof import('../requestLog.ts');
-        registerRequestLogging();
-        reloaded.registerRequestLogging();
+        t.after(registerRequestLogging());
+        t.after(reloaded.registerRequestLogging());
 
         const firstChunk = Promise.withResolvers<void>();
         const server = createServer(async (request, response) => {
@@ -331,8 +440,182 @@ test(
                 host: 'developmentfinance.org',
                 kind: 'api',
                 status: 200,
+                finished: true,
                 bot: true,
+                prerender: false,
             },
         ]);
     },
 );
+
+const listen = async (
+    t: test.TestContext,
+    handler: Parameters<typeof createServer>[1],
+): Promise<number> => {
+    const server = createServer(handler);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(() => {
+        server.closeAllConnections();
+        server.close();
+    });
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+
+    return address.port;
+};
+
+test('server logging writes one line with finished true for a response that finishes', async (t) => {
+    const lines: unknown[] = [];
+    t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+    t.after(registerRequestLogging());
+    const closed = Promise.withResolvers<void>();
+    const port = await listen(t, (_request, response) => {
+        response.once('close', () => closed.resolve());
+        response.end('ok');
+    });
+
+    await (await fetch(`http://127.0.0.1:${port}/studio`)).text();
+    // The close event follows the finish event, and must write nothing more.
+    await closed.promise;
+
+    assert.deepEqual(
+        lines.map((line) => (line as { finished: boolean }).finished),
+        [true],
+    );
+});
+
+test(
+    'server logging writes one line with finished false for a response closed early',
+    { timeout: 5000 },
+    async (t) => {
+        const lines: unknown[] = [];
+        const logged = Promise.withResolvers<void>();
+        t.mock.method(console, 'log', (line: string) => {
+            lines.push(JSON.parse(line));
+            logged.resolve();
+        });
+        t.after(registerRequestLogging());
+        const closed = Promise.withResolvers<void>();
+        const port = await listen(t, (_request, response) => {
+            response.once('close', () => closed.resolve());
+            // Headers and a first chunk go out, and the stream never ends.
+            response.write('first chunk');
+        });
+
+        const upload = httpRequest({
+            host: '127.0.0.1',
+            port,
+            path: '/mcp?token=private-query',
+            headers: { 'user-agent': 'stream-test' },
+        });
+        const responseReady = once(upload, 'response');
+        upload.end();
+        const [response] = await responseReady;
+        await once(response, 'data');
+        upload.destroy();
+        await closed.promise;
+        await logged.promise;
+
+        assert.equal(lines.length, 1);
+        assert.deepEqual(
+            {
+                path: (lines[0] as { path: string }).path,
+                kind: (lines[0] as { kind: string }).kind,
+                status: (lines[0] as { status: number }).status,
+                finished: (lines[0] as { finished: boolean }).finished,
+            },
+            { path: '/mcp', kind: 'api', status: 200, finished: false },
+        );
+    },
+);
+
+test(
+    'server logging writes status 499 for a response closed before its headers were sent',
+    { timeout: 5000 },
+    async (t) => {
+        const lines: unknown[] = [];
+        const logged = Promise.withResolvers<void>();
+        t.mock.method(console, 'log', (line: string) => {
+            lines.push(JSON.parse(line));
+            logged.resolve();
+        });
+        t.after(registerRequestLogging());
+        const received = Promise.withResolvers<void>();
+        const port = await listen(t, () => {
+            // The handler sends nothing, not even the headers.
+            received.resolve();
+        });
+
+        const upload = httpRequest({ host: '127.0.0.1', port, path: '/studio' });
+        upload.on('error', () => {});
+        upload.end();
+        await received.promise;
+        upload.destroy();
+        await logged.promise;
+
+        assert.equal(lines.length, 1);
+        assert.deepEqual(
+            {
+                path: (lines[0] as { path: string }).path,
+                status: (lines[0] as { status: number }).status,
+                finished: (lines[0] as { finished: boolean }).finished,
+            },
+            { path: '/studio', status: 499, finished: false },
+        );
+    },
+);
+
+test('server logging logs the target as it arrived when a handler rewrites request.url', async (t) => {
+    const lines: unknown[] = [];
+    t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+    t.after(registerRequestLogging());
+    const closed = Promise.withResolvers<void>();
+    const port = await listen(t, (request, response) => {
+        response.once('close', () => closed.resolve());
+        request.url = '/_next/static/rewritten.js';
+        response.end('ok');
+    });
+
+    await (await fetch(`http://127.0.0.1:${port}/mcp?token=private-query`)).text();
+    // The line is written on close, which can follow the body's arrival.
+    await closed.promise;
+
+    assert.deepEqual(
+        lines.map((line) => ({
+            path: (line as { path: string }).path,
+            kind: (line as { kind: string }).kind,
+        })),
+        [{ path: '/mcp', kind: 'api' }],
+    );
+});
+
+test('server logging attaches no close listener to a static asset response', async (t) => {
+    const lines: unknown[] = [];
+    t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+    t.after(registerRequestLogging());
+    const listeners = new Map<string, number>();
+    const closed: Promise<void>[] = [];
+    const port = await listen(t, (request, response) => {
+        listeners.set(request.url ?? '', response.listenerCount('close'));
+        const done = Promise.withResolvers<void>();
+        closed.push(done.promise);
+        response.once('close', () => done.resolve());
+        response.end('ok');
+    });
+
+    for (const path of ['/_next/static/chunks/main.js', '/studio']) {
+        await (await fetch(`http://127.0.0.1:${port}${path}`)).text();
+    }
+    await Promise.all(closed);
+
+    // The logged page carries the one listener the asset lacks.
+    assert.equal(
+        listeners.get('/studio'),
+        (listeners.get('/_next/static/chunks/main.js') ?? 0) + 1,
+    );
+    assert.deepEqual(
+        lines.map((line) => (line as { path: string }).path),
+        ['/studio'],
+    );
+});

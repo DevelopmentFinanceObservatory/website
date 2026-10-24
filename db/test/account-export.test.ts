@@ -9,6 +9,7 @@ import freeEmailDomains from 'free-email-domains';
 import { Pool } from 'pg';
 import {
     ACCOUNT_SCHEMA,
+    type AccountRead,
     type AccountRow,
     bigQueryAccountTable,
     readAccountDaily,
@@ -120,8 +121,11 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         options: `-c TimeZone=${hour >= 12 ? 'Etc/GMT-14' : 'Etc/GMT+12'}`,
     });
 
+    const { rows, accounts, webmailDomains } = await readAccountDaily(readerPool);
+
+    assert.deepEqual({ accounts, webmailDomains }, { accounts: true, webmailDomains: true });
     assert.deepEqual(
-        sorted(await readAccountDaily(readerPool)),
+        sorted(rows),
         sorted([
             { day: day(4), organisation: 'Personal email', accounts: 1 },
             { day: day(3), organisation: 'Other organisations', accounts: 2 },
@@ -136,6 +140,29 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
     );
     await assert.rejects(readerPool.query('select 1 from "user"'), /permission denied/);
     await assert.rejects(readerPool.query('select 1 from webmail_domain'), /permission denied/);
+});
+
+test('account_daily names a domain only once it holds 3 accounts before today', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await migrate(database);
+    await database.runtimePool().query(
+        `insert into "user" (id, name, email, created_at)
+         select email, 'Name', email, (now() at time zone 'UTC')::date - back
+         from unnest(array['a@three.org', 'b@three.org', 'c@three.org'], array[2, 1, 0])
+              as seed (email, back)`,
+    );
+
+    const { rows } = await readAccountDaily(database.adminPool());
+
+    assert.deepEqual(
+        rows.map(({ organisation, accounts }) => [organisation, accounts]),
+        [
+            ['Other organisations', 1],
+            ['Other organisations', 1],
+        ],
+    );
 });
 
 test('account_daily holds no rows while webmail_domain is empty, and the export fails', async (t) => {
@@ -165,9 +192,37 @@ test('account_daily holds no rows while webmail_domain is empty, and the export 
             scratchFile: path.join(os.tmpdir(), `account-export-test-${process.pid}.ndjson`),
             log: () => {},
         }),
-        /read no rows/,
+        /webmail_domain is empty/,
     );
     assert.equal(replaced, false);
+});
+
+test('account_daily_source tells accounts only from today from an empty user table', async (t) => {
+    const cases: [string, string[], boolean][] = [
+        ['an account today', ['a@one.org'], true],
+        ['no account', [], false],
+    ];
+
+    for (const [label, emails, accounts] of cases) {
+        await t.test(label, async (t) => {
+            const database = await createTestDatabase();
+            t.after(() => database.teardown());
+
+            await migrate(database);
+            await database.runtimePool().query(
+                `insert into "user" (id, name, email, created_at)
+                 select email, 'Name', email, now() at time zone 'UTC'
+                 from unnest($1::text[]) as email`,
+                [emails],
+            );
+
+            assert.deepEqual(await readAccountDaily(database.adminPool()), {
+                rows: [],
+                accounts,
+                webmailDomains: true,
+            });
+        });
+    }
 });
 
 test('syncWebmailDomains rewrites webmail_domain to the package list', async (t) => {
@@ -193,9 +248,9 @@ const fakeBigQuery = () => {
     const bigquery = {
         dataset: (dataset: string) => ({
             table: (table: string) => ({
-                load: async (file: string, metadata: Record<string, unknown>) => {
+                createLoadJob: async (file: string, metadata: Record<string, unknown>) => {
                     loads.push({ table: `${dataset}.${table}`, file, metadata });
-                    return [{}];
+                    return [{ promise: async () => [{}] }];
                 },
             }),
         }),
@@ -223,6 +278,35 @@ test('bigQueryAccountTable replaces the whole table in one load', async () => {
     assert.ok(ACCOUNT_SCHEMA.every((field) => field.description));
 });
 
+test(
+    'readAccountDaily fails a read that hangs past its bound and destroys its client',
+    { timeout: 5_000 },
+    async () => {
+        const queries: string[] = [];
+        const released: unknown[] = [];
+        const pool = {
+            connect: async () => ({
+                // BEGIN answers, and the view's read never does, as over a stalled tunnel.
+                query: (text: string) => {
+                    queries.push(text.trim().split(/\s/, 1)[0]!);
+                    return text.startsWith('BEGIN')
+                        ? Promise.resolve({ rows: [] })
+                        : new Promise(() => undefined);
+                },
+                release: (error?: unknown) => released.push(error),
+            }),
+        } as unknown as Pool;
+
+        await assert.rejects(
+            readAccountDaily(pool, { timeoutMs: 20 }),
+            /account read ran past 0.02 s/,
+        );
+        assert.deepEqual(queries, ['BEGIN', 'SELECT']);
+        assert.equal(released.length, 1);
+        assert.ok(released[0] instanceof Error);
+    },
+);
+
 const ROWS: AccountRow[] = [
     { day: '2026-10-20', organisation: 'Personal email', accounts: 4 },
     { day: '2026-10-21', organisation: 'one.org', accounts: 3 },
@@ -233,7 +317,7 @@ test('runAccountExport loads every row in one file and removes it', async () => 
     const loaded: string[] = [];
 
     await runAccountExport({
-        read: async () => ROWS,
+        read: async () => ({ rows: ROWS, accounts: true, webmailDomains: true }),
         replace: async (file) => {
             loaded.push(await fs.readFile(file, 'utf8'));
         },
@@ -253,19 +337,36 @@ test('runAccountExport loads every row in one file and removes it', async () => 
     await assert.rejects(fs.access(scratchFile));
 });
 
-test('runAccountExport rejects a read with no rows and keeps the table', async () => {
-    let replaced = false;
+test('runAccountExport empties the table when every account is from today, and rejects other empty reads', async (t) => {
+    const cases: [string, Omit<AccountRead, 'rows'>, RegExp | null][] = [
+        ['every account from today', { accounts: true, webmailDomains: true }, null],
+        ['no account', { accounts: false, webmailDomains: true }, /read no accounts/],
+        [
+            'an empty webmail_domain',
+            { accounts: true, webmailDomains: false },
+            /webmail_domain is empty/,
+        ],
+    ];
 
-    await assert.rejects(
-        runAccountExport({
-            read: async () => [],
-            replace: async () => {
-                replaced = true;
-            },
-            scratchFile: path.join(os.tmpdir(), `account-export-test-${process.pid}.ndjson`),
-            log: () => {},
-        }),
-        /read no rows/,
-    );
-    assert.equal(replaced, false);
+    for (const [label, source, rejects] of cases) {
+        await t.test(label, async () => {
+            const loaded: string[] = [];
+            const run = runAccountExport({
+                read: async () => ({ rows: [], ...source }),
+                replace: async (file) => {
+                    loaded.push(await fs.readFile(file, 'utf8'));
+                },
+                scratchFile: path.join(os.tmpdir(), `account-export-test-${process.pid}.ndjson`),
+                log: () => {},
+            });
+
+            if (rejects === null) {
+                await run;
+                assert.deepEqual(loaded, ['']);
+            } else {
+                await assert.rejects(run, rejects);
+                assert.deepEqual(loaded, []);
+            }
+        });
+    }
 });

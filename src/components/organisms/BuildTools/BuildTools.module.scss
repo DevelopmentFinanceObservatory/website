@@ -40,13 +40,32 @@
 .box {
     display: flex;
     flex-direction: column;
-    cursor: pointer;
+
+    // The button is positioned against the box.
+    position: relative;
     width: rem(308);
     height: rem(300);
-    padding: rem(20) rem(10) rem(10);
     color: var(--color-bg);
     background-color: var(--color-stone);
     border-radius: rem(4);
+}
+
+// Fills the box; the bottom padding keeps the text clear of the button.
+.boxLink {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: rem(20) rem(10) rem(48);
+    color: inherit;
+    text-decoration: none;
+    border-radius: inherit;
+
+    // The link is each box's only tab stop, and the global reset drops the
+    // focus outline.
+    &:focus-visible {
+        outline: 2px solid var(--color-step-text);
+        outline-offset: 2px;
+    }
 }
 
 .boxTitle {
@@ -67,8 +86,9 @@
 }
 
 .boxButton {
-    align-self: flex-end;
-    margin-top: auto;
+    position: absolute;
+    right: rem(10);
+    bottom: rem(10);
 }
 
 .headingBlock {

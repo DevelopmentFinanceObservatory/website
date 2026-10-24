@@ -71,54 +71,38 @@ migration.
 
 ## Event export
 
-In production a Cloud Run Job, `dfo-prod-website-export`, copies the
-`event` table into the BigQuery table `event` in `EXPORT_BQ_DATASET`
-(`website_export`) every hour. It runs the website image with the command
-`node dist/export-events.cjs` (`db/export-events.ts`, bundled by
-`pnpm build:export-events`). `build-migrate-deploy.yml` points it at each
-new image after the service update, only where `EXPORT_JOB_WEBSITE` is
-set. infra defines the Job, its identity, the dataset and the schedule.
+In production a Cloud Run Job, `dfo-prod-website-export`, copies the `event` table into the BigQuery table `event` in `EXPORT_BQ_DATASET` (`website_export`) every hour. It runs the website image with the command `node dist/export-events.cjs` (`db/export-events.ts`, bundled by `pnpm build:export-events`). `build-migrate-deploy.yml` points it at each new image after the service update, only where `EXPORT_JOB_WEBSITE` is set. infra defines the Job, its identity, the dataset and the schedule.
 
-The Job reads the database as its own IAM user, a member of the NOLOGIN
-role `website_export_reader`, which migration `0019_event_export_grant`
-grants `SELECT` on `event` and migration `0020_account_daily` on the view
-`account_daily`, and on nothing else. infra creates the role in every tier,
-so its apply must land before the deploy that first carries the migration.
+The Job reads the database as its own IAM user, a member of the NOLOGIN role `website_export_reader`, which migration `0019_event_export_grant` grants `SELECT` on `event`, migration `0020_account_daily` on the view `account_daily`, and migration `0021_account_daily_before_today` on the view `account_daily_source`, and on nothing else. infra creates the role in every tier, so its apply must land before the deploy that first carries the migration.
 
-| Env var                                                                     | What it is                                                   |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME`, `WEBSITE_DB_USER` | The database as the service reads it, `DATABASE_URL` locally |
-| `EXPORT_BQ_PROJECT`                                                         | The BigQuery project                                         |
-| `EXPORT_BQ_DATASET`                                                         | The BigQuery dataset                                         |
-| `EXPORT_ID_HMAC_KEY`                                                        | Key for the visitor and user id digests                      |
+| Env var                                                  | What it is                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `WEBSITE_DB_INSTANCE_CONNECTION_NAME`, `WEBSITE_DB_NAME` | The database the Job reads, `DATABASE_URL` locally                        |
+| `WEBSITE_DB_USER`                                        | The exporter's own IAM database user, a member of `website_export_reader` |
+| `EXPORT_BQ_PROJECT`                                      | The BigQuery project                                                      |
+| `EXPORT_BQ_DATASET`                                      | The BigQuery dataset                                                      |
+| `EXPORT_ID_HMAC_KEY`                                     | Key for the visitor and user id digests                                   |
 
-Each run replaces every UTC day from the latest day in the table minus one
-through today, so a missed run is made up by the next one. When the table
-is empty or missing, the Job creates it and loads every day from the first
-event. The run also replaces every earlier day whose count of `event` rows
-differs from its partition's row count. It takes both counts per day up
-front, one `GROUP BY` over the whole `event` table and one over the
-BigQuery table's `created_at` column. Each day is read in pages into a
-scratch file, then loaded into its partition (`event$YYYYMMDD`,
-`WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`, so a column added to the schema
-reaches the table on the next load). A replace never shrinks a partition.
-Nothing deletes `event` rows, and they carry no foreign key to `user`, so
-deleting an account leaves them in place. A day that reads fewer rows than
-its partition holds is therefore a fault, such as a wrong database, an
-emptied table or a lagging replica. That day keeps its partition, the
-other days still load, and the run then fails naming each short day with
-both counts, as it does for a day that reads fewer rows than its source
-count from the start of the run, whatever its partition holds. Its counts
-still differ, so the day stays in every later run, however many later days
-load, and fails each one until it matches. The Job's failure alert
-therefore fires on every run until the export is complete. A day that
-reads no rows and holds none loads nothing. The Job logs each day as it
-finishes. A failure names the day it failed on and any short day before
-it, and that day keeps its partition as it was. A database query that runs
-past 5 minutes fails the run (`statement_timeout` on the Job's pool), and
-so does a BigQuery count job that bills more than 1 GB, about 125 million
-rows, or runs past 2 minutes (`maximumBytesBilled` and `jobTimeoutMs`),
-all well inside the Job's 1800 s task timeout.
+Each run replaces every UTC day from the latest day in the table minus one through today, so a missed run is made up by the next one. When the table is empty or missing, the Job creates it and loads every day from the first event. The run also replaces every earlier day whose count of `event` rows differs from its partition's row count. It takes both counts per day up front: one `GROUP BY` over the whole `event` table in Postgres, and one query over the BigQuery table that counts each day's rows and finds its stale days (below). The window days load first, oldest first, then the earlier days, oldest first, so yesterday and today load before any backlog. Each day is read in pages, in `created_at` and id order with each page starting after the last row of the one before, and only with the prop keys `PROP_RULES` keeps. A page shorter than the page size ends the day's read. The pages go to a scratch file, then load into the day's partition (`event$YYYYMMDD`, `WRITE_TRUNCATE`, `ALLOW_FIELD_ADDITION`). A load adds a new NULLABLE column to the table, and fails on a new REQUIRED one, so `ExportField` in `db/event-export.ts` lets a column be REQUIRED only if the table was created with it.
+
+The scratch file sits in `os.tmpdir()`, which on Cloud Run is in memory, so a run holds one page of rows plus one day's file, about 360 bytes an event. The busiest day so far holds 1,434 events, about 0.5 MB, against the Job's 512 MiB. The file is written in full before its load starts, so a day loads only once it has been read to its end.
+
+A replace never shrinks a partition. Nothing deletes `event` rows, and they carry no foreign key to `user`, so deleting an account leaves them in place. A day that reads fewer rows than its partition holds is therefore a fault, such as a wrong database, an emptied table or a lagging replica. That day keeps its partition, the other days still load, and the run then fails naming each short day with both counts, as it does for a day that reads fewer rows than its source count from the start of the run, whatever its partition holds. Its counts still differ, so the day stays in every later run, however many later days load, and fails each one until it matches. The Job's failure alert therefore fires on every run until the export is complete. A day that reads no rows and holds none loads nothing.
+
+A day whose read or load fails keeps its partition as it was, and the later days still load. The run then fails naming every such day with its error, and any short day. The Job logs each day as it finishes, and a failure outside a day's read or load, such as the per-day count, fails the run. Either way the Job logs one error naming the phase it failed in, and exits 1 (`runAndExit` in `db/event-export.ts`). A BigQuery query that bills more than 1 GB fails the run (`maximumBytesBilled`). The BigQuery query that counts each day and finds its stale days scans about 74 bytes an event row, so it reaches the 1 GB cap at about 13.5 million rows, and the run then fails with an error naming the cap.
+
+Every call the Job makes has its own time bound, and a call past it fails its day or its phase:
+
+- a database connection, 30 seconds (`connectionTimeoutMillis` on the Job's pool);
+- the per-day count, 5 minutes on the server (`statement_timeout`), and 5 seconds more on the Job's side for a connection that stalls where the server's timeout cannot reach it;
+- the account read, 5 minutes a query on the server, and 10 minutes 5 seconds on the Job's side for its two queries together;
+- a day's page queries together, 5 minutes from the day's start plus 5 seconds, on the Job's side;
+- a BigQuery query, 2 minutes on the server (`jobTimeoutMs`) and 5 seconds more on the Job's side, as for each table read or create;
+- a load, the account export's included, 2 minutes, after which the Job cancels it and waits at most 10 seconds for the cancel (`loadWithin` in `db/bounded.ts`).
+
+A database call past its bound on the Job's side leaves its connection mid-query, so the Job destroys that connection and the next call opens a new one (`callWithin` in `db/bounded.ts`). The Job stops a run still going 28 minutes after its start (`JOB_DEADLINE_MS`), two minutes before the task timeout, whatever call is in flight. It logs one error naming the phase (the account export, the day counts, or a named day's read or load), the days not started, and the failed and short days so far, after the lines each finished day already logged, and exits 1. The window days run first, so a run stopped this way has loaded yesterday and today before the backlog, and the next hourly run picks up the days it did not reach. The Job also exits as soon as the run ends, which closes the pool, the connector and any upload socket a load past its timeout left open.
+
+Every row carries in `export_rules` a digest of what shapes it (`exportRules` in `db/event-export.ts`): `PROP_RULES`, `PAGE_PATH`, `SHARE_PATH`, the token rule, the schema, the SQL that reads a day's page, `ROW_SHAPE_VERSION` and an HMAC of a fixed string under `EXPORT_ID_HMAC_KEY`. `ROW_SHAPE_VERSION` is bumped by hand with any change to the functions that build a row, and a test pins each version's rows for a fixed sample of events, so a change to the rows without a bump fails CI. Each run finds the days holding a row with another digest, or none, in the same query over the `created_at` and `export_rules` columns that counts each day's rows, and replaces those days too. A change to the rules or the key thus reaches every partition. A day that fails keeps its old rows, so the next run retries it with the window days and the count-mismatch days, and reloads no day that is already current.
 
 The table is partitioned by day on `created_at`:
 
@@ -132,35 +116,15 @@ The table is partitioned by day on `created_at`:
 | `visitor_hash` | STRING    | HMAC-SHA256 hex of `visitor_id`, null without one                               |
 | `user_hash`    | STRING    | HMAC-SHA256 hex of `user_id`, null without one                                  |
 | `props`        | JSON      | the event's allow-listed props, `shareId` as its HMAC-SHA256 hex                |
+| `export_rules` | STRING    | the digest of the rules the row was exported under                              |
 
-`page` keeps a path only when it is a slash followed by letters, digits
-and `_ - . : /`, up to 300 characters, the characters the site's routes
-use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser
-posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and
-the pages under them exports as `:id`, since a share id opens its share.
+`page` keeps a path only when it is a slash followed by letters, digits and `_ - . : /`, up to 300 characters, the characters the site's routes use (`PAGE_PATH` in `db/event-export.ts`). Any other text the browser posts as its page exports as null. The id in `/s/<id>`, `/embed/<id>` and the pages under them exports as `:id`, since a share id opens its share.
 
-`PROP_RULES` in `db/event-export.ts` lists the props each event keeps:
-enums, booleans, counts and ids, each checked against its rule, since the
-browser posts its own props. Search query text, refused terms, card units
-and every list or nested object stay in Postgres. `shareId` exports as
-its HMAC-SHA256 hex under `EXPORT_ID_HMAC_KEY`, so share, embed and
-search events still join on it. A new event name fails
-the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY`
-changes every digest, so drop the BigQuery table afterwards and let the
-next run reload it.
+`PROP_RULES` in `db/event-export.ts` lists the props each event keeps: enums, booleans, counts and ids, each checked against its rule, since the browser posts its own props. Search query text, refused terms, card units and every list or nested object stay in Postgres. `shareId` exports as its HMAC-SHA256 hex under `EXPORT_ID_HMAC_KEY`, so share, embed and search events still join on it. A new event name fails the typecheck until it has an entry there. Changing `EXPORT_ID_HMAC_KEY` changes every digest and the rules digest with them, so the next run reloads every day.
 
 ### Accounts
 
-Each run first replaces the BigQuery table `account_daily` with every row
-of the Postgres view `account_daily` (`db/account-export.ts`), in one
-`WRITE_TRUNCATE` load job, so a failed run leaves the previous table. The
-event export still runs when it fails, and the run then fails too. A read
-with no rows fails the run and keeps the table. The view runs with the
-migrator's rights, so the Job reads accounts per day and organisation and
-no email address or user id. It holds every UTC day from the first
-account's through yesterday's, so the latest day is the last complete
-one, and a day without new accounts is one row with a null `organisation`
-and 0 `accounts`.
+Each run first replaces the BigQuery table `account_daily` with every row of the Postgres view `account_daily` (`db/account-export.ts`), in one `WRITE_TRUNCATE` load job, so a failed run leaves the previous table. The event export still runs when it fails, and the run then fails too. The view runs with the migrator's rights, so the Job reads accounts per day and organisation and no email address or user id. It holds every UTC day from the first account's through yesterday's, so the latest day is the last complete one, and a day without new accounts is one row with a null `organisation` and 0 `accounts`. It counts only the accounts created before today, UTC, so a domain it names holds at least 3 of the accounts the export carries.
 
 | Column         | Type   | Value                                                                                                                                                                                                                 |
 | -------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,13 +132,9 @@ and 0 `accounts`.
 | `organisation` | STRING | `Personal email` for a webmail domain, else the lower-cased domain after the last `@` once it holds at least 3 accounts, else `Other organisations`; null on a day without new accounts, whose one row has 0 accounts |
 | `accounts`     | INT64  | the accounts created that day, 0 on a day without new accounts                                                                                                                                                        |
 
-A domain in `webmail_domain` is `Personal email` whatever its count. The
-view holds no rows while that table is empty, so the run fails and keeps
-the BigQuery table. The table holds the `free-email-domains` package's
-list, which `db/migrate.ts`
-writes after the migrations on every deploy, so bumping the package
-updates it. pnpm skips the package's postinstall script, which would
-refetch the list.
+A domain in `webmail_domain` is `Personal email` whatever its count. The table holds the `free-email-domains` package's list, which `db/migrate.ts` writes after the migrations on every deploy, so bumping the package updates it. pnpm skips the package's postinstall script, which would refetch the list.
+
+A read with no rows fails the run and leaves the table as it was while `webmail_domain` is empty, since the view then holds no rows and webmail domains would show by name, and while the user table holds no account, which is a wrong database or an emptied table. When accounts exist and every one is from today, the run replaces the table with no rows, so a deleted account and the organisation it named leave the export. The view `account_daily_source` tells the cases apart, and the Job reads it in the same transaction as `account_daily`.
 
 ## GitHub vars and secrets
 
