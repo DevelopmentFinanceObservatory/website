@@ -245,7 +245,7 @@ test('logRequest: no client address logs a null caller', () => {
     assert.equal((line as { caller: unknown }).caller, null);
 });
 
-test('logRequest: the path is the target without its query, resolved, with //mcp kept as a path, * as itself and an unparsable URL cut at its query', () => {
+test('logRequest: the path is the target without its query, resolved, with //mcp kept as a path, * as itself and any other target as a placeholder', () => {
     // [target, logged path or null for a dropped static asset, kind]
     const cases: [string, string | null, string][] = [
         ['//mcp', '//mcp', 'page'],
@@ -257,7 +257,13 @@ test('logRequest: the path is the target without its query, resolved, with //mcp
         ['http://host/_next/static/x.js', null, 'page'],
         ['https://host/api/v1/search?q=secret', '/api/v1/search', 'api'],
         ['*', '*', 'page'],
-        ['http://[bad/path?q=secret#frag', 'http://[bad/path', 'page'],
+        ['http://[bad/path?q=secret#frag', '/:unparsable', 'page'],
+        ['http://user:pw@203.0.113.7:99999/x?q=secret', '/:unparsable', 'page'],
+        ['ftp://user:pw@203.0.113.7/x?q=secret', '/:unparsable', 'page'],
+        ['ws://user:pw@203.0.113.7/mcp', '/:unparsable', 'page'],
+        ['file:///etc/passwd', '/:unparsable', 'page'],
+        ['mailto:a@b', '/:unparsable', 'page'],
+        ['example.com:443', '/:unparsable', 'page'],
     ];
 
     for (const [target, path, kind] of cases) {
@@ -323,7 +329,7 @@ test('server logging catches a request accepted during startup with its original
         // Next.js may normalise these headers before a startup request finishes.
         delete request.headers.rsc;
         delete request.headers['x-forwarded-for'];
-        registerRequestLogging();
+        t.after(registerRequestLogging());
         response.statusCode = 404;
         response.end('ok');
     });
@@ -364,8 +370,8 @@ test(
         // A dev reload evaluates the module again, so its subscriber is a new function.
         const reloadedModule = '../requestLog.ts?reload';
         const reloaded = (await import(reloadedModule)) as typeof import('../requestLog.ts');
-        registerRequestLogging();
-        reloaded.registerRequestLogging();
+        t.after(registerRequestLogging());
+        t.after(reloaded.registerRequestLogging());
 
         const firstChunk = Promise.withResolvers<void>();
         const server = createServer(async (request, response) => {
@@ -462,7 +468,7 @@ const listen = async (
 test('server logging writes one line with finished true for a response that finishes', async (t) => {
     const lines: unknown[] = [];
     t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
-    registerRequestLogging();
+    t.after(registerRequestLogging());
     const closed = Promise.withResolvers<void>();
     const port = await listen(t, (_request, response) => {
         response.once('close', () => closed.resolve());
@@ -489,7 +495,7 @@ test(
             lines.push(JSON.parse(line));
             logged.resolve();
         });
-        registerRequestLogging();
+        t.after(registerRequestLogging());
         const closed = Promise.withResolvers<void>();
         const port = await listen(t, (_request, response) => {
             response.once('close', () => closed.resolve());
@@ -534,7 +540,7 @@ test(
             lines.push(JSON.parse(line));
             logged.resolve();
         });
-        registerRequestLogging();
+        t.after(registerRequestLogging());
         const received = Promise.withResolvers<void>();
         const port = await listen(t, () => {
             // The handler sends nothing, not even the headers.
@@ -563,13 +569,17 @@ test(
 test('server logging logs the target as it arrived when a handler rewrites request.url', async (t) => {
     const lines: unknown[] = [];
     t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
-    registerRequestLogging();
+    t.after(registerRequestLogging());
+    const closed = Promise.withResolvers<void>();
     const port = await listen(t, (request, response) => {
+        response.once('close', () => closed.resolve());
         request.url = '/_next/static/rewritten.js';
         response.end('ok');
     });
 
     await (await fetch(`http://127.0.0.1:${port}/mcp?token=private-query`)).text();
+    // The line is written on close, which can follow the body's arrival.
+    await closed.promise;
 
     assert.deepEqual(
         lines.map((line) => ({
@@ -577,5 +587,35 @@ test('server logging logs the target as it arrived when a handler rewrites reque
             kind: (line as { kind: string }).kind,
         })),
         [{ path: '/mcp', kind: 'api' }],
+    );
+});
+
+test('server logging attaches no close listener to a static asset response', async (t) => {
+    const lines: unknown[] = [];
+    t.mock.method(console, 'log', (line: string) => lines.push(JSON.parse(line)));
+    t.after(registerRequestLogging());
+    const listeners = new Map<string, number>();
+    const closed: Promise<void>[] = [];
+    const port = await listen(t, (request, response) => {
+        listeners.set(request.url ?? '', response.listenerCount('close'));
+        const done = Promise.withResolvers<void>();
+        closed.push(done.promise);
+        response.once('close', () => done.resolve());
+        response.end('ok');
+    });
+
+    for (const path of ['/_next/static/chunks/main.js', '/studio']) {
+        await (await fetch(`http://127.0.0.1:${port}${path}`)).text();
+    }
+    await Promise.all(closed);
+
+    // The logged page carries the one listener the asset lacks.
+    assert.equal(
+        listeners.get('/studio'),
+        (listeners.get('/_next/static/chunks/main.js') ?? 0) + 1,
+    );
+    assert.deepEqual(
+        lines.map((line) => (line as { path: string }).path),
+        ['/studio'],
     );
 });

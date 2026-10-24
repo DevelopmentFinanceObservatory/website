@@ -17,7 +17,9 @@ import { requestCaller } from './caller.ts';
  * connection closed.
  *
  * `path` is the request target as it arrived at `http.server.request.start`,
- * without its query string, with dot segments resolved. `caller` is the
+ * without its query string, with dot segments resolved, or `/:unparsable` for
+ * a target that is not origin-form, `*`, or an http or https URL that
+ * parses. `caller` is the
  * same `ip:<digest>` the /mcp proxy sends as x-dfo-caller (see caller.ts).
  * `bot` is true when the User-Agent header is missing, empty or one isbot
  * flags. `prerender` is true for a document request with `Sec-Purpose:
@@ -119,31 +121,53 @@ export const requestLogEntry = (
     };
 };
 
-// The request target as it arrived, kept because Next.js can rewrite
-// `request.url` before the response ends.
-const arrivedTargets = new WeakMap<IncomingMessage, string>();
+// The path of each logged request's target as it arrived, kept because
+// Next.js can rewrite `request.url` before the response ends.
+const arrivedPaths = new WeakMap<IncomingMessage, string>();
 
 // Client closed request, the status for a response whose app sent no status
 // before the connection closed.
 const CLIENT_CLOSED_REQUEST = 499;
 
 /**
- * The path of a request target. An origin-form target resolves against a
- * placeholder host, which reads `//mcp` as a path and not a host and resolves
- * dot segments; an absolute-form target keeps its own pathname. The
- * asterisk-form target of `OPTIONS *` is its own path. A target whose URL does
- * not parse is cut at its first `?` or `#`, so the request still writes a line.
+ * The path a target is logged as when it is neither origin-form, an http or
+ * https absolute-form target that parses, nor `*`, since a target of any
+ * other form or scheme can hold userinfo or an IP address.
+ */
+const UNPARSABLE_TARGET_PATH = '/:unparsable';
+
+const HTTP_ABSOLUTE_FORM = /^https?:\/\//i;
+
+/**
+ * The path of a request target. An origin-form target (one starting with
+ * `/`) resolves against a placeholder host, which reads `//mcp` as the path
+ * `//mcp` and resolves dot segments, and is cut at its first `?` or `#`
+ * if its URL does not parse. An http or https absolute-form target keeps
+ * its own pathname. The asterisk-form target of `OPTIONS *` is its own
+ * path. Every other target is UNPARSABLE_TARGET_PATH, so the request still
+ * writes a line.
  */
 const targetPath = (target: string): string => {
     if (target === '*') {
         return target;
     }
 
+    if (target.startsWith('/')) {
+        try {
+            return new URL(`http://localhost${target}`).pathname;
+        } catch {
+            return target.split(/[?#]/, 1)[0] ?? target;
+        }
+    }
+
+    if (!HTTP_ABSOLUTE_FORM.test(target)) {
+        return UNPARSABLE_TARGET_PATH;
+    }
+
     try {
-        return new URL(/^https?:\/\//i.test(target) ? target : `http://localhost${target}`)
-            .pathname;
+        return new URL(target).pathname;
     } catch {
-        return target.split(/[?#]/, 1)[0] ?? target;
+        return UNPARSABLE_TARGET_PATH;
     }
 };
 
@@ -177,7 +201,7 @@ export const logRequest = (
     response: { status: number; finished: boolean },
 ): void => {
     try {
-        const path = targetPath(arrivedTargets.get(request) ?? request.url ?? '/');
+        const path = arrivedPaths.get(request) ?? targetPath(request.url ?? '/');
 
         if (isStaticAsset(path)) {
             return;
@@ -220,7 +244,8 @@ const httpPair = (
         ? { request: message.request, response: message.response }
         : undefined;
 
-// The close listener logs every request that arrived after registration.
+// The close listener logs every request that arrived after registration,
+// apart from a static asset, which gets no listener and no entry.
 // ServerResponse emits `close` after `finish`, so one listener covers a
 // response that ends and one that does not.
 const onRequestStart = (message: unknown): void => {
@@ -231,8 +256,13 @@ const onRequestStart = (message: unknown): void => {
     }
 
     const { request, response } = pair;
+    const path = targetPath(request.url ?? '/');
 
-    arrivedTargets.set(request, request.url ?? '/');
+    if (isStaticAsset(path)) {
+        return;
+    }
+
+    arrivedPaths.set(request, path);
     response.once('close', () => {
         logRequest(request, {
             status: response.headersSent ? response.statusCode : CLIENT_CLOSED_REQUEST,
@@ -242,11 +272,14 @@ const onRequestStart = (message: unknown): void => {
 };
 
 // A request accepted before registration has no close listener, so its finish
-// writes the line.
+// writes the line. A static asset that arrived after it has no entry either,
+// so logRequest reads its path from `request.url` at finish and drops it. A
+// handler that rewrote it to a logged path would log it under that path; no
+// rewrite in next.config.ts does that.
 const onResponseFinish = (message: unknown): void => {
     const pair = httpPair(message);
 
-    if (pair && !arrivedTargets.has(pair.request)) {
+    if (pair && !arrivedPaths.has(pair.request)) {
         logRequest(pair.request, { status: pair.response.statusCode, finished: true });
     }
 };
@@ -254,8 +287,9 @@ const onResponseFinish = (message: unknown): void => {
 /**
  * Observe HTTP headers without reading or buffering a request body. A request
  * accepted before this runs is still logged when its response finishes.
+ * Returns a function that removes the subscribers.
  */
-export const registerRequestLogging = (): void => {
+export const registerRequestLogging = (): (() => void) => {
     const previous = globalForRequestLog.dfoRequestLogSubscribers;
 
     if (previous) {
@@ -268,5 +302,14 @@ export const registerRequestLogging = (): void => {
     globalForRequestLog.dfoRequestLogSubscribers = {
         start: onRequestStart,
         finish: onResponseFinish,
+    };
+
+    return () => {
+        unsubscribe(REQUEST_START, onRequestStart);
+        unsubscribe(RESPONSE_FINISH, onResponseFinish);
+
+        if (globalForRequestLog.dfoRequestLogSubscribers?.start === onRequestStart) {
+            delete globalForRequestLog.dfoRequestLogSubscribers;
+        }
     };
 };

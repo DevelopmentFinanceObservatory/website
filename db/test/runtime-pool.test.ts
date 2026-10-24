@@ -76,7 +76,10 @@ class FakeCloudSqlSocket extends EventEmitter {
  * them.
  */
 test('getCloudSqlRuntimeStream throws a clear error before anything is registered', () => {
-    assert.throws(() => getCloudSqlRuntimeStream(), /register\(\) must run/);
+    assert.throws(
+        () => getCloudSqlRuntimeStream(),
+        /instrumentation\.ts's register\(\).+export-events\.ts's main\(\) must set it/,
+    );
 });
 
 test('buildRuntimePool wires the Cloud SQL path to the registered stream factory', async (t) => {
