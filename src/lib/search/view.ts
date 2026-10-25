@@ -2571,16 +2571,23 @@ export const unresolvedPartText = (part: Part | null | undefined): string | null
     return null;
 };
 
-/** What an ambiguous wording names, by the role its restatement entity
- *  plays. The engine echoes a directed role as "from" or "to" (dfo-apis
- *  search/engine/role_text.py), so "from" is a provider, "to" a recipient, and
- *  anything else a place. */
-const ambiguousEntityNoun = (restatement: ParsedPart | null | undefined, text: string): string => {
-    const role = restatement?.entities
-        ?.find((entity) => entity.text === text)
-        ?.role_text?.toLowerCase();
+/** What an ambiguous wording names, by the role each restatement entity
+ *  written that way plays. The engine echoes a directed role as "from" or
+ *  "to" (dfo-apis search/engine/role_text.py), so "from" is a provider, "to"
+ *  a recipient, and anything else a place. A wording written at both ends
+ *  ("aid from Congo to Congo") names both. */
+const ambiguousEntityNouns = (
+    restatement: ParsedPart | null | undefined,
+    text: string,
+): string[] => {
+    const roles = (restatement?.entities ?? [])
+        .filter((entity) => entity.text === text)
+        .map((entity) => entity.role_text?.toLowerCase());
+    const nouns = roles.map((role) =>
+        role === 'from' ? 'Provider' : role === 'to' ? 'Recipient' : 'Place',
+    );
 
-    return role === 'from' ? 'Provider' : role === 'to' ? 'Recipient' : 'Place';
+    return nouns.length > 0 ? nouns : ['Place'];
 };
 
 /**
@@ -2598,7 +2605,7 @@ export const ambiguousEntityMenuTitle = (
     }
 
     const nouns = new Set(
-        groups.map((group) => ambiguousEntityNoun(part?.restatement, group.text)),
+        groups.flatMap((group) => ambiguousEntityNouns(part?.restatement, group.text)),
     );
 
     return `Select ${[...nouns].join(' or ')}`;
@@ -2607,25 +2614,31 @@ export const ambiguousEntityMenuTitle = (
 /**
  * The ambiguous wording an entity_ambiguous part's slot token renders, with
  * the options that settle it (entityChoiceGroups), or null for any other
- * token. The engine marks each wording as a `slot` token with no
- * `entity_refs` or `binding_ref`, the role the request gave it, and text
- * equal to the wording (dfo-apis search/render/no_data.py). The part's own
- * variable slot is never one.
+ * token. A token carrying `entity_choice` names its group in
+ * `no_data.ambiguous_entities`. Without it, the engine marks each wording as
+ * a `slot` token with no `entity_refs` or `binding_ref`, the role the request
+ * gave it, and text equal to the wording (dfo-apis search/render/no_data.py);
+ * the part's own variable slot is never one.
  */
 export const ambiguousWordingGroup = (
     token: SentenceToken,
     noData: NoData | null | undefined,
 ): EntityChoiceGroup | null => {
+    const choice = token.entity_choice;
+
     if (
-        token.kind !== 'slot' ||
-        token.axis === 'what' ||
-        token.binding_ref ||
-        token.entity_refs?.length
+        typeof choice !== 'number' &&
+        (token.kind !== 'slot' ||
+            token.axis === 'what' ||
+            token.binding_ref ||
+            token.entity_refs?.length)
     ) {
         return null;
     }
 
-    return entityChoiceGroups(noData).find((group) => group.text === token.text) ?? null;
+    const key = typeof choice === 'number' ? choice : token.text;
+
+    return entityChoiceGroups(noData).find((group) => group.key === key) ?? null;
 };
 
 // Values render exactly as the engine sent them — US-style separators,

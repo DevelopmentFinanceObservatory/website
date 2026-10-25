@@ -129,7 +129,7 @@ const SearchCards = ({
                         {groups.flatMap((group) =>
                             group.options.map((option, index) => (
                                 <button
-                                    key={`${group.text}:${index}`}
+                                    key={`${group.key}:${index}`}
                                     type="button"
                                     className={styles.card}
                                     style={{ '--i': index } as React.CSSProperties}

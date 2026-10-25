@@ -1909,7 +1909,7 @@ export const SearchSentenceHeading = ({
                             {groups.flatMap((group) =>
                                 group.options.map((option, optionIndex) => (
                                     <DropdownMenu.Item
-                                        key={`${group.text}:${optionIndex}`}
+                                        key={`${group.key}:${optionIndex}`}
                                         asChild
                                         onSelect={() => pick(option)}
                                     >
