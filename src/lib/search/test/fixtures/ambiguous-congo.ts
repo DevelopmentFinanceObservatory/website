@@ -12,7 +12,7 @@
  * restatement, so it carries none.
  */
 
-import type { NoData, NoDataOption, ParsedPart } from '../../types.ts';
+import type { NoData, NoDataOption, ParsedPart, SentenceToken } from '../../types.ts';
 
 const congoOption = (dcid: string, label: string): NoDataOption => ({
     mentions: ['Congo'],
@@ -75,3 +75,68 @@ export const odaToCongoRestatement: ParsedPart = {
     variable_text: 'official development assistance',
     entities: [{ text: 'Congo', role_text: 'to' }],
 };
+
+/** "aid from Congo to Congo": one wording asked for each end, so the refusal
+ *  carries two `ambiguous_entities` groups written alike. Each option pins
+ *  one end by its candidate's name and posts the other as "Congo", and names
+ *  its group as `entity_choice`, as dfo-apis search/engine/conjoin.py
+ *  `_entity_options` builds them. */
+const congoEnds: NoDataOption[] = [0, 1].flatMap((entityChoice) =>
+    [
+        ['country/COD', 'Congo [DRC]'],
+        ['country/COG', 'Congo [Republic]'],
+    ].map(([dcid, label]) => {
+        const pinned = { text: label, dcid };
+        const [origin, destination] =
+            entityChoice === 0 ? [pinned, { text: 'Congo' }] : [{ text: 'Congo' }, pinned];
+
+        return {
+            mentions: ['Congo'],
+            entity_choice: entityChoice,
+            label,
+            data_query: {
+                kind: 'parsed' as const,
+                parts: [
+                    {
+                        variable_text: 'aid',
+                        entities: [
+                            { ...origin, role_text: 'from' },
+                            { ...destination, role_text: 'to' },
+                        ],
+                    },
+                ],
+            },
+        };
+    }),
+);
+
+const congoGroup = {
+    text: 'Congo',
+    candidates: [
+        { ref: 'country/COD', label: 'Congo [DRC]', kind: 'country' },
+        { ref: 'country/COG', label: 'Congo [Republic]', kind: 'country' },
+    ],
+};
+
+export const congoToCongoNoData: NoData = {
+    reason: 'entity_ambiguous',
+    entity_terms: ['Congo', 'Congo'],
+    ambiguous_entities: [congoGroup, congoGroup],
+    options: congoEnds,
+    unbound_qualifiers: [],
+};
+
+export const congoToCongoRestatement: ParsedPart = {
+    variable_text: 'aid',
+    entities: [
+        { text: 'Congo', role_text: 'from' },
+        { text: 'Congo', role_text: 'to' },
+    ],
+};
+
+/** The two wording slot tokens of its sentence plan, as dfo-apis
+ *  search/render/no_data.py `_ambiguous_entity_plan` marks them. */
+export const congoToCongoWordings: SentenceToken[] = [
+    { kind: 'slot', text: 'Congo', role: 'origin', entity_choice: 0 },
+    { kind: 'slot', text: 'Congo', axis: 'where', role: 'destination', entity_choice: 1 },
+];

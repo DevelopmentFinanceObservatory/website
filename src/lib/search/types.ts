@@ -48,7 +48,6 @@ export type {
     IdentityUnitRequest,
     MeasureAxisValue,
     NoDataDenominator,
-    NoDataOption,
     ObservationSeries,
     ObservationsOmission,
     OpenConstraintAxisFact,
@@ -63,7 +62,6 @@ export type {
     ParsedEntity as ParsedPartEntity,
     RequestedOperation as Operation,
     RoleAxis,
-    SentenceToken,
     Shape,
     Slot,
     SlotOption,
@@ -75,6 +73,15 @@ export type {
     UnitConversion,
     Warning,
 } from '@developmentfinance/client/wire';
+
+// dfo-apis' NoDataOption.entity_choice (and SentenceToken's); the vendored client lacks it.
+type EntityChoice = { entity_choice?: number | null };
+
+/** One ready request a no_data refusal offers. */
+export type NoDataOption = wire.NoDataOption & EntityChoice;
+
+/** One token of a sentence plan. */
+export type SentenceToken = wire.SentenceToken & EntityChoice;
 
 /** The envelope's contract version. */
 export type SchemaVersion = Present<wire.Resolution['schema_version']>;
@@ -211,10 +218,14 @@ export type SpecReading = Partial<Spec> | UnreadableSpec;
 type CandidateSet = Omit<wire.CandidateSet, 'specs'> & { specs: PartSpec[] };
 
 /** A no_data outcome with its nearest, flagged and alternate Specs flattened. */
-export type NoData = Omit<wire.NoData, 'nearest_real' | 'flagged_match' | 'alternate_match'> & {
+export type NoData = Omit<
+    wire.NoData,
+    'nearest_real' | 'flagged_match' | 'alternate_match' | 'options'
+> & {
     nearest_real?: PartSpec[] | null;
     flagged_match?: PartSpec | null;
     alternate_match?: PartSpec | null;
+    options?: NoDataOption[];
 };
 
 /** The members `searchClient.flattenPart` defaults when the wire omits them. */
