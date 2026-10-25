@@ -186,7 +186,8 @@ test('live share routes', async (t) => {
             const answer = await refresh(deps, shareId, cardId);
 
             assert.equal(answer.status, 404, name);
-            assert.deepEqual(answer.body, { error: 'not_found' }, name);
+            assert.equal(answer.body.code, 'not_found', name);
+            assert.equal(answer.body.retryable, false, name);
             assert.equal((await download(deps, shareId, cardId)).status, 404, name);
         }
 
@@ -279,7 +280,7 @@ test('live share routes', async (t) => {
 
         assert.equal(waiting.status, 503);
         assert.equal(waiting.headers.get('retry-after'), '2');
-        assert.deepEqual(await waiting.json(), { status: 'pending', retry_after_s: 2 });
+        assert.equal((await waiting.json()).retry_after_s, 2);
     });
 
     await t.test('no credential: an error answer and no back-end call', async () => {
@@ -295,7 +296,7 @@ test('live share routes', async (t) => {
         const file = await download(unset, id, 'data');
 
         assert.equal(file.status, 502);
-        assert.deepEqual(await file.json(), { status: 'error', code: 'live_unavailable' });
+        assert.equal((await file.json()).code, 'live_unavailable');
         assert.equal(stub.calls.length, 0);
         assert.deepEqual(await rows(id), []);
     });
@@ -562,17 +563,23 @@ test('live share routes', async (t) => {
 
         assert.equal(waiting.status, 503);
         assert.equal(waiting.headers.get('retry-after'), '9');
-        assert.deepEqual(await waiting.json(), { status: 'pending', retry_after_s: 9 });
+        const pending = await waiting.json();
+
+        assert.equal(waiting.headers.get('content-type'), 'application/problem+json');
+        assert.equal(pending.code, 'refresh_pending');
+        assert.equal(pending.retryable, true);
+        assert.equal(pending.retry_after_s, 9);
 
         const failed = over({ refreshDerived: (call) => aiRefusal('recipe_missing', call) });
         const none = await download(failed.deps, id, 'derived');
 
         assert.equal(none.status, 502);
-        assert.deepEqual(await none.json(), {
-            status: 'error',
-            code: 'recipe_missing',
-            retry_after_s: 30,
-        });
+        const missing = await none.json();
+
+        assert.equal(none.headers.get('content-type'), 'application/problem+json');
+        assert.equal(missing.code, 'recipe_missing');
+        assert.equal(missing.retryable, false);
+        assert.equal(missing.retry_after_s, 30);
 
         await age(id);
 
@@ -587,13 +594,13 @@ test('live share routes', async (t) => {
         const badFormat = await download(refusing.deps, id, 'data', 'format=xlsx');
 
         assert.equal(badFormat.status, 400);
-        assert.deepEqual(await badFormat.json(), { status: 'error', code: 'request_invalid' });
+        assert.equal((await badFormat.json()).code, 'request_invalid');
 
         // A refusal of the server's own credential is not the caller's error.
         const badCredential = await download(refusing.deps, id, 'data', 'format=csv');
 
         assert.equal(badCredential.status, 502);
-        assert.deepEqual(await badCredential.json(), { status: 'error', code: 'unauthorized' });
+        assert.equal((await badCredential.json()).code, 'unauthorized');
     });
 
     await t.test('stored answers go with the share and with a switch to snapshot', async () => {
@@ -683,7 +690,7 @@ test('live share routes', async (t) => {
         ]);
 
         assert.equal(res.status, 502);
-        assert.deepEqual(await res.json(), { status: 'error', code: 'backend_timeout' });
+        assert.equal((await res.json()).code, 'backend_timeout');
     });
 
     await t.test('a share deleted mid-refresh answers 404, not a foreign-key failure', async () => {
@@ -722,7 +729,8 @@ test('live share routes', async (t) => {
 
         const answer = await refresh({ ...deps, db: racing }, id, 'data');
 
-        assert.deepEqual(answer, { status: 404, body: { error: 'not_found' } });
+        assert.equal(answer.status, 404);
+        assert.equal(answer.body.code, 'not_found');
         assert.deepEqual(await rows(id), []);
     });
 

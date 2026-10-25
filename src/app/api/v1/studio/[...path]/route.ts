@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { getUser } from '@/lib/auth/session';
 import { counterDb } from '@/lib/db';
 import { clientIp, forward, STUDIO_API_BASE } from '@/lib/proxy/forward';
+import { notFoundProblem } from '@/lib/proxy/problem';
 import {
     meterTurn,
     refundPrompt,
@@ -29,10 +30,7 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
     const route = studioRoute((await params).path);
 
     if (!route) {
-        return Response.json(
-            { error: 'not_found', retry: 'do_not_retry', detail: 'There is no such Studio route.' },
-            { status: 404 },
-        );
+        return notFoundProblem(req.nextUrl.pathname);
     }
 
     const options = {

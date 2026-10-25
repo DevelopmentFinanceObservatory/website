@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
 import type { SavedConversation } from './history.ts';
+import { problem, requestInvalidProblem } from '../proxy/problem.ts';
 import type { ShareKind } from './sharePrune.ts';
 
 /**
@@ -48,15 +49,13 @@ export type StudioShareRequest = {
     cardId?: string;
 };
 
-export type StudioShareRefusal = 'bad_request' | 'invalid_mode' | 'live_unsupported_kind';
-
 /**
- * A Studio share request (`POST /api/share`), or the code it is refused
- * with. A request that names no mode asks for a snapshot.
+ * A Studio share request (`POST /api/share`), or the 400 problem document it
+ * is refused with: `request_invalid`, with a `pointer` to the mode when that
+ * is the fault, or `live_unsupported_kind`. A request that names no mode
+ * asks for a snapshot.
  */
-export const readStudioShareRequest = (
-    body: any,
-): StudioShareRequest | { error: StudioShareRefusal } => {
+export const readStudioShareRequest = (body: any): StudioShareRequest | Response => {
     const saved = body?.conversation;
 
     if (
@@ -67,17 +66,24 @@ export const readStudioShareRequest = (
         !Array.isArray(saved.widgets) ||
         (body.kind === 'card' && typeof body.cardId !== 'string')
     ) {
-        return { error: 'bad_request' };
+        return requestInvalidProblem(
+            'The body needs a kind, a conversation with an id and widgets, and a cardId for a card.',
+        );
     }
 
     const mode: unknown = body.mode ?? 'snapshot';
 
     if (!(MODES as unknown[]).includes(mode)) {
-        return { error: 'invalid_mode' };
+        return requestInvalidProblem('The mode is `live` or `snapshot`.', '/mode');
     }
 
     if (mode === 'live' && !LIVE_KINDS.includes(body.kind)) {
-        return { error: 'live_unsupported_kind' };
+        return problem({
+            status: 400,
+            code: 'live_unsupported_kind',
+            detail: 'Only a canvas or a card can be a live share.',
+            retryable: false,
+        });
     }
 
     return { kind: body.kind, mode: mode as ShareMode, saved, cardId: body.cardId };

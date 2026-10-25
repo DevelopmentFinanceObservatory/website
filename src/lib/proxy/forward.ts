@@ -7,6 +7,7 @@ import { apisFetch } from '@/lib/apisAuth';
 import { limiterKeyFor, setCaller, trustedHops } from './caller';
 import { relayBody } from './compress';
 import { clientResponseHeaders, dropEncodedLength, pick, upstreamRequestHeaders } from './headers';
+import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders } from './rateHeaders';
 import { hit, type Surface } from './rateLimit';
 
@@ -80,28 +81,12 @@ type ForwardOptions = {
     rewrite?: (upstream: Response) => Promise<Response>;
 };
 
-const unreachable = (detail: string, headers: Record<string, string>): Response =>
-    Response.json(
-        { error: 'transient_unavailable', retry: 'retry_after_delay', detail },
-        { status: 502, headers },
-    );
-
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     const verdict = options.surface ? await hit(options.surface, clientIp(req)) : undefined;
     const limitHeaders = verdict ? rateHeaders(verdict) : {};
 
     if (verdict && !verdict.allowed) {
-        return Response.json(
-            {
-                error: 'rate_limited',
-                retry: 'retry_after_delay',
-                detail: `Too many requests — ${verdict.limit} per window per address. Try again in ${verdict.reset}s.`,
-            },
-            {
-                status: 429,
-                headers: { ...limitHeaders, 'Retry-After': String(verdict.reset) },
-            },
-        );
+        return rateLimitedProblem(verdict, limitHeaders);
     }
 
     const refusal = await options.admit?.();
@@ -131,7 +116,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             );
         }
 
-        return unreachable(options.unreachable, limitHeaders);
+        return unreachableProblem(options.unreachable, limitHeaders);
     };
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
@@ -151,7 +136,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             signal: req.signal,
         } as RequestInit);
     } catch {
-        return unreachable(options.unreachable, limitHeaders);
+        return unreachableProblem(options.unreachable, limitHeaders);
     }
 
     if (options.rewrite) {
@@ -192,7 +177,8 @@ const ASSET_RESPONSE_HEADERS = [
 /**
  * GET a public static asset from `target` and return it with its own type
  * and cache headers. No token, no caller and no limit, since the asset is
- * public upstream too. Gives up after ASSET_TIMEOUT_MS with a 502.
+ * public upstream too. Gives up after ASSET_TIMEOUT_MS with a 502 problem
+ * document.
  */
 export const forwardAsset = async (req: NextRequest, target: string): Promise<Response> => {
     const headers = new Headers();
@@ -211,7 +197,7 @@ export const forwardAsset = async (req: NextRequest, target: string): Promise<Re
     } catch (error) {
         console.error(`asset fetch failed: ${new URL(target).pathname}`, error);
 
-        return new Response(null, { status: 502 });
+        return unreachableProblem('The upstream asset is unreachable.', {});
     }
 
     const out = new Headers();

@@ -68,12 +68,13 @@ export const renderingArtifact = <
     );
 
 /** The pin failed or cannot be attempted, so the snapshot would expire with
- *  the working tier. POST /api/share answers this code as its `detail`. */
+ *  the working tier. POST /api/share answers this code as the `platform_code`
+ *  of its `platform_refused` problem. */
 export const PIN_REFUSED = 'pin_refused';
 
 /** The pin door is pinning nothing right now (429 or 503) because its daily
  *  allowance is spent or it is busy. POST /api/share answers this code as
- *  its `detail`. */
+ *  the `platform_code` of its `platform_refused` problem. */
 export const PIN_UNAVAILABLE = 'pin_unavailable';
 
 const UNAVAILABLE_STATUSES = new Set([429, 503]);

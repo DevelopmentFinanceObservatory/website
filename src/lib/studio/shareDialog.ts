@@ -104,23 +104,22 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
         return typeof body['id'] === 'string' && body['id'] ? { id: body['id'] } : FAILED;
     }
 
-    const { error, cards, limit, count } = body;
+    // Every refusal is a problem document; its `code` says which.
+    const { code, cards, limit, count } = body;
 
-    if (error === 'live_cards_blocked' && Array.isArray(cards)) {
+    if (code === 'live_cards_blocked' && Array.isArray(cards)) {
         const cardIds = cards.flatMap((card) =>
             isRecord(card) && typeof card['id'] === 'string' ? [card['id']] : [],
         );
 
-        return cardIds.length ? { refusal: { code: error, cardIds } } : FAILED;
+        return cardIds.length ? { refusal: { code, cardIds } } : FAILED;
     }
 
-    if (error === 'live_too_many_cards' && typeof limit === 'number' && typeof count === 'number') {
-        return { refusal: { code: error, limit, count } };
+    if (code === 'live_too_many_cards' && typeof limit === 'number' && typeof count === 'number') {
+        return { refusal: { code, limit, count } };
     }
 
-    return error === 'live_unavailable' || error === 'guest_limit'
-        ? { refusal: { code: error } }
-        : FAILED;
+    return code === 'live_unavailable' || code === 'guest_limit' ? { refusal: { code } } : FAILED;
 };
 
 /**

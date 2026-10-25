@@ -6,6 +6,7 @@ import { isLiveStudioShare } from '../chat/shareMode.ts';
 import type { ShareDb } from '../chat/shareWrites.ts';
 import type { CardRef, Widget } from '../chat/widgets.ts';
 import { dropEncodedLength, pick } from '../proxy/headers.ts';
+import { problem, type ProblemStatus } from '../proxy/problem.ts';
 import { gateOf } from './gate.ts';
 import {
     BackendError,
@@ -106,12 +107,6 @@ export type BlockedCard = {
     reason: 'missing_ref' | 'unknown_component' | 'unsupported_frame';
 };
 
-export type LiveShareRefusal =
-    | { status: 503; body: { error: 'live_unavailable' } }
-    | { status: 400; body: { error: 'live_too_many_cards'; limit: number; count: number } }
-    | { status: 400; body: { error: 'live_cards_blocked'; cards: BlockedCard[] } }
-    | { status: 502; body: { error: 'live_check_failed' } };
-
 const blockOf = async (backend: LiveBackend, widget: Widget): Promise<BlockedCard | null> => {
     const ref = refOf(widget);
 
@@ -136,32 +131,38 @@ const blockOf = async (backend: LiveBackend, widget: Widget): Promise<BlockedCar
 };
 
 /**
- * Why `saved`, the pruned copy a share would store, cannot be a live share,
- * or null when it can: the deployment holds the credential, the canvas is
- * within the card cap, and every data card names a component revision in
- * dfo-apis that stands on a frame a refresh can check. No refresh runs here.
+ * The problem document that says why `saved`, the pruned copy a share would
+ * store, cannot be a live share, or null when it can: the deployment holds
+ * the credential, the canvas is within the card cap, and every data card
+ * names a component revision in dfo-apis that stands on a frame a refresh
+ * can check. No refresh runs here. `live_too_many_cards` carries `limit` and
+ * `count`, and `live_cards_blocked` carries `cards`, as extra members.
  */
 export const liveShareRefusal = async (
     { env, fetch: fetcher }: Pick<LiveDeps, 'env' | 'fetch'>,
     saved: SavedConversation,
-): Promise<LiveShareRefusal | null> => {
+): Promise<Response | null> => {
     const backend = liveBackendFrom(env, fetcher);
 
     if (!backend) {
-        return { status: 503, body: { error: 'live_unavailable' } };
+        return problem({
+            status: 503,
+            code: 'live_unavailable',
+            detail: 'This deployment cannot refresh live cards.',
+            retryable: false,
+        });
     }
 
     const cards = dataCardsOf(saved);
 
     if (cards.length > LIVE_SHARE_MAX_DATA_CARDS) {
-        return {
+        return problem({
             status: 400,
-            body: {
-                error: 'live_too_many_cards',
-                limit: LIVE_SHARE_MAX_DATA_CARDS,
-                count: cards.length,
-            },
-        };
+            code: 'live_too_many_cards',
+            detail: `A live share holds at most ${LIVE_SHARE_MAX_DATA_CARDS} data cards; this one holds ${cards.length}.`,
+            retryable: false,
+            extra: { limit: LIVE_SHARE_MAX_DATA_CARDS, count: cards.length },
+        });
     }
 
     const limited = bounded(backend, CREATE_CHECK_DEADLINE_MS);
@@ -173,14 +174,25 @@ export const liveShareRefusal = async (
         ).filter((block) => block !== null);
 
         return blocked.length
-            ? { status: 400, body: { error: 'live_cards_blocked', cards: blocked } }
+            ? problem({
+                  status: 400,
+                  code: 'live_cards_blocked',
+                  detail: 'Some data cards cannot be refreshed, so the share cannot be live.',
+                  retryable: false,
+                  extra: { cards: blocked },
+              })
             : null;
     } catch (error) {
         console.error('live share: card check failed', {
             error: error instanceof BackendError ? error.code : error,
         });
 
-        return { status: 502, body: { error: 'live_check_failed' } };
+        return problem({
+            status: 502,
+            code: 'transient_unavailable',
+            detail: 'The data cards could not be checked right now. Try again in a minute.',
+            retryable: true,
+        });
     }
 };
 
@@ -271,7 +283,13 @@ const NOT_CONFIGURED: LiveResult = { status: 'error', code: 'live_unavailable' }
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
 const notFound = (): Response =>
-    Response.json({ error: 'not_found' }, { status: 404, headers: NO_STORE });
+    problem({
+        status: 404,
+        code: 'not_found',
+        detail: 'There is no such live card.',
+        retryable: false,
+        headers: NO_STORE,
+    });
 
 export type RefreshAnswer = {
     status: LiveResult['status'];
@@ -344,19 +362,34 @@ const EXPORT_HEADERS = ['content-type', 'content-disposition', 'content-length']
 
 // The statuses with which dfo-apis refuses an export request itself: a
 // format it cannot write, or rows that are gone.
-const REQUEST_REFUSALS = [400, 404, 422];
+const REQUEST_REFUSALS = [400, 404, 422] as const satisfies readonly ProblemStatus[];
 
-// A download that cannot be served answers JSON under an error status, so a
-// browser does not save it as the file: 503 with Retry-After while the
-// card's refresh is pending, dfo-apis' own status for a refusal of the
-// export request (`REQUEST_REFUSALS`), and 502 for everything else.
-const noFile = (result: LiveResult & { status: 'pending' | 'error' }, status = 502): Response =>
+// A download that cannot be served answers a problem document under an error
+// status, so a browser does not save it as the file: 503 `refresh_pending`
+// with Retry-After while the card's refresh is pending, dfo-apis' own status
+// for a refusal of the export request (`REQUEST_REFUSALS`), and 502 for
+// everything else. `retry_after_s` is an extension member of both.
+const noFile = (
+    result: LiveResult & { status: 'pending' | 'error' },
+    status: ProblemStatus = 502,
+): Response =>
     result.status === 'pending'
-        ? Response.json(answerOf(result), {
+        ? problem({
               status: 503,
+              code: 'refresh_pending',
+              detail: 'The card is being refreshed. Ask again after the wait.',
+              retryable: true,
               headers: { ...NO_STORE, 'Retry-After': String(result.retryAfterS) },
+              extra: { retry_after_s: result.retryAfterS },
           })
-        : Response.json(answerOf(result), { status, headers: NO_STORE });
+        : problem({
+              status,
+              code: result.code,
+              detail: 'The card has no data file to serve.',
+              retryable: result.retryable === true,
+              headers: NO_STORE,
+              extra: result.retryAfterS ? { retry_after_s: result.retryAfterS } : undefined,
+          });
 
 /**
  * `GET /api/share/[id]/cards/[cardId]/data?format=&bundle=`. The rows of
