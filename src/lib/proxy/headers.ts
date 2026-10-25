@@ -3,9 +3,13 @@
  * from forward.ts, which imports server-only, so `node --test` can load it.
  *
  * A request carries its content headers, the caller's user-agent (the API
- * logs it to tell client families apart) and every `mcp-*` header (the MCP
- * transport defines mcp-method, mcp-name, mcp-session-id and
- * mcp-protocol-version, and validates the first two against the body). A
+ * logs it to tell client families apart), the SDK clients' x-dfo-client label
+ * (cleaned by clientLabel below, so the API's request log can name the client
+ * of production traffic) and every `mcp-*` header (the MCP transport defines
+ * mcp-method, mcp-name, mcp-session-id and mcp-protocol-version, and
+ * validates the first two against the body). x-dfo-client is a label the
+ * caller chooses, good for counting usage and for nothing else: it takes no
+ * part in trust, auth or rate limits. A
  * response carries its content headers, allow (the methods of a 405),
  * location (a redirect, as the Datasets API's file links answer),
  * cache-control (the `no-store` on such a redirect to a signed URL, which
@@ -17,8 +21,8 @@
  * x-dfo-write-token), so it stays here. The content-length is left behind
  * when the upstream encoded the body, since fetch has decoded it by then.
  * Matching `mcp-*` by prefix means a protocol header added later needs no
- * change here. No `x-dfo-*` header goes upstream from the client:
- * authorization and x-dfo-caller are set by forward.ts.
+ * change here. Of the `x-dfo-*` names only x-dfo-client goes upstream from the
+ * client; authorization and x-dfo-caller are set by forward.ts.
  */
 const REQUEST_PREFIXES = ['mcp-'];
 const RESPONSE_PREFIXES = ['mcp-'];
@@ -26,6 +30,14 @@ const RESPONSE_PREFIXES = ['mcp-'];
 // Request headers worth carrying upstream; everything else (cookies, the
 // site's Basic auth, hop-by-hop) stays here.
 const REQUEST_HEADERS = ['content-type', 'accept', 'user-agent'];
+const CLIENT_HEADER = 'x-dfo-client';
+// The APIs' cap on a logged caller-supplied string (dfo_platform/caller.py).
+const MAX_CLIENT_LABEL_LENGTH = 256;
+// What Python's str.isprintable() rejects, bar the plain space: control, format
+// (soft hyphen), surrogate, private-use and unassigned characters, line and
+// paragraph separators, and every space separator other than U+0020.
+const NON_PRINTABLE = /[\p{C}\p{Zl}\p{Zp}]|(?! )\p{Zs}/gu;
+
 // Response headers worth carrying back; the rest is the upstream's own
 // business (server, date, transfer-encoding…).
 const RESPONSE_HEADERS = [
@@ -71,9 +83,26 @@ const pickWithPrefixes = (
     }
 };
 
+/**
+ * The x-dfo-client label as the APIs clean it: non-printable characters and
+ * surrounding space dropped, then cut to 256 characters. Empty when the
+ * header is absent or blank after cleaning.
+ */
+export const clientLabel = (source: Headers): string => {
+    const printable = (source.get(CLIENT_HEADER) ?? '').replace(NON_PRINTABLE, '').trim();
+
+    return [...printable].slice(0, MAX_CLIENT_LABEL_LENGTH).join('');
+};
+
 /** The client's request headers that go upstream. */
 export const upstreamRequestHeaders = (source: Headers, into: Headers = new Headers()): Headers => {
     pickWithPrefixes(source, REQUEST_HEADERS, REQUEST_PREFIXES, into);
+
+    const label = clientLabel(source);
+
+    if (label) {
+        into.set(CLIENT_HEADER, label);
+    }
 
     return into;
 };
