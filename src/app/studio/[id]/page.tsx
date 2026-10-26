@@ -7,6 +7,7 @@ import { liveSharingAvailable } from '@/lib/studio/liveShare';
 
 export const metadata: Metadata = {
     title: 'DFO Studio',
+    robots: { index: false, follow: false },
 };
 
 // A conversation's own URL — the Studio opens straight on it (a refresh, a

@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import manifestJson from '@/content/dfo-docs/manifest.json';
 
+import { docsHref } from './href.ts';
 import { bundleLinks, corpusTarget } from './links.ts';
-import { docsHref } from './nav';
 
 /**
  * The dfo-docs corpus, as pinned by scripts/sync-dfo-docs.mjs: the manifest

@@ -6,12 +6,18 @@
 import path from 'node:path';
 
 import type { DocsPage } from './corpus.ts';
+import { docsHref } from './href.ts';
 
 /** The corpus file a relative link in `page`'s markdown points at. */
 export const corpusTarget = (page: DocsPage, relative: string): string | undefined =>
     page.corpus_path
         ? path.posix.normalize(path.posix.join(path.posix.dirname(page.corpus_path), relative))
         : undefined;
+
+/** Where the site serves a page's raw markdown (the docs-md route); undefined
+ *  for a page the corpus holds no markdown for, a package documented elsewhere. */
+export const markdownHref = (page: DocsPage): string | undefined =>
+    page.corpus_path ? `${docsHref(page.path)}.md` : undefined;
 
 /** Where the site serves a page's skill zip: scripts/sync-dfo-docs.mjs writes
  *  it to the same path under public/. */
