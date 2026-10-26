@@ -37,9 +37,9 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
-/** An HTTP refusal of a stream request: its status and, when the body is
- *  one, the harness's ToolError. */
-export type StreamRefusal = { status: number; error: ToolError | null };
+/** An HTTP refusal of a stream request: its status, the body's `detail`
+ *  when it has one, and the harness's ToolError when the body is one. */
+export type StreamRefusal = { status: number; detail: string | null; error: ToolError | null };
 
 /** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
  *  before the stream would report it as an `error` frame, and returns true
@@ -84,7 +84,7 @@ const streamStudio = async (
     }
 
     if (!res.ok || !res.body) {
-        let detail = `HTTP ${res.status}`;
+        let detail: string | null = null;
         let error: ToolError | null = null;
 
         try {
@@ -99,11 +99,11 @@ const streamStudio = async (
             // Non-JSON body — the status line stands.
         }
 
-        if (!res.ok && onRefusal?.({ status: res.status, error })) {
+        if (!res.ok && onRefusal?.({ status: res.status, detail, error })) {
             return;
         }
 
-        onFrame(transportError(detail));
+        onFrame(transportError(detail ?? `HTTP ${res.status}`));
 
         return;
     }

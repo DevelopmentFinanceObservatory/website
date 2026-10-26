@@ -32,22 +32,23 @@ type PlanModalProps = {
 };
 
 /** What the switch that produced this plan changed, said once on the plan
- *  it re-offered. */
-export const PlanMovedNote = ({ plan, className }: { plan: PlanState; className?: string }) =>
-    plan.moved.length > 0 ? (
-        <ul className={classNames(styles.moved, className)} aria-live="polite">
-            {plan.moved.map((moved) => (
-                <li key={moved.choice_id}>{movedSentence(moved)}</li>
-            ))}
-        </ul>
-    ) : null;
+ *  it re-offered. The live region stays mounted, empty between switches,
+ *  so a screen reader announces the sentences when they arrive. */
+export const PlanMovedNote = ({ plan, className }: { plan: PlanState; className?: string }) => (
+    <ul className={classNames(styles.moved, className)} aria-live="polite">
+        {plan.moved.map((moved) => (
+            <li key={moved.choice_id}>{movedSentence(moved)}</li>
+        ))}
+    </ul>
+);
 
 /**
  * One decision: the question, the chosen answer and why. A scope decision
  * the plan lets the user switch also lists its options, the active one
  * marked; a partial option names the years it covers, an unavailable one
- * says why and cannot be picked. Every option waits while a switch is in
- * flight.
+ * says why and cannot be picked. While a switch is in flight every option
+ * ignores clicks but keeps focus (`aria-disabled`); only unavailable ones
+ * are natively disabled.
  */
 const DecisionRow = ({
     decision,
@@ -72,6 +73,7 @@ const DecisionRow = ({
                         const pending =
                             plan.switching?.choiceId === choiceId &&
                             plan.switching.optionId === option.option_id;
+                        const inert = !isSelectable(decision, option) || !!plan.switching;
                         const note =
                             option.status === 'unavailable'
                                 ? option.reason
@@ -90,8 +92,9 @@ const DecisionRow = ({
                                 )}
                                 aria-pressed={active}
                                 aria-busy={pending || undefined}
-                                disabled={!isSelectable(decision, option) || !!plan.switching}
-                                onClick={() => onSwitch?.(choiceId, option.option_id)}
+                                aria-disabled={inert || undefined}
+                                disabled={option.status === 'unavailable'}
+                                onClick={() => !inert && onSwitch?.(choiceId, option.option_id)}
                             >
                                 <span className={styles.optionLabel}>{option.label}</span>
                                 {note && <span className={styles.optionNote}>{note}</span>}
@@ -196,11 +199,9 @@ const PlanModal = ({ plan, open, onOpenChange, onApprove, onCancel, onSwitch }: 
                     </ul>
                 )}
                 <PlanMovedNote plan={plan} />
-                {plan.notice && (
-                    <p className={styles.notice} role="status">
-                        {plan.notice}
-                    </p>
-                )}
+                <p className={styles.notice} role="status">
+                    {plan.notice}
+                </p>
             </div>
             <div className={styles.proceed}>
                 <p className={styles.proceedLabel}>Start building?</p>

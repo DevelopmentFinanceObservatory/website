@@ -123,6 +123,10 @@
 .moved {
     margin: 0;
     padding: 0 rem(16) rem(14);
+
+    &:empty {
+        padding: 0;
+    }
 }
 
 // --- "Start building?" ------------------------------------------------------

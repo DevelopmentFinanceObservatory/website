@@ -170,16 +170,17 @@
         background-color 0.25s ease,
         opacity 0.25s ease;
 
-    &:hover:not(:disabled) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
         background-color: var(--color-net-mid);
     }
 
-    &:disabled {
+    &:disabled,
+    &[aria-disabled="true"] {
         cursor: default;
     }
 
     // Unavailable, or waiting on a switch in flight.
-    &:disabled:not(.optionActive, .optionPending) {
+    &:is(:disabled, [aria-disabled="true"]):not(.optionActive, .optionPending) {
         opacity: 0.55;
     }
 }
@@ -220,6 +221,13 @@
     gap: rem(4);
     padding: 0;
     list-style: none;
+}
+
+// Both stay mounted as live regions; empty, they take no room.
+.moved:empty,
+.notice:empty {
+    margin: 0;
+    padding: 0;
 }
 
 // --- "Start building?" ------------------------------------------------------

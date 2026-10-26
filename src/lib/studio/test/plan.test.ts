@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
     PLAN_REVISION_STALE,
+    canSwitch,
     STALE_NOTICE,
     isActiveOption,
     isSelectable,
@@ -167,13 +168,14 @@ test('without active_option_id the chosen label marks the active option', () => 
     assert.equal(isActiveOption(decision, net!), false);
 });
 
-test('a stale revision keeps the card and asks the user to check the plan', () => {
+test('a stale revision ends switching on the card and asks for a reload', () => {
     const plan = startSwitch(planFromFrame(frame()), {
         choiceId: 'spec_1:measure_basis',
         optionId: 'measure_basis:net',
     });
     const refused = refusedSwitch(plan, {
         status: 409,
+        detail: 'plan revision rev-a is not the pending plan',
         error: {
             error: 'edit_conflict',
             retry: 'refresh_then_retry',
@@ -184,8 +186,9 @@ test('a stale revision keeps the card and asks the user to check the plan', () =
 
     assert.equal(refused.switching, null);
     assert.equal(refused.notice, STALE_NOTICE);
-    assert.equal(refused.revision, 'rev-a');
-    assert.notEqual(switchReply(refused, 'spec_1:measure_basis', 'measure_basis:net'), null);
+    assert.equal(refused.revision, null);
+    assert.equal(canSwitch(refused), false);
+    assert.equal(switchReply(refused, 'spec_1:measure_basis', 'measure_basis:net'), null);
 });
 
 test('an unavailable option keeps the card and shows the harness reason', () => {
@@ -195,6 +198,7 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
     });
     const refused = refusedSwitch(plan, {
         status: 422,
+        detail: 'Net disbursements are not published for 2020.',
         error: {
             error: 'binding_invalid',
             retry: 'correct_and_retry',
@@ -205,12 +209,20 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
 
     assert.equal(refused.switching, null);
     assert.equal(refused.notice, 'Net disbursements are not published for 2020.');
+    assert.equal(refused.revision, 'rev-a');
 });
 
-test('a refusal without a ToolError body names the status', () => {
-    const refused = refusedSwitch(planFromFrame(frame()), { status: 502, error: null });
+test('a plain detail body is the notice; without one the status is named', () => {
+    const plan = planFromFrame(frame());
 
-    assert.equal(refused.notice, 'The switch was refused (HTTP 502).');
+    assert.equal(
+        refusedSwitch(plan, { status: 401, detail: 'Sign in again.', error: null }).notice,
+        'Sign in again.',
+    );
+    assert.equal(
+        refusedSwitch(plan, { status: 502, detail: null, error: null }).notice,
+        'The switch was refused (HTTP 502).',
+    );
 });
 
 test('a fresh plan after a switch replaces the waiting card with what moved', () => {

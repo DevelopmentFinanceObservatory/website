@@ -123,7 +123,7 @@ test('runInterrupt: a refusal reaches onRefusal with its status and ToolError, a
         },
     });
 
-    assert.deepEqual(refusals, [{ status: 409, error: staleBody }]);
+    assert.deepEqual(refusals, [{ status: 409, detail: staleBody.detail, error: staleBody }]);
     assert.deepEqual(frames, []);
 });
 
@@ -143,7 +143,7 @@ test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail
         },
     });
 
-    assert.deepEqual(refusals, [{ status: 502, error: null }]);
+    assert.deepEqual(refusals, [{ status: 502, detail: 'proxy failed', error: null }]);
     assert.equal(frames.length, 1);
     assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
 });

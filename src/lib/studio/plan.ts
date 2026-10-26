@@ -44,7 +44,7 @@ export type SwitchReply = Required<
 export const PLAN_REVISION_STALE = 'plan_revision_stale';
 
 export const STALE_NOTICE =
-    'The plan changed before your switch reached it. Check the plan and switch again.';
+    'This plan changed after this page received it, so it can no longer be switched here. Reload the conversation to see the current plan.';
 
 export const planFromFrame = (frame: PlanProposed): PlanState => ({
     title: frame.title,
@@ -124,16 +124,17 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
     notice: null,
 });
 
-/** The plan after the harness refused its switch: the card keeps the
- *  newest plan this page holds and says why. */
-export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => ({
-    ...plan,
-    switching: null,
-    notice:
-        refusal.error?.constraint_id === PLAN_REVISION_STALE
-            ? STALE_NOTICE
-            : (refusal.error?.detail ?? `The switch was refused (HTTP ${refusal.status}).`),
-});
+/** The plan after the harness refused its switch, saying why. A stale
+ *  revision cannot be recovered from here (the refusal carries no newer
+ *  plan), so that card drops its revision and offers no further switch. */
+export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState =>
+    refusal.error?.constraint_id === PLAN_REVISION_STALE
+        ? { ...plan, revision: null, switching: null, notice: STALE_NOTICE }
+        : {
+              ...plan,
+              switching: null,
+              notice: refusal.detail ?? `The switch was refused (HTTP ${refusal.status}).`,
+          };
 
 /** A plan whose switch ended without a fresh plan (an error, a stop, a turn
  *  that finished) leaves the card; any other plan stays. */
