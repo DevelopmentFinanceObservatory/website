@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { DocsPage } from '../corpus.ts';
-import { bundleLinks } from '../links.ts';
+import { bundleLinks, markdownHref } from '../links.ts';
 
 const skill: DocsPage = {
     id: 'skills/oda-crs',
@@ -58,4 +58,25 @@ test('pages that record no bundle resolve nothing', () => {
     ]) {
         assert.equal(resolve(unbundled, href), undefined, href);
     }
+});
+
+test('only a page the corpus holds markdown for links its .md copy', () => {
+    const home: DocsPage = {
+        id: 'index',
+        title: 'Docs',
+        path: '',
+        kind: 'page',
+        corpus_path: 'index.md',
+    };
+    const external: DocsPage = {
+        id: 'pydeflate',
+        title: 'pydeflate',
+        path: 'tools/pydeflate',
+        kind: 'external',
+        url: 'https://jm-rivera.github.io/pydeflate/',
+    };
+
+    assert.equal(markdownHref(guide), '/docs/guides/install.md');
+    assert.equal(markdownHref(home), '/docs.md');
+    assert.equal(markdownHref(external), undefined);
 });

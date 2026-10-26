@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 import styles from './page.module.scss';
 
 import DataSearch from '@/components/organisms/DataSearch/DataSearch';
+import { GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
+import { dataPageRobots } from '@/lib/crawl';
 import { loadSearchCatalogue } from '@/lib/search/catalogueLoader';
 
 // Rendered per request, so `next build` does not depend on the API
@@ -13,10 +15,13 @@ export const dynamic = 'force-dynamic';
 
 type DataPageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-// A version link (?spec=) is unlisted, like a share link: one page per
-// dataset version is nothing a search engine should list.
-export const generateMetadata = async ({ searchParams }: DataPageProps): Promise<Metadata> =>
-    (await searchParams).spec ? { robots: { index: false, follow: false } } : {};
+// Version links and search shares are unlisted, except a gallery item's
+// search (dataPageRobots).
+export const generateMetadata = async ({ searchParams }: DataPageProps): Promise<Metadata> => {
+    const robots = dataPageRobots(await searchParams, GALLERY_ITEMS);
+
+    return robots ? { robots } : {};
+};
 
 // The catalogue comes from the server, so the idle chips, the stat tiles and
 // the starting point render with no search call.
