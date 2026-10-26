@@ -48,6 +48,16 @@ env:
         echo "ok Created {{ENV_FILE}} from {{ENV_SAMPLE}}."
     fi
 
+# pnpm reuses an installed `file:` package whose name and version are
+# unchanged, so the stale install goes first.
+#
+# Re-lock the vendored API client tarball
+relock-client:
+    rm -rf node_modules/.pnpm/@developmentfinance+client@*
+    pnpm install --lockfile-only --fix-lockfile
+    pnpm install --frozen-lockfile
+    node --input-type=module -e "await import('@developmentfinance/client')"
+
 # ── Development ───────────────────────────────────────
 
 # LAN access (phone/tablet testing) needs DEV_ORIGINS set in {{ENV_FILE}}.
