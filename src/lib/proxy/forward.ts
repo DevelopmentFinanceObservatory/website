@@ -19,8 +19,8 @@ import { hit, type Surface } from './rateLimit';
  * /codes call the route forwards, is rate-limited per IP: /mcp on its own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers go out only on a counted call). A call is forwarded with its
- * method, query, body, content headers, user-agent and every mcp-* header
- * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
+ * method, query, body, content headers, user-agent, x-dfo-client and every
+ * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
  * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
  * or more is gzipped on the way for a client that accepts it

@@ -1,8 +1,9 @@
 /**
  * `headers.ts`: which request and response headers cross the proxy. Every
- * `mcp-*` header goes either way whatever its case, and the public
- * x-dfo-trace-id and x-dfo-commit come back; credentials, the caller header
- * and the internal `x-dfo-*` identity headers are never copied.
+ * `mcp-*` header goes either way whatever its case, the cleaned x-dfo-client
+ * label goes up, and the public x-dfo-trace-id and x-dfo-commit come back;
+ * credentials, the caller header and the other `x-dfo-*` headers are never
+ * copied.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -48,12 +49,47 @@ test("upstreamRequestHeaders: carries the caller's user-agent", () => {
     assert.deepEqual(Object.fromEntries(out), { 'user-agent': 'dfo-python/0.4.1' });
 });
 
+test('upstreamRequestHeaders: carries x-dfo-client whatever its case', () => {
+    for (const name of ['x-dfo-client', 'X-DFO-Client', 'X-Dfo-Client']) {
+        const out = upstreamRequestHeaders(
+            new Headers({ [name]: 'dfo-python/0.4.1 (CPython 3.12)' }),
+        );
+
+        assert.deepEqual(Object.fromEntries(out), {
+            'x-dfo-client': 'dfo-python/0.4.1 (CPython 3.12)',
+        });
+    }
+});
+
+test('upstreamRequestHeaders: strips control characters and surrounding space from x-dfo-client', () => {
+    const out = upstreamRequestHeaders(
+        new Headers({ 'x-dfo-client': ' dfo\x01-py\tthon\x85/0.4\u00ad.1 ' }),
+    );
+
+    assert.equal(out.get('x-dfo-client'), 'dfo-python/0.4.1');
+});
+
+test('upstreamRequestHeaders: caps x-dfo-client at 256 characters', () => {
+    const out = upstreamRequestHeaders(new Headers({ 'x-dfo-client': 'a'.repeat(300) }));
+
+    assert.equal(out.get('x-dfo-client'), 'a'.repeat(256));
+});
+
+test('upstreamRequestHeaders: leaves out an x-dfo-client that is empty after cleaning', () => {
+    const out = upstreamRequestHeaders(new Headers({ 'x-dfo-client': ' \x01\t\x85 ' }));
+
+    assert.equal(out.has('x-dfo-client'), false);
+});
+
 test('upstreamRequestHeaders: drops credentials, x-dfo-* and other headers', () => {
     const out = upstreamRequestHeaders(
         new Headers({
             authorization: 'Bearer client',
             'x-dfo-caller': 'ip:spoofed',
             'x-dfo-trace-id': 'spoofed',
+            'x-dfo-principal': 'user:42',
+            'x-dfo-write-token': 'w1',
+            'x-dfo-client-ip': '203.0.113.9',
             cookie: 'a=b',
             connection: 'keep-alive',
             'x-mcp-method': 'no',
