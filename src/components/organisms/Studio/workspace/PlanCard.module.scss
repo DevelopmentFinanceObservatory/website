@@ -119,6 +119,12 @@
     letter-spacing: -0.031em;
 }
 
+// What the switch behind this plan changed, under the steps.
+.moved {
+    margin: 0;
+    padding: 0 rem(16) rem(14);
+}
+
 // --- "Start building?" ------------------------------------------------------
 
 // Grows OUT of the input below: rounded on top only, its bottom edge

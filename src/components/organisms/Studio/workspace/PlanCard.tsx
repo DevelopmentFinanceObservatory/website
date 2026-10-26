@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { useState } from 'react';
 
 import styles from './PlanCard.module.scss';
-import PlanModal from './PlanModal';
+import PlanModal, { PlanMovedNote } from './PlanModal';
 import type { ChatState } from '../hooks/useChat';
 
 import Button from '@/components/atoms/Button/Button';
@@ -16,6 +16,7 @@ type PlanCardProps = {
     plan: NonNullable<ChatState['plan']>;
     onApprove: () => void;
     onCancel: () => void;
+    onSwitch?: (choiceId: string, optionId: string) => void;
 };
 
 /**
@@ -27,7 +28,7 @@ type PlanCardProps = {
  * changes or ask a follow up…" while the plan is pending, wired to the
  * amend decision).
  */
-const PlanCard = ({ plan, onApprove, onCancel }: PlanCardProps) => {
+const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
     const [open, setOpen] = useState(false);
     const preview = plan.steps.slice(0, PREVIEW_STEPS);
     const more = plan.steps.length > PREVIEW_STEPS;
@@ -57,14 +58,15 @@ const PlanCard = ({ plan, onApprove, onCancel }: PlanCardProps) => {
                         </li>
                     ))}
                 </ol>
+                <PlanMovedNote plan={plan} className={styles.moved} />
             </section>
             <div className={styles.proceed}>
                 <p className={styles.proceedLabel}>Start building?</p>
                 <div className={styles.proceedActions}>
-                    <Button variant="bordered" onClick={onCancel}>
+                    <Button variant="bordered" onClick={onCancel} disabled={!!plan.switching}>
                         Cancel
                     </Button>
-                    <Button variant="dark" onClick={onApprove}>
+                    <Button variant="dark" onClick={onApprove} disabled={!!plan.switching}>
                         Approve
                     </Button>
                 </div>
@@ -73,6 +75,7 @@ const PlanCard = ({ plan, onApprove, onCancel }: PlanCardProps) => {
                 plan={plan}
                 open={open}
                 onOpenChange={setOpen}
+                onSwitch={onSwitch}
                 onApprove={() => {
                     setOpen(false);
                     onApprove();

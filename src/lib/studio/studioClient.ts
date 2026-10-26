@@ -37,16 +37,31 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
-/** What a stream reports to its caller. */
+/** An HTTP refusal of a stream request: its status and, when the body is
+ *  one, the harness's ToolError. */
+export type StreamRefusal = { status: number; error: ToolError | null };
+
+/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
+ *  before the stream would report it as an `error` frame, and returns true
+ *  when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onKeepAlive?: () => void;
+    onRefusal?: (refusal: StreamRefusal) => boolean;
 };
+
+const asToolError = (body: unknown): ToolError | null =>
+    body !== null &&
+    typeof body === 'object' &&
+    typeof (body as ToolError).error === 'string' &&
+    typeof (body as ToolError).detail === 'string'
+        ? (body as ToolError)
+        : null;
 
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
     body: TurnRequest | InterruptResponse,
-    { onFrame, onKeepAlive }: StreamHandlers,
+    { onFrame, onKeepAlive, onRefusal }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -70,15 +85,22 @@ const streamStudio = async (
 
     if (!res.ok || !res.body) {
         let detail = `HTTP ${res.status}`;
+        let error: ToolError | null = null;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
+
+            error = asToolError(parsed);
 
             if (typeof parsed.detail === 'string') {
                 detail = parsed.detail;
             }
         } catch {
             // Non-JSON body — the status line stands.
+        }
+
+        if (!res.ok && onRefusal?.({ status: res.status, error })) {
+            return;
         }
 
         onFrame(transportError(detail));
@@ -162,7 +184,10 @@ export const runTurn = (
 export const runInterrupt = (
     conversationId: string,
     interruptId: string,
-    reply: Pick<InterruptResponse, 'decision' | 'payload' | 'answers'>,
+    reply: Pick<
+        InterruptResponse,
+        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision'
+    >,
     handlers: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> =>

@@ -5,7 +5,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { cancelTurn, fetchComponentRevision, runTurn } from '../studioClient.ts';
+import { cancelTurn, fetchComponentRevision, runInterrupt, runTurn } from '../studioClient.ts';
+import type { StudioFrame } from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -76,4 +77,73 @@ test('cancelTurn: a cancel request that never answers settles once the bound pas
     ]);
 
     assert.equal(outcome, 'settled');
+});
+
+const switchReply = {
+    decision: 'switch',
+    choice_id: 'spec_1:measure_basis',
+    option_id: 'measure_basis:net',
+    plan_revision: 'rev-a',
+} as const;
+
+const staleBody = {
+    error: 'edit_conflict',
+    retry: 'refresh_then_retry',
+    detail: 'plan revision rev-a is not the pending plan',
+    constraint_id: 'plan_revision_stale',
+};
+
+test('runInterrupt: a switch posts exactly the interrupt members and the switch fields', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+
+    await runInterrupt('conv', 'int-1', switchReply, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.deepEqual(JSON.parse(init.body as string), {
+        kind: 'interrupt.response',
+        schema_version: 1,
+        conversation_id: 'conv',
+        interrupt_id: 'int-1',
+        ...switchReply,
+    });
+});
+
+test('runInterrupt: a refusal reaches onRefusal with its status and ToolError, and no error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => Response.json(staleBody, { status: 409 }));
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onRefusal: (refusal) => {
+            refusals.push(refusal);
+
+            return true;
+        },
+    });
+
+    assert.deepEqual(refusals, [{ status: 409, error: staleBody }]);
+    assert.deepEqual(frames, []);
+});
+
+test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ detail: 'proxy failed' }, { status: 502 }),
+    );
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onRefusal: (refusal) => {
+            refusals.push(refusal);
+
+            return false;
+        },
+    });
+
+    assert.deepEqual(refusals, [{ status: 502, error: null }]);
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
 });

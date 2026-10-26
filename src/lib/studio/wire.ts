@@ -219,7 +219,7 @@ export type TurnRequest = {
     auto_add?: boolean;
 };
 
-export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'answer' | 'skip';
+export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
 
 export type InterruptResponse = {
     kind: 'interrupt.response';
@@ -234,6 +234,14 @@ export type InterruptResponse = {
     // One answer per question of an `elicitation.request`, keyed by the
     // frame's question ids exactly. Sent with `answer` only.
     answers?: Record<string, ElicitationAnswer>;
+    // A plan's `switch`: the decision's `choice_id`, one of its options'
+    // `option_id`, and the `revision` of the plan the user saw. Sent
+    // together with `switch` and never otherwise. The harness refuses a
+    // stale revision with 409 `plan_revision_stale` and an option it did not
+    // offer, or offered as unavailable, with 422 `switch_option_unavailable`.
+    choice_id?: string;
+    option_id?: string;
+    plan_revision?: string;
 };
 
 export type ElicitationAnswer =
@@ -269,6 +277,17 @@ export type CancelRequest = {
 
 export type PlanStep = { id: string; label: string; description?: string | null };
 
+/** One way a scope decision can be counted. `partial` options cover only
+ *  `years` (inclusive `[first, last]` ranges); `unavailable` ones say why in
+ *  `reason`, reader copy written by the harness. */
+export type PlanDecisionOption = {
+    option_id: string;
+    label: string;
+    status: 'available' | 'partial' | 'unavailable';
+    reason: string | null;
+    years: [number, number][] | null;
+};
+
 export type PlanDecision = {
     id: string;
     question: string;
@@ -276,6 +295,47 @@ export type PlanDecision = {
     reason: string;
     resolved_by: 'default' | 'user';
     alternatives?: string[] | null;
+    // A scope decision the user can switch: the harness's ScopeChoice id,
+    // every option it offers, and the one the plan counts by now. A
+    // decision without `choice_id` is an ordinary planner decision.
+    choice_id?: string | null;
+    options?: PlanDecisionOption[] | null;
+    active_option_id?: string | null;
+};
+
+export type PlanAction = 'approve' | 'amend' | 'reject' | 'switch';
+
+/** What a switch changed, one entry per scope decision it moved. */
+export type PlanMoved = {
+    choice_id: string;
+    from_label: string;
+    to_label: string;
+    reason: string;
+};
+
+/** One piece of evidence the plan needs, in words the harness composed. */
+export type PlanRequirement = {
+    id: string;
+    kind: string;
+    sentence: string;
+    decision_ids?: string[];
+};
+
+/** One computed step of the plan, in words. */
+export type PlanOperation = {
+    id: string;
+    kind: string;
+    sentence: string;
+    requirement_id?: string | null;
+};
+
+/** One output the user asked for: the step ids that answer it, or why the
+ *  plan does not compute it, or both when it answers in part. */
+export type PlanAsk = {
+    ask: string;
+    answered_by?: string[];
+    declined?: string | null;
+    not_computed?: string | null;
 };
 
 export type PlanProposed = {
@@ -286,9 +346,19 @@ export type PlanProposed = {
     version: number;
     title: string;
     steps: PlanStep[];
-    actions: ('approve' | 'amend' | 'reject')[];
+    // `switch` is listed only when some decision has a `choice_id` with
+    // another available option.
+    actions: PlanAction[];
     depth?: 'shallow' | 'standard' | 'deep' | null;
     decisions?: PlanDecision[] | null;
+    // The plan's approval key, a string distinct from the integer
+    // `version`. A `switch` echoes it as `plan_revision`.
+    revision?: string | null;
+    requirements?: PlanRequirement[] | null;
+    operations?: PlanOperation[] | null;
+    asks?: PlanAsk[] | null;
+    // Set on the plan a switch re-offers.
+    moved?: PlanMoved[] | null;
 };
 
 export type StepProgress = { completed: number; total: number };
