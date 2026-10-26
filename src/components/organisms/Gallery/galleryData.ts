@@ -122,6 +122,11 @@ export const GALLERY_COVERS: Record<
     },
 };
 
+export const gallerySourceLabels = (item: GalleryItem): string[] =>
+    GALLERY_SOURCES.filter((source) => item.sources.includes(source.id)).map(
+        (source) => source.label,
+    );
+
 export const galleryItem = (slug: string): GalleryItem | undefined =>
     GALLERY_ITEMS.find((item) => item.slug === slug);
 

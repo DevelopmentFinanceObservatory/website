@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import styles from './DataSearch.module.scss';
 import ReadingCards from './ReadingCards';
@@ -129,9 +129,20 @@ type SearchAction =
     | ({ action: 'download'; partIndex: number } & DatasetDownloaded)
     | { action: 'share'; mode: SearchShareMode; shareId: string };
 
-const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
+// `lead` is the server's summary of a gallery search, shown while the URL
+// still names its share. Its title is the page's <h1> then, so the query
+// heading drops to <h2>.
+const DataSearch = ({
+    catalogue,
+    lead,
+}: {
+    catalogue: SearchCatalogue | null;
+    lead?: ReactNode;
+}) => {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const leadShown = Boolean(lead) && searchParams.has('share');
+    const QueryHeading = leadShown ? 'h2' : 'h1';
     // The URL is the state: `q` is the query text, `s` the permalink's
     // `{query, edits}` payload once the user has edited a part (see
     // lib/search/permalink). A refresh, or a pasted link, replays the same
@@ -845,6 +856,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
 
     return (
         <section ref={sectionRef} className={styles.section} data-nav-dark="true">
+            {leadShown && lead}
             {phase === 'idle' && (
                 <div className={styles.idle} data-typing={typing || undefined}>
                     <div className={styles.idlePrompt}>
@@ -934,7 +946,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                     <div className={classNames(styles.hero, styles.heroBare)}>
                         <div className={styles.heroMain}>
                             <p className={styles.eyebrow}>Your Query</p>
-                            <h1 className={styles.query}>{query}</h1>
+                            <QueryHeading className={styles.query}>{query}</QueryHeading>
                             <p className={styles.errorLine}>{error}</p>
                             <div className={styles.actions}>
                                 <Button variant="outline" onClick={retry}>
@@ -1013,7 +1025,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                         <div className={classNames(styles.hero, styles.heroBare)}>
                             <div className={styles.heroMain}>
                                 <p className={styles.eyebrow}>Your Query</p>
-                                <h1 className={styles.query}>{query}</h1>
+                                <QueryHeading className={styles.query}>{query}</QueryHeading>
                                 <SearchAnswer
                                     answer={answer}
                                     catalogue={catalogue}
@@ -1055,6 +1067,7 @@ const DataSearch = ({ catalogue }: { catalogue: SearchCatalogue | null }) => {
                                 {definiteParts.length > 0 && <SearchHint />}
 
                                 <SearchSentenceHeading
+                                    headingTag={QueryHeading}
                                     response={response}
                                     parts={parts}
                                     optionsBySpec={optionsBySpec}

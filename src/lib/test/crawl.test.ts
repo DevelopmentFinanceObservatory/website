@@ -11,7 +11,7 @@ import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match.js';
 import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
 import robots from '../../app/robots.ts';
-import { dataPageRobots, NOINDEX_ROUTES, noindexHeaders } from '../crawl.ts';
+import { dataPageMetadata, dataPageRobots, NOINDEX_ROUTES, noindexHeaders } from '../crawl.ts';
 import type { DocsPage } from '../docs/corpus.ts';
 import { sitemapPaths } from '../sitemap.ts';
 
@@ -48,7 +48,14 @@ const base = {
 
 const gallery: GalleryItem[] = [
     { ...base, slug: 'a-card', kind: 'card', sharedFrom: 'aaaaaaaa', live: true },
-    { ...base, slug: 'a-search', kind: 'dataset', sharedFrom: 'bbbbbbbb' },
+    {
+        ...base,
+        slug: 'a-search',
+        kind: 'dataset',
+        title: 'Aid to Ghana',
+        description: 'Aid to Ghana since 2000.',
+        sharedFrom: 'bbbbbbbb',
+    },
 ];
 
 const docs: DocsPage[] = [
@@ -119,6 +126,25 @@ test('a search share is indexed only when a gallery item opens it', () => {
         index: false,
         follow: false,
     });
+});
+
+test('a gallery search carries its title and description, other shares do not', () => {
+    assert.deepEqual(dataPageMetadata({ share: 'bbbbbbbb' }, gallery), {
+        title: 'Aid to Ghana — DFO Gallery',
+        description: 'Aid to Ghana since 2000.',
+        openGraph: {
+            type: 'article',
+            title: 'Aid to Ghana',
+            description: 'Aid to Ghana since 2000.',
+        },
+    });
+    assert.deepEqual(dataPageMetadata({ share: 'cccccccc' }, gallery), {
+        robots: { index: false, follow: false },
+    });
+    assert.deepEqual(dataPageMetadata({ spec: 'x', share: 'bbbbbbbb' }, gallery), {
+        robots: { index: false, follow: false },
+    });
+    assert.deepEqual(dataPageMetadata({}, gallery), {});
 });
 
 test('the sitemap lists docs, gallery and source pages, but no redirect', () => {

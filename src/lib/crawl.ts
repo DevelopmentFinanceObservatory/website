@@ -29,27 +29,66 @@ export const noindexHeaders = () =>
 
 const NOINDEX: Metadata['robots'] = { index: false, follow: false };
 
+type DataPageQuery = Record<string, string | string[] | undefined>;
+
+export type GallerySearch = Extract<GalleryItem, { kind: 'dataset' }>;
+
 /**
- * The robots metadata for /data. A version link (?spec=) is unlisted: one
- * page per dataset version is nothing to list. A search share (?share=, where
- * `/s/<id>` sends one) is unlisted unless a gallery item opens it, so a
- * curated search is found the way the rest of the gallery is.
+ * The gallery item a /data URL opens: a search share (?share=, where
+ * `/s/<id>` sends one) that a dataset item names. A version link (?spec=)
+ * opens a dataset version, never a gallery item.
  */
-export const dataPageRobots = (
-    query: Record<string, string | string[] | undefined>,
+export const gallerySearch = (
+    query: DataPageQuery,
     gallery: readonly GalleryItem[],
-): Metadata['robots'] => {
+): GallerySearch | undefined => {
     const { spec, share } = query;
 
-    if (spec !== undefined) {
-        return NOINDEX;
-    }
-
-    if (share === undefined) {
+    if (spec !== undefined || share === undefined) {
         return undefined;
     }
 
-    const curated = gallery.some((item) => item.kind === 'dataset' && item.sharedFrom === share);
+    return gallery.find(
+        (item): item is GallerySearch => item.kind === 'dataset' && item.sharedFrom === share,
+    );
+};
 
-    return curated ? undefined : NOINDEX;
+/**
+ * The robots metadata for /data. A version link is unlisted: one page per
+ * dataset version is nothing to list. A search share is unlisted unless a
+ * gallery item opens it (gallerySearch), so a curated search is found the
+ * way the rest of the gallery is.
+ */
+export const dataPageRobots = (
+    query: DataPageQuery,
+    gallery: readonly GalleryItem[],
+): Metadata['robots'] => {
+    if (query.spec === undefined && query.share === undefined) {
+        return undefined;
+    }
+
+    return gallerySearch(query, gallery) ? undefined : NOINDEX;
+};
+
+/**
+ * The metadata for /data: a gallery search carries its item's title and
+ * description, as its gallery page would, and the rest keep the site's.
+ */
+export const dataPageMetadata = (
+    query: DataPageQuery,
+    gallery: readonly GalleryItem[],
+): Metadata => {
+    const item = gallerySearch(query, gallery);
+
+    if (item) {
+        return {
+            title: `${item.title} — DFO Gallery`,
+            description: item.description,
+            openGraph: { type: 'article', title: item.title, description: item.description },
+        };
+    }
+
+    const robots = dataPageRobots(query, gallery);
+
+    return robots ? { robots } : {};
 };
