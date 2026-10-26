@@ -87,7 +87,7 @@ const ChatPanel = ({
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
     const sendFollow = () => {
-        // A plan switch in flight has the pause; the text waits in the input.
+        // A plan switch in flight has the pause, so the text waits in the input.
         if (!follow.trim() || chat.plan?.switching) {
             return;
         }

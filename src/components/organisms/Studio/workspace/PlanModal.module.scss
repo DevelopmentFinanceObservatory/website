@@ -223,7 +223,7 @@
     list-style: none;
 }
 
-// Both stay mounted as live regions; empty, they take no room.
+// Both stay mounted as live regions and take no room when empty.
 .moved:empty,
 .notice:empty {
     margin: 0;

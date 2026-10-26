@@ -27,9 +27,9 @@ export type PlanState = {
     version: number;
     actions: PlanAction[];
     interruptId: string;
-    // The approval key a switch echoes; null from a harness that predates it.
+    // The approval key a switch echoes, null from a harness that predates it.
     revision: string | null;
-    // What the switch that produced this plan changed; empty otherwise.
+    // What the switch that produced this plan changed, empty otherwise.
     moved: PlanMoved[];
     switching: PlanSwitch | null;
     // Why the harness refused the last switch, for the card to say.
@@ -130,7 +130,7 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
 const isStale = (refusal: StreamRefusal): boolean =>
     refusal.error?.constraint_id === PLAN_REVISION_STALE;
 
-/** The card a stale switch or approve is answered with: the harness's
+/** The card a stale switch or approve is answered with, the harness's
  *  current plan, saying why it replaced the one the user answered. Null for
  *  any other refusal, or a stale one without a current plan. */
 export const stalePlan = (refusal: StreamRefusal): PlanState | null => {
@@ -140,8 +140,8 @@ export const stalePlan = (refusal: StreamRefusal): PlanState | null => {
 };
 
 /** The card after the harness refused its switch, saying why. A stale
- *  revision brings the current plan, and switching works again on it;
- *  without one the card drops its revision and offers no further switch. */
+ *  revision brings the current plan, and switching works again on it.
+ *  Without one the card drops its revision and offers no further switch. */
 export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
     if (isStale(refusal)) {
         return (
@@ -166,6 +166,6 @@ export const approveReply = (
         : { decision: 'approve' };
 
 /** A plan whose switch ended without a fresh plan (an error, a stop, a turn
- *  that finished) leaves the card; any other plan stays. */
+ *  that finished) leaves the card. Any other plan stays. */
 export const settledPlan = (plan: PlanState | null): PlanState | null =>
     plan?.switching ? null : plan;

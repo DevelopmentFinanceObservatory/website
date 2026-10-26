@@ -69,8 +69,8 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // so the transcript shows what the question was about. `answer` marks the
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
-// A bot turn's `followups` are prompts a click sends as the next message;
-// its `chips` switch a scope choice of the answer's readings.
+// A bot turn's `followups` are prompts a click sends as the next message,
+// and its `chips` switch a scope choice of the answer's readings.
 export type ChatMessage =
     | { role: 'user'; text: string; card?: { title: string }; answer?: true }
     | { role: 'bot'; text: string; followups?: string[]; chips?: ApplyChoiceSuggestion[] };
@@ -227,8 +227,8 @@ export const useChat = (initial?: ChatSnapshot) => {
     );
     // The pending pause's addressing (interrupt_id) with, for elicitations,
     // the normalized clarify that answerClarify() builds its reply and
-    // status note from, and that skipClarify() reads `skippable` from; for
-    // plans, the plan that switchChoice() checks a pick against.
+    // status note from, and that skipClarify() reads `skippable` from.
+    // For plans, the plan that switchChoice() checks a pick against.
     const pendingInterruptRef = useRef<{
         interruptId: string;
         clarify?: Clarify;
@@ -331,8 +331,8 @@ export const useChat = (initial?: ChatSnapshot) => {
         },
         [syncCanvas],
     );
-    // Put a plan card up as the pending pause: from the stream, or from a
-    // refusal that answered a stale card with the current one.
+    // Put a plan card up as the pending pause, whether from the stream or
+    // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
         pendingInterruptRef.current = { interruptId: plan.interruptId, plan };
         setState((prev) => ({ ...prev, ...NO_LINE, thinking: false, plan }));
@@ -567,7 +567,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         break;
                     }
                     case 'plan.proposed':
-                        // Also the answer to a switch: the fresh plan, with
+                        // Also the answer to a switch, whose fresh plan, with
                         // what moved, replaces the card it kept.
                         stall.stop();
                         grace.cancel();
@@ -979,9 +979,9 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     // A scope decision's option, picked on the plan card. The card stays,
     // its controls waiting, until the harness re-offers the plan with what
-    // moved. A refused switch keeps the pause and the card says why; a
+    // moved. A refused switch keeps the pause and the card says why. A
     // stale one (the plan moved on elsewhere) is answered with the current
-    // card instead.
+    // card.
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -1027,7 +1027,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         [offerPlan, stream],
     );
 
-    // A clicked `apply_choice` chip: a turn with the chip's choice and no
+    // A clicked `apply_choice` chip runs a turn with the chip's choice and no
     // message, which the transcript shows as the chip's label. Chips show
     // only on the latest answer, so nothing is in flight or paused. A chip
     // the harness refuses (the answer moved on, or Search cannot serve the

@@ -47,7 +47,7 @@ export const PlanMovedNote = ({ plan, className }: { plan: PlanState; className?
  * the plan lets the user switch also lists its options, the active one
  * marked; a partial option names the years it covers, an unavailable one
  * says why and cannot be picked. While a switch is in flight every option
- * ignores clicks but keeps focus (`aria-disabled`); only unavailable ones
+ * ignores clicks but keeps focus (`aria-disabled`). Only unavailable ones
  * are natively disabled.
  */
 const DecisionRow = ({

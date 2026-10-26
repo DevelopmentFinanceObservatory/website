@@ -219,7 +219,7 @@ export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
     conversation_id: string;
-    /** Absent only beside `apply_choice`; the harness reads an absent
+    /** Absent only beside `apply_choice`. The harness reads an absent
      *  message as "". */
     message?: string;
     surface?: 'studio' | 'download' | 'embed';
@@ -479,7 +479,7 @@ export type LegacyElicitationRequest = {
 export type SuggestionItem = { label: string; prompt: string };
 
 /** A chip that moves one scope choice of the answer's readings to another
- *  option; a click sends a turn with `apply_choice` and no message. `label`
+ *  option. A click sends a turn with `apply_choice` and no message. `label`
  *  is the option's label. */
 export type ApplyChoiceSuggestion = {
     kind: 'apply_choice';
