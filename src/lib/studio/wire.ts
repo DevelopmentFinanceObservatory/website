@@ -211,11 +211,17 @@ export type Seed = {
     operations: SeedOperation[];
 };
 
+/** A clicked `ApplyChoiceSuggestion`: the scope choice of a stored reading
+ *  and the option it moves to. */
+export type ApplyChoice = { choice_id: string; option_id: string };
+
 export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
     conversation_id: string;
-    message: string;
+    /** Absent only beside `apply_choice`; the harness reads an absent
+     *  message as "". */
+    message?: string;
     surface?: 'studio' | 'download' | 'embed';
     component_ref?: ComponentRef | null;
     /** The Search results a "… in Studio" action hands over, one per
@@ -223,6 +229,13 @@ export type TurnRequest = {
      *  planning and plans from those datasets and their operations. */
     seed_spec?: Seed[] | null;
     auto_add?: boolean;
+    /** A clicked chip. The turn applies the option to the reading the
+     *  answer used, with no search. It comes without `message`, `seed_spec`
+     *  or `component_ref`. A chip that no longer applies is refused 422
+     *  `constraint_violation` with `pointer: "/apply_choice"`
+     *  (`scope_choice_stale` or `switch_option_unavailable`) and a `detail`
+     *  to show. */
+    apply_choice?: ApplyChoice | null;
 };
 
 export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
@@ -462,6 +475,19 @@ export type LegacyElicitationRequest = {
     rationale?: string | null;
 };
 
+/** A chip that sends `prompt` as the user's next message. */
+export type SuggestionItem = { label: string; prompt: string };
+
+/** A chip that moves one scope choice of the answer's readings to another
+ *  option; a click sends a turn with `apply_choice` and no message. `label`
+ *  is the option's label. */
+export type ApplyChoiceSuggestion = {
+    kind: 'apply_choice';
+    label: string;
+    choice_id: string;
+    option_id: string;
+};
+
 export type StudioFrame =
     | { event: 'message.delta'; seq: number; text: string }
     | { event: 'message.complete'; seq: number; text: string }
@@ -480,6 +506,6 @@ export type StudioFrame =
     | { event: 'composition.updated'; seq: number; manifest: CompositionManifest }
     | ElicitationRequest
     | LegacyElicitationRequest
-    | { event: 'suggestions'; seq: number; items: { label: string; prompt: string }[] }
+    | { event: 'suggestions'; seq: number; items: (SuggestionItem | ApplyChoiceSuggestion)[] }
     | { event: 'error'; seq: number; error: ToolError }
     | { event: 'done'; seq: number; trace_id: string; composition?: CompositionManifest | null };

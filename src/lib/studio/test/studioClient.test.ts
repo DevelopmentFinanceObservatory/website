@@ -3,10 +3,17 @@
  * reason when the read fails.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { cancelTurn, fetchComponentRevision, runInterrupt, runTurn } from '../studioClient.ts';
-import type { StudioFrame } from '../wire.ts';
+import {
+    cancelTurn,
+    fetchComponentRevision,
+    runApplyChoice,
+    runInterrupt,
+    runTurn,
+} from '../studioClient.ts';
+import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -181,4 +188,61 @@ test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', a
     );
 
     assert.deepEqual(seen, currentPlan);
+});
+
+test('runApplyChoice: a chip posts the harness fixture request, with no message', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+    // The harness's wire fixtures (`services/harness/tests/wire_fixtures/studio`
+    // in dfo-ai), copied. The request names the conversation by the
+    // `session_id` alias the harness also accepts.
+    const read = (name: string): unknown =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const { session_id: conversation, ...request } = read(
+        'request-13-turn-apply-choice.json',
+    ) as Record<string, unknown> & { session_id: string };
+    const { items } = read('event-15-suggestions-apply-choice.json') as {
+        items: ApplyChoiceSuggestion[];
+    };
+    const chip = items[0];
+
+    assert.ok(chip);
+    await runApplyChoice(conversation, chip, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
+    assert.deepEqual(JSON.parse(init.body as string), {
+        ...request,
+        conversation_id: conversation,
+    });
+});
+
+test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame', async (t) => {
+    const body = {
+        error: 'constraint_violation',
+        retry: 'do_not_retry',
+        detail: 'That option is not offered here.',
+        constraint_id: 'switch_option_unavailable',
+        pointer: '/apply_choice',
+    };
+
+    t.mock.method(globalThis, 'fetch', async () => Response.json(body, { status: 422 }));
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runApplyChoice(
+        'conv',
+        { choice_id: 'spec_1:sector', option_id: 'sector:120' },
+        {
+            onFrame: (frame) => frames.push(frame),
+            onRefusal: (refusal) => {
+                refusals.push(refusal);
+
+                return true;
+            },
+        },
+    );
+
+    assert.deepEqual(refusals, [{ status: 422, detail: body.detail, error: body }]);
+    assert.deepEqual(frames, []);
 });

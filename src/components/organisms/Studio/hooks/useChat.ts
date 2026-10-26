@@ -19,6 +19,7 @@ import {
     WORKING,
 } from '@/lib/studio/chatLine';
 import { createCanvasEdits } from '@/lib/studio/canvasEdits';
+import { chipRefusalDetail, splitSuggestions, withRefusedChip } from '@/lib/studio/chips';
 import {
     clarifyAnswer,
     clarifyFromFrame,
@@ -45,6 +46,7 @@ import {
     cancelTurn,
     fetchComponentRevision,
     mutateComposition,
+    runApplyChoice,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
@@ -53,6 +55,7 @@ import {
 } from '@/lib/studio/studioClient';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type {
+    ApplyChoiceSuggestion,
     CompositionManifest,
     InterruptResponse,
     MutationOperation,
@@ -66,9 +69,11 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // so the transcript shows what the question was about. `answer` marks the
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
+// A bot turn's `followups` are prompts a click sends as the next message;
+// its `chips` switch a scope choice of the answer's readings.
 export type ChatMessage =
     | { role: 'user'; text: string; card?: { title: string }; answer?: true }
-    | { role: 'bot'; text: string; followups?: string[] };
+    | { role: 'bot'; text: string; followups?: string[]; chips?: ApplyChoiceSuggestion[] };
 
 // A widget stamped with the send() turn it arrived in — the canvas keeps
 // only the latest turn's widgets plus whatever the user pinned.
@@ -589,15 +594,19 @@ export const useChat = (initial?: ChatSnapshot) => {
                         }));
                         break;
                     }
-                    case 'suggestions':
-                        if (frame.items.length > 0) {
+                    case 'suggestions': {
+                        const { followups, chips } = splitSuggestions(frame.items);
+
+                        if (followups.length > 0 || chips.length > 0) {
                             patchBot((last) => ({
                                 ...last,
-                                followups: frame.items.map((item) => item.prompt),
+                                ...(followups.length > 0 && { followups }),
+                                ...(chips.length > 0 && { chips }),
                             }));
                         }
 
                         break;
+                    }
                     case 'composition.updated':
                         // The whiteboard keeps its own layout; a manifest only
                         // says which cards the harness took off the canvas.
@@ -1018,6 +1027,77 @@ export const useChat = (initial?: ChatSnapshot) => {
         [offerPlan, stream],
     );
 
+    // A clicked `apply_choice` chip: a turn with the chip's choice and no
+    // message, which the transcript shows as the chip's label. Chips show
+    // only on the latest answer, so nothing is in flight or paused. A chip
+    // the harness refuses (the answer moved on, or Search cannot serve the
+    // option) leaves the reply saying why, with the answer's other chips.
+    const applyChoice = useCallback(
+        (chip: ApplyChoiceSuggestion) => {
+            if (inFlightRef.current > 0) {
+                return;
+            }
+
+            if (!sessionRef.current) {
+                sessionRef.current = uuid();
+            }
+
+            turnCount.current += 1;
+            const turn = turnCount.current;
+            const conversation = sessionRef.current;
+            const generation = generationRef.current;
+
+            pendingInterruptRef.current = null;
+            editingRef.current = null;
+            setState((prev) => ({
+                ...withLine(prev, `Switching to ${chip.label}`),
+                messages: [
+                    ...prev.messages,
+                    { role: 'user', text: chip.label },
+                    { role: 'bot', text: '' },
+                ],
+                activity: [
+                    ...prev.activity,
+                    { turn, prompt: chip.label, startedAt: Date.now(), tools: [] },
+                ],
+                thinking: true,
+                clarify: null,
+                plan: null,
+            }));
+
+            stream(turn, (handlers, signal) =>
+                runApplyChoice(
+                    conversation,
+                    chip,
+                    {
+                        ...handlers,
+                        onRefusal: (refusal) => {
+                            const detail = chipRefusalDetail(refusal);
+
+                            if (detail === null) {
+                                return false;
+                            }
+
+                            if (generationRef.current === generation) {
+                                setState((prev) => ({
+                                    ...prev,
+                                    messages: withRefusedChip(prev.messages, chip, detail),
+                                    activity: endTurnActivity(prev.activity, turn, 'failed'),
+                                    ...NO_LINE,
+                                    thinking: false,
+                                }));
+                            }
+
+                            return true;
+                        },
+                    },
+                    signal,
+                ),
+            );
+        },
+        [stream],
+    );
+
     // The Stop control: ask the harness to cancel and end the running turn
     // (see `halt` in stream()). Requests queued behind it also wait for the
     // cancel request to answer.
@@ -1128,6 +1208,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         skipClarify,
         respondPlan,
         switchChoice,
+        applyChoice,
         stop,
         reset,
         hydrate,

@@ -150,6 +150,7 @@ const ChatPanel = ({
                                         onAdd={onAdd}
                                         onRemove={onRemove}
                                         onFollowup={chat.send}
+                                        onApplyChoice={chat.applyChoice}
                                         readOnly={readOnly}
                                     />
                                     {sharedAfter(index) && (

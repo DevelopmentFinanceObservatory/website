@@ -10,6 +10,7 @@
  */
 
 import type {
+    ApplyChoice,
     CancelRequest,
     CompositionManifest,
     CompositionMutation,
@@ -181,6 +182,26 @@ export const runTurn = (
             conversation_id: conversationId,
             message,
             ...extras,
+        },
+        handlers,
+        signal,
+    );
+
+/** Run a turn from a clicked `apply_choice` chip: the chip's choice and
+ *  option, and no message. */
+export const runApplyChoice = (
+    conversationId: string,
+    { choice_id, option_id }: ApplyChoice,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_choice: { choice_id, option_id },
         },
         handlers,
         signal,
