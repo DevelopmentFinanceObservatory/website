@@ -78,6 +78,16 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     });
 
     const pools: Pool[] = [];
+    const closed: Promise<void>[] = [];
+
+    const open = (user: string, password: string): Pool => {
+        const pool = poolFor(databaseName, user, password);
+        pool.on('connect', (client) => {
+            closed.push(new Promise((resolve) => client.once('end', resolve)));
+        });
+        pools.push(pool);
+        return pool;
+    };
 
     return {
         databaseName,
@@ -86,22 +96,21 @@ export async function createTestDatabase(): Promise<TestDatabase> {
         runtimeUser,
         runtimePassword,
         migratorPool(): Pool {
-            const pool = poolFor(databaseName, migratorUser, migratorPassword);
-            pools.push(pool);
-            return pool;
+            return open(migratorUser, migratorPassword);
         },
         runtimePool(): Pool {
-            const pool = poolFor(databaseName, runtimeUser, runtimePassword);
-            pools.push(pool);
-            return pool;
+            return open(runtimeUser, runtimePassword);
         },
         adminPool(): Pool {
-            const pool = poolFor(databaseName, SUPERUSER_USER, SUPERUSER_PASSWORD);
-            pools.push(pool);
-            return pool;
+            return open(SUPERUSER_USER, SUPERUSER_PASSWORD);
         },
         async teardown(): Promise<void> {
+            // pool.end() resolves once it has asked its clients to close, not
+            // once they have. A backend that has not yet read its client's
+            // Terminate when the terminate below reaches it sends the client
+            // a FATAL error, which the ended pool emits with no listener.
             await Promise.all(pools.map((pool) => pool.end()));
+            await Promise.all(closed);
 
             const admin = new Client({
                 host: SUPERUSER_HOST,
