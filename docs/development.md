@@ -211,17 +211,17 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 
 ## API client package
 
-The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock, so `pnpm-lock.yaml` carries the new tarball's integrity:
+The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock:
 
 ```sh
 cd <sdk checkout>/typescript
 pnpm install && pnpm run build
 pnpm pack --pack-destination <website checkout>/vendor
 cd <website checkout>
-pnpm install
+just relock-client
 ```
 
-A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. A rebuilt tarball keeps its file name, so a local re-vendor needs the client's directory under `node_modules/.pnpm` deleted before `pnpm install --frozen-lockfile` picks it up. Commit the tarball and the lockfile together.
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. `just relock-client` reads the tarball name from that entry, rewrites the tarball's one `resolution` line in `pnpm-lock.yaml` to the file's sha512 integrity, deletes the client's stale directory under `node_modules/.pnpm` (a rebuilt tarball that keeps its name is otherwise not picked up), and runs `pnpm install --frozen-lockfile` to prove the lock and the tarball agree. It fails unless exactly one lockfile line matches, and a re-lock changes that one line. Commit the tarball and the lockfile together.
 
 The tarball carries the statuses of the codes the proxy raises itself and not their descriptions. `src/lib/proxy/proxy-codes.json` holds the full file, copied from the spec-kit repository's `python/client-contract/src/dfo_client_contract/proxy-codes.json` and formatted with Prettier. Copy it again when the client contract changes it.
 

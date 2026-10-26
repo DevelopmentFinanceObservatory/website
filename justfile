@@ -48,6 +48,11 @@ env:
         echo "ok Created {{ENV_FILE}} from {{ENV_SAMPLE}}."
     fi
 
+# Re-lock the vendored API client tarball
+relock-client:
+    node scripts/relock-client.mjs
+    pnpm install --frozen-lockfile
+
 # ── Development ───────────────────────────────────────
 
 # LAN access (phone/tablet testing) needs DEV_ORIGINS set in {{ENV_FILE}}.
