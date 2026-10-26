@@ -89,6 +89,12 @@ export type ToolError = {
     retry_after_seconds?: number | null;
 };
 
+/** The 409 `plan_revision_stale` body of POST /api/studio/interrupt: a
+ *  ToolError plus `current_plan`, the `plan.proposed` frame of the plan now
+ *  awaiting an answer, exactly as the stream sent it (`seq` included). Absent
+ *  only for a pause stored before the harness kept cards. */
+export type PlanRevisionStaleError = ToolError & { current_plan?: PlanProposed | null };
+
 export type ComponentType =
     | 'stat_card'
     | 'line_chart'
@@ -235,10 +241,11 @@ export type InterruptResponse = {
     // frame's question ids exactly. Sent with `answer` only.
     answers?: Record<string, ElicitationAnswer>;
     // A plan's `switch`: the decision's `choice_id`, one of its options'
-    // `option_id`, and the `revision` of the plan the user saw. Sent
-    // together with `switch` and never otherwise. The harness refuses a
-    // stale revision with 409 `plan_revision_stale` and an option it did not
-    // offer, or offered as unavailable, with 422 `switch_option_unavailable`.
+    // `option_id`, and the `revision` of the plan the user saw. `approve`
+    // sends `plan_revision` alone. The harness refuses a stale revision with
+    // 409 `plan_revision_stale` (a `PlanRevisionStaleError`) and an option it
+    // did not offer, or offered as unavailable, with 422
+    // `switch_option_unavailable`.
     choice_id?: string;
     option_id?: string;
     plan_revision?: string;

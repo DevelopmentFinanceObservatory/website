@@ -40,9 +40,12 @@ export type SwitchReply = Required<
     Pick<InterruptResponse, 'decision' | 'choice_id' | 'option_id' | 'plan_revision'>
 >;
 
-/** The ToolError `constraint_id` of a switch sent against an older plan. */
+/** The ToolError `constraint_id` of a switch or approve sent against an
+ *  older plan. */
 export const PLAN_REVISION_STALE = 'plan_revision_stale';
 
+/** Shown when a stale refusal carries no current plan (a pause the harness
+ *  stored before it kept cards). */
 export const STALE_NOTICE =
     'This plan changed after this page received it, so it can no longer be switched here. Reload the conversation to see the current plan.';
 
@@ -124,17 +127,43 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
     notice: null,
 });
 
-/** The plan after the harness refused its switch, saying why. A stale
- *  revision cannot be recovered from here (the refusal carries no newer
- *  plan), so that card drops its revision and offers no further switch. */
-export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState =>
-    refusal.error?.constraint_id === PLAN_REVISION_STALE
-        ? { ...plan, revision: null, switching: null, notice: STALE_NOTICE }
-        : {
-              ...plan,
-              switching: null,
-              notice: refusal.detail ?? `The switch was refused (HTTP ${refusal.status}).`,
-          };
+const isStale = (refusal: StreamRefusal): boolean =>
+    refusal.error?.constraint_id === PLAN_REVISION_STALE;
+
+/** The card a stale switch or approve is answered with: the harness's
+ *  current plan, saying why it replaced the one the user answered. Null for
+ *  any other refusal, or a stale one without a current plan. */
+export const stalePlan = (refusal: StreamRefusal): PlanState | null => {
+    const current = isStale(refusal) ? refusal.error?.current_plan : null;
+
+    return current ? { ...planFromFrame(current), notice: refusal.detail } : null;
+};
+
+/** The card after the harness refused its switch, saying why. A stale
+ *  revision brings the current plan, and switching works again on it;
+ *  without one the card drops its revision and offers no further switch. */
+export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
+    if (isStale(refusal)) {
+        return (
+            stalePlan(refusal) ?? { ...plan, revision: null, switching: null, notice: STALE_NOTICE }
+        );
+    }
+
+    return {
+        ...plan,
+        switching: null,
+        notice: refusal.detail ?? `The switch was refused (HTTP ${refusal.status}).`,
+    };
+};
+
+/** An `approve` of `plan`, carrying its revision so the harness can tell an
+ *  approval from an out-of-date card. */
+export const approveReply = (
+    plan: PlanState | undefined,
+): Pick<InterruptResponse, 'decision' | 'plan_revision'> =>
+    plan?.revision
+        ? { decision: 'approve', plan_revision: plan.revision }
+        : { decision: 'approve' };
 
 /** A plan whose switch ended without a fresh plan (an error, a stop, a turn
  *  that finished) leaves the card; any other plan stays. */

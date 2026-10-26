@@ -147,3 +147,38 @@ test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail
     assert.equal(frames.length, 1);
     assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
 });
+
+test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', async (t) => {
+    const currentPlan = {
+        event: 'plan.proposed',
+        seq: 9,
+        interrupt_id: 'int-2',
+        plan_version_id: 'pv-2',
+        version: 2,
+        title: 'Health aid to Ghana',
+        steps: [],
+        actions: ['approve', 'amend', 'reject'],
+        revision: 'rev-b',
+    };
+
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ ...staleBody, current_plan: currentPlan }, { status: 409 }),
+    );
+    let seen: unknown = null;
+
+    await runInterrupt(
+        'conv',
+        'int-1',
+        { decision: 'approve', plan_revision: 'rev-a' },
+        {
+            onFrame: () => {},
+            onRefusal: (refusal) => {
+                seen = refusal.error?.current_plan;
+
+                return true;
+            },
+        },
+    );
+
+    assert.deepEqual(seen, currentPlan);
+});

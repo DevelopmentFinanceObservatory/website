@@ -15,6 +15,7 @@ import type {
     CompositionMutation,
     InterruptResponse,
     MutationOperation,
+    PlanRevisionStaleError,
     StudioFrame,
     ToolError,
     TurnRequest,
@@ -38,8 +39,13 @@ const transportError = (detail: string): StudioFrame => ({
 });
 
 /** An HTTP refusal of a stream request: its status, the body's `detail`
- *  when it has one, and the harness's ToolError when the body is one. */
-export type StreamRefusal = { status: number; detail: string | null; error: ToolError | null };
+ *  when it has one, and the harness's ToolError when the body is one
+ *  (with `current_plan` on a stale plan answer). */
+export type StreamRefusal = {
+    status: number;
+    detail: string | null;
+    error: PlanRevisionStaleError | null;
+};
 
 /** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
  *  before the stream would report it as an `error` frame, and returns true
@@ -50,7 +56,7 @@ export type StreamHandlers = {
     onRefusal?: (refusal: StreamRefusal) => boolean;
 };
 
-const asToolError = (body: unknown): ToolError | null =>
+const asToolError = (body: unknown): PlanRevisionStaleError | null =>
     body !== null &&
     typeof body === 'object' &&
     typeof (body as ToolError).error === 'string' &&
@@ -85,7 +91,7 @@ const streamStudio = async (
 
     if (!res.ok || !res.body) {
         let detail: string | null = null;
-        let error: ToolError | null = null;
+        let error: PlanRevisionStaleError | null = null;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };

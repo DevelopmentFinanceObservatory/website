@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
     PLAN_REVISION_STALE,
+    approveReply,
     canSwitch,
     STALE_NOTICE,
     isActiveOption,
@@ -15,10 +16,12 @@ import {
     planFromFrame,
     refusedSwitch,
     settledPlan,
+    stalePlan,
     startSwitch,
     switchReply,
     yearsText,
 } from '../plan.ts';
+import type { StreamRefusal } from '../studioClient.ts';
 import type { PlanDecision, PlanProposed } from '../wire.ts';
 
 const countDecision: PlanDecision = {
@@ -168,7 +171,66 @@ test('without active_option_id the chosen label marks the active option', () => 
     assert.equal(isActiveOption(decision, net!), false);
 });
 
-test('a stale revision ends switching on the card and asks for a reload', () => {
+const STALE_DETAIL = 'This plan changed in another window. Here is the current plan.';
+
+/** A 409 `plan_revision_stale`, with the harness's current card when given. */
+const staleRefusal = (currentPlan?: PlanProposed): StreamRefusal => ({
+    status: 409,
+    detail: STALE_DETAIL,
+    error: {
+        error: 'edit_conflict',
+        retry: 'refresh_then_retry',
+        detail: STALE_DETAIL,
+        constraint_id: PLAN_REVISION_STALE,
+        ...(currentPlan && { current_plan: currentPlan }),
+    },
+});
+
+const currentFrame = frame({ seq: 9, interrupt_id: 'int-2', version: 2, revision: 'rev-b' });
+
+test('a stale switch is answered with the current card, which switches again', () => {
+    const waiting = startSwitch(planFromFrame(frame()), {
+        choiceId: 'spec_1:measure_basis',
+        optionId: 'measure_basis:net',
+    });
+    const replaced = refusedSwitch(waiting, staleRefusal(currentFrame));
+
+    assert.deepEqual(replaced, { ...planFromFrame(currentFrame), notice: STALE_DETAIL });
+    assert.deepEqual(switchReply(replaced, 'spec_1:measure_basis', 'measure_basis:net'), {
+        decision: 'switch',
+        choice_id: 'spec_1:measure_basis',
+        option_id: 'measure_basis:net',
+        plan_revision: 'rev-b',
+    });
+});
+
+test('a stale approve is answered with the current card; other refusals are not', () => {
+    assert.deepEqual(stalePlan(staleRefusal(currentFrame)), {
+        ...planFromFrame(currentFrame),
+        notice: STALE_DETAIL,
+    });
+    assert.equal(stalePlan(staleRefusal()), null);
+    assert.equal(
+        stalePlan({
+            status: 422,
+            detail: 'decision approve does not take a payload',
+            error: null,
+        }),
+        null,
+    );
+});
+
+test('an approve carries the revision of the card the user approved', () => {
+    assert.deepEqual(approveReply(planFromFrame(frame())), {
+        decision: 'approve',
+        plan_revision: 'rev-a',
+    });
+    assert.deepEqual(approveReply(planFromFrame(frame({ revision: null }))), {
+        decision: 'approve',
+    });
+});
+
+test('a stale switch without a current card ends switching and asks for a reload', () => {
     const plan = startSwitch(planFromFrame(frame()), {
         choiceId: 'spec_1:measure_basis',
         optionId: 'measure_basis:net',

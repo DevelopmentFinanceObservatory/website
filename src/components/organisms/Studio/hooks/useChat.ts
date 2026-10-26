@@ -31,8 +31,10 @@ import {
 import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
+    approveReply,
     planFromFrame,
     refusedSwitch,
+    stalePlan,
     settledPlan,
     startSwitch,
     switchReply,
@@ -47,9 +49,16 @@ import {
     runTurn,
     STOP_GRACE_MS,
     type StreamHandlers,
+    type StreamRefusal,
 } from '@/lib/studio/studioClient';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
-import type { CompositionManifest, MutationOperation, Seed, StudioFrame } from '@/lib/studio/wire';
+import type {
+    CompositionManifest,
+    InterruptResponse,
+    MutationOperation,
+    Seed,
+    StudioFrame,
+} from '@/lib/studio/wire';
 import { uuid } from '@/lib/uuid';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
 
@@ -317,6 +326,12 @@ export const useChat = (initial?: ChatSnapshot) => {
         },
         [syncCanvas],
     );
+    // Put a plan card up as the pending pause: from the stream, or from a
+    // refusal that answered a stale card with the current one.
+    const offerPlan = useCallback((plan: PlanState) => {
+        pendingInterruptRef.current = { interruptId: plan.interruptId, plan };
+        setState((prev) => ({ ...prev, ...NO_LINE, thinking: false, plan }));
+    }, []);
     // Swap one widget in place, wherever it sits in the list.
     const patchWidget = useCallback((id: string, fn: (widget: TurnWidget) => TurnWidget) => {
         setState((prev) => ({
@@ -546,17 +561,13 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         break;
                     }
-                    case 'plan.proposed': {
+                    case 'plan.proposed':
                         // Also the answer to a switch: the fresh plan, with
                         // what moved, replaces the card it kept.
-                        const plan = planFromFrame(frame);
-
                         stall.stop();
                         grace.cancel();
-                        pendingInterruptRef.current = { interruptId: frame.interrupt_id, plan };
-                        setState((prev) => ({ ...prev, ...NO_LINE, thinking: false, plan }));
+                        offerPlan(planFromFrame(frame));
                         break;
-                    }
                     case 'plan.versioned':
                         // Transient bookkeeping — the fresh plan.proposed that
                         // follows re-renders the card.
@@ -728,7 +739,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                 });
         },
-        [applyManifest, patchWidget],
+        [applyManifest, offerPlan, patchWidget],
     );
 
     const send = useCallback(
@@ -846,10 +857,17 @@ export const useChat = (initial?: ChatSnapshot) => {
     // Continue a paused turn on /interrupt — shared by clarify answers, the
     // skip button and the plan actions. `answer` is what the user chose or
     // wrote, which enters the transcript.
+    // A stale plan answer (an approve sent from an out-of-date card) is
+    // refused with the current card, which replaces it to be answered again.
     const resume = useCallback(
-        (reply: ClarifyReply, note: string | null, answer?: string) => {
+        (
+            reply: ClarifyReply | Pick<InterruptResponse, 'decision' | 'plan_revision'>,
+            note: string | null,
+            answer?: string,
+        ) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
+            const generation = generationRef.current;
 
             pendingInterruptRef.current = null;
 
@@ -868,11 +886,27 @@ export const useChat = (initial?: ChatSnapshot) => {
                 return;
             }
 
+            const onRefusal = (refusal: StreamRefusal) => {
+                const current = stalePlan(refusal);
+
+                if (current && generationRef.current === generation) {
+                    offerPlan(current);
+                }
+
+                return current !== null;
+            };
+
             stream(turnCount.current, (handlers, signal) =>
-                runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
+                runInterrupt(
+                    conversation,
+                    pending.interruptId,
+                    reply,
+                    { ...handlers, onRefusal },
+                    signal,
+                ),
             );
         },
-        [stream],
+        [offerPlan, stream],
     );
 
     // Answer every question of the pending clarify at once, keyed by
@@ -924,7 +958,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                       : `_Change requested: ${payload ?? ''}_`;
 
             resume(
-                { decision, ...(decision === 'amend' ? { payload } : {}) },
+                decision === 'approve'
+                    ? approveReply(pendingInterruptRef.current?.plan)
+                    : { decision, ...(decision === 'amend' ? { payload } : {}) },
                 note,
                 decision === 'amend' ? payload : undefined,
             );
@@ -934,9 +970,9 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     // A scope decision's option, picked on the plan card. The card stays,
     // its controls waiting, until the harness re-offers the plan with what
-    // moved. A refused switch leaves the pause as it was and the card says
-    // why: a stale revision (another switch got there first) or an option
-    // the harness no longer offers.
+    // moved. A refused switch keeps the pause and the card says why; a
+    // stale one (the plan moved on elsewhere) is answered with the current
+    // card instead.
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -944,11 +980,11 @@ export const useChat = (initial?: ChatSnapshot) => {
             const plan = pending?.plan;
             const reply = plan ? switchReply(plan, choiceId, optionId) : null;
 
-            if (!conversation || !pending || !reply) {
+            if (!conversation || !pending || !plan || !reply) {
                 return;
             }
 
-            const label = plan?.decisions
+            const label = plan.decisions
                 .find((decision) => decision.choice_id === choiceId)
                 ?.options?.find((option) => option.option_id === optionId)?.label;
             const generation = generationRef.current;
@@ -969,13 +1005,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         ...handlers,
                         onRefusal: (refusal) => {
                             if (generationRef.current === generation) {
-                                pendingInterruptRef.current = pending;
-                                setState((prev) => ({
-                                    ...prev,
-                                    ...NO_LINE,
-                                    thinking: false,
-                                    plan: prev.plan && refusedSwitch(prev.plan, refusal),
-                                }));
+                                offerPlan(refusedSwitch(plan, refusal));
                             }
 
                             return true;
@@ -985,7 +1015,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 ),
             );
         },
-        [stream],
+        [offerPlan, stream],
     );
 
     // The Stop control: ask the harness to cancel and end the running turn
