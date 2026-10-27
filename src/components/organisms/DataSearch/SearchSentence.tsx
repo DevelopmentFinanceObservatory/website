@@ -494,6 +494,8 @@ type SearchSentenceHeadingProps = Pick<
     // What the <h1> shows before the response lands: the query, or the
     // early heading's tokens.
     fallback: ReactNode;
+    // The heading's tag: an <h2> while a gallery lead holds the page's <h1>.
+    headingTag: 'h1' | 'h2';
     // A departure's Studio action (operation_not_applied).
     onStudio: () => void;
     // What Refine offers (answerRefineItems), and a departure's way to open
@@ -736,6 +738,7 @@ export const SearchSentenceHeading = ({
     onEditShared,
     onRefine,
     fallback,
+    headingTag: Heading,
     onStudio,
     newTokenTexts,
     refine,
@@ -1909,7 +1912,7 @@ export const SearchSentenceHeading = ({
                             {groups.flatMap((group) =>
                                 group.options.map((option, optionIndex) => (
                                     <DropdownMenu.Item
-                                        key={`${group.text}:${optionIndex}`}
+                                        key={`${group.key}:${optionIndex}`}
                                         asChild
                                         onSelect={() => pick(option)}
                                     >
@@ -2124,12 +2127,12 @@ export const SearchSentenceHeading = ({
         <>
             {coverageLead && <p className={styles.coverageLead}>{coverageLead}</p>}
             {closestLead && <p className={styles.closestLead}>{closestLead}</p>}
-            <h1
+            <Heading
                 className={styles.sentence}
                 aria-label={(response && planSentenceText(rawPlan)) || undefined}
             >
                 {response ? headingNodes : fallback}
-            </h1>
+            </Heading>
             {bylineNodes.length > 0 && <p className={styles.byline}>{bylineNodes}</p>}
             {departureItems.length > 0 && <DepartureList items={departureItems} />}
             {clauses.length > 0 && (

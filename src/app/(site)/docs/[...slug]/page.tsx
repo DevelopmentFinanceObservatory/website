@@ -9,6 +9,7 @@ import {
     docsRedirect,
     docsRedirectPaths,
 } from '@/lib/docs/corpus';
+import { markdownHref } from '@/lib/docs/links';
 
 type DocsPageProps = { params: Promise<{ slug: string[] }> };
 
@@ -23,12 +24,13 @@ export const generateStaticParams = () =>
 
 export const generateMetadata = async ({ params }: DocsPageProps): Promise<Metadata> => {
     const page = docsPageByPath((await params).slug.join('/'));
+    const markdown = page && markdownHref(page);
 
     return page
         ? {
               title: `${page.title} — DFO Docs`,
               description: page.description,
-              alternates: { types: { 'text/markdown': `${docsHref(page.path)}.md` } },
+              ...(markdown && { alternates: { types: { 'text/markdown': markdown } } }),
           }
         : {};
 };

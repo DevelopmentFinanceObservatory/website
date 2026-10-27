@@ -10,6 +10,7 @@ import {
     restatementTargetForToken,
 } from '../parsedEdit.ts';
 import {
+    congoToCongoNoData,
     gdpOfCongoNoData,
     gdpOfCongoRestatement,
     odaToCongoNoData,
@@ -272,6 +273,20 @@ test('entityChoiceGroups lists a wording per mention, in the order the options c
     );
     assert.deepEqual(entityChoiceGroups({ ...noData, reason: 'source_ambiguous' }), []);
     assert.deepEqual(entityChoiceGroups(null), []);
+});
+
+test('entityChoiceGroups keeps one group per entity_choice, two written alike apart', () => {
+    assert.deepEqual(
+        entityChoiceGroups(congoToCongoNoData).map(({ key, text, options }) => [
+            key,
+            text,
+            options.map((option) => option.entity_choice),
+        ]),
+        [
+            [0, 'Congo', [0, 0]],
+            [1, 'Congo', [1, 1]],
+        ],
+    );
 });
 
 // ---------------------------------------------------------------------------

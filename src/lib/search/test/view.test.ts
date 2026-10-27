@@ -6,6 +6,11 @@ import { tokenPart } from '../sentencePlan.ts';
 import { definite, noData, readable, resolution } from './fixtures/resolution.ts';
 import { fixtures } from './fixtures/index.ts';
 import { noDataResponse, wireSpec } from './fixtures/no-data.ts';
+import {
+    congoToCongoNoData,
+    congoToCongoRestatement,
+    congoToCongoWordings,
+} from './fixtures/ambiguous-congo.ts';
 import { servedAnswer } from './fixtures/served-answer.ts';
 import { servedAid, servedHealth, servedHealthEvents } from './fixtures/served-options.ts';
 import {
@@ -1732,6 +1737,24 @@ test('ambiguousWordingGroup refuses the variable slot and an entity read-back', 
     assert.equal(ambiguousWordingGroup({ ...token, text: 'IFC' }, refusal), null);
 });
 
+test('ambiguousWordingGroup finds each slot its own group when two wordings are written alike', () => {
+    const [from, to] = congoToCongoWordings;
+    const menu = (token: SentenceToken) =>
+        ambiguousWordingGroup(token, congoToCongoNoData)?.options.map((option) =>
+            option.data_query.parts[0]?.entities?.map((entity) => entity.dcid ?? null),
+        );
+
+    // The "from" slot pins the origin, the "to" slot the destination.
+    assert.deepEqual(menu(from), [
+        ['country/COD', null],
+        ['country/COG', null],
+    ]);
+    assert.deepEqual(menu(to), [
+        [null, 'country/COD'],
+        [null, 'country/COG'],
+    ]);
+});
+
 test("ambiguousEntityMenuTitle titles the menu by the ambiguous wording's role", () => {
     const part = noData(resolution(fixtures['entity-ambiguous']).parts[0]);
     const { restatement } = part;
@@ -1782,6 +1805,13 @@ test('ambiguousEntityMenuTitle names every ambiguous wording a shared menu offer
     };
 
     assert.equal(ambiguousEntityMenuTitle(bothAmbiguous), 'Select Provider or Recipient');
+    assert.equal(
+        ambiguousEntityMenuTitle({
+            no_data: congoToCongoNoData,
+            restatement: congoToCongoRestatement,
+        }),
+        'Select Provider or Recipient',
+    );
 });
 
 test('ambiguousEntityMenuTitle reads a restatement whose entities are null', () => {

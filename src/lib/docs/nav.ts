@@ -1,5 +1,7 @@
 import manifest from '@/content/dfo-docs/manifest.json';
 
+import { docsHref } from './href.ts';
+
 /**
  * The docs' top-level sections as site menu entries — the header's Docs
  * dropdown and the footer's Docs column — read from the pinned dfo-docs nav
@@ -12,8 +14,6 @@ type NavNode = { id: string; title: string; kind: string; page_id?: string; chil
 type PageRef = { id: string; path: string };
 
 const pagePath = new Map((manifest.pages as PageRef[]).map((page) => [page.id, page.path]));
-
-export const docsHref = (path: string): string => (path ? `/docs/${path}` : '/docs');
 
 // A section links to its own page; a group without one, to its first page.
 const firstPage = (node: NavNode): string | undefined =>
