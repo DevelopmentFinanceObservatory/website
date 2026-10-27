@@ -48,13 +48,15 @@ export type StreamRefusal = {
     error: PlanRevisionStaleError | null;
 };
 
-/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
- *  before the stream would report it as an `error` frame, and returns true
- *  when it has dealt with it. */
+/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
+ *  and `onUnreachable` a request that got no response at all (the fetch
+ *  rejected), before the stream would report either as an `error` frame;
+ *  each returns true when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onKeepAlive?: () => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
+    onUnreachable?: () => boolean;
 };
 
 const asToolError = (body: unknown): PlanRevisionStaleError | null =>
@@ -68,7 +70,7 @@ const asToolError = (body: unknown): PlanRevisionStaleError | null =>
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
     body: TurnRequest | InterruptResponse,
-    { onFrame, onKeepAlive, onRefusal }: StreamHandlers,
+    { onFrame, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -85,7 +87,9 @@ const streamStudio = async (
             throw error;
         }
 
-        onFrame(transportError((error as Error).message));
+        if (!onUnreachable?.()) {
+            onFrame(transportError((error as Error).message));
+        }
 
         return;
     }

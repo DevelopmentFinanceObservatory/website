@@ -147,8 +147,9 @@ const PlanModal = ({
                     <section className={styles.section}>
                         <p className={styles.sectionHead}>Keep in mind</p>
                         <ul className={styles.others}>
-                            {view.caveats.map((caveat) => (
-                                <li key={caveat}>{caveat}</li>
+                            {view.caveats.map((caveat, index) => (
+                                // Caveats are sentences with no id, and two may read alike.
+                                <li key={index}>{caveat}</li>
                             ))}
                         </ul>
                     </section>

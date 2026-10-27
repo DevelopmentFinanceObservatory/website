@@ -25,6 +25,8 @@ import {
     startSwitch,
     switchEnded,
     switchReply,
+    UNREACHABLE_NOTICE,
+    unreachableSwitch,
     withApprovedPlan,
     yearsText,
     type PlanState,
@@ -170,6 +172,17 @@ test('the answer step is the flagged one, else the last step an ask names', asyn
             'Divide',
         ],
         ['an ask', { steps, asks: [{ ask: 'share', answered_by: ['s2', 'missing'] }] }, 'Divide'],
+        [
+            'asks naming steps out of plan order',
+            {
+                steps,
+                asks: [
+                    { ask: 'chart', answered_by: ['s3'] },
+                    { ask: 'share', answered_by: ['s1'] },
+                ],
+            },
+            'Chart',
+        ],
         ['neither', { steps }, 'Chart'],
     ];
 
@@ -255,7 +268,7 @@ test('moved names a choice the switch moved besides the picked one, with why', (
     ]);
 });
 
-test('after two switches both rows are Changed from the first plan, across a re-pinned spec', () => {
+test('after two switches both rows are Changed from the first plan', () => {
     const v1 = planFromFrame(
         frame({
             decisions: [basisDecision('measure_basis:gross'), sectorDecision('sector:120+130')],
@@ -267,24 +280,20 @@ test('after two switches both rows are Changed from the first plan, across a re-
         }),
         startSwitch(v1, PICK),
     );
-    // The sector switch re-pins the spec its choice_id names.
     const v3 = planFromFrame(
         switchedFrame({
             interrupt_id: 'int-3',
             version: 3,
-            decisions: [
-                basisDecision('measure_basis:net', 'spec_2'),
-                sectorDecision('sector:120', 'spec_2'),
-            ],
+            decisions: [basisDecision('measure_basis:net'), sectorDecision('sector:120')],
         }),
         startSwitch(v2, { choiceId: 'spec_1:sector', optionId: 'sector:120' }),
     );
 
     assert.deepEqual(v3.changed, [
-        { choiceId: 'spec_2:measure_basis', from: 'Gross disbursements', reason: null },
-        { choiceId: 'spec_2:sector', from: 'Health and population', reason: null },
+        { choiceId: 'spec_1:measure_basis', from: 'Gross disbursements', reason: null },
+        { choiceId: 'spec_1:sector', from: 'Health and population', reason: null },
     ]);
-    assert.equal(v3.switched, 'spec_2:sector');
+    assert.equal(v3.switched, 'spec_1:sector');
     assert.deepEqual(
         planView(v3).choices.map((choice) => [choice.name, choice.changedFrom]),
         [
@@ -311,12 +320,15 @@ test('a plan that drops one of two choices keeps Changed and the focus target', 
             'r2:measure_basis',
         ],
         [
-            'the harness merged the switched choice into one sharing its axis',
+            // A merged row keeps its first member's id in plan order, so a
+            // switch of the second member finds no row of its own and focus
+            // goes to the first row, which is the merged one.
+            'a merge of the switched choice keeps the first member id, the first row',
             [numerator(gross), denominator(gross)],
-            'r1:measure_basis',
-            [denominator(net)],
-            ['r2:measure_basis'],
             'r2:measure_basis',
+            [numerator(net)],
+            ['r1:measure_basis'],
+            'r1:measure_basis',
         ],
         [
             'the switched choice left the plan',
@@ -980,7 +992,7 @@ test('a switch that ended after a fresh plan or a refusal leaves the state alone
     assert.equal(switchEnded(replaced, waiting, endedPlan(waiting)), replaced);
 });
 
-test('the card leads with the title beside a summary, else the first ask, else the title', async (t) => {
+test('the card leads with the title, and with the first ask only when there is no title', async (t) => {
     const asks = [{ ask: 'health share of US ODA in 2023', answered_by: ['s1'] }];
     const cases: [string, Partial<PlanProposed>, string][] = [
         [
@@ -988,8 +1000,9 @@ test('the card leads with the title beside a summary, else the first ask, else t
             { title: 'Health share of US aid, 2023', summary: 'Gross.', asks },
             'Health share of US aid, 2023',
         ],
-        ['no summary, an ask', { title: 'Research plan', asks }, 'Health share of US ODA in 2023'],
-        ['neither', { title: 'Research plan' }, 'Research plan'],
+        ['a title and an ask', { title: 'Research plan', asks }, 'Research plan'],
+        ['no title, an ask', { title: '', asks }, 'Health share of US ODA in 2023'],
+        ['a title alone', { title: 'Research plan' }, 'Research plan'],
     ];
 
     for (const [name, overrides, title] of cases) {
@@ -997,6 +1010,44 @@ test('the card leads with the title beside a summary, else the first ask, else t
             assert.equal(planFromFrame(frame(overrides)).title, title);
         });
     }
+});
+
+test('a switch that does not apply clears the mark of the switch before it', async (t) => {
+    const applied = planFromFrame(switchedFrame(), startSwitch(planFromFrame(frame()), PICK));
+    const waiting = startSwitch(applied, {
+        choiceId: PICK.choiceId,
+        optionId: 'measure_basis:gross',
+    });
+    const cases: [string, PlanState][] = [
+        ['a refusal', refusedSwitch(waiting, { status: 422, detail: 'No.', error: null })],
+        ['a gone pause', refusedSwitch(waiting, { status: 404, detail: null, error: null })],
+        ['a stream end without a plan', endedPlan(waiting, { detail: 'The harness stopped.' })],
+        ['an unreachable harness', unreachableSwitch(waiting)],
+    ];
+
+    assert.equal(applied.switched, PICK.choiceId);
+
+    for (const [name, plan] of cases) {
+        await t.test(name, () => {
+            assert.equal(plan.switched, null);
+        });
+    }
+});
+
+test('a switch that never reached the harness keeps the card live, with Try again', () => {
+    const unreached = unreachableSwitch(startSwitch(planFromFrame(frame()), PICK));
+
+    assert.equal(unreached.live, true);
+    assert.equal(unreached.switching, null);
+    assert.deepEqual(unreached.notice, {
+        lead: 'Could not switch to Net disbursements.',
+        text: UNREACHABLE_NOTICE,
+        retryable: true,
+        retryAfter: null,
+        quiet: false,
+        ...PICK,
+    });
+    assert.ok(switchReply(unreached, PICK.choiceId, PICK.optionId));
 });
 
 test('a plan re-offered after a switch names the switched choice, for focus to return to', () => {

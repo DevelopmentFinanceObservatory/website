@@ -155,6 +155,67 @@ test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail
     assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
 });
 
+test('runInterrupt: a request no server answered goes to onUnreachable, a server error does not', async (t) => {
+    const cases: [string, () => Promise<Response>, number, number][] = [
+        [
+            'fetch rejects',
+            async () => {
+                throw new TypeError('Failed to fetch');
+            },
+            1,
+            0,
+        ],
+        ['a 502', async () => Response.json({ detail: 'proxy failed' }, { status: 502 }), 0, 1],
+        [
+            'an error frame',
+            async () =>
+                new Response(
+                    'data: {"event":"error","seq":2,"error":{"error":"transient_unavailable","retry":"retry_after_delay","detail":"Failed to fetch"}}\n\n',
+                ),
+            0,
+            1,
+        ],
+    ];
+
+    for (const [name, respond, unreached, errors] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', respond);
+            const frames: StudioFrame[] = [];
+            let calls = 0;
+
+            await runInterrupt('conv', 'int-1', switchReply, {
+                onFrame: (frame) => frames.push(frame),
+                onRefusal: () => false,
+                onUnreachable: () => {
+                    calls += 1;
+
+                    return true;
+                },
+            });
+
+            assert.equal(calls, unreached);
+            assert.equal(frames.filter((frame) => frame.event === 'error').length, errors);
+        });
+    }
+});
+
+test('runInterrupt: an unreachable request onUnreachable leaves is an error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => {
+        throw new TypeError('Failed to fetch');
+    });
+    const frames: StudioFrame[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onUnreachable: () => false,
+    });
+
+    assert.deepEqual(
+        frames.map((frame) => frame.event),
+        ['error'],
+    );
+});
+
 test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', async (t) => {
     const currentPlan = {
         event: 'plan.proposed',

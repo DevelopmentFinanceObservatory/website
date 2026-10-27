@@ -46,6 +46,7 @@ import {
     switchEnded,
     endedPlan,
     switchReply,
+    unreachableSwitch,
     optionLabel,
     withApprovedPlan,
     type ApprovedPlan,
@@ -390,9 +391,10 @@ export const useChat = (initial?: ChatSnapshot) => {
         }));
     }, []);
 
-    // `onRefusal` answers an HTTP refusal of the request (see StreamHandlers)
-    // and returns true when it has dealt with it; any other refusal ends the
-    // turn as an error. `onEnd` hands the turn's end to the caller: an error
+    // `onRefusal` answers an HTTP refusal of the request, and `onUnreachable`
+    // a request that got no response (see StreamHandlers); each returns true
+    // when it has dealt with it, and anything else ends the turn as an error.
+    // `onEnd` hands the turn's end to the caller: an error
     // frame, `done` or a broken stream leave the turn open, Stop asks the
     // harness to cancel and keeps reading the frames, and once the stream
     // ends `onEnd` gets how it ended (see StreamEnding).
@@ -400,8 +402,15 @@ export const useChat = (initial?: ChatSnapshot) => {
         (
             turn: number,
             start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
-            onRefusal?: (refusal: StreamRefusal) => boolean,
-            onEnd?: (ending: StreamEnding) => void,
+            {
+                onRefusal,
+                onUnreachable,
+                onEnd,
+            }: {
+                onRefusal?: (refusal: StreamRefusal) => boolean;
+                onUnreachable?: () => boolean;
+                onEnd?: (ending: StreamEnding) => void;
+            } = {},
         ) => {
             const controller = new AbortController();
             const generation = generationRef.current;
@@ -764,6 +773,8 @@ export const useChat = (initial?: ChatSnapshot) => {
             // that the user stopped, is dropped, as handle() drops frames.
             const refuse = (refusal: StreamRefusal): boolean =>
                 generationRef.current !== generation || stopped || (onRefusal?.(refusal) ?? false);
+            const unreachable = (): boolean =>
+                generationRef.current !== generation || stopped || (onUnreachable?.() ?? false);
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -782,7 +793,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                     stall.beat();
 
                     return start(
-                        { onFrame: handle, onKeepAlive: stall.beat, onRefusal: refuse },
+                        {
+                            onFrame: handle,
+                            onKeepAlive: stall.beat,
+                            onRefusal: refuse,
+                            onUnreachable: unreachable,
+                        },
                         controller.signal,
                     ).catch((error: Error) => {
                         if (error.name !== 'AbortError' && generationRef.current === generation) {
@@ -959,14 +975,16 @@ export const useChat = (initial?: ChatSnapshot) => {
                 turnCount.current,
                 (handlers, signal) =>
                     runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
-                (refusal) => {
-                    const current = stalePlan(refusal, pending?.plan);
+                {
+                    onRefusal: (refusal) => {
+                        const current = stalePlan(refusal, pending?.plan);
 
-                    if (current) {
-                        offerPlan(current);
-                    }
+                        if (current) {
+                            offerPlan(current);
+                        }
 
-                    return current !== null;
+                        return current !== null;
+                    },
                 },
             );
         },
@@ -1045,7 +1063,8 @@ export const useChat = (initial?: ChatSnapshot) => {
     // with the current card, and one saying the pause is gone ends the card
     // read-only. So does a stream that ends without a plan or a refusal (it
     // closed, broke, sent an error, or was stopped), once, closing the turn's
-    // Activity entry and leaving the reply alone.
+    // Activity entry and leaving the reply alone. A request that never
+    // reached the harness keeps the card live, with "Try again".
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -1079,39 +1098,51 @@ export const useChat = (initial?: ChatSnapshot) => {
                 turn,
                 (handlers, signal) =>
                     runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
-                (refusal) => {
-                    const refused = refusedSwitch(waiting, refusal);
+                {
+                    onRefusal: (refusal) => {
+                        const refused = refusedSwitch(waiting, refusal);
 
-                    if (refused.live) {
-                        offerPlan(refused);
-                    } else {
-                        gone = refused;
-                    }
+                        if (refused.live) {
+                            offerPlan(refused);
+                        } else {
+                            gone = refused;
+                        }
 
-                    return true;
-                },
-                ({ detail, stopped, failed }) => {
-                    // A fresh plan or a refusal replaced the waiting card.
-                    if (pendingInterruptRef.current?.plan !== waiting) {
-                        return;
-                    }
+                        return true;
+                    },
+                    // The request never reached the harness, so the pause
+                    // still waits.
+                    onUnreachable: () => {
+                        offerPlan(unreachableSwitch(waiting));
 
-                    const open = stopped
-                        ? 'skipped'
-                        : gone || detail !== null || failed
-                          ? 'failed'
-                          : undefined;
-                    const ended = gone ?? endedPlan(waiting, { detail, stopped });
+                        return true;
+                    },
+                    onEnd: ({ detail, stopped, failed }) => {
+                        // A fresh plan or a refusal replaced the waiting card.
+                        if (pendingInterruptRef.current?.plan !== waiting) {
+                            return;
+                        }
 
-                    pendingInterruptRef.current = null;
-                    turnPlanRef.current = null;
-                    setState((prev) => {
-                        const after = switchEnded(prev, waiting, ended);
+                        const open = stopped
+                            ? 'skipped'
+                            : gone || detail !== null || failed
+                              ? 'failed'
+                              : undefined;
+                        const ended = gone ?? endedPlan(waiting, { detail, stopped });
 
-                        return after === prev
-                            ? prev
-                            : { ...after, activity: endTurnActivity(after.activity, turn, open) };
-                    });
+                        pendingInterruptRef.current = null;
+                        turnPlanRef.current = null;
+                        setState((prev) => {
+                            const after = switchEnded(prev, waiting, ended);
+
+                            return after === prev
+                                ? prev
+                                : {
+                                      ...after,
+                                      activity: endTurnActivity(after.activity, turn, open),
+                                  };
+                        });
+                    },
                 },
             );
         },
@@ -1137,22 +1168,24 @@ export const useChat = (initial?: ChatSnapshot) => {
             stream(
                 turn,
                 (handlers, signal) => runApplyChoice(conversation, chip, handlers, signal),
-                (refusal) => {
-                    const detail = chipRefusalDetail(refusal);
+                {
+                    onRefusal: (refusal) => {
+                        const detail = chipRefusalDetail(refusal);
 
-                    if (detail === null) {
-                        return false;
-                    }
+                        if (detail === null) {
+                            return false;
+                        }
 
-                    setState((prev) =>
-                        endTurn(
-                            { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
-                            turn,
-                            'failed',
-                        ),
-                    );
+                        setState((prev) =>
+                            endTurn(
+                                { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
+                                turn,
+                                'failed',
+                            ),
+                        );
 
-                    return true;
+                        return true;
+                    },
                 },
             );
         },

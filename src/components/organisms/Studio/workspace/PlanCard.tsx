@@ -54,7 +54,9 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                     {answer && (
                         <>
                             <p className={styles.stepsTop}>
-                                {view.steps.length > 1 ? `${steps}, ending in` : 'One step'}
+                                {view.steps.length > 1
+                                    ? `${steps}. The answer comes from:`
+                                    : 'One step'}
                             </p>
                             <p className={styles.answer}>
                                 <span className={styles.dot} />
@@ -67,8 +69,9 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                         <div className={styles.caveats}>
                             <p className={styles.caveatsHead}>Keep in mind</p>
                             <ul className={styles.caveatList}>
-                                {view.caveats.map((caveat) => (
-                                    <li key={caveat}>{caveat}</li>
+                                {view.caveats.map((caveat, index) => (
+                                    // Caveats are sentences with no id, and two may read alike.
+                                    <li key={index}>{caveat}</li>
                                 ))}
                             </ul>
                         </div>
