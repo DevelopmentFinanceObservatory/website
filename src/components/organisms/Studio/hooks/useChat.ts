@@ -38,12 +38,15 @@ import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/c
 import { plainTextFromNote } from '@/lib/studio/note';
 import {
     approveReply,
+    approvedFromFrame,
     planFromFrame,
     refusedSwitch,
     stalePlan,
     settledPlan,
     startSwitch,
     switchReply,
+    withApprovedPlan,
+    type ApprovedPlan,
     type PlanState,
 } from '@/lib/studio/plan';
 import { withAnswer } from '@/lib/studio/transcript';
@@ -75,10 +78,18 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
 // A bot turn's `followups` are prompts a click sends as the next message,
-// and its `chips` switch a scope choice of the answer's readings.
+// and its `chips` switch a scope choice of the answer's readings. `plan` is
+// the plan the user approved for this answer, saved with the transcript so
+// a reopened conversation can still show it.
 export type ChatMessage =
     | { role: 'user'; text: string; card?: { title: string }; answer?: true }
-    | { role: 'bot'; text: string; followups?: string[]; chips?: ApplyChoiceSuggestion[] };
+    | {
+          role: 'bot';
+          text: string;
+          followups?: string[];
+          chips?: ApplyChoiceSuggestion[];
+          plan?: ApprovedPlan;
+      };
 
 // A widget stamped with the send() turn it arrived in — the canvas keeps
 // only the latest turn's widgets plus whatever the user pinned.
@@ -133,7 +144,8 @@ export type ChatState = {
 };
 
 // A saved conversation's chat half — what hydrate() restores and what a
-// shared/forked copy starts from.
+// shared/forked copy starts from. Approved plans ride on their answers in
+// `messages`.
 export type ChatSnapshot = {
     sessionId: string | null;
     componentRefs?: CardRef[];
@@ -162,7 +174,8 @@ const withLine = (prev: ChatState, status: string, statusDetail: string | null =
 });
 
 // A turn's end on screen, however it ended: its Activity entry closes, the
-// chat line clears, and a plan card whose switch got no fresh plan leaves.
+// chat line clears, and a plan card whose switch got no fresh plan says so
+// on the choice's row.
 const endTurn = (prev: ChatState, turn: number, open?: 'skipped' | 'failed'): ChatState => ({
     ...prev,
     activity: endTurnActivity(prev.activity, turn, open),
@@ -596,13 +609,27 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         break;
                     }
-                    case 'plan.proposed':
-                        // Also the answer to a switch, whose fresh plan, with
-                        // what moved, replaces the card it kept.
+                    case 'plan.proposed': {
+                        // Also the answer to a switch, whose fresh plan
+                        // replaces the card it kept and marks what changed.
+                        const previous = pendingInterruptRef.current?.plan;
+
                         stall.stop();
                         grace.cancel();
-                        offerPlan(planFromFrame(frame));
+                        offerPlan(planFromFrame(frame, previous?.switching ? previous : undefined));
                         break;
+                    }
+                    case 'plan.approved': {
+                        // Comes first on the approve's stream, so the reply it
+                        // writes into is the transcript's last message.
+                        const approved = approvedFromFrame(frame);
+
+                        setState((prev) => ({
+                            ...prev,
+                            messages: withApprovedPlan(prev.messages, approved),
+                        }));
+                        break;
+                    }
                     case 'plan.versioned':
                         // Transient bookkeeping — the fresh plan.proposed that
                         // follows re-renders the card.
@@ -968,10 +995,11 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     // A scope decision's option, picked on the plan card. The card stays,
     // its controls waiting, until the harness re-offers the plan with what
-    // moved. A refused switch keeps the pause and the card says why. A
-    // stale one (the plan moved on elsewhere) is answered with the current
-    // card. Any other refusal fails the turn, and the card leaves with the
-    // pause it answered.
+    // changed. A switch that does not apply keeps the card and the pause,
+    // and the card says why on the choice's row: a refusal through
+    // refusedSwitch, a stream that ended without a fresh plan through
+    // settledPlan. A stale one (the plan moved on elsewhere) is answered
+    // with the current card.
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -987,25 +1015,42 @@ export const useChat = (initial?: ChatSnapshot) => {
                 .find((decision) => decision.choice_id === choiceId)
                 ?.options?.find((option) => option.option_id === optionId)?.label;
 
-            pendingInterruptRef.current = null;
+            // The pause stays pending with the waiting plan: switchReply
+            // refuses a second pick while it waits, and the plan the harness
+            // re-offers is compared against it.
+            const waiting = startSwitch(plan, { choiceId, optionId });
+
+            pendingInterruptRef.current = { interruptId: pending.interruptId, plan: waiting };
             setState((prev) => ({
                 ...withLine(prev, label ? `Switching to ${label}` : 'Switching'),
                 thinking: true,
-                plan: prev.plan && startSwitch(prev.plan, { choiceId, optionId }),
+                plan: waiting,
             }));
 
             stream(
                 turnCount.current,
                 (handlers, signal) =>
-                    runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
+                    runInterrupt(
+                        conversation,
+                        pending.interruptId,
+                        reply,
+                        handlers,
+                        signal,
+                    ).finally(() => {
+                        // Neither a fresh plan nor a refusal replaced the
+                        // waiting card: endTurn settles the card on
+                        // screen, and the pause answers from the same.
+                        if (pendingInterruptRef.current?.plan === waiting) {
+                            pendingInterruptRef.current = {
+                                interruptId: pending.interruptId,
+                                plan: settledPlan(waiting) ?? undefined,
+                            };
+                        }
+                    }),
                 (refusal) => {
-                    const refused = refusedSwitch(plan, refusal);
+                    offerPlan(refusedSwitch(waiting, refusal));
 
-                    if (refused) {
-                        offerPlan(refused);
-                    }
-
-                    return refused !== null;
+                    return true;
                 },
             );
         },

@@ -8,22 +8,28 @@ import test from 'node:test';
 import {
     PLAN_REVISION_STALE,
     approveReply,
+    approvedFromFrame,
+    approvedView,
+    answerStepOf,
     canSwitch,
     STALE_NOTICE,
     SWITCH_OPTION_UNAVAILABLE,
     isActiveOption,
     isSelectable,
-    movedSentence,
     planFromFrame,
+    planView,
     refusedSwitch,
     settledPlan,
     stalePlan,
     startSwitch,
     switchReply,
+    withApprovedPlan,
     yearsText,
 } from '../plan.ts';
+import { withoutChips } from '../chips.ts';
 import type { StreamRefusal } from '../studioClient.ts';
-import type { PlanDecision, PlanProposed } from '../wire.ts';
+import type { PlanApproved, PlanDecision, PlanProposed } from '../wire.ts';
+import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 
 const countDecision: PlanDecision = {
     id: 'd1',
@@ -75,28 +81,168 @@ const frame = (overrides: Partial<PlanProposed> = {}): PlanProposed => ({
     ...overrides,
 });
 
-test('planFromFrame keeps the revision and what moved', () => {
-    const moved = [
-        {
-            choice_id: 'spec_1:measure_basis',
-            from_label: 'Gross disbursements',
-            to_label: 'Net disbursements',
-            reason: 'Repayments are now subtracted.',
-        },
-    ];
-    const plan = planFromFrame(frame({ revision: 'rev-b', moved }));
+const PICK = { choiceId: 'spec_1:measure_basis', optionId: 'measure_basis:net' };
+
+/** The fresh plan a switch to net disbursements re-offers. */
+const switchedFrame = (overrides: Partial<PlanProposed> = {}): PlanProposed =>
+    frame({
+        interrupt_id: 'int-2',
+        version: 2,
+        revision: 'rev-b',
+        decisions: [
+            {
+                ...countDecision,
+                chosen: 'Net disbursements',
+                active_option_id: 'measure_basis:net',
+            },
+        ],
+        ...overrides,
+    });
+
+test('planFromFrame keeps the revision and marks nothing changed without a switch', () => {
+    const plan = planFromFrame(frame({ revision: 'rev-b' }));
 
     assert.equal(plan.revision, 'rev-b');
-    assert.deepEqual(plan.moved, moved);
+    assert.deepEqual(plan.changed, []);
     assert.equal(plan.switching, null);
     assert.equal(plan.notice, null);
 });
 
-test('planFromFrame reads a harness without revision or moved as none', () => {
-    const plan = planFromFrame(frame({ revision: undefined, moved: undefined }));
+test('a harness without summary, gives_answer or revision still gives a whole card', () => {
+    const plan = planFromFrame(
+        frame({
+            revision: undefined,
+            moved: undefined,
+            steps: [
+                { id: 's1', label: 'Retrieve health aid' },
+                { id: 's2', label: 'Sum across recipients' },
+            ],
+        }),
+    );
+    const view = planView(plan);
 
     assert.equal(plan.revision, null);
-    assert.deepEqual(plan.moved, []);
+    assert.equal(view.title, 'Health aid to Ghana');
+    assert.equal(view.summary, null);
+    assert.deepEqual(
+        view.steps.map((step) => [step.label, step.givesAnswer]),
+        [
+            ['Retrieve health aid', false],
+            ['Sum across recipients', true],
+        ],
+    );
+    assert.deepEqual(
+        view.choices.map((choice) => [choice.key, choice.value, choice.changedFrom]),
+        [['spec_1:measure_basis', 'Gross disbursements', null]],
+    );
+    assert.deepEqual(
+        view.others.map((other) => other.key),
+        ['d2'],
+    );
+});
+
+test('the answer step is the flagged one, else the last step an ask names', async (t) => {
+    const steps = [
+        { id: 's1', label: 'Fetch' },
+        { id: 's2', label: 'Divide' },
+        { id: 's3', label: 'Chart' },
+    ];
+    const cases: [string, Partial<PlanProposed>, string][] = [
+        [
+            'flagged',
+            { steps: steps.map((step) => ({ ...step, gives_answer: step.id === 's2' })) },
+            'Divide',
+        ],
+        ['an ask', { steps, asks: [{ ask: 'share', answered_by: ['s2', 'missing'] }] }, 'Divide'],
+        ['neither', { steps }, 'Chart'],
+    ];
+
+    for (const [name, overrides, label] of cases) {
+        await t.test(name, () => {
+            assert.equal(answerStepOf(planView(planFromFrame(frame(overrides))))?.label, label);
+        });
+    }
+});
+
+test('a plan re-offered after a switch marks the switched choice and what it held', () => {
+    const fresh = planFromFrame(switchedFrame(), startSwitch(planFromFrame(frame()), PICK));
+    const [choice] = planView(fresh).choices;
+
+    assert.deepEqual(fresh.changed, [
+        { choiceId: 'spec_1:measure_basis', from: 'Gross disbursements', reason: null },
+    ]);
+    assert.equal(choice?.value, 'Net disbursements');
+    assert.equal(choice?.changedFrom, 'Gross disbursements');
+});
+
+test('moved names a choice the switch moved besides the picked one, with why', () => {
+    const sector: PlanDecision = {
+        ...countDecision,
+        id: 'd3',
+        question: 'Sector',
+        chosen: 'Health',
+        choice_id: 'spec_1:sector',
+        active_option_id: 'sector:120',
+        options: [
+            {
+                option_id: 'sector:120',
+                label: 'Health',
+                status: 'available',
+                reason: null,
+                years: null,
+            },
+        ],
+    };
+    const fresh = planFromFrame(
+        switchedFrame({
+            decisions: [{ ...countDecision, active_option_id: 'measure_basis:net' }, sector],
+            moved: [
+                {
+                    choice_id: 'spec_1:sector',
+                    from_label: 'Health and population',
+                    to_label: 'Health',
+                    reason: 'Net figures cover health alone.',
+                },
+            ],
+        }),
+        startSwitch(planFromFrame(frame({ decisions: [countDecision, sector] })), PICK),
+    );
+
+    assert.deepEqual(fresh.changed, [
+        { choiceId: 'spec_1:measure_basis', from: 'Gross disbursements', reason: null },
+        {
+            choiceId: 'spec_1:sector',
+            from: 'Health and population',
+            reason: 'Net figures cover health alone.',
+        },
+    ]);
+});
+
+test('switch_failed puts its reason on the row of the choice it names', () => {
+    const reason = 'Net figures for 2023 are not published. The plan still counts gross.';
+    const plan = planFromFrame(
+        frame({
+            revision: 'rev-c',
+            switch_failed: {
+                choice_id: 'spec_1:measure_basis',
+                option_id: 'measure_basis:net',
+                code: 'operation_unsupported',
+                reason,
+            },
+        }),
+    );
+
+    assert.deepEqual(plan.notice, {
+        lead: 'Could not switch to Net disbursements.',
+        text: reason,
+        ...PICK,
+    });
+    assert.deepEqual(switchReply(plan, PICK.choiceId, PICK.optionId), {
+        decision: 'switch',
+        choice_id: PICK.choiceId,
+        option_id: PICK.optionId,
+        plan_revision: 'rev-c',
+    });
 });
 
 test('switchReply sends the choice, the option and the revision the user saw', () => {
@@ -196,7 +342,10 @@ test('a stale switch is answered with the current card, which switches again', (
     });
     const replaced = refusedSwitch(waiting, staleRefusal(currentFrame));
 
-    assert.deepEqual(replaced, { ...planFromFrame(currentFrame), notice: STALE_DETAIL });
+    assert.deepEqual(replaced, {
+        ...planFromFrame(currentFrame),
+        notice: { lead: null, text: STALE_DETAIL, choiceId: null, optionId: null },
+    });
     assert.deepEqual(switchReply(replaced, 'spec_1:measure_basis', 'measure_basis:net'), {
         decision: 'switch',
         choice_id: 'spec_1:measure_basis',
@@ -208,7 +357,7 @@ test('a stale switch is answered with the current card, which switches again', (
 test('a stale approve is answered with the current card; other refusals are not', () => {
     assert.deepEqual(stalePlan(staleRefusal(currentFrame)), {
         ...planFromFrame(currentFrame),
-        notice: STALE_DETAIL,
+        notice: { lead: null, text: STALE_DETAIL, choiceId: null, optionId: null },
     });
     assert.equal(stalePlan(staleRefusal()), null);
     assert.equal(
@@ -238,9 +387,13 @@ test('a stale switch without a current card keeps its revision, so an approve is
     });
     const refused = refusedSwitch(plan, staleRefusal());
 
-    assert.ok(refused);
     assert.equal(refused.switching, null);
-    assert.equal(refused.notice, STALE_NOTICE);
+    assert.deepEqual(refused.notice, {
+        lead: null,
+        text: STALE_NOTICE,
+        choiceId: null,
+        optionId: null,
+    });
     assert.equal(canSwitch(refused), false);
     assert.equal(switchReply(refused, 'spec_1:measure_basis', 'measure_basis:net'), null);
     assert.deepEqual(approveReply(refused), { decision: 'approve', plan_revision: 'rev-a' });
@@ -262,14 +415,17 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
         },
     });
 
-    assert.ok(refused);
     assert.equal(refused.switching, null);
-    assert.equal(refused.notice, 'Net disbursements cannot be counted for this plan.');
+    assert.deepEqual(refused.notice, {
+        lead: null,
+        text: 'Net disbursements cannot be counted for this plan.',
+        ...PICK,
+    });
     assert.equal(refused.revision, 'rev-a');
     assert.equal(canSwitch(refused), true);
 });
 
-test('a refusal the harness does not give a switch is a failed request, with no card', async (t) => {
+test('any other refusal keeps the card, saying on the row that the switch did not apply', async (t) => {
     const plan = startSwitch(planFromFrame(frame()), {
         choiceId: 'spec_1:measure_basis',
         optionId: 'measure_basis:net',
@@ -304,53 +460,93 @@ test('a refusal the harness does not give a switch is a failed request, with no 
 
     for (const [name, refusal] of cases) {
         await t.test(name, () => {
-            assert.equal(refusedSwitch(plan, refusal), null);
+            const refused = refusedSwitch(plan, refusal);
+
+            assert.equal(refused.switching, null);
+            assert.deepEqual(refused.notice, {
+                lead: null,
+                text: 'Studio could not switch to Net disbursements. The plan still counts Gross disbursements.',
+                ...PICK,
+            });
+            assert.equal(
+                switchReply(refused, PICK.choiceId, PICK.optionId)?.plan_revision,
+                'rev-a',
+            );
         });
     }
 });
 
-test('a fresh plan after a switch replaces the waiting card with what moved', () => {
-    const waiting = startSwitch(planFromFrame(frame()), {
-        choiceId: 'spec_1:measure_basis',
-        optionId: 'measure_basis:net',
-    });
-    const fresh = planFromFrame(
-        frame({
-            interrupt_id: 'int-2',
-            version: 2,
-            revision: 'rev-b',
-            moved: [
-                {
-                    choice_id: 'spec_1:measure_basis',
-                    from_label: 'Gross disbursements',
-                    to_label: 'Net disbursements',
-                    reason: 'Repayments are now subtracted.',
-                },
-            ],
-        }),
-    );
+test('a switch that ends without a fresh plan keeps the card and says so on its row', () => {
+    const plan = planFromFrame(frame());
+    const settled = settledPlan(startSwitch(plan, PICK));
 
-    assert.equal(waiting.switching?.optionId, 'measure_basis:net');
-    assert.equal(fresh.switching, null);
-    assert.deepEqual(fresh.moved.map(movedSentence), [
-        'Gross disbursements changed to Net disbursements. Repayments are now subtracted.',
-    ]);
-    assert.equal(
-        switchReply(fresh, 'spec_1:measure_basis', 'measure_basis:net')?.plan_revision,
-        'rev-b',
+    assert.ok(settled);
+    assert.equal(settled.switching, null);
+    assert.equal(settled.notice?.choiceId, PICK.choiceId);
+    assert.equal(settled.notice?.optionId, PICK.optionId);
+    assert.equal(switchReply(settled, PICK.choiceId, PICK.optionId)?.plan_revision, 'rev-a');
+    assert.equal(settledPlan(plan), plan);
+    assert.equal(settledPlan(null), null);
+});
+
+const approvedFrame: PlanApproved = {
+    event: 'plan.approved',
+    seq: 1,
+    plan_version_id: 'pv-2',
+    version: 2,
+    revision: 'rev-b',
+    title: 'Health share of US aid, 2023',
+    summary: 'Gross disbursements of US aid, current US dollars.',
+    steps: [
+        { label: 'Fetch health aid' },
+        { label: 'Divide', gives_answer: true },
+        { label: 'Chart' },
+    ],
+    choices: [
+        { question: 'Basis', chosen: 'net disbursements', changed_from: 'gross disbursements' },
+    ],
+};
+
+test('plan.approved rides on the reply the approve resumed and survives a save and a fork', () => {
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'What share of US aid went to health in 2023?' },
+        { role: 'bot', text: '' },
+    ];
+    const approved = withApprovedPlan(messages, approvedFromFrame(approvedFrame));
+    const answered: ChatMessage[] = approved.map((message) =>
+        message.role === 'bot'
+            ? { ...message, text: 'In 2023, 13%.', chips: [] as never[] }
+            : message,
+    );
+    const saved = JSON.parse(JSON.stringify({ messages: answered })) as { messages: ChatMessage[] };
+    const reply = withoutChips(saved.messages).at(-1);
+
+    assert.equal(messages.at(-1)?.role, 'bot');
+    assert.ok(reply?.role === 'bot' && reply.plan);
+    assert.equal(reply.text, 'In 2023, 13%.');
+
+    const view = approvedView(reply.plan);
+
+    assert.equal(view.title, 'Health share of US aid, 2023');
+    assert.equal(answerStepOf(view)?.label, 'Divide');
+    assert.deepEqual(
+        view.choices.map((choice) => [choice.name, choice.value, choice.changedFrom]),
+        [['Basis', 'net disbursements', 'gross disbursements']],
     );
 });
 
-test('a switch that ends without a fresh plan drops the card; other plans stay', () => {
-    const plan = planFromFrame(frame());
-    const waiting = startSwitch(plan, {
-        choiceId: 'spec_1:measure_basis',
-        optionId: 'measure_basis:net',
-    });
+test('an approved plan with no step flagged answers with its last step', () => {
+    const view = approvedView(
+        approvedFromFrame({ ...approvedFrame, steps: [{ label: 'Fetch' }, { label: 'Sum' }] }),
+    );
 
-    assert.equal(settledPlan(waiting), null);
-    assert.equal(settledPlan(plan), plan);
-    assert.equal(settledPlan(null), null);
+    assert.equal(answerStepOf(view)?.label, 'Sum');
+});
+
+test('withApprovedPlan leaves a transcript that does not end on a reply', () => {
+    const messages: ChatMessage[] = [{ role: 'user', text: 'hi' }];
+
+    assert.equal(withApprovedPlan(messages, approvedFromFrame(approvedFrame)), messages);
 });
 
 test('yearsText joins ranges and prints a one-year range once', () => {
