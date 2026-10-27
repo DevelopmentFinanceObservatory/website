@@ -30,6 +30,24 @@ export const PlanMeta = ({ view, approved }: { view: PlanView; approved?: boolea
     </p>
 );
 
+/** Whether `seconds` have passed since `notice` arrived; true at once for
+ *  null. */
+const useWaited = (notice: PlanNotice | null, seconds: number | null): boolean => {
+    const [waited, setWaited] = useState<PlanNotice | null>(null);
+
+    useEffect(() => {
+        if (seconds === null) {
+            return;
+        }
+
+        const timer = setTimeout(() => setWaited(notice), seconds * 1000);
+
+        return () => clearTimeout(timer);
+    }, [notice, seconds]);
+
+    return seconds === null || waited === notice;
+};
+
 /**
  * Why the last switch did not apply, with "Try again" when picking the
  * option again could apply. The live region stays mounted, empty until a
@@ -38,7 +56,7 @@ export const PlanMeta = ({ view, approved }: { view: PlanView; approved?: boolea
 const NoticeRegion = ({ notice, onRetry }: { notice: PlanNotice | null; onRetry?: () => void }) => (
     <div className={styles.live} role="status">
         {notice && (
-            <div className={styles.notice}>
+            <div className={classNames(styles.notice, notice.quiet && styles.noticeQuiet)}>
                 <p className={styles.noticeText}>
                     {notice.lead && <span className={styles.noticeLead}>{notice.lead}</span>}
                     {notice.text}
@@ -68,6 +86,7 @@ const ChoiceRow = ({
     choice,
     plan,
     open,
+    reasons,
     refocus,
     onToggle,
     onSwitch,
@@ -75,6 +94,7 @@ const ChoiceRow = ({
     choice: PlanChoiceView;
     plan: PlanState | null;
     open: boolean;
+    reasons: boolean;
     // Focus was inside the ledger when it last moved (see PlanLedger).
     refocus: RefObject<boolean>;
     onToggle: () => void;
@@ -88,8 +108,11 @@ const ChoiceRow = ({
     const pending = plan?.switching?.choiceId === choiceId ? plan?.switching?.optionId : null;
     const notice = plan?.notice?.choiceId && plan.notice.choiceId === choiceId ? plan.notice : null;
     const failedOption = notice?.optionId;
+    // "Try again" waits out the delay the harness asked for.
+    const waited = useWaited(notice, notice?.retryAfter ?? null);
     const retry =
         notice?.retryable &&
+        waited &&
         !busy &&
         choiceId &&
         failedOption &&
@@ -136,6 +159,7 @@ const ChoiceRow = ({
                     {choice.changedReason && ` ${choice.changedReason}`}
                 </span>
             )}
+            {reasons && choice.reason && <span className={styles.why}>{choice.reason}</span>}
             {switchable && open && decision?.options && (
                 <div className={styles.options} role="group" aria-label={choice.name}>
                     {decision.options.map((option) => {
@@ -187,20 +211,24 @@ const ChoiceRow = ({
 };
 
 /**
- * "Counted as": the plan's scope choices as a ruled ledger, one row each.
- * `plan` and `onSwitch` make the rows switchable. An approved plan passes
- * neither. One row opens at a time: the one being switched, else the one
- * whose switch failed, until the user opens or closes another.
+ * "Counted as": the plan's scope choices as a ruled ledger, one row each,
+ * then a line for each choice the switch moved that has no row. `plan` and
+ * `onSwitch` make the rows switchable. An approved plan passes neither.
+ * `reasons` adds why the plan holds each choice. One row opens at a time:
+ * the one being switched, else the one whose switch failed, until the user
+ * opens or closes another.
  */
 export const PlanLedger = ({
     view,
     plan = null,
     onSwitch,
+    reasons = false,
     className,
 }: {
     view: PlanView;
     plan?: PlanState | null;
     onSwitch?: Switch;
+    reasons?: boolean;
     className?: string;
 }) => {
     // The row the user opened or closed (null) for this plan. Undefined
@@ -228,15 +256,17 @@ export const PlanLedger = ({
             ? plan.notice
             : null;
 
+    const ruled = view.choices.length > 0 || view.moved.length > 0;
+
     // An approved plan without choices has nothing to show. A live plan keeps
     // its notice region mounted.
-    if (view.choices.length === 0 && !plan) {
+    if (!ruled && !plan) {
         return null;
     }
 
     return (
         <div
-            className={classNames((view.choices.length > 0 || general) && styles.ledger, className)}
+            className={classNames((ruled || general) && styles.ledger, className)}
             onFocus={() => {
                 hadFocusRef.current = true;
             }}
@@ -246,19 +276,27 @@ export const PlanLedger = ({
                 }
             }}
         >
-            {view.choices.length > 0 && <p className={styles.head}>Counted as</p>}
+            {ruled && <p className={styles.head}>Counted as</p>}
             {view.choices.map((choice) => (
                 <ChoiceRow
                     key={choice.key}
                     choice={choice}
                     plan={plan}
                     open={open === choice.key}
+                    reasons={reasons}
                     refocus={hadFocusRef}
                     onSwitch={onSwitch}
                     onToggle={() =>
                         setPicked({ plan, open: open === choice.key ? null : choice.key })
                     }
                 />
+            ))}
+            {view.moved.map((move) => (
+                <p key={move.key} className={classNames(styles.row, styles.moved)}>
+                    <span className={styles.was}>
+                        Changed from {move.from} to {move.to}.{move.reason && ` ${move.reason}`}
+                    </span>
+                </p>
             ))}
             <div className={classNames(general && styles.row)}>
                 <NoticeRegion notice={general} />

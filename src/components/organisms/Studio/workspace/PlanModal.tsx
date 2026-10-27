@@ -3,13 +3,14 @@
 import classNames from 'classnames';
 import { useState } from 'react';
 
+import { PlanApproveBar } from './PlanApproveBar';
 import { PlanLedger, PlanMeta } from './PlanLedger';
 import styles from './PlanModal.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
-import type { PlanState, PlanView } from '@/lib/studio/plan';
+import { answerStepOf, type PlanState, type PlanView } from '@/lib/studio/plan';
 
 type PlanModalProps = {
     view: PlanView;
@@ -90,8 +91,8 @@ const Steps = ({ view }: { view: PlanView }) => {
 
 /**
  * The full plan: what it counts, the scope choices (switchable on a live
- * plan), the steps folded to labels with the answer step open, then the
- * planner's other decisions. A live plan's footer asks to approve; an
+ * plan) with why the plan holds each, what to keep in mind, the steps folded
+ * to labels with the answer step open, then the planner's other decisions. A live plan's footer asks to approve; an
  * approved plan opens read-only from the pill under its answer.
  */
 const PlanModal = ({
@@ -106,7 +107,7 @@ const PlanModal = ({
     const readOnly = !plan;
     const ended = plan && !plan.live;
     const busy = !!plan?.switching;
-    const answerKey = view.steps.find((step) => step.givesAnswer)?.key;
+    const answerKey = answerStepOf(view)?.key;
 
     return (
         <Modal
@@ -128,26 +129,20 @@ const PlanModal = ({
                         </Button>
                     </div>
                 ) : (
-                    <div className={styles.proceed}>
-                        <p className={styles.proceedLabel}>
-                            {busy ? 'Updating the plan…' : 'Start building?'}
-                        </p>
-                        <div className={styles.proceedActions}>
-                            <Button variant="plain" onClick={onCancel} disabled={busy}>
-                                Cancel
-                            </Button>
-                            <Button variant="dark" onClick={onApprove} disabled={busy}>
-                                Approve
-                            </Button>
-                        </div>
-                    </div>
+                    <PlanApproveBar busy={busy} onApprove={onApprove} onCancel={onCancel} />
                 )
             }
         >
             <div className={styles.body}>
                 <PlanMeta view={view} approved={readOnly} />
                 {view.summary && <p className={styles.summary}>{view.summary}</p>}
-                <PlanLedger view={view} plan={plan} onSwitch={onSwitch} className={styles.ledger} />
+                <PlanLedger
+                    view={view}
+                    plan={plan}
+                    onSwitch={onSwitch}
+                    reasons
+                    className={styles.ledger}
+                />
                 {view.caveats.length > 0 && (
                     <section className={styles.section}>
                         <p className={styles.sectionHead}>Keep in mind</p>

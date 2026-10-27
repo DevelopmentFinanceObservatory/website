@@ -177,23 +177,6 @@
     gap: rem(10);
 }
 
-.proceedLabel {
-    @include font-size(12px, 1.1);
-
-    font-family: var(--font-outfit);
-    font-weight: 500;
-    color: var(--color-charcoal);
-    letter-spacing: -0.01em;
-}
-
-.proceedActions {
-    @include flex(row, flex-end, center);
-
-    gap: rem(10);
-
-    --plain-color: var(--color-charcoal);
-}
-
 .note {
     @include font-size(12px, 1.3);
 

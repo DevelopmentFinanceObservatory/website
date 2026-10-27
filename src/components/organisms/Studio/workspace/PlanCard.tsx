@@ -3,6 +3,7 @@
 import classNames from 'classnames';
 import { useState } from 'react';
 
+import { PlanApproveBar } from './PlanApproveBar';
 import styles from './PlanCard.module.scss';
 import { PlanLedger, PlanMeta } from './PlanLedger';
 import PlanModal from './PlanModal';
@@ -21,8 +22,9 @@ type PlanCardProps = {
 /**
  * The research plan awaiting review, in the chat foot: the title and its
  * summary, the scope choices ("Counted as", each switchable in place), the
- * step that gives the answer, and "View full plan" to every step in a
- * modal. Then the "Start building?" bar with Cancel and Approve. Changes
+ * step that gives the answer, what to keep in mind about the answer, and
+ * "View full plan" to every step in a modal. Then the "Start building?" bar
+ * with Cancel and Approve. Changes
  * still travel through the chat input below (ChatPanel repurposes it as
  * "Propose changes or ask a follow up…" while the plan is pending, wired to
  * the amend decision).
@@ -61,6 +63,16 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                         </>
                     )}
                     {plan.switched && <p className={styles.updated}>Steps updated to match.</p>}
+                    {view.caveats.length > 0 && (
+                        <div className={styles.caveats}>
+                            <p className={styles.caveatsHead}>Keep in mind</p>
+                            <ul className={styles.caveatList}>
+                                {view.caveats.map((caveat) => (
+                                    <li key={caveat}>{caveat}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <Button
                         variant="bordered"
                         full
@@ -73,19 +85,12 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                 </div>
             </section>
             {plan.live && (
-                <div className={styles.proceed}>
-                    <p className={styles.proceedLabel}>
-                        {busy ? 'Updating the plan…' : 'Start building?'}
-                    </p>
-                    <div className={styles.proceedActions}>
-                        <Button variant="plain" onClick={onCancel} disabled={busy}>
-                            Cancel
-                        </Button>
-                        <Button variant="dark" onClick={onApprove} disabled={busy}>
-                            Approve
-                        </Button>
-                    </div>
-                </div>
+                <PlanApproveBar
+                    busy={busy}
+                    onApprove={onApprove}
+                    onCancel={onCancel}
+                    className={styles.proceed}
+                />
             )}
             <PlanModal
                 view={view}

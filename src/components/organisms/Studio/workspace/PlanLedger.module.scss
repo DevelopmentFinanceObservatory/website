@@ -115,6 +115,23 @@
     letter-spacing: -0.01em;
 }
 
+// Why the plan holds the choice (the full plan only).
+.why {
+    @include font-size(10px, 1.35);
+
+    grid-column: 1 / -1;
+    margin-top: rem(3);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.01em;
+}
+
+// A choice the switch moved that has no row of its own.
+.moved .was {
+    margin-top: 0;
+}
+
 // The open choice: one option per line, a radio each.
 .options {
     @include flex(column, flex-start, stretch);
@@ -242,6 +259,14 @@
     background-color: var(--color-net-light);
     border-left: 2px solid var(--color-stone-light);
     border-radius: rem(6);
+}
+
+// A switch the user stopped: their own outcome, so plain text with no
+// panel.
+.noticeQuiet {
+    padding: 0;
+    background-color: transparent;
+    border-left: 0;
 }
 
 .noticeText {

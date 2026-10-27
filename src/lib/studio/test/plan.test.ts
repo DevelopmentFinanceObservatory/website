@@ -20,6 +20,7 @@ import {
     planView,
     refusedSwitch,
     endedPlan,
+    SWITCH_CANCELLED,
     stalePlan,
     startSwitch,
     switchEnded,
@@ -141,6 +142,19 @@ test('a harness without summary, gives_answer or revision still gives a whole ca
         view.others.map((other) => other.key),
         ['d2'],
     );
+});
+
+test('a plan shows its caveats and why it holds each choice; one without caveats shows none', () => {
+    const caveat = 'The total counts every provider, the health figure bilateral aid only.';
+    const view = planView(planFromFrame(frame({ caveats: [caveat] })));
+
+    assert.deepEqual(view.caveats, [caveat]);
+    assert.deepEqual(
+        view.choices.map((choice) => choice.reason),
+        ['the source publishes this basis'],
+    );
+    assert.deepEqual(planView(planFromFrame(frame({ caveats: undefined }))).caveats, []);
+    assert.deepEqual(planView(planFromFrame(frame({ caveats: null }))).caveats, []);
 });
 
 test('the answer step is the flagged one, else the last step an ask names', async (t) => {
@@ -381,6 +395,67 @@ test('a choice switched back to its first option is not Changed', () => {
     assert.equal(v3.switched, PICK.choiceId);
 });
 
+test('a choice added on an axis another choice holds is Changed only against itself', () => {
+    const v1 = planFromFrame(frame({ decisions: [basisDecision('measure_basis:gross', 'r1')] }));
+    const v2 = planFromFrame(
+        switchedFrame({
+            decisions: [
+                basisDecision('measure_basis:net', 'r1'),
+                { ...basisDecision('measure_basis:net', 'r2'), id: 'd-new' },
+            ],
+        }),
+        startSwitch(v1, { choiceId: 'r1:measure_basis', optionId: 'measure_basis:net' }),
+    );
+
+    assert.deepEqual(
+        v2.changed.map((change) => change.choiceId),
+        ['r1:measure_basis'],
+    );
+    assert.equal(v2.baseline['r2:measure_basis']?.optionId, 'measure_basis:net');
+    assert.equal(v2.switched, 'r1:measure_basis');
+});
+
+test('a moved choice without a row of its own still shows what moved', () => {
+    const fresh = planFromFrame(
+        switchedFrame({
+            decisions: [
+                basisDecision('measure_basis:net'),
+                { ...sectorDecision('sector:120'), options: [] },
+            ],
+            moved: [
+                {
+                    choice_id: 'spec_1:sector',
+                    from_label: 'Health and population',
+                    to_label: 'Health',
+                    reason: 'Net figures cover health alone.',
+                },
+                {
+                    choice_id: 'spec_9:provider',
+                    from_label: 'All donors',
+                    to_label: 'Bilateral donors',
+                    reason: '',
+                },
+            ],
+        }),
+        startSwitch(planFromFrame(frame()), PICK),
+    );
+    const view = planView(fresh);
+
+    assert.deepEqual(
+        view.choices.map((choice) => choice.key),
+        ['spec_1:measure_basis'],
+    );
+    assert.deepEqual(view.moved, [
+        {
+            key: 'spec_1:sector',
+            from: 'Health and population',
+            to: 'Health',
+            reason: 'Net figures cover health alone.',
+        },
+        { key: 'spec_9:provider', from: 'All donors', to: 'Bilateral donors', reason: null },
+    ]);
+});
+
 test('switch_failed puts its reason on the row of the choice it names', () => {
     const reason = 'Net figures for 2023 are not published. The plan still counts gross.';
     const failed = {
@@ -395,6 +470,8 @@ test('switch_failed puts its reason on the row of the choice it names', () => {
         lead: 'Could not switch to Net disbursements.',
         text: reason,
         retryable: true,
+        retryAfter: null,
+        quiet: false,
         ...PICK,
     });
     assert.equal(
@@ -512,6 +589,8 @@ test('a stale switch is answered with the current card, which switches again', (
             lead: null,
             text: STALE_DETAIL,
             retryable: false,
+            retryAfter: null,
+            quiet: false,
             choiceId: null,
             optionId: null,
         },
@@ -550,6 +629,8 @@ test('a stale approve is answered with the current card; other refusals are not'
             lead: null,
             text: STALE_DETAIL,
             retryable: false,
+            retryAfter: null,
+            quiet: false,
             choiceId: null,
             optionId: null,
         },
@@ -587,6 +668,8 @@ test('a stale switch without a current card keeps its revision, so an approve is
         lead: null,
         text: STALE_NOTICE,
         retryable: false,
+        retryAfter: null,
+        quiet: false,
         choiceId: null,
         optionId: null,
     });
@@ -617,6 +700,8 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
         lead: 'Could not switch to Net disbursements.',
         text: 'Net disbursements cannot be counted for this plan.',
         retryable: false,
+        retryAfter: null,
+        quiet: false,
         ...PICK,
     });
     assert.equal(refused.revision, 'rev-a');
@@ -641,13 +726,6 @@ test('any other refusal keeps the card and says on the row why the switch did no
     // [name, refusal, lead, text, retryable]
     const cases: [string, StreamRefusal, string | null, string, boolean][] = [
         [
-            'a 404 for an interrupt that is gone',
-            { status: 404, detail: 'gone', error: toolError('not_found') },
-            lead,
-            'gone',
-            false,
-        ],
-        [
             'a 401',
             { status: 401, detail: 'Sign in again.', error: null },
             lead,
@@ -662,6 +740,28 @@ test('any other refusal keeps the card and says on the row why the switch did no
             false,
         ],
         ['a 429 without detail', { status: 429, detail: null, error: null }, null, generic, false],
+        [
+            'a 401 whose ToolError says to retry after a delay',
+            {
+                status: 401,
+                detail: 'Sign in again.',
+                error: toolError('transient_unavailable', 'retry_after_delay'),
+            },
+            lead,
+            'Sign in again.',
+            false,
+        ],
+        [
+            'a 429 whose ToolError says to retry after a delay',
+            {
+                status: 429,
+                detail: 'Too many requests.',
+                error: toolError('rate_limited', 'retry_after_delay'),
+            },
+            lead,
+            'Too many requests.',
+            false,
+        ],
         ['a 502', { status: 502, detail: null, error: null }, null, generic, true],
         [
             'a 409 transient_unavailable',
@@ -692,11 +792,67 @@ test('any other refusal keeps the card and says on the row why the switch did no
             const refused = refusedSwitch(plan, refusal);
 
             assert.equal(refused.switching, null);
-            assert.deepEqual(refused.notice, { lead: wantLead, text, retryable, ...PICK });
+            assert.deepEqual(refused.notice, {
+                lead: wantLead,
+                text,
+                retryable,
+                retryAfter: null,
+                quiet: false,
+                ...PICK,
+            });
             assert.equal(
                 switchReply(refused, PICK.choiceId, PICK.optionId)?.plan_revision,
                 'rev-a',
             );
+        });
+    }
+});
+
+test('a refusal asking to wait offers Try again only after its delay', () => {
+    const refused = refusedSwitch(startSwitch(planFromFrame(frame()), PICK), {
+        status: 409,
+        detail: 'Another turn is running.',
+        error: {
+            error: 'transient_unavailable',
+            retry: 'retry_after_delay',
+            detail: 'Another turn is running.',
+            retry_after_seconds: 5,
+        },
+    });
+
+    assert.equal(refused.notice?.retryable, true);
+    assert.equal(refused.notice?.retryAfter, 5);
+});
+
+test('a refused switch whose pause is gone ends the card read-only', async (t) => {
+    const plan = startSwitch(planFromFrame(frame()), PICK);
+    const cases: [string, StreamRefusal][] = [
+        ['a 404', { status: 404, detail: 'The plan is gone.', error: null }],
+        [
+            'a not_found ToolError',
+            {
+                status: 410,
+                detail: 'The plan is gone.',
+                error: { error: 'not_found', retry: 'do_not_retry', detail: 'The plan is gone.' },
+            },
+        ],
+    ];
+
+    for (const [name, refusal] of cases) {
+        await t.test(name, () => {
+            const refused = refusedSwitch(plan, refusal);
+
+            assert.equal(refused.live, false);
+            assert.equal(refused.switching, null);
+            assert.deepEqual(refused.notice, {
+                lead: 'Could not switch to Net disbursements.',
+                text: 'The plan is gone. Ask again to change the plan.',
+                retryable: false,
+                retryAfter: null,
+                quiet: false,
+                ...PICK,
+            });
+            assert.equal(switchReply(refused, PICK.choiceId, PICK.optionId), null);
         });
     }
 });
@@ -730,7 +886,14 @@ test('a switch that ends without a fresh plan leaves the card read-only, saying 
 
             assert.equal(ended.live, false);
             assert.equal(ended.switching, null);
-            assert.deepEqual(ended.notice, { lead, text, retryable: false, ...PICK });
+            assert.deepEqual(ended.notice, {
+                lead,
+                text,
+                retryable: false,
+                retryAfter: null,
+                quiet: false,
+                ...PICK,
+            });
             assert.equal(canSwitch(ended), false);
             assert.equal(switchReply(ended, PICK.choiceId, PICK.optionId), null);
         });
@@ -745,7 +908,7 @@ test('a switch stopped and re-offered by the harness is live again, with Try aga
             switch_failed: {
                 choice_id: PICK.choiceId,
                 option_id: PICK.optionId,
-                code: 'switch_cancelled',
+                code: SWITCH_CANCELLED,
                 reason: 'The switch was stopped. The plan still counts gross.',
                 retryable: true,
             },
@@ -755,7 +918,16 @@ test('a switch stopped and re-offered by the harness is live again, with Try aga
 
     assert.equal(reoffered.live, true);
     assert.equal(reoffered.interruptId, 'int-2');
-    assert.equal(reoffered.notice?.retryable, true);
+    // The user stopped it: the reason alone, quietly, with no "Could not
+    // switch" lead.
+    assert.deepEqual(reoffered.notice, {
+        lead: null,
+        text: 'The switch was stopped. The plan still counts gross.',
+        retryable: true,
+        retryAfter: null,
+        quiet: true,
+        ...PICK,
+    });
     assert.deepEqual(reoffered.changed, []);
     assert.ok(switchReply(reoffered, PICK.choiceId, PICK.optionId));
 });
@@ -777,7 +949,7 @@ const pausedTurn = (plan: PlanState | null) => ({
 
 test('a switch stream that ends with no plan, done or error returns the card to idle', () => {
     const waiting = startSwitch(planFromFrame(frame()), PICK);
-    const after = switchEnded(pausedTurn(waiting), waiting);
+    const after = switchEnded(pausedTurn(waiting), waiting, endedPlan(waiting));
 
     assert.equal(after.plan?.switching, null);
     assert.equal(after.plan?.live, false);
@@ -790,7 +962,11 @@ test('a switch stream that ends with no plan, done or error returns the card to 
 test('a failed switch writes nothing into the paused reply or its Activity entry', () => {
     const waiting = startSwitch(planFromFrame(frame()), PICK);
     const before = pausedTurn(waiting);
-    const after = switchEnded(before, waiting, { detail: 'The harness stopped.' });
+    const after = switchEnded(
+        before,
+        waiting,
+        endedPlan(waiting, { detail: 'The harness stopped.' }),
+    );
 
     assert.equal(after.messages, before.messages);
     assert.equal(after.activity, before.activity);
@@ -801,7 +977,7 @@ test('a switch that ended after a fresh plan or a refusal leaves the state alone
     const waiting = startSwitch(planFromFrame(frame()), PICK);
     const replaced = pausedTurn(planFromFrame(switchedFrame(), waiting));
 
-    assert.equal(switchEnded(replaced, waiting), replaced);
+    assert.equal(switchEnded(replaced, waiting, endedPlan(waiting)), replaced);
 });
 
 test('the card leads with the title beside a summary, else the first ask, else the title', async (t) => {
@@ -888,6 +1064,17 @@ test('an approved plan shows its caveats, and one saved before caveats shows non
         approvedView({ ...approvedFromFrame(approvedFrame), caveats: undefined }).caveats,
         [],
     );
+});
+
+test('a stored approved plan without steps or choices still gives a view', () => {
+    const stored = JSON.parse(
+        JSON.stringify({ ...approvedFrame, steps: undefined, choices: undefined }),
+    ) as PlanApproved;
+    const view = approvedView(approvedFromFrame(stored));
+
+    assert.deepEqual(view.steps, []);
+    assert.deepEqual(view.choices, []);
+    assert.equal(answerStepOf(view), undefined);
 });
 
 test('an approved plan with no step flagged answers with its last step', () => {

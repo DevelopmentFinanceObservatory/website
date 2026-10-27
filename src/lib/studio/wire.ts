@@ -400,6 +400,9 @@ export type PlanProposed = {
     summary?: string | null;
     // Set on the plan re-offered after a switch that did not apply.
     switch_failed?: PlanSwitchFailed | null;
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
 };
 
 /** A switch that did not apply: the option the user picked, the refusal's
