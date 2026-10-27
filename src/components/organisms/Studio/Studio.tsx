@@ -39,7 +39,7 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
-import { GUEST_PROMPTS } from '@/lib/studio/promptAllowance';
+import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
 import { isPrompt } from '@/lib/studio/transcript';
@@ -182,25 +182,39 @@ const Studio = ({
 
     // Queued prompts hold their place in the limit until sent or removed.
     const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;
-    // Every prompt (landing, follow-up, card menu) goes through here: past
-    // the limit a guest's is dropped, the rest are counted as usage (turn,
-    // intent and length — never the text).
-    const send: typeof conversation.send = (text, options, seeds) => {
+    // Every prompt (landing, follow-up, card menu, a clicked chip) goes
+    // through here: past the limit a guest's is dropped, the rest are counted
+    // as usage (turn, intent and a typed prompt's length, never the text). A
+    // prompt the chat queues is counted here once; the queue's drain sends it
+    // inside the chat, past this gate.
+    const prompt = (
+        intent: PromptIntent | undefined,
+        length: number | undefined,
+        run: () => void,
+    ) => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
-        if (guest && readGuestUsed() + conversation.queued.length >= GUEST_PROMPTS) {
+        const event = promptEvent({
+            guest,
+            used: readGuestUsed(),
+            queued: conversation.queued.length,
+            sent: sentCount,
+            intent,
+            length,
+        });
+
+        if (!event) {
             return;
         }
 
-        track('studio.prompt', {
-            turn: sentCount + conversation.queued.length + 1,
-            intent: options?.intent ?? (sentCount === 0 ? 'new' : 'follow_up'),
-            length: text.trim().length,
-            guest,
-        });
-        conversation.send(text, options, seeds);
+        track('studio.prompt', event);
+        run();
     };
-    const chat = { ...conversation, send };
+    const send: typeof conversation.send = (text, options, seeds) =>
+        prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
+    const applyChoice: typeof conversation.applyChoice = (chip) =>
+        prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
+    const chat = { ...conversation, send, applyChoice };
 
     // Usage: each card the harness puts on the canvas, once (a reopened or
     // shared conversation's cards were counted when they were made).
