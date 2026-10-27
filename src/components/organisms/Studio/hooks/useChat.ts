@@ -272,6 +272,10 @@ export const useChat = (initial?: ChatSnapshot) => {
         clarify?: Clarify;
         plan?: PlanState;
     } | null>(null);
+    // The latest plan this turn offered, or is waiting on a switch of: a
+    // fresh plan.proposed carries its baseline (what the turn's first plan
+    // held) and learns which choice its switch moved. A new turn clears it.
+    const turnPlanRef = useRef<PlanState | null>(null);
     // The card an in-flight `edit` turn is changing. The harness answers an
     // edit with a REPLACEMENT component under a new id (and drops the old one
     // from its composition) rather than a component.revised, so the canvas has
@@ -373,6 +377,7 @@ export const useChat = (initial?: ChatSnapshot) => {
     // from a refusal that answered a stale card with the current one.
     const offerPlan = useCallback((plan: PlanState) => {
         pendingInterruptRef.current = { interruptId: plan.interruptId, plan };
+        turnPlanRef.current = plan;
         setState((prev) => ({ ...prev, ...NO_LINE, thinking: false, plan }));
     }, []);
     // Swap one widget in place, wherever it sits in the list.
@@ -615,13 +620,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                         break;
                     }
                     case 'plan.proposed': {
-                        // Also the answer to a switch, whose fresh plan
-                        // replaces the card it kept and marks what changed.
-                        const previous = pendingInterruptRef.current?.plan;
-
+                        // Also the answer to a switch or an amendment, whose
+                        // fresh plan replaces the card and marks what changed
+                        // since the turn's first plan.
                         stall.stop();
                         grace.cancel();
-                        offerPlan(planFromFrame(frame, previous?.switching ? previous : undefined));
+                        offerPlan(planFromFrame(frame, turnPlanRef.current ?? undefined));
                         break;
                     }
                     case 'plan.approved': {
@@ -841,6 +845,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         const turn = turnCount.current;
 
         pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
         editingRef.current = null;
         setState((prev) => ({
             ...withLine(prev, line),
@@ -1041,6 +1046,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             const waiting = startSwitch(plan, { choiceId, optionId });
 
             pendingInterruptRef.current = { interruptId: pending.interruptId, plan: waiting };
+            turnPlanRef.current = waiting;
             setState((prev) => ({
                 ...withLine(prev, label ? `Switching to ${label}` : 'Switching'),
                 thinking: true,
@@ -1062,10 +1068,13 @@ export const useChat = (initial?: ChatSnapshot) => {
                         // the waiting card, the card goes back to idle with
                         // its notice, and the pause answers from the same.
                         if (pendingInterruptRef.current?.plan === waiting) {
+                            const settled = settledPlan(waiting) ?? undefined;
+
                             pendingInterruptRef.current = {
                                 interruptId: pending.interruptId,
-                                plan: settledPlan(waiting) ?? undefined,
+                                plan: settled,
                             };
+                            turnPlanRef.current = settled ?? null;
                             setState((prev) => switchEnded(prev, waiting));
                         }
                     }),
@@ -1186,6 +1195,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
         pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
         recapRef.current = null;
         setState({
             messages: [],
@@ -1212,6 +1222,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         inFlightRef.current = 0;
         queueRef.current = [];
         pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
         sessionRef.current = saved.sessionId;
         revisionsRef.current = restoreCardRevisions(saved);
         canvasRef.current = restoreCanvas(saved);

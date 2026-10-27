@@ -177,27 +177,45 @@ test('a plan re-offered after a switch marks the switched choice and what it hel
     assert.equal(choice?.changedFrom, 'Gross disbursements');
 });
 
+/** A sector choice on spec `spec`, holding `active`. */
+const sectorDecision = (
+    active: 'sector:120' | 'sector:120+130',
+    spec = 'spec_1',
+): PlanDecision => ({
+    ...countDecision,
+    id: `sector_${spec}`,
+    question: 'Sector',
+    chosen: active === 'sector:120' ? 'Health' : 'Health and population',
+    choice_id: `${spec}:sector`,
+    active_option_id: active,
+    options: [
+        {
+            option_id: 'sector:120+130',
+            label: 'Health and population',
+            status: 'available',
+            reason: null,
+            years: null,
+        },
+        {
+            option_id: 'sector:120',
+            label: 'Health',
+            status: 'available',
+            reason: null,
+            years: null,
+        },
+    ],
+});
+
+const basisDecision = (active: string, spec = 'spec_1'): PlanDecision => ({
+    ...countDecision,
+    choice_id: `${spec}:measure_basis`,
+    active_option_id: active,
+});
+
 test('moved names a choice the switch moved besides the picked one, with why', () => {
-    const sector: PlanDecision = {
-        ...countDecision,
-        id: 'd3',
-        question: 'Sector',
-        chosen: 'Health',
-        choice_id: 'spec_1:sector',
-        active_option_id: 'sector:120',
-        options: [
-            {
-                option_id: 'sector:120',
-                label: 'Health',
-                status: 'available',
-                reason: null,
-                years: null,
-            },
-        ],
-    };
     const fresh = planFromFrame(
         switchedFrame({
-            decisions: [{ ...countDecision, active_option_id: 'measure_basis:net' }, sector],
+            decisions: [basisDecision('measure_basis:net'), sectorDecision('sector:120')],
             moved: [
                 {
                     choice_id: 'spec_1:sector',
@@ -207,7 +225,10 @@ test('moved names a choice the switch moved besides the picked one, with why', (
                 },
             ],
         }),
-        startSwitch(planFromFrame(frame({ decisions: [countDecision, sector] })), PICK),
+        startSwitch(
+            planFromFrame(frame({ decisions: [countDecision, sectorDecision('sector:120+130')] })),
+            PICK,
+        ),
     );
 
     assert.deepEqual(fresh.changed, [
@@ -218,6 +239,64 @@ test('moved names a choice the switch moved besides the picked one, with why', (
             reason: 'Net figures cover health alone.',
         },
     ]);
+});
+
+test('after two switches both rows are Changed from the first plan, across a re-pinned spec', () => {
+    const v1 = planFromFrame(
+        frame({
+            decisions: [basisDecision('measure_basis:gross'), sectorDecision('sector:120+130')],
+        }),
+    );
+    const v2 = planFromFrame(
+        switchedFrame({
+            decisions: [basisDecision('measure_basis:net'), sectorDecision('sector:120+130')],
+        }),
+        startSwitch(v1, PICK),
+    );
+    // The sector switch re-pins the spec its choice_id names.
+    const v3 = planFromFrame(
+        switchedFrame({
+            interrupt_id: 'int-3',
+            version: 3,
+            decisions: [
+                basisDecision('measure_basis:net', 'spec_2'),
+                sectorDecision('sector:120', 'spec_2'),
+            ],
+        }),
+        startSwitch(v2, { choiceId: 'spec_1:sector', optionId: 'sector:120' }),
+    );
+
+    assert.deepEqual(v3.changed, [
+        { choiceId: 'spec_2:measure_basis', from: 'Gross disbursements', reason: null },
+        { choiceId: 'spec_2:sector', from: 'Health and population', reason: null },
+    ]);
+    assert.equal(v3.switched, 'spec_2:sector');
+    assert.deepEqual(
+        planView(v3).choices.map((choice) => [choice.name, choice.changedFrom]),
+        [
+            ['How is aid counted?', 'Gross disbursements'],
+            ['Sector', 'Health and population'],
+        ],
+    );
+});
+
+test('a choice switched back to its first option is not Changed', () => {
+    const v1 = planFromFrame(frame({ decisions: [basisDecision('measure_basis:gross')] }));
+    const v2 = planFromFrame(
+        switchedFrame({ decisions: [basisDecision('measure_basis:net')] }),
+        startSwitch(v1, PICK),
+    );
+    const v3 = planFromFrame(
+        switchedFrame({ version: 3, decisions: [basisDecision('measure_basis:gross')] }),
+        startSwitch(v2, { choiceId: PICK.choiceId, optionId: 'measure_basis:gross' }),
+    );
+
+    assert.deepEqual(
+        v2.changed.map((change) => change.choiceId),
+        [PICK.choiceId],
+    );
+    assert.deepEqual(v3.changed, []);
+    assert.equal(v3.switched, PICK.choiceId);
 });
 
 test('switch_failed puts its reason on the row of the choice it names', () => {

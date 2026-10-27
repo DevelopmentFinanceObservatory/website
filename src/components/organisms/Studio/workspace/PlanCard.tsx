@@ -58,9 +58,7 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                             </p>
                         </>
                     )}
-                    {plan.changed.length > 0 && (
-                        <p className={styles.updated}>Steps updated to match.</p>
-                    )}
+                    {plan.switched && <p className={styles.updated}>Steps updated to match.</p>}
                     <Button
                         variant="bordered"
                         full

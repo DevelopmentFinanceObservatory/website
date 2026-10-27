@@ -37,9 +37,13 @@ export type PlanNotice = {
     optionId: string | null;
 };
 
-/** A scope choice whose option differs from the plan before the switch: the
- *  label it held, and why it moved when the harness said. */
+/** A scope choice whose option differs from the first plan of the turn:
+ *  the label it held there, and why it moved when the harness said. */
 export type PlanChange = { choiceId: string; from: string; reason: string | null };
+
+/** The option each scope choice held on the first plan of the turn, by
+ *  `choiceKey`. */
+export type PlanBaseline = Record<string, { optionId: string | null; label: string }>;
 
 /** A plan awaiting the user's approve, amend, reject or switch (the
  *  harness's `plan.proposed` pause). */
@@ -60,10 +64,12 @@ export type PlanState = {
     interruptId: string;
     // The approval key a switch echoes, null from a harness that predates it.
     revision: string | null;
-    // The scope choices the switch that produced this plan changed, empty
-    // otherwise.
+    // What the scope choices held on the first plan of the turn, and the
+    // ones that hold another option now.
+    baseline: PlanBaseline;
     changed: PlanChange[];
-    // The choice whose switch produced this plan, null otherwise.
+    // The choice whose switch applied and produced this plan, null
+    // otherwise.
     switched: string | null;
     switching: PlanSwitch | null;
     notice: PlanNotice | null;
@@ -117,39 +123,80 @@ const couldNotSwitch = (label: string | null): string =>
     `Could not switch to ${label ?? 'that option'}.`;
 
 /**
- * What a switch changed: each scope choice whose active option differs from
- * the plan the switch was sent from, with the label it held, and the
- * harness's reason for the ones it says moved.
+ * A scope choice's identity across the plans of a turn: its axis, the part
+ * of `choice_id` after the spec. A switch can re-pin the spec that
+ * `choice_id` names, so the full id does not survive it. An axis two choices
+ * of one plan share (a numerator's and a denominator's basis) keeps the full
+ * id.
+ */
+const choiceKeys = (decisions: PlanDecision[]): Map<string, string> => {
+    const ids = decisions.flatMap((decision) =>
+        decision.choice_id && switchOptions(decision) ? [decision.choice_id] : [],
+    );
+    const axis = (id: string) => id.slice(id.lastIndexOf(':') + 1);
+    const count = Map.groupBy(ids, axis);
+
+    return new Map(ids.map((id) => [id, count.get(axis(id))!.length > 1 ? id : axis(id)]));
+};
+
+const activeOptionId = (decision: PlanDecision): string | null =>
+    decision.options?.find((option) => isActiveOption(decision, option))?.option_id ?? null;
+
+/** What each scope choice holds, by `choiceKey`. */
+const heldOptions = (decisions: PlanDecision[]): PlanBaseline => {
+    const keys = choiceKeys(decisions);
+
+    return Object.fromEntries(
+        decisions.flatMap((decision) => {
+            const key = decision.choice_id && keys.get(decision.choice_id);
+
+            return key
+                ? [[key, { optionId: activeOptionId(decision), label: activeLabel(decision) }]]
+                : [];
+        }),
+    );
+};
+
+/**
+ * The scope choices that hold another option than on the first plan of the
+ * turn, with the label they held there and the harness's reason for the
+ * ones it says moved. A choice switched back to its first option is
+ * unchanged.
  */
 const changesSince = (
-    previous: PlanState,
+    baseline: PlanBaseline,
     decisions: PlanDecision[],
     moved: PlanMoved[],
 ): PlanChange[] => {
-    const before = new Map(
-        previous.decisions.flatMap((decision) =>
-            decision.choice_id && switchOptions(decision) ? [[decision.choice_id, decision]] : [],
-        ),
-    );
+    const keys = choiceKeys(decisions);
+    const held = heldOptions(decisions);
 
-    return decisions.flatMap((decision) => {
-        const prior = decision.choice_id ? before.get(decision.choice_id) : undefined;
-        const said = moved.find((entry) => entry.choice_id === decision.choice_id);
+    return [...keys].flatMap(([choiceId, key]) => {
+        const first = baseline[key];
+        const now = held[key];
+        const same =
+            first?.optionId && now?.optionId
+                ? first.optionId === now.optionId
+                : first?.label === now?.label;
 
-        if (!decision.choice_id || !prior || activeLabel(prior) === activeLabel(decision)) {
-            return said
-                ? [{ choiceId: said.choice_id, from: said.from_label, reason: said.reason || null }]
-                : [];
+        if (!first || same) {
+            return [];
         }
 
-        return [
-            {
-                choiceId: decision.choice_id,
-                from: said?.from_label ?? activeLabel(prior),
-                reason: said?.reason || null,
-            },
-        ];
+        const said = moved.find((entry) => entry.choice_id === choiceId);
+
+        return [{ choiceId, from: first.label, reason: said?.reason || null }];
     });
+};
+
+/** The choice of `decisions` that is the one `previous` was switching. */
+const switchedChoice = (previous: PlanState, decisions: PlanDecision[]): string | null => {
+    const pick = previous.switching;
+    const key = pick && choiceKeys(previous.decisions).get(pick.choiceId);
+
+    return key
+        ? ([...choiceKeys(decisions)].find(([, candidate]) => candidate === key)?.[0] ?? null)
+        : null;
 };
 
 /** The harness's word on a switch that did not apply: a lead naming the
@@ -174,13 +221,16 @@ const headline = (frame: PlanProposed): string => {
 };
 
 /**
- * The card for a `plan.proposed` frame. `previous` is the plan whose switch
- * this frame answers: the card then marks the choices that changed. A frame
- * carrying `switch_failed` says why on the row of the choice it names.
+ * The card for a `plan.proposed` frame. `previous` is the plan the turn
+ * offered before it (the waiting card of a switch, or a plan amended): its
+ * baseline carries over, so the card marks every choice that holds another
+ * option than on the turn's first plan. A frame carrying `switch_failed`
+ * says why on the row of the choice it names.
  */
 export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanState => {
     const decisions = frame.decisions ?? [];
     const failed = frame.switch_failed;
+    const baseline = previous?.baseline ?? heldOptions(decisions);
 
     return {
         title: headline(frame),
@@ -192,8 +242,9 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
         actions: frame.actions,
         interruptId: frame.interrupt_id,
         revision: frame.revision ?? null,
-        changed: previous ? changesSince(previous, decisions, frame.moved ?? []) : [],
-        switched: previous?.switching?.choiceId ?? null,
+        baseline,
+        changed: changesSince(baseline, decisions, frame.moved ?? []),
+        switched: previous && !failed ? switchedChoice(previous, decisions) : null,
         switching: null,
         notice: failed ? switchFailedNotice(decisions, failed) : null,
     };
