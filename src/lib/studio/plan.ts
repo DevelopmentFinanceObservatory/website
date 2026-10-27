@@ -464,11 +464,22 @@ const unappliedNotice = (
 const retryableRefusal = ({ status, error }: StreamRefusal): boolean =>
     error?.retry === 'retry_after_delay' && (status !== 429 || !!error.retry_after_seconds);
 
+/** "Studio is busy. Try again in 12s.": the site proxy's rate limit, as a
+ *  wait. */
+const busyText = (seconds: number | null): string =>
+    `Studio is busy. Try again in ${seconds ? `${seconds}s` : 'a moment'}.`;
+
+/** The site proxy answered for a harness it could not reach, without
+ *  forwarding the switch (no `upstream_status`). */
+const proxyUnreached = ({ proxy }: StreamRefusal): boolean =>
+    proxy?.code === 'transient_unavailable' && proxy.upstreamStatus === null;
+
 /**
  * The harness refused the switch before touching the pause: another request
  * holds the conversation (409 `transient_unavailable`), the plan does not
  * offer the option (422 `switch_option_unavailable`), or the caller is rate
- * limited (429). After any other refusal the pause may be gone or in use.
+ * limited (429, the harness's or the site proxy's, which never forwards the
+ * switch). After any other refusal the pause may be gone or in use.
  */
 const leavesPause = ({ status, error }: StreamRefusal): boolean =>
     status === 429 ||
@@ -482,13 +493,17 @@ const leavesPause = ({ status, error }: StreamRefusal): boolean =>
  * again on it. Without one the card keeps its revision, so an approve from it
  * is refused as stale, and drops the switch action. A refusal that leaves
  * the pause alone (leavesPause) says on the choice's row that the switch did
- * not apply, with the harness's detail when it gave one. It offers "Try
- * again" only where a second try could apply (retryableRefusal), and once
- * the ToolError's `retry_after_seconds`, when it sets them, have run from
- * `now`, when the refusal arrived. Any other refusal (a 404, a 401, a 5xx,
- * a 422 `binding_invalid`) ends the card read-only (endedPlan), with the
- * harness's detail when a ToolError carries it and the card's own words
- * otherwise, since a proxy's text is written for developers.
+ * not apply, with the harness's detail when a ToolError carries it and the
+ * card's own words otherwise, since a proxy's text is written for
+ * developers. It offers "Try again" only where a second try could apply
+ * (retryableRefusal), and once the ToolError's `retry_after_seconds`, when
+ * it sets them, have run from `now`, when the refusal arrived. The site
+ * proxy's rate limit reads as a wait (busyText) and offers "Try again" once
+ * its Retry-After has run. A switch the proxy could not forward is a request
+ * that never reached the harness (unreachableSwitch). Any other refusal (a
+ * 404, a 401, a 5xx, a 422 `binding_invalid`, the proxy's 502 after the
+ * harness answered) ends the card read-only (endedPlan), with the harness's
+ * detail when a ToolError carries it and the card's own words otherwise.
  */
 export const refusedSwitch = (
     plan: PlanState,
@@ -508,12 +523,30 @@ export const refusedSwitch = (
         );
     }
 
+    if (proxyUnreached(refusal)) {
+        return unreachableSwitch(plan);
+    }
+
+    const detail = refusal.error ? refusal.detail : null;
+
     if (!leavesPause(refusal)) {
-        return endedPlan(plan, { detail: refusal.error ? refusal.detail : null });
+        return endedPlan(plan, { detail });
     }
 
     if (!pick) {
         return settled;
+    }
+
+    if (refusal.proxy?.code === 'rate_limited') {
+        const wait = refusal.proxy.retryAfterSeconds;
+
+        return {
+            ...settled,
+            notice: unappliedNotice(plan, pick, busyText(wait), {
+                retryable: true,
+                retryAt: wait ? now + wait * 1000 : null,
+            }),
+        };
     }
 
     const retryable = retryableRefusal(refusal);
@@ -521,7 +554,7 @@ export const refusedSwitch = (
 
     return {
         ...settled,
-        notice: unappliedNotice(plan, pick, refusal.detail, {
+        notice: unappliedNotice(plan, pick, detail, {
             retryable,
             retryAt: retryable && seconds ? now + seconds * 1000 : null,
         }),
@@ -577,6 +610,8 @@ export const endedPlan = (plan: PlanState, { detail, stopped }: SwitchEnding = {
         detail: stopped ? null : (detail ?? null),
         own: stopped ? (picked) => `Stopped before switching to ${picked}.` : studioCouldNotSwitch,
         askAgain: true,
+        // The user asked for the stop.
+        quiet: !!stopped,
     }),
 });
 

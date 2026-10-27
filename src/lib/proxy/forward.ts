@@ -107,18 +107,6 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
 
     setCaller(headers, options.caller);
 
-    const earlyFailure = (error: unknown): Response => {
-        // A client that left aborted the read itself, so no one is answered.
-        if (!req.signal.aborted) {
-            console.error(
-                `relay failed before the first byte: ${new URL(options.target).pathname}`,
-                error,
-            );
-        }
-
-        return unreachableProblem(options.unreachable, limitHeaders);
-    };
-
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
     let upstream: Response;
 
@@ -136,14 +124,32 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             signal: req.signal,
         } as RequestInit);
     } catch {
+        // No response, so the upstream is taken not to have received the
+        // call: a connection reset after the body went out reads the same.
         return unreachableProblem(options.unreachable, limitHeaders);
     }
 
+    // The upstream answered `status`, so it received the call; the problem
+    // document says so (upstream_status).
+    const earlyFailure = (error: unknown, status: number): Response => {
+        // A client that left aborted the read itself, so no one is answered.
+        if (!req.signal.aborted) {
+            console.error(
+                `relay failed before the first byte: ${new URL(options.target).pathname}`,
+                error,
+            );
+        }
+
+        return unreachableProblem(options.unreachable, limitHeaders, status);
+    };
+
     if (options.rewrite) {
+        const { status } = upstream;
+
         try {
             upstream = await options.rewrite(upstream);
         } catch (error) {
-            return earlyFailure(error);
+            return earlyFailure(error, status);
         }
     }
 
@@ -157,7 +163,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         upstream,
         headers: out,
         compress: options.compress,
-        onEarlyFailure: earlyFailure,
+        onEarlyFailure: (error) => earlyFailure(error, upstream.status),
     });
 };
 

@@ -733,13 +733,8 @@ test('a refusal that leaves the pause alone keeps the card and says on the row w
     const lead = 'Could not switch to Net disbursements.';
     // [name, refusal, lead, text, retryable]
     const cases: [string, StreamRefusal, string | null, string, boolean][] = [
-        [
-            'a 429',
-            { status: 429, detail: 'Too many requests.', error: null },
-            lead,
-            'Too many requests.',
-            false,
-        ],
+        // A detail without a ToolError is written for developers.
+        ['a 429', { status: 429, detail: 'Too many requests.', error: null }, null, generic, false],
         ['a 429 without detail', { status: 429, detail: null, error: null }, null, generic, false],
         [
             'a 429 whose ToolError says to retry after a delay',
@@ -835,6 +830,67 @@ test('a 429 offers Try again only when its ToolError names a delay to wait out',
 
             assert.equal(refused.notice?.retryable, retryable);
             assert.equal(refused.notice?.retryAt, retryAt);
+        });
+    }
+});
+
+test('a refusal the proxy answered itself keeps the card live only where the harness never saw the switch', async (t) => {
+    const plan = startSwitch(planFromFrame(frame()), PICK);
+    const arrived = 1_000_000;
+    const lead = 'Could not switch to Net disbursements.';
+    const proxied = (
+        status: number,
+        proxy: NonNullable<StreamRefusal['proxy']>,
+    ): StreamRefusal => ({ status, detail: 'proxy text for developers', error: null, proxy });
+    // [name, refusal, live, text, retryable, retryAt]
+    const cases: [string, StreamRefusal, boolean, string, boolean, number | null][] = [
+        [
+            'a rate limit waits out its Retry-After',
+            proxied(429, { code: 'rate_limited', upstreamStatus: null, retryAfterSeconds: 12 }),
+            true,
+            'Studio is busy. Try again in 12s.',
+            true,
+            arrived + 12_000,
+        ],
+        [
+            'an unreachable harness',
+            proxied(502, {
+                code: 'transient_unavailable',
+                upstreamStatus: null,
+                retryAfterSeconds: null,
+            }),
+            true,
+            UNREACHABLE_NOTICE,
+            true,
+            null,
+        ],
+        [
+            'a harness that answered before the relay failed',
+            proxied(502, {
+                code: 'transient_unavailable',
+                upstreamStatus: 422,
+                retryAfterSeconds: null,
+            }),
+            false,
+            'Studio could not switch to Net disbursements. Ask again to change the plan.',
+            false,
+            null,
+        ],
+    ];
+
+    for (const [name, refusal, live, text, retryable, retryAt] of cases) {
+        await t.test(name, () => {
+            const refused = refusedSwitch(plan, refusal, arrived);
+
+            assert.equal(refused.live, live);
+            assert.deepEqual(refused.notice, {
+                lead: live ? lead : null,
+                text,
+                retryable,
+                retryAt,
+                quiet: false,
+                ...PICK,
+            });
         });
     }
 });
@@ -940,28 +996,32 @@ test('a refusal that may have used up the pause ends the card read-only, without
 
 test('a switch that ends without a fresh plan leaves the card read-only, saying to ask again', async (t) => {
     const waiting = startSwitch(planFromFrame(frame()), PICK);
-    const cases: [string, Parameters<typeof endedPlan>[1], string | null, string][] = [
+    // [name, ending, lead, text, quiet]
+    const cases: [string, Parameters<typeof endedPlan>[1], string | null, string, boolean][] = [
         [
             'closed',
             {},
             null,
             'Studio could not switch to Net disbursements. Ask again to change the plan.',
+            false,
         ],
         [
             'an error',
             { detail: 'The harness stopped.' },
             'Could not switch to Net disbursements.',
             'The harness stopped. Ask again to change the plan.',
+            false,
         ],
         [
             'stopped',
             { stopped: true, detail: 'Cancelled.' },
             null,
             'Stopped before switching to Net disbursements. Ask again to change the plan.',
+            true,
         ],
     ];
 
-    for (const [name, ending, lead, text] of cases) {
+    for (const [name, ending, lead, text, quiet] of cases) {
         await t.test(name, () => {
             const ended = endedPlan(waiting, ending);
 
@@ -972,7 +1032,7 @@ test('a switch that ends without a fresh plan leaves the card read-only, saying 
                 text,
                 retryable: false,
                 retryAt: null,
-                quiet: false,
+                quiet,
                 ...PICK,
             });
             assert.equal(canSwitch(ended), false);
@@ -1099,7 +1159,7 @@ const pausedTurn = (plan: PlanState | null) => ({
     stalled: false,
 });
 
-test('a switch stream that ends with no plan, done or error returns the card to idle', () => {
+test('a switch stream that ends with no plan, done or error leaves the card read-only, its row saying so without Try again', () => {
     const waiting = startSwitch(planFromFrame(frame()), PICK);
     const after = switchEnded(pausedTurn(waiting), waiting, endedPlan(waiting));
 

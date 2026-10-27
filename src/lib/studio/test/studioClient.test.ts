@@ -12,6 +12,7 @@ import {
     runApplyChoice,
     runInterrupt,
     runTurn,
+    type StreamRefusal,
 } from '../studioClient.ts';
 import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
 
@@ -153,6 +154,54 @@ test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail
     assert.deepEqual(refusals, [{ status: 502, detail: 'proxy failed', error: null }]);
     assert.equal(frames.length, 1);
     assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
+});
+
+test("runInterrupt: a problem document the proxy answered with itself reaches onRefusal as the proxy's", async (t) => {
+    const proxyProblem = (status: number, body: Record<string, unknown>, headers = {}) =>
+        Response.json(
+            { status, detail: 'proxy text', retryable: true, ...body },
+            { status, headers: { 'Content-Type': 'application/problem+json', ...headers } },
+        );
+    const cases: [string, Response, unknown][] = [
+        [
+            'a rate limit, with its Retry-After',
+            proxyProblem(429, { code: 'rate_limited' }, { 'Retry-After': '12' }),
+            { code: 'rate_limited', upstreamStatus: null, retryAfterSeconds: 12 },
+        ],
+        [
+            'an unreachable harness',
+            proxyProblem(502, { code: 'transient_unavailable' }),
+            { code: 'transient_unavailable', upstreamStatus: null, retryAfterSeconds: null },
+        ],
+        [
+            'a harness that answered before the relay failed',
+            proxyProblem(502, { code: 'transient_unavailable', upstream_status: 422 }),
+            { code: 'transient_unavailable', upstreamStatus: 422, retryAfterSeconds: null },
+        ],
+        [
+            "a harness ToolError, which is not the proxy's",
+            Response.json(staleBody, { status: 409 }),
+            undefined,
+        ],
+    ];
+
+    for (const [name, response, proxy] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => response);
+            const refusals: StreamRefusal[] = [];
+
+            await runInterrupt('conv', 'int-1', switchReply, {
+                onFrame: () => {},
+                onRefusal: (refusal) => {
+                    refusals.push(refusal);
+
+                    return true;
+                },
+            });
+
+            assert.deepEqual(refusals[0]?.proxy, proxy);
+        });
+    }
 });
 
 test('runInterrupt: a request no server answered goes to onUnreachable, a server error does not', async (t) => {

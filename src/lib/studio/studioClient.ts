@@ -47,13 +47,25 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
+/** A problem document the site proxy answered with itself
+ *  (src/lib/proxy/problem): its `code`, the status of a harness that
+ *  answered before the relay failed (`upstream_status`, null when the
+ *  harness was not reached), and the Retry-After seconds. */
+export type ProxyProblem = {
+    code: string;
+    upstreamStatus: number | null;
+    retryAfterSeconds: number | null;
+};
+
 /** An HTTP refusal of a stream request: its status, the body's `detail`
- *  when it has one, and the harness's ToolError when the body is one
- *  (with `current_plan` on a stale plan answer). */
+ *  when it has one, the harness's ToolError when the body is one (with
+ *  `current_plan` on a stale plan answer), and `proxy` when the site proxy
+ *  refused the request itself. */
 export type StreamRefusal = {
     status: number;
     detail: string | null;
     error: PlanRevisionStaleError | null;
+    proxy?: ProxyProblem;
 };
 
 /** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
@@ -74,6 +86,24 @@ const asToolError = (body: unknown): PlanRevisionStaleError | null =>
     typeof (body as ToolError).detail === 'string'
         ? (body as ToolError)
         : null;
+
+// The proxy's problem documents carry a `code` and no harness `error`.
+const asProxyProblem = (body: unknown, headers: Headers): ProxyProblem | null => {
+    if (body === null || typeof body !== 'object' || 'error' in body) {
+        return null;
+    }
+
+    const { code, upstream_status: upstreamStatus } = body as Record<string, unknown>;
+    const retryAfter = Number.parseInt(headers.get('retry-after') ?? '', 10);
+
+    return typeof code === 'string'
+        ? {
+              code,
+              upstreamStatus: typeof upstreamStatus === 'number' ? upstreamStatus : null,
+              retryAfterSeconds: Number.isFinite(retryAfter) ? retryAfter : null,
+          }
+        : null;
+};
 
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
@@ -105,11 +135,13 @@ const streamStudio = async (
     if (!res.ok || !res.body) {
         let detail: string | null = null;
         let error: PlanRevisionStaleError | null = null;
+        let proxy: ProxyProblem | null = null;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
 
             error = asToolError(parsed);
+            proxy = asProxyProblem(parsed, res.headers);
 
             if (typeof parsed.detail === 'string') {
                 detail = parsed.detail;
@@ -118,7 +150,10 @@ const streamStudio = async (
             // Non-JSON body — the status line stands.
         }
 
-        if (!res.ok && onRefusal?.({ status: res.status, detail, error })) {
+        if (
+            !res.ok &&
+            onRefusal?.({ status: res.status, detail, error, ...(proxy && { proxy }) })
+        ) {
             return;
         }
 
