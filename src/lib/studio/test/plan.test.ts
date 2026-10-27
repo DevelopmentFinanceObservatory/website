@@ -20,6 +20,7 @@ import {
     planView,
     refusedSwitch,
     endedPlan,
+    endedSwitch,
     SWITCH_CANCELLED,
     stalePlan,
     startSwitch,
@@ -720,30 +721,18 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
     assert.equal(canSwitch(refused), true);
 });
 
-test('any other refusal keeps the card and says on the row why the switch did not apply', async (t) => {
+test('a refusal that leaves the pause alone keeps the card and says on the row why the switch did not apply', async (t) => {
     const plan = startSwitch(planFromFrame(frame()), PICK);
-    const toolError = (
-        error: string,
-        retry: RetryMode = 'do_not_retry',
-        constraint_id?: string,
-    ) => ({
+    const toolError = (error: string, retry: RetryMode = 'do_not_retry') => ({
         error: error as 'not_found',
         retry,
         detail: error,
-        ...(constraint_id && { constraint_id }),
     });
     const generic =
         'Studio could not switch to Net disbursements. The plan still counts Gross disbursements.';
     const lead = 'Could not switch to Net disbursements.';
     // [name, refusal, lead, text, retryable]
     const cases: [string, StreamRefusal, string | null, string, boolean][] = [
-        [
-            'a 401',
-            { status: 401, detail: 'Sign in again.', error: null },
-            lead,
-            'Sign in again.',
-            false,
-        ],
         [
             'a 429',
             { status: 429, detail: 'Too many requests.', error: null },
@@ -752,17 +741,6 @@ test('any other refusal keeps the card and says on the row why the switch did no
             false,
         ],
         ['a 429 without detail', { status: 429, detail: null, error: null }, null, generic, false],
-        [
-            'a 401 whose ToolError says to retry after a delay',
-            {
-                status: 401,
-                detail: 'Sign in again.',
-                error: toolError('transient_unavailable', 'retry_after_delay'),
-            },
-            lead,
-            'Sign in again.',
-            false,
-        ],
         [
             'a 429 whose ToolError says to retry after a delay',
             {
@@ -774,7 +752,6 @@ test('any other refusal keeps the card and says on the row why the switch did no
             'Too many requests.',
             false,
         ],
-        ['a 502', { status: 502, detail: null, error: null }, null, generic, true],
         [
             'a 409 transient_unavailable',
             {
@@ -786,23 +763,13 @@ test('any other refusal keeps the card and says on the row why the switch did no
             'busy',
             true,
         ],
-        [
-            'a stale constraint on a 422',
-            {
-                status: 422,
-                detail: 'x',
-                error: toolError('edit_conflict', 'refresh_then_retry', PLAN_REVISION_STALE),
-            },
-            lead,
-            'x',
-            false,
-        ],
     ];
 
     for (const [name, refusal, wantLead, text, retryable] of cases) {
         await t.test(name, () => {
             const refused = refusedSwitch(plan, refusal);
 
+            assert.equal(refused.live, true);
             assert.equal(refused.switching, null);
             assert.deepEqual(refused.notice, {
                 lead: wantLead,
@@ -872,8 +839,19 @@ test('a 429 offers Try again only when its ToolError names a delay to wait out',
     }
 });
 
-test('a refused switch whose pause is gone ends the card read-only', async (t) => {
+test('a refusal that may have used up the pause ends the card read-only, without Try again', async (t) => {
     const plan = startSwitch(planFromFrame(frame()), PICK);
+    const toolError = (
+        error: string,
+        retry: RetryMode = 'do_not_retry',
+        constraint_id?: string,
+    ) => ({
+        error: error as 'not_found',
+        retry,
+        detail: error,
+        ...(constraint_id && { constraint_id }),
+    });
+    const generic = 'Studio could not switch to Net disbursements. Ask again to change the plan.';
     const cases: [string, StreamRefusal][] = [
         ['a 404', { status: 404, detail: 'The plan is gone.', error: null }],
         [
@@ -881,7 +859,60 @@ test('a refused switch whose pause is gone ends the card read-only', async (t) =
             {
                 status: 410,
                 detail: 'The plan is gone.',
-                error: { error: 'not_found', retry: 'do_not_retry', detail: 'The plan is gone.' },
+                error: toolError('not_found'),
+            },
+        ],
+        ['a 400', { status: 400, detail: 'Bad request.', error: null }],
+        ['a 401', { status: 401, detail: 'Sign in again.', error: null }],
+        [
+            'a 401 whose ToolError says to retry after a delay',
+            {
+                status: 401,
+                detail: 'Sign in again.',
+                error: toolError('transient_unavailable', 'retry_after_delay'),
+            },
+        ],
+        ['a 403', { status: 403, detail: 'Forbidden.', error: null }],
+        ['a 413', { status: 413, detail: 'Too large.', error: null }],
+        [
+            'a 422 binding_invalid',
+            {
+                status: 422,
+                detail: 'a plan interrupt takes no answers',
+                error: toolError('binding_invalid', 'correct_and_retry'),
+            },
+        ],
+        [
+            'a stale constraint on a 422',
+            {
+                status: 422,
+                detail: 'x',
+                error: toolError('edit_conflict', 'refresh_then_retry', PLAN_REVISION_STALE),
+            },
+        ],
+        [
+            'a 409 resumed with another decision',
+            {
+                status: 409,
+                detail: 'already resumed',
+                error: toolError('edit_conflict', 'refresh_then_retry'),
+            },
+        ],
+        ['a 500 with no body', { status: 500, detail: null, error: null }],
+        ['a 502 with no body', { status: 502, detail: null, error: null }],
+        [
+            'a proxy 502 whose text is not a ToolError',
+            { status: 502, detail: 'The studio agent is unreachable.', error: null },
+        ],
+        [
+            'a 503 whose ToolError says to retry after a delay',
+            {
+                status: 503,
+                detail: 'Not saved.',
+                error: {
+                    ...toolError('transient_unavailable', 'retry_after_delay'),
+                    retry_after_seconds: 30,
+                },
             },
         ],
     ];
@@ -889,12 +920,14 @@ test('a refused switch whose pause is gone ends the card read-only', async (t) =
     for (const [name, refusal] of cases) {
         await t.test(name, () => {
             const refused = refusedSwitch(plan, refusal);
+            // Only a harness ToolError's detail is written for readers.
+            const detail = refusal.error && refusal.detail;
 
             assert.equal(refused.live, false);
             assert.equal(refused.switching, null);
             assert.deepEqual(refused.notice, {
-                lead: 'Could not switch to Net disbursements.',
-                text: 'The plan is gone. Ask again to change the plan.',
+                lead: detail ? 'Could not switch to Net disbursements.' : null,
+                text: detail ? `${detail} Ask again to change the plan.` : generic,
                 retryable: false,
                 retryAt: null,
                 quiet: false,
@@ -944,6 +977,77 @@ test('a switch that ends without a fresh plan leaves the card read-only, saying 
             });
             assert.equal(canSwitch(ended), false);
             assert.equal(switchReply(ended, PICK.choiceId, PICK.optionId), null);
+        });
+    }
+});
+
+test('a switch stream that ends without a fresh plan closes its Activity entry by how the harness ended it', async (t) => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const harnessError = (error: 'cancelled' | 'transient_unavailable', detail: string) => ({
+        error,
+        retry: 'do_not_retry' as const,
+        detail,
+    });
+    const gone = refusedSwitch(waiting, {
+        status: 404,
+        detail: 'The plan is gone.',
+        error: { error: 'not_found', retry: 'do_not_retry', detail: 'The plan is gone.' },
+    });
+    const generic = 'Studio could not switch to Net disbursements. Ask again to change the plan.';
+    const stoppedText =
+        'Stopped before switching to Net disbursements. Ask again to change the plan.';
+    // [name, ending, Activity state, notice text]
+    const cases: [string, Parameters<typeof endedSwitch>[1], 'skipped' | 'failed', string][] = [
+        ['done with no plan', { error: null, stopped: false, refused: null }, 'failed', generic],
+        [
+            'a harness error',
+            {
+                error: harnessError('transient_unavailable', 'Lost.'),
+                stopped: false,
+                refused: null,
+            },
+            'failed',
+            'Lost. Ask again to change the plan.',
+        ],
+        [
+            'a refusal',
+            { error: null, stopped: false, refused: gone },
+            'failed',
+            'The plan is gone. Ask again to change the plan.',
+        ],
+        [
+            'stopped, then closed',
+            { error: null, stopped: true, refused: null },
+            'skipped',
+            stoppedText,
+        ],
+        [
+            'stopped, then cancelled by the harness',
+            { error: harnessError('cancelled', 'Stopped.'), stopped: true, refused: null },
+            'skipped',
+            stoppedText,
+        ],
+        [
+            'stopped, then a harness error',
+            { error: harnessError('transient_unavailable', 'Lost.'), stopped: true, refused: null },
+            'failed',
+            'Lost. Ask again to change the plan.',
+        ],
+        [
+            'stopped, then a 404',
+            { error: null, stopped: true, refused: gone },
+            'failed',
+            'The plan is gone. Ask again to change the plan.',
+        ],
+    ];
+
+    for (const [name, ending, activity, text] of cases) {
+        await t.test(name, () => {
+            const ended = endedSwitch(waiting, ending);
+
+            assert.equal(ended.activity, activity);
+            assert.equal(ended.plan.live, false);
+            assert.equal(ended.plan.notice?.text, text);
         });
     }
 });

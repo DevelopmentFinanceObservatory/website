@@ -16,6 +16,7 @@ import type {
     PlanProposed,
     PlanStep,
     PlanSwitchFailed,
+    ToolError,
 } from './wire';
 
 /** A switch the user asked for and the harness has not answered yet. */
@@ -456,52 +457,48 @@ const unappliedNotice = (
 };
 
 /**
- * Picking the option again could apply. Never when signed out (401). A rate
- * limit (429) only when its ToolError says to retry after a delay and names
- * the delay, since an immediate retry would meet it again. Any other refusal
- * when its ToolError, if it sends one, says to retry after a delay.
+ * Picking the option again could apply: the harness's ToolError says to
+ * retry after a delay. A rate limit (429) also names the delay, since an
+ * immediate retry would meet it again.
  */
-const retryableRefusal = ({ status, error }: StreamRefusal): boolean => {
-    const afterDelay = error?.retry === 'retry_after_delay';
+const retryableRefusal = ({ status, error }: StreamRefusal): boolean =>
+    error?.retry === 'retry_after_delay' && (status !== 429 || !!error.retry_after_seconds);
 
-    if (status === 401) {
-        return false;
-    }
-
-    if (status === 429) {
-        return afterDelay && !!error.retry_after_seconds;
-    }
-
-    return error ? afterDelay : true;
-};
-
-/** The pause a refusal answers is gone (the turn ended or was replaced). */
-const isGone = (refusal: StreamRefusal): boolean =>
-    refusal.status === 404 || refusal.error?.error === 'not_found';
+/**
+ * The harness refused the switch before touching the pause: another request
+ * holds the conversation (409 `transient_unavailable`), the plan does not
+ * offer the option (422 `switch_option_unavailable`), or the caller is rate
+ * limited (429). After any other refusal the pause may be gone or in use.
+ */
+const leavesPause = ({ status, error }: StreamRefusal): boolean =>
+    status === 429 ||
+    (status === 409 && error?.error === 'transient_unavailable') ||
+    (status === 422 && error?.constraint_id === SWITCH_OPTION_UNAVAILABLE);
 
 /**
  * The card after the harness refused its switch. The card always stays.
  *
  * A 409 `plan_revision_stale` brings the current plan, and switching works
  * again on it. Without one the card keeps its revision, so an approve from it
- * is refused as stale, and drops the switch action. A 404 or `not_found`
- * says the pause is gone, so the card ends read-only (endedPlan). Any other
- * refusal (a 422 `switch_option_unavailable` among them) says on the
- * choice's row that the switch did not apply, with the harness's detail when
- * it gave one. It offers "Try again" only where a second try could apply
- * (retryableRefusal), and once the ToolError's `retry_after_seconds`, when it
- * sets them, have run from `now`, when the refusal arrived.
+ * is refused as stale, and drops the switch action. A refusal that leaves
+ * the pause alone (leavesPause) says on the choice's row that the switch did
+ * not apply, with the harness's detail when it gave one. It offers "Try
+ * again" only where a second try could apply (retryableRefusal), and once
+ * the ToolError's `retry_after_seconds`, when it sets them, have run from
+ * `now`, when the refusal arrived. Any other refusal (a 404, a 401, a 5xx,
+ * a 422 `binding_invalid`) ends the card read-only (endedPlan), with the
+ * harness's detail when a ToolError carries it and the card's own words
+ * otherwise, since a proxy's text is written for developers.
  */
 export const refusedSwitch = (
     plan: PlanState,
     refusal: StreamRefusal,
     now: number = Date.now(),
 ): PlanState => {
-    const constraint = refusal.error?.constraint_id;
     const pick = plan.switching;
     const settled = { ...plan, switching: null };
 
-    if (refusal.status === 409 && constraint === PLAN_REVISION_STALE) {
+    if (refusal.status === 409 && refusal.error?.constraint_id === PLAN_REVISION_STALE) {
         return (
             stalePlan(refusal, plan) ?? {
                 ...settled,
@@ -511,8 +508,8 @@ export const refusedSwitch = (
         );
     }
 
-    if (isGone(refusal)) {
-        return endedPlan(plan, { detail: refusal.detail });
+    if (!leavesPause(refusal)) {
+        return endedPlan(plan, { detail: refusal.error ? refusal.detail : null });
     }
 
     if (!pick) {
@@ -567,10 +564,10 @@ export type SwitchEnding = { detail?: string | null; stopped?: boolean };
 /**
  * The card once a switch's stream ended without the harness offering a plan
  * again (it broke, sent an error, closed, or was stopped and the harness did
- * not re-offer), or the harness refused it because the pause is gone. The
- * turn has ended, so the card stays read-only, saying in
- * one line on the choice's row that the switch did not apply and to ask
- * again.
+ * not re-offer), or the harness refused it in a way that may have used up
+ * the pause (refusedSwitch). The turn has ended, so the card stays
+ * read-only, saying in one line on the choice's row that the switch did not
+ * apply and to ask again.
  */
 export const endedPlan = (plan: PlanState, { detail, stopped }: SwitchEnding = {}): PlanState => ({
     ...plan,
@@ -582,6 +579,38 @@ export const endedPlan = (plan: PlanState, { detail, stopped }: SwitchEnding = {
         askAgain: true,
     }),
 });
+
+/** How a switch's stream ended without a fresh plan: the harness's error
+ *  frame, whether the user stopped it, and the read-only card a refusal
+ *  ended it on. */
+export type SwitchStreamEnd = {
+    error: ToolError | null;
+    stopped: boolean;
+    refused: PlanState | null;
+};
+
+/**
+ * The read-only card a switch's stream ended on without a fresh plan, and
+ * how its Activity entry closes. A stop the harness answered by closing the
+ * stream or cancelling the turn is skipped. Every other end failed, the
+ * switch did not apply: a refusal (its card), a harness error (its reason,
+ * a stop before it included), or a stream that closed, broke or sent
+ * `done`.
+ */
+export const endedSwitch = (
+    waiting: PlanState,
+    { error, stopped, refused }: SwitchStreamEnd,
+): { plan: PlanState; activity: 'skipped' | 'failed' } => {
+    if (refused) {
+        return { plan: refused, activity: 'failed' };
+    }
+
+    if (stopped && (!error || error.error === 'cancelled')) {
+        return { plan: endedPlan(waiting, { stopped }), activity: 'skipped' };
+    }
+
+    return { plan: endedPlan(waiting, { detail: error?.detail }), activity: 'failed' };
+};
 
 /**
  * The conversation once a switch's stream ended without a fresh plan: the
