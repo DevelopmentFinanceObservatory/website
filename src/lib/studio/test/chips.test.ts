@@ -7,7 +7,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { chipRefusalDetail, splitSuggestions, withRefusedChip } from '../chips.ts';
+import {
+    chipKey,
+    chipRefusalDetail,
+    splitSuggestions,
+    withoutChips,
+    withRefusedChip,
+} from '../chips.ts';
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import type { StudioFrame } from '../wire.ts';
 
@@ -47,6 +53,15 @@ test('splitSuggestions: prompt follow-ups keep their prompts beside the chips', 
     assert.deepEqual(splitSuggestions([prompt, ...frame.items]), {
         followups: ['Break this down by donor'],
         chips: frame.items,
+    });
+});
+
+test('splitSuggestions: an item of another kind is neither a chip nor a follow-up', () => {
+    const other = { kind: 'open_card', label: 'Open the card', prompt: 'Open it' };
+
+    assert.deepEqual(splitSuggestions([other as unknown as Suggestions['items'][number]]), {
+        followups: [],
+        chips: [],
     });
 });
 
@@ -98,4 +113,38 @@ test('withRefusedChip: the last chip refused leaves a reply with no chips', () =
         role: 'bot',
         text: '_Nothing changed._',
     });
+});
+
+test('withRefusedChip: a chip for another reading of the same choice and option stays', () => {
+    assert.ok(sector);
+
+    const other = { ...sector, spec_id: `${sector.spec_id}_other` };
+    const messages: ChatMessage[] = [
+        { role: 'bot', text: 'USD 4.1bn', chips: [sector, other] },
+        { role: 'user', text: sector.label },
+        { role: 'bot', text: '' },
+    ];
+
+    assert.notEqual(chipKey(sector), chipKey(other));
+    assert.deepEqual(withRefusedChip(messages, sector, 'Nothing changed.').at(-1), {
+        role: 'bot',
+        text: '_Nothing changed._',
+        chips: [other],
+    });
+});
+
+test('withoutChips: a restored transcript keeps its follow-ups and loses its chips', () => {
+    assert.ok(sector);
+
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'Aid to Africa for health' },
+        { role: 'bot', text: 'USD 4.1bn', followups: ['By donor'], chips: [sector] },
+        { role: 'bot', text: 'Done', chips: [sector] },
+    ];
+
+    assert.deepEqual(withoutChips(messages), [
+        { role: 'user', text: 'Aid to Africa for health' },
+        { role: 'bot', text: 'USD 4.1bn', followups: ['By donor'] },
+        { role: 'bot', text: 'Done' },
+    ]);
 });

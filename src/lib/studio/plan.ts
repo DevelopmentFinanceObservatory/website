@@ -130,6 +130,10 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
 const isStale = (refusal: StreamRefusal): boolean =>
     refusal.error?.constraint_id === PLAN_REVISION_STALE;
 
+/** The constraint_id of a switch the harness refused because the plan does
+ *  not offer the option. */
+export const SWITCH_OPTION_UNAVAILABLE = 'switch_option_unavailable';
+
 /** The card a stale switch or approve is answered with, the harness's
  *  current plan, saying why it replaced the one the user answered. Null for
  *  any other refusal, or a stale one without a current plan. */
@@ -139,21 +143,36 @@ export const stalePlan = (refusal: StreamRefusal): PlanState | null => {
     return current ? { ...planFromFrame(current), notice: refusal.detail } : null;
 };
 
-/** The card after the harness refused its switch, saying why. A stale
- *  revision brings the current plan, and switching works again on it.
- *  Without one the card drops its revision and offers no further switch. */
-export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
-    if (isStale(refusal)) {
+/**
+ * The card after the harness refused its switch, saying why, or null when
+ * the refusal is not one the harness gives a switch. Those are a 409
+ * `plan_revision_stale` and a 422 `switch_option_unavailable`; any other
+ * status (a 404 for an interrupt that is gone, 401, 429, 5xx) is a failed
+ * request, and the pause it answered is over.
+ *
+ * A stale revision brings the current plan, and switching works again on
+ * it. Without one the card keeps its revision, so an approve from it is
+ * refused as stale, and drops the switch action.
+ */
+export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState | null => {
+    const constraint = refusal.error?.constraint_id;
+
+    if (refusal.status === 409 && constraint === PLAN_REVISION_STALE) {
         return (
-            stalePlan(refusal) ?? { ...plan, revision: null, switching: null, notice: STALE_NOTICE }
+            stalePlan(refusal) ?? {
+                ...plan,
+                actions: plan.actions.filter((action) => action !== 'switch'),
+                switching: null,
+                notice: STALE_NOTICE,
+            }
         );
     }
 
-    return {
-        ...plan,
-        switching: null,
-        notice: refusal.detail ?? `The switch was refused (HTTP ${refusal.status}).`,
-    };
+    if (refusal.status === 422 && constraint === SWITCH_OPTION_UNAVAILABLE) {
+        return { ...plan, switching: null, notice: refusal.detail };
+    }
+
+    return null;
 };
 
 /** An `approve` of `plan`, carrying its revision so the harness can tell an

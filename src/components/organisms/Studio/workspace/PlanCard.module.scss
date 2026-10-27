@@ -119,8 +119,10 @@
     letter-spacing: -0.031em;
 }
 
-// What the switch behind this plan changed, under the steps.
-.moved {
+// What the switch behind this plan changed, and why the harness refused the
+// last answer to it, under the steps.
+.moved,
+.notice {
     margin: 0;
     padding: 0 rem(16) rem(14);
 

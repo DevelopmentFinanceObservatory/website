@@ -10,6 +10,7 @@ import {
     approveReply,
     canSwitch,
     STALE_NOTICE,
+    SWITCH_OPTION_UNAVAILABLE,
     isActiveOption,
     isSelectable,
     movedSentence,
@@ -230,27 +231,19 @@ test('an approve carries the revision of the card the user approved', () => {
     });
 });
 
-test('a stale switch without a current card ends switching and asks for a reload', () => {
+test('a stale switch without a current card keeps its revision, so an approve is refused', () => {
     const plan = startSwitch(planFromFrame(frame()), {
         choiceId: 'spec_1:measure_basis',
         optionId: 'measure_basis:net',
     });
-    const refused = refusedSwitch(plan, {
-        status: 409,
-        detail: 'plan revision rev-a is not the pending plan',
-        error: {
-            error: 'edit_conflict',
-            retry: 'refresh_then_retry',
-            detail: 'plan revision rev-a is not the pending plan',
-            constraint_id: PLAN_REVISION_STALE,
-        },
-    });
+    const refused = refusedSwitch(plan, staleRefusal());
 
+    assert.ok(refused);
     assert.equal(refused.switching, null);
     assert.equal(refused.notice, STALE_NOTICE);
-    assert.equal(refused.revision, null);
     assert.equal(canSwitch(refused), false);
     assert.equal(switchReply(refused, 'spec_1:measure_basis', 'measure_basis:net'), null);
+    assert.deepEqual(approveReply(refused), { decision: 'approve', plan_revision: 'rev-a' });
 });
 
 test('an unavailable option keeps the card and shows the harness reason', () => {
@@ -260,31 +253,60 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
     });
     const refused = refusedSwitch(plan, {
         status: 422,
-        detail: 'Net disbursements are not published for 2020.',
+        detail: 'Net disbursements cannot be counted for this plan.',
         error: {
-            error: 'binding_invalid',
+            error: 'constraint_violation',
             retry: 'correct_and_retry',
-            detail: 'Net disbursements are not published for 2020.',
-            constraint_id: 'switch_option_unavailable',
+            detail: 'Net disbursements cannot be counted for this plan.',
+            constraint_id: SWITCH_OPTION_UNAVAILABLE,
         },
     });
 
+    assert.ok(refused);
     assert.equal(refused.switching, null);
-    assert.equal(refused.notice, 'Net disbursements are not published for 2020.');
+    assert.equal(refused.notice, 'Net disbursements cannot be counted for this plan.');
     assert.equal(refused.revision, 'rev-a');
+    assert.equal(canSwitch(refused), true);
 });
 
-test('a plain detail body is the notice; without one the status is named', () => {
-    const plan = planFromFrame(frame());
+test('a refusal the harness does not give a switch is a failed request, with no card', async (t) => {
+    const plan = startSwitch(planFromFrame(frame()), {
+        choiceId: 'spec_1:measure_basis',
+        optionId: 'measure_basis:net',
+    });
+    const toolError = (error: string, constraint_id?: string) => ({
+        error: error as 'not_found',
+        retry: 'do_not_retry' as const,
+        detail: error,
+        ...(constraint_id && { constraint_id }),
+    });
+    const cases: [string, StreamRefusal][] = [
+        [
+            'a 404 for an interrupt that is gone',
+            { status: 404, detail: 'gone', error: toolError('not_found') },
+        ],
+        ['a 401', { status: 401, detail: 'Sign in again.', error: null }],
+        ['a 429', { status: 429, detail: null, error: null }],
+        ['a 502', { status: 502, detail: null, error: null }],
+        [
+            'a 409 transient_unavailable',
+            { status: 409, detail: 'busy', error: toolError('transient_unavailable') },
+        ],
+        [
+            'a 422 binding_invalid',
+            { status: 422, detail: 'bad', error: toolError('binding_invalid') },
+        ],
+        [
+            'a stale constraint on a 422',
+            { status: 422, detail: 'x', error: toolError('edit_conflict', PLAN_REVISION_STALE) },
+        ],
+    ];
 
-    assert.equal(
-        refusedSwitch(plan, { status: 401, detail: 'Sign in again.', error: null }).notice,
-        'Sign in again.',
-    );
-    assert.equal(
-        refusedSwitch(plan, { status: 502, detail: null, error: null }).notice,
-        'The switch was refused (HTTP 502).',
-    );
+    for (const [name, refusal] of cases) {
+        await t.test(name, () => {
+            assert.equal(refusedSwitch(plan, refusal), null);
+        });
+    }
 });
 
 test('a fresh plan after a switch replaces the waiting card with what moved', () => {

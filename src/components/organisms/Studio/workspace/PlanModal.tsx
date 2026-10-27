@@ -42,6 +42,14 @@ export const PlanMovedNote = ({ plan, className }: { plan: PlanState; className?
     </ul>
 );
 
+/** Why the harness refused the last answer to this plan, for the user to
+ *  answer it again. A live region, mounted while empty, as above. */
+export const PlanNotice = ({ plan, className }: { plan: PlanState; className?: string }) => (
+    <p className={classNames(styles.notice, className)} role="status">
+        {plan.notice}
+    </p>
+);
+
 /**
  * One decision: the question, the chosen answer and why. A scope decision
  * the plan lets the user switch also lists its options, the active one
@@ -199,9 +207,7 @@ const PlanModal = ({ plan, open, onOpenChange, onApprove, onCancel, onSwitch }: 
                     </ul>
                 )}
                 <PlanMovedNote plan={plan} />
-                <p className={styles.notice} role="status">
-                    {plan.notice}
-                </p>
+                <PlanNotice plan={plan} />
             </div>
             <div className={styles.proceed}>
                 <p className={styles.proceedLabel}>Start building?</p>

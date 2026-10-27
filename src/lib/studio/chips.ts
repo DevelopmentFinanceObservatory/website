@@ -13,7 +13,8 @@ import type { ApplyChoiceSuggestion, StudioFrame } from './wire';
 type SuggestionItems = Extract<StudioFrame, { event: 'suggestions' }>['items'];
 
 /** The frame's items split by kind: prompt follow-ups (their prompts, as
- *  sent) and `apply_choice` chips, each in frame order. */
+ *  sent) and `apply_choice` chips, each in frame order. An item of another
+ *  kind is left out. */
 export const splitSuggestions = (
     items: SuggestionItems,
 ): { followups: string[]; chips: ApplyChoiceSuggestion[] } => {
@@ -22,7 +23,9 @@ export const splitSuggestions = (
 
     for (const item of items) {
         if ('kind' in item) {
-            chips.push(item);
+            if (item.kind === 'apply_choice') {
+                chips.push(item);
+            }
         } else {
             followups.push(item.prompt);
         }
@@ -31,8 +34,26 @@ export const splitSuggestions = (
     return { followups, chips };
 };
 
+/** What tells chips apart: the reading, the choice and the option. */
+export const chipKey = (chip: ApplyChoiceSuggestion): string =>
+    `${chip.spec_id} ${chip.choice_id} ${chip.option_id}`;
+
 const sameChip = (a: ApplyChoiceSuggestion, b: ApplyChoiceSuggestion): boolean =>
-    a.choice_id === b.choice_id && a.option_id === b.option_id;
+    chipKey(a) === chipKey(b);
+
+/** The transcript of a conversation restored without its harness session,
+ *  such as a fork of a share: its chips go, since the harness holds none of
+ *  the answers that offered them. */
+export const withoutChips = (messages: ChatMessage[]): ChatMessage[] =>
+    messages.map((message) =>
+        message.role === 'bot' && message.chips
+            ? {
+                  role: 'bot',
+                  text: message.text,
+                  ...(message.followups && { followups: message.followups }),
+              }
+            : message,
+    );
 
 /** The `detail` of the harness's refusal of a chip (422 with pointer
  *  `/apply_choice`), or null for any other refusal. */

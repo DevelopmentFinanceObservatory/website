@@ -9,6 +9,7 @@ import MessageFeedback from './MessageFeedback';
 import WidgetChips from './WidgetChips';
 import type { ChatMessage as ChatMessageData, TurnWidget } from '../hooks/useChat';
 import type { CardView } from '../canvas/layout';
+import { chipKey } from '@/lib/studio/chips';
 import type { ApplyChoiceSuggestion } from '@/lib/studio/wire';
 
 type ChatMessageProps = {
@@ -110,7 +111,7 @@ const ChatMessage = ({
                     ))}
                     {chips.map((chip) => (
                         <button
-                            key={`${chip.choice_id} ${chip.option_id}`}
+                            key={chipKey(chip)}
                             type="button"
                             className={classNames(styles.followupChip, styles.choiceChip)}
                             onClick={() => onApplyChoice(chip)}

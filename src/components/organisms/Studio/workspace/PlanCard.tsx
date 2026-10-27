@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { useState } from 'react';
 
 import styles from './PlanCard.module.scss';
-import PlanModal, { PlanMovedNote } from './PlanModal';
+import PlanModal, { PlanMovedNote, PlanNotice } from './PlanModal';
 import type { ChatState } from '../hooks/useChat';
 
 import Button from '@/components/atoms/Button/Button';
@@ -59,6 +59,7 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                     ))}
                 </ol>
                 <PlanMovedNote plan={plan} className={styles.moved} />
+                <PlanNotice plan={plan} className={styles.notice} />
             </section>
             <div className={styles.proceed}>
                 <p className={styles.proceedLabel}>Start building?</p>
