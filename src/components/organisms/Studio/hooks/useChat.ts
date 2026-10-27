@@ -44,7 +44,9 @@ import {
     stalePlan,
     settledPlan,
     startSwitch,
+    switchEnded,
     switchReply,
+    optionLabel,
     withApprovedPlan,
     type ApprovedPlan,
     type PlanState,
@@ -383,12 +385,15 @@ export const useChat = (initial?: ChatSnapshot) => {
 
     // `onRefusal` answers an HTTP refusal of the request (see StreamHandlers)
     // and returns true when it has dealt with it; any other refusal ends the
-    // turn as an error.
+    // turn as an error. `switching` is the waiting card of a plan switch: its
+    // turn stays paused, so an error, a break or Stop settles only the card
+    // (switchEnded) and leaves the reply and the Activity record alone.
     const stream = useCallback(
         (
             turn: number,
             start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
             onRefusal?: (refusal: StreamRefusal) => boolean,
+            switching?: PlanState,
         ) => {
             const controller = new AbortController();
             const generation = generationRef.current;
@@ -672,6 +677,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                     case 'error':
                         stall.stop();
                         grace.cancel();
+
+                        if (switching) {
+                            setState((prev) => switchEnded(prev, switching, frame.error.detail));
+                            break;
+                        }
+
                         setState((prev) => {
                             const messages = prev.messages.slice();
                             const last = messages[messages.length - 1];
@@ -712,6 +723,13 @@ export const useChat = (initial?: ChatSnapshot) => {
                 stall.stop();
                 grace.cancel();
                 stopGrace = setTimeout(() => controller.abort(), STOP_GRACE_MS);
+
+                if (switching) {
+                    setState((prev) => switchEnded(prev, switching));
+
+                    return;
+                }
+
                 setState((prev) => {
                     const messages = prev.messages.slice();
                     const last = messages[messages.length - 1];
@@ -753,7 +771,11 @@ export const useChat = (initial?: ChatSnapshot) => {
                             failed = true;
 
                             if (!stopped) {
-                                setState((prev) => endTurn(prev, turn, 'failed'));
+                                setState((prev) =>
+                                    switching
+                                        ? switchEnded(prev, switching)
+                                        : endTurn(prev, turn, 'failed'),
+                                );
                             }
                         }
                     });
@@ -1011,9 +1033,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 return;
             }
 
-            const label = plan.decisions
-                .find((decision) => decision.choice_id === choiceId)
-                ?.options?.find((option) => option.option_id === optionId)?.label;
+            const label = optionLabel(plan.decisions, choiceId, optionId);
 
             // The pause stays pending with the waiting plan: switchReply
             // refuses a second pick while it waits, and the plan the harness
@@ -1037,14 +1057,16 @@ export const useChat = (initial?: ChatSnapshot) => {
                         handlers,
                         signal,
                     ).finally(() => {
-                        // Neither a fresh plan nor a refusal replaced the
-                        // waiting card: endTurn settles the card on
-                        // screen, and the pause answers from the same.
+                        // The stream ended (closed, broke or sent an error)
+                        // and neither a fresh plan nor a refusal replaced
+                        // the waiting card: the card goes back to idle with
+                        // its notice, and the pause answers from the same.
                         if (pendingInterruptRef.current?.plan === waiting) {
                             pendingInterruptRef.current = {
                                 interruptId: pending.interruptId,
                                 plan: settledPlan(waiting) ?? undefined,
                             };
+                            setState((prev) => switchEnded(prev, waiting));
                         }
                     }),
                 (refusal) => {
@@ -1052,6 +1074,7 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                     return true;
                 },
+                waiting,
             );
         },
         [offerPlan, stream],

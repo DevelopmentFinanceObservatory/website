@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import styles from './PlanLedger.module.scss';
 
@@ -13,6 +13,7 @@ import {
     switchReply,
     yearsText,
     type PlanChoiceView,
+    type PlanNotice,
     type PlanState,
     type PlanView,
 } from '@/lib/studio/plan';
@@ -29,26 +30,25 @@ export const PlanMeta = ({ view, approved }: { view: PlanView; approved?: boolea
     </p>
 );
 
-/** Why the last switch did not apply, with "Try again" when the plan still
- *  offers the option. */
-const Notice = ({
-    lead,
-    text,
-    onRetry,
-}: {
-    lead?: string | null;
-    text: string;
-    onRetry?: () => void;
-}) => (
-    <div className={styles.notice} role="status">
-        <p className={styles.noticeText}>
-            {lead && <span className={styles.noticeLead}>{lead}</span>}
-            {text}
-        </p>
-        {onRetry && (
-            <button type="button" className={styles.retry} onClick={onRetry}>
-                Try again
-            </button>
+/**
+ * Why the last switch did not apply, with "Try again" when picking the
+ * option again could apply. The live region stays mounted, empty until a
+ * notice arrives, so a screen reader announces the notice when it does.
+ */
+const NoticeRegion = ({ notice, onRetry }: { notice: PlanNotice | null; onRetry?: () => void }) => (
+    <div className={styles.live} role="status">
+        {notice && (
+            <div className={styles.notice}>
+                <p className={styles.noticeText}>
+                    {notice.lead && <span className={styles.noticeLead}>{notice.lead}</span>}
+                    {notice.text}
+                </p>
+                {onRetry && (
+                    <button type="button" className={styles.retry} onClick={onRetry}>
+                        Try again
+                    </button>
+                )}
+            </div>
         )}
     </div>
 );
@@ -56,24 +56,31 @@ const Notice = ({
 /**
  * One scope choice: its name, the value the plan counts by, "Changed" and
  * the value it held when a switch moved it, and "Change", which opens the
- * options in place as a radio list. A partial option names the years it
- * covers and an unavailable one says why. While a switch is in flight every
- * option ignores clicks but keeps focus (`aria-disabled`), and the picked
- * one says the plan is updating.
+ * options in place, drawn as a radio list: buttons in a group, the active
+ * one pressed, each picking its option at once. A partial option names the
+ * years it covers and an unavailable one says why. While a switch is in
+ * flight every option ignores clicks but keeps focus (`aria-disabled`), and
+ * the picked one says the plan is updating. When the plan this row's switch
+ * produced arrives and the option that held focus is gone, focus moves to
+ * "Change".
  */
 const ChoiceRow = ({
     choice,
     plan,
     open,
+    refocus,
     onToggle,
     onSwitch,
 }: {
     choice: PlanChoiceView;
     plan: PlanState | null;
     open: boolean;
+    // Focus was inside the ledger when it last moved (see PlanLedger).
+    refocus: RefObject<boolean>;
     onToggle: () => void;
     onSwitch?: Switch;
 }) => {
+    const changeRef = useRef<HTMLButtonElement>(null);
     const decision = choice.decision;
     const choiceId = decision?.choice_id;
     const switchable = !!(plan && onSwitch && decision && choiceId && canSwitch(plan));
@@ -82,9 +89,27 @@ const ChoiceRow = ({
     const notice = plan?.notice?.choiceId && plan.notice.choiceId === choiceId ? plan.notice : null;
     const failedOption = notice?.optionId;
     const retry =
-        choiceId && failedOption && plan && onSwitch && switchReply(plan, choiceId, failedOption)
+        notice?.retryable &&
+        !busy &&
+        choiceId &&
+        failedOption &&
+        plan &&
+        onSwitch &&
+        switchReply(plan, choiceId, failedOption)
             ? () => onSwitch(choiceId, failedOption)
             : undefined;
+
+    useEffect(() => {
+        const active = document.activeElement;
+
+        if (
+            refocus.current &&
+            plan?.switched === choiceId &&
+            (!active || active === document.body)
+        ) {
+            changeRef.current?.focus();
+        }
+    }, [refocus, plan, choiceId]);
 
     return (
         <div className={styles.row}>
@@ -95,6 +120,7 @@ const ChoiceRow = ({
             </span>
             {switchable && (
                 <button
+                    ref={changeRef}
                     type="button"
                     className={styles.change}
                     aria-expanded={open}
@@ -111,7 +137,7 @@ const ChoiceRow = ({
                 </span>
             )}
             {switchable && open && decision?.options && (
-                <div className={styles.options} role="radiogroup" aria-label={choice.name}>
+                <div className={styles.options} role="group" aria-label={choice.name}>
                     {decision.options.map((option) => {
                         const active = isActiveOption(decision, option);
                         const isPending = option.option_id === pending;
@@ -127,8 +153,7 @@ const ChoiceRow = ({
                             <button
                                 key={option.option_id}
                                 type="button"
-                                role="radio"
-                                aria-checked={active}
+                                aria-pressed={active}
                                 aria-busy={isPending || undefined}
                                 aria-disabled={(inert && !active) || undefined}
                                 className={classNames(
@@ -156,9 +181,7 @@ const ChoiceRow = ({
                     })}
                 </div>
             )}
-            {notice && (
-                <Notice lead={notice.lead} text={notice.text} onRetry={busy ? undefined : retry} />
-            )}
+            <NoticeRegion notice={notice} onRetry={retry} />
         </div>
     );
 };
@@ -185,6 +208,9 @@ export const PlanLedger = ({
     const [picked, setPicked] = useState<{ plan: PlanState | null; open?: string | null }>({
         plan,
     });
+    // Focus was inside this ledger when it last moved. An option that held
+    // it unmounts without a blur, so it stays set across a re-offer.
+    const hadFocusRef = useRef(false);
 
     if (picked.plan !== plan) {
         setPicked({ plan });
@@ -202,12 +228,24 @@ export const PlanLedger = ({
             ? plan.notice
             : null;
 
-    if (view.choices.length === 0 && !general) {
+    // An approved plan without choices has nothing to show; a live plan keeps
+    // its notice region mounted.
+    if (view.choices.length === 0 && !plan) {
         return null;
     }
 
     return (
-        <div className={classNames(styles.ledger, className)}>
+        <div
+            className={classNames((view.choices.length > 0 || general) && styles.ledger, className)}
+            onFocus={() => {
+                hadFocusRef.current = true;
+            }}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                    hadFocusRef.current = false;
+                }
+            }}
+        >
             {view.choices.length > 0 && <p className={styles.head}>Counted as</p>}
             {view.choices.map((choice) => (
                 <ChoiceRow
@@ -215,17 +253,16 @@ export const PlanLedger = ({
                     choice={choice}
                     plan={plan}
                     open={open === choice.key}
+                    refocus={hadFocusRef}
                     onSwitch={onSwitch}
                     onToggle={() =>
                         setPicked({ plan, open: open === choice.key ? null : choice.key })
                     }
                 />
             ))}
-            {general && (
-                <div className={styles.row}>
-                    <Notice lead={general.lead} text={general.text} />
-                </div>
-            )}
+            <div className={classNames(general && styles.row)}>
+                <NoticeRegion notice={general} />
+            </div>
         </div>
     );
 };

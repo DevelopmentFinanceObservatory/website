@@ -220,6 +220,11 @@
     }
 }
 
+// The notice's live region, mounted empty, spanning the row.
+.live {
+    grid-column: 1 / -1;
+}
+
 // Why the last switch did not apply, under its row: an expected outcome,
 // so a quiet panel in the ledger's own tones.
 .notice {
