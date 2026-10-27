@@ -28,7 +28,9 @@ type PlanCardProps = {
  * the amend decision).
  *
  * The card's height follows the number of scope choices.
- * While a switch is in flight the steps line dims and the bar waits.
+ * While a switch is in flight the steps line dims and the bar waits. A card
+ * whose pause has ended (a switch ended without a fresh plan) is read-only:
+ * no bar, and its rows say to ask again.
  */
 const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
     const [open, setOpen] = useState(false);
@@ -70,19 +72,21 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                     </Button>
                 </div>
             </section>
-            <div className={styles.proceed}>
-                <p className={styles.proceedLabel}>
-                    {busy ? 'Updating the plan…' : 'Start building?'}
-                </p>
-                <div className={styles.proceedActions}>
-                    <Button variant="plain" onClick={onCancel} disabled={busy}>
-                        Cancel
-                    </Button>
-                    <Button variant="dark" onClick={onApprove} disabled={busy}>
-                        Approve
-                    </Button>
+            {plan.live && (
+                <div className={styles.proceed}>
+                    <p className={styles.proceedLabel}>
+                        {busy ? 'Updating the plan…' : 'Start building?'}
+                    </p>
+                    <div className={styles.proceedActions}>
+                        <Button variant="plain" onClick={onCancel} disabled={busy}>
+                            Cancel
+                        </Button>
+                        <Button variant="dark" onClick={onApprove} disabled={busy}>
+                            Approve
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
             <PlanModal
                 view={view}
                 plan={plan}

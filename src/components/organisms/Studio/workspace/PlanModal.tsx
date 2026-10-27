@@ -15,8 +15,8 @@ type PlanModalProps = {
     view: PlanView;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    // The live plan, with its answers. An approved plan (read-only) passes
-    // none of these.
+    // The plan awaiting review, with its answers. An approved plan
+    // (read-only) passes none of these.
     plan?: PlanState;
     onApprove?: () => void;
     onCancel?: () => void;
@@ -104,7 +104,9 @@ const PlanModal = ({
     onSwitch,
 }: PlanModalProps) => {
     const readOnly = !plan;
+    const ended = plan && !plan.live;
     const busy = !!plan?.switching;
+    const answerKey = view.steps.find((step) => step.givesAnswer)?.key;
 
     return (
         <Modal
@@ -114,10 +116,12 @@ const PlanModal = ({
             title={view.title}
             className={styles.modal}
             footer={
-                readOnly ? (
+                readOnly || ended ? (
                     <div className={styles.proceed}>
                         <p className={styles.note}>
-                            Approved. Ask a follow up to change the scope.
+                            {readOnly
+                                ? 'Approved. Ask a follow up to change the scope.'
+                                : 'Ask again to change the plan.'}
                         </p>
                         <Button variant="bordered" onClick={() => onOpenChange(false)}>
                             Close
@@ -144,9 +148,21 @@ const PlanModal = ({
                 <PlanMeta view={view} approved={readOnly} />
                 {view.summary && <p className={styles.summary}>{view.summary}</p>}
                 <PlanLedger view={view} plan={plan} onSwitch={onSwitch} className={styles.ledger} />
+                {view.caveats.length > 0 && (
+                    <section className={styles.section}>
+                        <p className={styles.sectionHead}>Keep in mind</p>
+                        <ul className={styles.others}>
+                            {view.caveats.map((caveat) => (
+                                <li key={caveat}>{caveat}</li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
                 <section className={styles.section}>
                     <p className={styles.sectionHead}>Steps</p>
-                    <Steps view={view} />
+                    {/* A switch can move the answer step; the open set
+                        starts again from the new one. */}
+                    <Steps key={answerKey} view={view} />
                 </section>
                 {view.others.length > 0 && (
                     <section className={styles.section}>

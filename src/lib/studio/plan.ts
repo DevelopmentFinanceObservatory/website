@@ -31,7 +31,8 @@ export type PlanNotice = {
     lead: string | null;
     text: string;
     // Whether picking the option again could apply; false where the refusal
-    // would repeat (signed out, rate limited).
+    // would repeat (an option Search cannot serve, signed out, rate limited)
+    // and on a card that is no longer live.
     retryable: boolean;
     choiceId: string | null;
     optionId: string | null;
@@ -41,8 +42,8 @@ export type PlanNotice = {
  *  the label it held there, and why it moved when the harness said. */
 export type PlanChange = { choiceId: string; from: string; reason: string | null };
 
-/** The option each scope choice held on the first plan of the turn, by
- *  `choiceKey`. */
+/** The option each scope choice held on the first plan of the turn that
+ *  showed it, by `choice_id`. */
 export type PlanBaseline = Record<string, { optionId: string | null; label: string }>;
 
 /** A plan awaiting the user's approve, amend, reject or switch (the
@@ -62,6 +63,10 @@ export type PlanState = {
     version: number;
     actions: PlanAction[];
     interruptId: string;
+    // The pause the harness sent is still waiting on the user, so the card's
+    // controls answer it. False once a switch ended without the harness
+    // offering a plan again: the turn ended, and the card stays read-only.
+    live: boolean;
     // The approval key a switch echoes, null from a harness that predates it.
     revision: string | null;
     // What the scope choices held on the first plan of the turn, and the
@@ -122,62 +127,71 @@ export const optionLabel = (
 const couldNotSwitch = (label: string | null): string =>
     `Could not switch to ${label ?? 'that option'}.`;
 
-/**
- * A scope choice's identity across the plans of a turn: its axis, the part
- * of `choice_id` after the spec. A switch can re-pin the spec that
- * `choice_id` names, so the full id does not survive it. An axis two choices
- * of one plan share (a numerator's and a denominator's basis) keeps the full
- * id.
- */
-const choiceKeys = (decisions: PlanDecision[]): Map<string, string> => {
-    const ids = decisions.flatMap((decision) =>
-        decision.choice_id && switchOptions(decision) ? [decision.choice_id] : [],
-    );
-    const axis = (id: string) => id.slice(id.lastIndexOf(':') + 1);
-    const count = Map.groupBy(ids, axis);
+const axisOf = (choiceId: string): string => choiceId.slice(choiceId.lastIndexOf(':') + 1);
 
-    return new Map(ids.map((id) => [id, count.get(axis(id))!.length > 1 ? id : axis(id)]));
+/**
+ * The id among `ids` that is the scope choice `choiceId`: itself, else, from
+ * a harness that builds `choice_id` from a spec a switch can re-pin, the one
+ * id of its axis. Null when no id, or several, match.
+ */
+const sameChoice = (choiceId: string, ids: readonly string[]): string | null => {
+    if (ids.includes(choiceId)) {
+        return choiceId;
+    }
+
+    const axis = axisOf(choiceId);
+    const matches = ids.filter((id) => axisOf(id) === axis);
+
+    return matches.length === 1 ? matches[0]! : null;
 };
+
+/** The switchable scope choices of `decisions`, by `choice_id`. */
+const switchable = (decisions: PlanDecision[]): Map<string, PlanDecision> =>
+    new Map(
+        decisions.flatMap((decision) =>
+            decision.choice_id && switchOptions(decision) ? [[decision.choice_id, decision]] : [],
+        ),
+    );
 
 const activeOptionId = (decision: PlanDecision): string | null =>
     decision.options?.find((option) => isActiveOption(decision, option))?.option_id ?? null;
 
-/** What each scope choice holds, by `choiceKey`. */
-const heldOptions = (decisions: PlanDecision[]): PlanBaseline => {
-    const keys = choiceKeys(decisions);
-
-    return Object.fromEntries(
-        decisions.flatMap((decision) => {
-            const key = decision.choice_id && keys.get(decision.choice_id);
-
-            return key
-                ? [[key, { optionId: activeOptionId(decision), label: activeLabel(decision) }]]
-                : [];
-        }),
+/**
+ * The baseline after a plan showing `decisions`: `previous` as it was, plus
+ * what each choice it does not hold yet holds now.
+ */
+const baselineWith = (decisions: PlanDecision[], previous: PlanBaseline = {}): PlanBaseline => {
+    const known = Object.keys(previous);
+    const added = [...switchable(decisions)].flatMap(([choiceId, decision]) =>
+        sameChoice(choiceId, known)
+            ? []
+            : [[choiceId, { optionId: activeOptionId(decision), label: activeLabel(decision) }]],
     );
+
+    return { ...previous, ...Object.fromEntries(added) };
 };
 
 /**
  * The scope choices that hold another option than on the first plan of the
- * turn, with the label they held there and the harness's reason for the
- * ones it says moved. A choice switched back to its first option is
- * unchanged.
+ * turn that showed them, with the label they held there and the harness's
+ * reason for the ones it says moved. A choice switched back to its first
+ * option is unchanged.
  */
 const changesSince = (
     baseline: PlanBaseline,
     decisions: PlanDecision[],
     moved: PlanMoved[],
 ): PlanChange[] => {
-    const keys = choiceKeys(decisions);
-    const held = heldOptions(decisions);
+    const known = Object.keys(baseline);
 
-    return [...keys].flatMap(([choiceId, key]) => {
-        const first = baseline[key];
-        const now = held[key];
+    return [...switchable(decisions)].flatMap(([choiceId, decision]) => {
+        const key = sameChoice(choiceId, known);
+        const first = key ? baseline[key] : undefined;
+        const optionId = activeOptionId(decision);
         const same =
-            first?.optionId && now?.optionId
-                ? first.optionId === now.optionId
-                : first?.label === now?.label;
+            first?.optionId && optionId
+                ? first.optionId === optionId
+                : first?.label === activeLabel(decision);
 
         if (!first || same) {
             return [];
@@ -189,14 +203,13 @@ const changesSince = (
     });
 };
 
-/** The choice of `decisions` that is the one `previous` was switching. */
+/** The choice of `decisions` that is the one `previous` was switching, for
+ *  focus to return to; the first row when the switch took it off the plan. */
 const switchedChoice = (previous: PlanState, decisions: PlanDecision[]): string | null => {
     const pick = previous.switching;
-    const key = pick && choiceKeys(previous.decisions).get(pick.choiceId);
+    const ids = [...switchable(decisions).keys()];
 
-    return key
-        ? ([...choiceKeys(decisions)].find(([, candidate]) => candidate === key)?.[0] ?? null)
-        : null;
+    return pick ? (sameChoice(pick.choiceId, ids) ?? ids[0] ?? null) : null;
 };
 
 /** The harness's word on a switch that did not apply: a lead naming the
@@ -204,7 +217,8 @@ const switchedChoice = (previous: PlanState, decisions: PlanDecision[]): string 
 const switchFailedNotice = (decisions: PlanDecision[], failed: PlanSwitchFailed): PlanNotice => ({
     lead: couldNotSwitch(optionLabel(decisions, failed.choice_id, failed.option_id)),
     text: failed.reason,
-    retryable: true,
+    // A harness that predates `retryable` leaves it out.
+    retryable: failed.retryable ?? true,
     choiceId: failed.choice_id,
     optionId: failed.option_id,
 });
@@ -222,15 +236,16 @@ const headline = (frame: PlanProposed): string => {
 
 /**
  * The card for a `plan.proposed` frame. `previous` is the plan the turn
- * offered before it (the waiting card of a switch, or a plan amended): its
- * baseline carries over, so the card marks every choice that holds another
- * option than on the turn's first plan. A frame carrying `switch_failed`
- * says why on the row of the choice it names.
+ * offered before it (the waiting card of a switch, a plan amended, or the
+ * card a stale answer was sent from): its baseline carries over, so the card
+ * marks every choice that holds another option than on the turn's first
+ * plan. A frame carrying `switch_failed` says why on the row of the choice
+ * it names.
  */
 export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanState => {
     const decisions = frame.decisions ?? [];
     const failed = frame.switch_failed;
-    const baseline = previous?.baseline ?? heldOptions(decisions);
+    const baseline = baselineWith(decisions, previous?.baseline);
 
     return {
         title: headline(frame),
@@ -241,6 +256,7 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
         version: frame.version,
         actions: frame.actions,
         interruptId: frame.interrupt_id,
+        live: true,
         revision: frame.revision ?? null,
         baseline,
         changed: changesSince(baseline, decisions, frame.moved ?? []),
@@ -250,10 +266,10 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
     };
 };
 
-/** The plan offers switching: it lists the action and carries the revision
- *  a switch must echo. */
+/** The plan offers switching: it is live, lists the action and carries the
+ *  revision a switch must echo. */
 export const canSwitch = (plan: PlanState): boolean =>
-    plan.actions.includes('switch') && plan.revision !== null;
+    plan.live && plan.actions.includes('switch') && plan.revision !== null;
 
 /** A decision's switchable options, or null for an ordinary decision. */
 export const switchOptions = (decision: PlanDecision): PlanDecisionOption[] | null =>
@@ -320,14 +336,15 @@ const isStale = (refusal: StreamRefusal): boolean =>
 export const SWITCH_OPTION_UNAVAILABLE = 'switch_option_unavailable';
 
 /** The card a stale switch or approve is answered with, the harness's
- *  current plan, saying why it replaced the one the user answered. Null for
- *  any other refusal, or a stale one without a current plan. */
-export const stalePlan = (refusal: StreamRefusal): PlanState | null => {
+ *  current plan, saying why it replaced `previous`, the one the user
+ *  answered, whose baseline it keeps. Null for any other refusal, or a stale
+ *  one without a current plan. */
+export const stalePlan = (refusal: StreamRefusal, previous?: PlanState): PlanState | null => {
     const current = isStale(refusal) ? refusal.error?.current_plan : null;
 
     return current
         ? {
-              ...planFromFrame(current),
+              ...planFromFrame(current, previous && { ...previous, switching: null }),
               notice: {
                   lead: null,
                   text: refusal.detail ?? STALE_NOTICE,
@@ -362,8 +379,14 @@ const unappliedNotice = (
     };
 };
 
-// Refusals a second try would meet again: signed out, rate limited.
+// Refusals without a ToolError that a second try would meet again: signed
+// out, rate limited.
 const UNRETRYABLE = new Set([401, 429]);
+
+/** Picking the option again could apply: the ToolError says to retry after a
+ *  delay, or a refusal without one is not of a kind that repeats. */
+const retryableRefusal = (refusal: StreamRefusal): boolean =>
+    refusal.error ? refusal.error.retry === 'retry_after_delay' : !UNRETRYABLE.has(refusal.status);
 
 /**
  * The card after the harness refused its switch. The card always stays.
@@ -372,9 +395,10 @@ const UNRETRYABLE = new Set([401, 429]);
  * again on it. Without one the card keeps its revision, so an approve from it
  * is refused as stale, and drops the switch action. Any other refusal (a 422
  * `switch_option_unavailable` among them) says on the choice's row that the
- * switch did not apply, with the harness's detail when it gave one. A 401 or
- * 429 offers no "Try again", since a second try would be refused the same
- * way.
+ * switch did not apply, with the harness's detail when it gave one. It
+ * offers "Try again" only where a second try could apply: a ToolError whose
+ * `retry` is `retry_after_delay`, or a refusal without one other than a 401
+ * or 429.
  */
 export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
     const constraint = refusal.error?.constraint_id;
@@ -383,7 +407,7 @@ export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanStat
 
     if (refusal.status === 409 && constraint === PLAN_REVISION_STALE) {
         return (
-            stalePlan(refusal) ?? {
+            stalePlan(refusal, plan) ?? {
                 ...settled,
                 actions: plan.actions.filter((action) => action !== 'switch'),
                 notice: {
@@ -405,7 +429,7 @@ export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanStat
         ...settled,
         notice: unappliedNotice(plan, pick, {
             detail: refusal.detail,
-            retryable: !UNRETRYABLE.has(refusal.status),
+            retryable: retryableRefusal(refusal),
         }),
     };
 };
@@ -419,20 +443,46 @@ export const approveReply = (
         ? { decision: 'approve', plan_revision: plan.revision }
         : { decision: 'approve' };
 
-/** The card once its turn ended. A plan whose switch ended without a fresh
- *  plan (an error, a stop, a stream that closed) stays, saying on the
- *  choice's row that the switch did not apply, with the error's `detail`
- *  when there was one. Any other plan stays as it is. */
-export const settledPlan = (plan: PlanState | null, detail?: string | null): PlanState | null =>
-    plan?.switching
-        ? { ...plan, switching: null, notice: unappliedNotice(plan, plan.switching, { detail }) }
-        : plan;
+const ASK_AGAIN = 'Ask again to change the plan.';
+
+/** How a switch's stream ended without a plan: the error's `detail` when it
+ *  sent one, and whether the user stopped it. */
+export type SwitchEnding = { detail?: string | null; stopped?: boolean };
 
 /**
- * The conversation once a switch's stream ended without a fresh plan (it
- * broke, sent an error, or closed): the waiting card goes back to idle with
- * its notice, and the turn it belongs to stays paused, so the transcript and
- * the Activity record are left as they were. A state whose card is not the
+ * The card once a switch's stream ended without the harness offering a plan
+ * again (it broke, sent an error, closed, or was stopped and the harness did
+ * not re-offer). The turn has ended, so the card stays read-only, saying in
+ * one line on the choice's row that the switch did not apply and to ask
+ * again.
+ */
+export const endedPlan = (plan: PlanState, { detail, stopped }: SwitchEnding = {}): PlanState => {
+    const pick = plan.switching;
+    const picked =
+        (pick && optionLabel(plan.decisions, pick.choiceId, pick.optionId)) ?? 'that option';
+    const said = !stopped && detail;
+
+    return {
+        ...plan,
+        live: false,
+        switching: null,
+        notice: {
+            lead: said ? couldNotSwitch(picked) : null,
+            text: stopped
+                ? `Stopped before switching to ${picked}. ${ASK_AGAIN}`
+                : `${said || `Studio could not switch to ${picked}.`} ${ASK_AGAIN}`,
+            retryable: false,
+            choiceId: pick?.choiceId ?? null,
+            optionId: pick?.optionId ?? null,
+        },
+    };
+};
+
+/**
+ * The conversation once a switch's stream ended without a fresh plan: the
+ * waiting card turns read-only with its notice (endedPlan) and the chat line
+ * clears. The paused reply and the Activity record are left as they were
+ * (the caller closes the Activity entry). A state whose card is not the
  * waiting one (a fresh plan or a refusal replaced it) is returned as is.
  */
 export const switchEnded = <
@@ -447,12 +497,12 @@ export const switchEnded = <
 >(
     state: TState,
     waiting: PlanState,
-    detail?: string | null,
+    ending?: SwitchEnding,
 ): TState =>
     state.plan === waiting
         ? {
               ...state,
-              plan: settledPlan(waiting, detail),
+              plan: endedPlan(waiting, ending),
               thinking: false,
               status: null,
               statusDetail: null,
@@ -470,6 +520,7 @@ export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({
     summary: frame.summary ?? null,
     steps: frame.steps,
     choices: frame.choices,
+    caveats: frame.caveats ?? [],
 });
 
 /** The transcript with `plan` kept on the reply the approve resumed: the
@@ -513,6 +564,9 @@ export type PlanView = {
     steps: PlanStepView[];
     choices: PlanChoiceView[];
     others: PlanOtherView[];
+    // What qualifies the answer, one reader sentence each (an approved
+    // plan's).
+    caveats: string[];
 };
 
 export const planView = (plan: PlanState): PlanView => {
@@ -555,6 +609,7 @@ export const planView = (plan: PlanState): PlanView => {
         })),
         choices,
         others,
+        caveats: [],
     };
 };
 
@@ -581,6 +636,8 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
             decision: null,
         })),
         others: [],
+        // A plan saved before the harness sent caveats has none.
+        caveats: plan.caveats ?? [],
     };
 };
 

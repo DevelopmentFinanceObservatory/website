@@ -63,7 +63,9 @@ const snippetOf = (messages: unknown, q: string): string | undefined => {
     return undefined;
 };
 
-/** Title + transcript search (case-insensitive substring), newest first. */
+/** Title + transcript search (case-insensitive substring over the title and
+ *  each message's text, not the plans and chips stored beside it), newest
+ *  first. */
 export const searchConversations = async (
     userId: string,
     q: string,
@@ -83,7 +85,16 @@ export const searchConversations = async (
                 eq(conversation.userId, userId),
                 or(
                     ilike(conversation.title, pattern),
-                    sql`(${conversation.data} -> 'messages')::text ILIKE ${pattern}`,
+                    sql`exists (
+                        select 1
+                        from jsonb_array_elements(
+                            case jsonb_typeof(${conversation.data} -> 'messages')
+                                when 'array' then ${conversation.data} -> 'messages'
+                                else '[]'::jsonb
+                            end
+                        ) as message
+                        where message ->> 'text' ilike ${pattern}
+                    )`,
                 ),
             ),
         )

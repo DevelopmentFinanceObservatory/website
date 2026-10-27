@@ -19,7 +19,7 @@ import {
     planFromFrame,
     planView,
     refusedSwitch,
-    settledPlan,
+    endedPlan,
     stalePlan,
     startSwitch,
     switchEnded,
@@ -30,7 +30,7 @@ import {
 } from '../plan.ts';
 import { withoutChips } from '../chips.ts';
 import type { StreamRefusal } from '../studioClient.ts';
-import type { PlanApproved, PlanDecision, PlanProposed } from '../wire.ts';
+import type { PlanApproved, PlanDecision, PlanProposed, RetryMode } from '../wire.ts';
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 
 const countDecision: PlanDecision = {
@@ -280,6 +280,88 @@ test('after two switches both rows are Changed from the first plan, across a re-
     );
 });
 
+test('a plan that drops one of two choices keeps Changed and the focus target', async (t) => {
+    const numerator = (active: string) => ({ ...basisDecision(active, 'r1'), id: 'd-num' });
+    const denominator = (active: string) => ({ ...basisDecision(active, 'r2'), id: 'd-den' });
+    const sector = sectorDecision('sector:120+130', 'r1');
+    const gross = 'measure_basis:gross';
+    const net = 'measure_basis:net';
+    // [name, v1 decisions, the choice switched, v2 decisions, Changed, focus]
+    const cases: [string, PlanDecision[], string, PlanDecision[], string[], string][] = [
+        [
+            'the switched choice survives',
+            [numerator(gross), denominator(gross)],
+            'r2:measure_basis',
+            [denominator(net)],
+            ['r2:measure_basis'],
+            'r2:measure_basis',
+        ],
+        [
+            'the harness merged the switched choice into one sharing its axis',
+            [numerator(gross), denominator(gross)],
+            'r1:measure_basis',
+            [denominator(net)],
+            ['r2:measure_basis'],
+            'r2:measure_basis',
+        ],
+        [
+            'the switched choice left the plan',
+            [sector, numerator(gross)],
+            'r1:measure_basis',
+            [sector],
+            [],
+            'r1:sector',
+        ],
+    ];
+
+    for (const [name, first, choiceId, second, changed, focus] of cases) {
+        await t.test(name, () => {
+            const v1 = planFromFrame(frame({ decisions: first }));
+            const v2 = planFromFrame(
+                switchedFrame({ decisions: second }),
+                startSwitch(v1, { choiceId, optionId: net }),
+            );
+
+            assert.deepEqual(
+                v2.changed.map((change) => [change.choiceId, change.from]),
+                changed.map((id) => [id, 'Gross disbursements']),
+            );
+            assert.equal(v2.switched, focus);
+        });
+    }
+});
+
+test('a choice first shown on a later plan is Changed from what it held there', () => {
+    const v1 = planFromFrame(frame({ decisions: [basisDecision('measure_basis:gross', 'r1')] }));
+    const v2 = planFromFrame(
+        switchedFrame({
+            decisions: [
+                basisDecision('measure_basis:net', 'r1'),
+                sectorDecision('sector:120+130', 'r1'),
+            ],
+        }),
+        startSwitch(v1, { choiceId: 'r1:measure_basis', optionId: 'measure_basis:net' }),
+    );
+    const v3 = planFromFrame(
+        switchedFrame({
+            version: 3,
+            decisions: [
+                basisDecision('measure_basis:net', 'r1'),
+                sectorDecision('sector:120', 'r1'),
+            ],
+        }),
+        startSwitch(v2, { choiceId: 'r1:sector', optionId: 'sector:120' }),
+    );
+
+    assert.deepEqual(
+        v3.changed.map((change) => [change.choiceId, change.from]),
+        [
+            ['r1:measure_basis', 'Gross disbursements'],
+            ['r1:sector', 'Health and population'],
+        ],
+    );
+});
+
 test('a choice switched back to its first option is not Changed', () => {
     const v1 = planFromFrame(frame({ decisions: [basisDecision('measure_basis:gross')] }));
     const v2 = planFromFrame(
@@ -301,17 +383,13 @@ test('a choice switched back to its first option is not Changed', () => {
 
 test('switch_failed puts its reason on the row of the choice it names', () => {
     const reason = 'Net figures for 2023 are not published. The plan still counts gross.';
-    const plan = planFromFrame(
-        frame({
-            revision: 'rev-c',
-            switch_failed: {
-                choice_id: 'spec_1:measure_basis',
-                option_id: 'measure_basis:net',
-                code: 'operation_unsupported',
-                reason,
-            },
-        }),
-    );
+    const failed = {
+        choice_id: 'spec_1:measure_basis',
+        option_id: 'measure_basis:net',
+        code: 'operation_unsupported',
+        reason,
+    };
+    const plan = planFromFrame(frame({ revision: 'rev-c', switch_failed: failed }));
 
     assert.deepEqual(plan.notice, {
         lead: 'Could not switch to Net disbursements.',
@@ -319,6 +397,10 @@ test('switch_failed puts its reason on the row of the choice it names', () => {
         retryable: true,
         ...PICK,
     });
+    assert.equal(
+        planFromFrame(frame({ switch_failed: { ...failed, retryable: false } })).notice?.retryable,
+        false,
+    );
     assert.deepEqual(switchReply(plan, PICK.choiceId, PICK.optionId), {
         decision: 'switch',
         choice_id: PICK.choiceId,
@@ -442,6 +524,25 @@ test('a stale switch is answered with the current card, which switches again', (
     });
 });
 
+test('a stale refusal keeps the turn baseline, so a choice moved elsewhere is Changed', () => {
+    const v1 = planFromFrame(frame());
+    const v2 = planFromFrame(switchedFrame(), startSwitch(v1, PICK));
+    const waiting = startSwitch(v2, {
+        choiceId: PICK.choiceId,
+        optionId: 'measure_basis:gross',
+    });
+    const replaced = refusedSwitch(
+        waiting,
+        staleRefusal(switchedFrame({ interrupt_id: 'int-3', version: 3, revision: 'rev-c' })),
+    );
+
+    assert.deepEqual(replaced.changed, [
+        { choiceId: PICK.choiceId, from: 'Gross disbursements', reason: null },
+    ]);
+    assert.equal(replaced.switched, null);
+    assert.equal(replaced.live, true);
+});
+
 test('a stale approve is answered with the current card; other refusals are not', () => {
     assert.deepEqual(stalePlan(staleRefusal(currentFrame)), {
         ...planFromFrame(currentFrame),
@@ -511,10 +612,11 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
     });
 
     assert.equal(refused.switching, null);
+    // The same pick would be refused again, so the row offers no Try again.
     assert.deepEqual(refused.notice, {
         lead: 'Could not switch to Net disbursements.',
         text: 'Net disbursements cannot be counted for this plan.',
-        retryable: true,
+        retryable: false,
         ...PICK,
     });
     assert.equal(refused.revision, 'rev-a');
@@ -523,9 +625,13 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
 
 test('any other refusal keeps the card and says on the row why the switch did not apply', async (t) => {
     const plan = startSwitch(planFromFrame(frame()), PICK);
-    const toolError = (error: string, constraint_id?: string) => ({
+    const toolError = (
+        error: string,
+        retry: RetryMode = 'do_not_retry',
+        constraint_id?: string,
+    ) => ({
         error: error as 'not_found',
-        retry: 'do_not_retry' as const,
+        retry,
         detail: error,
         ...(constraint_id && { constraint_id }),
     });
@@ -539,7 +645,7 @@ test('any other refusal keeps the card and says on the row why the switch did no
             { status: 404, detail: 'gone', error: toolError('not_found') },
             lead,
             'gone',
-            true,
+            false,
         ],
         [
             'a 401',
@@ -559,17 +665,25 @@ test('any other refusal keeps the card and says on the row why the switch did no
         ['a 502', { status: 502, detail: null, error: null }, null, generic, true],
         [
             'a 409 transient_unavailable',
-            { status: 409, detail: 'busy', error: toolError('transient_unavailable') },
+            {
+                status: 409,
+                detail: 'busy',
+                error: toolError('transient_unavailable', 'retry_after_delay'),
+            },
             lead,
             'busy',
             true,
         ],
         [
             'a stale constraint on a 422',
-            { status: 422, detail: 'x', error: toolError('edit_conflict', PLAN_REVISION_STALE) },
+            {
+                status: 422,
+                detail: 'x',
+                error: toolError('edit_conflict', 'refresh_then_retry', PLAN_REVISION_STALE),
+            },
             lead,
             'x',
-            true,
+            false,
         ],
     ];
 
@@ -587,17 +701,63 @@ test('any other refusal keeps the card and says on the row why the switch did no
     }
 });
 
-test('a switch that ends without a fresh plan keeps the card and says so on its row', () => {
-    const plan = planFromFrame(frame());
-    const settled = settledPlan(startSwitch(plan, PICK));
+test('a switch that ends without a fresh plan leaves the card read-only, saying to ask again', async (t) => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const cases: [string, Parameters<typeof endedPlan>[1], string | null, string][] = [
+        [
+            'closed',
+            {},
+            null,
+            'Studio could not switch to Net disbursements. Ask again to change the plan.',
+        ],
+        [
+            'an error',
+            { detail: 'The harness stopped.' },
+            'Could not switch to Net disbursements.',
+            'The harness stopped. Ask again to change the plan.',
+        ],
+        [
+            'stopped',
+            { stopped: true, detail: 'Cancelled.' },
+            null,
+            'Stopped before switching to Net disbursements. Ask again to change the plan.',
+        ],
+    ];
 
-    assert.ok(settled);
-    assert.equal(settled.switching, null);
-    assert.equal(settled.notice?.choiceId, PICK.choiceId);
-    assert.equal(settled.notice?.optionId, PICK.optionId);
-    assert.equal(switchReply(settled, PICK.choiceId, PICK.optionId)?.plan_revision, 'rev-a');
-    assert.equal(settledPlan(plan), plan);
-    assert.equal(settledPlan(null), null);
+    for (const [name, ending, lead, text] of cases) {
+        await t.test(name, () => {
+            const ended = endedPlan(waiting, ending);
+
+            assert.equal(ended.live, false);
+            assert.equal(ended.switching, null);
+            assert.deepEqual(ended.notice, { lead, text, retryable: false, ...PICK });
+            assert.equal(canSwitch(ended), false);
+            assert.equal(switchReply(ended, PICK.choiceId, PICK.optionId), null);
+        });
+    }
+});
+
+test('a switch stopped and re-offered by the harness is live again, with Try again', () => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const reoffered = planFromFrame(
+        frame({
+            interrupt_id: 'int-2',
+            switch_failed: {
+                choice_id: PICK.choiceId,
+                option_id: PICK.optionId,
+                code: 'switch_cancelled',
+                reason: 'The switch was stopped. The plan still counts gross.',
+                retryable: true,
+            },
+        }),
+        waiting,
+    );
+
+    assert.equal(reoffered.live, true);
+    assert.equal(reoffered.interruptId, 'int-2');
+    assert.equal(reoffered.notice?.retryable, true);
+    assert.deepEqual(reoffered.changed, []);
+    assert.ok(switchReply(reoffered, PICK.choiceId, PICK.optionId));
 });
 
 /** The conversation fields switchEnded reads, around a paused turn. */
@@ -620,8 +780,9 @@ test('a switch stream that ends with no plan, done or error returns the card to 
     const after = switchEnded(pausedTurn(waiting), waiting);
 
     assert.equal(after.plan?.switching, null);
+    assert.equal(after.plan?.live, false);
     assert.equal(after.plan?.notice?.choiceId, PICK.choiceId);
-    assert.equal(after.plan?.notice?.retryable, true);
+    assert.equal(after.plan?.notice?.retryable, false);
     assert.equal(after.thinking, false);
     assert.equal(after.status, null);
 });
@@ -629,16 +790,11 @@ test('a switch stream that ends with no plan, done or error returns the card to 
 test('a failed switch writes nothing into the paused reply or its Activity entry', () => {
     const waiting = startSwitch(planFromFrame(frame()), PICK);
     const before = pausedTurn(waiting);
-    const after = switchEnded(before, waiting, 'The harness stopped.');
+    const after = switchEnded(before, waiting, { detail: 'The harness stopped.' });
 
     assert.equal(after.messages, before.messages);
     assert.equal(after.activity, before.activity);
-    assert.deepEqual(after.plan?.notice, {
-        lead: 'Could not switch to Net disbursements.',
-        text: 'The harness stopped.',
-        retryable: true,
-        ...PICK,
-    });
+    assert.equal(after.plan?.notice?.text, 'The harness stopped. Ask again to change the plan.');
 });
 
 test('a switch that ended after a fresh plan or a refusal leaves the state alone', () => {
@@ -717,6 +873,20 @@ test('plan.approved rides on the reply the approve resumed and survives a save a
     assert.deepEqual(
         view.choices.map((choice) => [choice.name, choice.value, choice.changedFrom]),
         [['Basis', 'net disbursements', 'gross disbursements']],
+    );
+});
+
+test('an approved plan shows its caveats, and one saved before caveats shows none', () => {
+    const caveat = 'The total counts every provider, the health figure bilateral aid only.';
+
+    assert.deepEqual(
+        approvedView(approvedFromFrame({ ...approvedFrame, caveats: [caveat] })).caveats,
+        [caveat],
+    );
+    assert.deepEqual(approvedView(approvedFromFrame(approvedFrame)).caveats, []);
+    assert.deepEqual(
+        approvedView({ ...approvedFromFrame(approvedFrame), caveats: undefined }).caveats,
+        [],
     );
 });
 

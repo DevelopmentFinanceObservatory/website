@@ -332,6 +332,9 @@ export type PlanDecision = {
     // A scope decision the user can switch: the harness's ScopeChoice id,
     // every option it offers, and the one the plan counts by now. A
     // decision without `choice_id` is an ordinary planner decision.
+    // `choice_id` is built from the requirement and the axis, so it holds
+    // across a conversation's switches; an older harness built it from a
+    // spec id a switch can re-pin.
     choice_id?: string | null;
     options?: PlanDecisionOption[] | null;
     active_option_id?: string | null;
@@ -400,18 +403,24 @@ export type PlanProposed = {
 };
 
 /** A switch that did not apply: the option the user picked, the refusal's
- *  code, and a reader's sentence saying why and what still holds. */
+ *  code, a reader's sentence saying why and what still holds, and whether
+ *  picking the option again could apply (false for a failure that would
+ *  repeat, such as an option Search cannot serve; absent from a harness that
+ *  predates it). A switch stopped through `/cancel` re-offers the unchanged
+ *  plan with `code: "switch_cancelled"` and `retryable: true`. */
 export type PlanSwitchFailed = {
     choice_id: string;
     option_id: string;
     code: string;
     reason: string;
+    retryable?: boolean | null;
 };
 
 export type PlanApprovedStep = { label: string; gives_answer?: boolean | null };
 
 /** One choice of an approved plan: its short name, the option label it
- *  holds, and the label it held before a switch. */
+ *  holds, and, when the user's switches moved it, the label it held on the
+ *  turn's first plan. */
 export type PlanApprovedChoice = {
     question: string;
     chosen: string;
@@ -430,6 +439,9 @@ export type PlanApproved = {
     summary?: string | null;
     steps: PlanApprovedStep[];
     choices: PlanApprovedChoice[];
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
 };
 
 export type StepProgress = { completed: number; total: number };
