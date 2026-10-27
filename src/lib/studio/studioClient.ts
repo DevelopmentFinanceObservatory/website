@@ -10,11 +10,13 @@
  */
 
 import type {
+    ApplyChoice,
     CancelRequest,
     CompositionManifest,
     CompositionMutation,
     InterruptResponse,
     MutationOperation,
+    PlanRevisionStaleError,
     StudioFrame,
     ToolError,
     TurnRequest,
@@ -37,16 +39,36 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
-/** What a stream reports to its caller. */
+/** An HTTP refusal of a stream request: its status, the body's `detail`
+ *  when it has one, and the harness's ToolError when the body is one
+ *  (with `current_plan` on a stale plan answer). */
+export type StreamRefusal = {
+    status: number;
+    detail: string | null;
+    error: PlanRevisionStaleError | null;
+};
+
+/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
+ *  before the stream would report it as an `error` frame, and returns true
+ *  when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onKeepAlive?: () => void;
+    onRefusal?: (refusal: StreamRefusal) => boolean;
 };
+
+const asToolError = (body: unknown): PlanRevisionStaleError | null =>
+    body !== null &&
+    typeof body === 'object' &&
+    typeof (body as ToolError).error === 'string' &&
+    typeof (body as ToolError).detail === 'string'
+        ? (body as ToolError)
+        : null;
 
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
     body: TurnRequest | InterruptResponse,
-    { onFrame, onKeepAlive }: StreamHandlers,
+    { onFrame, onKeepAlive, onRefusal }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -69,10 +91,13 @@ const streamStudio = async (
     }
 
     if (!res.ok || !res.body) {
-        let detail = `HTTP ${res.status}`;
+        let detail: string | null = null;
+        let error: PlanRevisionStaleError | null = null;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
+
+            error = asToolError(parsed);
 
             if (typeof parsed.detail === 'string') {
                 detail = parsed.detail;
@@ -81,7 +106,11 @@ const streamStudio = async (
             // Non-JSON body — the status line stands.
         }
 
-        onFrame(transportError(detail));
+        if (!res.ok && onRefusal?.({ status: res.status, detail, error })) {
+            return;
+        }
+
+        onFrame(transportError(detail ?? `HTTP ${res.status}`));
 
         return;
     }
@@ -158,11 +187,34 @@ export const runTurn = (
         signal,
     );
 
+/** Run a turn from a clicked `apply_choice` chip: the chip's choice, option,
+ *  turn and reading, copied as offered, and no message. */
+export const runApplyChoice = (
+    conversationId: string,
+    { choice_id, option_id, turn, spec_id }: ApplyChoice,
+    handlers: StreamHandlers,
+    signal?: AbortSignal,
+): Promise<void> =>
+    streamStudio(
+        'turn',
+        {
+            kind: 'turn.request',
+            schema_version: 1,
+            conversation_id: conversationId,
+            apply_choice: { choice_id, option_id, turn, spec_id },
+        },
+        handlers,
+        signal,
+    );
+
 /** Answer a pause; the response is a NEW stream continuing the same turn. */
 export const runInterrupt = (
     conversationId: string,
     interruptId: string,
-    reply: Pick<InterruptResponse, 'decision' | 'payload' | 'answers'>,
+    reply: Pick<
+        InterruptResponse,
+        'decision' | 'payload' | 'answers' | 'choice_id' | 'option_id' | 'plan_revision'
+    >,
     handlers: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> =>

@@ -119,6 +119,18 @@
     letter-spacing: -0.031em;
 }
 
+// What the switch behind this plan changed, and why the harness refused the
+// last answer to it, under the steps.
+.moved,
+.notice {
+    margin: 0;
+    padding: 0 rem(16) rem(14);
+
+    &:empty {
+        padding: 0;
+    }
+}
+
 // --- "Start building?" ------------------------------------------------------
 
 // Grows OUT of the input below: rounded on top only, its bottom edge

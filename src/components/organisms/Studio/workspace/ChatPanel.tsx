@@ -87,7 +87,8 @@ const ChatPanel = ({
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
     const sendFollow = () => {
-        if (!follow.trim()) {
+        // A plan switch in flight has the pause, so the text waits in the input.
+        if (!follow.trim() || chat.plan?.switching) {
             return;
         }
 
@@ -149,6 +150,7 @@ const ChatPanel = ({
                                         onAdd={onAdd}
                                         onRemove={onRemove}
                                         onFollowup={chat.send}
+                                        onApplyChoice={chat.applyChoice}
                                         readOnly={readOnly}
                                     />
                                     {sharedAfter(index) && (
@@ -210,6 +212,9 @@ const ChatPanel = ({
                                     plan={chat.plan}
                                     onApprove={() => chat.respondPlan('approve')}
                                     onCancel={() => chat.respondPlan('reject')}
+                                    // Switching goes with amending, which the
+                                    // wall takes away with the input.
+                                    onSwitch={wall ? undefined : chat.switchChoice}
                                 />
                             )}
                             {wall ? (

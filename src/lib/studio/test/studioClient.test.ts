@@ -3,9 +3,17 @@
  * reason when the read fails.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { cancelTurn, fetchComponentRevision, runTurn } from '../studioClient.ts';
+import {
+    cancelTurn,
+    fetchComponentRevision,
+    runApplyChoice,
+    runInterrupt,
+    runTurn,
+} from '../studioClient.ts';
+import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
 
 test('fetchComponentRevision: a refused read is null and logs the ids and status', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 502 }));
@@ -76,4 +84,166 @@ test('cancelTurn: a cancel request that never answers settles once the bound pas
     ]);
 
     assert.equal(outcome, 'settled');
+});
+
+const switchReply = {
+    decision: 'switch',
+    choice_id: 'spec_1:measure_basis',
+    option_id: 'measure_basis:net',
+    plan_revision: 'rev-a',
+} as const;
+
+const staleBody = {
+    error: 'edit_conflict',
+    retry: 'refresh_then_retry',
+    detail: 'plan revision rev-a is not the pending plan',
+    constraint_id: 'plan_revision_stale',
+};
+
+test('runInterrupt: a switch posts exactly the interrupt members and the switch fields', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+
+    await runInterrupt('conv', 'int-1', switchReply, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.deepEqual(JSON.parse(init.body as string), {
+        kind: 'interrupt.response',
+        schema_version: 1,
+        conversation_id: 'conv',
+        interrupt_id: 'int-1',
+        ...switchReply,
+    });
+});
+
+test('runInterrupt: a refusal reaches onRefusal with its status and ToolError, and no error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => Response.json(staleBody, { status: 409 }));
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onRefusal: (refusal) => {
+            refusals.push(refusal);
+
+            return true;
+        },
+    });
+
+    assert.deepEqual(refusals, [{ status: 409, detail: staleBody.detail, error: staleBody }]);
+    assert.deepEqual(frames, []);
+});
+
+test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ detail: 'proxy failed' }, { status: 502 }),
+    );
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onRefusal: (refusal) => {
+            refusals.push(refusal);
+
+            return false;
+        },
+    });
+
+    assert.deepEqual(refusals, [{ status: 502, detail: 'proxy failed', error: null }]);
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
+});
+
+test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', async (t) => {
+    const currentPlan = {
+        event: 'plan.proposed',
+        seq: 9,
+        interrupt_id: 'int-2',
+        plan_version_id: 'pv-2',
+        version: 2,
+        title: 'Health aid to Ghana',
+        steps: [],
+        actions: ['approve', 'amend', 'reject'],
+        revision: 'rev-b',
+    };
+
+    t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ ...staleBody, current_plan: currentPlan }, { status: 409 }),
+    );
+    let seen: unknown = null;
+
+    await runInterrupt(
+        'conv',
+        'int-1',
+        { decision: 'approve', plan_revision: 'rev-a' },
+        {
+            onFrame: () => {},
+            onRefusal: (refusal) => {
+                seen = refusal.error?.current_plan;
+
+                return true;
+            },
+        },
+    );
+
+    assert.deepEqual(seen, currentPlan);
+});
+
+test('runApplyChoice: a chip posts the harness fixture request, with no message', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(''));
+    // The harness's wire fixtures (`services/harness/tests/wire_fixtures/studio`
+    // in dfo-ai), copied. The request names the conversation by the
+    // `session_id` alias the harness also accepts.
+    const read = (name: string): unknown =>
+        JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
+    const { session_id: conversation, ...request } = read(
+        'request-13-turn-apply-choice.json',
+    ) as Record<string, unknown> & { session_id: string };
+    const { items } = read('event-15-suggestions-apply-choice.json') as {
+        items: ApplyChoiceSuggestion[];
+    };
+    const chip = items[0];
+
+    assert.ok(chip);
+    await runApplyChoice(conversation, chip, { onFrame: () => {} });
+
+    const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
+
+    assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
+    const body = JSON.parse(init.body as string) as { apply_choice: Record<string, unknown> };
+
+    assert.deepEqual(body, { ...request, conversation_id: conversation });
+    assert.equal(body.apply_choice.turn, chip.turn);
+    assert.equal(body.apply_choice.spec_id, chip.spec_id);
+});
+
+test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame', async (t) => {
+    const body = {
+        error: 'constraint_violation',
+        retry: 'do_not_retry',
+        detail: 'That option is not offered here.',
+        constraint_id: 'switch_option_unavailable',
+        pointer: '/apply_choice',
+    };
+
+    t.mock.method(globalThis, 'fetch', async () => Response.json(body, { status: 422 }));
+    const frames: StudioFrame[] = [];
+    const refusals: unknown[] = [];
+
+    await runApplyChoice(
+        'conv',
+        { choice_id: 'spec_1:sector', option_id: 'sector:120', turn: 1, spec_id: 'spec_1' },
+        {
+            onFrame: (frame) => frames.push(frame),
+            onRefusal: (refusal) => {
+                refusals.push(refusal);
+
+                return true;
+            },
+        },
+    );
+
+    assert.deepEqual(refusals, [{ status: 422, detail: body.detail, error: body }]);
+    assert.deepEqual(frames, []);
 });
