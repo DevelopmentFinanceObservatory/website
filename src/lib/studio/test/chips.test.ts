@@ -28,6 +28,19 @@ test('splitSuggestions: the fixture frame is two chips in frame order, no follow
     assert.deepEqual(splitSuggestions(frame.items), { followups: [], chips: frame.items });
 });
 
+test('splitSuggestions: each chip keeps the turn and spec_id it was offered with', () => {
+    const { chips } = splitSuggestions(frame.items);
+
+    assert.deepEqual(
+        chips.map(({ turn, spec_id }) => ({ turn, spec_id })),
+        frame.items.map((item) => ({
+            turn: 'turn' in item ? item.turn : undefined,
+            spec_id: 'spec_id' in item ? item.spec_id : undefined,
+        })),
+    );
+    assert.ok(chips.every((chip) => chip.turn >= 1 && chip.spec_id.startsWith('spec_')));
+});
+
 test('splitSuggestions: prompt follow-ups keep their prompts beside the chips', () => {
     const prompt = { label: 'By donor', prompt: 'Break this down by donor' };
 

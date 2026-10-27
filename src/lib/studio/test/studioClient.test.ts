@@ -211,10 +211,11 @@ test('runApplyChoice: a chip posts the harness fixture request, with no message'
     const init = fetch.mock.calls[0]?.arguments[1] as RequestInit;
 
     assert.equal(fetch.mock.calls[0]?.arguments[0], '/api/studio/turn');
-    assert.deepEqual(JSON.parse(init.body as string), {
-        ...request,
-        conversation_id: conversation,
-    });
+    const body = JSON.parse(init.body as string) as { apply_choice: Record<string, unknown> };
+
+    assert.deepEqual(body, { ...request, conversation_id: conversation });
+    assert.equal(body.apply_choice.turn, chip.turn);
+    assert.equal(body.apply_choice.spec_id, chip.spec_id);
 });
 
 test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame', async (t) => {
@@ -232,7 +233,7 @@ test('runApplyChoice: a 422 chip refusal reaches onRefusal, and no error frame',
 
     await runApplyChoice(
         'conv',
-        { choice_id: 'spec_1:sector', option_id: 'sector:120' },
+        { choice_id: 'spec_1:sector', option_id: 'sector:120', turn: 1, spec_id: 'spec_1' },
         {
             onFrame: (frame) => frames.push(frame),
             onRefusal: (refusal) => {

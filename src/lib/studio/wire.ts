@@ -211,9 +211,15 @@ export type Seed = {
     operations: SeedOperation[];
 };
 
-/** A clicked `ApplyChoiceSuggestion`: the scope choice of a stored reading
- *  and the option it moves to. */
-export type ApplyChoice = { choice_id: string; option_id: string };
+/** A clicked `ApplyChoiceSuggestion`, echoed whole: the scope choice of a
+ *  stored reading, the option it moves to, the conversation turn whose answer
+ *  offered the chip (`turn`, from 1) and the reading it switches (`spec_id`). */
+export type ApplyChoice = {
+    choice_id: string;
+    option_id: string;
+    turn: number;
+    spec_id: string;
+};
 
 export type TurnRequest = {
     kind: 'turn.request';
@@ -233,8 +239,9 @@ export type TurnRequest = {
      *  answer used, with no search. It comes without `message`, `seed_spec`
      *  or `component_ref`. A chip that no longer applies is refused 422
      *  `constraint_violation` with `pointer: "/apply_choice"`
-     *  (`scope_choice_stale` or `switch_option_unavailable`) and a `detail`
-     *  to show. */
+     *  (`scope_choice_stale`, when a later turn has answered or a later
+     *  reading holds the choice, or `switch_option_unavailable`) and a
+     *  `detail` to show. */
     apply_choice?: ApplyChoice | null;
 };
 
@@ -480,12 +487,15 @@ export type SuggestionItem = { label: string; prompt: string };
 
 /** A chip that moves one scope choice of the answer's readings to another
  *  option. A click sends a turn with `apply_choice` and no message. `label`
- *  is the option's label. */
+ *  is the option's label, `turn` the conversation turn whose answer offers
+ *  the chip, counted from 1, and `spec_id` the reading the chip switches. */
 export type ApplyChoiceSuggestion = {
     kind: 'apply_choice';
     label: string;
     choice_id: string;
     option_id: string;
+    turn: number;
+    spec_id: string;
 };
 
 export type StudioFrame =

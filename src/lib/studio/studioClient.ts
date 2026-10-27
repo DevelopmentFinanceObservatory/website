@@ -187,11 +187,11 @@ export const runTurn = (
         signal,
     );
 
-/** Run a turn from a clicked `apply_choice` chip: the chip's choice and
- *  option, and no message. */
+/** Run a turn from a clicked `apply_choice` chip: the chip's choice, option,
+ *  turn and reading, copied as offered, and no message. */
 export const runApplyChoice = (
     conversationId: string,
-    { choice_id, option_id }: ApplyChoice,
+    { choice_id, option_id, turn, spec_id }: ApplyChoice,
     handlers: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> =>
@@ -201,7 +201,7 @@ export const runApplyChoice = (
             kind: 'turn.request',
             schema_version: 1,
             conversation_id: conversationId,
-            apply_choice: { choice_id, option_id },
+            apply_choice: { choice_id, option_id, turn, spec_id },
         },
         handlers,
         signal,
