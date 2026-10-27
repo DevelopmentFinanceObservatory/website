@@ -30,22 +30,48 @@ export const PlanMeta = ({ view, approved }: { view: PlanView; approved?: boolea
     </p>
 );
 
-/** Whether `seconds` have passed since `notice` arrived; true at once for
- *  null. */
-const useWaited = (notice: PlanNotice | null, seconds: number | null): boolean => {
+/**
+ * "Keep in mind": what qualifies the answer, one sentence a line, on the card
+ * and in the full plan; nothing without caveats. `className` places it in its
+ * host, and `headClassName` draws its head as the host's other section heads.
+ */
+export const PlanCaveats = ({
+    caveats,
+    className,
+    headClassName,
+}: {
+    caveats: string[];
+    className?: string;
+    headClassName?: string;
+}) =>
+    caveats.length > 0 && (
+        <div className={className}>
+            <p className={headClassName ?? styles.caveatsHead}>Keep in mind</p>
+            <ul className={styles.caveatList}>
+                {caveats.map((caveat, index) => (
+                    // Caveats are sentences with no id, and two may read alike.
+                    <li key={index}>{caveat}</li>
+                ))}
+            </ul>
+        </div>
+    );
+
+/** Whether `notice`'s `retryAt` has passed; true at once without one. */
+const useWaited = (notice: PlanNotice | null): boolean => {
+    const retryAt = notice?.retryAt ?? null;
     const [waited, setWaited] = useState<PlanNotice | null>(null);
 
     useEffect(() => {
-        if (seconds === null) {
+        if (retryAt === null) {
             return;
         }
 
-        const timer = setTimeout(() => setWaited(notice), seconds * 1000);
+        const timer = setTimeout(() => setWaited(notice), Math.max(0, retryAt - Date.now()));
 
         return () => clearTimeout(timer);
-    }, [notice, seconds]);
+    }, [notice, retryAt]);
 
-    return seconds === null || waited === notice;
+    return retryAt === null || waited === notice;
 };
 
 /**
@@ -109,7 +135,7 @@ const ChoiceRow = ({
     const notice = plan?.notice?.choiceId && plan.notice.choiceId === choiceId ? plan.notice : null;
     const failedOption = notice?.optionId;
     // "Try again" waits out the delay the harness asked for.
-    const waited = useWaited(notice, notice?.retryAfter ?? null);
+    const waited = useWaited(notice);
     const retry =
         notice?.retryable &&
         waited &&

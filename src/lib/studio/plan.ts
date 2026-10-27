@@ -34,9 +34,9 @@ export type PlanNotice = {
     // would repeat (an option Search cannot serve, signed out, rate limited)
     // and on a card that is no longer live.
     retryable: boolean;
-    // Seconds the harness asked to wait before picking the option again;
-    // "Try again" shows once they pass. Null to offer it at once.
-    retryAfter: number | null;
+    // When "Try again" shows (ms epoch): the delay the harness asked for,
+    // counted from the refusal's arrival. Null to offer it at once.
+    retryAt: number | null;
     // An outcome the user chose (a switch they stopped), said without error
     // styling.
     quiet: boolean;
@@ -50,7 +50,7 @@ export const planNotice = ({
     text,
     lead = null,
     retryable = false,
-    retryAfter = null,
+    retryAt = null,
     quiet = false,
     choiceId = null,
     optionId = null,
@@ -58,7 +58,7 @@ export const planNotice = ({
     lead,
     text,
     retryable,
-    retryAfter,
+    retryAt,
     quiet,
     choiceId,
     optionId,
@@ -127,16 +127,25 @@ export const PLAN_REVISION_STALE = 'plan_revision_stale';
 export const STALE_NOTICE =
     'This plan changed after this page received it, so it can no longer be switched here. Reload the conversation to see the current plan.';
 
-/** The step that answers the question: the one the harness flags, else
- *  the last step in plan order that answers an ask, else the last step. */
+/** The index of the step whose result answers the question, on a live
+ *  plan and an approved one alike: the one the harness flags, else the last
+ *  step in plan order that `answers` (one an ask names), else the last
+ *  step. -1 without steps. */
+const answerIndex = <TStep extends { gives_answer?: boolean | null }>(
+    steps: readonly TStep[],
+    answers: (step: TStep) => boolean = () => false,
+): number => {
+    const flagged = steps.findIndex((step) => step.gives_answer);
+    const named = steps.findLastIndex(answers);
+
+    return flagged >= 0 ? flagged : named >= 0 ? named : steps.length - 1;
+};
+
+/** The id of the step that answers the question (answerIndex). */
 const answerStep = (frame: PlanProposed): string | null => {
     const answering = new Set((frame.asks ?? []).flatMap((ask) => ask.answered_by ?? []));
-    const step =
-        frame.steps.find((candidate) => candidate.gives_answer) ??
-        frame.steps.findLast((candidate) => answering.has(candidate.id)) ??
-        frame.steps.at(-1);
 
-    return step?.id ?? null;
+    return frame.steps[answerIndex(frame.steps, (step) => answering.has(step.id))]?.id ?? null;
 };
 
 /** The label of the option a scope decision counts by. */
@@ -251,7 +260,7 @@ const switchNotice = (
         own,
         askAgain = false,
         ...rest
-    }: Pick<Partial<PlanNotice>, 'retryable' | 'retryAfter' | 'quiet'> & {
+    }: Pick<Partial<PlanNotice>, 'retryable' | 'retryAt' | 'quiet'> & {
         detail: string | null;
         own: (picked: string) => string;
         askAgain?: boolean;
@@ -433,7 +442,7 @@ const unappliedNotice = (
     plan: PlanState,
     pick: PlanSwitch,
     detail: string | null,
-    { retryable, retryAfter }: { retryable: boolean; retryAfter: number | null },
+    { retryable, retryAt }: Pick<PlanNotice, 'retryable' | 'retryAt'>,
 ): PlanNotice => {
     const decision = plan.decisions.find((candidate) => candidate.choice_id === pick.choiceId);
     const still = decision ? ` The plan still counts ${activeLabel(decision)}.` : '';
@@ -442,20 +451,29 @@ const unappliedNotice = (
         detail,
         own: (picked) => `${studioCouldNotSwitch(picked)}${still}`,
         retryable,
-        retryAfter,
+        retryAt,
     });
 };
 
-// Refusals a second try would meet again, whatever their body says: signed
-// out, rate limited.
-const UNRETRYABLE = new Set([401, 429]);
+/**
+ * Picking the option again could apply. Never when signed out (401). A rate
+ * limit (429) only when its ToolError says to retry after a delay and names
+ * the delay, since an immediate retry would meet it again. Any other refusal
+ * when its ToolError, if it sends one, says to retry after a delay.
+ */
+const retryableRefusal = ({ status, error }: StreamRefusal): boolean => {
+    const afterDelay = error?.retry === 'retry_after_delay';
 
-/** Picking the option again could apply: the refusal is not of a kind that
- *  repeats, and its ToolError, when it sends one, says to retry after a
- *  delay. */
-const retryableRefusal = (refusal: StreamRefusal): boolean =>
-    !UNRETRYABLE.has(refusal.status) &&
-    (refusal.error ? refusal.error.retry === 'retry_after_delay' : true);
+    if (status === 401) {
+        return false;
+    }
+
+    if (status === 429) {
+        return afterDelay && !!error.retry_after_seconds;
+    }
+
+    return error ? afterDelay : true;
+};
 
 /** The pause a refusal answers is gone (the turn ended or was replaced). */
 const isGone = (refusal: StreamRefusal): boolean =>
@@ -470,12 +488,15 @@ const isGone = (refusal: StreamRefusal): boolean =>
  * says the pause is gone, so the card ends read-only (endedPlan). Any other
  * refusal (a 422 `switch_option_unavailable` among them) says on the
  * choice's row that the switch did not apply, with the harness's detail when
- * it gave one. It offers "Try again" only where a second try could apply:
- * never on a 401 or 429, and otherwise on a ToolError whose `retry` is
- * `retry_after_delay` (after its `retry_after_seconds`, when it sets them)
- * or a refusal without a ToolError.
+ * it gave one. It offers "Try again" only where a second try could apply
+ * (retryableRefusal), and once the ToolError's `retry_after_seconds`, when it
+ * sets them, have run from `now`, when the refusal arrived.
  */
-export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
+export const refusedSwitch = (
+    plan: PlanState,
+    refusal: StreamRefusal,
+    now: number = Date.now(),
+): PlanState => {
     const constraint = refusal.error?.constraint_id;
     const pick = plan.switching;
     const settled = { ...plan, switching: null };
@@ -498,11 +519,14 @@ export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanStat
         return settled;
     }
 
+    const retryable = retryableRefusal(refusal);
+    const seconds = refusal.error?.retry_after_seconds;
+
     return {
         ...settled,
         notice: unappliedNotice(plan, pick, refusal.detail, {
-            retryable: retryableRefusal(refusal),
-            retryAfter: refusal.error?.retry_after_seconds || null,
+            retryable,
+            retryAt: retryable && seconds ? now + seconds * 1000 : null,
         }),
     };
 };
@@ -521,7 +545,7 @@ export const unreachableSwitch = (plan: PlanState): PlanState => {
               ...settled,
               notice: unappliedNotice(plan, pick, UNREACHABLE_NOTICE, {
                   retryable: true,
-                  retryAfter: null,
+                  retryAt: null,
               }),
           }
         : settled;
@@ -561,36 +585,15 @@ export const endedPlan = (plan: PlanState, { detail, stopped }: SwitchEnding = {
 
 /**
  * The conversation once a switch's stream ended without a fresh plan: the
- * waiting card gives way to `ended`, its read-only form (endedPlan), and the
- * chat line clears. The paused reply and the Activity record are left as they were
- * (the caller closes the Activity entry). A state whose card is not the
- * waiting one (a fresh plan or a refusal replaced it) is returned as is.
+ * waiting card gives way to `ended`, its read-only form (endedPlan). A state
+ * whose card is not the waiting one (a fresh plan or a refusal replaced it)
+ * is returned as is. The caller ends the turn on screen.
  */
-export const switchEnded = <
-    TState extends {
-        plan: PlanState | null;
-        thinking: boolean;
-        status: string | null;
-        statusDetail: string | null;
-        statusSince: number | null;
-        stalled: boolean;
-    },
->(
+export const switchEnded = <TState extends { plan: PlanState | null }>(
     state: TState,
     waiting: PlanState,
     ended: PlanState,
-): TState =>
-    state.plan === waiting
-        ? {
-              ...state,
-              plan: ended,
-              thinking: false,
-              status: null,
-              statusDetail: null,
-              statusSince: null,
-              stalled: false,
-          }
-        : state;
+): TState => (state.plan === waiting ? { ...state, plan: ended } : state);
 
 /** The approved plan an answer keeps, from its `plan.approved` frame. */
 export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({
@@ -709,8 +712,7 @@ export const planView = (plan: PlanState): PlanView => {
 };
 
 export const approvedView = (plan: ApprovedPlan): PlanView => {
-    const flagged = plan.steps.findIndex((step) => step.gives_answer);
-    const answer = flagged >= 0 ? flagged : plan.steps.length - 1;
+    const answer = answerIndex(plan.steps);
 
     return {
         title: plan.title,

@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { useState } from 'react';
 
 import { PlanApproveBar } from './PlanApproveBar';
-import { PlanLedger, PlanMeta } from './PlanLedger';
+import { PlanCaveats, PlanLedger, PlanMeta } from './PlanLedger';
 import styles from './PlanModal.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
@@ -143,17 +143,11 @@ const PlanModal = ({
                     reasons
                     className={styles.ledger}
                 />
-                {view.caveats.length > 0 && (
-                    <section className={styles.section}>
-                        <p className={styles.sectionHead}>Keep in mind</p>
-                        <ul className={styles.others}>
-                            {view.caveats.map((caveat, index) => (
-                                // Caveats are sentences with no id, and two may read alike.
-                                <li key={index}>{caveat}</li>
-                            ))}
-                        </ul>
-                    </section>
-                )}
+                <PlanCaveats
+                    caveats={view.caveats}
+                    className={styles.section}
+                    headClassName={styles.sectionHead}
+                />
                 <section className={styles.section}>
                     <p className={styles.sectionHead}>Steps</p>
                     {/* A switch can move the answer step; the open set

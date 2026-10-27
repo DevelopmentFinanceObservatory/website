@@ -29,6 +29,14 @@ import type {
  */
 export const STOP_GRACE_MS = 10_000;
 
+/**
+ * How long the page waits on a stop of a plan-card switch. The harness reads
+ * a stopped switch's stream on for up to its `SWITCH_REOFFER_SECONDS` (10 s)
+ * to re-offer the plan, so this grace is that window plus 5 s for the
+ * re-offer to arrive; a shorter one would close the stream on a live pause.
+ */
+export const SWITCH_STOP_GRACE_MS = 15_000;
+
 const transportError = (detail: string): StudioFrame => ({
     event: 'error',
     seq: -1,

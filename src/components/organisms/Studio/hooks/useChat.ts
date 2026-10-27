@@ -61,6 +61,7 @@ import {
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
+    SWITCH_STOP_GRACE_MS,
     type StreamHandlers,
     type StreamRefusal,
 } from '@/lib/studio/studioClient';
@@ -176,9 +177,9 @@ const withLine = (prev: ChatState, status: string, statusDetail: string | null =
     statusSince: status === prev.status ? prev.statusSince : Date.now(),
 });
 
-// How a stream whose caller ends the turn (stream's `onEnd`) ended: the
-// error frame's detail, whether the user stopped it, and whether it broke.
-type StreamEnding = { detail: string | null; stopped: boolean; failed: boolean };
+// How a stream ended: the error frame's detail, whether `done` arrived,
+// whether the user stopped it, and whether it broke.
+type StreamEnding = { detail: string | null; done: boolean; stopped: boolean; failed: boolean };
 
 // A turn's end on screen, however it ended: its Activity entry closes and
 // the chat line clears.
@@ -248,8 +249,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
     const abortRef = useRef<AbortController | null>(null);
-    // Stops the running stream's turn (set while a request runs).
-    const haltRef = useRef<(() => void) | null>(null);
+    // Stops the running stream's turn (set while a request runs); true for
+    // the stream's first Stop.
+    const haltRef = useRef<(() => boolean) | null>(null);
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -394,10 +396,10 @@ export const useChat = (initial?: ChatSnapshot) => {
     // `onRefusal` answers an HTTP refusal of the request, and `onUnreachable`
     // a request that got no response (see StreamHandlers); each returns true
     // when it has dealt with it, and anything else ends the turn as an error.
-    // `onEnd` hands the turn's end to the caller: an error
-    // frame, `done` or a broken stream leave the turn open, Stop asks the
-    // harness to cancel and keeps reading the frames, and once the stream
-    // ends `onEnd` gets how it ended (see StreamEnding).
+    // Once the stream ends, `onEnd` gets how it ended (see StreamEnding) and
+    // ends the turn on screen. A caller without one gets `endOwn`. A caller
+    // with one (a switch, whose harness may re-offer the plan after a Stop)
+    // also keeps the frames after Stop, for up to SWITCH_STOP_GRACE_MS.
     const stream = useCallback(
         (
             turn: number,
@@ -414,17 +416,17 @@ export const useChat = (initial?: ChatSnapshot) => {
         ) => {
             const controller = new AbortController();
             const generation = generationRef.current;
-            // Set by Stop. The stream is read to its end and its frames are
-            // ignored, unless the caller ends the turn (onEnd).
+            // The user stopped the stream (Stop).
             let stopped = false;
-            // For onEnd: the user stopped the stream, and the error frame's
-            // detail.
-            let stopAsked = false;
+            // Set by Stop without `onEnd`: the stream is read to its end and
+            // its frames are ignored.
+            let muted = false;
             let errorDetail: string | null = null;
+            let done = false;
             let stopGrace: ReturnType<typeof setTimeout> | null = null;
             // Runs from the request's start until the stream ends or pauses.
             const stall = createStallWatch((stalled) => {
-                if (generationRef.current === generation && !stopped) {
+                if (generationRef.current === generation && !muted) {
                     setState((prev) => ({ ...prev, stalled }));
                 }
             });
@@ -432,7 +434,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             // The fall back to "Working", held back while a finished step may
             // hand over to the next one.
             const grace = createWorkingGrace(() => {
-                if (generationRef.current === generation && !stopped) {
+                if (generationRef.current === generation && !muted) {
                     setState((prev) => withLine(prev, WORKING));
                 }
             });
@@ -470,7 +472,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             const handle = (frame: StudioFrame) => {
                 // A stream that reset/hydrate walked away from, or that the
                 // user stopped, must not write into the conversation.
-                if (generationRef.current !== generation || stopped) {
+                if (generationRef.current !== generation || muted) {
                     return;
                 }
 
@@ -697,36 +699,15 @@ export const useChat = (initial?: ChatSnapshot) => {
                     case 'error':
                         stall.stop();
                         grace.cancel();
-
-                        if (onEnd) {
-                            errorDetail = frame.error.detail;
-                            break;
-                        }
-
-                        setState((prev) => {
-                            const messages = prev.messages.slice();
-                            const last = messages[messages.length - 1];
-
-                            if (last?.role === 'bot' && !last.text) {
-                                messages[messages.length - 1] = {
-                                    ...last,
-                                    text: `_${frame.error.detail}_`,
-                                };
-                            }
-
-                            return endTurn({ ...prev, messages }, turn, 'failed');
-                        });
+                        errorDetail = frame.error.detail;
                         break;
                     case 'done':
                         stall.stop();
                         grace.cancel();
+                        done = true;
 
                         if (frame.composition) {
                             applyManifest(frame.composition);
-                        }
-
-                        if (!onEnd) {
-                            setState((prev) => endTurn(prev, turn));
                         }
 
                         break;
@@ -738,22 +719,26 @@ export const useChat = (initial?: ChatSnapshot) => {
             // read until the harness ends it, so the request counts as in
             // flight, and queued sends wait, until the conversation is free.
             // A caller that ends the turn itself keeps the frames (a switch's
-            // stream may re-offer the plan).
-            const halt = () => {
-                if (stopped || stopAsked || generationRef.current !== generation) {
-                    return;
-                }
-
-                stopGrace = setTimeout(() => controller.abort(), STOP_GRACE_MS);
-
-                if (onEnd) {
-                    stopAsked = true;
-                    setState((prev) => withLine(prev, 'Stopping'));
-
-                    return;
+            // stream may re-offer the plan). Returns whether this Stop was
+            // the stream's first, the one to send the cancel.
+            const halt = (): boolean => {
+                if (stopped || generationRef.current !== generation) {
+                    return false;
                 }
 
                 stopped = true;
+                stopGrace = setTimeout(
+                    () => controller.abort(),
+                    onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
+                );
+
+                if (onEnd) {
+                    setState((prev) => withLine(prev, 'Stopping'));
+
+                    return true;
+                }
+
+                muted = true;
                 stall.stop();
                 grace.cancel();
 
@@ -767,14 +752,44 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                     return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
+
+                return true;
+            };
+
+            // The end of a turn whose caller leaves it to the stream: `done`
+            // ends it, an error frame ends it failed with its detail as an
+            // empty reply's text, and a broken stream ends it failed. A
+            // stream that paused leaves the turn open, and one the user
+            // stopped ended on screen at the Stop.
+            const endOwn = (ending: StreamEnding) => {
+                if (ending.stopped) {
+                    return;
+                }
+
+                const { detail } = ending;
+
+                if (detail !== null) {
+                    setState((prev) => {
+                        const messages = prev.messages.slice();
+                        const last = messages[messages.length - 1];
+
+                        if (last?.role === 'bot' && !last.text) {
+                            messages[messages.length - 1] = { ...last, text: `_${detail}_` };
+                        }
+
+                        return endTurn({ ...prev, messages }, turn, 'failed');
+                    });
+                } else if (ending.failed || ending.done) {
+                    setState((prev) => endTurn(prev, turn, ending.failed ? 'failed' : undefined));
+                }
             };
 
             // A refusal of a stream that reset/hydrate walked away from, or
             // that the user stopped, is dropped, as handle() drops frames.
             const refuse = (refusal: StreamRefusal): boolean =>
-                generationRef.current !== generation || stopped || (onRefusal?.(refusal) ?? false);
+                generationRef.current !== generation || muted || (onRefusal?.(refusal) ?? false);
             const unreachable = (): boolean =>
-                generationRef.current !== generation || stopped || (onUnreachable?.() ?? false);
+                generationRef.current !== generation || muted || (onUnreachable?.() ?? false);
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
@@ -803,10 +818,6 @@ export const useChat = (initial?: ChatSnapshot) => {
                     ).catch((error: Error) => {
                         if (error.name !== 'AbortError' && generationRef.current === generation) {
                             failed = true;
-
-                            if (!stopped && !onEnd) {
-                                setState((prev) => endTurn(prev, turn, 'failed'));
-                            }
                         }
                     });
                 })
@@ -826,7 +837,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         return;
                     }
 
-                    onEnd?.({ detail: errorDetail, stopped: stopAsked, failed });
+                    (onEnd ?? endOwn)({ detail: errorDetail, done, stopped, failed });
 
                     inFlightRef.current -= 1;
 
@@ -1135,12 +1146,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         setState((prev) => {
                             const after = switchEnded(prev, waiting, ended);
 
-                            return after === prev
-                                ? prev
-                                : {
-                                      ...after,
-                                      activity: endTurnActivity(after.activity, turn, open),
-                                  };
+                            return after === prev ? prev : endTurn(after, turn, open);
                         });
                     },
                 },
@@ -1219,21 +1225,20 @@ export const useChat = (initial?: ChatSnapshot) => {
         };
     }, [applyChoice, send]);
 
-    // The Stop control: ask the harness to cancel and end the running turn
-    // (see `halt` in stream()). Requests queued behind it also wait for the
-    // cancel request to answer.
+    // The Stop control: end the running turn (see `halt` in stream()) and
+    // ask the harness to cancel, once per stream: on a switch, a second
+    // cancel would end the stream before the harness re-offers the plan.
+    // Requests queued behind it also wait for the cancel request to answer.
     const stop = useCallback(() => {
         const conversation = sessionRef.current;
-        const halt = haltRef.current;
 
-        if (!conversation || !halt) {
+        if (!conversation || !haltRef.current?.()) {
             return;
         }
 
         const cancelled = cancelTurn(conversation);
 
         chainRef.current = chainRef.current.then(() => cancelled);
-        halt();
     }, []);
 
     const reset = useCallback(() => {

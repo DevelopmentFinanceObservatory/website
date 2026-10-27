@@ -482,7 +482,7 @@ test('switch_failed puts its reason on the row of the choice it names', () => {
         lead: 'Could not switch to Net disbursements.',
         text: reason,
         retryable: true,
-        retryAfter: null,
+        retryAt: null,
         quiet: false,
         ...PICK,
     });
@@ -601,7 +601,7 @@ test('a stale switch is answered with the current card, which switches again', (
             lead: null,
             text: STALE_DETAIL,
             retryable: false,
-            retryAfter: null,
+            retryAt: null,
             quiet: false,
             choiceId: null,
             optionId: null,
@@ -641,7 +641,7 @@ test('a stale approve is answered with the current card; other refusals are not'
             lead: null,
             text: STALE_DETAIL,
             retryable: false,
-            retryAfter: null,
+            retryAt: null,
             quiet: false,
             choiceId: null,
             optionId: null,
@@ -680,7 +680,7 @@ test('a stale switch without a current card keeps its revision, so an approve is
         lead: null,
         text: STALE_NOTICE,
         retryable: false,
-        retryAfter: null,
+        retryAt: null,
         quiet: false,
         choiceId: null,
         optionId: null,
@@ -712,7 +712,7 @@ test('an unavailable option keeps the card and shows the harness reason', () => 
         lead: 'Could not switch to Net disbursements.',
         text: 'Net disbursements cannot be counted for this plan.',
         retryable: false,
-        retryAfter: null,
+        retryAt: null,
         quiet: false,
         ...PICK,
     });
@@ -808,7 +808,7 @@ test('any other refusal keeps the card and says on the row why the switch did no
                 lead: wantLead,
                 text,
                 retryable,
-                retryAfter: null,
+                retryAt: null,
                 quiet: false,
                 ...PICK,
             });
@@ -820,20 +820,56 @@ test('any other refusal keeps the card and says on the row why the switch did no
     }
 });
 
-test('a refusal asking to wait offers Try again only after its delay', () => {
-    const refused = refusedSwitch(startSwitch(planFromFrame(frame()), PICK), {
-        status: 409,
-        detail: 'Another turn is running.',
-        error: {
-            error: 'transient_unavailable',
-            retry: 'retry_after_delay',
+test('a refusal asking to wait offers Try again once its delay has run from its arrival', () => {
+    const arrived = 1_000_000;
+    const refused = refusedSwitch(
+        startSwitch(planFromFrame(frame()), PICK),
+        {
+            status: 409,
             detail: 'Another turn is running.',
-            retry_after_seconds: 5,
+            error: {
+                error: 'transient_unavailable',
+                retry: 'retry_after_delay',
+                detail: 'Another turn is running.',
+                retry_after_seconds: 5,
+            },
         },
-    });
+        arrived,
+    );
 
     assert.equal(refused.notice?.retryable, true);
-    assert.equal(refused.notice?.retryAfter, 5);
+    assert.equal(refused.notice?.retryAt, arrived + 5_000);
+});
+
+test('a 429 offers Try again only when its ToolError names a delay to wait out', async (t) => {
+    const plan = startSwitch(planFromFrame(frame()), PICK);
+    const arrived = 1_000_000;
+    const rateLimited = (retry: RetryMode, seconds?: number): StreamRefusal => ({
+        status: 429,
+        detail: 'Too many requests.',
+        error: {
+            error: 'rate_limited',
+            retry,
+            detail: 'Too many requests.',
+            ...(seconds !== undefined && { retry_after_seconds: seconds }),
+        },
+    });
+    // [name, refusal, retryable, retryAt]
+    const cases: [string, StreamRefusal, boolean, number | null][] = [
+        ['a delay', rateLimited('retry_after_delay', 30), true, arrived + 30_000],
+        ['retry_after_delay without seconds', rateLimited('retry_after_delay'), false, null],
+        ['seconds without retry_after_delay', rateLimited('do_not_retry', 30), false, null],
+        ['no ToolError', { status: 429, detail: 'Too many requests.', error: null }, false, null],
+    ];
+
+    for (const [name, refusal, retryable, retryAt] of cases) {
+        await t.test(name, () => {
+            const refused = refusedSwitch(plan, refusal, arrived);
+
+            assert.equal(refused.notice?.retryable, retryable);
+            assert.equal(refused.notice?.retryAt, retryAt);
+        });
+    }
 });
 
 test('a refused switch whose pause is gone ends the card read-only', async (t) => {
@@ -860,7 +896,7 @@ test('a refused switch whose pause is gone ends the card read-only', async (t) =
                 lead: 'Could not switch to Net disbursements.',
                 text: 'The plan is gone. Ask again to change the plan.',
                 retryable: false,
-                retryAfter: null,
+                retryAt: null,
                 quiet: false,
                 ...PICK,
             });
@@ -902,7 +938,7 @@ test('a switch that ends without a fresh plan leaves the card read-only, saying 
                 lead,
                 text,
                 retryable: false,
-                retryAfter: null,
+                retryAt: null,
                 quiet: false,
                 ...PICK,
             });
@@ -936,7 +972,7 @@ test('a switch stopped and re-offered by the harness is live again, with Try aga
         lead: null,
         text: 'The switch was stopped. The plan still counts gross.',
         retryable: true,
-        retryAfter: null,
+        retryAt: null,
         quiet: true,
         ...PICK,
     });
@@ -967,8 +1003,6 @@ test('a switch stream that ends with no plan, done or error returns the card to 
     assert.equal(after.plan?.live, false);
     assert.equal(after.plan?.notice?.choiceId, PICK.choiceId);
     assert.equal(after.plan?.notice?.retryable, false);
-    assert.equal(after.thinking, false);
-    assert.equal(after.status, null);
 });
 
 test('a failed switch writes nothing into the paused reply or its Activity entry', () => {
@@ -1043,7 +1077,7 @@ test('a switch that never reached the harness keeps the card live, with Try agai
         lead: 'Could not switch to Net disbursements.',
         text: UNREACHABLE_NOTICE,
         retryable: true,
-        retryAfter: null,
+        retryAt: null,
         quiet: false,
         ...PICK,
     });

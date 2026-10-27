@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { PlanApproveBar } from './PlanApproveBar';
 import styles from './PlanCard.module.scss';
-import { PlanLedger, PlanMeta } from './PlanLedger';
+import { PlanCaveats, PlanLedger, PlanMeta } from './PlanLedger';
 import PlanModal from './PlanModal';
 import type { ChatState } from '../hooks/useChat';
 
@@ -65,17 +65,7 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                         </>
                     )}
                     {plan.switched && <p className={styles.updated}>Steps updated to match.</p>}
-                    {view.caveats.length > 0 && (
-                        <div className={styles.caveats}>
-                            <p className={styles.caveatsHead}>Keep in mind</p>
-                            <ul className={styles.caveatList}>
-                                {view.caveats.map((caveat, index) => (
-                                    // Caveats are sentences with no id, and two may read alike.
-                                    <li key={index}>{caveat}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+                    <PlanCaveats caveats={view.caveats} className={styles.caveats} />
                     <Button
                         variant="bordered"
                         full
