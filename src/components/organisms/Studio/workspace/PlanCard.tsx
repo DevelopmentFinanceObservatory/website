@@ -27,7 +27,7 @@ type PlanCardProps = {
  * "Propose changes or ask a follow up…" while the plan is pending, wired to
  * the amend decision).
  *
- * The card's height follows the number of scope choices, not of steps.
+ * The card's height follows the number of scope choices.
  * While a switch is in flight the steps line dims and the bar waits.
  */
 const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {

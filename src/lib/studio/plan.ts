@@ -37,8 +37,8 @@ export type PlanNotice = {
     optionId: string | null;
 };
 
-/** A scope choice that holds another option than on the plan before the
- *  switch: the label it held, and why it moved when the harness said. */
+/** A scope choice whose option differs from the plan before the switch: the
+ *  label it held, and why it moved when the harness said. */
 export type PlanChange = { choiceId: string; from: string; reason: string | null };
 
 /** A plan awaiting the user's approve, amend, reject or switch (the
@@ -97,7 +97,7 @@ const answerStep = (frame: PlanProposed): string | null => {
     return flagged?.id ?? answering.at(-1) ?? frame.steps.at(-1)?.id ?? null;
 };
 
-/** The label of the option a scope decision counts by now. */
+/** The label of the option a scope decision counts by. */
 export const activeLabel = (decision: PlanDecision): string =>
     decision.options?.find((option) => isActiveOption(decision, option))?.label ?? decision.chosen;
 
@@ -321,8 +321,9 @@ const UNRETRYABLE = new Set([401, 429]);
  * again on it. Without one the card keeps its revision, so an approve from it
  * is refused as stale, and drops the switch action. Any other refusal (a 422
  * `switch_option_unavailable` among them) says on the choice's row that the
- * switch did not apply, with the harness's detail when it gave one. A 401 or 429 offers no
- * "Try again", since a second try would be refused the same way.
+ * switch did not apply, with the harness's detail when it gave one. A 401 or
+ * 429 offers no "Try again", since a second try would be refused the same
+ * way.
  */
 export const refusedSwitch = (plan: PlanState, refusal: StreamRefusal): PlanState => {
     const constraint = refusal.error?.constraint_id;
@@ -380,8 +381,8 @@ export const settledPlan = (plan: PlanState | null, detail?: string | null): Pla
  * The conversation once a switch's stream ended without a fresh plan (it
  * broke, sent an error, or closed): the waiting card goes back to idle with
  * its notice, and the turn it belongs to stays paused, so the transcript and
- * the Activity record are left as they were. A state whose card is no longer
- * the waiting one (a fresh plan or a refusal replaced it) is returned as is.
+ * the Activity record are left as they were. A state whose card is not the
+ * waiting one (a fresh plan or a refusal replaced it) is returned as is.
  */
 export const switchEnded = <
     TState extends {

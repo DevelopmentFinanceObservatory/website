@@ -52,7 +52,7 @@
     list-style: none;
 }
 
-// Each step draws a hollow dot; the line runs from under it to the next.
+// Each step draws a hollow dot, and a line runs from under it to the next.
 // The answer step's dot is filled.
 .step {
     position: relative;

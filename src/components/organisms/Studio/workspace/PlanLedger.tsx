@@ -188,7 +188,7 @@ const ChoiceRow = ({
 
 /**
  * "Counted as": the plan's scope choices as a ruled ledger, one row each.
- * `plan` and `onSwitch` make the rows switchable; an approved plan passes
+ * `plan` and `onSwitch` make the rows switchable. An approved plan passes
  * neither. One row opens at a time: the one being switched, else the one
  * whose switch failed, until the user opens or closes another.
  */
@@ -203,7 +203,7 @@ export const PlanLedger = ({
     onSwitch?: Switch;
     className?: string;
 }) => {
-    // The row the user opened or closed (null), for this plan; undefined
+    // The row the user opened or closed (null) for this plan. Undefined
     // follows the plan.
     const [picked, setPicked] = useState<{ plan: PlanState | null; open?: string | null }>({
         plan,
@@ -221,14 +221,14 @@ export const PlanLedger = ({
             ? picked.open
             : (plan?.switching?.choiceId ?? plan?.notice?.choiceId ?? null);
     const rowIds = new Set(view.choices.map((choice) => choice.decision?.choice_id));
-    // A notice about the whole plan, or about a choice the plan no longer
-    // shows, goes under the rows.
+    // A notice about the whole plan, or about a choice the plan does not
+    // show, goes under the rows.
     const general =
         plan?.notice && !(plan.notice.choiceId && rowIds.has(plan.notice.choiceId))
             ? plan.notice
             : null;
 
-    // An approved plan without choices has nothing to show; a live plan keeps
+    // An approved plan without choices has nothing to show. A live plan keeps
     // its notice region mounted.
     if (view.choices.length === 0 && !plan) {
         return null;

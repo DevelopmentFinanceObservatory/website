@@ -25,7 +25,7 @@ type PlanModalProps = {
     onSwitch?: (choiceId: string, optionId: string) => void;
 };
 
-/** Every step on the dot rail, folded to its label; the step that gives the
+/** Every step on the dot rail, folded to its label. The step that gives the
  *  answer starts open and carries a filled dot. */
 const Steps = ({ view }: { view: PlanView }) => {
     const [openKeys, setOpenKeys] = useState(

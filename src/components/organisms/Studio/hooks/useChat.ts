@@ -1035,7 +1035,7 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             const label = optionLabel(plan.decisions, choiceId, optionId);
 
-            // The pause stays pending with the waiting plan: switchReply
+            // The pause stays pending with the waiting plan. switchReply
             // refuses a second pick while it waits, and the plan the harness
             // re-offers is compared against it.
             const waiting = startSwitch(plan, { choiceId, optionId });
@@ -1057,9 +1057,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                         handlers,
                         signal,
                     ).finally(() => {
-                        // The stream ended (closed, broke or sent an error)
-                        // and neither a fresh plan nor a refusal replaced
-                        // the waiting card: the card goes back to idle with
+                        // When the stream ended (closed, broke or sent an
+                        // error) without a fresh plan or a refusal replacing
+                        // the waiting card, the card goes back to idle with
                         // its notice, and the pause answers from the same.
                         if (pendingInterruptRef.current?.plan === waiting) {
                             pendingInterruptRef.current = {

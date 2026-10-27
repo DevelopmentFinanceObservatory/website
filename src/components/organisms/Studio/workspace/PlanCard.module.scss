@@ -53,7 +53,7 @@
     transition: opacity 0.25s ease;
 }
 
-// A switch in flight: these steps are about to be rewritten.
+// While a switch is in flight, these steps are about to be rewritten.
 .dim {
     opacity: 0.4;
 }
@@ -132,7 +132,7 @@
     letter-spacing: -0.01em;
 }
 
-// Approve is the one dark button; Cancel stays quiet.
+// Approve is the one dark button. Cancel is plain.
 .proceedActions {
     @include flex(row, flex-end, center);
 
