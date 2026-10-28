@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
+import { asRecord } from '../src/lib/asRecord.ts';
 import type { SavedConversation } from '../src/lib/chat/history.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import { slotCanvas, viewerCopy, type ShareSlot } from '../src/lib/chat/sharePayload.ts';
@@ -60,14 +61,15 @@ type LineBase = Pick<ExportLine, 'id' | 'owner' | 'created_at' | 'title'>;
 
 const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isCanvasState = (data: unknown): data is SavedConversation => {
+    const state = asRecord(data);
 
-const isCanvasState = (data: unknown): data is SavedConversation =>
-    isRecord(data) &&
-    Array.isArray(data.widgets) &&
-    Array.isArray(data.pinnedIds) &&
-    Array.isArray(data.removedIds);
+    return (
+        Array.isArray(state?.['widgets']) &&
+        Array.isArray(state['pinnedIds']) &&
+        Array.isArray(state['removedIds'])
+    );
+};
 
 const placeSearch = (row: StoredShare, base: LineBase): Placement => {
     if (row.mode !== null && row.mode !== 'live' && row.mode !== 'snapshot') {
@@ -82,7 +84,8 @@ const placeSearch = (row: StoredShare, base: LineBase): Placement => {
         return { refusal: `snapshot part ${unpinned.part_index} has no content_version` };
     }
 
-    const query = isRecord(row.data) && typeof row.data.query === 'string' ? row.data.query : null;
+    const stored = asRecord(row.data)?.['query'];
+    const query = typeof stored === 'string' ? stored : null;
 
     return {
         line: {
@@ -116,11 +119,13 @@ const placeStudio = (
             return { refusal: 'a conversation share cannot be live' };
         }
 
-        if (!isRecord(row.data)) {
+        const data = asRecord(row.data);
+
+        if (!data) {
             return { refusal: 'data is not a saved conversation' };
         }
 
-        return { line: { ...base, kind, mode, slots: [], payload: viewerCopy(row.data) } };
+        return { line: { ...base, kind, mode, slots: [], payload: viewerCopy(data) } };
     }
 
     if (!isCanvasState(row.data)) {
@@ -170,9 +175,31 @@ export const placeShare = (row: StoredShare): Placement => {
 /**
  * Every share made at or after `since` (an ISO timestamp with its offset),
  * by `created_at` then id, each with its `share_ref` rows in part order.
+ * Both reads run in one repeatable-read transaction, so they see the same
+ * snapshot and a share changed between them still exports whole.
  */
 export const readShares = async (pool: Pool, since: string): Promise<StoredShare[]> => {
-    const shares = await pool.query<Omit<StoredShare, 'parts'>>(
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+
+        const rows = await readSharesIn(client, since);
+
+        await client.query('COMMIT');
+
+        return rows;
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
+const readSharesIn = async (client: PoolClient, since: string): Promise<StoredShare[]> => {
+    const shares = await client.query<Omit<StoredShare, 'parts'>>(
         `SELECT id, kind, mode, user_id, title, data,
                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
          FROM share
@@ -180,7 +207,7 @@ export const readShares = async (pool: Pool, since: string): Promise<StoredShare
          ORDER BY share.created_at, id`,
         [since],
     );
-    const parts = await pool.query<StoredPart & { share_id: string }>(
+    const parts = await client.query<StoredPart & { share_id: string }>(
         `SELECT r.share_id, r.part_index, r.spec_id, r.identity, r.entity_groups,
                 r.variable_text, r.content_version, r.artifact_digest, r.operations,
                 r.assumptions

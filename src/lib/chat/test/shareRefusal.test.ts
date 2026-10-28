@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { SharesError } from '../apisShares.ts';
-import { sharesRefusal } from '../shareRefusal.ts';
+import { sharesReadFailure, sharesRefusal } from '../shareRefusal.ts';
 
 test("dfo-apis' refusals of a create become the site's own codes", async () => {
     const rows: [SharesError, number, string, boolean][] = [
@@ -19,7 +19,10 @@ test("dfo-apis' refusals of a create become the site's own codes", async () => {
             'transient_unavailable',
             true,
         ],
-        [new SharesError('request_invalid', { status: 400 }), 502, 'transient_unavailable', false],
+        [new SharesError('backend_unreachable'), 502, 'transient_unavailable', true],
+        [new SharesError('request_invalid', { status: 400 }), 422, 'share_refused', false],
+        [new SharesError('frame_unavailable', { status: 404 }), 422, 'share_refused', false],
+        [new SharesError('internal_error', { status: 500 }), 502, 'share_refused', false],
     ];
 
     for (const [error, status, code, retryable] of rows) {
@@ -28,6 +31,25 @@ test("dfo-apis' refusals of a create become the site's own codes", async () => {
 
         assert.equal(response.status, status, error.code);
         assert.equal(body.code, code, error.code);
+        assert.equal(body.retryable, retryable, error.code);
+        assert.equal(body.upstream_code, code === 'share_refused' ? error.code : undefined);
+    }
+});
+
+test("a failed share read answers dfo-apis' code and whether to ask again", async () => {
+    const rows: [SharesError, boolean][] = [
+        [new SharesError('service_unavailable', { status: 503, retryable: true }), true],
+        [new SharesError('backend_timeout'), true],
+        [new SharesError('backend_refused', { status: 500 }), false],
+    ];
+
+    for (const [error, retryable] of rows) {
+        const response = sharesReadFailure(error);
+        const body = await response.json();
+
+        assert.equal(response.status, 502, error.code);
+        assert.equal(response.headers.get('content-type'), 'application/problem+json');
+        assert.equal(body.code, error.code);
         assert.equal(body.retryable, retryable, error.code);
     }
 });

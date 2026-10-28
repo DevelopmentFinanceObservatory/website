@@ -5,6 +5,7 @@ import {
     createOwnedShare,
     ownerShareWrite,
     readShare,
+    takeDownUserShares,
     type CreateShareBody,
     type ShareRecord,
     type SharesBackend,
@@ -61,6 +62,11 @@ export const writeOwnShare = (
     write: { shareId: string; userId: string; action: 'snapshot' | 'delete' },
 ): ReturnType<typeof ownerShareWrite> =>
     ownerShareWrite({ db, backend: sharesBackendFor(incoming) }, write);
+
+/** Take down every share `userId` keeps a token for, before their account
+ *  is deleted. Throws when one cannot be taken down. */
+export const takeDownSharesOf = (incoming: Headers, userId: string): Promise<void> =>
+    takeDownUserShares({ db, backend: sharesBackendFor(incoming) }, userId);
 
 /** What the share pages, the live card routes, and a live share's check
  *  draw with: dfo-apis' share routes and public component reads. */

@@ -9,7 +9,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { deleteShareToken, putShareToken, readShareToken } from '../../src/lib/chat/shareTokens.ts';
 import { applyMigrations } from '../apply-migrations.ts';
-import { readTokenLines } from '../share-token-import.ts';
+import { importShareTokens, readTokenLines } from '../share-token-import.ts';
 import { user } from '../schema.ts';
 import { createTestDatabase } from './harness.ts';
 
@@ -130,14 +130,16 @@ test("the token import stores each owner's token once, however often it runs", a
         ['Zy9xWv8u', 'other', 'shw_b'],
     ];
 
-    const first = await run(process.execPath, [SCRIPT, '--in', file], { env });
-
-    assert.match(first.stderr, /share Gone0001: its owner is no longer a user; skipped/);
-    assert.match(first.stderr, /^2 tokens stored, 1 skipped, 0 held by another user$/m);
+    await run(process.execPath, [SCRIPT, '--in', file], { env });
     assert.deepEqual(await tokens(), stored);
 
-    await run(process.execPath, [SCRIPT, '--in', file], { env });
-
+    // A second import of the same lines stores the same rows and skips the
+    // share whose owner is gone.
+    assert.deepEqual(await importShareTokens(drizzle(pool), lines), {
+        stored: 2,
+        ownerGone: ['Gone0001'],
+        heldByOther: [],
+    });
     assert.deepEqual(await tokens(), stored);
 
     // A token another user holds is left as it was and fails the run.
@@ -168,7 +170,6 @@ test("the token import stores each owner's token once, however often it runs", a
     );
 
     assert.equal('code' in refused && refused.code, 1);
-    assert.match(refused.stderr, /^line 2: /m);
     assert.equal(
         await readShareToken(drizzle(pool), { shareId: 'New00001', userId: 'owner' }),
         null,

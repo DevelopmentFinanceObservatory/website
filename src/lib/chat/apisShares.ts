@@ -1,7 +1,9 @@
+import { asRecord } from '../asRecord.ts';
 import type { ShareMode } from './shareMode.ts';
 import type { ShareKind } from './sharePrune.ts';
 import {
     deleteShareToken,
+    listShareTokens,
     putShareToken,
     readShareToken,
     type ShareTokenDb,
@@ -123,9 +125,6 @@ const CODE = /^[a-z][a-z0-9_]{0,63}$/;
 // dfo-apis' bound on a title.
 const MAX_TITLE = 300;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const sharePath = (id: string): string => {
     // The id is the viewer's URL segment, so only dfo-apis' own form reaches a path.
     if (!SHARE_ID.test(id)) {
@@ -136,13 +135,13 @@ const sharePath = (id: string): string => {
 };
 
 const refusalOf = async (res: Response): Promise<SharesError> => {
-    const body: unknown = await res.json().catch(() => null);
-    const code = isRecord(body) ? body['code'] : undefined;
+    const body = asRecord(await res.json().catch(() => null));
+    const code = body?.['code'];
     const wait = Number(res.headers.get('retry-after'));
 
     return new SharesError(typeof code === 'string' && CODE.test(code) ? code : 'backend_refused', {
         status: res.status,
-        retryable: isRecord(body) && body['retryable'] === true,
+        retryable: body?.['retryable'] === true,
         ...(Number.isFinite(wait) && wait > 0 ? { retryAfterS: wait } : {}),
     });
 };
@@ -200,35 +199,38 @@ const send = async (
 };
 
 const json = async (res: Response): Promise<Record<string, unknown>> => {
-    const body: unknown = await res.json().catch(() => null);
+    const body = asRecord(await res.json().catch(() => null));
 
-    if (!isRecord(body)) {
+    if (!body) {
         throw new SharesError('backend_invalid');
     }
 
     return body;
 };
 
-const frameOf = (value: unknown): FrameRef | null =>
-    isRecord(value) &&
-    typeof value['spec_id'] === 'string' &&
-    typeof value['content_version'] === 'string'
-        ? { spec_id: value['spec_id'], content_version: value['content_version'] }
-        : null;
+const frameOf = (value: unknown): FrameRef | null => {
+    const frame = asRecord(value);
 
-const slotOf = (value: unknown): RecordSlot => {
-    if (!isRecord(value) || !Number.isSafeInteger(value['slot'])) {
+    return typeof frame?.['spec_id'] === 'string' && typeof frame['content_version'] === 'string'
+        ? { spec_id: frame['spec_id'], content_version: frame['content_version'] }
+        : null;
+};
+
+const slotOf = (raw: unknown): RecordSlot => {
+    const value = asRecord(raw);
+
+    if (!value || !Number.isSafeInteger(value['slot'])) {
         throw new SharesError('backend_invalid');
     }
 
-    const card = value['card'];
-
-    if (card === null) {
+    if (value['card'] === null) {
         return { slot: value['slot'] as number, card: null };
     }
 
+    const card = asRecord(value['card']);
+
     if (
-        !isRecord(card) ||
+        !card ||
         typeof card['component_id'] !== 'string' ||
         !Number.isSafeInteger(card['revision'])
     ) {
@@ -270,7 +272,8 @@ export const createShare = async (
         body: {
             kind,
             latest,
-            title: title.trim().slice(0, MAX_TITLE) || null,
+            // Cut by code point, as dfo-apis counts, so no surrogate pair is split.
+            title: Array.from(title.trim()).slice(0, MAX_TITLE).join('') || null,
             cards,
             payload,
             write_token: writeToken,
@@ -365,12 +368,16 @@ export const readSlotFile = async (
 ): Promise<Response> =>
     send(backend, `${sharePath(id)}/slots/${slot}/data?${new URLSearchParams({ format, bundle })}`);
 
+// Take down the share `id` with its write token.
+const takeDown = (backend: SharesBackend, id: string, token: string): Promise<Response> =>
+    send(backend, sharePath(id), { method: 'DELETE', token });
+
 /**
  * Make a share and keep its write token for `userId`, the signed-in maker.
  * A guest's share (`userId` null) keeps no token, so nobody can change or
- * remove it. When the token cannot be kept, the new share is deleted with
- * it before the failure is rethrown, so no share is left that its maker
- * cannot manage.
+ * remove it. When the token cannot be kept, because the write fails or
+ * another user's row holds the id, the new share is deleted with it before
+ * the failure is thrown, so no share is left that its maker cannot manage.
  */
 export const createOwnedShare = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
@@ -383,24 +390,26 @@ export const createOwnedShare = async (
         return { id };
     }
 
-    try {
-        await putShareToken(db, { shareId: id, userId, writeToken });
-    } catch (error) {
-        const removed = await send(backend, sharePath(id), { method: 'DELETE', token: writeToken })
-            .then(() => 'deleted')
-            .catch((refusal: unknown) =>
-                refusal instanceof SharesError ? refusal.code : String(refusal),
-            );
+    const kept: unknown = await putShareToken(db, { shareId: id, userId, writeToken }).catch(
+        (error: unknown) => error,
+    );
 
-        console.error('share: the write token was not kept, so the share was taken down', {
-            share: id,
-            removed,
-        });
-
-        throw error;
+    if (kept === true) {
+        return { id };
     }
 
-    return { id };
+    const removed = await takeDown(backend, id, writeToken)
+        .then(() => 'deleted')
+        .catch((refusal: unknown) =>
+            refusal instanceof SharesError ? refusal.code : String(refusal),
+        );
+
+    console.error('share: the write token was not kept, so the share was taken down', {
+        share: id,
+        removed,
+    });
+
+    throw kept === false ? new Error(`share ${id}: another user holds its write token`) : kept;
 };
 
 // The refusals that say the share is gone or its token grants nothing.
@@ -468,4 +477,26 @@ export const ownerShareWrite = async (
     }
 
     return 'done';
+};
+
+/**
+ * Take down every share `userId` keeps a write token for, before their
+ * account is deleted, dropping each token once its share is gone. A share
+ * dfo-apis no longer has (`not_found`) counts as taken down. Any other
+ * failure throws its `SharesError`, and the shares not yet taken down keep
+ * their tokens, so the account can be deleted again later and no share is
+ * left without one.
+ */
+export const takeDownUserShares = async (
+    { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
+    userId: string,
+): Promise<void> => {
+    for (const { shareId, writeToken } of await listShareTokens(db, userId)) {
+        await takeDown(backend, shareId, writeToken).catch((error: unknown) => {
+            if (!(error instanceof SharesError && error.code === 'not_found')) {
+                throw error;
+            }
+        });
+        await deleteShareToken(db, { shareId, userId });
+    }
 };

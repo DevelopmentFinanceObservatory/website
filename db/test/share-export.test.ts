@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { Pool, PoolClient } from 'pg';
 
 import { applyMigrations } from '../apply-migrations.ts';
 import { exportShares, placeShare, readShares, type StoredShare } from '../share-export.ts';
@@ -389,7 +390,54 @@ test('every legacy share case lands in the export', async (t) => {
     }).catch((error: { code: number }) => error);
 
     assert.equal('code' in noOffset && noOffset.code, 2);
+
+    // A share's parts deleted between the read of the shares and the read of
+    // their parts still export with it, as both reads see one snapshot.
+    let raced = false;
+    const read = await readShares(
+        afterFirstSelect(pool, async () => {
+            raced = true;
+            await database.adminPool().query(`delete from share_ref where share_id = 'srchSnp1'`);
+        }),
+        '2026-09-02T00:00:00Z',
+    );
+
+    assert.ok(raced);
+    assert.equal(read.find(({ id }) => id === 'srchSnp1')?.parts.length, 1);
 });
+
+// `pool`, with `between` run once, after the first SELECT through the pool
+// or one of its clients has answered.
+const afterFirstSelect = (pool: Pool, between: () => Promise<void>): Pool => {
+    let fired = false;
+    const watched = <T extends Pool | PoolClient>(target: T): T =>
+        new Proxy(target, {
+            get(object, key) {
+                const value: unknown = Reflect.get(object, key);
+
+                if (key === 'connect') {
+                    return async () => watched(await (object as Pool).connect());
+                }
+
+                if (key !== 'query') {
+                    return typeof value === 'function' ? value.bind(object) : value;
+                }
+
+                return async (text: string, values?: unknown[]) => {
+                    const result = await object.query(text, values);
+
+                    if (!fired && /^\s*select/i.test(text)) {
+                        fired = true;
+                        await between();
+                    }
+
+                    return result;
+                };
+            },
+        });
+
+    return watched(pool);
+};
 
 const stored = (overrides: Partial<StoredShare>): StoredShare => ({
     id: 'abcd1234',

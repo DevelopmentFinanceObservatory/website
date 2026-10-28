@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
 import { SHARE_ID, SharesError } from '@/lib/chat/apisShares';
+import { sharesReadFailure } from '@/lib/chat/shareRefusal';
 import { writeOwnShare } from '@/lib/chat/shareStore';
 import {
     missingProblem,
@@ -18,9 +19,20 @@ const noSuchShare = (): Response => missingProblem('There is no such share.');
 // GET /api/share/<id> → a search share's references ({ mode, query, refs }).
 // Public, like the link itself; Studio shares render server-side on
 // /s/<id> and never come through here.
+// A failed read of dfo-apis answers a problem document with its code.
 export const GET = async (_request: Request, { params }: Context) => {
     const { id } = await params;
-    const found = SHARE_ID.test(id) ? await getSearchShare(id) : null;
+    let found: Awaited<ReturnType<typeof getSearchShare>> = null;
+
+    try {
+        found = SHARE_ID.test(id) ? await getSearchShare(id) : null;
+    } catch (error) {
+        if (error instanceof SharesError) {
+            return sharesReadFailure(error);
+        }
+
+        throw error;
+    }
 
     if (!found) {
         return noSuchShare();

@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import { canvasWidgetsOf } from './canvas.ts';
 import type { SavedConversation } from './history.ts';
 import type { ShareMode, StudioShareKind } from './shareMode.ts';
@@ -30,17 +31,16 @@ type StoredWidget = SavedConversation['widgets'][number];
 const COMPONENT_ID = /^cmp_[A-Za-z0-9_-]{1,64}$/;
 const FRAME_SPEC_ID = /^(spec|ops)_[A-Za-z0-9_-]+$/;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const frameOf = (value: unknown): FrameRef | null => {
+    const frame = asRecord(value);
 
-const frameOf = (frame: unknown): FrameRef | null =>
-    isRecord(frame) &&
-    typeof frame.spec_id === 'string' &&
-    FRAME_SPEC_ID.test(frame.spec_id) &&
-    typeof frame.content_version === 'string' &&
-    frame.content_version !== ''
-        ? { spec_id: frame.spec_id, content_version: frame.content_version }
+    return typeof frame?.['spec_id'] === 'string' &&
+        FRAME_SPEC_ID.test(frame['spec_id']) &&
+        typeof frame['content_version'] === 'string' &&
+        frame['content_version'] !== ''
+        ? { spec_id: frame['spec_id'], content_version: frame['content_version'] }
         : null;
+};
 
 /** The slot of a data card whose `ref` names a component revision in
  *  dfo-apis' form, or null for a text card and a card with no such ref. */
@@ -49,10 +49,10 @@ export const slotOf = (widget: StoredWidget): ShareSlot | null => {
         return null;
     }
 
-    const ref: unknown = widget.ref;
+    const ref = asRecord(widget.ref);
 
     if (
-        !isRecord(ref) ||
+        !ref ||
         typeof ref.component_id !== 'string' ||
         !COMPONENT_ID.test(ref.component_id) ||
         !Number.isSafeInteger(ref.revision) ||

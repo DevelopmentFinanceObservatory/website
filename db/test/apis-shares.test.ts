@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import {
     createOwnedShare,
     ownerShareWrite,
+    takeDownUserShares,
     type SharesBackend,
 } from '../../src/lib/chat/apisShares.ts';
 import { putShareToken, readShareToken } from '../../src/lib/chat/shareTokens.ts';
@@ -235,4 +236,73 @@ test('owner writes to shares held in dfo-apis', async (t) => {
         });
         assert.equal(await readShareToken(db, write), 'shw_made');
     });
+
+    await t.test(
+        'before an account goes, each of its shares is taken down with its token, and a failure stops there',
+        async () => {
+            await database.runtimePool().query('delete from share_token');
+
+            for (const [shareId, userId] of [
+                ['Aaaaaaa1', 'owner'],
+                ['Aaaaaaa2', 'owner'],
+                ['Aaaaaaa3', 'owner'],
+                ['Bbbbbbb1', 'other'],
+            ]) {
+                await putShareToken(db, { shareId, userId, writeToken: `shw_${shareId}` });
+            }
+
+            const tokens = async () =>
+                (
+                    await database
+                        .runtimePool()
+                        .query<{ share_id: string }>(
+                            'select share_id from share_token order by share_id',
+                        )
+                ).rows.map(({ share_id: id }) => id);
+
+            // The first share is gone already, and dfo-apis fails the third.
+            const failing = backendOf(({ url }) =>
+                url.endsWith('Aaaaaaa1')
+                    ? Response.json({ code: 'not_found' }, { status: 404 })
+                    : url.endsWith('Aaaaaaa3')
+                      ? Response.json(
+                            { code: 'service_unavailable', retryable: true },
+                            { status: 503 },
+                        )
+                      : new Response(null, { status: 204 }),
+            );
+
+            await assert.rejects(takeDownUserShares({ db, backend: failing.backend }, 'owner'), {
+                name: 'SharesError',
+                code: 'service_unavailable',
+            });
+            assert.deepEqual(failing.calls, [
+                {
+                    url: '/api/presentation/shares/Aaaaaaa1',
+                    method: 'DELETE',
+                    token: 'shw_Aaaaaaa1',
+                },
+                {
+                    url: '/api/presentation/shares/Aaaaaaa2',
+                    method: 'DELETE',
+                    token: 'shw_Aaaaaaa2',
+                },
+                {
+                    url: '/api/presentation/shares/Aaaaaaa3',
+                    method: 'DELETE',
+                    token: 'shw_Aaaaaaa3',
+                },
+            ]);
+            assert.deepEqual(await tokens(), ['Aaaaaaa3', 'Bbbbbbb1']);
+
+            const { backend, calls } = backendOf(() => new Response(null, { status: 204 }));
+
+            await takeDownUserShares({ db, backend }, 'owner');
+            assert.deepEqual(
+                calls.map(({ url }) => url),
+                ['/api/presentation/shares/Aaaaaaa3'],
+            );
+            assert.deepEqual(await tokens(), ['Bbbbbbb1']);
+        },
+    );
 });

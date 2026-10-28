@@ -121,6 +121,11 @@ test('a create names the caller, sends the body under a minted token, and return
     // Every create mints its own token.
     await createShare(backend, CREATE_BODY);
     assert.notEqual((calls[1]?.body as Record<string, unknown>)['write_token'], token);
+
+    // The cut counts code points, so an emoji across the bound is kept whole
+    // or dropped whole.
+    await createShare(backend, { ...CREATE_BODY, title: `${'t'.repeat(299)}😀x` });
+    assert.equal((calls[2]?.body as Record<string, unknown>)['title'], `${'t'.repeat(299)}😀`);
 });
 
 test('a create that fails in a passing way is sent once more with the same token and body', async () => {
@@ -163,28 +168,45 @@ test('every call runs under its own deadline, so a timed-out create is tried aga
     assert.ok(calls[2]?.signal instanceof AbortSignal);
 });
 
-test('a share whose token cannot be kept is taken down with that token, and the failure rethrown', async () => {
-    const { backend, calls } = backendOf((call) =>
-        call.method === 'DELETE' ? new Response(null, { status: 204 }) : CREATED(call),
-    );
+test('a share whose token cannot be kept is taken down with that token, and the failure thrown', async () => {
     const down = new Error('share_token write failed');
-    // Only the token write is reached, and it fails.
-    const db = {
-        insert: () => {
-            throw down;
-        },
-    } as unknown as ShareTokenDb;
+    // Only the token write is reached: it fails, or another user's row
+    // holds the id, so no row comes back.
+    const writes: [string, () => unknown, Error | { name: string }][] = [
+        [
+            'write fails',
+            () => {
+                throw down;
+            },
+            down,
+        ],
+        [
+            'held by another user',
+            () => ({
+                values: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }),
+            }),
+            { name: 'Error' },
+        ],
+    ];
 
-    await assert.rejects(createOwnedShare({ db, backend }, 'owner', CREATE_BODY), down);
+    for (const [name, insert, thrown] of writes) {
+        const { backend, calls } = backendOf((call) =>
+            call.method === 'DELETE' ? new Response(null, { status: 204 }) : CREATED(call),
+        );
+        const db = { insert } as unknown as ShareTokenDb;
 
-    const token = (calls[0]?.body as { write_token: string }).write_token;
+        await assert.rejects(createOwnedShare({ db, backend }, 'owner', CREATE_BODY), thrown, name);
 
-    assert.deepEqual(
-        calls
-            .slice(1)
-            .map(({ method, url, headers }) => [method, url, headers.get('x-dfo-write-token')]),
-        [['DELETE', `${APIS}/api/presentation/shares/Ab3dEf7h`, token]],
-    );
+        const token = (calls[0]?.body as { write_token: string }).write_token;
+
+        assert.deepEqual(
+            calls
+                .slice(1)
+                .map(({ method, url, headers }) => [method, url, headers.get('x-dfo-write-token')]),
+            [['DELETE', `${APIS}/api/presentation/shares/Ab3dEf7h`, token]],
+            name,
+        );
+    }
 });
 
 test('a create is sent at most twice, and a refusal of the request or a spent allowance once', async () => {

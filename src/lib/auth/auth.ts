@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 
 import { counterDb, db } from '@/lib/db';
@@ -8,6 +8,8 @@ import * as schema from '../../../db/schema';
 import { CLIENT_IP_HEADER } from '@/lib/auth/clientIp';
 import { takeCodeAllowance } from '@/lib/auth/codeLimit';
 import { emailSignInConfig } from '@/lib/auth/emailSignIn';
+import { SharesError } from '@/lib/chat/apisShares';
+import { takeDownSharesOf } from '@/lib/chat/shareStore';
 import { CODE_SIGN_IN_PATH, emailSignInOptions } from '@/lib/auth/emailSignInOptions';
 import { track } from '@/lib/events/track';
 import { sendMail } from '@/lib/mail/send';
@@ -97,7 +99,27 @@ export const auth = betterAuth({
     user: {
         // Delete account (account menu). With no password to confirm with,
         // Better Auth asks for a fresh session instead (session.freshAge).
-        deleteUser: { enabled: true },
+        // The user's shares live in dfo-apis, out of reach of the user row's
+        // cascade, so each is taken down with its write token first. When
+        // one cannot be, the account stays and the dialog shows the message.
+        deleteUser: {
+            enabled: true,
+            beforeDelete: async (doomed, request) => {
+                try {
+                    await takeDownSharesOf(request?.headers ?? new Headers(), doomed.id);
+                } catch (error) {
+                    console.error('auth: account deletion stopped, a share was not taken down', {
+                        cause: error instanceof SharesError ? error.code : String(error),
+                    });
+
+                    throw new APIError('SERVICE_UNAVAILABLE', {
+                        code: 'SHARES_NOT_REMOVED',
+                        message:
+                            'Your share links could not all be removed, so your account is still here. Try again in a minute.',
+                    });
+                }
+            },
+        },
     },
     // No cookie cache: every check hits the database, so a session removed
     // there (sign-out elsewhere, a wipe) is gone immediately — nothing to

@@ -52,6 +52,17 @@ export const readShareToken = async (
     return row?.writeToken ?? null;
 };
 
+/** Every share `userId` keeps a write token for, with that token. */
+export const listShareTokens = (
+    db: ShareTokenDb,
+    userId: string,
+): Promise<{ shareId: string; writeToken: string }[]> =>
+    db
+        .select({ shareId: shareToken.shareId, writeToken: shareToken.writeToken })
+        .from(shareToken)
+        .where(eq(shareToken.userId, userId))
+        .orderBy(shareToken.shareId);
+
 /** Delete `userId`'s write token for `shareId`, once the share is taken
  *  down. A token another user stored for it stays. */
 export const deleteShareToken = async (
