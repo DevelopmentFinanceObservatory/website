@@ -48,6 +48,24 @@ test('share write tokens', async (t) => {
     assert.equal(await putShareToken(db, { ...owner, writeToken: 'shw_two' }), true);
     assert.equal(await readShareToken(db, owner), 'shw_two');
 
+    // Putting the token already held changes nothing; a new token restamps the row.
+    const createdAt = async () =>
+        (
+            await database
+                .runtimePool()
+                .query<{ created_at: string }>(
+                    'select created_at::text from share_token where share_id = $1',
+                    [owner.shareId],
+                )
+        ).rows.map((row) => row.created_at);
+    const stamped = await createdAt();
+
+    assert.equal(await putShareToken(db, { ...owner, writeToken: 'shw_two' }), true);
+    assert.deepEqual(await createdAt(), stamped);
+    assert.equal(await putShareToken(db, { ...owner, writeToken: 'shw_three' }), true);
+    assert.notDeepEqual(await createdAt(), stamped);
+    assert.equal(await putShareToken(db, { ...owner, writeToken: 'shw_two' }), true);
+
     assert.equal(await readShareToken(db, other), null);
     assert.equal(await putShareToken(db, { ...other, writeToken: 'shw_theirs' }), false);
     assert.equal(await readShareToken(db, owner), 'shw_two');

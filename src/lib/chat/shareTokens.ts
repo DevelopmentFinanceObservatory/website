@@ -14,7 +14,8 @@ export type ShareTokenDb = Pick<NodePgDatabase, 'select' | 'insert' | 'delete'>;
 
 /**
  * Store `writeToken` as `userId`'s token for `shareId`, replacing the token
- * that user stored for it before. False when the share's token belongs to
+ * that user stored for it before. Storing the token already held changes
+ * nothing, `created_at` included. False when the share's token belongs to
  * another user, whose row is left as it was.
  */
 export const putShareToken = async (
@@ -26,7 +27,10 @@ export const putShareToken = async (
         .values({ shareId, userId, writeToken })
         .onConflictDoUpdate({
             target: shareToken.shareId,
-            set: { writeToken, createdAt: sql`now()` },
+            set: {
+                writeToken,
+                createdAt: sql`case when ${shareToken.writeToken} = ${writeToken} then ${shareToken.createdAt} else now() end`,
+            },
             setWhere: eq(shareToken.userId, userId),
         })
         .returning({ shareId: shareToken.shareId });
