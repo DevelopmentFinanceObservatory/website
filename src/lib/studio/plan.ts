@@ -468,10 +468,8 @@ const stillCounts = (plan: PlanState, pick: PlanSwitch): string => {
 const retryableRefusal = ({ status, error }: StreamRefusal): boolean =>
     error?.retry === 'retry_after_delay' && (status !== 429 || !!error.retry_after_seconds);
 
-/** "Studio is busy. Try again in 12s.": the site proxy's rate limit, as a
- *  wait. */
-const busyText = (seconds: number | null): string =>
-    `Studio is busy. Try again in ${seconds ? `${seconds}s` : 'a moment'}.`;
+/** The site proxy's rate limit. The button's appearance carries the wait. */
+const BUSY_TEXT = 'Studio is busy.';
 
 /** The site proxy answered for a harness it could not reach, without
  *  forwarding the switch (no `upstream_status`). */
@@ -502,8 +500,8 @@ const leavesPause = ({ status, error }: StreamRefusal): boolean =>
  * developers. It offers "Try again" only where a second try could apply
  * (retryableRefusal), and once the ToolError's `retry_after_seconds`, when
  * it sets them, have run from `now`, when the refusal arrived. The site
- * proxy's rate limit reads as a wait (busyText) and offers "Try again" once
- * its Retry-After has run. A switch the proxy could not forward is a request
+ * proxy's rate limit says the studio is busy (BUSY_TEXT) and offers "Try
+ * again" once its Retry-After has run, or not at all when it names no wait. A switch the proxy could not forward is a request
  * that never reached the harness (unreachableSwitch). Any other refusal (a
  * 404, a 401, a 5xx, a 422 `binding_invalid`, the proxy's 502 after the
  * harness answered) ends the card read-only (endedPlan), with the harness's
@@ -546,8 +544,8 @@ export const refusedSwitch = (
 
         return {
             ...settled,
-            notice: unappliedNotice(plan, pick, busyText(wait), {
-                retryable: true,
+            notice: unappliedNotice(plan, pick, BUSY_TEXT, {
+                retryable: !!wait,
                 retryAt: wait ? now + wait * 1000 : null,
             }),
         };

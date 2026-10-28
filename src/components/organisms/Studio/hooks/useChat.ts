@@ -772,6 +772,12 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                 if (onEnd) {
                     if (!sent) {
+                        // Stop is free for the next stream queued behind this
+                        // one, which the chain has not reached yet.
+                        if (haltRef.current === halt) {
+                            haltRef.current = null;
+                        }
+
                         finish();
 
                         return false;
@@ -837,19 +843,26 @@ export const useChat = (initial?: ChatSnapshot) => {
             };
 
             // A refusal of a stream that reset/hydrate walked away from, or
-            // that the user stopped, is dropped, as handle() drops frames.
+            // that the user stopped, is dropped, as handle() drops frames. A
+            // switch the user stopped then ends as stopped (its `onEnd`), not
+            // on a live card whose buttons the cancel has made useless.
             const refuse = (refusal: StreamRefusal): boolean =>
-                generationRef.current !== generation || muted || (onRefusal?.(refusal) ?? false);
+                generationRef.current !== generation ||
+                muted ||
+                stopped ||
+                (onRefusal?.(refusal) ?? false);
             const unreachable = (): boolean =>
                 generationRef.current !== generation || muted || (onUnreachable?.() ?? false);
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
             // that is running, not one still waiting here. The halt is
-            // published at once when no stream holds Stop (the one ahead
-            // paused on a plan but has not closed yet), so a Stop while this
-            // one waits skips its request.
-            if (haltRef.current === null) {
+            // published at once for a switch when no stream holds Stop (the
+            // one ahead paused on a plan but has not closed yet), so a Stop
+            // while it waits skips its request. A resume has no such halt:
+            // it has already cleared its card, so skipping its request would
+            // lose the approval while the pause waits.
+            if (onEnd && haltRef.current === null) {
                 haltRef.current = halt;
             }
 
