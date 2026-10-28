@@ -56,13 +56,25 @@ test('isForwardablePath: a decoded segment that would climb out of its surface i
 });
 
 // Next.js resolves the `@/` imports of a route, so `node --test` cannot load
-// one; the guard is held to the catch-all routes by their source.
-test('the datasets and presentation catch-alls refuse an unsafe path before forwarding', () => {
-    for (const route of [
-        'datasets/[...path]/route.ts',
-        'presentation/components/[[...path]]/route.ts',
-        'presentation/shares/[[...path]]/route.ts',
-    ]) {
-        assert.match(readFileSync(join(V1, route), 'utf8'), /isForwardablePath\(path\)/, route);
+// one; the guard is held to the routes by their source. Every catch-all route
+// under /api/v1 that forwards is found by globbing: it refuses an unsafe path
+// with isForwardablePath, or admits only the exact names studioRoute lists.
+const forwardingCatchAlls = readdirSync(V1, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('route.ts') && /\[\[?\.\.\.path\]\]?/.test(file))
+    .map((file) => ({ file, source: readFileSync(join(V1, file), 'utf8') }))
+    .filter(({ source }) => /\bforward\(/.test(source));
+
+test('every forwarding catch-all under /api/v1 refuses an unsafe path before forwarding', () => {
+    assert.ok(forwardingCatchAlls.length >= SEARCH_API_SURFACES.length);
+
+    for (const { file, source } of forwardingCatchAlls) {
+        assert.match(source, /isForwardablePath\(path\)|studioRoute\(/, file);
     }
+});
+
+test('the component export route refuses a dot id or revision before forwarding', () => {
+    const route = 'presentation/components/[id]/revisions/[revision]/data/route.ts';
+    const source = readFileSync(join(V1, '..', route), 'utf8');
+
+    assert.match(source, /isForwardablePath\(\[id, revision\]\)/);
 });
