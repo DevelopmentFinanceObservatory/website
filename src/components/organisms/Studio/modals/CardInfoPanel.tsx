@@ -313,6 +313,11 @@ const LegacyPanel = ({
     </div>
 );
 
+/** The snapshot share a card is cited from: its id, when the share was
+ *  made, and when the card's slot began to show the data it shows, which
+ *  the citation prefers. Both times are ISO timestamps. */
+export type CitedSnapshot = { id: string; createdAt?: string; servedAt?: string };
+
 // The link a snapshot share is cited by, read in the browser, where the
 // panel opens.
 const snapshotUrlOf = (shareId: string | undefined): string | null =>
@@ -320,10 +325,12 @@ const snapshotUrlOf = (shareId: string | undefined): string | null =>
         ? `${window.location.origin}/s/${encodeURIComponent(shareId)}`
         : null;
 
-// The day a snapshot share captured its data, in the reader's time zone,
-// as its banner reads it.
-const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
-    const moment = createdAt ? new Date(createdAt) : null;
+// The day a snapshot card's data dates from, in the reader's time zone:
+// when its slot began to show it, or when the share was made if that is
+// not known.
+const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
+    const at = snapshot?.servedAt ?? snapshot?.createdAt;
+    const moment = at ? new Date(at) : null;
 
     return moment && !Number.isNaN(moment.getTime()) ? localDay(moment) : null;
 };
@@ -336,7 +343,7 @@ const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
  * slot serves. The card's
  * owner (`canShare`) is told how to get a link to cite. The full citation
  * is retrieved today. On a snapshot share (`snapshot`) it names the share's
- * link and the day the share captured its data.
+ * link and the day the card's data dates from.
  */
 const CardInfoPanel = ({
     info,
@@ -353,8 +360,8 @@ const CardInfoPanel = ({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     shared?: SharedCardAddress | null;
-    // The snapshot share the card is shown on, and when it was made.
-    snapshot?: { id: string; createdAt?: string };
+    // The snapshot share the card is shown on.
+    snapshot?: CitedSnapshot;
     canShare?: boolean;
 }) => {
     const view =
@@ -362,7 +369,7 @@ const CardInfoPanel = ({
         panelViewOf(info, {
             retrievedOn: localDay(new Date()),
             snapshotUrl: snapshotUrlOf(snapshot?.id),
-            snapshotAsOf: snapshotAsOfOf(snapshot?.createdAt),
+            snapshotAsOf: snapshotAsOfOf(snapshot),
             canShare,
         });
     const download = widget && <CardDownload widget={widget} shared={shared} />;

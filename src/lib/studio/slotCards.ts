@@ -1,8 +1,10 @@
 import {
+    readShareHistory,
     readSlotCard,
     readSlotFile,
     SharesError,
     type CreateShareBody,
+    type ServedEntry,
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
@@ -38,7 +40,9 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
  * live share's cards leave the server held, and the browser fills each one
  * (`refreshLiveCards`) from `GET /api/share/[id]/cards/[cardId]/refresh?slot=`,
  * whose body is `slotRefreshResponse`. A snapshot card the server did not
- * read in time is filled the same way.
+ * read in time is filled the same way. A snapshot's page also reads the
+ * share's history once, which says since when each slot has shown its
+ * frame (`servedAt`), the date a card's citation gives.
  *
  * A live slot serves the newest frame. dfo-apis checks for newer data at
  * most once per 15 minutes and records what it served in the share's
@@ -177,6 +181,46 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
         widgets,
     }) as SavedConversation;
 
+// When each slot of a snapshot began to show the frame it serves, by slot:
+// the newest entry of the share's history with that slot and frame. Empty
+// when no slot records a frame or the history cannot be read.
+const servedSince = async (
+    shares: SharesBackend,
+    record: ShareRecord,
+): Promise<Map<number, string>> => {
+    const framed = record.slots.flatMap(({ slot, card }) =>
+        card?.frame ? [{ slot, frame: card.frame }] : [],
+    );
+
+    if (!framed.length) {
+        return new Map();
+    }
+
+    let served: ServedEntry[];
+
+    try {
+        served = await readShareHistory(shares, record.id);
+    } catch (error) {
+        console.error('share: the share history could not be read', {
+            share: record.id,
+            error: error instanceof SharesError ? error.code : String(error),
+        });
+
+        return new Map();
+    }
+
+    return new Map(
+        framed.flatMap(({ slot, frame }) => {
+            const entry = served.find(
+                ({ slot: at, card }) =>
+                    at === slot && card !== null && sameFrame(card.frame, frame),
+            );
+
+            return entry ? [[slot, entry.firstServedAt] as const] : [];
+        }),
+    );
+};
+
 /**
  * A Studio share from dfo-apis as its page passes it to the client. Every
  * held card has its slot's revision as `ref`, and `slots` names each one's
@@ -184,7 +228,10 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
  * slot. A snapshot's held cards are drawn here from their slots' cards, each
  * on the frame its slot recorded: the frame of the card's revision for a
  * share made as a snapshot, and the frame the slot served at the switch for
- * a live share made a snapshot. The reads share `deadlineMs`. A card whose
+ * a live share made a snapshot. `servedAt` gives each held card of a
+ * snapshot the moment its slot began to show that frame, from one read of
+ * the share's history; a card is left out when that read fails or no entry
+ * matches. The reads share `deadlineMs`. A card whose
  * read fails or is not done by then stays held and is named in `undrawn`,
  * so the browser asks the refresh route for it, and the failure is logged.
  * A live share's cards stay held for the browser.
@@ -200,6 +247,11 @@ export const sharedViewOfRecord = async (
     const undrawn: string[] = [];
     const slots: Record<string, number> = {};
     const payloadWidgets = widgetsOf(record.payload);
+
+    // Read beside the cards, within the same deadline.
+    const firstServed = live
+        ? Promise.resolve(new Map<number, string>())
+        : servedSince(shares, record);
 
     const drawn = async (held: Widget, slot: number): Promise<Widget | null> => {
         const { body } = await gate(() => readSlotCard(shares, record.id, slot));
@@ -246,6 +298,14 @@ export const sharedViewOfRecord = async (
             return held;
         }),
     );
+    const servedBySlot = await firstServed;
+    const servedAt = Object.fromEntries(
+        Object.entries(slots).flatMap(([id, slot]) => {
+            const at = servedBySlot.get(slot);
+
+            return at ? [[id, at]] : [];
+        }),
+    );
 
     return {
         id: record.id,
@@ -255,6 +315,7 @@ export const sharedViewOfRecord = async (
         live,
         undrawn,
         slots,
+        servedAt,
         createdAt: record.createdAt,
     };
 };

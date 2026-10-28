@@ -168,28 +168,27 @@ test('every call runs under its own deadline, so a timed-out create is tried aga
     assert.ok(calls[2]?.signal instanceof AbortSignal);
 });
 
-test('a share whose token cannot be kept is taken down with that token, and the failure thrown', async () => {
-    const down = new Error('share_token write failed');
+test('a share whose token cannot be kept is taken down with that token, and a retryable failure thrown', async () => {
     // Only the token write is reached: it fails, or another user's row
     // holds the id, so no row comes back.
-    const writes: [string, () => unknown, Error | { name: string }][] = [
+    const writes: [string, () => unknown][] = [
         [
             'write fails',
             () => {
-                throw down;
+                throw new Error('share_token write failed');
             },
-            down,
         ],
         [
             'held by another user',
             () => ({
                 values: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }),
             }),
-            { name: 'Error' },
         ],
     ];
+    // A second try mints a new id, so the site answers it as passing.
+    const thrown = { name: 'SharesError', code: 'token_not_kept', retryable: true };
 
-    for (const [name, insert, thrown] of writes) {
+    for (const [name, insert] of writes) {
         const { backend, calls } = backendOf((call) =>
             call.method === 'DELETE' ? new Response(null, { status: 204 }) : CREATED(call),
         );

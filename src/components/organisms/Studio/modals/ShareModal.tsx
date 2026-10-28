@@ -108,6 +108,8 @@ const COPY = {
     nowSnapshot: 'This link is now a snapshot. It keeps the numbers it showed when you switched.',
     guest: 'Without an account, a link stays up as made, and you cannot make it a snapshot or remove it later. Sign in to manage your links.',
     shareLimit: "This network has made today's links. Try again tomorrow.",
+    tooLarge: 'This is too large to share as a link.',
+    refused: 'This cannot be shared as it stands.',
 };
 
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -224,6 +226,7 @@ const ShareModal = ({
     const id = link?.status === 'ready' ? link.id : undefined;
     const failed = link?.status === 'failed';
     const limited = link?.status === 'limited';
+    const refused = link?.status === 'refused' ? link.reason : null;
     const withdrawal = link?.status === 'withdrawn' ? link.withdrawal : null;
 
     // Keys whose link is being made (a ref: no render churn, no double POST).
@@ -383,6 +386,11 @@ const ShareModal = ({
                         {limited && (
                             <p className={styles.error} role="alert">
                                 {COPY.shareLimit}
+                            </p>
+                        )}
+                        {refused && (
+                            <p className={styles.error} role="alert">
+                                {refused === 'too_large' ? COPY.tooLarge : COPY.refused}
                             </p>
                         )}
                         {withdrawal && (

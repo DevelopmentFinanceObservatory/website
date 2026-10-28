@@ -64,7 +64,8 @@ export type StudioProps = {
     // share's data cards arrive held and are filled from the refresh route
     // (see useLiveCards), and so are a snapshot's `undrawn` cards. `slots`
     // names the slot that draws each card, whose rows a download serves.
-    // `createdAt` is when the share was made.
+    // `servedAt` is when each snapshot card's slot began to show its data,
+    // and `createdAt` when the share was made.
     shared?: {
         id: string;
         kind: ShareKind;
@@ -72,6 +73,7 @@ export type StudioProps = {
         live?: boolean;
         undrawn?: string[];
         slots?: Record<string, number>;
+        servedAt?: Record<string, string>;
         createdAt?: string;
     };
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
@@ -719,7 +721,15 @@ const Studio = ({
                 shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
                 // A share row's `live` is set either way (sharedViewOfRecord).
                 // A gallery canvas leaves it unset and has no share link.
-                snapshot={shared?.live === false ? shared : undefined}
+                snapshot={
+                    shared?.live === false
+                        ? {
+                              id: shared.id,
+                              createdAt: shared.createdAt,
+                              servedAt: infoWidget ? shared.servedAt?.[infoWidget.id] : undefined,
+                          }
+                        : undefined
+                }
                 canShare={!readOnly}
             />
 

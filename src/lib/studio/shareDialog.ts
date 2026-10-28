@@ -21,13 +21,16 @@ import { dataCardsOf } from './liveCards.ts';
 /** A data card a share holds: its widget id and the title its owner sees. */
 export type SharedCard = { id: string; title: string };
 
-/** Why the site made no share. `failed` is every fault a second try can
- *  outlive: the network, a 5xx, a session that lapsed. */
+/** Why the site made no share. `payload_too_large` and `share_refused` are
+ *  refusals a second try would meet again. `failed` is every fault a second
+ *  try can outlive: the network, a 5xx, a session that lapsed. */
 export type ShareRefusal =
     | { code: 'live_cards_blocked'; cardIds: string[] }
     | { code: 'live_too_many_cards'; limit: number; count: number }
     | { code: 'live_unavailable' }
     | { code: 'share_limit' }
+    | { code: 'payload_too_large' }
+    | { code: 'share_refused' }
     | { code: 'failed' };
 
 /** What `POST /api/share` came to: the share's id, or the refusal. */
@@ -50,12 +53,15 @@ export type Withdrawal =
  * link to copy, in the mode it has now. `withdrawn`: no link, and why.
  * `failed`: the share was not made and a second try may make it. `limited`:
  * this network has made today's shares (dfo-apis' share allowance).
+ * `refused`: the share cannot be made as it stands, because it is too large
+ * or dfo-apis refuses it, so no second try is offered.
  */
 export type ShareLink =
     | { status: 'ready'; id: string; mode: ShareMode }
     | { status: 'withdrawn'; withdrawal: Withdrawal }
     | { status: 'failed' }
-    | { status: 'limited' };
+    | { status: 'limited' }
+    | { status: 'refused'; reason: 'too_large' | 'refused' };
 
 /** The dialog's key for a link, which keeps one mode's link from showing for
  *  the other mode and one card's from showing for another. */
@@ -113,7 +119,14 @@ export const readShareAnswer = (ok: boolean, answer: unknown): ShareAnswer => {
         return { refusal: { code, limit, count } };
     }
 
-    return code === 'live_unavailable' || code === 'share_limit' ? { refusal: { code } } : FAILED;
+    if (code === 'live_unavailable' || code === 'share_limit') {
+        return { refusal: { code } };
+    }
+
+    // A permanent refusal says so in `retryable`.
+    return (code === 'payload_too_large' || code === 'share_refused') && body['retryable'] === false
+        ? { refusal: { code } }
+        : FAILED;
 };
 
 /**
@@ -145,6 +158,8 @@ const withdrawalOf = (refusal: ShareRefusal, cards: SharedCard[]): Withdrawal | 
         case 'live_unavailable':
             return { reason: 'unavailable' };
         case 'share_limit':
+        case 'payload_too_large':
+        case 'share_refused':
         case 'failed':
             return null;
     }
@@ -176,8 +191,22 @@ export type ShareLinkDeps = {
     ) => Promise<ShareMint>;
 };
 
+// Where a refusal that withdraws no link leaves it.
+const unmadeLink = (refusal: ShareRefusal): ShareLink => {
+    switch (refusal.code) {
+        case 'share_limit':
+            return { status: 'limited' };
+        case 'payload_too_large':
+            return { status: 'refused', reason: 'too_large' };
+        case 'share_refused':
+            return { status: 'refused', reason: 'refused' };
+        default:
+            return { status: 'failed' };
+    }
+};
+
 /** Makes one link and reports where it ends: `ready`, `withdrawn`,
- *  `limited`, or `failed`. */
+ *  `limited`, `refused`, or `failed`. */
 export const openShareLink = async (
     { createShare }: ShareLinkDeps,
     request: { kind: StudioShareKind; cardId: string | undefined; mode: ShareMode },
@@ -189,11 +218,7 @@ export const openShareLink = async (
     if ('refusal' in mint) {
         const withdrawal = withdrawalOf(mint.refusal, 'cards' in mint ? mint.cards : []);
 
-        report(
-            withdrawal
-                ? { status: 'withdrawn', withdrawal }
-                : { status: mint.refusal.code === 'share_limit' ? 'limited' : 'failed' },
-        );
+        report(withdrawal ? { status: 'withdrawn', withdrawal } : unmadeLink(mint.refusal));
 
         return;
     }

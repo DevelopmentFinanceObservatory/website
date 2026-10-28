@@ -298,6 +298,27 @@ test('pinVersionFrame refuses a version the API no longer serves', async () => {
     assert.equal(calls.length, 1);
 });
 
+test('pinVersionFrame sends the spec and version as one path segment each', async () => {
+    const { calls, fetchImpl } = frameApi({ versionArtifacts: artifacts });
+
+    await pinVersionFrame({
+        base: 'https://api',
+        specId: 'spec_a/../b?c#d',
+        contentVersion: 'cv_%2e.',
+        definition: {},
+        principal: 'site',
+        pollDeadlineMs: 1_000,
+        fetchImpl,
+    });
+    assert.deepEqual(
+        calls.map(({ method, url }) => `${method} ${url}`),
+        [
+            'GET https://api/api/datasets/spec_a%2F..%2Fb%3Fc%23d/cv_%252e.',
+            'POST https://api/api/datasets/spec_a%2F..%2Fb%3Fc%23d/cv_%252e./pin',
+        ],
+    );
+});
+
 const pinBody = (fields: Record<string, unknown>) =>
     JSON.stringify({ specId: 'spec_crs', contentVersion: 'cv_abc', ...fields });
 
@@ -317,6 +338,10 @@ test('parseDownloadPin reads a download-pin body', () => {
 for (const [name, text] of [
     ['a non-JSON body', 'nope'],
     ['a malformed spec', pinBody({ specId: '../x' })],
+    ...['/', '.', '%', '?', '#'].flatMap((mark) => [
+        [`a spec holding "${mark}"`, pinBody({ specId: `spec_a${mark}b` })],
+        [`a version holding "${mark}"`, pinBody({ contentVersion: `cv_a${mark}b` })],
+    ]),
     ['a definition that is not an object', pinBody({ definition: 'x' })],
 ] as const) {
     test(`parseDownloadPin refuses ${name}`, () => {

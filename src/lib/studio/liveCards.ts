@@ -35,8 +35,10 @@ import type { FactSummary } from './wire.ts';
  *  refresh route for. It is empty for a live share, whose cards the browser
  *  fills all. `slots` maps each card a slot draws to that slot (from 1),
  *  which its refresh and data URLs carry; a card with none, such as every
- *  card of a conversation share, exports its own revision. `createdAt` is an
- *  ISO timestamp: the moment the share's text was written. */
+ *  card of a conversation share, exports its own revision. `servedAt` maps
+ *  each card of a snapshot to the ISO moment its slot began to show the
+ *  data it shows, when dfo-apis' history says. `createdAt` is an ISO
+ *  timestamp: the moment the share's text was written. */
 export type SharedView = {
     id: string;
     kind: StudioShareKind;
@@ -44,6 +46,7 @@ export type SharedView = {
     live: boolean;
     undrawn: string[];
     slots: Record<string, number>;
+    servedAt: Record<string, string>;
     createdAt: string;
 };
 
@@ -105,6 +108,7 @@ export const sharedViewOf = (row: {
         live,
         undrawn: [],
         slots: {},
+        servedAt: {},
         createdAt: row.createdAt.toISOString(),
     };
 };

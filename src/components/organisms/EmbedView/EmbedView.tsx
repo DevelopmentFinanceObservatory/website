@@ -160,7 +160,15 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
                 shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
-                snapshot={shared.live ? undefined : shared}
+                snapshot={
+                    shared.live
+                        ? undefined
+                        : {
+                              id: shared.id,
+                              createdAt: shared.createdAt,
+                              servedAt: infoWidget ? shared.servedAt[infoWidget.id] : undefined,
+                          }
+                }
             />
         </div>
     );

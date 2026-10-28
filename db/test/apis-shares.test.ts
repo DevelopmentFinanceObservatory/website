@@ -238,7 +238,7 @@ test('owner writes to shares held in dfo-apis', async (t) => {
     });
 
     await t.test(
-        'before an account goes, each of its shares is taken down with its token, and a failure stops there',
+        'before an account goes, each of its shares is taken down with its token, a lost token counts as gone, and a failure stops there',
         async () => {
             await database.runtimePool().query('delete from share_token');
 
@@ -260,16 +260,19 @@ test('owner writes to shares held in dfo-apis', async (t) => {
                         )
                 ).rows.map(({ share_id: id }) => id);
 
-            // The first share is gone already, and dfo-apis fails the third.
+            // The first share is gone already, the second's token is lost,
+            // which leaves nothing to try again, and dfo-apis fails the third.
             const failing = backendOf(({ url }) =>
                 url.endsWith('Aaaaaaa1')
                     ? Response.json({ code: 'not_found' }, { status: 404 })
-                    : url.endsWith('Aaaaaaa3')
-                      ? Response.json(
-                            { code: 'service_unavailable', retryable: true },
-                            { status: 503 },
-                        )
-                      : new Response(null, { status: 204 }),
+                    : url.endsWith('Aaaaaaa2')
+                      ? Response.json({ code: 'write_token_invalid' }, { status: 403 })
+                      : url.endsWith('Aaaaaaa3')
+                        ? Response.json(
+                              { code: 'service_unavailable', retryable: true },
+                              { status: 503 },
+                          )
+                        : new Response(null, { status: 204 }),
             );
 
             await assert.rejects(takeDownUserShares({ db, backend: failing.backend }, 'owner'), {

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies are validated field by field below */
+import { asRecord } from '../asRecord.ts';
 import {
     type Assumption,
     type AssumptionKind,
@@ -58,11 +59,8 @@ const GROUP_IDENTIFIER_MAX_LENGTH = 1024;
 const isGroupIdentifier = (value: unknown): boolean =>
     value == null || (typeof value === 'string' && value.length <= GROUP_IDENTIFIER_MAX_LENGTH);
 
-const isPlainObject = (value: any): boolean =>
-    !!value && typeof value === 'object' && !Array.isArray(value);
-
 const isEntityGroup = (value: any): value is EntityGroup =>
-    isPlainObject(value) &&
+    asRecord(value) !== undefined &&
     Object.keys(value).every(
         (member) =>
             member === 'ref' ||
@@ -83,7 +81,7 @@ const isEntityGroup = (value: any): value is EntityGroup =>
  *  role key at most, each holding a label and an optional ref, entity type
  *  and total only. */
 const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
-    isPlainObject(value) &&
+    asRecord(value) !== undefined &&
     Object.entries(value).every(
         ([role, group]) => ENTITY_ROLE_KEYS.includes(role) && isEntityGroup(group),
     );
@@ -107,7 +105,7 @@ const ASSUMPTION_BINDING_REF_MAX_LENGTH = 1036;
 const ASSUMPTIONS_MAX = 67;
 
 const isAssumption = (value: any): value is Assumption =>
-    isPlainObject(value) &&
+    asRecord(value) !== undefined &&
     Object.keys(value).every((member) =>
         ['kind', 'binding_ref', 'refs', 'text'].includes(member),
     ) &&

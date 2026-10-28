@@ -16,6 +16,7 @@ import type { CardRef, FrameRef } from './widgets.ts';
  *
  *   POST   {apis}/api/presentation/shares                         createShare
  *   GET    {apis}/api/presentation/shares/{id}                    readShare
+ *   GET    {apis}/api/presentation/shares/{id}/history            readShareHistory
  *   POST   {apis}/api/presentation/shares/{id}/snapshot           (token) ownerShareWrite
  *   DELETE {apis}/api/presentation/shares/{id}                    (token) ownerShareWrite,
  *                                                                  createOwnedShare
@@ -88,6 +89,15 @@ export type ShareRecord = {
     slots: RecordSlot[];
     payload: unknown;
     createdAt: string;
+};
+
+/** One entry of what a share's slot showed (`GET .../shares/{id}/history`):
+ *  the card and frame it began to show at `firstServedAt`, an ISO
+ *  timestamp. `card` is null when the slot showed no card. */
+export type ServedEntry = {
+    slot: number;
+    card: (CardRef & { frame: FrameRef }) | null;
+    firstServedAt: string;
 };
 
 /** A slot's card as dfo-apis drew it on the frame the slot serves: the
@@ -247,6 +257,33 @@ const slotOf = (raw: unknown): RecordSlot => {
     };
 };
 
+const servedOf = (raw: unknown): ServedEntry => {
+    const value = asRecord(raw);
+    const slot = value?.['slot'];
+    const firstServedAt = value?.['first_served_at'];
+
+    if (!value || !Number.isSafeInteger(slot) || typeof firstServedAt !== 'string') {
+        throw new SharesError('backend_invalid');
+    }
+
+    if (value['frame'] === null) {
+        return { slot: slot as number, card: null, firstServedAt };
+    }
+
+    const frame = frameOf(value['frame']);
+    const componentId = value['component_id'];
+
+    if (!frame || typeof componentId !== 'string' || !Number.isSafeInteger(value['revision'])) {
+        throw new SharesError('backend_invalid');
+    }
+
+    return {
+        slot: slot as number,
+        card: { component_id: componentId, revision: value['revision'] as number, frame },
+        firstServedAt,
+    };
+};
+
 /** A new `shw_` write token in dfo-apis' form. */
 export const mintWriteToken = (): string =>
     `${WRITE_TOKEN_PREFIX}${Buffer.from(crypto.getRandomValues(new Uint8Array(WRITE_TOKEN_BYTES))).toString('base64url')}`;
@@ -339,6 +376,22 @@ export const readShare = async (
     };
 };
 
+/** What each slot of a share showed, newest first, an entry each time it
+ *  changed. dfo-apis records an entry at every write and at each read that
+ *  serves something new. */
+export const readShareHistory = async (
+    backend: SharesBackend,
+    id: string,
+): Promise<ServedEntry[]> => {
+    const body = await json(await send(backend, `${sharePath(id)}/history`));
+
+    if (body['id'] !== id || !Array.isArray(body['served'])) {
+        throw new SharesError('backend_invalid');
+    }
+
+    return body['served'].map(servedOf);
+};
+
 /** Slot `slot` (from 1) of a share: its card drawn on the frame the slot
  *  serves. Reading it is what has dfo-apis check a live slot for newer data,
  *  at most once per 15 minutes, and record the frame in the share's history.
@@ -376,8 +429,9 @@ const takeDown = (backend: SharesBackend, id: string, token: string): Promise<Re
  * Make a share and keep its write token for `userId`, the signed-in maker.
  * A guest's share (`userId` null) keeps no token, so nobody can change or
  * remove it. When the token cannot be kept, because the write fails or
- * another user's row holds the id, the new share is deleted with it before
- * the failure is thrown, so no share is left that its maker cannot manage.
+ * another user's row holds the id, the new share is deleted with it and a
+ * retryable `token_not_kept` is thrown, so no share is left that its maker
+ * cannot manage. A second try makes a share under a new id.
  */
 export const createOwnedShare = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
@@ -407,9 +461,10 @@ export const createOwnedShare = async (
     console.error('share: the write token was not kept, so the share was taken down', {
         share: id,
         removed,
+        error: kept === false ? 'another user holds its write token' : String(kept),
     });
 
-    throw kept === false ? new Error(`share ${id}: another user holds its write token`) : kept;
+    throw new SharesError('token_not_kept', { retryable: true });
 };
 
 // The refusals that say the share is gone or its token grants nothing.
@@ -482,7 +537,10 @@ export const ownerShareWrite = async (
 /**
  * Take down every share `userId` keeps a write token for, before their
  * account is deleted, dropping each token once its share is gone. A share
- * dfo-apis no longer has (`not_found`) counts as taken down. Any other
+ * dfo-apis no longer has (`not_found`) counts as taken down, and so does one
+ * whose token dfo-apis refuses (`write_token_*`), which is logged: nothing
+ * can take that share down, and its lost token must not block the account's
+ * deletion. Any other
  * failure throws its `SharesError`, and the shares not yet taken down keep
  * their tokens, so the account can be deleted again later and no share is
  * left without one.
@@ -493,8 +551,15 @@ export const takeDownUserShares = async (
 ): Promise<void> => {
     for (const { shareId, writeToken } of await listShareTokens(db, userId)) {
         await takeDown(backend, shareId, writeToken).catch((error: unknown) => {
-            if (!(error instanceof SharesError && error.code === 'not_found')) {
+            if (!(error instanceof SharesError && isLostShare(error))) {
                 throw error;
+            }
+
+            if (error.code !== 'not_found') {
+                console.error('share: dfo-apis refused the write token, so the share stays up', {
+                    share: shareId,
+                    code: error.code,
+                });
             }
         });
         await deleteShareToken(db, { shareId, userId });

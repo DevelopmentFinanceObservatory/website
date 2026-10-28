@@ -91,11 +91,13 @@ const slotCard = (served: typeof DATASET_FRAME) => {
 };
 
 /** A dfo-apis holding `record`, whose slot 1 serves `served`. `slotReply`
- *  replaces its slot card answer. */
+ *  replaces its slot card answer, and `historyReply` its history, which
+ *  otherwise lists nothing. */
 const depsOf = (
     record: ShareRecord,
     served = DATASET_FRAME,
     slotReply?: (call: Call) => Response | Promise<Response>,
+    historyReply: () => Response = () => Response.json({ id: record.id, served: [] }),
 ): { deps: SlotDeps; calls: Call[] } => {
     const calls: Call[] = [];
     const fetcher: typeof fetch = async (input, init) => {
@@ -111,6 +113,10 @@ const depsOf = (
 
         if (url.pathname === `/api/presentation/shares/${record.id}`) {
             return Response.json(shareBody(record));
+        }
+
+        if (url.pathname === `/api/presentation/shares/${record.id}/history`) {
+            return historyReply();
         }
 
         if (url.pathname === `/api/presentation/shares/${record.id}/slots/1`) {
@@ -160,12 +166,64 @@ test("a snapshot's slotted cards are drawn on the server on the frame each slot 
     // A snapshot's card with no slot stays as stored, and so does a note.
     assert.deepEqual(table, { kind: 'table', id: 'c2', turn: 1 });
     assert.deepEqual(note, NOTE);
-    // The slot card read, never the revision's own read, with no credential.
-    assert.deepEqual(
-        calls.map(({ path }) => path),
-        ['/api/presentation/shares/Ab3dEf7h/slots/1'],
+    // The slot card read, never the revision's own read, with no credential,
+    // and one read of the share's history.
+    assert.deepEqual(calls.map(({ path }) => path).toSorted(), [
+        '/api/presentation/shares/Ab3dEf7h/history',
+        '/api/presentation/shares/Ab3dEf7h/slots/1',
+    ]);
+    assert.ok(calls.every(({ headers }) => headers.get('x-dfo-principal') === null));
+});
+
+const servedEntry = (slot: number, frame: typeof DATASET_FRAME | null, at: string) => ({
+    slot,
+    component_id: frame && 'cmp_a',
+    revision: frame && 2,
+    frame,
+    rendering: null,
+    first_served_at: at,
+    retention: null,
+    fetchable: frame !== null,
+});
+
+test("a snapshot card's citation date is when its slot began to show the frame it serves", async () => {
+    const record = recordOf('snapshot');
+    // Newest first: the live share moved on and back, and slot 2 was emptied.
+    const history = [
+        servedEntry(2, null, '2026-10-29T09:00:00Z'),
+        servedEntry(1, DATASET_FRAME, '2026-10-28T15:00:00Z'),
+        servedEntry(1, MOVED_FRAME, '2026-10-28T12:00:00Z'),
+        servedEntry(1, DATASET_FRAME, '2026-10-28T10:00:00Z'),
+    ];
+    const { deps } = depsOf(record, DATASET_FRAME, undefined, () =>
+        Response.json({ id: record.id, served: history }),
     );
-    assert.equal(calls[0]?.headers.get('x-dfo-principal'), null);
+
+    assert.deepEqual((await sharedViewOfRecord(deps, record)).servedAt, {
+        c1: '2026-10-28T15:00:00Z',
+    });
+
+    // No entry for the slot's frame, or no history: no date, and the cards
+    // are drawn all the same.
+    for (const reply of [
+        () => Response.json({ id: record.id, served: [history[2]] }),
+        () => Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
+        () => Response.json({ id: record.id, served: [{ slot: 1 }] }),
+    ]) {
+        const view = await sharedViewOfRecord(
+            depsOf(record, DATASET_FRAME, undefined, reply).deps,
+            record,
+        );
+
+        assert.deepEqual(view.servedAt, {});
+        assert.deepEqual(view.undrawn, []);
+    }
+
+    // A live share's page reads no history.
+    const live = depsOf(recordOf('live'));
+
+    assert.deepEqual((await sharedViewOfRecord(live.deps, recordOf('live'))).servedAt, {});
+    assert.equal(live.calls.length, 0);
 });
 
 test('a snapshot card the server cannot read stays held and is named for the browser to fill', async () => {

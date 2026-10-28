@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import type { ShareRecord } from '../chat/apisShares.ts';
 import type { SearchShare, SearchShareRef } from './searchShare.ts';
 import type { SearchSharePart } from './searchShareRequest.ts';
@@ -48,17 +49,12 @@ export const searchSharePayload = (
     })),
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
-const refOf = (part: unknown): SearchShareRef | null => {
-    if (
-        !isRecord(part) ||
-        !Number.isSafeInteger(part['part_index']) ||
-        typeof part['spec_id'] !== 'string'
-    ) {
+const refOf = (raw: unknown): SearchShareRef | null => {
+    const part = asRecord(raw);
+
+    if (!part || !Number.isSafeInteger(part['part_index']) || typeof part['spec_id'] !== 'string') {
         return null;
     }
 
@@ -67,7 +63,7 @@ const refOf = (part: unknown): SearchShareRef | null => {
         variableText: textOrNull(part['variable_text']),
         specId: part['spec_id'],
         identity: part['identity'],
-        entityGroups: isRecord(part['entity_groups'])
+        entityGroups: asRecord(part['entity_groups'])
             ? (part['entity_groups'] as SearchShareRef['entityGroups'])
             : null,
         operations: Array.isArray(part['operations'])
@@ -84,9 +80,9 @@ const refOf = (part: unknown): SearchShareRef | null => {
 /** A search share as the search page and its download read it, or null for
  *  a share of another kind or a payload that is not a search's. */
 export const searchShareOf = (record: ShareRecord): SearchShare | null => {
-    const { payload } = record;
+    const payload = asRecord(record.payload);
 
-    if (record.kind !== 'search' || !isRecord(payload) || !Array.isArray(payload['parts'])) {
+    if (record.kind !== 'search' || !payload || !Array.isArray(payload['parts'])) {
         return null;
     }
 

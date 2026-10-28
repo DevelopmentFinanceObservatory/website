@@ -19,6 +19,7 @@
  * chart type it was created with when a later revision changes it.
  */
 
+import { asRecord } from '../asRecord.ts';
 import type { CardData, CardRef, FrameRef, Widget } from '../chat/widgets';
 import { payloadFrameRef, payloadTitle } from './payload.ts';
 import { widgetFromComponent } from './widgets.ts';
@@ -50,34 +51,42 @@ type DataWidget = Exclude<Widget, { kind: 'text' }>;
  *  served, and has no `data`. */
 export type StoredCard = DataWidget & { csv?: string };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === 'object' && !Array.isArray(value);
-
 const DATA_KINDS = new Set(['key_number', 'chart', 'table']);
 
-export const isStoredCard = (value: unknown): value is StoredCard =>
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    value['id'] !== '' &&
-    typeof value['kind'] === 'string' &&
-    DATA_KINDS.has(value['kind']);
+export const isStoredCard = (value: unknown): value is StoredCard => {
+    const record = asRecord(value);
+
+    return (
+        typeof record?.['id'] === 'string' &&
+        record['id'] !== '' &&
+        typeof record['kind'] === 'string' &&
+        DATA_KINDS.has(record['kind'])
+    );
+};
 
 // Whether a record names a component revision, as a `ref` and a read both do.
 const namesRevision = (record: Record<string, unknown>): boolean =>
     typeof record['component_id'] === 'string' && Number.isInteger(record['revision']);
 
-const isCardRef = (value: unknown): value is CardRef => isRecord(value) && namesRevision(value);
+const isCardRef = (value: unknown): value is CardRef => {
+    const record = asRecord(value);
+
+    return record !== undefined && namesRevision(record);
+};
 
 /** A read response body as a `ComponentRead`. Undefined when it is not one. */
-export const asComponentRead = (body: unknown): ComponentRead | undefined =>
-    isRecord(body) &&
-    namesRevision(body) &&
-    typeof body['catalog_version'] === 'string' &&
-    isRecord(body['stored_intent']) &&
-    isRecord(body['fact_summary']) &&
-    isRecord(body['resolved_payload'])
-        ? (body as ComponentRead)
+export const asComponentRead = (body: unknown): ComponentRead | undefined => {
+    const record = asRecord(body);
+
+    return record &&
+        namesRevision(record) &&
+        typeof record['catalog_version'] === 'string' &&
+        asRecord(record['stored_intent']) &&
+        asRecord(record['fact_summary']) &&
+        asRecord(record['resolved_payload'])
+        ? (record as ComponentRead)
         : undefined;
+};
 
 // --- Values -----------------------------------------------------------------
 
@@ -135,8 +144,10 @@ const dataLines = (kind: StoredCard['kind'], data: CardData): string | undefined
  * Undefined for a card that holds no values.
  */
 export const valueLines = (card: StoredCard): string | undefined => {
-    if (isRecord(card.data)) {
-        return dataLines(card.kind, card.data);
+    const { data } = card;
+
+    if (data && asRecord(data)) {
+        return dataLines(card.kind, data);
     }
 
     if (typeof card.csv !== 'string' || !card.csv.includes('\n')) {
@@ -326,7 +337,7 @@ export const cardsWithoutRef = (widgets: unknown): { index: number; card: Stored
  */
 export const cardsWithRef = (widgets: unknown): (StoredCard & { ref: CardRef })[] =>
     cardsOf(widgets).flatMap(({ card }) =>
-        isCardRef(card.ref) && isRecord(card.data) ? [{ ...card, ref: card.ref }] : [],
+        isCardRef(card.ref) && asRecord(card.data) ? [{ ...card, ref: card.ref }] : [],
     );
 
 // --- Validation -------------------------------------------------------------

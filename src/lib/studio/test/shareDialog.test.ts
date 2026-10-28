@@ -108,6 +108,19 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
         ],
         [false, { code: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
         [false, { code: 'share_limit' }, { refusal: { code: 'share_limit' } }],
+        // A refusal a second try would meet again, as its `retryable` says.
+        [
+            false,
+            { code: 'payload_too_large', retryable: false },
+            { refusal: { code: 'payload_too_large' } },
+        ],
+        [
+            false,
+            { code: 'share_refused', retryable: false, upstream_code: 'binding_invalid' },
+            { refusal: { code: 'share_refused' } },
+        ],
+        [false, { code: 'share_refused', retryable: true }, { refusal: { code: 'failed' } }],
+        [false, { code: 'payload_too_large' }, { refusal: { code: 'failed' } }],
         // What a second try can outlive, and every answer outside the contract.
         [
             false,
@@ -180,7 +193,7 @@ test('a link is ready as soon as the share exists, in the mode it was made in', 
     }
 });
 
-test('a share the site refuses to make is withdrawn, failed or limited', async () => {
+test('a share the site refuses to make is withdrawn, failed, limited or refused', async () => {
     const rows: [ShareMint, ShareLink][] = [
         [
             { refusal: { code: 'live_cards_blocked', cardIds: ['cmp_c', 'cmp_a'] }, cards: CARDS },
@@ -199,6 +212,8 @@ test('a share the site refuses to make is withdrawn, failed or limited', async (
         ],
         [{ refusal: { code: 'failed' } }, { status: 'failed' }],
         [{ refusal: { code: 'share_limit' } }, { status: 'limited' }],
+        [{ refusal: { code: 'payload_too_large' } }, { status: 'refused', reason: 'too_large' }],
+        [{ refusal: { code: 'share_refused' } }, { status: 'refused', reason: 'refused' }],
     ];
 
     for (const [mint, expected] of rows) {
