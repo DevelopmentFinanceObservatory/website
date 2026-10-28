@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { forward } from '@/lib/proxy/forward';
 import { PRESENTATION_HEADERS } from '@/lib/proxy/headers';
 import { dotSegmentProblem } from '@/lib/proxy/problem';
-import { isForwardablePath } from '@/lib/proxy/surfaces';
+import { forwardablePath } from '@/lib/proxy/surfaces';
 import { searchApiBase } from '@/lib/searchApi';
 
 // The Presentation API's cards (create, revise, read, and a revision's data),
@@ -11,11 +11,11 @@ import { searchApiBase } from '@/lib/searchApi';
 // token a card was made with goes upstream (PRESENTATION_HEADERS).
 const proxy = (req: NextRequest, { params }: { params: Promise<{ path?: string[] }> }) =>
     params.then(({ path = [] }) => {
-        if (!isForwardablePath(path)) {
+        const rest = forwardablePath(path);
+
+        if (rest === undefined) {
             return dotSegmentProblem();
         }
-
-        const rest = path.map((segment) => `/${encodeURIComponent(segment)}`).join('');
 
         return forward(req, {
             surface: 'api',

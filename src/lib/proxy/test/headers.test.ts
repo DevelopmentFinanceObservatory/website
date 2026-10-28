@@ -135,7 +135,9 @@ test('clientResponseHeaders: carries the PRESENTATION_HEADERS a route asks for',
         etag: '"v1"',
         vary: 'Origin',
         'access-control-allow-origin': '*',
-        'access-control-expose-headers': 'etag',
+        'access-control-expose-headers': 'etag, x-dfo-freshness, x-dfo-checked-at',
+        'x-dfo-freshness': 'current',
+        'x-dfo-checked-at': '2026-10-29T09:00:00+00:00',
         'x-dfo-write-token': 'shw_1',
     });
 
@@ -146,9 +148,11 @@ test('clientResponseHeaders: carries the PRESENTATION_HEADERS a route asks for',
         ),
         {
             'access-control-allow-origin': '*',
-            'access-control-expose-headers': 'etag',
+            'access-control-expose-headers': 'etag, x-dfo-freshness, x-dfo-checked-at',
             etag: '"v1"',
             vary: 'Origin',
+            'x-dfo-checked-at': '2026-10-29T09:00:00+00:00',
+            'x-dfo-freshness': 'current',
         },
     );
 });

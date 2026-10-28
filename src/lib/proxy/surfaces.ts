@@ -23,3 +23,15 @@ export const SEARCH_API_SURFACES = [
  */
 export const isForwardablePath = (segments: readonly string[]): boolean =>
     segments.every((segment) => segment !== '.' && segment !== '..' && !/[/\\]/.test(segment));
+
+/**
+ * The path a route's decoded segments take below its surface upstream, each
+ * segment encoded again, or undefined when isForwardablePath refuses them.
+ * Next.js decodes a segment once, so `%252e%252e` arrives as `%2e%2e`, which
+ * `fetch` would read as `..` if spliced in raw, and `%3F` or `%23` arrives as
+ * `?` or `#`, which would start a query or fragment.
+ */
+export const forwardablePath = (segments: readonly string[]): string | undefined =>
+    isForwardablePath(segments)
+        ? segments.map((segment) => `/${encodeURIComponent(segment)}`).join('')
+        : undefined;

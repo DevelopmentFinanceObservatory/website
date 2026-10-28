@@ -18,7 +18,8 @@
  * two `x-dfo-*` headers the APIs document as public (x-dfo-trace-id and
  * x-dfo-commit, in the docs corpus's dfo-apis/conventions.md). The rest of
  * `x-dfo-*` names internal identity (x-dfo-principal, x-dfo-caller,
- * x-dfo-write-token), so it stays here. The content-length is left behind
+ * x-dfo-write-token), so it stays here, bar the slot data's freshness headers
+ * PRESENTATION_HEADERS carries. The content-length is left behind
  * when the upstream encoded the body, since fetch has decoded it by then.
  * Matching `mcp-*` by prefix means a protocol header added later needs no
  * change here. Of the `x-dfo-*` names only x-dfo-client goes upstream from the
@@ -63,8 +64,10 @@ export type HeaderPass = { request: readonly string[]; response: readonly string
  * What the Presentation API's card and share routes need beyond the defaults:
  * the write token that lets a client revise or delete what it made, the
  * conditional read of a share's slot data (ETag one way, If-None-Match the
- * other), and CORS, so a page on another origin can read that data and its
- * preflight is answered by dfo-apis.
+ * other), the slot data's x-dfo-freshness and x-dfo-checked-at (how current
+ * the data is and when dfo-apis last checked it), and CORS, so a page on
+ * another origin can read that data and its preflight is answered by
+ * dfo-apis.
  */
 export const PRESENTATION_HEADERS: HeaderPass = {
     request: [
@@ -76,6 +79,8 @@ export const PRESENTATION_HEADERS: HeaderPass = {
     ],
     response: [
         'etag',
+        'x-dfo-freshness',
+        'x-dfo-checked-at',
         'vary',
         'access-control-allow-origin',
         'access-control-allow-methods',

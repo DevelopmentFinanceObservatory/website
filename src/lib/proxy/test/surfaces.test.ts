@@ -9,7 +9,7 @@ import { dirname, join, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { isForwardablePath, SEARCH_API_SURFACES } from '../surfaces.ts';
+import { forwardablePath, isForwardablePath, SEARCH_API_SURFACES } from '../surfaces.ts';
 
 const V1 = fileURLToPath(new URL('../../../app/api/v1', import.meta.url));
 
@@ -55,26 +55,51 @@ test('isForwardablePath: a decoded segment that would climb out of its surface i
     }
 });
 
-// Next.js resolves the `@/` imports of a route, so `node --test` cannot load
-// one; the guard is held to the routes by their source. Every catch-all route
-// under /api/v1 that forwards is found by globbing: it refuses an unsafe path
-// with isForwardablePath, or admits only the exact names studioRoute lists.
-const forwardingCatchAlls = readdirSync(V1, { recursive: true, encoding: 'utf8' })
-    .filter((file) => file.endsWith('route.ts') && /\[\[?\.\.\.path\]\]?/.test(file))
-    .map((file) => ({ file, source: readFileSync(join(V1, file), 'utf8') }))
-    .filter(({ source }) => /\bforward\(/.test(source));
+test('forwardablePath: encodes each decoded segment so it stays one segment below its surface', () => {
+    const upstream = (segments: string[]) =>
+        new URL(`https://apis.test/api/datasets${forwardablePath(segments) ?? ''}`);
 
-test('every forwarding catch-all under /api/v1 refuses an unsafe path before forwarding', () => {
-    assert.ok(forwardingCatchAlls.length >= SEARCH_API_SURFACES.length);
+    // /api/v1/datasets/%252e%252e/skills/x reaches the route as `%2e%2e`,
+    // which fetch would read as `..` if spliced in raw.
+    assert.equal(upstream(['%2e%2e', 'skills', 'x']).pathname, '/api/datasets/%252e%252e/skills/x');
 
-    for (const { file, source } of forwardingCatchAlls) {
-        assert.match(source, /isForwardablePath\(path\)|studioRoute\(/, file);
+    for (const segment of ['spec?admin=1', 'spec#frag']) {
+        const url = upstream([segment, 'cv_1']);
+
+        assert.equal(url.search, '', segment);
+        assert.equal(url.hash, '', segment);
+        assert.equal(url.pathname.split('/').length, 5, segment);
     }
+
+    assert.equal(forwardablePath([]), '');
+    assert.equal(forwardablePath(['..', 'skills']), undefined);
 });
 
-test('the component export route refuses a dot id or revision before forwarding', () => {
-    const route = 'presentation/components/[id]/revisions/[revision]/data/route.ts';
-    const source = readFileSync(join(V1, '..', route), 'utf8');
+// Next.js resolves the `@/` imports of a route, so `node --test` cannot load
+// one; the guard is held to the routes by their source. Every route under
+// /api that forwards (calls forward() or builds a target on SEARCH_API_BASE)
+// is found by globbing. One with a dynamic segment builds its upstream path
+// with forwardablePath, refuses dot segments with isForwardablePath before an
+// encoding target builder, or admits only the exact names studioRoute lists;
+// none splices its segments in raw.
+const API = fileURLToPath(new URL('../../../app/api', import.meta.url));
 
-    assert.match(source, /isForwardablePath\(\[id, revision\]\)/);
+const forwardingRoutes = readdirSync(API, { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('route.ts'))
+    .map((file) => ({ file, source: readFileSync(join(API, file), 'utf8') }))
+    .filter(({ source }) => /\bforward\(|\$\{searchApiBase\(\)\}|SEARCH_API_BASE\}/.test(source));
+
+test('every forwarding route with a dynamic segment refuses or encodes it before forwarding', () => {
+    const dynamic = forwardingRoutes.filter(({ file }) => file.includes('['));
+
+    assert.ok(dynamic.length >= SEARCH_API_SURFACES.length + 2);
+
+    for (const { file, source } of dynamic) {
+        assert.match(
+            source,
+            /\bforwardablePath\(|\bisForwardablePath\(\[[^\]]+\]\)|studioRoute\(/,
+            file,
+        );
+        assert.doesNotMatch(source, /\.join\(['"]\/['"]\)|\$\{(path|id|revision)\}/, file);
+    }
 });

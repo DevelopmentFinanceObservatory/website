@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import { SEARCH_API_SURFACES } from './surfaces.ts';
 
 /**
@@ -32,13 +33,15 @@ type OpenApiDocument = JsonObject & {
     components?: JsonObject & { schemas?: JsonObject };
 };
 
-const isObject = (value: unknown): value is JsonObject =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isDocument = (value: unknown): value is OpenApiDocument => {
+    const document = asRecord(value);
 
-const isDocument = (value: unknown): value is OpenApiDocument =>
-    isObject(value) &&
-    isObject(value.paths) &&
-    (value.components === undefined || isObject(value.components));
+    return (
+        document !== undefined &&
+        asRecord(document.paths) !== undefined &&
+        (document.components === undefined || asRecord(document.components) !== undefined)
+    );
+};
 
 /** The site's address for a dfo-apis path, or undefined when the site does not serve it. */
 export const publicPath = (path: string): string | undefined => {
@@ -72,8 +75,8 @@ const collectSchemas = (node: unknown, schemas: JsonObject, found: Set<string>):
         for (const item of node) {
             collectSchemas(item, schemas, found);
         }
-    } else if (isObject(node)) {
-        for (const [key, value] of Object.entries(node)) {
+    } else {
+        for (const [key, value] of Object.entries(asRecord(node) ?? {})) {
             if (key === '$ref' && typeof value === 'string' && value.startsWith(SCHEMA_REF)) {
                 const name = schemaName(value);
 
