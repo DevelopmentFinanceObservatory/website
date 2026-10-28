@@ -197,7 +197,8 @@ The app defines the definitive contract once it exists. Known so far:
 | `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                       |
 | `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                   |
 | `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                             |
-| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                                              |
+| `CALLER_HMAC_KEY`                     | HMAC key for the client digest sent as `x-dfo-caller` (`/mcp`, and dfo-apis beside the principal); unset, none is sent; secret set by infra                                                             |
+| `DFO_CALLER_PRINCIPAL`                | Secret shared with dfo-apis (its `DFO_CALLER_PRINCIPAL`), sent as `x-dfo-caller-principal` on every dfo-apis call so dfo-apis trusts `x-dfo-caller`; unset, neither is sent                             |
 | `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                |
 | `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
 | `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
@@ -220,7 +221,12 @@ The proxy forwards `content-type`, `accept` and every `mcp-*` request header
 (`mcp-method` and `mcp-name` among them, which the harness checks against the
 request body), and returns `content-type`, `content-disposition`,
 `content-length`, `www-authenticate` and every `mcp-*` response header.
-`x-dfo-caller` is set by the proxy, whatever the client sent. `authorization`
+`x-dfo-caller` is set by the proxy, whatever the client sent. A call to
+dfo-apis carries `x-dfo-caller` beside `x-dfo-caller-principal` when
+`DFO_CALLER_PRINCIPAL` is set, and neither when it is unset. The digest's
+input is the client address folded as the rate limiter folds it (an IPv6
+address as its /64), so dfo-apis, which computes the same digest for a direct
+caller, keys both on one allowance. `authorization`
 is set by the proxy only when `MCP_API_TOKEN` is set; otherwise the client's
 own `authorization` header goes through to the harness. A malformed
 `TRUSTED_PROXY_HOPS` stops a production server at startup. If one reaches a

@@ -22,7 +22,9 @@
  * when the upstream encoded the body, since fetch has decoded it by then.
  * Matching `mcp-*` by prefix means a protocol header added later needs no
  * change here. Of the `x-dfo-*` names only x-dfo-client goes upstream from the
- * client; authorization and x-dfo-caller are set by forward.ts.
+ * client by default; authorization, x-dfo-caller and x-dfo-caller-principal
+ * are set by forward.ts. A route can carry more in both directions with a
+ * HeaderPass, as the Presentation API's routes do (PRESENTATION_HEADERS).
  */
 const REQUEST_PREFIXES = ['mcp-'];
 const RESPONSE_PREFIXES = ['mcp-'];
@@ -53,6 +55,36 @@ const RESPONSE_HEADERS = [
     'x-dfo-commit',
     'allow',
 ];
+
+/** Headers a route carries beyond the defaults, each way. */
+export type HeaderPass = { request: readonly string[]; response: readonly string[] };
+
+/**
+ * What the Presentation API's card and share routes need beyond the defaults:
+ * the write token that lets a client revise or delete what it made, the
+ * conditional read of a share's slot data (ETag one way, If-None-Match the
+ * other), and CORS, so a page on another origin can read that data and its
+ * preflight is answered by dfo-apis.
+ */
+export const PRESENTATION_HEADERS: HeaderPass = {
+    request: [
+        'x-dfo-write-token',
+        'if-none-match',
+        'origin',
+        'access-control-request-method',
+        'access-control-request-headers',
+    ],
+    response: [
+        'etag',
+        'vary',
+        'access-control-allow-origin',
+        'access-control-allow-methods',
+        'access-control-allow-headers',
+        'access-control-allow-credentials',
+        'access-control-expose-headers',
+        'access-control-max-age',
+    ],
+};
 
 // Copy the named headers present on `source` onto `into`.
 export const pick = (source: Headers, names: readonly string[], into: Headers): void => {
@@ -94,9 +126,13 @@ export const clientLabel = (source: Headers): string => {
     return [...printable].slice(0, MAX_CLIENT_LABEL_LENGTH).join('');
 };
 
-/** The client's request headers that go upstream. */
-export const upstreamRequestHeaders = (source: Headers, into: Headers = new Headers()): Headers => {
-    pickWithPrefixes(source, REQUEST_HEADERS, REQUEST_PREFIXES, into);
+/** The client's request headers that go upstream, plus the `extra` names. */
+export const upstreamRequestHeaders = (
+    source: Headers,
+    into: Headers = new Headers(),
+    extra: readonly string[] = [],
+): Headers => {
+    pickWithPrefixes(source, [...REQUEST_HEADERS, ...extra], REQUEST_PREFIXES, into);
 
     const label = clientLabel(source);
 
@@ -115,9 +151,13 @@ export const dropEncodedLength = (source: Headers, into: Headers): void => {
     }
 };
 
-/** The upstream's response headers that go back to the client. */
-export const clientResponseHeaders = (source: Headers, into: Headers = new Headers()): Headers => {
-    pickWithPrefixes(source, RESPONSE_HEADERS, RESPONSE_PREFIXES, into);
+/** The upstream's response headers that go back to the client, plus the `extra` names. */
+export const clientResponseHeaders = (
+    source: Headers,
+    into: Headers = new Headers(),
+    extra: readonly string[] = [],
+): Headers => {
+    pickWithPrefixes(source, [...RESPONSE_HEADERS, ...extra], RESPONSE_PREFIXES, into);
     dropEncodedLength(source, into);
 
     return into;

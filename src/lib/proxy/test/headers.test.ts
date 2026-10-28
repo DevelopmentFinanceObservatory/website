@@ -2,13 +2,18 @@
  * `headers.ts`: which request and response headers cross the proxy. Every
  * `mcp-*` header goes either way whatever its case, the cleaned x-dfo-client
  * label goes up, and the public x-dfo-trace-id and x-dfo-commit come back;
- * credentials, the caller header and the other `x-dfo-*` headers are never
- * copied.
+ * credentials, the caller headers and the other `x-dfo-*` headers are never
+ * copied, bar the write token a route asks for in PRESENTATION_HEADERS.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clientResponseHeaders, pick, upstreamRequestHeaders } from '../headers.ts';
+import {
+    clientResponseHeaders,
+    pick,
+    PRESENTATION_HEADERS,
+    upstreamRequestHeaders,
+} from '../headers.ts';
 
 test('upstreamRequestHeaders: carries mcp-method and mcp-name', () => {
     const out = upstreamRequestHeaders(
@@ -86,6 +91,7 @@ test('upstreamRequestHeaders: drops credentials, x-dfo-* and other headers', () 
         new Headers({
             authorization: 'Bearer client',
             'x-dfo-caller': 'ip:spoofed',
+            'x-dfo-caller-principal': 'spoofed',
             'x-dfo-trace-id': 'spoofed',
             'x-dfo-principal': 'user:42',
             'x-dfo-write-token': 'w1',
@@ -97,6 +103,54 @@ test('upstreamRequestHeaders: drops credentials, x-dfo-* and other headers', () 
     );
 
     assert.deepEqual([...out], []);
+});
+
+test('upstreamRequestHeaders: carries the PRESENTATION_HEADERS a route asks for', () => {
+    const client = new Headers({
+        'x-dfo-write-token': 'shw_1',
+        'if-none-match': '"v1"',
+        origin: 'https://example.org',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'if-none-match',
+        'x-dfo-caller-principal': 'spoofed',
+    });
+
+    assert.deepEqual([...upstreamRequestHeaders(client)], []);
+    assert.deepEqual(
+        Object.fromEntries(
+            upstreamRequestHeaders(client, new Headers(), PRESENTATION_HEADERS.request),
+        ),
+        {
+            'access-control-request-headers': 'if-none-match',
+            'access-control-request-method': 'GET',
+            'if-none-match': '"v1"',
+            origin: 'https://example.org',
+            'x-dfo-write-token': 'shw_1',
+        },
+    );
+});
+
+test('clientResponseHeaders: carries the PRESENTATION_HEADERS a route asks for', () => {
+    const upstream = new Headers({
+        etag: '"v1"',
+        vary: 'Origin',
+        'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'etag',
+        'x-dfo-write-token': 'shw_1',
+    });
+
+    assert.deepEqual([...clientResponseHeaders(upstream)], []);
+    assert.deepEqual(
+        Object.fromEntries(
+            clientResponseHeaders(upstream, new Headers(), PRESENTATION_HEADERS.response),
+        ),
+        {
+            'access-control-allow-origin': '*',
+            'access-control-expose-headers': 'etag',
+            etag: '"v1"',
+            vary: 'Origin',
+        },
+    );
 });
 
 test('upstreamRequestHeaders: adds to the headers it is given', () => {
