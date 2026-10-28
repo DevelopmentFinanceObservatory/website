@@ -61,3 +61,22 @@ The script refuses a share whose:
 ## Not exported
 
 `share_card_result` rows are not exported. They cache live refreshes, and dfo-apis refreshes live slots itself. The `conversation_id` and `card_id` columns are not exported either, because no share page reads them.
+
+## Round trip on a local stack
+
+`scripts/share-migration-round-trip.ts` runs the whole migration on a local website and the dfo-apis local stack. It makes two cards in dfo-apis on the stack's seeded readings, seeds one share per legacy case (a search share with no mode from a guest, a search snapshot, a canvas with no mode holding a card with no component reference, a live canvas holding a card with no frame, a live card, a guest's snapshot card with no component reference, and a conversation with no mode), and runs `export-shares`, dfo-apis' `import-shares` and `import-share-tokens`. It then renders `/s/<id>` and `/embed/<id>` of each share through the dev server and checks what each shows: a search share redirects to `/data?share=<id>` and reads back its mode, query and parts from `/api/share/<id>`, a slotted card draws its component revision and not its stored copy, a card with no component reference and a conversation's cards show as stored, and each live slot draws its card from `/api/v1/presentation/shares/<id>/slots/<n>`. The owner signs in with a session row and switches their live canvas to snapshot with its imported token, and cannot delete a guest's share. Last, it runs both imports again and checks that dfo-apis holds the same shares and `share_token` the same tokens.
+
+It needs the stack up and seeded (`just local-stack up` and `just local-stack seed` in dfo-apis), a migrated website database, and the dev server on that database in front of the stack, with the caller principal and HMAC key the stack uses:
+
+```
+docker run -d --rm --name website-db -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55433:5432 postgres:18
+PGHOST=127.0.0.1 PGPORT=55433 node db/migrate-local.ts
+export DATABASE_URL=postgresql://website_runtime:website_runtime_dev_password@127.0.0.1:55433/website
+export BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+SEARCH_API_BASE=http://127.0.0.1:58083 BETTER_AUTH_URL=http://127.0.0.1:3000 \
+  DFO_CALLER_PRINCIPAL=local-caller-principal CALLER_HMAC_KEY=local-caller-hmac-key \
+  RATE_LIMIT_API=100000 pnpm dev -H 127.0.0.1 -p 3000 &
+DFO_APIS_DIR=/path/to/dfo-apis node scripts/share-migration-round-trip.ts
+```
+
+The dev server runs on port 3000 because the stack's share links name `http://127.0.0.1:3000`. `WEBSITE_URL` points the script at another address. Each check prints one line, and the script exits 1 when any fails. Its shares, cards and rows stay in place under fresh ids, so it can run again on the same stack.
