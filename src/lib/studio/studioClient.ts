@@ -33,7 +33,7 @@ export const STOP_GRACE_MS = 10_000;
  * How long the page waits on a stop of a plan-card switch. The harness reads
  * a stopped switch's stream on for up to its `SWITCH_REOFFER_SECONDS` (10 s)
  * to re-offer the plan, so this grace is that window plus 5 s for the
- * re-offer to arrive; a shorter one would close the stream on a live pause.
+ * re-offer to arrive. A shorter one would close the stream on a live pause.
  */
 export const SWITCH_STOP_GRACE_MS = 15_000;
 
@@ -48,8 +48,8 @@ const transportError = (detail: string): StudioFrame => ({
 });
 
 /** A problem document the site proxy answered with itself
- *  (src/lib/proxy/problem): its `code`, the status of a harness that
- *  answered before the relay failed (`upstream_status`, null when the
+ *  (src/lib/proxy/problem). It carries the `code`, the status of a harness
+ *  that answered before the relay failed (`upstream_status`, null when the
  *  harness was not reached), and the Retry-After seconds. */
 export type ProxyProblem = {
     code: string;
@@ -70,8 +70,8 @@ export type StreamRefusal = {
 
 /** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
  *  and `onUnreachable` a request that got no response at all (the fetch
- *  rejected), before the stream would report either as an `error` frame;
- *  each returns true when it has dealt with it. */
+ *  rejected), before the stream would report either as an `error` frame.
+ *  Each returns true when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onKeepAlive?: () => void;

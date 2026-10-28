@@ -86,7 +86,7 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
-// a reopened conversation can still show it.
+// a reopened conversation can show it.
 export type ChatMessage =
     | { role: 'user'; text: string; card?: { title: string }; answer?: true }
     | {
@@ -286,7 +286,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         clarify?: Clarify;
         plan?: PlanState;
     } | null>(null);
-    // The latest plan this turn offered, or is waiting on a switch of: a
+    // The latest plan this turn offered, or is waiting on a switch of. A
     // fresh plan.proposed carries its baseline (what the turn's first plan
     // held) and learns which choice its switch moved. A new turn clears it.
     const turnPlanRef = useRef<PlanState | null>(null);
@@ -751,10 +751,10 @@ export const useChat = (initial?: ChatSnapshot) => {
             // read until the harness ends it, so the request counts as in
             // flight, and queued sends wait, until the conversation is free.
             // A caller that ends the turn itself keeps the frames (a switch's
-            // stream may re-offer the plan); a Stop before the request
+            // stream may re-offer the plan). A Stop before the request
             // started ends it at once, and the request is skipped. Returns
-            // whether to send the cancel: on the stream's first Stop, once
-            // its request has started.
+            // whether to send the cancel, which is true on the stream's
+            // first Stop once its request has started.
             const halt = (): boolean => {
                 if (stopped || generationRef.current !== generation) {
                     return false;
@@ -1204,7 +1204,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                         return true;
                     },
                     // The request never reached the harness, so the pause
-                    // still waits.
+                    // waits.
                     onUnreachable: () => {
                         offerPlan(unreachableSwitch(waiting));
 
@@ -1217,8 +1217,8 @@ export const useChat = (initial?: ChatSnapshot) => {
                         }
 
                         // Stopped while it waited behind the stream that
-                        // offered the plan: nothing reached the harness, so
-                        // the pause still waits.
+                        // offered the plan. Nothing reached the harness, so
+                        // the pause waits.
                         if (!sent) {
                             offerPlan(stoppedQueuedSwitch(waiting));
 
@@ -1316,10 +1316,10 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, [applyChoice, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()) and
-    // ask the harness to cancel, once per stream whose request started: on a
+    // ask the harness to cancel, once per stream whose request started. On a
     // switch, a second cancel would end the stream before the harness
-    // re-offers the plan.
-    // Requests queued behind it also wait for the cancel request to answer.
+    // re-offers the plan. Requests queued behind it also wait for the cancel
+    // request to answer.
     const stop = useCallback(() => {
         const conversation = sessionRef.current;
 

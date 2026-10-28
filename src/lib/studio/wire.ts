@@ -333,7 +333,7 @@ export type PlanDecision = {
     // every option it offers, and the one the plan counts by now. A
     // decision without `choice_id` is an ordinary planner decision.
     // `choice_id` is built from the requirement and the axis, so it holds
-    // across a conversation's switches; an older harness built it from a
+    // across a conversation's switches. An older harness built it from a
     // spec id a switch can re-pin.
     choice_id?: string | null;
     options?: PlanDecisionOption[] | null;
@@ -408,8 +408,8 @@ export type PlanProposed = {
 /** A switch that did not apply: the option the user picked, the refusal's
  *  code, a reader's sentence saying why and what still holds, and whether
  *  picking the option again could apply (false for a failure that would
- *  repeat, such as an option Search cannot serve; absent from a harness that
- *  predates it). A switch stopped through `/cancel` re-offers the unchanged
+ *  repeat, such as an option Search cannot serve, and absent from a harness
+ *  that predates it). A switch stopped through `/cancel` re-offers the unchanged
  *  plan with `code: "switch_cancelled"` and `retryable: true`. */
 export type PlanSwitchFailed = {
     choice_id: string;

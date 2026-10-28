@@ -36,8 +36,8 @@ type ChatMessageProps = {
 /**
  * One transcript entry: a user bubble, or a bot turn — markdown, the cards
  * it put on the whiteboard as chips, the plan the user approved for it, and
- * (on the latest turn) the suggested
- * follow-ups and the chips that switch a scope choice of the answer.
+ * (on the latest turn) the suggested follow-ups and the chips that switch a
+ * scope choice of the answer.
  */
 const ChatMessage = ({
     message,

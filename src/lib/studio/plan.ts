@@ -24,16 +24,16 @@ export type PlanSwitch = { choiceId: string; optionId: string };
 
 /** Why the last answer to the plan did not apply. A notice about a switch
  *  names the choice and option it was for, so the card says it on that
- *  choice's row and can try the option again; a notice about the whole plan
+ *  choice's row and can try the option again. A notice about the whole plan
  *  (a stale card) names neither. */
 export type PlanNotice = {
     // A short first line naming the option ("Could not switch to net
     // disbursements."), null when `text` says it all.
     lead: string | null;
     text: string;
-    // Whether picking the option again could apply; false where the refusal
+    // Whether picking the option again could apply. False where the refusal
     // would repeat (an option Search cannot serve, signed out, rate limited)
-    // and on a card that is no longer live.
+    // and on a card that is not live.
     retryable: boolean;
     // When "Try again" shows (ms epoch): the delay the harness asked for,
     // counted from the refusal's arrival. Null to offer it at once.
@@ -95,14 +95,14 @@ export type PlanState = {
     version: number;
     actions: PlanAction[];
     interruptId: string;
-    // The pause the harness sent is still waiting on the user, so the card's
+    // The pause the harness sent is waiting on the user, so the card's
     // controls answer it. False once a switch ended without the harness
-    // offering a plan again: the turn ended, and the card stays read-only.
+    // offering a plan again. The turn has ended and the card is read-only.
     live: boolean;
     // The approval key a switch echoes, null from a harness that predates it.
     revision: string | null;
     // What the scope choices held on the first plan of the turn, and the
-    // ones that hold another option now.
+    // ones that hold another option on this plan.
     baseline: PlanBaseline;
     changed: PlanChange[];
     // The choice whose switch applied and produced this plan, null
@@ -171,8 +171,8 @@ export const optionLabel = (
  *  re-offering the unchanged plan. */
 export const SWITCH_CANCELLED = 'switch_cancelled';
 
-/** The notice of a switch that never reached the harness: the pause still
- *  waits, so picking the option again can apply. */
+/** The notice of a switch that did not reach the harness. The pause waits,
+ *  so picking the option again can apply. */
 export const UNREACHABLE_NOTICE = 'Studio could not be reached.';
 
 const ASK_AGAIN = 'Ask again to change the plan.';
@@ -446,8 +446,8 @@ export const stalePlan = (refusal: StreamRefusal, previous?: PlanState): PlanSta
 
 /**
  * Why a switch did not apply. With the harness's `detail`, a lead naming the
- * option and the detail under it; without one, the card's own words: what
- * the user picked, and what the plan still counts.
+ * option and the detail under it; without one, the card's own words (what
+ * the user picked, and what the plan still counts).
  */
 const unappliedNotice = (
     plan: PlanState,
@@ -462,8 +462,8 @@ const unappliedNotice = (
         retryAt,
     });
 
-/** " The plan still counts gross disbursements.": the option the pick's
- *  choice still holds, or nothing when the plan lacks the choice. */
+/** The sentence " The plan still counts gross disbursements." for the option
+ *  the pick's choice holds, or nothing when the plan lacks the choice. */
 const stillCounts = (plan: PlanState, pick: PlanSwitch): string => {
     const decision = plan.decisions.find((candidate) => candidate.choice_id === pick.choiceId);
 
@@ -490,8 +490,8 @@ const proxyUnreached = ({ proxy }: StreamRefusal): boolean =>
  * The harness refused the switch before touching the pause: another request
  * holds the conversation (409 `transient_unavailable`), the plan does not
  * offer the option (422 `switch_option_unavailable`), or the caller is rate
- * limited (429, the harness's or the site proxy's, which never forwards the
- * switch). After any other refusal the pause may be gone or in use.
+ * limited (429, the harness's or the site proxy's, which answers without
+ * forwarding the switch). After any other refusal the pause may be gone or in use.
  */
 const leavesPause = ({ status, error }: StreamRefusal): boolean =>
     status === 429 ||
@@ -511,11 +511,12 @@ const leavesPause = ({ status, error }: StreamRefusal): boolean =>
  * (retryableRefusal), and once the ToolError's `retry_after_seconds`, when
  * it sets them, have run from `now`, when the refusal arrived. The site
  * proxy's rate limit says the studio is busy (BUSY_TEXT) and offers "Try
- * again" once its Retry-After has run, or not at all when it names no wait. A switch the proxy could not forward is a request
- * that never reached the harness (unreachableSwitch). Any other refusal (a
- * 404, a 401, a 5xx, a 422 `binding_invalid`, the proxy's 502 after the
- * harness answered) ends the card read-only (endedPlan), with the harness's
- * detail when a ToolError carries it and the card's own words otherwise.
+ * again" once its Retry-After has run, or not at all when it names no wait.
+ * A switch the proxy could not forward is a request that did not reach the
+ * harness (unreachableSwitch). Any other refusal (a 404, a 401, a 5xx, a 422
+ * `binding_invalid`, the proxy's 502 after the harness answered) ends the
+ * card read-only (endedPlan), with the harness's detail when a ToolError
+ * carries it and the card's own words otherwise.
  */
 export const refusedSwitch = (
     plan: PlanState,
@@ -575,7 +576,7 @@ export const refusedSwitch = (
 
 /**
  * The card after its switch request never reached the harness (the request
- * failed before any response). The pause still waits, so the card stays live
+ * failed before any response). The pause waits, so the card stays live
  * and its row offers "Try again".
  */
 export const unreachableSwitch = (plan: PlanState): PlanState => {
@@ -595,7 +596,7 @@ export const unreachableSwitch = (plan: PlanState): PlanState => {
 
 /** The card once the user stopped a switch before its request started (it
  *  waited behind the stream that offered the plan). Nothing reached the
- *  harness, so the pause still waits and the card stays live, saying
+ *  harness, so the pause waits and the card stays live, saying
  *  quietly on the choice's row that the plan is unchanged, with Try again. */
 export const stoppedQueuedSwitch = (plan: PlanState): PlanState => {
     const pick = plan.switching;
@@ -662,11 +663,11 @@ export type SwitchStreamEnd = {
 /**
  * The read-only card a switch's stream ended on without a fresh plan, and
  * how its Activity entry closes. A stop the harness answered by closing the
- * stream, cancelling the turn or refusing the switch is skipped: the Stop's
+ * stream, cancelling the turn or refusing the switch is skipped. The Stop's
  * cancel can reach the harness before the switch, which then finds no pause
- * (a 404 or 409). Every other end failed, the switch did not apply: a
- * refusal (its card), a harness error (its reason, a stop before it
- * included), or a stream that closed, broke or sent `done`.
+ * (a 404 or 409). Every other end failed and the switch did not apply. That
+ * covers a refusal (its card), a harness error (its reason, a stop before it
+ * included), and a stream that closed, broke or sent `done`.
  */
 export const endedSwitch = (
     waiting: PlanState,

@@ -1,6 +1,6 @@
 /**
- * `conversationSearch.ts`: conversation search's snippet reads message texts and
- * the title of the card a user message names, and nothing else stored.
+ * The snippet in `conversationSearch.ts` reads message texts and the title of
+ * the card a user message names. Other stored fields do not match.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';

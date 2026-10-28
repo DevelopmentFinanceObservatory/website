@@ -129,8 +129,8 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         return unreachableProblem(options.unreachable, limitHeaders);
     }
 
-    // The upstream answered `status`, so it received the call; the problem
-    // document says so (upstream_status).
+    // The upstream answered `status`, so it received the call, and the
+    // problem document says so (upstream_status).
     const earlyFailure = (error: unknown, status: number): Response => {
         // A client that left aborted the read itself, so no one is answered.
         if (!req.signal.aborted) {

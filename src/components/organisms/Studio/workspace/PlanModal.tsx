@@ -92,8 +92,9 @@ const Steps = ({ view }: { view: PlanView }) => {
 /**
  * The full plan: what it counts, the scope choices (switchable on a live
  * plan) with why the plan holds each, what to keep in mind, the steps folded
- * to labels with the answer step open, then the planner's other decisions. A live plan's footer asks to approve; an
- * approved plan opens read-only from the pill under its answer.
+ * to labels with the answer step open, then the planner's other decisions.
+ * A live plan's footer asks to approve. An approved plan opens read-only
+ * from the pill under its answer.
  */
 const PlanModal = ({
     view,
@@ -150,7 +151,7 @@ const PlanModal = ({
                 />
                 <section className={styles.section}>
                     <p className={styles.sectionHead}>Steps</p>
-                    {/* A switch can move the answer step; the open set
+                    {/* A switch can move the answer step, and the open set
                         starts again from the new one. */}
                     <Steps key={answerKey} view={view} />
                 </section>

@@ -24,20 +24,19 @@ type PlanCardProps = {
  * summary, the scope choices ("Counted as", each switchable in place), the
  * step that gives the answer, what to keep in mind about the answer, and
  * "View full plan" to every step in a modal. Then the "Start building?" bar
- * with Cancel and Approve. Changes
- * still travel through the chat input below (ChatPanel repurposes it as
- * "Propose changes or ask a follow up…" while the plan is pending, wired to
- * the amend decision).
+ * with Cancel and Approve. Changes travel through the chat input below
+ * (ChatPanel repurposes it as "Propose changes or ask a follow up…" while
+ * the plan is pending, wired to the amend decision).
  *
  * What a switch changed (the rows marked Changed, the choices moved without
  * a row, and the steps) is also written out in one polite live region, empty
  * between switches and read by screen readers only, so it is announced when
  * the fresh plan arrives.
  *
- * The card's height follows the number of scope choices.
- * While a switch is in flight the steps line dims and the bar waits. A card
- * whose pause has ended (a switch ended without a fresh plan) is read-only:
- * no bar, and its rows say to ask again.
+ * The card's height follows the number of scope choices. While a switch is
+ * in flight the steps line dims and the bar waits. A card whose pause has
+ * ended (a switch ended without a fresh plan) is read-only, with no bar, and
+ * its rows say to ask again.
  */
 const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
     const [open, setOpen] = useState(false);

@@ -32,8 +32,9 @@ export const PlanMeta = ({ view, approved }: { view: PlanView; approved?: boolea
 
 /**
  * "Keep in mind": what qualifies the answer, one sentence a line, on the card
- * and in the full plan; nothing without caveats. `className` places it in its
- * host, and `headClassName` draws its head as the host's other section heads.
+ * and in the full plan, and nothing without caveats. `className` places it in
+ * its host, and `headClassName` draws its head as the host's other section
+ * heads.
  */
 export const PlanCaveats = ({
     caveats,
@@ -56,7 +57,7 @@ export const PlanCaveats = ({
         </div>
     );
 
-/** Whether `notice`'s `retryAt` has passed; true at once without one. */
+/** Whether `notice`'s `retryAt` has passed, true at once without one. */
 const useWaited = (notice: PlanNotice | null): boolean => {
     const retryAt = notice?.retryAt ?? null;
     const [waited, setWaited] = useState<PlanNotice | null>(null);

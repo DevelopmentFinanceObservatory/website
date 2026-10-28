@@ -242,8 +242,8 @@
     grid-column: 1 / -1;
 }
 
-// Why the last switch did not apply, under its row: an expected outcome,
-// so a quiet panel in the ledger's own tones.
+// Why the last switch did not apply, under its row. An expected outcome, so
+// a quiet panel in the ledger's own tones.
 .notice {
     @include flex(row, space-between, flex-start);
     @include font-size(11px, 1.35);
@@ -261,7 +261,7 @@
     border-radius: rem(6);
 }
 
-// A switch the user stopped: their own outcome, so plain text with no
+// A switch the user stopped. Their own outcome, so plain text with no
 // panel.
 .noticeQuiet {
     padding: 0;

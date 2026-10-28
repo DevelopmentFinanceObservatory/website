@@ -1224,8 +1224,8 @@ test('a switch stopped and re-offered by the harness is live again, with Try aga
 
     assert.equal(reoffered.live, true);
     assert.equal(reoffered.interruptId, 'int-2');
-    // The user stopped it: the reason alone, quietly, with no "Could not
-    // switch" lead.
+    // The user stopped it, so the notice is the reason alone, said quietly,
+    // with a null lead.
     assert.deepEqual(reoffered.notice, {
         lead: null,
         text: 'The switch was stopped. The plan still counts gross.',

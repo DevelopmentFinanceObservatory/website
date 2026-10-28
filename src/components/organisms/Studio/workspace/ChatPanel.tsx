@@ -93,7 +93,7 @@ const ChatPanel = ({
         }
 
         // While a plan awaits review, the input is the "Propose changes"
-        // channel — the text travels as an amendment, not a new turn. A
+        // channel, and the text travels as an amendment, not a new turn. A
         // read-only card awaits nothing, so the text asks again.
         if (chat.plan?.live) {
             chat.respondPlan('amend', follow.trim());
