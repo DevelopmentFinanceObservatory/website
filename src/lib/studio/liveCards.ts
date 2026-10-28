@@ -14,7 +14,7 @@ import type { FactSummary } from './wire.ts';
 /**
  * A live Studio share's viewer side: what the share pages hand the browser,
  * and how the browser fills each data card from
- * `POST /api/share/[id]/cards/[cardId]/refresh`.
+ * `GET /api/share/[id]/cards/[cardId]/refresh`.
  *
  * A live share's stored copy holds the numbers its cards showed when it was
  * made. `sharedViewOf` withholds them on the server, so neither the HTML nor
@@ -359,8 +359,8 @@ const askOnce = async (
     signal: AbortSignal,
 ): Promise<Answer> => {
     try {
+        // A GET, so the browser's cache revalidates the card with its ETag.
         const response = await fetcher(url, {
-            method: 'POST',
             signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
         });
 

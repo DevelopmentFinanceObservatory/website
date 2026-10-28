@@ -90,6 +90,9 @@ const REFUSALS: Record<string, string> = {
         "This card's data cannot be written as Excel. Download it as CSV or Parquet instead.",
     internal_error: 'The file did not match the card, so it was not served. Try again later.',
     live_unavailable: 'Live data is unavailable for this link.',
+    // slotCards.ts LIVE_FILE_UNAVAILABLE: a bundle or Excel file of a card on newer data.
+    live_file_unavailable:
+        'On current data this card downloads as CSV or Parquet, without the README and citation.',
     backend_timeout: 'The data took too long to prepare. Try again.',
     unauthorized: 'Live data is unavailable for this link.',
     refresh_not_configured: 'Live data is unavailable for this link.',

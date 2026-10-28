@@ -1,7 +1,10 @@
 import {
     readShare,
-    readSlot,
+    readSlotCard,
+    readSlotFile,
     SharesError,
+    SLOT_FILE_FORMATS,
+    type CreateShareBody,
     type ShareRecord,
     type SharesBackend,
 } from '../chat/apisShares.ts';
@@ -14,18 +17,17 @@ import { gateOf } from './gate.ts';
 import {
     BackendError,
     bounded,
-    livePrincipal,
+    componentReadOf,
+    drawnFrame,
     readComponent,
-    renderedExport,
-    renderOnFrame,
     storedExport,
     type LiveBackend,
-    type LiveCard,
 } from './liveBackend.ts';
 import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
 
 /**
- * The cards of a share held in dfo-apis, as the share pages draw them.
+ * The cards of a share held in dfo-apis, as the share pages draw them, and
+ * the check a live share's cards pass before it is made.
  *
  * A share's payload (src/lib/chat/sharePayload.ts) holds each slotted data
  * card with `slot`, the 0-based index of the slot that draws it, and none of
@@ -34,32 +36,19 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
  * server from their revisions' public reads, which are the numbers the share
  * was made with. A live share's cards leave the server held, and the browser
  * fills each one (`refreshLiveCards`) from
- * `POST /api/share/[id]/cards/[cardId]/refresh`, whose body is
+ * `GET /api/share/[id]/cards/[cardId]/refresh`, whose body is
  * `slotRefreshResponse`.
  *
- * A live card is drawn on the frame its slot serves now: a read of dfo-apis'
- * slot data route, which checks for newer data at most once per 15 minutes
- * and records what it served in the share's history. When that is the
- * frame the card revision stands on, the revision's own public read is the
- * card. When the data moved, the revision is drawn on the served frame
- * through dfo-apis' render route, which only the live-refresh credential
- * (`LIVE_REFRESH_PRINCIPAL`) opens. Without it a moved card answers
- * `live_unavailable`.
+ * A live card is dfo-apis' public slot card route: the slot's card drawn on
+ * the frame the slot serves now. dfo-apis checks for newer data at most once
+ * per 15 minutes and records what it served in the share's history. The
+ * route's `ETag` and `Cache-Control` pass through, and so does the browser's
+ * `If-None-Match`, so a card that has not changed answers 304.
  *
  * No database, React, or path-alias dependency, so `node --test` imports it.
  */
 
-type Env = Record<string, string | undefined>;
-
-export type SlotDeps = {
-    shares: SharesBackend;
-    // dfo-apis' render routes, or null without the live-refresh credential.
-    render: LiveBackend | null;
-};
-
-/** Whether this deployment can draw a live share's cards on moved data. */
-export const liveSharingAvailable = (env: Env = process.env): boolean =>
-    livePrincipal(env) !== null;
+export type SlotDeps = { shares: SharesBackend };
 
 // The public component reads and exports, which carry no credential.
 const publicReads = ({ shares }: SlotDeps): LiveBackend => ({
@@ -69,26 +58,35 @@ const publicReads = ({ shares }: SlotDeps): LiveBackend => ({
     fetch: shares.fetch,
 });
 
-// A refresh's whole budget, as the site's old live refresh had it.
+// A refresh's whole budget: the share read and the slot card read.
 const REFRESH_DEADLINE_MS = 75_000;
 
 // One export call: dfo-apis stops a component route at 30 seconds.
 const EXPORT_DEADLINE_MS = 35_000;
 
-// How many component reads one snapshot page has in flight at once: the
+// The component reads that check a new live share share this deadline: 20
+// cards four at a time is five rounds of reads of about 25 milliseconds.
+const CREATE_CHECK_DEADLINE_MS = 15_000;
+
+// How many component reads one page or check has in flight at once: the
 // dfo-apis default for `PRESENTATION_COMPONENTS_MAX_CONCURRENCY`.
 const READ_CONCURRENCY = 4;
+
+// A viewer opening a live canvas reads one slot card per data card, and
+// each read can cost dfo-apis a newest-data check and a render, so the cap
+// bounds what one opening costs.
+export const LIVE_SHARE_MAX_DATA_CARDS = 20;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const sameFrame = (a: FrameRef | null, b: FrameRef): boolean =>
-    a !== null && a.spec_id === b.spec_id && a.content_version === b.content_version;
+const sameFrame = (a: FrameRef | null, b: FrameRef | null): boolean =>
+    a?.spec_id === b?.spec_id && a?.content_version === b?.content_version;
 
 type PayloadWidget = Record<string, unknown> & { id: string; kind: string };
 
-const widgetsOf = (record: ShareRecord): PayloadWidget[] => {
-    const widgets = isRecord(record.payload) ? record.payload['widgets'] : undefined;
+const widgetsOf = (payload: unknown): PayloadWidget[] => {
+    const widgets = isRecord(payload) ? payload['widgets'] : undefined;
 
     return Array.isArray(widgets)
         ? widgets.filter(
@@ -165,7 +163,7 @@ export const sharedViewOfRecord = async (
     const gate = gateOf(READ_CONCURRENCY);
 
     const widgets = await Promise.all(
-        widgetsOf(record).map(async (widget) => {
+        widgetsOf(record.payload).map(async (widget) => {
             if (!isHeld(record, widget)) {
                 return widget as unknown as Widget;
             }
@@ -202,11 +200,9 @@ export const sharedViewOfRecord = async (
     };
 };
 
-type Drawn =
-    | { status: 'current' | 'redrawn'; card: LiveCard; ref: CardRef; frame: FrameRef }
-    | { status: 'error'; code: string; retryable?: true };
+type CardError = { status: 'error'; code: string; retryable?: true };
 
-const errorOf = (error: unknown): Drawn => {
+const errorOf = (error: unknown): CardError => {
     if (error instanceof BackendError || error instanceof SharesError) {
         return {
             status: 'error',
@@ -216,39 +212,6 @@ const errorOf = (error: unknown): Drawn => {
     }
 
     throw error;
-};
-
-/** One slot of a live share drawn on the frame it serves now. */
-export const drawLiveSlot = async (
-    deps: SlotDeps,
-    shareId: string,
-    slot: number,
-): Promise<Drawn> => {
-    const signal = AbortSignal.timeout(REFRESH_DEADLINE_MS);
-
-    try {
-        const served = await readSlot({ ...deps.shares, signal }, shareId, slot);
-        const ref = { component_id: served.componentId, revision: served.revision };
-        const stored = await readComponent(bounded(publicReads(deps), REFRESH_DEADLINE_MS), ref);
-
-        if (sameFrame(stored.frame, served.frame)) {
-            return { status: 'current', card: stored.card, ref, frame: served.frame };
-        }
-
-        if (!deps.render) {
-            return { status: 'error', code: 'live_unavailable' };
-        }
-
-        const drawn = await renderOnFrame(
-            bounded(deps.render, REFRESH_DEADLINE_MS),
-            ref,
-            served.frame,
-        );
-
-        return { status: 'redrawn', card: drawn.card, ref, frame: served.frame };
-    } catch (error) {
-        return errorOf(error);
-    }
 };
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -265,24 +228,27 @@ const notFound = (): Response =>
 // The slot of a live share's data card, or null: no such share, a share
 // that is not live, or no data card with that id drawn by a slot.
 const liveSlotOf = async (
-    deps: SlotDeps,
+    shares: SharesBackend,
     shareId: string,
     cardId: string,
 ): Promise<number | null> => {
-    const record = await readShare(deps.shares, shareId);
+    const record = await readShare(shares, shareId);
 
     if (!record || record.mode !== 'live') {
         return null;
     }
 
-    const widget = widgetsOf(record).find((entry) => entry.id === cardId);
+    const widget = widgetsOf(record.payload).find((entry) => entry.id === cardId);
 
     return (widget && slotCardOf(record, widget)?.slot) ?? null;
 };
 
 /**
- * `POST /api/share/[id]/cards/[cardId]/refresh`. 404 unless the share is
- * live and a slot draws the card. Otherwise 200 with `{status, card}` or
+ * `GET /api/share/[id]/cards/[cardId]/refresh`. 404 unless the share is
+ * live and a slot draws the card. Otherwise 200 with `{status, card}`, where
+ * `status` is `current` when the card stands on its revision's own frame and
+ * `redrawn` when dfo-apis drew it on newer data, under dfo-apis' `ETag` and
+ * `Cache-Control`; 304 when `ifNoneMatch` names that ETag; or 200 with
  * `{status: 'error', code, retryable?}`, so one failing card leaves the rest
  * of the page standing. A share id that is not dfo-apis' form answers 404.
  */
@@ -290,11 +256,13 @@ export const slotRefreshResponse = async (
     deps: SlotDeps,
     shareId: string,
     cardId: string,
+    ifNoneMatch: string | null = null,
 ): Promise<Response> => {
+    const shares = { ...deps.shares, signal: AbortSignal.timeout(REFRESH_DEADLINE_MS) };
     let slot: number | null;
 
     try {
-        slot = await liveSlotOf(deps, shareId, cardId);
+        slot = await liveSlotOf(shares, shareId, cardId);
     } catch (error) {
         if (error instanceof SharesError && error.status === 404) {
             return notFound();
@@ -307,12 +275,25 @@ export const slotRefreshResponse = async (
         return notFound();
     }
 
-    const drawn = await drawLiveSlot(deps, shareId, slot);
+    try {
+        const served = await readSlotCard(shares, shareId, slot, ifNoneMatch);
+        const headers = new Headers({ 'Cache-Control': served.cacheControl ?? 'no-cache' });
 
-    return Response.json(
-        drawn.status === 'error' ? drawn : { status: drawn.status, card: drawn.card },
-        { headers: NO_STORE },
-    );
+        if (served.etag) {
+            headers.set('ETag', served.etag);
+        }
+
+        if (!served.body) {
+            return new Response(null, { status: 304, headers });
+        }
+
+        const { card, frame } = componentReadOf(served.body);
+        const status = sameFrame(frame, drawnFrame(card)) ? 'current' : 'redrawn';
+
+        return Response.json({ status, card }, { headers });
+    } catch (error) {
+        return Response.json(errorOf(error), { headers: NO_STORE });
+    }
 };
 
 const EXPORT_HEADERS = ['content-type', 'content-disposition', 'content-length'];
@@ -333,12 +314,43 @@ const noFile = (
         headers: NO_STORE,
     });
 
+/** The code of a live card's download that dfo-apis can write only on the
+ *  card's own frame (a bundle, or Excel), refused while the slot serves
+ *  newer data. */
+export const LIVE_FILE_UNAVAILABLE = 'live_file_unavailable';
+
+// A bundle or an Excel file of a live card: the stored revision's export,
+// which holds the rows the slot serves only while it serves the revision's
+// own frame.
+const storedFileOnServedFrame = async (
+    deps: SlotDeps,
+    shares: SharesBackend,
+    shareId: string,
+    slot: number,
+    options: { format: string; bundle: string },
+): Promise<Response> => {
+    const { body } = await readSlotCard(shares, shareId, slot);
+    const { card, frame } = componentReadOf(body ?? {});
+
+    if (!sameFrame(frame, drawnFrame(card))) {
+        throw new BackendError(LIVE_FILE_UNAVAILABLE, 422);
+    }
+
+    return storedExport(
+        bounded(publicReads(deps), EXPORT_DEADLINE_MS),
+        { component_id: card.component_id, revision: card.revision },
+        options,
+    );
+};
+
 /**
  * `GET /api/share/[id]/cards/[cardId]/data?format=&bundle=`. The rows of a
- * live card on the frame its slot serves now: the stored revision's public
- * export when that is its own frame, else the render export on the served
- * frame. A download that cannot be served answers a problem document under
- * an error status, so a browser does not save it as the file.
+ * live card on the frame its slot serves now. An unbundled CSV or Parquet
+ * file is dfo-apis' slot data route. A bundle or an Excel file is the stored
+ * revision's export while the slot serves the revision's own frame, and
+ * otherwise 422 `live_file_unavailable`. A download that cannot be served
+ * answers a problem document under an error status, so a browser does not
+ * save it as the file.
  */
 export const slotDataResponse = async (
     deps: SlotDeps,
@@ -346,49 +358,32 @@ export const slotDataResponse = async (
     cardId: string,
     query: URLSearchParams,
 ): Promise<Response> => {
+    const shares = { ...deps.shares, signal: AbortSignal.timeout(EXPORT_DEADLINE_MS) };
     let slot: number | null;
 
     try {
-        slot = await liveSlotOf(deps, shareId, cardId);
+        slot = await liveSlotOf(shares, shareId, cardId);
     } catch (error) {
         if (error instanceof SharesError && error.status === 404) {
             return notFound();
         }
 
-        const failed = errorOf(error) as { code: string; retryable?: boolean };
-
-        return noFile(failed);
+        return noFile(errorOf(error));
     }
 
     if (slot === null) {
         return notFound();
     }
 
-    const drawn = await drawLiveSlot(deps, shareId, slot);
-
-    if (drawn.status === 'error') {
-        return noFile(drawn);
-    }
-
-    const options = {
-        format: query.get('format') ?? undefined,
-        bundle: query.get('bundle') ?? undefined,
-    };
+    // dfo-apis' export defaults: a CSV bundle.
+    const format = query.get('format') ?? 'csv';
+    const bundle = query.get('bundle') ?? 'true';
 
     try {
         const upstream =
-            drawn.status === 'redrawn' && deps.render
-                ? await renderedExport(
-                      bounded(deps.render, EXPORT_DEADLINE_MS),
-                      drawn.ref,
-                      drawn.frame,
-                      options,
-                  )
-                : await storedExport(
-                      bounded(publicReads(deps), EXPORT_DEADLINE_MS),
-                      drawn.ref,
-                      options,
-                  );
+            bundle === 'false' && SLOT_FILE_FORMATS.includes(format)
+                ? await readSlotFile(shares, shareId, slot, format)
+                : await storedFileOnServedFrame(deps, shares, shareId, slot, { format, bundle });
         const headers = new Headers(NO_STORE);
 
         pick(upstream.headers, EXPORT_HEADERS, headers);
@@ -396,7 +391,7 @@ export const slotDataResponse = async (
 
         return new Response(upstream.body, { headers });
     } catch (error) {
-        if (!(error instanceof BackendError)) {
+        if (!(error instanceof BackendError || error instanceof SharesError)) {
             throw error;
         }
 
@@ -404,4 +399,87 @@ export const slotDataResponse = async (
 
         return noFile(error, status);
     }
+};
+
+type BlockedCard = { id: string; reason: 'unknown_component' | 'unsupported_frame' };
+
+const isRefreshableFrame = (frame: FrameRef | null): boolean =>
+    frame !== null && (frame.spec_id.startsWith('spec_') || frame.spec_id.startsWith('ops_'));
+
+/**
+ * The problem document that says why `body`, a live share about to be made,
+ * cannot be live, or null when it can. Run before the create, so a share
+ * whose cards fail is never made. The share holds at most
+ * `LIVE_SHARE_MAX_DATA_CARDS` cards (400 `live_too_many_cards`, with `limit`
+ * and `count`), and every card's revision is one dfo-apis reads publicly
+ * and stands on a dataset or derived frame, which a slot can follow to
+ * newer data (400 `live_cards_blocked`, naming the payload widget of each
+ * card that fails). A read that fails for want of an answer is 502
+ * `transient_unavailable`.
+ */
+export const liveCardsRefusal = async (
+    deps: SlotDeps,
+    { cards, payload }: Pick<CreateShareBody, 'cards' | 'payload'>,
+): Promise<Response | null> => {
+    if (cards.length > LIVE_SHARE_MAX_DATA_CARDS) {
+        return problem({
+            status: 400,
+            code: 'live_too_many_cards',
+            detail: `A live share holds at most ${LIVE_SHARE_MAX_DATA_CARDS} data cards; this one holds ${cards.length}.`,
+            retryable: false,
+            extra: { limit: LIVE_SHARE_MAX_DATA_CARDS, count: cards.length },
+        });
+    }
+
+    const reads = bounded(publicReads(deps), CREATE_CHECK_DEADLINE_MS);
+    const gate = gateOf(READ_CONCURRENCY);
+    // Each slot's card, by the payload widget that the slot draws.
+    const slotted = widgetsOf(payload).flatMap((widget) => {
+        const index = widget['slot'];
+        const ref = Number.isSafeInteger(index) ? cards[index as number] : undefined;
+
+        return ref ? [{ id: widget.id, ref }] : [];
+    });
+
+    const blockOf = async ({ id, ref }: { id: string; ref: CardRef }) => {
+        try {
+            const { frame } = await gate(() => readComponent(reads, ref));
+
+            return isRefreshableFrame(frame) ? null : { id, reason: 'unsupported_frame' as const };
+        } catch (error) {
+            // A 4xx is dfo-apis saying the ref names no component of its own.
+            if (error instanceof BackendError && error.status && error.status < 500) {
+                return { id, reason: 'unknown_component' as const };
+            }
+
+            throw error;
+        }
+    };
+
+    let blocked: BlockedCard[];
+
+    try {
+        blocked = (await Promise.all(slotted.map(blockOf))).filter((block) => block !== null);
+    } catch (error) {
+        console.error('live share: card check failed', {
+            error: error instanceof BackendError ? error.code : String(error),
+        });
+
+        return problem({
+            status: 502,
+            code: 'transient_unavailable',
+            detail: 'The data cards could not be checked right now. Try again in a minute.',
+            retryable: true,
+        });
+    }
+
+    return blocked.length
+        ? problem({
+              status: 400,
+              code: 'live_cards_blocked',
+              detail: 'Some data cards cannot show live data, so the share cannot be live.',
+              retryable: false,
+              extra: { cards: blocked },
+          })
+        : null;
 };

@@ -78,9 +78,6 @@ export type StudioProps = {
     // A gallery item: the same read-only sheet, plus the one action a
     // curated session exists for — carrying it on in your own Studio.
     continuable?: boolean;
-    // The site can refresh a live share's cards (`liveSharingAvailable`,
-    // read on the server), so the Share dialog offers Live Data.
-    liveSharing?: boolean;
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
     examples?: readonly string[];
@@ -116,7 +113,6 @@ const Studio = ({
     openId,
     guest = false,
     continuable = false,
-    liveSharing = false,
     examples = [],
 }: StudioProps) => {
     const sharedSaved = shared?.saved;
@@ -744,7 +740,6 @@ const Studio = ({
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
-                    liveSharing={liveSharing}
                     createShare={save.createShare}
                     guest={guest}
                 />

@@ -15,7 +15,6 @@ import { apisFetch } from '@/lib/apisAuth';
 import { db } from '@/lib/db';
 import { setApisCaller } from '@/lib/proxy/caller';
 import { searchApiBase } from '@/lib/searchApi';
-import { liveBackendFrom } from '@/lib/studio/liveBackend';
 import type { SlotDeps } from '@/lib/studio/slotCards';
 
 /**
@@ -63,10 +62,8 @@ export const writeOwnShare = (
 ): Promise<'done' | 'not_found'> =>
     ownerShareWrite({ db, backend: sharesBackendFor(incoming) }, write);
 
-/** What the share pages and live card routes draw with: dfo-apis' share
- *  routes, and its render routes when this deployment holds the
- *  live-refresh credential. */
+/** What the share pages, the live card routes, and a live share's check
+ *  draw with: dfo-apis' share routes and public component reads. */
 export const slotDepsFor = (incoming: Headers): SlotDeps => ({
     shares: sharesBackendFor(incoming),
-    render: liveBackendFrom(process.env, apisFetch),
 });

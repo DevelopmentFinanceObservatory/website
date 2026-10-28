@@ -428,7 +428,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
     });
 });
 
-test('a request is a bare POST to the share-gated route', async () => {
+test("a request is a bare GET to the share-gated route, left to the browser's cache", async () => {
     const { deps, calls } = site({ 'cmp a/b': [{ body: { status: 'current', card: CARD } }] });
     const seen: string[] = [];
     const fetcher = deps.fetch;
@@ -442,7 +442,10 @@ test('a request is a bare POST to the share-gated route', async () => {
     await settle(deps, ['cmp a/b']);
 
     assert.deepEqual(seen, ['/api/share/Ab12Cd34/cards/cmp%20a%2Fb/refresh']);
-    assert.equal(calls[0]!.init?.method, 'POST');
+    // A GET under the default cache mode, so the browser revalidates the
+    // card with the route's ETag.
+    assert.equal(calls[0]!.init?.method ?? 'GET', 'GET');
+    assert.equal(calls[0]!.init?.cache, undefined);
     assert.equal(calls[0]!.init?.body, undefined);
     assert.equal(calls[0]!.init?.headers, undefined);
 });

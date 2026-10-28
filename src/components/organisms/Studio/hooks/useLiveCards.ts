@@ -56,7 +56,7 @@ const settledOf = (held: Widget | undefined, outcome: LiveCardOutcome): Settled 
  * The data cards of a live share, filled in the browser. `widgets` is the
  * canvas as the share page sent it, whose data cards are held (see
  * `sharedViewOf`). Each one is refreshed through
- * `POST /api/share/[id]/cards/[cardId]/refresh` and drawn as soon as its own
+ * `GET /api/share/[id]/cards/[cardId]/refresh` and drawn as soon as its own
  * answer arrives.
  *
  * Returns the widgets to render, with every refreshed card drawn in place

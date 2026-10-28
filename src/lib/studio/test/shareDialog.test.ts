@@ -1,15 +1,13 @@
 /**
  * `shareDialog.ts`: the links of the Studio share dialog. What the site's
  * answer to a new share means, which cards a share holds, and how a live
- * link is checked, offered, or withdrawn.
+ * link is offered or withdrawn.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { SavedConversation } from '../../chat/history.ts';
 import type { ShareMode, StudioShareKind } from '../../chat/shareMode.ts';
-import { liveFailureKind, type LiveDeps } from '../liveCards.ts';
-import { AI_REFUSALS } from './fixtures/live-backend-stub.ts';
 import {
     openShareLink,
     readShareAnswer,
@@ -29,43 +27,10 @@ const CARDS: SharedCard[] = [
     { id: 'cmp_c', title: 'Remittances' },
 ];
 
-// A refresh answer that settles a card as ready.
-const READY = {
-    status: 'current',
-    card: { component_id: 'cmp', revision: 1, payload: {}, fact_summary: {} },
-};
-const refused = (code: string) => ({ status: 'error', code });
-
-type Reply = { status?: number; body: unknown };
-
 // The site as the dialog meets it: `mint` is what creating the share comes
-// to, and `refresh` scripts each card's refresh answers, one per call,
-// repeating the last. Every request the dialog sends is recorded.
-const site = (mint: ShareMint, refresh: Record<string, Reply[]> = {}) => {
-    const requests: string[] = [];
-    const bodies: unknown[] = [];
+// to. Every share the dialog asks for is recorded.
+const site = (mint: ShareMint) => {
     const created: [StudioShareKind, string | undefined, ShareMode][] = [];
-    const live: LiveDeps = {
-        fetch: async (input, init) => {
-            const path = String(input);
-
-            requests.push(`${init?.method} ${path}`);
-            bodies.push(typeof init?.body === 'string' ? JSON.parse(init.body) : undefined);
-
-            const cardId = /cards\/([^/]+)\/refresh$/.exec(path)?.[1];
-
-            if (!cardId) {
-                return new Response(null, { status: 204 });
-            }
-
-            const replies = refresh[cardId]!;
-            const reply = replies.length > 1 ? replies.shift()! : replies[0]!;
-
-            return Response.json(reply.body, { status: reply.status ?? 200 });
-        },
-        now: () => 0,
-        sleep: async () => {},
-    };
     const open = async (kind: StudioShareKind, mode: ShareMode, cardId?: string) => {
         const reported: ShareLink[] = [];
 
@@ -76,7 +41,6 @@ const site = (mint: ShareMint, refresh: Record<string, Reply[]> = {}) => {
 
                     return mint;
                 },
-                live,
             },
             { kind, cardId, mode },
             (link) => reported.push(link),
@@ -85,7 +49,7 @@ const site = (mint: ShareMint, refresh: Record<string, Reply[]> = {}) => {
         return reported;
     };
 
-    return { open, requests, bodies, created };
+    return { open, created };
 };
 
 test('a link is kept apart by kind, card, and mode', () => {
@@ -205,166 +169,18 @@ test('a share holds the data cards its kind keeps, under the titles their owner 
     assert.deepEqual(sharedDataCards(saved, 'card', 'text', titleOf), []);
 });
 
-test('a snapshot link is ready as soon as the share exists, and asks for no refresh', async () => {
-    const { open, requests, created } = site({ id: 'Snap0001', cards: CARDS });
+test('a link is ready as soon as the share exists, in the mode it was made in', async () => {
+    for (const mode of ['snapshot', 'live'] as const) {
+        const { open, created } = site({ id: 'Link0001', cards: CARDS });
 
-    assert.deepEqual(await open('canvas', 'snapshot'), [
-        { status: 'ready', id: 'Snap0001', mode: 'snapshot', unchecked: 0 },
-    ]);
-    assert.deepEqual(created, [['canvas', undefined, 'snapshot']]);
-    assert.deepEqual(requests, []);
-});
-
-test('a live link is shown once every card has answered the refresh route', async () => {
-    const { open, requests } = site(
-        { id: 'Live0001', cards: CARDS },
-        {
-            cmp_a: [{ body: READY }],
-            cmp_b: [{ body: { status: 'pending', retry_after_s: 2 } }, { body: READY }],
-            cmp_c: [{ body: READY }],
-        },
-    );
-    const reported = await open('canvas', 'live');
-
-    // Until the last card settles the link is `checking`, which has no URL
-    // to copy.
-    assert.deepEqual(
-        reported.map((link) => (link.status === 'checking' ? link.checked : link.status)),
-        [0, 1, 2, 3, 'ready'],
-    );
-    assert.deepEqual(reported.at(-1), {
-        status: 'ready',
-        id: 'Live0001',
-        mode: 'live',
-        unchecked: 0,
-    });
-    assert.deepEqual(
-        requests.toSorted(),
-        [
-            'POST /api/share/Live0001/cards/cmp_a/refresh',
-            'POST /api/share/Live0001/cards/cmp_b/refresh',
-            'POST /api/share/Live0001/cards/cmp_b/refresh',
-            'POST /api/share/Live0001/cards/cmp_c/refresh',
-        ].toSorted(),
-    );
-});
-
-test('a card that can never refresh withdraws the live link: named, deleted, never ready', async () => {
-    const { open, requests } = site(
-        { id: 'Live0002', cards: CARDS },
-        {
-            cmp_a: [{ body: READY }],
-            cmp_b: [{ body: refused('recipe_missing') }],
-            cmp_c: [{ status: 404, body: { code: 'not_found', retryable: false } }],
-        },
-    );
-    const reported = await open('canvas', 'live');
-
-    assert.deepEqual(reported.at(-1), {
-        status: 'withdrawn',
-        withdrawal: { reason: 'cards', cards: [CARDS[1], CARDS[2]] },
-    });
-    assert.equal(
-        reported.some((link) => link.status === 'ready'),
-        false,
-    );
-    // The delete follows the last refresh, so no live share is left behind.
-    assert.equal(requests.at(-1), 'DELETE /api/share/Live0002');
-});
-
-test('a failure that asking again can fix leaves the live link standing', async () => {
-    const { open, requests } = site(
-        { id: 'Live0003', cards: CARDS },
-        {
-            cmp_a: [{ body: READY }],
-            cmp_b: [{ body: refused('backend_unreachable') }],
-            cmp_c: [{ body: { ...refused('service_unavailable'), retryable: true } }],
-        },
-    );
-
-    assert.deepEqual((await open('canvas', 'live')).at(-1), {
-        status: 'ready',
-        id: 'Live0003',
-        mode: 'live',
-        unchecked: 2,
-    });
-    assert.equal(
-        requests.some((request) => request.startsWith('DELETE')),
-        false,
-    );
-});
-
-test('a dfo-apis refusal that says it is retryable leaves the link standing; the same code without it names the card', async () => {
-    for (const [retryable, expected] of [
-        [true, { status: 'ready', id: 'Live0007', mode: 'live', unchecked: 1 }],
-        [false, { status: 'withdrawn', withdrawal: { reason: 'cards', cards: CARDS.slice(0, 1) } }],
-    ] as const) {
-        const { open } = site(
-            { id: 'Live0007', cards: CARDS.slice(0, 1) },
-            {
-                cmp_a: [
-                    {
-                        body: {
-                            ...refused('release_mismatch'),
-                            ...(retryable ? { retryable } : {}),
-                        },
-                    },
-                ],
-            },
-        );
-
-        assert.deepEqual((await open('card', 'live', 'cmp_a')).at(-1), expected, `${retryable}`);
+        // The site checked a live share's cards before it made the share, so
+        // the dialog reports the link once, with nothing more to ask.
+        assert.deepEqual(await open('canvas', mode), [{ status: 'ready', id: 'Link0001', mode }]);
+        assert.deepEqual(created, [['canvas', undefined, mode]]);
     }
 });
 
-test('a site that cannot refresh any card withdraws the live link without blaming a card', async () => {
-    const { open, requests } = site(
-        { id: 'Live0004', cards: CARDS.slice(0, 1) },
-        { cmp_a: [{ body: refused('refresh_not_permitted') }] },
-    );
-
-    assert.deepEqual((await open('card', 'live', 'cmp_a')).at(-1), {
-        status: 'withdrawn',
-        withdrawal: { reason: 'unavailable' },
-    });
-    assert.equal(requests.at(-1), 'DELETE /api/share/Live0004');
-});
-
-test('dfo-ai’s refusals decide the link: a transient one stands, a permanent one names the card, an unset credential withdraws it', async () => {
-    for (const code of Object.keys(AI_REFUSALS)) {
-        const { open, requests } = site(
-            { id: 'Live0006', cards: CARDS.slice(0, 1) },
-            { cmp_a: [{ body: refused(code) }] },
-        );
-        const last = (await open('card', 'live', 'cmp_a')).at(-1);
-        const expected = {
-            transient: { status: 'ready', id: 'Live0006', mode: 'live', unchecked: 1 },
-            permanent: {
-                status: 'withdrawn',
-                withdrawal: { reason: 'cards', cards: CARDS.slice(0, 1) },
-            },
-            switched_off: { status: 'withdrawn', withdrawal: { reason: 'unavailable' } },
-        }[liveFailureKind({ code })];
-
-        assert.deepEqual(last, expected, code);
-        assert.equal(
-            requests.some((request) => request.startsWith('DELETE')),
-            expected.status === 'withdrawn',
-            code,
-        );
-    }
-
-    // The three classes, one code each, so the loop above cannot pass by
-    // putting every code in one class.
-    assert.deepEqual(
-        ['upstream_unavailable', 'recipe_missing', 'unauthorized'].map((code) =>
-            liveFailureKind({ code }),
-        ),
-        ['transient', 'permanent', 'switched_off'],
-    );
-});
-
-test('a share the site refuses to make is withdrawn, failed or limited, with nothing to refresh or delete', async () => {
+test('a share the site refuses to make is withdrawn, failed or limited', async () => {
     const rows: [ShareMint, ShareLink][] = [
         [
             { refusal: { code: 'live_cards_blocked', cardIds: ['cmp_c', 'cmp_a'] }, cards: CARDS },
@@ -386,20 +202,8 @@ test('a share the site refuses to make is withdrawn, failed or limited, with not
     ];
 
     for (const [mint, expected] of rows) {
-        const { open, requests } = site(mint);
-
-        assert.deepEqual(await open('canvas', 'live'), [expected]);
-        assert.deepEqual(requests, []);
+        assert.deepEqual(await site(mint).open('canvas', 'live'), [expected]);
     }
-});
-
-test('a live share with no data card is ready at once', async () => {
-    const { open, requests } = site({ id: 'Live0005', cards: [] });
-
-    assert.deepEqual(await open('canvas', 'live'), [
-        { status: 'ready', id: 'Live0005', mode: 'live', unchecked: 0 },
-    ]);
-    assert.deepEqual(requests, []);
 });
 
 test('the withdrawal sentence names every card in the way, and the limit with the count', () => {
@@ -414,7 +218,8 @@ test('the withdrawal sentence names every card in the way, and the limit with th
 });
 
 test("a live link is made a snapshot through the owner's PATCH", async () => {
-    const { requests, bodies } = site({ refusal: { code: 'failed' } });
+    const requests: string[] = [];
+    const bodies: unknown[] = [];
     const fetcher: typeof fetch = async (input, init) => {
         requests.push(`${init?.method} ${String(input)}`);
         bodies.push(JSON.parse(String(init?.body)));

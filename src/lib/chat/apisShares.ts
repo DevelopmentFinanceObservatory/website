@@ -16,10 +16,13 @@ import type { CardRef, FrameRef } from './widgets.ts';
  *   GET    {apis}/api/presentation/shares/{id}                    readShare
  *   POST   {apis}/api/presentation/shares/{id}/snapshot           (token) ownerShareWrite
  *   DELETE {apis}/api/presentation/shares/{id}                    (token) ownerShareWrite
- *   GET    {apis}/api/presentation/shares/{id}/slots/{n}/data     readSlot
+ *   GET    {apis}/api/presentation/shares/{id}/slots/{n}          readSlotCard
+ *   GET    {apis}/api/presentation/shares/{id}/slots/{n}/data     readSlotFile
  *
- * dfo-apis mints every share id and a `shw_` write token, which a create
- * answers once. A signed-in owner's token is kept in `share_token`
+ * dfo-apis mints every share id. The website mints each create's `shw_`
+ * write token (`mintWriteToken`), so a create that failed on the way can be
+ * sent again with the same token and body and answer the share the first
+ * one made. A signed-in owner's token is kept in `share_token`
  * (shareTokens.ts) and sent back in `x-dfo-write-token` to switch a live
  * share to snapshot or take a share down. A guest's share keeps no token, so
  * it stays as made. Every call names the browser's caller to dfo-apis
@@ -83,13 +86,14 @@ export type ShareRecord = {
     createdAt: string;
 };
 
-/** What a slot serves now: the card revision it shows, the frame it drew
- *  the rows on, and whether that is the newest data. */
-export type SlotServed = {
-    componentId: string;
-    revision: number;
-    frame: FrameRef;
-    freshness: 'current' | 'stale' | 'pending';
+/** A slot's card as dfo-apis drew it on the frame the slot serves: the
+ *  component read's body, with `freshness`, and the reply's `ETag` and
+ *  `Cache-Control`. `body` is null when dfo-apis answered 304 to the
+ *  `If-None-Match` it was sent. */
+export type SlotCard = {
+    body: Record<string, unknown> | null;
+    etag: string | null;
+    cacheControl: string | null;
 };
 
 export type CreateShareBody = {
@@ -103,6 +107,10 @@ export type CreateShareBody = {
 export const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
 const WRITE_TOKEN_HEADER = 'x-dfo-write-token';
+const WRITE_TOKEN_PREFIX = 'shw_';
+// dfo-apis' form of a write token: 16 random bytes as unpadded url-safe
+// base64.
+const WRITE_TOKEN_BYTES = 16;
 const KINDS: readonly string[] = ['card', 'canvas', 'search', 'conversation'];
 const CODE = /^[a-z][a-z0-9_]{0,63}$/;
 // dfo-apis' bound on a title.
@@ -135,9 +143,13 @@ const refusalOf = async (res: Response): Promise<SharesError> => {
 const send = async (
     backend: SharesBackend,
     path: string,
-    init: { method?: string; body?: unknown; token?: string } = {},
+    init: { method?: string; body?: unknown; token?: string; ifNoneMatch?: string | null } = {},
 ): Promise<Response> => {
     const headers = new Headers({ accept: 'application/json' });
+
+    if (init.ifNoneMatch) {
+        headers.set('if-none-match', init.ifNoneMatch);
+    }
 
     backend.nameCaller(headers);
 
@@ -168,7 +180,8 @@ const send = async (
         throw new SharesError(timedOut ? 'backend_timeout' : 'backend_unreachable');
     }
 
-    if (!res.ok) {
+    // A 304 answers a request that sent `If-None-Match`.
+    if (!res.ok && !(init.ifNoneMatch && res.status === 304)) {
         throw await refusalOf(res);
     }
 
@@ -221,30 +234,53 @@ const slotOf = (value: unknown): RecordSlot => {
     };
 };
 
-/** Make a share. Returns its id and write token. */
+/** A new `shw_` write token in dfo-apis' form. */
+export const mintWriteToken = (): string =>
+    `${WRITE_TOKEN_PREFIX}${Buffer.from(crypto.getRandomValues(new Uint8Array(WRITE_TOKEN_BYTES))).toString('base64url')}`;
+
+// A create worth sending again: no answer, or a server fault dfo-apis calls
+// passing. A refusal of the request itself, and a spent allowance, would
+// meet the same answer.
+const isRetryableCreate = (error: unknown): boolean =>
+    error instanceof SharesError &&
+    (error.status === undefined || (error.retryable && error.status >= 500));
+
+/** Make a share under a write token minted here. A create that fails in a
+ *  way a second try can outlive is sent once more, with the same token and
+ *  body, which dfo-apis answers with the share the first create made if it
+ *  made one. Returns the share's id and the write token dfo-apis answers. */
 export const createShare = async (
     backend: SharesBackend,
     { kind, latest, title, cards, payload }: CreateShareBody,
 ): Promise<{ id: string; writeToken: string }> => {
-    const body = await json(
-        await send(backend, '/api/presentation/shares', {
-            method: 'POST',
-            body: {
-                kind,
-                latest,
-                title: title.trim().slice(0, MAX_TITLE) || null,
-                cards,
-                payload,
-            },
-        }),
-    );
-    const { id, write_token: writeToken } = body;
+    const writeToken = mintWriteToken();
+    const request = {
+        method: 'POST',
+        body: {
+            kind,
+            latest,
+            title: title.trim().slice(0, MAX_TITLE) || null,
+            cards,
+            payload,
+            write_token: writeToken,
+        },
+    };
+    const create = async () => json(await send(backend, '/api/presentation/shares', request));
+    const body = await create().catch((error: unknown) => {
+        if (isRetryableCreate(error)) {
+            return create();
+        }
 
-    if (typeof id !== 'string' || !SHARE_ID.test(id) || typeof writeToken !== 'string') {
+        throw error;
+    });
+    // The reply's token is the one dfo-apis holds: the one sent here.
+    const { id, write_token: held } = body;
+
+    if (typeof id !== 'string' || !SHARE_ID.test(id) || typeof held !== 'string') {
         throw new SharesError('backend_invalid');
     }
 
-    return { id, writeToken };
+    return { id, writeToken: held };
 };
 
 /** A share, or null when no share has this id. */
@@ -289,28 +325,39 @@ export const readShare = async (
     };
 };
 
-/** What slot `slot` (from 1) of a share serves now. Reading it is what has
- *  dfo-apis check a live slot for newer data, at most once per 15 minutes,
- *  and record the frame in the share's history. */
-export const readSlot = async (
+/** Slot `slot` (from 1) of a share: its card drawn on the frame the slot
+ *  serves. Reading it is what has dfo-apis check a live slot for newer data,
+ *  at most once per 15 minutes, and record the frame in the share's history.
+ *  `ifNoneMatch` goes to dfo-apis as it came. */
+export const readSlotCard = async (
     backend: SharesBackend,
     id: string,
     slot: number,
-): Promise<SlotServed> => {
-    const body = await json(await send(backend, `${sharePath(id)}/slots/${slot}/data?format=json`));
-    const { component_id: componentId, revision, freshness } = body;
-    const frame = frameOf(body['frame']);
+    ifNoneMatch: string | null = null,
+): Promise<SlotCard> => {
+    const res = await send(backend, `${sharePath(id)}/slots/${slot}`, { ifNoneMatch });
+    const etag = res.headers.get('etag');
+    const cacheControl = res.headers.get('cache-control');
 
-    if (
-        typeof componentId !== 'string' ||
-        !Number.isSafeInteger(revision) ||
-        !frame ||
-        (freshness !== 'current' && freshness !== 'stale' && freshness !== 'pending')
-    ) {
-        throw new SharesError('backend_invalid');
+    return { body: res.status === 304 ? null : await json(res), etag, cacheControl };
+};
+
+/** The formats dfo-apis' slot data route writes a file in. */
+export const SLOT_FILE_FORMATS: readonly string[] = ['csv', 'parquet'];
+
+/** The rows behind slot `slot`'s card on the frame the slot serves, as a
+ *  file in one of `SLOT_FILE_FORMATS`. */
+export const readSlotFile = async (
+    backend: SharesBackend,
+    id: string,
+    slot: number,
+    format: string,
+): Promise<Response> => {
+    if (!SLOT_FILE_FORMATS.includes(format)) {
+        throw new SharesError('request_invalid', { status: 400 });
     }
 
-    return { componentId, revision: revision as number, frame, freshness };
+    return send(backend, `${sharePath(id)}/slots/${slot}/data?format=${format}`);
 };
 
 /**

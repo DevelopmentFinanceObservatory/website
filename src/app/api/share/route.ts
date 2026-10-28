@@ -3,42 +3,19 @@ import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
 import { SharesError } from '@/lib/chat/apisShares';
+import { sharesRefusal } from '@/lib/chat/shareRefusal';
 import { studioShareBody } from '@/lib/chat/sharePayload';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
-import { makeShare } from '@/lib/chat/shareStore';
+import { makeShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { track } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
+import { liveCardsRefusal } from '@/lib/studio/slotCards';
 
 // The largest share request read, in bytes; a larger one gets 413.
 const MAX_SHARE_BODY = 10_000_000;
-
-// What a refusal of dfo-apis' share create says to the browser. A spent
-// share allowance (counted by dfo-apis per network address) is 429
-// `share_limit`, with dfo-apis' Retry-After. Everything else is a fault the
-// sharer cannot fix, 502, retryable when dfo-apis said so.
-const sharesRefusal = (error: SharesError): Response => {
-    if (error.code === 'allowance_exhausted') {
-        return problem({
-            status: 429,
-            code: 'share_limit',
-            detail: "This network has made today's shares. Try again tomorrow.",
-            retryable: true,
-            headers: error.retryAfterS ? { 'Retry-After': String(error.retryAfterS) } : undefined,
-        });
-    }
-
-    console.error('share: dfo-apis refused the share', { code: error.code, status: error.status });
-
-    return problem({
-        status: 502,
-        code: 'transient_unavailable',
-        detail: 'The share could not be made right now. Try again in a minute.',
-        retryable: error.retryable || error.status === undefined || error.status >= 500,
-    });
-};
 
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
@@ -110,8 +87,10 @@ const shareSearch = async (body: any, headers: Headers) => {
 // network address (429 `share_limit`).
 // `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a
 // conversation. A request that names none stores a snapshot. A live share is
-// refused when a data card it shows names no component revision
-// (400 `live_cards_blocked`, naming the cards).
+// checked before it is made (`liveCardsRefusal`), so none is left behind
+// when its cards fail: 400 `live_cards_blocked` names a data card it shows
+// that names no component revision, or one that cannot follow newer data,
+// and 400 `live_too_many_cards` gives the cap.
 // Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
     const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
@@ -159,6 +138,14 @@ export const POST = async (request: NextRequest) => {
     // can draw, and a card share takes at least one card.
     if (share.kind === 'card' && share.cards.length === 0) {
         return requestInvalidProblem('This card has no saved revision, so it cannot be shared.');
+    }
+
+    const refusal = share.latest
+        ? await liveCardsRefusal(slotDepsFor(request.headers), share)
+        : null;
+
+    if (refusal) {
+        return refusal;
     }
 
     const user = await getUser();

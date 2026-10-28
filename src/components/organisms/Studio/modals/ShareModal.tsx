@@ -22,14 +22,12 @@ import {
     fetchCardData,
 } from '@/lib/studio/cardDownload';
 import {
-    checkingText,
     openShareLink,
     type ShareLink,
     type ShareLinkDeps,
     shareLinkKey,
     shareModeFor,
     snapshotShare,
-    uncheckedText,
     withdrawalText,
 } from '@/lib/studio/shareDialog';
 
@@ -41,8 +39,8 @@ import {
  * when `offerLive` is set; Chat + Canvas is always a snapshot, and so is
  * every share when it is not. Links are made lazily, one per tab and mode
  * (`openShareLink` in src/lib/studio/shareDialog), and kept for the dialog's
- * lifetime. A live link is shown once every data card it holds has been
- * checked, and withdrawn when one cannot refresh. Data offers each card's
+ * lifetime. The site checks a live link's data cards before it makes the
+ * share, and a link whose cards cannot show live data is withdrawn. Data offers each card's
  * stored rows as a file from the export route (src/lib/studio/cardDownload).
  */
 
@@ -58,9 +56,9 @@ type ShareModalProps = {
     // The conversation's title (embed <iframe title>).
     title: string;
     data: ShareDatum[];
-    // Whether this scope can be shared live, which needs a site that can
-    // refresh cards and a canvas, or a card, that draws data. Off, the dialog
-    // has no mode choice and every link is a snapshot.
+    // Whether this scope can be shared live, which needs a canvas, or a
+    // card, that draws data. Off, the dialog has no mode choice and every
+    // link is a snapshot.
     offerLive: boolean;
     createShare: ShareLinkDeps['createShare'];
     // Signed out: the site keeps no write token for the links, so the dialog
@@ -237,10 +235,8 @@ const ShareModal = ({
         }
 
         requestedRef.current.add(key);
-        void openShareLink(
-            { createShare, live: browserLiveDeps },
-            { kind, cardId, mode: linkMode },
-            (next) => setLinks((prev) => ({ ...prev, [key]: next })),
+        void openShareLink({ createShare }, { kind, cardId, mode: linkMode }, (next) =>
+            setLinks((prev) => ({ ...prev, [key]: next })),
         ).finally(() => requestedRef.current.delete(key));
     }, [open, key, kind, cardId, linkMode, links, createShare]);
 
@@ -273,7 +269,7 @@ const ShareModal = ({
         if (await snapshotShare(browserLiveDeps.fetch, id)) {
             setLinks((prev) => ({
                 ...prev,
-                [key]: { status: 'ready', id, mode: 'snapshot', unchecked: 0 },
+                [key]: { status: 'ready', id, mode: 'snapshot' },
             }));
         } else {
             setSwitching((prev) => ({ ...prev, [key]: 'failed' }));
@@ -282,8 +278,7 @@ const ShareModal = ({
 
     const tabs = scope.kind === 'whole' ? WHOLE_TABS : CARD_TABS;
     const embedTitle = scope.kind === 'card' ? scope.title : title;
-    const checking = link?.status === 'checking';
-    const pending = !!key && (!link || checking);
+    const pending = !!key && !link;
     const showLink = scope.kind === 'whole' ? tab !== 'data' : tab === 'link';
     const showEmbed = scope.kind === 'whole' ? tab === 'canvas' : tab === 'embed';
     // A live link made a snapshot keeps its tab and reads as a snapshot.
@@ -292,16 +287,13 @@ const ShareModal = ({
     const switchState = key ? switching[key] : undefined;
     const status = !hasMode
         ? null
-        : checking
-          ? checkingText(link.checked, link.total)
-          : withdrawal
-            ? withdrawalText(withdrawal, scope.kind === 'card')
-            : link?.status === 'ready'
-              ? linkMode === 'live' && link.mode === 'snapshot'
-                  ? COPY.nowSnapshot
-                  : uncheckedText(link.unchecked)
-              : null;
-    const pendingText = checking ? 'Checking cards…' : undefined;
+        : withdrawal
+          ? withdrawalText(withdrawal, scope.kind === 'card')
+          : link?.status === 'ready' && linkMode === 'live' && link.mode === 'snapshot'
+            ? COPY.nowSnapshot
+            : null;
+    // A live link waits on the site's check of its cards.
+    const pendingText = pending && linkMode === 'live' ? 'Checking cards…' : undefined;
 
     return (
         <Modal open={open} onOpenChange={onOpenChange} title="Share" fit>

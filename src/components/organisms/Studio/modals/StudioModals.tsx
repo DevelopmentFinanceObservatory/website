@@ -22,9 +22,6 @@ type StudioModalsProps = {
     title: string;
     firstPrompt: string;
     shareData: ShareDatum[];
-    // The site can refresh a live share's cards, and the canvas holds a
-    // data card a share of it would carry.
-    liveSharing: boolean;
     createShare: ShareLinkDeps['createShare'];
     // Signed out: the share dialog makes unowned snapshots only.
     guest?: boolean;
@@ -43,7 +40,6 @@ const StudioModals = ({
     title,
     firstPrompt,
     shareData,
-    liveSharing,
     createShare,
     guest = false,
 }: StudioModalsProps) => {
@@ -138,7 +134,7 @@ const StudioModals = ({
                 scope={modals.share.scope}
                 title={title}
                 data={shareData}
-                offerLive={liveSharing && sharesData}
+                offerLive={sharesData}
                 createShare={createShare}
                 guest={guest}
             />
