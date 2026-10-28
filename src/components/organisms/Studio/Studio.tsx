@@ -61,12 +61,14 @@ export type StudioProps = {
     // conversation, read-only — no input, no card actions, no saving, no
     // way back and no account: logo, title, filters and the sheet. A `live`
     // share's data cards arrive held and are filled from the refresh route
-    // (see useLiveCards); `createdAt` is when the share was made.
+    // (see useLiveCards), and so are a snapshot's `undrawn` cards;
+    // `createdAt` is when the share was made.
     shared?: {
         id: string;
         kind: ShareKind;
         saved: SavedConversation;
         live?: boolean;
+        undrawn?: string[];
         createdAt?: string;
     };
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
@@ -468,12 +470,17 @@ const Studio = ({
     const latestTurn = latestTurnOf(chat.widgets);
 
     // A live share's canvas: its data cards drawn on current data as each
-    // refresh answers, and their states. A snapshot's and the owner's own
-    // widgets pass through untouched.
+    // refresh answers, and their states. A snapshot's cards its page could
+    // not draw are filled the same way. The owner's own widgets pass
+    // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
         doc.visibleWidgets(chat.widgets),
     );
+    // The share whose data route serves a card's rows: any share row, live
+    // or snapshot. A gallery snapshot leaves `live` unset and has no share,
+    // so its cards export their own revisions.
+    const dataShareId = shared?.live === undefined ? undefined : shared.id;
     // The harness cards off screen that the user did not remove: a new turn
     // hid them. Reported once their fade-out has finished.
     const hiddenKey = chat.widgets
@@ -710,9 +717,9 @@ const Studio = ({
                 widget={infoWidget}
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
-                liveShareId={liveCanvas?.shareId}
-                // A share row's `live` is set either way (sharedViewOf). A
-                // gallery canvas leaves it unset and has no share link.
+                shareId={dataShareId}
+                // A share row's `live` is set either way (sharedViewOfRecord).
+                // A gallery canvas leaves it unset and has no share link.
                 snapshot={shared?.live === false ? shared : undefined}
                 canShare={!readOnly}
             />
@@ -724,11 +731,7 @@ const Studio = ({
                 fit
             >
                 {downloadWidget && (
-                    <CardDownload
-                        widget={downloadWidget}
-                        details
-                        liveShareId={liveCanvas?.shareId}
-                    />
+                    <CardDownload widget={downloadWidget} details shareId={dataShareId} />
                 )}
             </Modal>
 

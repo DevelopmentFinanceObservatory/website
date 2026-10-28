@@ -88,10 +88,26 @@ test('owner writes to shares held in dfo-apis', async (t) => {
         );
     });
 
+    // dfo-apis' read of a share of `kind`, and its answer to every write.
+    const holding =
+        (kind: string, write: () => Response = () => Response.json({ id: 'Ab3dEf7h' })) =>
+        (call: Call) =>
+            call.method === 'GET'
+                ? Response.json({
+                      id: 'Ab3dEf7h',
+                      kind,
+                      mode: 'live',
+                      title: null,
+                      slots: [],
+                      payload: null,
+                      created_at: '2026-10-28T10:00:00Z',
+                  })
+                : write();
+
     await t.test("a switch to snapshot sends the owner's token and keeps it", async () => {
         await putShareToken(db, { shareId: 'Ab3dEf7h', userId: 'owner', writeToken: 'shw_made' });
 
-        const { backend, calls } = backendOf(() => Response.json({ id: 'Ab3dEf7h' }));
+        const { backend, calls } = backendOf(holding('canvas'));
         const write = { shareId: 'Ab3dEf7h', userId: 'owner' };
 
         assert.equal(
@@ -99,6 +115,7 @@ test('owner writes to shares held in dfo-apis', async (t) => {
             'done',
         );
         assert.deepEqual(calls, [
+            { url: '/api/presentation/shares/Ab3dEf7h', method: 'GET', token: null },
             {
                 url: '/api/presentation/shares/Ab3dEf7h/snapshot',
                 method: 'POST',
@@ -107,6 +124,50 @@ test('owner writes to shares held in dfo-apis', async (t) => {
         ]);
         assert.equal(await readShareToken(db, write), 'shw_made');
     });
+
+    await t.test(
+        'a search or conversation share is not switched, and keeps its token',
+        async () => {
+            for (const kind of ['search', 'conversation']) {
+                const { backend, calls } = backendOf(holding(kind));
+                const write = { shareId: 'Ab3dEf7h', userId: 'owner' };
+
+                assert.equal(
+                    await ownerShareWrite({ db, backend }, { ...write, action: 'snapshot' }),
+                    'unsupported_kind',
+                    kind,
+                );
+                assert.deepEqual(
+                    calls.map(({ method }) => method),
+                    ['GET'],
+                    kind,
+                );
+                assert.equal(await readShareToken(db, write), 'shw_made', kind);
+            }
+        },
+    );
+
+    await t.test(
+        'a switch refused for a reason of its own throws its code and keeps the token',
+        async () => {
+            // A slot's frame is gone, so dfo-apis cannot pin it: the share stays.
+            const { backend } = backendOf(
+                holding('canvas', () =>
+                    Response.json({ code: 'frame_unavailable', retryable: false }, { status: 404 }),
+                ),
+            );
+            const write = { shareId: 'Ab3dEf7h', userId: 'owner' };
+
+            await assert.rejects(
+                ownerShareWrite({ db, backend }, { ...write, action: 'snapshot' }),
+                {
+                    name: 'SharesError',
+                    code: 'frame_unavailable',
+                },
+            );
+            assert.equal(await readShareToken(db, write), 'shw_made');
+        },
+    );
 
     await t.test('a caller with no token gets not_found and calls nothing', async () => {
         const { backend, calls } = backendOf(() => new Response(null, { status: 204 }));
@@ -138,6 +199,7 @@ test('owner writes to shares held in dfo-apis', async (t) => {
     await t.test('a token dfo-apis refuses, or a share it no longer has, is dropped', async () => {
         for (const [status, code] of [
             [403, 'write_token_invalid'],
+            [401, 'write_token_required'],
             [404, 'not_found'],
         ] as const) {
             await putShareToken(db, {
@@ -146,7 +208,9 @@ test('owner writes to shares held in dfo-apis', async (t) => {
                 writeToken: 'shw_old',
             });
 
-            const { backend } = backendOf(() => Response.json({ code }, { status }));
+            const { backend } = backendOf(
+                holding('canvas', () => Response.json({ code }, { status })),
+            );
             const write = { shareId: 'Ab3dEf7h', userId: 'owner' };
 
             assert.equal(

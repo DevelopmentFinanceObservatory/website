@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    createOwnedShare,
     createShare,
     readShare,
     readSlotCard,
@@ -10,8 +11,15 @@ import {
     type CreateShareBody,
     type SharesBackend,
 } from '../apisShares.ts';
+import type { ShareTokenDb } from '../shareTokens.ts';
 
-type Call = { url: string; method: string; headers: Headers; body: unknown };
+type Call = {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: unknown;
+    signal: AbortSignal | null | undefined;
+};
 
 const APIS = 'https://apis.example';
 
@@ -31,6 +39,7 @@ const backendOf = (
                     method: init?.method ?? 'GET',
                     headers: new Headers(init?.headers),
                     body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+                    signal: init?.signal,
                 };
 
                 calls.push(call);
@@ -131,6 +140,51 @@ test('a create that fails in a passing way is sent once more with the same token
         assert.equal(calls.length, 2, name);
         assert.deepEqual(calls[1]?.body, calls[0]?.body, name);
     }
+});
+
+test('every call runs under its own deadline, so a timed-out create is tried again afresh', async () => {
+    let sent = 0;
+    const { backend, calls } = backendOf((call) => {
+        if (sent++ > 0) {
+            return CREATED(call);
+        }
+
+        // The first try's deadline passes.
+        return Promise.reject(new DOMException('The operation timed out.', 'TimeoutError'));
+    });
+
+    assert.equal((await createShare(backend, CREATE_BODY)).id, 'Ab3dEf7h');
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(({ signal }) => signal instanceof AbortSignal && !signal.aborted));
+    assert.notEqual(calls[0]?.signal, calls[1]?.signal);
+
+    // A read has its deadline too.
+    await readShare(backend, 'Ab3dEf7h').catch(() => null);
+    assert.ok(calls[2]?.signal instanceof AbortSignal);
+});
+
+test('a share whose token cannot be kept is taken down with that token, and the failure rethrown', async () => {
+    const { backend, calls } = backendOf((call) =>
+        call.method === 'DELETE' ? new Response(null, { status: 204 }) : CREATED(call),
+    );
+    const down = new Error('share_token write failed');
+    // Only the token write is reached, and it fails.
+    const db = {
+        insert: () => {
+            throw down;
+        },
+    } as unknown as ShareTokenDb;
+
+    await assert.rejects(createOwnedShare({ db, backend }, 'owner', CREATE_BODY), down);
+
+    const token = (calls[0]?.body as { write_token: string }).write_token;
+
+    assert.deepEqual(
+        calls
+            .slice(1)
+            .map(({ method, url, headers }) => [method, url, headers.get('x-dfo-write-token')]),
+        [['DELETE', `${APIS}/api/presentation/shares/Ab3dEf7h`, token]],
+    );
 });
 
 test('a create is sent at most twice, and a refusal of the request or a spent allowance once', async () => {

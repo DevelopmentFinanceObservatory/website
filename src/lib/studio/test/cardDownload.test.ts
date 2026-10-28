@@ -12,7 +12,6 @@ import {
     CardDownloadError,
     cardDataUrl,
     cardDownloadMessage,
-    DOWNLOAD_PENDING,
     cardRefOf,
     cardRevisions,
     restoreCardRevisions,
@@ -182,9 +181,9 @@ test('fetchCardData: a refusal without a JSON body throws with no code', async (
     );
 });
 
-const LIVE = { shareId: 'shr 1', cardId: 'cmp_9f8e' };
+const SHARED = { shareId: 'shr 1', cardId: 'cmp_9f8e' };
 
-test('fetchCardData: a live card asks its share for the rows, any other card the export route', async (t) => {
+test('fetchCardData: a shared card asks its share for the rows, any other card the export route', async (t) => {
     const asked: string[] = [];
 
     t.mock.method(globalThis, 'fetch', async (url: string) => {
@@ -193,7 +192,7 @@ test('fetchCardData: a live card asks its share for the rows, any other card the
         return new Response('rows');
     });
 
-    await fetchCardData(REF, { format: 'parquet', bundle: false }, { live: LIVE });
+    await fetchCardData(REF, { format: 'parquet', bundle: false }, { shared: SHARED });
     await fetchCardData(REF, { format: 'parquet', bundle: false });
 
     assert.deepEqual(asked, [
@@ -203,26 +202,7 @@ test('fetchCardData: a live card asks its share for the rows, any other card the
 });
 
 // The share route's answers that are not a file: none may be saved as one.
-for (const [name, response, code, retryAfterS] of [
-    [
-        'a refresh in progress, the wait in Retry-After',
-        () =>
-            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
-                status: 503,
-                headers: { 'retry-after': '7' },
-            }),
-        DOWNLOAD_PENDING,
-        7,
-    ],
-    [
-        'a refresh in progress, the wait in the body alone',
-        () =>
-            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
-                status: 503,
-            }),
-        DOWNLOAD_PENDING,
-        6,
-    ],
+for (const [name, response, code] of [
     [
         'a refusal of the format',
         () =>
@@ -230,7 +210,6 @@ for (const [name, response, code, retryAfterS] of [
                 status: 400,
             }),
         'request_invalid',
-        null,
     ],
     [
         'a back end out of reach',
@@ -239,63 +218,24 @@ for (const [name, response, code, retryAfterS] of [
                 status: 502,
             }),
         'backend_unreachable',
-        null,
     ],
     [
         'a share that no longer holds the card',
         () =>
             new Response(JSON.stringify({ code: 'not_found', retryable: false }), { status: 404 }),
         'not_found',
-        null,
     ],
 ] as const) {
-    test(`fetchCardData: a live card meeting ${name} throws ${code}`, async (t) => {
+    test(`fetchCardData: a shared card meeting ${name} throws ${code}`, async (t) => {
         t.mock.method(globalThis, 'fetch', async () => response());
 
         await assert.rejects(
-            fetchCardData(REF, { format: 'csv', bundle: true }, { live: LIVE }),
-            (error: unknown) =>
-                error instanceof CardDownloadError &&
-                error.code === code &&
-                error.retryAfterS === retryAfterS,
+            fetchCardData(REF, { format: 'csv', bundle: true }, { shared: SHARED }),
+            (error: unknown) => error instanceof CardDownloadError && error.code === code,
         );
     });
 }
 
-test('fetchCardData: off a live share, the wait of a pending 503 is not read as the share route', async (t) => {
-    t.mock.method(
-        globalThis,
-        'fetch',
-        async () =>
-            new Response(JSON.stringify({ code: 'refresh_pending', retry_after_s: 6 }), {
-                status: 503,
-                headers: { 'retry-after': '7' },
-            }),
-    );
-
-    await assert.rejects(
-        fetchCardData(REF, { format: 'csv', bundle: true }),
-        (error: unknown) =>
-            error instanceof CardDownloadError &&
-            error.code === 'refresh_pending' &&
-            error.retryAfterS === null,
-    );
-});
-
-test('cardDownloadMessage: a stalled export and a switched-off site each say what happened', () => {
-    const messages = [
-        'backend_timeout',
-        'live_unavailable',
-        'unauthorized',
-        'refresh_not_configured',
-    ].map((code) => cardDownloadMessage(code));
-
-    assert.ok(messages.every((message) => message !== cardDownloadMessage(null)));
-    assert.match(messages[0]!, /took too long/);
-    assert.equal(new Set(messages.slice(1)).size, 1);
-});
-
-test('cardDownloadMessage: a refresh in progress names the wait, and is not the generic failure', () => {
-    assert.match(cardDownloadMessage(DOWNLOAD_PENDING, 7), /\b7 seconds\b/);
-    assert.notEqual(cardDownloadMessage(DOWNLOAD_PENDING), cardDownloadMessage(null));
+test('cardDownloadMessage: a stalled export says what happened', () => {
+    assert.match(cardDownloadMessage('backend_timeout'), /took too long/);
 });

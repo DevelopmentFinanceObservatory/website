@@ -15,7 +15,8 @@ import type { CardRef, FrameRef } from './widgets.ts';
  *   POST   {apis}/api/presentation/shares                         createShare
  *   GET    {apis}/api/presentation/shares/{id}                    readShare
  *   POST   {apis}/api/presentation/shares/{id}/snapshot           (token) ownerShareWrite
- *   DELETE {apis}/api/presentation/shares/{id}                    (token) ownerShareWrite
+ *   DELETE {apis}/api/presentation/shares/{id}                    (token) ownerShareWrite,
+ *                                                                  createOwnedShare
  *   GET    {apis}/api/presentation/shares/{id}/slots/{n}          readSlotCard
  *   GET    {apis}/api/presentation/shares/{id}/slots/{n}/data     readSlotFile
  *
@@ -28,10 +29,11 @@ import type { CardRef, FrameRef } from './widgets.ts';
  * it stays as made. Every call names the browser's caller to dfo-apis
  * (`SharesBackend.nameCaller`), which counts the share allowance by it.
  *
- * Every failure is a `SharesError` whose `code` is machine-readable: the
- * code of dfo-apis' refusal, or one of `backend_unreachable`,
- * `backend_timeout`, `backend_refused`, `backend_invalid`. No free text of a
- * refusal leaves this module.
+ * Every call has 35 seconds (`CALL_DEADLINE_MS`), within any deadline the
+ * backend's own `signal` sets. Every failure is a `SharesError` whose `code`
+ * is machine-readable: the code of dfo-apis' refusal, or one of
+ * `backend_unreachable`, `backend_timeout`, `backend_refused`,
+ * `backend_invalid`. No free text of a refusal leaves this module.
  *
  * No database binding or path-alias dependency, so `node --test` imports it.
  */
@@ -106,6 +108,11 @@ export type CreateShareBody = {
 
 export const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
+// One call's deadline. dfo-apis stops a Presentation route at 30 seconds
+// (`PRESENTATION_COMPONENTS_TIMEOUT_SECONDS`), as the slot data route's
+// `EXPORT_DEADLINE_MS` allows for.
+const CALL_DEADLINE_MS = 35_000;
+
 const WRITE_TOKEN_HEADER = 'x-dfo-write-token';
 const WRITE_TOKEN_PREFIX = 'shw_';
 // dfo-apis' form of a write token: 16 random bytes as unpadded url-safe
@@ -170,7 +177,11 @@ const send = async (
             body: init.body === undefined ? undefined : JSON.stringify(init.body),
             cache: 'no-store',
             redirect: 'manual',
-            signal: backend.signal,
+            // A deadline per call, so a create's second try starts afresh.
+            signal: AbortSignal.any([
+                AbortSignal.timeout(CALL_DEADLINE_MS),
+                ...(backend.signal ? [backend.signal] : []),
+            ]),
         });
     } catch (error) {
         const timedOut =
@@ -357,7 +368,9 @@ export const readSlotFile = async (
 /**
  * Make a share and keep its write token for `userId`, the signed-in maker.
  * A guest's share (`userId` null) keeps no token, so nobody can change or
- * remove it.
+ * remove it. When the token cannot be kept, the new share is deleted with
+ * it before the failure is rethrown, so no share is left that its maker
+ * cannot manage.
  */
 export const createOwnedShare = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
@@ -366,24 +379,52 @@ export const createOwnedShare = async (
 ): Promise<{ id: string }> => {
     const { id, writeToken } = await createShare(backend, body);
 
-    if (userId) {
+    if (!userId) {
+        return { id };
+    }
+
+    try {
         await putShareToken(db, { shareId: id, userId, writeToken });
+    } catch (error) {
+        const removed = await send(backend, sharePath(id), { method: 'DELETE', token: writeToken })
+            .then(() => 'deleted')
+            .catch((refusal: unknown) =>
+                refusal instanceof SharesError ? refusal.code : String(refusal),
+            );
+
+        console.error('share: the write token was not kept, so the share was taken down', {
+            share: id,
+            removed,
+        });
+
+        throw error;
     }
 
     return { id };
 };
 
+// The refusals that say the share is gone or the token no longer grants it.
+const isLostShare = ({ code }: SharesError): boolean =>
+    code === 'not_found' || code.startsWith('write_token_');
+
+// The kinds a switch to snapshot applies to. A conversation share is always
+// a snapshot, and a search share has no slots for dfo-apis to pin.
+const SWITCHABLE_KINDS: readonly ShareKind[] = ['canvas', 'card'];
+
 /**
  * A signed-in owner's write to their own share: `snapshot` turns a live
- * share into a snapshot under the same URLs, `delete` takes it down and
- * drops the token. `not_found` covers a share that does not exist, one the
- * caller holds no token for, and one whose token dfo-apis refuses, so the
- * answer does not reveal which ids are taken. Any other refusal throws.
+ * canvas or card share into a snapshot under the same URLs, `delete` takes
+ * it down and drops the token. `not_found` covers a share that does not
+ * exist, one the caller holds no token for, and one whose token dfo-apis
+ * refuses (`not_found`, `write_token_*`), so the answer does not reveal
+ * which ids are taken; only then is the stored token dropped.
+ * `unsupported_kind` answers a switch of a search or conversation share.
+ * Any other refusal throws with its code, and the token stays.
  */
 export const ownerShareWrite = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
     { shareId, userId, action }: { shareId: string; userId: string; action: 'snapshot' | 'delete' },
-): Promise<'done' | 'not_found'> => {
+): Promise<'done' | 'not_found' | 'unsupported_kind'> => {
     if (!SHARE_ID.test(shareId)) {
         return 'not_found';
     }
@@ -395,17 +436,28 @@ export const ownerShareWrite = async (
     }
 
     try {
+        if (action === 'snapshot') {
+            const record = await readShare(backend, shareId);
+
+            if (!record) {
+                throw new SharesError('not_found', { status: 404 });
+            }
+
+            if (!SWITCHABLE_KINDS.includes(record.kind)) {
+                return 'unsupported_kind';
+            }
+        }
+
         await send(
             backend,
             action === 'delete' ? sharePath(shareId) : `${sharePath(shareId)}/snapshot`,
             { method: action === 'delete' ? 'DELETE' : 'POST', token },
         );
     } catch (error) {
-        if (!(error instanceof SharesError) || (error.status !== 404 && error.status !== 403)) {
+        if (!(error instanceof SharesError) || !isLostShare(error)) {
             throw error;
         }
 
-        // The share is gone, or the token no longer grants it.
         await deleteShareToken(db, { shareId, userId });
 
         return 'not_found';

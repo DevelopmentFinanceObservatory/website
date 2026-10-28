@@ -13,3 +13,13 @@ export const SEARCH_API_SURFACES = [
     'presentation/components',
     'presentation/shares',
 ] as const;
+
+/**
+ * Whether a catch-all route's path segments stay below its surface once
+ * forwarded. Next.js hands a route its segments decoded, so `%2E%2E` arrives
+ * as `..` and `%2F` as `/`, and `fetch` would resolve either against the
+ * surface's prefix. A segment that is `.` or `..`, or holds `/` or `\`, is
+ * refused before the upstream URL is built.
+ */
+export const isForwardablePath = (segments: readonly string[]): boolean =>
+    segments.every((segment) => segment !== '.' && segment !== '..' && !/[/\\]/.test(segment));

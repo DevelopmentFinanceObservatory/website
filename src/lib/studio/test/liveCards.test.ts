@@ -12,6 +12,8 @@ import type { Widget } from '../../chat/widgets.ts';
 import type { LiveCard, LiveFactSummary } from '../liveBackend.ts';
 import {
     cardLiveOf,
+    cardsToFill,
+    isLiveCanvas,
     LIVE_CLIENT_CODES,
     LIVE_REFRESH_CONCURRENCY,
     liveCardFailure,
@@ -364,7 +366,6 @@ const site = (script: Record<string, Reply[]>) => {
 
             return Response.json(reply.body, { status: reply.status ?? 200 });
         },
-        now: () => 0,
     };
 
     return { deps, calls };
@@ -465,7 +466,6 @@ test('requests run a few at a time, and a card is reported as soon as it answers
 
             return Response.json({ status: 'current', card: CARD });
         },
-        now: () => 0,
     };
     const order: string[] = [];
     const done = refreshLiveCards(deps, {
@@ -548,29 +548,16 @@ test('a refreshed card names what its data leaves out, from its coverage_gap war
     assert.ok(!('leftOut' in infoOf(answer)));
 });
 
-test('an error answer carries what the back end said about retrying and how long it stands', async () => {
+test('an error answer carries what the back end said about retrying', async () => {
     const { deps } = site({
-        stored: [
-            {
-                body: {
-                    status: 'error',
-                    code: 'release_mismatch',
-                    retryable: true,
-                    retry_after_s: 12,
-                },
-            },
-        ],
+        stored: [{ body: { status: 'error', code: 'release_mismatch', retryable: true } }],
         plain: [{ body: { status: 'error', code: 'recipe_missing' } }],
-        // A wait of nothing, or one that is not a number, is not a wait.
-        odd: [{ body: { status: 'error', code: 'recipe_missing', retry_after_s: 'soon' } }],
     });
-    const { outcomes } = await settle(deps, ['stored', 'plain', 'odd']);
+    const { outcomes } = await settle(deps, ['stored', 'plain']);
 
     assert.deepEqual(outcomes, {
-        // The moment (`deps.now`) from which a request reaches the back end again.
-        stored: { status: 'error', code: 'release_mismatch', retryable: true, retryAt: 12_000 },
+        stored: { status: 'error', code: 'release_mismatch', retryable: true },
         plain: { status: 'error', code: 'recipe_missing' },
-        odd: { status: 'error', code: 'recipe_missing' },
     });
 });
 
@@ -676,6 +663,7 @@ test('a card of a live canvas retries itself, and a card off it has no live stat
     const retried: string[] = [];
     const canvas = {
         shareId: 'shr_1',
+        snapshot: false,
         createdAt: '2026-10-07T00:00:00.000Z',
         states: { cmp_chart: { status: 'error', code: 'backend_timeout' } as const },
         retry: (cardId: string) => retried.push(cardId),
@@ -686,4 +674,48 @@ test('a card of a live canvas retries itself, and a card off it has no live stat
     assert.deepEqual(retried, ['cmp_chart']);
     assert.equal(cardLiveOf(canvas, 'txt_1'), undefined);
     assert.equal(cardLiveOf(undefined, 'cmp_chart'), undefined);
+});
+
+test('the browser fills every data card of a live share, and only the undrawn cards of a snapshot', () => {
+    const widgets = [
+        {
+            kind: 'chart',
+            id: 'c1',
+            turn: 1,
+            chartType: 'line',
+            title: '',
+            categories: [],
+            series: [],
+        },
+        { kind: 'table', id: 't1', turn: 1, title: '', columns: [], rows: [] },
+        { kind: 'text', id: 'n1', title: 'Mine', body: 'Words' },
+    ] as Widget[];
+
+    assert.deepEqual(cardsToFill({ id: 'Ab3dEf7h', live: true }, widgets), {
+        shareId: 'Ab3dEf7h',
+        snapshot: false,
+        cardIds: ['c1', 't1'],
+    });
+    assert.deepEqual(cardsToFill({ id: 'Ab3dEf7h', live: false, undrawn: ['t1'] }, widgets), {
+        shareId: 'Ab3dEf7h',
+        snapshot: true,
+        cardIds: ['t1'],
+    });
+    // A snapshot whose page drew every card, a gallery snapshot, and no share.
+    assert.equal(cardsToFill({ id: 'Ab3dEf7h', live: false, undrawn: [] }, widgets), null);
+    assert.equal(cardsToFill({ id: 'gallery-slug' }, widgets), null);
+    assert.equal(cardsToFill(undefined, widgets), null);
+
+    // A snapshot's filled cards carry no live note.
+    const states = { t1: { status: 'loading' } as const };
+    const retry = () => {};
+
+    assert.equal(
+        isLiveCanvas({ shareId: 'Ab3dEf7h', snapshot: true, createdAt: undefined, states, retry }),
+        false,
+    );
+    assert.equal(
+        isLiveCanvas({ shareId: 'Ab3dEf7h', snapshot: false, createdAt: undefined, states, retry }),
+        true,
+    );
 });

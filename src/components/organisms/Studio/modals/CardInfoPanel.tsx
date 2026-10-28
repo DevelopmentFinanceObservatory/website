@@ -331,7 +331,7 @@ const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
  * More Info, the back of the card. A card that carries a description shows
  * it as `DescribedPanel` lays it out, with no request. A card without one
  * shows the legacy panel. Download Data sits after the citation either way.
- * On a live share (`liveShareId`) it serves the refreshed rows. The card's
+ * On a share (`shareId`) it serves the rows the card's slot serves. The card's
  * owner (`canShare`) is told how to get a link to cite. The full citation
  * is retrieved today. On a snapshot share (`snapshot`) it names the share's
  * link and the day the share captured its data.
@@ -341,7 +341,7 @@ const CardInfoPanel = ({
     widget,
     open,
     onOpenChange,
-    liveShareId,
+    shareId,
     snapshot,
     canShare = false,
 }: {
@@ -350,7 +350,7 @@ const CardInfoPanel = ({
     widget: Widget | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    liveShareId?: string;
+    shareId?: string;
     // The snapshot share the card is shown on, and when it was made.
     snapshot?: { id: string; createdAt?: string };
     canShare?: boolean;
@@ -363,7 +363,7 @@ const CardInfoPanel = ({
             snapshotAsOf: snapshotAsOfOf(snapshot?.createdAt),
             canShare,
         });
-    const download = widget && <CardDownload widget={widget} liveShareId={liveShareId} />;
+    const download = widget && <CardDownload widget={widget} shareId={shareId} />;
 
     return (
         <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">

@@ -54,6 +54,15 @@ const ownerWrite = async (
             action,
         });
 
+        if (result === 'unsupported_kind') {
+            return problem({
+                status: 400,
+                code: 'unsupported_kind',
+                detail: 'Only a canvas or card share can be switched to a snapshot.',
+                retryable: false,
+            });
+        }
+
         return result === 'done' ? done(id) : noSuchShare();
     } catch (error) {
         if (!(error instanceof SharesError)) {
@@ -76,9 +85,10 @@ const ownerWrite = async (
 };
 
 // PATCH /api/share/<id> { mode: 'snapshot' } → { id, mode }
-// Switches the caller's live share to snapshot under the same URLs, keeping
-// the data each card shows now. A snapshot answers as it is. A snapshot
-// cannot be switched to live.
+// Switches the caller's live canvas or card share to snapshot under the same
+// URLs: each slot keeps the data it serves now. A snapshot answers as it is.
+// A snapshot cannot be switched to live. A search or conversation share
+// answers 400 `unsupported_kind`.
 export const PATCH = async (request: Request, context: Context) => {
     const body = (await request.json().catch(() => null)) as { mode?: unknown } | null;
 

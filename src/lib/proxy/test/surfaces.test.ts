@@ -9,7 +9,7 @@ import { dirname, join, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { SEARCH_API_SURFACES } from '../surfaces.ts';
+import { isForwardablePath, SEARCH_API_SURFACES } from '../surfaces.ts';
 
 const V1 = fileURLToPath(new URL('../../../app/api/v1', import.meta.url));
 
@@ -37,5 +37,32 @@ test("SEARCH_API_SURFACES: each surface's routes forward to its own dfo-apis pat
 
     for (const { surface, source } of apisRoutes) {
         assert.ok(source.includes(`\${searchApiBase()}/api/${surface}`), surface);
+    }
+});
+
+test('isForwardablePath: a decoded segment that would climb out of its surface is refused', () => {
+    for (const path of [['..'], ['.'], ['Ab3dEf7h', '..', '..', 'skills'], ['a/b'], ['a\\b']]) {
+        assert.equal(isForwardablePath(path), false, JSON.stringify(path));
+    }
+
+    for (const path of [
+        [],
+        ['Ab3dEf7h', 'slots', '1', 'data'],
+        ['cmp_a', 'revisions', '2'],
+        ['..a'],
+    ]) {
+        assert.equal(isForwardablePath(path), true, JSON.stringify(path));
+    }
+});
+
+// Next.js resolves the `@/` imports of a route, so `node --test` cannot load
+// one; the guard is held to the catch-all routes by their source.
+test('the datasets and presentation catch-alls refuse an unsafe path before forwarding', () => {
+    for (const route of [
+        'datasets/[...path]/route.ts',
+        'presentation/components/[[...path]]/route.ts',
+        'presentation/shares/[[...path]]/route.ts',
+    ]) {
+        assert.match(readFileSync(join(V1, route), 'utf8'), /isForwardablePath\(path\)/, route);
     }
 });

@@ -59,7 +59,7 @@ export const makeShare = (
 export const writeOwnShare = (
     incoming: Headers,
     write: { shareId: string; userId: string; action: 'snapshot' | 'delete' },
-): Promise<'done' | 'not_found'> =>
+): ReturnType<typeof ownerShareWrite> =>
     ownerShareWrite({ db, backend: sharesBackendFor(incoming) }, write);
 
 /** What the share pages, the live card routes, and a live share's check

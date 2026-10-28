@@ -105,6 +105,11 @@ export const requestInvalidProblem = (detail: string, pointer?: string): Respons
         extra: pointer ? { pointer } : undefined,
     });
 
+/** The 400 `request_invalid` refusal of a path segment that would leave its
+ *  surface once forwarded (`isForwardablePath` in ./surfaces). */
+export const dotSegmentProblem = (): Response =>
+    requestInvalidProblem('A path segment cannot be `.` or `..`, or contain `/` or `\\`.');
+
 /** A 401 `unauthorized` problem document: the call needs a signed-in account. */
 export const unauthorizedProblem = (): Response =>
     problem({

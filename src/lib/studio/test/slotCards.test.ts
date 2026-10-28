@@ -116,24 +116,41 @@ const depsOf = (
     return { deps: { shares }, calls };
 };
 
-test("a snapshot's slotted cards are drawn from their revisions on the server", async () => {
-    const { deps, calls } = depsOf(recordOf('snapshot'));
+test("a snapshot's slotted cards are drawn on the server on the frame each slot recorded", async () => {
+    // A live share made a snapshot after a data release: its slot recorded a
+    // newer frame than the card's revision stands on.
+    const { deps, calls } = depsOf(recordOf('snapshot'), MOVED_FRAME);
     const view = await sharedViewOfRecord(deps, recordOf('snapshot'));
     const [chart, table, note] = view.saved.widgets;
 
     assert.equal(view.live, false);
+    assert.deepEqual(view.undrawn, []);
     assert.ok(chart?.kind === 'chart');
     assert.ok(chart.series.length > 0 && chart.title);
+    assert.deepEqual(chart.frame, MOVED_FRAME);
     assert.deepEqual(chart.ref, { component_id: 'cmp_a', revision: 2 });
     // A snapshot's card with no slot stays as stored, and so does a note.
     assert.deepEqual(table, { kind: 'table', id: 'c2', turn: 1 });
     assert.deepEqual(note, NOTE);
-    // The revision's public read, with no slot read and no credential.
+    // The slot card read, never the revision's own read, with no credential.
     assert.deepEqual(
         calls.map(({ path }) => path),
-        ['/api/presentation/components/cmp_a?revision=2'],
+        ['/api/presentation/shares/Ab3dEf7h/slots/1'],
     );
     assert.equal(calls[0]?.headers.get('x-dfo-principal'), null);
+});
+
+test('a snapshot card the server cannot read stays held and is named for the browser to fill', async () => {
+    const { deps } = depsOf(recordOf('snapshot'), DATASET_FRAME, () =>
+        Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
+    );
+    const view = await sharedViewOfRecord(deps, recordOf('snapshot'));
+    const [chart] = view.saved.widgets;
+
+    assert.deepEqual(view.undrawn, ['c1']);
+    assert.ok(chart?.kind === 'chart');
+    assert.deepEqual(chart.series, []);
+    assert.deepEqual(chart.ref, { component_id: 'cmp_a', revision: 2 });
 });
 
 test("a live share's data cards leave the server held, with their slot's ref", async () => {
@@ -156,6 +173,7 @@ test("a live share's data cards leave the server held, with their slot's ref", a
         { kind: 'table', id: 'c2', turn: 1, title: '', columns: [], rows: [], ref: undefined },
         NOTE,
     ]);
+    assert.deepEqual(view.undrawn, []);
     assert.equal(calls.length, 0);
 });
 
@@ -207,9 +225,9 @@ test("a slot card refusal is the card's error, not stored", async () => {
     assert.equal(response.headers.get('etag'), null);
 });
 
-test('a card no live slot draws is 404', async () => {
+test('a card no slot draws is 404', async () => {
     for (const [mode, cardId] of [
-        ['snapshot', 'c1'],
+        ['snapshot', 'c2'],
         ['live', 'c2'],
         ['live', 'n1'],
         ['live', 'nope'],
@@ -223,6 +241,22 @@ test('a card no live slot draws is 404', async () => {
     const { deps } = depsOf(recordOf('live'));
 
     assert.equal((await slotRefreshResponse(deps, 'Zz9yXx8w', 'c1')).status, 404);
+});
+
+test("a snapshot card's refresh and rows come from its slot, on the frame the slot recorded", async () => {
+    const { deps, calls } = depsOf(recordOf('snapshot'), MOVED_FRAME);
+    const refreshed = await slotRefreshResponse(deps, 'Ab3dEf7h', 'c1');
+
+    assert.equal(refreshed.status, 200);
+    assert.deepEqual((await refreshed.json()).card.payload.provenance.inputs, [MOVED_FRAME]);
+
+    const file = await slotDataResponse(deps, 'Ab3dEf7h', 'c1', new URLSearchParams());
+
+    assert.equal(file.status, 200);
+    assert.equal(
+        calls.at(-1)?.path,
+        '/api/presentation/shares/Ab3dEf7h/slots/1/data?format=csv&bundle=true',
+    );
 });
 
 test("a live card's rows come from the slot data route in the format and bundle asked, on any frame", async () => {

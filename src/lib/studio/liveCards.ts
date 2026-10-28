@@ -5,7 +5,7 @@ import type { CardInfo, Widget } from '../chat/widgets.ts';
 import { shortDateText } from '../sources/updateDates.ts';
 import type { LiveCard } from './liveBackend.ts';
 import type { Description } from './description.ts';
-import { gateOf, type Gate } from './gate.ts';
+import { gateOf } from './gate.ts';
 import { cardDescription } from './infoPanel.ts';
 import { describedBy, payloadDescription, payloadProvenance } from './payload.ts';
 import { reviseWidget } from './widgets.ts';
@@ -29,13 +29,17 @@ import type { FactSummary } from './wire.ts';
  * pages, the client hook (`useLiveCards`), and `node --test` all import it.
  */
 
-/** What a share page hands `Studio` or `EmbedView`. `createdAt` is an ISO
- *  timestamp: the moment the share's text was written. */
+/** What a share page hands `Studio` or `EmbedView`. `undrawn` names the
+ *  snapshot cards the server could not draw, which the browser asks the
+ *  refresh route for; it is empty for a live share, whose cards the browser
+ *  fills all. `createdAt` is an ISO timestamp: the moment the share's text
+ *  was written. */
 export type SharedView = {
     id: string;
     kind: StudioShareKind;
     saved: SavedConversation;
     live: boolean;
+    undrawn: string[];
     createdAt: string;
 };
 
@@ -95,6 +99,7 @@ export const sharedViewOf = (row: {
         kind: row.kind as StudioShareKind,
         saved: live ? withholdCardData(saved) : saved,
         live,
+        undrawn: [],
         createdAt: row.createdAt.toISOString(),
     };
 };
@@ -104,33 +109,34 @@ export const sharedViewOf = (row: {
  * carries the refresh route's card, whose `payload.provenance` names the
  * frame it was drawn on, the revision it was refreshed from, and its
  * warnings. `error` carries the route's `code`, or one of
- * `LIVE_CLIENT_CODES`; `retryable` when the back end said asking again
- * might succeed; and `retryAt`, the moment (`LiveDeps.now`) from which a
- * request reaches the back end again, because the route stands on the
- * error it stored until then.
+ * `LIVE_CLIENT_CODES`, and `retryable` when the back end said asking again
+ * might succeed.
  */
 export type LiveCardState =
     | { status: 'loading' }
     | { status: 'ready'; outcome: 'current' | 'redrawn'; card: LiveCard }
-    | { status: 'error'; code: string; retryable?: boolean; retryAt?: number };
+    | { status: 'error'; code: string; retryable?: boolean };
 
 /** A settled card is every `LiveCardState` but `loading`. */
 export type LiveCardOutcome = Exclude<LiveCardState, { status: 'loading' }>;
 
-/** The live share a canvas is showing: its id, the moment it was made, the
- *  state of each of its data cards by widget id, and `retry`, which asks the
- *  refresh route for one failed card again. */
+/** The share whose cards a canvas fills in the browser: its id, whether it
+ *  is a snapshot (whose cards the server could not draw are the only ones
+ *  filled), the moment it was made, the state of each filled card by widget
+ *  id, and `retry`, which asks the refresh route for one failed card again. */
 export type LiveCanvas = {
     shareId: string;
+    snapshot: boolean;
     createdAt: string | undefined;
     states: Record<string, LiveCardState>;
     retry: (cardId: string) => void;
 };
 
-/** What one card of a live canvas is told about itself. Absent on a text
- *  card and on every card of a snapshot. */
+/** What one card a canvas fills in the browser is told about itself. Absent
+ *  on a text card and on every card a snapshot's page drew. */
 export type CardLive = {
     shareId: string;
+    snapshot: boolean;
     createdAt: string | undefined;
     state: LiveCardState;
     retry: () => void;
@@ -145,6 +151,7 @@ export const cardLiveOf = (
     return canvas && state
         ? {
               shareId: canvas.shareId,
+              snapshot: canvas.snapshot,
               createdAt: canvas.createdAt,
               state,
               retry: () => canvas.retry(cardId),
@@ -155,7 +162,7 @@ export const cardLiveOf = (
 /** Whether a canvas carries the live note, which takes a live share with at
  *  least one data card on it. */
 export const isLiveCanvas = (canvas: LiveCanvas | undefined): canvas is LiveCanvas =>
-    canvas !== undefined && Object.keys(canvas.states).length > 0;
+    canvas !== undefined && !canvas.snapshot && Object.keys(canvas.states).length > 0;
 
 /**
  * The line a live canvas shows once. It says its data is current and its
@@ -254,12 +261,9 @@ const REQUEST_TIMEOUT_MS = 90_000;
 
 export type LiveDeps = {
     fetch: typeof fetch;
-    now: () => number;
 };
 
-type ErrorAnswer = { status: 'error'; code: string; retryable?: boolean; retryAfterS?: number };
-
-type Answer = Exclude<LiveCardOutcome, { status: 'error' }> | ErrorAnswer;
+type ErrorAnswer = Extract<LiveCardOutcome, { status: 'error' }>;
 
 const failure = (code: string): ErrorAnswer => ({ status: 'error', code });
 
@@ -273,7 +277,7 @@ const isLiveCard = (value: unknown): value is LiveCard =>
     isRecord(value['payload']) &&
     isRecord(value['fact_summary']);
 
-const readAnswer = (ok: boolean, body: unknown): Answer => {
+const readAnswer = (ok: boolean, body: unknown): LiveCardOutcome => {
     if (!isRecord(body)) {
         return failure(ok ? LIVE_CLIENT_CODES.invalid : LIVE_CLIENT_CODES.failed);
     }
@@ -294,14 +298,9 @@ const readAnswer = (ok: boolean, body: unknown): Answer => {
     }
 
     if (status === 'error') {
-        const wait = body['retry_after_s'];
-
         return {
             ...failure(typeof code === 'string' && code ? code : LIVE_CLIENT_CODES.failed),
             ...(body['retryable'] === true ? { retryable: true } : {}),
-            ...(typeof wait === 'number' && Number.isFinite(wait) && wait > 0
-                ? { retryAfterS: wait }
-                : {}),
         };
     }
 
@@ -315,7 +314,7 @@ const askOnce = async (
     { fetch: fetcher }: LiveDeps,
     url: string,
     signal: AbortSignal,
-): Promise<Answer> => {
+): Promise<LiveCardOutcome> => {
     try {
         // A GET, so the browser's cache revalidates the card with its ETag.
         const response = await fetcher(url, {
@@ -328,27 +327,6 @@ const askOnce = async (
         // caller aborted (and then discards the answer).
         return failure(LIVE_CLIENT_CODES.network);
     }
-};
-
-// One card to its settled answer.
-const refreshLiveCard = async (
-    deps: LiveDeps,
-    gate: Gate,
-    url: string,
-    signal: AbortSignal,
-): Promise<LiveCardOutcome> => {
-    const answer = await gate(() => askOnce(deps, url, signal));
-
-    if (answer.status !== 'error') {
-        return answer;
-    }
-
-    const { retryAfterS, ...error } = answer;
-
-    return {
-        ...error,
-        ...(retryAfterS ? { retryAt: deps.now() + retryAfterS * 1000 } : {}),
-    };
 };
 
 /**
@@ -376,7 +354,7 @@ export const refreshLiveCards = async (
 
     await Promise.all(
         cardIds.map(async (cardId) => {
-            const outcome = await refreshLiveCard(deps, gate, refreshUrl(shareId, cardId), signal);
+            const outcome = await gate(() => askOnce(deps, refreshUrl(shareId, cardId), signal));
 
             if (!signal.aborted) {
                 onSettled(cardId, outcome);
@@ -467,6 +445,32 @@ export const leftOutOf = (
 /** A data card of a live canvas: every card but the user's text cards and
  *  the agent's notes. */
 export const isLiveDataCard = (widget: Widget): boolean => widget.kind !== 'text';
+
+/**
+ * The cards of `share` the browser fills from the refresh route: every data
+ * card of a live share, and the snapshot cards its page could not draw
+ * (`undrawn`). Null when there is nothing to fill: no share, or a snapshot
+ * whose page drew every card. A live share with no data card still answers,
+ * so its canvas reads as live.
+ */
+export const cardsToFill = (
+    share: { id: string; live?: boolean; undrawn?: string[] } | undefined,
+    widgets: Widget[],
+): { shareId: string; snapshot: boolean; cardIds: string[] } | null => {
+    if (!share || (!share.live && !share.undrawn?.length)) {
+        return null;
+    }
+
+    const fill = share.live
+        ? isLiveDataCard
+        : (widget: Widget) => isLiveDataCard(widget) && !!share.undrawn?.includes(widget.id);
+
+    return {
+        shareId: share.id,
+        snapshot: !share.live,
+        cardIds: widgets.filter(fill).map((widget) => widget.id),
+    };
+};
 
 /** The cards of a shared canvas that draw data: every card the canvas shows
  *  (`canvasWidgetsOf`) other than a text card. */
