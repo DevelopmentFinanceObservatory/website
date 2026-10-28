@@ -100,6 +100,16 @@
     letter-spacing: -0.01em;
 }
 
+// The switch outcome's live region, mounted empty; screen readers only.
+.outcome {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    white-space: nowrap;
+    clip-path: inset(50%);
+}
+
 .viewPlan {
     margin-top: rem(12);
 }

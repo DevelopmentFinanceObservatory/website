@@ -108,6 +108,9 @@ export type PlanState = {
     // The choice whose switch applied and produced this plan, null
     // otherwise and once another switch starts.
     switched: string | null;
+    // The switch that produced this plan changed the step labels. False
+    // wherever `switched` is null.
+    stepsUpdated: boolean;
     switching: PlanSwitch | null;
     notice: PlanNotice | null;
 };
@@ -234,6 +237,10 @@ const changesSince = (
         return [{ choiceId, from: first.label, reason: said?.reason || null }];
     });
 
+/** Whether two plans' steps read differently, by label and order. */
+const stepsDiffer = (before: readonly PlanStep[], after: readonly PlanStep[]): boolean =>
+    before.length !== after.length || before.some((step, i) => step.label !== after[i]?.label);
+
 /** The choice of `choices` that `previous` was switching, for focus to
  *  return to; the first row when the switch took it off the plan. */
 const switchedChoice = (previous: PlanState, choices: Map<string, PlanDecision>): string | null => {
@@ -326,6 +333,7 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
     const rows = switchable(decisions);
     const baseline = baselineWith(rows, previous?.baseline);
     const moved = frame.moved ?? [];
+    const switched = previous && !failed ? switchedChoice(previous, rows) : null;
 
     return {
         title: headline(frame),
@@ -342,7 +350,8 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
         revision: frame.revision ?? null,
         baseline,
         changed: changesSince(baseline, rows, moved),
-        switched: previous && !failed ? switchedChoice(previous, rows) : null,
+        switched,
+        stepsUpdated: !!previous && switched !== null && stepsDiffer(previous.steps, frame.steps),
         switching: null,
         notice: failed ? switchFailedNotice(decisions, failed) : null,
     };
@@ -409,6 +418,7 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
     ...plan,
     switching: pick,
     switched: null,
+    stepsUpdated: false,
     notice: null,
 });
 
@@ -830,6 +840,41 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
         // A plan saved before the harness sent caveats has none.
         caveats: plan.caveats ?? [],
     };
+};
+
+export const STEPS_UPDATED = 'Steps updated to match.';
+
+/**
+ * What the switch that produced `plan` changed, a sentence each, for the
+ * card's one live region: the rows that hold another option than on the
+ * turn's first plan, the choices moved without a row, and whether the steps
+ * changed. Empty on a plan no switch produced. A switch that changed none of
+ * these (back to the first option, the same steps) still says the plan
+ * updated.
+ */
+export const switchOutcome = (view: PlanView, plan: PlanState): string[] => {
+    if (plan.switched === null) {
+        return [];
+    }
+
+    const lines = [
+        ...view.choices.flatMap((choice) =>
+            choice.changedFrom
+                ? [
+                      `${choice.name} is now ${choice.value}, changed from ${choice.changedFrom}.${
+                          choice.changedReason ? ` ${choice.changedReason}` : ''
+                      }`,
+                  ]
+                : [],
+        ),
+        ...view.moved.map(
+            (move) =>
+                `Changed from ${move.from} to ${move.to}.${move.reason ? ` ${move.reason}` : ''}`,
+        ),
+        ...(plan.stepsUpdated ? [STEPS_UPDATED] : []),
+    ];
+
+    return lines.length > 0 ? lines : ['Plan updated.'];
 };
 
 /** The step whose result answers the question. */

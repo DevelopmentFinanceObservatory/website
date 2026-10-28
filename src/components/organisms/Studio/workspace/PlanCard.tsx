@@ -10,7 +10,7 @@ import PlanModal from './PlanModal';
 import type { ChatState } from '../hooks/useChat';
 
 import Button from '@/components/atoms/Button/Button';
-import { answerStepOf, planView, stepCount } from '@/lib/studio/plan';
+import { STEPS_UPDATED, answerStepOf, planView, stepCount, switchOutcome } from '@/lib/studio/plan';
 
 type PlanCardProps = {
     plan: NonNullable<ChatState['plan']>;
@@ -28,6 +28,11 @@ type PlanCardProps = {
  * still travel through the chat input below (ChatPanel repurposes it as
  * "Propose changes or ask a follow up…" while the plan is pending, wired to
  * the amend decision).
+ *
+ * What a switch changed (the rows marked Changed, the choices moved without
+ * a row, and the steps) is also written out in one polite live region, empty
+ * between switches and read by screen readers only, so it is announced when
+ * the fresh plan arrives.
  *
  * The card's height follows the number of scope choices.
  * While a switch is in flight the steps line dims and the bar waits. A card
@@ -64,7 +69,7 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                             </p>
                         </>
                     )}
-                    {plan.switched && <p className={styles.updated}>Steps updated to match.</p>}
+                    {plan.stepsUpdated && <p className={styles.updated}>{STEPS_UPDATED}</p>}
                     <PlanCaveats caveats={view.caveats} className={styles.caveats} />
                     <Button
                         variant="bordered"
@@ -76,6 +81,9 @@ const PlanCard = ({ plan, onApprove, onCancel, onSwitch }: PlanCardProps) => {
                         {`View full plan (${steps})`}
                     </Button>
                 </div>
+                <p className={styles.outcome} aria-live="polite">
+                    {switchOutcome(view, plan).join(' ')}
+                </p>
             </section>
             {plan.live && (
                 <PlanApproveBar

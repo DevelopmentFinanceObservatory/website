@@ -13,6 +13,7 @@ import {
     answerStepOf,
     canSwitch,
     STALE_NOTICE,
+    STEPS_UPDATED,
     SWITCH_OPTION_UNAVAILABLE,
     isActiveOption,
     isSelectable,
@@ -26,6 +27,7 @@ import {
     startSwitch,
     stoppedQueuedSwitch,
     switchEnded,
+    switchOutcome,
     switchReply,
     UNREACHABLE_NOTICE,
     unreachableSwitch,
@@ -204,6 +206,79 @@ test('a plan re-offered after a switch marks the switched choice and what it hel
     ]);
     assert.equal(choice?.value, 'Net disbursements');
     assert.equal(choice?.changedFrom, 'Gross disbursements');
+});
+
+test('a switch announces "Steps updated to match." only when the step labels differ', async (t) => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const cases: [string, Partial<PlanProposed>, boolean][] = [
+        ['the same steps', {}, false],
+        [
+            'the same labels under new ids',
+            { steps: [{ id: 's9', label: 'Retrieve health aid' }] },
+            false,
+        ],
+        ['another label', { steps: [{ id: 's1', label: 'Retrieve net health aid' }] }, true],
+        [
+            'another number of steps',
+            {
+                steps: [
+                    { id: 's1', label: 'Retrieve health aid' },
+                    { id: 's2', label: 'Sum across recipients' },
+                ],
+            },
+            true,
+        ],
+    ];
+
+    for (const [name, overrides, updated] of cases) {
+        await t.test(name, () => {
+            const fresh = planFromFrame(switchedFrame(overrides), waiting);
+
+            assert.equal(switchOutcome(planView(fresh), fresh).includes(STEPS_UPDATED), updated);
+        });
+    }
+
+    // A plan no switch produced, and one whose next switch has started, announce nothing.
+    const unswitched = planFromFrame(frame({ steps: [{ id: 's1', label: 'Other' }] }));
+    const fresh = planFromFrame(switchedFrame({ steps: [{ id: 's1', label: 'Other' }] }), waiting);
+
+    assert.deepEqual(switchOutcome(planView(unswitched), unswitched), []);
+    assert.deepEqual(
+        switchOutcome(planView(startSwitch(fresh, PICK)), startSwitch(fresh, PICK)),
+        [],
+    );
+});
+
+test('a switch outcome names each changed row and each move, for one live region', () => {
+    const fresh = planFromFrame(
+        switchedFrame({
+            decisions: [basisDecision('measure_basis:net'), sectorDecision('sector:120')],
+            moved: [
+                {
+                    choice_id: 'spec_2:gone',
+                    from_label: 'Health and population',
+                    to_label: 'Health',
+                    reason: 'Net figures cover health alone.',
+                },
+            ],
+        }),
+        startSwitch(planFromFrame(frame()), PICK),
+    );
+
+    assert.deepEqual(switchOutcome(planView(fresh), fresh), [
+        'How is aid counted? is now Net disbursements, changed from Gross disbursements.',
+        'Changed from Health and population to Health. Net figures cover health alone.',
+    ]);
+});
+
+test('a switch back to the first option still announces that the plan updated', () => {
+    const v2 = planFromFrame(switchedFrame(), startSwitch(planFromFrame(frame()), PICK));
+    const v3 = planFromFrame(
+        switchedFrame({ version: 3, decisions: [basisDecision('measure_basis:gross')] }),
+        startSwitch(v2, { ...PICK, optionId: 'measure_basis:gross' }),
+    );
+
+    assert.deepEqual(switchOutcome(planView(v3), v3), ['Plan updated.']);
 });
 
 /** A sector choice on spec `spec`, holding `active`. */
