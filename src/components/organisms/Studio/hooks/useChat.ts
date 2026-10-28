@@ -842,17 +842,21 @@ export const useChat = (initial?: ChatSnapshot) => {
                 }
             };
 
-            // A refusal of a stream that reset/hydrate walked away from, or
-            // that the user stopped, is dropped, as handle() drops frames. A
-            // switch the user stopped then ends as stopped (its `onEnd`), not
-            // on a live card whose buttons the cancel has made useless.
+            // A refusal or a failed fetch of a stream that reset/hydrate
+            // walked away from, or that the user stopped, is dropped, as
+            // handle() drops frames. A switch the user stopped then ends as
+            // stopped (its `onEnd`), not on a live card whose buttons the
+            // cancel has made useless.
             const refuse = (refusal: StreamRefusal): boolean =>
                 generationRef.current !== generation ||
                 muted ||
                 stopped ||
                 (onRefusal?.(refusal) ?? false);
             const unreachable = (): boolean =>
-                generationRef.current !== generation || muted || (onUnreachable?.() ?? false);
+                generationRef.current !== generation ||
+                muted ||
+                stopped ||
+                (onUnreachable?.() ?? false);
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
