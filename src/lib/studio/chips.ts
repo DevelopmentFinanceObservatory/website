@@ -45,15 +45,17 @@ const sameChip = (a: ApplyChoiceSuggestion, b: ApplyChoiceSuggestion): boolean =
  *  such as a fork of a share: its chips go, since the harness holds none of
  *  the answers that offered them. */
 export const withoutChips = (messages: ChatMessage[]): ChatMessage[] =>
-    messages.map((message) =>
-        message.role === 'bot' && message.chips
-            ? {
-                  role: 'bot',
-                  text: message.text,
-                  ...(message.followups && { followups: message.followups }),
-              }
-            : message,
-    );
+    messages.map((message) => {
+        if (message.role !== 'bot' || !message.chips) {
+            return message;
+        }
+
+        const rest = { ...message };
+
+        delete rest.chips;
+
+        return rest;
+    });
 
 /** The `detail` of the harness's refusal of a chip (422 with pointer
  *  `/apply_choice`), or null for any other refusal. */

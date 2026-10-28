@@ -29,6 +29,14 @@ import type {
  */
 export const STOP_GRACE_MS = 10_000;
 
+/**
+ * How long the page waits on a stop of a plan-card switch. The harness reads
+ * a stopped switch's stream on for up to its `SWITCH_REOFFER_SECONDS` (10 s)
+ * to re-offer the plan, so this grace is that window plus 5 s for the
+ * re-offer to arrive. A shorter one would close the stream on a live pause.
+ */
+export const SWITCH_STOP_GRACE_MS = 15_000;
+
 const transportError = (detail: string): StudioFrame => ({
     event: 'error',
     seq: -1,
@@ -39,22 +47,36 @@ const transportError = (detail: string): StudioFrame => ({
     } as ToolError,
 });
 
+/** A problem document the site proxy answered with itself
+ *  (src/lib/proxy/problem). It carries the `code`, the status of a harness
+ *  that answered before the relay failed (`upstream_status`, null when the
+ *  harness was not reached), and the Retry-After seconds. */
+export type ProxyProblem = {
+    code: string;
+    upstreamStatus: number | null;
+    retryAfterSeconds: number | null;
+};
+
 /** An HTTP refusal of a stream request: its status, the body's `detail`
- *  when it has one, and the harness's ToolError when the body is one
- *  (with `current_plan` on a stale plan answer). */
+ *  when it has one, the harness's ToolError when the body is one (with
+ *  `current_plan` on a stale plan answer), and `proxy` when the site proxy
+ *  refused the request itself. */
 export type StreamRefusal = {
     status: number;
     detail: string | null;
     error: PlanRevisionStaleError | null;
+    proxy?: ProxyProblem;
 };
 
-/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal
- *  before the stream would report it as an `error` frame, and returns true
- *  when it has dealt with it. */
+/** What a stream reports to its caller. `onRefusal` sees an HTTP refusal,
+ *  and `onUnreachable` a request that got no response at all (the fetch
+ *  rejected), before the stream would report either as an `error` frame.
+ *  Each returns true when it has dealt with it. */
 export type StreamHandlers = {
     onFrame: (frame: StudioFrame) => void;
     onKeepAlive?: () => void;
     onRefusal?: (refusal: StreamRefusal) => boolean;
+    onUnreachable?: () => boolean;
 };
 
 const asToolError = (body: unknown): PlanRevisionStaleError | null =>
@@ -65,10 +87,28 @@ const asToolError = (body: unknown): PlanRevisionStaleError | null =>
         ? (body as ToolError)
         : null;
 
+// The proxy's problem documents carry a `code` and no harness `error`.
+const asProxyProblem = (body: unknown, headers: Headers): ProxyProblem | null => {
+    if (body === null || typeof body !== 'object' || 'error' in body) {
+        return null;
+    }
+
+    const { code, upstream_status: upstreamStatus } = body as Record<string, unknown>;
+    const retryAfter = Number.parseInt(headers.get('retry-after') ?? '', 10);
+
+    return typeof code === 'string'
+        ? {
+              code,
+              upstreamStatus: typeof upstreamStatus === 'number' ? upstreamStatus : null,
+              retryAfterSeconds: Number.isFinite(retryAfter) ? retryAfter : null,
+          }
+        : null;
+};
+
 const streamStudio = async (
     endpoint: 'turn' | 'interrupt',
     body: TurnRequest | InterruptResponse,
-    { onFrame, onKeepAlive, onRefusal }: StreamHandlers,
+    { onFrame, onKeepAlive, onRefusal, onUnreachable }: StreamHandlers,
     signal?: AbortSignal,
 ): Promise<void> => {
     let res: Response;
@@ -85,7 +125,9 @@ const streamStudio = async (
             throw error;
         }
 
-        onFrame(transportError((error as Error).message));
+        if (!onUnreachable?.()) {
+            onFrame(transportError((error as Error).message));
+        }
 
         return;
     }
@@ -93,11 +135,13 @@ const streamStudio = async (
     if (!res.ok || !res.body) {
         let detail: string | null = null;
         let error: PlanRevisionStaleError | null = null;
+        let proxy: ProxyProblem | null = null;
 
         try {
             const parsed = (await res.json()) as { detail?: unknown };
 
             error = asToolError(parsed);
+            proxy = asProxyProblem(parsed, res.headers);
 
             if (typeof parsed.detail === 'string') {
                 detail = parsed.detail;
@@ -106,7 +150,10 @@ const streamStudio = async (
             // Non-JSON body — the status line stands.
         }
 
-        if (!res.ok && onRefusal?.({ status: res.status, detail, error })) {
+        if (
+            !res.ok &&
+            onRefusal?.({ status: res.status, detail, error, ...(proxy && { proxy }) })
+        ) {
             return;
         }
 

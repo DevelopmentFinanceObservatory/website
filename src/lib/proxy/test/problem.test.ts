@@ -62,6 +62,15 @@ test('unreachableProblem: a retryable 502 transient_unavailable problem with the
     assert.equal(body.retryable, true);
 });
 
+test('unreachableProblem: names the status of an upstream that answered before its body failed', async () => {
+    const before = await unreachableProblem('The studio agent is unreachable.', {}).json();
+    const after = await unreachableProblem('The studio agent is unreachable.', {}, 422).json();
+
+    assert.equal('upstream_status' in before, false);
+    assert.equal(after.upstream_status, 422);
+    assert.equal(after.code, 'transient_unavailable');
+});
+
 test('problem: titles the statuses the site refuses with and spreads the extra members', async () => {
     for (const [status, title] of [
         [400, 'Bad Request'],

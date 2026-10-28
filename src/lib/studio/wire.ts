@@ -302,7 +302,14 @@ export type CancelRequest = {
 // Frames — discriminated on `event`
 // ---------------------------------------------------------------------------
 
-export type PlanStep = { id: string; label: string; description?: string | null };
+/** One step of a plan. `gives_answer` is true on the one step whose result
+ *  answers the user's question; a harness that predates it sends none. */
+export type PlanStep = {
+    id: string;
+    label: string;
+    description?: string | null;
+    gives_answer?: boolean | null;
+};
 
 /** One way a scope decision can be counted. `partial` options cover only
  *  `years` (inclusive `[first, last]` ranges); `unavailable` ones say why in
@@ -325,6 +332,9 @@ export type PlanDecision = {
     // A scope decision the user can switch: the harness's ScopeChoice id,
     // every option it offers, and the one the plan counts by now. A
     // decision without `choice_id` is an ordinary planner decision.
+    // `choice_id` is built from the requirement and the axis, so it holds
+    // across a conversation's switches. An older harness built it from a
+    // spec id a switch can re-pin.
     choice_id?: string | null;
     options?: PlanDecisionOption[] | null;
     active_option_id?: string | null;
@@ -386,6 +396,55 @@ export type PlanProposed = {
     asks?: PlanAsk[] | null;
     // Set on the plan a switch re-offers.
     moved?: PlanMoved[] | null;
+    // One sentence: what is counted, for whom, when and from which source.
+    summary?: string | null;
+    // Set on the plan re-offered after a switch that did not apply.
+    switch_failed?: PlanSwitchFailed | null;
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
+};
+
+/** A switch that did not apply: the option the user picked, the refusal's
+ *  code, a reader's sentence saying why and what still holds, and whether
+ *  picking the option again could apply (false for a failure that would
+ *  repeat, such as an option Search cannot serve, and absent from a harness
+ *  that predates it). A switch stopped through `/cancel` re-offers the unchanged
+ *  plan with `code: "switch_cancelled"` and `retryable: true`. */
+export type PlanSwitchFailed = {
+    choice_id: string;
+    option_id: string;
+    code: string;
+    reason: string;
+    retryable?: boolean | null;
+};
+
+export type PlanApprovedStep = { label: string; gives_answer?: boolean | null };
+
+/** One choice of an approved plan: its short name, the option label it
+ *  holds, and, when the user's switches moved it, the label it held on the
+ *  turn's first plan. */
+export type PlanApprovedChoice = {
+    question: string;
+    chosen: string;
+    changed_from?: string | null;
+};
+
+/** The plan the user approved, sent once on the `approve` answer before the
+ *  resumed run's first frame. */
+export type PlanApproved = {
+    event: 'plan.approved';
+    seq: number;
+    plan_version_id: string;
+    version: number;
+    revision?: string | null;
+    title: string;
+    summary?: string | null;
+    steps: PlanApprovedStep[];
+    choices: PlanApprovedChoice[];
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
 };
 
 export type StepProgress = { completed: number; total: number };
@@ -502,6 +561,7 @@ export type StudioFrame =
     | { event: 'message.delta'; seq: number; text: string }
     | { event: 'message.complete'; seq: number; text: string }
     | PlanProposed
+    | PlanApproved
     | {
           event: 'plan.versioned';
           seq: number;

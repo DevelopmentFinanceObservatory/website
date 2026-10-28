@@ -12,6 +12,7 @@ import {
     runApplyChoice,
     runInterrupt,
     runTurn,
+    type StreamRefusal,
 } from '../studioClient.ts';
 import type { ApplyChoiceSuggestion, StudioFrame } from '../wire.ts';
 
@@ -153,6 +154,115 @@ test('runInterrupt: a refusal onRefusal leaves is an error frame with its detail
     assert.deepEqual(refusals, [{ status: 502, detail: 'proxy failed', error: null }]);
     assert.equal(frames.length, 1);
     assert.equal(frames[0]?.event === 'error' && frames[0].error.detail, 'proxy failed');
+});
+
+test("runInterrupt: a problem document the proxy answered with itself reaches onRefusal as the proxy's", async (t) => {
+    const proxyProblem = (status: number, body: Record<string, unknown>, headers = {}) =>
+        Response.json(
+            { status, detail: 'proxy text', retryable: true, ...body },
+            { status, headers: { 'Content-Type': 'application/problem+json', ...headers } },
+        );
+    const cases: [string, Response, unknown][] = [
+        [
+            'a rate limit, with its Retry-After',
+            proxyProblem(429, { code: 'rate_limited' }, { 'Retry-After': '12' }),
+            { code: 'rate_limited', upstreamStatus: null, retryAfterSeconds: 12 },
+        ],
+        [
+            'an unreachable harness',
+            proxyProblem(502, { code: 'transient_unavailable' }),
+            { code: 'transient_unavailable', upstreamStatus: null, retryAfterSeconds: null },
+        ],
+        [
+            'a harness that answered before the relay failed',
+            proxyProblem(502, { code: 'transient_unavailable', upstream_status: 422 }),
+            { code: 'transient_unavailable', upstreamStatus: 422, retryAfterSeconds: null },
+        ],
+        [
+            "a harness ToolError, which is not the proxy's",
+            Response.json(staleBody, { status: 409 }),
+            undefined,
+        ],
+    ];
+
+    for (const [name, response, proxy] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', async () => response);
+            const refusals: StreamRefusal[] = [];
+
+            await runInterrupt('conv', 'int-1', switchReply, {
+                onFrame: () => {},
+                onRefusal: (refusal) => {
+                    refusals.push(refusal);
+
+                    return true;
+                },
+            });
+
+            assert.deepEqual(refusals[0]?.proxy, proxy);
+        });
+    }
+});
+
+test('runInterrupt: a request no server answered goes to onUnreachable, a server error does not', async (t) => {
+    const cases: [string, () => Promise<Response>, number, number][] = [
+        [
+            'fetch rejects',
+            async () => {
+                throw new TypeError('Failed to fetch');
+            },
+            1,
+            0,
+        ],
+        ['a 502', async () => Response.json({ detail: 'proxy failed' }, { status: 502 }), 0, 1],
+        [
+            'an error frame',
+            async () =>
+                new Response(
+                    'data: {"event":"error","seq":2,"error":{"error":"transient_unavailable","retry":"retry_after_delay","detail":"Failed to fetch"}}\n\n',
+                ),
+            0,
+            1,
+        ],
+    ];
+
+    for (const [name, respond, unreached, errors] of cases) {
+        await t.test(name, async (t) => {
+            t.mock.method(globalThis, 'fetch', respond);
+            const frames: StudioFrame[] = [];
+            let calls = 0;
+
+            await runInterrupt('conv', 'int-1', switchReply, {
+                onFrame: (frame) => frames.push(frame),
+                onRefusal: () => false,
+                onUnreachable: () => {
+                    calls += 1;
+
+                    return true;
+                },
+            });
+
+            assert.equal(calls, unreached);
+            assert.equal(frames.filter((frame) => frame.event === 'error').length, errors);
+        });
+    }
+});
+
+test('runInterrupt: an unreachable request onUnreachable leaves is an error frame', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => {
+        throw new TypeError('Failed to fetch');
+    });
+    const frames: StudioFrame[] = [];
+
+    await runInterrupt('conv', 'int-1', switchReply, {
+        onFrame: (frame) => frames.push(frame),
+        onUnreachable: () => false,
+    });
+
+    assert.deepEqual(
+        frames.map((frame) => frame.event),
+        ['error'],
+    );
 });
 
 test('runInterrupt: a stale refusal hands onRefusal the current plan as sent', async (t) => {

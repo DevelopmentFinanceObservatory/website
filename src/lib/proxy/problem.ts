@@ -127,6 +127,23 @@ export const rateLimitedProblem = (
         headers: { ...headers, 'Retry-After': String(reset) },
     });
 
-/** A 502 `transient_unavailable` problem document: the upstream did not answer. */
-export const unreachableProblem = (detail: string, headers: Record<string, string>): Response =>
-    problem({ status: 502, code: 'transient_unavailable', detail, retryable: true, headers });
+/**
+ * A 502 `transient_unavailable` problem document: the upstream did not
+ * answer. `upstreamStatus` is the status of an upstream that did answer and
+ * whose body then failed before the first byte was relayed; the document
+ * carries it as `upstream_status`, so a client can tell that the upstream
+ * received the call.
+ */
+export const unreachableProblem = (
+    detail: string,
+    headers: Record<string, string>,
+    upstreamStatus?: number,
+): Response =>
+    problem({
+        status: 502,
+        code: 'transient_unavailable',
+        detail,
+        retryable: true,
+        headers,
+        extra: upstreamStatus === undefined ? undefined : { upstream_status: upstreamStatus },
+    });

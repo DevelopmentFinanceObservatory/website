@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import ApprovedPlanPill from './ApprovedPlanPill';
 import styles from './ChatPanel.module.scss';
 import MessageFeedback from './MessageFeedback';
 import WidgetChips from './WidgetChips';
@@ -34,8 +35,9 @@ type ChatMessageProps = {
 
 /**
  * One transcript entry: a user bubble, or a bot turn — markdown, the cards
- * it put on the whiteboard as chips, and (on the latest turn) the suggested
- * follow-ups and the chips that switch a scope choice of the answer.
+ * it put on the whiteboard as chips, the plan the user approved for it, and
+ * (on the latest turn) the suggested follow-ups and the chips that switch a
+ * scope choice of the answer.
  */
 const ChatMessage = ({
     message,
@@ -69,7 +71,7 @@ const ChatMessage = ({
     const followups = message.followups ?? [];
     const chips = message.chips ?? [];
 
-    if (!message.text && followups.length === 0 && chips.length === 0) {
+    if (!message.text && followups.length === 0 && chips.length === 0 && !message.plan) {
         return null;
     }
 
@@ -95,6 +97,8 @@ const ChatMessage = ({
                 onRemove={onRemove}
                 readOnly={readOnly}
             />
+            {/* The plan the user approved for this answer, to read again. */}
+            {message.plan && <ApprovedPlanPill plan={message.plan} />}
             {/* Follow-ups belong to the CURRENT turn only — once a newer turn
                 exists they're stale, so drop them. */}
             {isLast && !readOnly && (followups.length > 0 || chips.length > 0) && (
