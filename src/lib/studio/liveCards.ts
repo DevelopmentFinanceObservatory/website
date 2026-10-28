@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import { canvasWidgetsOf } from '../chat/canvas.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import { isLiveStudioShare, type StudioShareKind } from '../chat/shareMode.ts';
@@ -32,14 +33,17 @@ import type { FactSummary } from './wire.ts';
 /** What a share page hands `Studio` or `EmbedView`. `undrawn` names the
  *  snapshot cards the server could not draw, which the browser asks the
  *  refresh route for. It is empty for a live share, whose cards the browser
- *  fills all. `createdAt` is an ISO timestamp: the moment the share's text
- *  was written. */
+ *  fills all. `slots` maps each card a slot draws to that slot (from 1),
+ *  which its refresh and data URLs carry; a card with none, such as every
+ *  card of a conversation share, exports its own revision. `createdAt` is an
+ *  ISO timestamp: the moment the share's text was written. */
 export type SharedView = {
     id: string;
     kind: StudioShareKind;
     saved: SavedConversation;
     live: boolean;
     undrawn: string[];
+    slots: Record<string, number>;
     createdAt: string;
 };
 
@@ -100,6 +104,7 @@ export const sharedViewOf = (row: {
         saved: live ? withholdCardData(saved) : saved,
         live,
         undrawn: [],
+        slots: {},
         createdAt: row.createdAt.toISOString(),
     };
 };
@@ -267,18 +272,22 @@ type ErrorAnswer = Extract<LiveCardOutcome, { status: 'error' }>;
 
 const failure = (code: string): ErrorAnswer => ({ status: 'error', code });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isLiveCard = (value: unknown): value is LiveCard => {
+    const card = asRecord(value);
 
-const isLiveCard = (value: unknown): value is LiveCard =>
-    isRecord(value) &&
-    typeof value['component_id'] === 'string' &&
-    Number.isInteger(value['revision']) &&
-    isRecord(value['payload']) &&
-    isRecord(value['fact_summary']);
+    return (
+        card !== undefined &&
+        typeof card['component_id'] === 'string' &&
+        Number.isInteger(card['revision']) &&
+        asRecord(card['payload']) !== undefined &&
+        asRecord(card['fact_summary']) !== undefined
+    );
+};
 
-const readAnswer = (ok: boolean, body: unknown): LiveCardOutcome => {
-    if (!isRecord(body)) {
+const readAnswer = (ok: boolean, answer: unknown): LiveCardOutcome => {
+    const body = asRecord(answer);
+
+    if (!body) {
         return failure(ok ? LIVE_CLIENT_CODES.invalid : LIVE_CLIENT_CODES.failed);
     }
 
@@ -307,8 +316,10 @@ const readAnswer = (ok: boolean, body: unknown): LiveCardOutcome => {
     return failure(LIVE_CLIENT_CODES.invalid);
 };
 
-export const refreshUrl = (shareId: string, cardId: string): string =>
-    `/api/share/${encodeURIComponent(shareId)}/cards/${encodeURIComponent(cardId)}/refresh`;
+/** The refresh route for one card, with the slot that draws it when the
+ *  page knows one. The route answers 404 without it. */
+export const refreshUrl = (shareId: string, cardId: string, slot?: number): string =>
+    `/api/share/${encodeURIComponent(shareId)}/cards/${encodeURIComponent(cardId)}/refresh${slot === undefined ? '' : `?slot=${slot}`}`;
 
 const askOnce = async (
     { fetch: fetcher }: LiveDeps,
@@ -330,8 +341,8 @@ const askOnce = async (
 };
 
 /**
- * Refresh the named cards of a live share, `LIVE_REFRESH_CONCURRENCY`
- * requests at a time, and report each card through `onSettled` as soon as
+ * Refresh the named cards of a live share, each from the slot `slots` names
+ * for it, `LIVE_REFRESH_CONCURRENCY` requests at a time, and report each card through `onSettled` as soon as
  * its own answer arrives. Every failure, and any answer outside the route's
  * contract, is that card's `error` outcome. After `signal` aborts nothing
  * more is reported. Resolves when every card has settled.
@@ -341,11 +352,13 @@ export const refreshLiveCards = async (
     {
         shareId,
         cardIds,
+        slots = {},
         signal,
         onSettled,
     }: {
         shareId: string;
         cardIds: string[];
+        slots?: Record<string, number>;
         signal: AbortSignal;
         onSettled: (cardId: string, outcome: LiveCardOutcome) => void;
     },
@@ -354,7 +367,9 @@ export const refreshLiveCards = async (
 
     await Promise.all(
         cardIds.map(async (cardId) => {
-            const outcome = await gate(() => askOnce(deps, refreshUrl(shareId, cardId), signal));
+            const outcome = await gate(() =>
+                askOnce(deps, refreshUrl(shareId, cardId, slots[cardId]), signal),
+            );
 
             if (!signal.aborted) {
                 onSettled(cardId, outcome);
@@ -395,11 +410,55 @@ const factsOf = (
     };
 };
 
+// The card kind each data component type draws as.
+const KIND_OF_TYPE: Record<string, 'key_number' | 'chart' | 'table'> = {
+    stat_card: 'key_number',
+    line_chart: 'chart',
+    bar_chart: 'chart',
+    table: 'table',
+};
+
+// The held card in the shape of the component its slot serves, which can
+// differ from the held shape: a share made through the Presentation API
+// holds each slot as a table, since only the slot's card says what it draws,
+// and an owner's replace can put another kind of card in a slot.
+const shapedFor = (held: Widget, card: LiveCard): Widget => {
+    const type = asRecord(card.payload['component'])?.['type'];
+    const kind = typeof type === 'string' ? KIND_OF_TYPE[type] : undefined;
+
+    if (!kind || kind === held.kind || held.kind === 'text') {
+        return held;
+    }
+
+    const { id, ref } = held;
+    // A canvas card keeps the turn it was made in.
+    const turn = 'turn' in held ? { turn: held.turn as number } : {};
+
+    switch (kind) {
+        case 'key_number':
+            return { kind, id, ...turn, label: '', value: '', ref };
+        case 'chart':
+            return {
+                kind,
+                id,
+                ...turn,
+                chartType: type === 'bar_chart' ? 'bar' : 'line',
+                title: '',
+                categories: [],
+                series: [],
+                ref,
+            };
+        case 'table':
+            return { kind, id, ...turn, title: '', columns: [], rows: [], ref };
+    }
+};
+
 /**
  * A held card drawn from the refresh route's card: title, drawing, values,
  * `ref`, `frame`, `source`, and `info` all come from the answer, through
- * `reviseWidget`. Null when the answer's payload resolves no component of
- * the held card's kind, which leaves nothing to draw.
+ * `reviseWidget`, in the shape of the component the answer carries. Null
+ * when the answer's payload resolves no component of that kind, which
+ * leaves nothing to draw.
  */
 export const widgetFromLiveCard = (held: Widget, card: LiveCard): Widget | null => {
     try {
@@ -407,7 +466,7 @@ export const widgetFromLiveCard = (held: Widget, card: LiveCard): Widget | null 
         // envelope fields, which `reviseWidget` does not read.
         const read = payloadDescription(card.payload);
         const drawn = reviseWidget(
-            held,
+            shapedFor(held, card),
             {
                 event: 'component.revised',
                 seq: 0,

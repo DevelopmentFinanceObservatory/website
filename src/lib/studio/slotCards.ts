@@ -1,5 +1,4 @@
 import {
-    readShare,
     readSlotCard,
     readSlotFile,
     SharesError,
@@ -10,6 +9,7 @@ import {
 import type { SavedConversation } from '../chat/history.ts';
 import type { StudioShareKind } from '../chat/shareMode.ts';
 import type { CardRef, FrameRef, Widget } from '../chat/widgets.ts';
+import { asRecord } from '../asRecord.ts';
 import { dropEncodedLength, pick } from '../proxy/headers.ts';
 import { problem, type ProblemStatus } from '../proxy/problem.ts';
 import { gateOf } from './gate.ts';
@@ -30,14 +30,15 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
  * A share's payload (src/lib/chat/sharePayload.ts) holds each slotted data
  * card with `slot`, the 0-based index of the slot that draws it, and none of
  * what it showed. `sharedViewOfRecord` gives every held card its slot's
- * component revision as `ref`. Every card, live or snapshot, comes from
- * dfo-apis' public slot card route, which draws the slot's card on the frame
- * the slot serves. A snapshot's slots serve the frames dfo-apis pinned, so
- * its cards are drawn here on the server. A live share's cards leave the
- * server held, and the browser fills each one (`refreshLiveCards`) from
- * `GET /api/share/[id]/cards/[cardId]/refresh`, whose body is
- * `slotRefreshResponse`. A snapshot card the server could not read is filled
- * the same way.
+ * component revision as `ref`, and names its slot in `slots`, which the page
+ * puts in each card's refresh and data URLs. Every card, live or snapshot,
+ * comes from dfo-apis' public slot card route, which draws the slot's card
+ * on the frame the slot serves. A snapshot's slots serve the frames dfo-apis
+ * pinned, so its cards are drawn here on the server, within a few seconds. A
+ * live share's cards leave the server held, and the browser fills each one
+ * (`refreshLiveCards`) from `GET /api/share/[id]/cards/[cardId]/refresh?slot=`,
+ * whose body is `slotRefreshResponse`. A snapshot card the server did not
+ * read in time is filled the same way.
  *
  * A live slot serves the newest frame. dfo-apis checks for newer data at
  * most once per 15 minutes and records what it served in the share's
@@ -57,8 +58,13 @@ const publicReads = ({ shares }: SlotDeps): LiveBackend => ({
     fetch: shares.fetch,
 });
 
-// A refresh's whole budget: the share read and the slot card read.
+// A refresh's whole budget: the slot card read.
 const REFRESH_DEADLINE_MS = 75_000;
+
+// A share page's whole budget for drawing a snapshot's cards on the server.
+// A card not read by then is left for the browser to fill, so a slow slot
+// holds the page back by this much at most.
+const PAGE_DEADLINE_MS = 4_000;
 
 // One export call: dfo-apis stops a component route at 30 seconds.
 const EXPORT_DEADLINE_MS = 35_000;
@@ -76,21 +82,18 @@ const READ_CONCURRENCY = 4;
 // bounds what one opening costs.
 export const LIVE_SHARE_MAX_DATA_CARDS = 20;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const sameFrame = (a: FrameRef | null, b: FrameRef | null): boolean =>
     a?.spec_id === b?.spec_id && a?.content_version === b?.content_version;
 
 type PayloadWidget = Record<string, unknown> & { id: string; kind: string };
 
 const widgetsOf = (payload: unknown): PayloadWidget[] => {
-    const widgets = isRecord(payload) ? payload['widgets'] : undefined;
+    const widgets = asRecord(payload)?.['widgets'];
 
     return Array.isArray(widgets)
         ? widgets.filter(
               (widget): widget is PayloadWidget =>
-                  isRecord(widget) &&
+                  asRecord(widget) !== undefined &&
                   typeof widget['id'] === 'string' &&
                   typeof widget['kind'] === 'string',
           )
@@ -147,24 +150,56 @@ const heldWidget = (widget: PayloadWidget, ref: CardRef | undefined): Widget => 
 const isHeld = (record: ShareRecord, widget: PayloadWidget): boolean =>
     widget.kind !== 'text' && (Number.isSafeInteger(widget['slot']) || record.mode === 'live');
 
+// A share made through the Presentation API (the SDK) holds no widgets of
+// the website's own: its payload is null. It shows one card per filled
+// slot, held as a table until its slot's card says what it draws
+// (`widgetFromLiveCard`).
+const slotWidgets = (record: ShareRecord): PayloadWidget[] =>
+    record.slots.flatMap(({ slot, card }) =>
+        card ? [{ kind: 'table', id: `slot-${slot}`, turn: 1, slot: slot - 1 }] : [],
+    );
+
+// The canvas a share's payload holds, with `widgets` in place of its own.
+// Fields a payload leaves out, as an SDK share's leaves them all, read as an
+// empty canvas named by the share's title.
+const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): SavedConversation =>
+    ({
+        id: record.id,
+        sessionId: null,
+        title: record.title ?? '',
+        updatedAt: Date.parse(record.createdAt),
+        messages: [],
+        turnCount: 1,
+        pinnedIds: [],
+        removedIds: [],
+        layout: {},
+        ...asRecord(record.payload),
+        widgets,
+    }) as SavedConversation;
+
 /**
  * A Studio share from dfo-apis as its page passes it to the client. Every
- * held card has its slot's revision as `ref`. A snapshot's held cards are
- * drawn here from their slots' cards, each on the frame its slot recorded:
- * the frame of the card's revision for a share made as a snapshot, and the
- * frame the slot served at the switch for a live share made a snapshot. A
- * card whose read fails stays held and is named in `undrawn`, so the browser
- * asks the refresh route for it, and the failure is logged. A live share's
- * cards stay held for the browser.
+ * held card has its slot's revision as `ref`, and `slots` names each one's
+ * slot. A share whose payload holds no widgets shows one card per filled
+ * slot. A snapshot's held cards are drawn here from their slots' cards, each
+ * on the frame its slot recorded: the frame of the card's revision for a
+ * share made as a snapshot, and the frame the slot served at the switch for
+ * a live share made a snapshot. The reads share `deadlineMs`. A card whose
+ * read fails or is not done by then stays held and is named in `undrawn`,
+ * so the browser asks the refresh route for it, and the failure is logged.
+ * A live share's cards stay held for the browser.
  */
 export const sharedViewOfRecord = async (
     deps: SlotDeps,
     record: ShareRecord,
+    { deadlineMs = PAGE_DEADLINE_MS }: { deadlineMs?: number } = {},
 ): Promise<SharedView> => {
     const live = record.mode === 'live';
-    const shares = { ...deps.shares, signal: AbortSignal.timeout(REFRESH_DEADLINE_MS) };
+    const shares = { ...deps.shares, signal: AbortSignal.timeout(deadlineMs) };
     const gate = gateOf(READ_CONCURRENCY);
     const undrawn: string[] = [];
+    const slots: Record<string, number> = {};
+    const payloadWidgets = widgetsOf(record.payload);
 
     const drawn = async (held: Widget, slot: number): Promise<Widget | null> => {
         const { body } = await gate(() => readSlotCard(shares, record.id, slot));
@@ -173,13 +208,17 @@ export const sharedViewOfRecord = async (
     };
 
     const widgets = await Promise.all(
-        widgetsOf(record.payload).map(async (widget) => {
+        (payloadWidgets.length ? payloadWidgets : slotWidgets(record)).map(async (widget) => {
             if (!isHeld(record, widget)) {
                 return widget as unknown as Widget;
             }
 
             const slotted = slotCardOf(record, widget);
             const held = heldWidget(widget, slotted?.ref);
+
+            if (slotted) {
+                slots[widget.id] = slotted.slot;
+            }
 
             if (live || !slotted) {
                 return held;
@@ -211,9 +250,11 @@ export const sharedViewOfRecord = async (
     return {
         id: record.id,
         kind: record.kind as StudioShareKind,
-        saved: { ...(record.payload as SavedConversation), widgets } as SavedConversation,
+        // Every widget keeps the turn its payload widget has.
+        saved: savedOf(record, widgets as SavedConversation['widgets']),
         live,
         undrawn,
+        slots,
         createdAt: record.createdAt,
     };
 };
@@ -243,46 +284,35 @@ const notFound = (): Response =>
         headers: NO_STORE,
     });
 
-// The slot that draws a share's data card, or null: no such share, or no
-// data card with that id drawn by a slot.
-const cardSlotOf = async (
-    shares: SharesBackend,
-    shareId: string,
-    cardId: string,
-): Promise<number | null> => {
-    const record = await readShare(shares, shareId);
-    const widget = record && widgetsOf(record.payload).find((entry) => entry.id === cardId);
+/** The slot a card route's `slot` query names (from 1), or null for none
+ *  or anything but a whole number from 1. The share page puts each card's
+ *  slot in its URLs (`SharedView.slots`), so a route reads the slot alone. */
+export const slotOfQuery = (value: string | null): number | null =>
+    value && /^[1-9][0-9]{0,8}$/.test(value) ? Number(value) : null;
 
-    return (record && widget && slotCardOf(record, widget)?.slot) ?? null;
-};
+// dfo-apis' answer for a share id or slot it does not have, an empty slot,
+// or a note's slot.
+const isNoSlot = (error: unknown): boolean =>
+    error instanceof SharesError && error.status === 404 && error.code === 'not_found';
 
 /**
- * `GET /api/share/[id]/cards/[cardId]/refresh`. 404 unless a slot of the
- * share draws the card. Otherwise 200 with `{status, card}`, where `status`
- * is `current` when the card stands on its revision's own frame and
- * `redrawn` when dfo-apis drew it on another, under dfo-apis' `ETag` and
- * `Cache-Control`; 304 when `ifNoneMatch` names that ETag; or 200 with
+ * `GET /api/share/[id]/cards/[cardId]/refresh?slot=`. The card slot `slot`
+ * of the share draws: 404 without a slot, or when dfo-apis has no such
+ * share or card-holding slot. Otherwise 200 with `{status, card}`, where
+ * `status` is `current` when the card stands on its revision's own frame
+ * and `redrawn` when dfo-apis drew it on another, under dfo-apis' `ETag`
+ * and `Cache-Control`; 304 when `ifNoneMatch` names that ETag; or 200 with
  * `{status: 'error', code, retryable?}`, so one failing card leaves the rest
- * of the page standing. A share id that is not dfo-apis' form answers 404.
+ * of the page standing. The card id names the card to its reader only: the
+ * slot routes are public, so the share record is not read to match it.
  */
 export const slotRefreshResponse = async (
     deps: SlotDeps,
     shareId: string,
-    cardId: string,
+    slot: number | null,
     ifNoneMatch: string | null = null,
 ): Promise<Response> => {
     const shares = { ...deps.shares, signal: AbortSignal.timeout(REFRESH_DEADLINE_MS) };
-    let slot: number | null;
-
-    try {
-        slot = await cardSlotOf(shares, shareId, cardId);
-    } catch (error) {
-        if (error instanceof SharesError && error.status === 404) {
-            return notFound();
-        }
-
-        return Response.json(errorOf(error), { headers: NO_STORE });
-    }
 
     if (slot === null) {
         return notFound();
@@ -305,7 +335,7 @@ export const slotRefreshResponse = async (
 
         return Response.json({ status, card }, { headers });
     } catch (error) {
-        return Response.json(errorOf(error), { headers: NO_STORE });
+        return isNoSlot(error) ? notFound() : Response.json(errorOf(error), { headers: NO_STORE });
     }
 };
 
@@ -328,10 +358,11 @@ const noFile = (
     });
 
 /**
- * `GET /api/share/[id]/cards/[cardId]/data?format=&bundle=`. The rows of a
- * share's card on the frame its slot serves (for a live share, the newest;
- * for a snapshot, the one pinned), in every format and as a
- * bundle or a bare file, from dfo-apis' slot data route. The route's
+ * `GET /api/share/[id]/cards/[cardId]/data?slot=&format=&bundle=`. 404
+ * without a slot. The rows of the card slot `slot` draws, on the frame the
+ * slot serves (for a live share, the newest; for a snapshot, the one
+ * pinned), in every format and as a bundle or a bare file, from dfo-apis'
+ * slot data route. The route's
  * defaults are the component export's (a CSV bundle), and the request names
  * both explicitly, so the file is the one the browser asked for. dfo-apis
  * refuses a format or bundle it cannot write (JSON as a bundle, or an
@@ -342,21 +373,10 @@ const noFile = (
 export const slotDataResponse = async (
     deps: SlotDeps,
     shareId: string,
-    cardId: string,
     query: URLSearchParams,
 ): Promise<Response> => {
     const shares = { ...deps.shares, signal: AbortSignal.timeout(EXPORT_DEADLINE_MS) };
-    let slot: number | null;
-
-    try {
-        slot = await cardSlotOf(shares, shareId, cardId);
-    } catch (error) {
-        if (error instanceof SharesError && error.status === 404) {
-            return notFound();
-        }
-
-        return noFile(errorOf(error));
-    }
+    const slot = slotOfQuery(query.get('slot'));
 
     if (slot === null) {
         return notFound();
@@ -430,8 +450,10 @@ export const liveCardsRefusal = async (
 
             return isRefreshableFrame(frame) ? null : { id, reason: 'unsupported_frame' as const };
         } catch (error) {
-            // A 4xx is dfo-apis saying the ref names no component of its own.
-            if (error instanceof BackendError && error.status && error.status < 500) {
+            // A 404 is dfo-apis saying the ref names no component of its own.
+            // Any other refusal says nothing about the card, so the check
+            // fails as transient.
+            if (error instanceof BackendError && error.status === 404) {
                 return { id, reason: 'unknown_component' as const };
             }
 

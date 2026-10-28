@@ -10,8 +10,10 @@
  * live share, and the one pinned for a snapshot, which a live share made a
  * snapshot keeps from the switch. Neither need be the stored revision's.
  * Its rows come from the share's own route,
- * `GET /api/share/{id}/cards/{cardId}/data?format=&bundle=`, which serves the
- * rows of that frame, in every format and as a bundle or a bare file.
+ * `GET /api/share/{id}/cards/{cardId}/data?slot=&format=&bundle=`, which
+ * serves the rows of that frame, in every format and as a bundle or a bare
+ * file. A card of a share that no slot draws, such as every card of a
+ * conversation share, exports its own revision.
  */
 
 import type { CardRef, Widget } from '../chat/widgets.ts';
@@ -53,11 +55,29 @@ export const restoreCardRevisions = (saved?: {
 const componentDataPath = (componentId: string, revision: string | number): string =>
     `/api/presentation/components/${encodeURIComponent(componentId)}/revisions/${encodeURIComponent(String(revision))}/data`;
 
-/** A card of a share, as its data route names it. */
-export type SharedCardAddress = { shareId: string; cardId: string };
+/** A card of a share, as its data route names it: the share, the card, and
+ *  the slot that draws it (from 1). */
+export type SharedCardAddress = { shareId: string; cardId: string; slot: number };
 
-const dataQuery = ({ format, bundle }: CardDataOptions): string =>
-    String(new URLSearchParams({ format, bundle: String(bundle) }));
+/** The address of a card on `share`, or null when no slot of the share
+ *  draws it, or there is no share: the card then exports its own revision. */
+export const sharedCardAddress = (
+    share: { id: string; slots?: Record<string, number> } | undefined,
+    cardId: string,
+): SharedCardAddress | null => {
+    const slot = share?.slots?.[cardId];
+
+    return share && slot !== undefined ? { shareId: share.id, cardId, slot } : null;
+};
+
+const dataQuery = ({ format, bundle }: CardDataOptions, slot?: number): string =>
+    String(
+        new URLSearchParams({
+            ...(slot === undefined ? {} : { slot: String(slot) }),
+            format,
+            bundle: String(bundle),
+        }),
+    );
 
 /** The site's proxy URL for one revision's rows. */
 export const cardDataUrl = (ref: CardRef, options: CardDataOptions): string =>
@@ -65,10 +85,10 @@ export const cardDataUrl = (ref: CardRef, options: CardDataOptions): string =>
 
 /** The share route for the rows a shared card's slot serves. */
 export const sharedCardDataUrl = (
-    { shareId, cardId }: SharedCardAddress,
+    { shareId, cardId, slot }: SharedCardAddress,
     options: CardDataOptions,
 ): string =>
-    `/api/share/${encodeURIComponent(shareId)}/cards/${encodeURIComponent(cardId)}/data?${dataQuery(options)}`;
+    `/api/share/${encodeURIComponent(shareId)}/cards/${encodeURIComponent(cardId)}/data?${dataQuery(options, slot)}`;
 
 /** The export route the proxy forwards to; `search` is the caller's query
  *  string, passed as it came. */

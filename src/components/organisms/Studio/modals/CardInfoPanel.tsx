@@ -11,6 +11,7 @@ import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import Modal from '@/components/molecules/Modal/Modal';
 import type { CardInfo, Widget } from '@/lib/chat/widgets';
+import type { SharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     type DescribedView,
     type LegacyView,
@@ -331,7 +332,8 @@ const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
  * More Info, the back of the card. A card that carries a description shows
  * it as `DescribedPanel` lays it out, with no request. A card without one
  * shows the legacy panel. Download Data sits after the citation either way.
- * On a share (`shareId`) it serves the rows the card's slot serves. The card's
+ * On a share whose slot draws the card (`shared`) it serves the rows that
+ * slot serves. The card's
  * owner (`canShare`) is told how to get a link to cite. The full citation
  * is retrieved today. On a snapshot share (`snapshot`) it names the share's
  * link and the day the share captured its data.
@@ -341,7 +343,7 @@ const CardInfoPanel = ({
     widget,
     open,
     onOpenChange,
-    shareId,
+    shared,
     snapshot,
     canShare = false,
 }: {
@@ -350,7 +352,7 @@ const CardInfoPanel = ({
     widget: Widget | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    shareId?: string;
+    shared?: SharedCardAddress | null;
     // The snapshot share the card is shown on, and when it was made.
     snapshot?: { id: string; createdAt?: string };
     canShare?: boolean;
@@ -363,7 +365,7 @@ const CardInfoPanel = ({
             snapshotAsOf: snapshotAsOfOf(snapshot?.createdAt),
             canShare,
         });
-    const download = widget && <CardDownload widget={widget} shareId={shareId} />;
+    const download = widget && <CardDownload widget={widget} shared={shared} />;
 
     return (
         <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">

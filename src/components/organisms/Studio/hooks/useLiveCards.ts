@@ -43,8 +43,8 @@ const settledOf = (held: Widget | undefined, outcome: LiveCardOutcome): Settled 
  * live share, and the cards of a snapshot its page could not draw
  * (`undrawn`). `widgets` is the canvas as the share page sent it, whose
  * cards to fill are held (see `sharedViewOfRecord`). Each one is asked for
- * through `GET /api/share/[id]/cards/[cardId]/refresh` and drawn as soon as
- * its own answer arrives.
+ * through `GET /api/share/[id]/cards/[cardId]/refresh?slot=`, from the slot
+ * `share.slots` names for it, and drawn as soon as its own answer arrives.
  *
  * Returns the widgets to render, with every filled card drawn in place of
  * its held one, and the canvas's state for the card components, whose
@@ -53,12 +53,21 @@ const settledOf = (held: Widget | undefined, outcome: LiveCardOutcome): Settled 
  * itself and no state, and makes no request.
  */
 export const useLiveCards = (
-    share: { id: string; live?: boolean; undrawn?: string[]; createdAt?: string } | undefined,
+    share:
+        | {
+              id: string;
+              live?: boolean;
+              undrawn?: string[];
+              slots?: Record<string, number>;
+              createdAt?: string;
+          }
+        | undefined,
     widgets: Widget[],
 ): { widgets: Widget[]; live: LiveCanvas | undefined } => {
     const fill = cardsToFill(share, widgets);
     const shareId = fill?.shareId ?? null;
     const cardIds = fill?.cardIds ?? [];
+    const slots = share?.slots;
     const [settled, setSettled] = useState<Record<string, Settled>>({});
     // The effect follows which cards are on the canvas, not the array's
     // identity, which changes on every render.
@@ -84,12 +93,13 @@ export const useLiveCards = (
         void refreshLiveCards(browserLiveDeps, {
             shareId,
             cardIds: JSON.parse(cardKey) as string[],
+            slots,
             signal: controller.signal,
             onSettled: settle,
         });
 
         return () => controller.abort();
-    }, [shareId, cardKey]);
+    }, [shareId, cardKey, slots]);
 
     if (!shareId) {
         return { widgets, live: undefined };
@@ -110,6 +120,7 @@ export const useLiveCards = (
         void refreshLiveCards(browserLiveDeps, {
             shareId,
             cardIds: [cardId],
+            slots,
             signal,
             onSettled: (id, outcome) =>
                 setSettled((prev) => ({ ...prev, [id]: settledOf(held, outcome) })),

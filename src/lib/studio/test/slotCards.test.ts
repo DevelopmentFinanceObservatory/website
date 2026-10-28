@@ -1,18 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { CreateShareBody, ShareRecord, SharesBackend } from '../../chat/apisShares.ts';
+import {
+    readShare,
+    type CreateShareBody,
+    type ShareRecord,
+    type SharesBackend,
+} from '../../chat/apisShares.ts';
 import {
     liveCardsRefusal,
     LIVE_SHARE_MAX_DATA_CARDS,
     sharedViewOfRecord,
     slotDataResponse,
+    slotOfQuery,
     slotRefreshResponse,
     type SlotDeps,
 } from '../slotCards.ts';
 import { APIS, componentRead, DATASET_FRAME, MOVED_FRAME } from './fixtures/live-backend-stub.ts';
 
-type Call = { method: string; path: string; headers: Headers };
+type Call = { method: string; path: string; headers: Headers; signal?: AbortSignal | null };
 
 const NOTE = { kind: 'text', id: 'n1', turn: 1, title: 'Mine', body: 'Words' };
 
@@ -49,9 +55,28 @@ const shareBody = (record: ShareRecord) => ({
     mode: record.mode,
     title: record.title,
     revision: 1,
-    slots: record.slots.map((slot) => ({ ...slot, data_url: 'x' })),
+    slots: record.slots.map((slot) => ({
+        ...slot,
+        data_url: `https://dfo.example/api/v1/presentation/shares/${record.id}/slots/${slot.slot}/data`,
+    })),
     payload: record.payload,
     created_at: record.createdAt,
+});
+
+// What dfo-apis holds for a share the SDK made (`{cards, latest}`, no
+// payload): a card share with slot 1 filled, and slot 2 left empty by a
+// replace.
+const sdkRecordOf = (mode: 'live' | 'snapshot'): ShareRecord => ({
+    id: 'Sd9kSh4r',
+    kind: 'card',
+    mode,
+    title: null,
+    slots: [
+        { slot: 1, card: { component_id: 'cmp_a', revision: 2, frame: DATASET_FRAME } },
+        { slot: 2, card: null },
+    ],
+    payload: null,
+    createdAt: '2026-10-28T10:00:00Z',
 });
 
 const ETAG = '"slot-card-1"';
@@ -70,7 +95,7 @@ const slotCard = (served: typeof DATASET_FRAME) => {
 const depsOf = (
     record: ShareRecord,
     served = DATASET_FRAME,
-    slotReply?: (call: Call) => Response,
+    slotReply?: (call: Call) => Response | Promise<Response>,
 ): { deps: SlotDeps; calls: Call[] } => {
     const calls: Call[] = [];
     const fetcher: typeof fetch = async (input, init) => {
@@ -79,6 +104,7 @@ const depsOf = (
             method: init?.method ?? 'GET',
             path: `${url.pathname}${url.search}`,
             headers: new Headers(init?.headers),
+            signal: init?.signal,
         };
 
         calls.push(call);
@@ -125,6 +151,8 @@ test("a snapshot's slotted cards are drawn on the server on the frame each slot 
 
     assert.equal(view.live, false);
     assert.deepEqual(view.undrawn, []);
+    // Only the slotted card names a slot; its URLs carry it.
+    assert.deepEqual(view.slots, { c1: 1 });
     assert.ok(chart?.kind === 'chart');
     assert.ok(chart.series.length > 0 && chart.title);
     assert.deepEqual(chart.frame, MOVED_FRAME);
@@ -151,6 +179,83 @@ test('a snapshot card the server cannot read stays held and is named for the bro
     assert.ok(chart?.kind === 'chart');
     assert.deepEqual(chart.series, []);
     assert.deepEqual(chart.ref, { component_id: 'cmp_a', revision: 2 });
+});
+
+test('a snapshot page waits a few seconds at most, and leaves an unread card for the browser', async () => {
+    // A slot card read that answers only when its request is given up.
+    const { deps } = depsOf(
+        recordOf('snapshot'),
+        DATASET_FRAME,
+        ({ signal }) =>
+            new Promise((_resolve, reject) =>
+                signal?.addEventListener('abort', () => reject(signal.reason)),
+            ),
+    );
+    const view = await sharedViewOfRecord(deps, recordOf('snapshot'), { deadlineMs: 20 });
+    const [chart] = view.saved.widgets;
+
+    assert.deepEqual(view.undrawn, ['c1']);
+    assert.deepEqual(view.slots, { c1: 1 });
+    assert.ok(chart?.kind === 'chart');
+    assert.deepEqual(chart.series, []);
+});
+
+test("an SDK share's page draws one card per filled slot, titled by the slot's card", async () => {
+    const snapshot = sdkRecordOf('snapshot');
+    const { deps, calls } = depsOf(snapshot);
+    // The record as readShare parses dfo-apis' answer.
+    const record = await readShare(deps.shares, snapshot.id);
+
+    assert.ok(record);
+
+    const view = await sharedViewOfRecord(deps, record);
+    const [card, ...rest] = view.saved.widgets;
+
+    assert.equal(view.kind, 'card');
+    assert.deepEqual(rest, []);
+    // Held as a table, drawn as the chart its slot serves.
+    assert.ok(card?.kind === 'chart');
+    assert.equal(card.id, 'slot-1');
+    assert.ok(card.title && card.series.length > 0);
+    assert.deepEqual(card.ref, { component_id: 'cmp_a', revision: 2 });
+    assert.deepEqual(view.slots, { 'slot-1': 1 });
+    assert.deepEqual(view.undrawn, []);
+    assert.equal(view.saved.title, '');
+    assert.deepEqual(view.saved.layout, {});
+    assert.equal(calls.at(-1)?.path, '/api/presentation/shares/Sd9kSh4r/slots/1');
+
+    // A live one leaves the card held for the browser, with its slot.
+    const live = await sharedViewOfRecord(depsOf(sdkRecordOf('live')).deps, sdkRecordOf('live'));
+
+    assert.deepEqual(live.saved.widgets, [
+        {
+            kind: 'table',
+            id: 'slot-1',
+            turn: 1,
+            title: '',
+            columns: [],
+            rows: [],
+            ref: { component_id: 'cmp_a', revision: 2 },
+        },
+    ]);
+    assert.deepEqual(live.slots, { 'slot-1': 1 });
+});
+
+test("a conversation share's cards name no slot, so they export their own revisions", async () => {
+    const record: ShareRecord = {
+        ...recordOf('snapshot'),
+        kind: 'conversation',
+        slots: [],
+        payload: {
+            ...(recordOf('snapshot').payload as object),
+            widgets: [{ kind: 'table', id: 'c2', turn: 1, title: 'T', columns: [], rows: [] }],
+        },
+    };
+    const { deps, calls } = depsOf(record);
+    const view = await sharedViewOfRecord(deps, record);
+
+    assert.deepEqual(view.slots, {});
+    assert.equal(calls.length, 0);
 });
 
 test("a live share's data cards leave the server held, with their slot's ref", async () => {
@@ -183,7 +288,7 @@ test("a live card is its slot's card from dfo-apis, under the slot's ETag and ca
         [MOVED_FRAME, 'redrawn'],
     ] as const) {
         const { deps, calls } = depsOf(recordOf('live'), served);
-        const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 'c1');
+        const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 1);
         const answer = await response.json();
 
         assert.equal(answer.status, status);
@@ -191,10 +296,10 @@ test("a live card is its slot's card from dfo-apis, under the slot's ETag and ca
         assert.deepEqual(answer.card.payload.provenance.inputs, [served]);
         assert.equal(response.headers.get('etag'), ETAG);
         assert.equal(response.headers.get('cache-control'), 'no-cache');
-        // The share read, then the one slot card read, with no credential.
+        // The one slot card read, with no read of the share, and no credential.
         assert.deepEqual(
             calls.map(({ path }) => path),
-            ['/api/presentation/shares/Ab3dEf7h', '/api/presentation/shares/Ab3dEf7h/slots/1'],
+            ['/api/presentation/shares/Ab3dEf7h/slots/1'],
         );
         assert.ok(calls.every(({ headers }) => !headers.has('x-dfo-principal')));
     }
@@ -202,7 +307,7 @@ test("a live card is its slot's card from dfo-apis, under the slot's ETag and ca
 
 test("the browser's If-None-Match reaches dfo-apis, and its 304 comes back", async () => {
     const { deps, calls } = depsOf(recordOf('live'));
-    const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 'c1', ETAG);
+    const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 1, ETAG);
 
     assert.equal(response.status, 304);
     assert.equal(response.headers.get('etag'), ETAG);
@@ -214,7 +319,7 @@ test("a slot card refusal is the card's error, not stored", async () => {
     const { deps } = depsOf(recordOf('live'), DATASET_FRAME, () =>
         Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
     );
-    const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 'c1');
+    const response = await slotRefreshResponse(deps, 'Ab3dEf7h', 1);
 
     assert.deepEqual(await response.json(), {
         status: 'error',
@@ -225,32 +330,52 @@ test("a slot card refusal is the card's error, not stored", async () => {
     assert.equal(response.headers.get('etag'), null);
 });
 
-test('a card no slot draws is 404', async () => {
-    for (const [mode, cardId] of [
-        ['snapshot', 'c2'],
-        ['live', 'c2'],
-        ['live', 'n1'],
-        ['live', 'nope'],
-    ] as const) {
-        const { deps } = depsOf(recordOf(mode));
-        const response = await slotRefreshResponse(deps, 'Ab3dEf7h', cardId);
+test('a card route with no slot, or a slot dfo-apis does not have, is 404', async () => {
+    const { deps, calls } = depsOf(recordOf('live'));
+    const cases: [string, Response][] = [
+        ['no slot', await slotRefreshResponse(deps, 'Ab3dEf7h', null)],
+        ['no slot', await slotDataResponse(deps, 'Ab3dEf7h', new URLSearchParams())],
+        ['slot 0', await slotDataResponse(deps, 'Ab3dEf7h', new URLSearchParams({ slot: '0' }))],
+        // dfo-apis answers 404 not_found for a slot the share has not had.
+        ['slot 2', await slotRefreshResponse(deps, 'Ab3dEf7h', 2)],
+        ['no such share', await slotRefreshResponse(deps, 'Zz9yXx8w', 1)],
+        ['share id not in form', await slotRefreshResponse(deps, '../x', 1)],
+    ];
 
-        assert.equal(response.status, 404, `${mode} ${cardId}`);
+    for (const [name, response] of cases) {
+        assert.equal(response.status, 404, name);
+        assert.equal((await response.json()).code, 'not_found', name);
     }
 
-    const { deps } = depsOf(recordOf('live'));
+    // No route reads the share record.
+    assert.ok(calls.every(({ path }) => path.includes('/slots/')));
+});
 
-    assert.equal((await slotRefreshResponse(deps, 'Zz9yXx8w', 'c1')).status, 404);
+test('a slot query is a whole number from 1', () => {
+    for (const [value, slot] of [
+        ['1', 1],
+        ['12', 12],
+        [null, null],
+        ['', null],
+        ['0', null],
+        ['-1', null],
+        ['1.5', null],
+        ['01', null],
+        ['1e3', null],
+        ['9999999999', null],
+    ] as const) {
+        assert.equal(slotOfQuery(value), slot, String(value));
+    }
 });
 
 test("a snapshot card's refresh and rows come from its slot, on the frame the slot recorded", async () => {
     const { deps, calls } = depsOf(recordOf('snapshot'), MOVED_FRAME);
-    const refreshed = await slotRefreshResponse(deps, 'Ab3dEf7h', 'c1');
+    const refreshed = await slotRefreshResponse(deps, 'Ab3dEf7h', 1);
 
     assert.equal(refreshed.status, 200);
     assert.deepEqual((await refreshed.json()).card.payload.provenance.inputs, [MOVED_FRAME]);
 
-    const file = await slotDataResponse(deps, 'Ab3dEf7h', 'c1', new URLSearchParams());
+    const file = await slotDataResponse(deps, 'Ab3dEf7h', new URLSearchParams({ slot: '1' }));
 
     assert.equal(file.status, 200);
     assert.equal(
@@ -277,8 +402,7 @@ test("a live card's rows come from the slot data route in the format and bundle 
             const response = await slotDataResponse(
                 deps,
                 'Ab3dEf7h',
-                'c1',
-                new URLSearchParams(query),
+                new URLSearchParams({ slot: '1', ...query }),
             );
             const name = `${served.content_version} ${JSON.stringify(query)}`;
 
@@ -317,8 +441,7 @@ test("dfo-apis' refusal of a live card's format or bundle comes back as a proble
     const response = await slotDataResponse(
         refusing,
         'Ab3dEf7h',
-        'c1',
-        new URLSearchParams({ format: 'json', bundle: 'true' }),
+        new URLSearchParams({ slot: '1', format: 'json', bundle: 'true' }),
     );
 
     assert.equal(response.status, 400);
@@ -418,4 +541,19 @@ test("a live share's check refuses past the card cap without a read, and a faile
 
     assert.equal(failed?.status, 502);
     assert.equal((await failed?.json()).code, 'transient_unavailable');
+});
+
+test("a live share's check reads only a 404 as a card that names no component", async () => {
+    for (const status of [400, 403, 409, 429]) {
+        const { deps } = readsOf({
+            cmp_a: () => Response.json({ code: 'refused' }, { status }),
+        });
+        const refusal = await liveCardsRefusal(
+            deps,
+            liveBody([{ component_id: 'cmp_a', revision: 2 }]),
+        );
+
+        assert.equal(refusal?.status, 502, String(status));
+        assert.equal((await refusal?.json()).code, 'transient_unavailable', String(status));
+    }
 });

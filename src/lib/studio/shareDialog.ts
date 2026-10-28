@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { ShareMode, StudioShareKind } from '../chat/shareMode.ts';
 import { pruneForShare } from '../chat/sharePrune.ts';
@@ -80,15 +81,14 @@ export const shareModeFor = (
     return { choice, mode: choice ? chosen : 'snapshot' };
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const FAILED: ShareAnswer = { refusal: { code: 'failed' } };
 
 /** The answer of `POST /api/share` for a Studio share, from the response's
  *  `ok` and its JSON body. */
-export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
-    if (!isRecord(body)) {
+export const readShareAnswer = (ok: boolean, answer: unknown): ShareAnswer => {
+    const body = asRecord(answer);
+
+    if (!body) {
         return FAILED;
     }
 
@@ -100,9 +100,11 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
     const { code, cards, limit, count } = body;
 
     if (code === 'live_cards_blocked' && Array.isArray(cards)) {
-        const cardIds = cards.flatMap((card) =>
-            isRecord(card) && typeof card['id'] === 'string' ? [card['id']] : [],
-        );
+        const cardIds = cards.flatMap((card) => {
+            const id = asRecord(card)?.['id'];
+
+            return typeof id === 'string' ? [id] : [];
+        });
 
         return cardIds.length ? { refusal: { code, cardIds } } : FAILED;
     }

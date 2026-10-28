@@ -16,6 +16,7 @@ import { GRID_CELL } from '@/components/atoms/GridPattern/GridPattern';
 import { useGridCell } from '@/hooks/useGridCell';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
+import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { cardLiveOf, isLiveCanvas, type LiveCanvas, type SharedView } from '@/lib/studio/liveCards';
 import { deriveTheme, DEFAULT_THEME, type ThemeDerived, themeVars } from '@/lib/studio/theme';
@@ -158,7 +159,7 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                 widget={infoWidget}
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
-                shareId={shared.id}
+                shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
                 snapshot={shared.live ? undefined : shared}
             />
         </div>

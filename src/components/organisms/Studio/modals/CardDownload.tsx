@@ -70,27 +70,23 @@ const CardRows = ({
  * export route. `details` adds the Details rows. More Info leaves them out,
  * since its own rows above already describe the data. Renders nothing for a
  * card with no revision to export, such as a text card or one saved before
- * cards kept their revision. `shareId` is the share the card is shown on:
- * the file then holds the rows the card's slot serves, from the share's own
- * data route.
+ * cards kept their revision. `shared` addresses the card on the share it is
+ * shown on, when a slot of the share draws it: the file then holds the rows
+ * the slot serves, from the share's own data route.
  */
 const CardDownload = ({
     widget,
     details = false,
-    shareId,
+    shared = null,
 }: {
     widget: Widget;
     details?: boolean;
-    shareId?: string;
+    shared?: SharedCardAddress | null;
 }) => {
     const cardRef = cardRefOf(widget);
 
     return cardRef ? (
-        <CardRows
-            cardRef={cardRef}
-            info={details ? (widget.info ?? null) : null}
-            shared={shareId ? { shareId, cardId: widget.id } : null}
-        />
+        <CardRows cardRef={cardRef} info={details ? (widget.info ?? null) : null} shared={shared} />
     ) : null;
 };
 

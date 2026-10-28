@@ -17,6 +17,7 @@ import {
     restoreCardRevisions,
     componentDataTarget,
     fetchCardData,
+    sharedCardAddress,
 } from '../cardDownload.ts';
 
 const REF = { component_id: 'cmp_9f8e', revision: 3 };
@@ -181,9 +182,9 @@ test('fetchCardData: a refusal without a JSON body throws with no code', async (
     );
 });
 
-const SHARED = { shareId: 'shr 1', cardId: 'cmp_9f8e' };
+const SHARED = { shareId: 'shr 1', cardId: 'cmp_9f8e', slot: 2 };
 
-test('fetchCardData: a shared card asks its share for the rows, any other card the export route', async (t) => {
+test('fetchCardData: a card a slot draws asks that slot for the rows, any other card the export route', async (t) => {
     const asked: string[] = [];
 
     t.mock.method(globalThis, 'fetch', async (url: string) => {
@@ -192,11 +193,24 @@ test('fetchCardData: a shared card asks its share for the rows, any other card t
         return new Response('rows');
     });
 
-    await fetchCardData(REF, { format: 'parquet', bundle: false }, { shared: SHARED });
-    await fetchCardData(REF, { format: 'parquet', bundle: false });
+    const options = { format: 'parquet', bundle: false } as const;
+    // A canvas share whose slot 2 draws the card.
+    const canvas = { id: 'shr 1', slots: { cmp_9f8e: 2 } };
+    // A conversation share: no slot draws any card.
+    const conversation = { id: 'shr 1', slots: {} };
+
+    assert.deepEqual(sharedCardAddress(canvas, 'cmp_9f8e'), SHARED);
+    assert.equal(sharedCardAddress(conversation, 'cmp_9f8e'), null);
+    // A gallery canvas, which is no share.
+    assert.equal(sharedCardAddress(undefined, 'cmp_9f8e'), null);
+
+    for (const share of [canvas, conversation, undefined]) {
+        await fetchCardData(REF, options, { shared: sharedCardAddress(share, 'cmp_9f8e') });
+    }
 
     assert.deepEqual(asked, [
-        '/api/share/shr%201/cards/cmp_9f8e/data?format=parquet&bundle=false',
+        '/api/share/shr%201/cards/cmp_9f8e/data?slot=2&format=parquet&bundle=false',
+        '/api/presentation/components/cmp_9f8e/revisions/3/data?format=parquet&bundle=false',
         '/api/presentation/components/cmp_9f8e/revisions/3/data?format=parquet&bundle=false',
     ]);
 });

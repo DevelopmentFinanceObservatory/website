@@ -327,10 +327,24 @@ test('a held card is drawn from the answer alone, whatever the share stored', ()
     }
 });
 
-test('an answer that resolves no component of the card kind draws nothing', () => {
+test('a held card takes the kind of the component its slot serves', () => {
+    // A share made through the Presentation API holds each slot as a table,
+    // and an owner's replace can put another kind of card in a slot.
+    const [heldChart] = sharedViewOf(row('canvas', 'live')).saved.widgets;
+    const stat = widgetFromLiveCard(heldChart!, liveCardOf(CURRENT.cmp_stat));
+    const expected = { ...drawn(CURRENT.cmp_stat), id: 'cmp_chart', turn: 2 };
+
+    assert.equal(stat?.kind, 'key_number');
+    assert.deepEqual(stat, {
+        ...expected,
+        source: 'OECD CRS',
+        info: { ...expected.info!, label: 'OECD CRS' },
+    });
+});
+
+test('an answer that resolves no component draws nothing', () => {
     const [heldChart] = sharedViewOf(row('canvas', 'live')).saved.widgets;
 
-    assert.equal(widgetFromLiveCard(heldChart!, liveCardOf(CURRENT.cmp_stat)), null);
     assert.equal(
         widgetFromLiveCard(heldChart!, {
             component_id: 'cmp_chart',
@@ -354,7 +368,9 @@ const site = (script: Record<string, Reply[]>) => {
     const calls: { cardId: string; init: RequestInit | undefined }[] = [];
     const deps: LiveDeps = {
         fetch: async (input, init) => {
-            const cardId = decodeURIComponent(/cards\/([^/]+)\/refresh$/.exec(String(input))![1]!);
+            const cardId = decodeURIComponent(
+                /cards\/([^/]+)\/refresh(\?|$)/.exec(String(input))![1]!,
+            );
             const replies = script[cardId]!;
             const reply = replies.length > 1 ? replies.shift()! : replies[0]!;
 
@@ -371,13 +387,19 @@ const site = (script: Record<string, Reply[]>) => {
     return { deps, calls };
 };
 
-const settle = async (deps: LiveDeps, cardIds: string[], signal = new AbortController().signal) => {
+const settle = async (
+    deps: LiveDeps,
+    cardIds: string[],
+    signal = new AbortController().signal,
+    slots: Record<string, number> = {},
+) => {
     const outcomes: Record<string, LiveCardOutcome> = {};
     const order: string[] = [];
 
     await refreshLiveCards(deps, {
         shareId: 'Ab12Cd34',
         cardIds,
+        slots,
         signal,
         onSettled: (cardId, outcome) => {
             outcomes[cardId] = outcome;
@@ -428,8 +450,11 @@ test('each card settles on its own answer, and one failing card leaves the rest 
     assert.equal(calls.filter(({ cardId }) => cardId === 'pending').length, 1);
 });
 
-test("a request is a bare GET to the share-gated route, left to the browser's cache", async () => {
-    const { deps, calls } = site({ 'cmp a/b': [{ body: { status: 'current', card: CARD } }] });
+test("a request is a bare GET to the share-gated route for the card's slot, left to the browser's cache", async () => {
+    const { deps, calls } = site({
+        'cmp a/b': [{ body: { status: 'current', card: CARD } }],
+        unslotted: [{ status: 404, body: { code: 'not_found' } }],
+    });
     const seen: string[] = [];
     const fetcher = deps.fetch;
 
@@ -439,9 +464,13 @@ test("a request is a bare GET to the share-gated route, left to the browser's ca
         return fetcher(input, init);
     };
 
-    await settle(deps, ['cmp a/b']);
+    await settle(deps, ['cmp a/b', 'unslotted'], undefined, { 'cmp a/b': 3 });
 
-    assert.deepEqual(seen, ['/api/share/Ab12Cd34/cards/cmp%20a%2Fb/refresh']);
+    // A card with no slot asks with none, which the route answers 404.
+    assert.deepEqual(seen, [
+        '/api/share/Ab12Cd34/cards/cmp%20a%2Fb/refresh?slot=3',
+        '/api/share/Ab12Cd34/cards/unslotted/refresh',
+    ]);
     // A GET under the default cache mode, so the browser revalidates the
     // card with the route's ETag.
     assert.equal(calls[0]!.init?.method ?? 'GET', 'GET');
