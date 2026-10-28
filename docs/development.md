@@ -32,9 +32,9 @@ at a mail catcher. To open the dev server from a
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 
-Live Studio shares need no credential. A live card is dfo-apis' public
-slot card route (`GET /api/presentation/shares/{id}/slots/{n}`), which
-checks for newer data at most once per 15 minutes.
+A live Studio share draws each card from dfo-apis' public slot card route
+(`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data
+at most once per 15 minutes and takes no credential.
 
 ### Reach the dev APIs
 

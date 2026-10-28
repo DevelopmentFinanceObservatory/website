@@ -8,7 +8,7 @@ import type { CardRef, FrameRef } from './widgets.ts';
  * What a Studio share holds in dfo-apis: its slots, the data cards dfo-apis
  * draws, and the website-owned payload that renders the rest. A new share
  * (`studioShareBody`) and the export of a stored one (db/share-export.ts)
- * both place cards through `slotCanvas`, so a share made today and one
+ * both place cards through `slotCanvas`, so a newly made share and one
  * imported from the website's table read back alike.
  *
  * A data card with a ref naming a component revision in dfo-apis' form gets
@@ -96,7 +96,7 @@ export type SlottedCanvas =
 /**
  * The slots of a canvas or card share and its payload widgets. The data
  * cards the canvas shows (`canvasWidgetsOf`) get a slot each, in that order,
- * when they have a ref; two cards drawing the same revision get one each. A
+ * when they have a ref. Two cards drawing the same revision get one each. A
  * live share needs a slot for every shown data card, and holds every data
  * card, shown or not, because live share pages show none of the numbers
  * stored with the share. A snapshot keeps a card with no ref, and every card

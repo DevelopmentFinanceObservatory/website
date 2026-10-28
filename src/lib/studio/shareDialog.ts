@@ -9,9 +9,9 @@ import { dataCardsOf } from './liveCards.ts';
  * and mode, each made once per opening.
  *
  * A link is ready as soon as `POST /api/share` answers. The site checks a
- * live share's data cards before it makes the share, so a live link whose
- * cards cannot show live data is never made: the refusal withdraws it and
- * names the cards.
+ * live share's data cards before it makes the share. When they cannot show
+ * live data, no share is made, and the refusal withdraws the link and names
+ * the cards.
  *
  * The module has no React or path-alias dependency, so `node --test`
  * imports it.
@@ -37,8 +37,8 @@ export type ShareAnswer = { id: string } | { refusal: ShareRefusal };
 export type ShareMint = (ShareAnswer & { cards: SharedCard[] }) | { refusal: ShareRefusal };
 
 /** Why a live link is not offered. `cards` names the ones that cannot
- *  show live data. `limit` is the cap on a live share's data cards. `unavailable`
- *  is a site that cannot refresh any card. */
+ *  show live data. `limit` is the cap on a live share's data cards.
+ *  `unavailable` is a site that cannot refresh any card. */
 export type Withdrawal =
     | { reason: 'cards'; cards: SharedCard[] }
     | { reason: 'limit'; limit: number; count: number }
@@ -46,9 +46,9 @@ export type Withdrawal =
 
 /**
  * One link of the dialog. A key with no entry is being made. `ready`: the
- * link to copy, in the mode it has now. `withdrawn`: no link, and why. `failed`: the share was not made and a
- * second try may make it. `limited`: this network has made today's shares
- * (dfo-apis' share allowance).
+ * link to copy, in the mode it has now. `withdrawn`: no link, and why.
+ * `failed`: the share was not made and a second try may make it. `limited`:
+ * this network has made today's shares (dfo-apis' share allowance).
  */
 export type ShareLink =
     | { status: 'ready'; id: string; mode: ShareMode }

@@ -61,7 +61,7 @@ export type StudioProps = {
     // conversation, read-only — no input, no card actions, no saving, no
     // way back and no account: logo, title, filters and the sheet. A `live`
     // share's data cards arrive held and are filled from the refresh route
-    // (see useLiveCards), and so are a snapshot's `undrawn` cards;
+    // (see useLiveCards), and so are a snapshot's `undrawn` cards.
     // `createdAt` is when the share was made.
     shared?: {
         id: string;
@@ -477,7 +477,7 @@ const Studio = ({
         shared,
         doc.visibleWidgets(chat.widgets),
     );
-    // The share whose data route serves a card's rows: any share row, live
+    // The share whose data route serves a card's rows is any share row, live
     // or snapshot. A gallery snapshot leaves `live` unset and has no share,
     // so its cards export their own revisions.
     const dataShareId = shared?.live === undefined ? undefined : shared.id;

@@ -127,7 +127,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const sharePath = (id: string): string => {
-    // The id is the viewer's URL segment; only dfo-apis' own form reaches a path.
+    // The id is the viewer's URL segment, so only dfo-apis' own form reaches a path.
     if (!SHARE_ID.test(id)) {
         throw new SharesError('not_found', { status: 404 });
     }
@@ -284,7 +284,7 @@ export const createShare = async (
 
         throw error;
     });
-    // The reply's token is the one dfo-apis holds: the one sent here.
+    // The reply's token is the one dfo-apis holds, which is the one sent here.
     const { id, write_token: held } = body;
 
     if (typeof id !== 'string' || !SHARE_ID.test(id) || typeof held !== 'string') {
@@ -403,7 +403,7 @@ export const createOwnedShare = async (
     return { id };
 };
 
-// The refusals that say the share is gone or the token no longer grants it.
+// The refusals that say the share is gone or its token grants nothing.
 const isLostShare = ({ code }: SharesError): boolean =>
     code === 'not_found' || code.startsWith('write_token_');
 
@@ -417,7 +417,7 @@ const SWITCHABLE_KINDS: readonly ShareKind[] = ['canvas', 'card'];
  * it down and drops the token. `not_found` covers a share that does not
  * exist, one the caller holds no token for, and one whose token dfo-apis
  * refuses (`not_found`, `write_token_*`), so the answer does not reveal
- * which ids are taken; only then is the stored token dropped.
+ * which ids are taken. The stored token is dropped only in those cases.
  * `unsupported_kind` answers a switch of a search or conversation share.
  * Any other refusal throws with its code, and the token stays.
  */

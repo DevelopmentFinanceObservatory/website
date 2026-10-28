@@ -31,7 +31,7 @@ import type { FactSummary } from './wire.ts';
 
 /** What a share page hands `Studio` or `EmbedView`. `undrawn` names the
  *  snapshot cards the server could not draw, which the browser asks the
- *  refresh route for; it is empty for a live share, whose cards the browser
+ *  refresh route for. It is empty for a live share, whose cards the browser
  *  fills all. `createdAt` is an ISO timestamp: the moment the share's text
  *  was written. */
 export type SharedView = {

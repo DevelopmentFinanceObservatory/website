@@ -20,7 +20,7 @@ const MAX_SHARE_BODY = 10_000_000;
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
 // page is public, so an account is optional here. A signed-in sharer's
-// write token is kept; a guest's share stays as made.
+// write token is kept. A guest's share stays as made.
 const shareSearch = async (body: any, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
@@ -82,7 +82,7 @@ const shareSearch = async (body: any, headers: Headers) => {
 // A pruned copy of what the caller is looking at, made in dfo-apis
 // (src/lib/chat/sharePayload, src/lib/chat/apisShares) under a short public
 // id. An account is optional. A signed-in sharer's write token is kept, so
-// they can switch the share to a snapshot or remove it later; a guest's
+// they can switch the share to a snapshot or remove it later. A guest's
 // share, live or snapshot, stays as made. dfo-apis counts shares per
 // network address (429 `share_limit`).
 // `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a

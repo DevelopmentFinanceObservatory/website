@@ -11,7 +11,7 @@
 // (the dev server's, to sign the owner's session cookie), WEBSITE_URL (the dev
 // server, default http://127.0.0.1:3000) and DFO_APIS_DIR (the dfo-apis
 // checkout whose `just local-stack` is up and seeded). Each check prints one
-// line; the run exits 1 when any fails. It leaves its rows and shares in
+// line, and the run exits 1 when any fails. It leaves its rows and shares in
 // place, under ids no other run uses.
 import { execFile } from 'node:child_process';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -130,8 +130,8 @@ type Case = {
     data: unknown;
     parts: Record<string, unknown>[];
     // Text each Studio page shows, server-rendered, and text it must not.
-    // A slotted card draws its component revision, never its stored copy;
-    // a live one is held for the browser, named by its component id.
+    // A slotted card draws its component revision, and a live one is held
+    // for the browser, named by its component id.
     shows: string[];
     hides: string[];
     // The titles a live share's slots draw, from their component revisions.
@@ -546,8 +546,8 @@ const main = async (): Promise<void> => {
             }
         }
 
-        // The owner signs in: a session row and its cookie, signed as Better
-        // Auth signs it.
+        // The owner signs in with a session row and its cookie, signed as
+        // Better Auth signs it.
         const token = randomBytes(24).toString('base64url');
 
         await pool.query(
@@ -611,9 +611,9 @@ const main = async (): Promise<void> => {
             (await page(`/s/${guest.id}`)).status === 200,
         );
 
-        // Both imports again: nothing changes in dfo-apis or the website.
-        // One read at a time: the shares door answers a retryable 503 past
-        // four requests in flight.
+        // Both imports again change nothing in dfo-apis or the website. The
+        // reads go one at a time, since the shares door answers a retryable
+        // 503 past four requests in flight.
         const readAll = async () => {
             const records = [];
 

@@ -30,15 +30,16 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
  * A share's payload (src/lib/chat/sharePayload.ts) holds each slotted data
  * card with `slot`, the 0-based index of the slot that draws it, and none of
  * what it showed. `sharedViewOfRecord` gives every held card its slot's
- * component revision as `ref`. Every card, live or snapshot, is dfo-apis'
- * public slot card route: the slot's card drawn on the frame the slot
- * serves. A snapshot's slots serve the frames dfo-apis pinned, so its cards
- * are drawn here on the server. A live share's cards leave the server held,
- * and the browser fills each one (`refreshLiveCards`) from
+ * component revision as `ref`. Every card, live or snapshot, comes from
+ * dfo-apis' public slot card route, which draws the slot's card on the frame
+ * the slot serves. A snapshot's slots serve the frames dfo-apis pinned, so
+ * its cards are drawn here on the server. A live share's cards leave the
+ * server held, and the browser fills each one (`refreshLiveCards`) from
  * `GET /api/share/[id]/cards/[cardId]/refresh`, whose body is
- * `slotRefreshResponse`; so does a snapshot card the server could not read.
+ * `slotRefreshResponse`. A snapshot card the server could not read is filled
+ * the same way.
  *
- * A live slot serves the newest frame: dfo-apis checks for newer data at
+ * A live slot serves the newest frame. dfo-apis checks for newer data at
  * most once per 15 minutes and records what it served in the share's
  * history. The route's `ETag` and `Cache-Control` pass through, and so does
  * the browser's `If-None-Match`, so a card that has not changed answers 304.
@@ -62,8 +63,8 @@ const REFRESH_DEADLINE_MS = 75_000;
 // One export call: dfo-apis stops a component route at 30 seconds.
 const EXPORT_DEADLINE_MS = 35_000;
 
-// The component reads that check a new live share share this deadline: 20
-// cards four at a time is five rounds of reads of about 25 milliseconds.
+// One deadline covers the component reads that check a new live share. 20
+// cards read four at a time are five rounds of reads of about 25 milliseconds.
 const CREATE_CHECK_DEADLINE_MS = 15_000;
 
 // How many component reads one page or check has in flight at once: the

@@ -8,7 +8,7 @@ node scripts/export-shares.ts --since 2026-10-01T00:00:00Z --out shares.jsonl
 
 The script reads the database from `DATABASE_URL`, or from the `WEBSITE_DB_*` Cloud SQL variables the runtime uses, and writes nothing to it. `--since` takes an ISO timestamp with a `Z` or `+hh:mm` offset and exports every share whose `created_at` is at or after it. Without `--out` the lines go to stdout. A count by kind and mode goes to stderr. A bad `--since` exits 2.
 
-A share the script cannot place fails the run: it prints `share <id>: <reason>` for each such share to stderr, exits 1, and writes no output, so a file on disk is always a whole export. Runs overlap safely, because the import is idempotent and a later run with an earlier `--since` writes the same lines for the same shares.
+A share the script cannot place fails the run. The script prints `share <id>: <reason>` for each such share to stderr, exits 1, and writes no output, so a file on disk is always a whole export. Runs overlap safely, because the import is idempotent and a later run with an earlier `--since` writes the same lines for the same shares.
 
 ## Lines
 
@@ -16,7 +16,7 @@ Each line is one JSON object with these members, and lines are ordered by `creat
 
 - `id`: the share id, 8 characters from `[A-Za-z0-9]`, case-sensitive.
 - `kind`: `search`, `conversation`, `canvas`, or `card`.
-- `mode`: `live` or `snapshot`. A share stored with no mode gets the default the website reads today: `live` for a search share (`searchShareMode` in `src/lib/chat/shareMode.ts`) and `snapshot` for the other kinds (`isLiveStudioShare`).
+- `mode`: `live` or `snapshot`. A share stored with no mode gets the default the website applies: `live` for a search share (`searchShareMode` in `src/lib/chat/shareMode.ts`) and `snapshot` for the other kinds (`isLiveStudioShare`).
 - `owner`: the website user id of the share's maker, or null for a guest's share. A guest's share imports with no write token, and nobody can change or delete it.
 - `created_at`: the stored moment in UTC to the microsecond, as `2026-09-01T10:00:00.000001Z`.
 - `title`: the stored title.
@@ -35,7 +35,7 @@ Each line is one JSON object with these members, and lines are ordered by `creat
 
 A search share's `query` is `share.data.query`, or the title when the row has none, as `getSearchShare` reads it. Its `parts` are the share's `share_ref` rows in `part_index` order, each with the members `part_index`, `spec_id`, `identity`, `entity_groups`, `variable_text`, `content_version`, `artifact_digest`, `operations`, and `assumptions`. A live search share's parts have null `content_version` and `artifact_digest` and replay their definitions. A snapshot made before the website stored `artifact_digest` has a null digest and keeps its `content_version`.
 
-The stored copy of a canvas, card, or conversation share is its `share.data`, a pruned saved conversation (`pruneForShare` in `src/lib/chat/sharePrune.ts`), with `sessionId` set to null and `componentRefs` to `[]`, as every share read already does. It keeps the layout, the user's text cards, the titles, notes and views by card id, the theme, pins and removals, and, for a conversation share, the messages.
+The stored copy of a canvas, card, or conversation share is its `share.data`, a pruned saved conversation (`pruneForShare` in `src/lib/chat/sharePrune.ts`), with `sessionId` set to null and `componentRefs` to `[]`, as every share read does. It keeps the layout, the user's text cards, the titles, notes and views by card id, the theme, pins and removals, and, for a conversation share, the messages.
 
 ## Slots
 
@@ -58,13 +58,13 @@ The script refuses a share whose:
 - canvas or card is live and a data card on it has no component reference;
 - search snapshot has a part with no `content_version`.
 
-## Not exported
+## Left out
 
-`share_card_result` rows are not exported. They cache live refreshes, and dfo-apis refreshes live slots itself. The `conversation_id` and `card_id` columns are not exported either, because no share page reads them.
+`share_card_result` rows cache live refreshes, and dfo-apis refreshes live slots itself, so the export leaves them out. It leaves out the `conversation_id` and `card_id` columns too, because no share page reads them.
 
 ## Round trip on a local stack
 
-`scripts/share-migration-round-trip.ts` runs the whole migration on a local website and the dfo-apis local stack. It makes two cards in dfo-apis on the stack's seeded readings, seeds one share per legacy case (a search share with no mode from a guest, a search snapshot, a canvas with no mode holding a card with no component reference, a live canvas holding a card with no frame, a live card, a guest's snapshot card with no component reference, and a conversation with no mode), and runs `export-shares`, dfo-apis' `import-shares` and `import-share-tokens`. It then renders `/s/<id>` and `/embed/<id>` of each share through the dev server and checks what each shows: a search share redirects to `/data?share=<id>` and reads back its mode, query and parts from `/api/share/<id>`, a slotted card draws its component revision and not its stored copy, a card with no component reference and a conversation's cards show as stored, and each live slot draws its card from `/api/v1/presentation/shares/<id>/slots/<n>`. The owner signs in with a session row and switches their live canvas to snapshot with its imported token, and cannot delete a guest's share. Last, it runs both imports again and checks that dfo-apis holds the same shares and `share_token` the same tokens.
+`scripts/share-migration-round-trip.ts` runs the whole migration on a local website and the dfo-apis local stack. It makes two cards in dfo-apis on the stack's seeded readings, seeds one share per legacy case (a search share with no mode from a guest, a search snapshot, a canvas with no mode holding a card with no component reference, a live canvas holding a card with no frame, a live card, a guest's snapshot card with no component reference, and a conversation with no mode), and runs `export-shares`, dfo-apis' `import-shares` and `import-share-tokens`. It then renders `/s/<id>` and `/embed/<id>` of each share through the dev server and checks what each shows: a search share redirects to `/data?share=<id>` and reads back its mode, query and parts from `/api/share/<id>`, a slotted card draws its component revision, a card with no component reference and a conversation's cards show as stored, and each live slot draws its card from `/api/v1/presentation/shares/<id>/slots/<n>`. The owner signs in with a session row and switches their live canvas to snapshot with its imported token, and cannot delete a guest's share. Last, it runs both imports again and checks that dfo-apis holds the same shares and `share_token` the same tokens.
 
 It needs the stack up and seeded (`just local-stack up` and `just local-stack seed` in dfo-apis), a migrated website database, and the dev server on that database in front of the stack, with the caller principal and HMAC key the stack uses:
 

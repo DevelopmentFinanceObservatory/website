@@ -40,8 +40,9 @@ import {
  * every share when it is not. Links are made lazily, one per tab and mode
  * (`openShareLink` in src/lib/studio/shareDialog), and kept for the dialog's
  * lifetime. The site checks a live link's data cards before it makes the
- * share, and a link whose cards cannot show live data is withdrawn. Data offers each card's
- * stored rows as a file from the export route (src/lib/studio/cardDownload).
+ * share, and a link whose cards cannot show live data is withdrawn. Data
+ * offers each card's stored rows as a file from the export route
+ * (src/lib/studio/cardDownload).
  */
 
 export type ShareScope = { kind: 'whole' } | { kind: 'card'; id: string; title: string };
@@ -105,7 +106,7 @@ const COPY = {
     toSnapshot:
         'To stop live updates, make this link a snapshot. Everyone who has the link then sees the numbers it shows now, and they stay that way. This cannot be undone.',
     nowSnapshot: 'This link is now a snapshot. It keeps the numbers it showed when you switched.',
-    guest: 'Without an account, a link stays up as made: you cannot make it a snapshot or remove it later. Sign in to manage your links.',
+    guest: 'Without an account, a link stays up as made, and you cannot make it a snapshot or remove it later. Sign in to manage your links.',
     shareLimit: "This network has made today's links. Try again tomorrow.",
 };
 

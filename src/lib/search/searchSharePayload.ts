@@ -4,7 +4,7 @@ import type { SearchSharePart } from './searchShareRequest.ts';
 
 /**
  * A search share's payload in dfo-apis: `{query, parts}`, each part under the
- * column names of the website's old `share_ref` rows (docs/share-export.md),
+ * column names of the website's `share_ref` rows (docs/share-export.md),
  * so a share made here and one imported from the website's table read back
  * alike. dfo-apis stores the payload as given and does not read it.
  *
