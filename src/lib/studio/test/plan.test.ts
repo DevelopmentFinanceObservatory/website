@@ -17,6 +17,8 @@ import {
     SWITCH_OPTION_UNAVAILABLE,
     isActiveOption,
     isSelectable,
+    ledgerSections,
+    PLANNER_HEAD,
     planFromFrame,
     planView,
     refusedSwitch,
@@ -27,8 +29,11 @@ import {
     startSwitch,
     stoppedQueuedSwitch,
     switchEnded,
+    switchLine,
     switchOutcome,
+    switchPendingText,
     switchReply,
+    SCOPE_HEAD,
     UNREACHABLE_NOTICE,
     unreachableSwitch,
     withApprovedPlan,
@@ -1456,4 +1461,75 @@ test('withApprovedPlan leaves a transcript that does not end on a reply', () => 
 
 test('yearsText joins ranges and prints a one-year range once', () => {
     assert.equal(yearsText(countDecision.options![1]!.years!), '2015–2019, 2022');
+});
+
+/** A planner decision the card can switch, as the harness sends it. */
+const donorsDecision: PlanDecision = {
+    id: 'd3',
+    question: 'How many donors?',
+    chosen: 'Top 5',
+    reason: 'a short list reads best',
+    resolved_by: 'default',
+    choice_id: 'decision:donor_count',
+    active_option_id: 'option_1',
+    options: [
+        { option_id: 'option_1', label: 'Top 5', status: 'available', reason: null, years: null },
+        { option_id: 'option_2', label: 'Top 10', status: 'available', reason: null, years: null },
+    ],
+};
+
+const DONORS_PICK = { choiceId: 'decision:donor_count', optionId: 'option_2' };
+
+test('the ledger heads scope choices and planner decisions apart', async (t) => {
+    const heads = (overrides: Partial<PlanProposed>) =>
+        ledgerSections(planView(planFromFrame(frame(overrides)))).map((section) => [
+            section.head,
+            section.choices.map((choice) => choice.key),
+        ]);
+    const cases: [string, Partial<PlanProposed>, [string, string[]][]][] = [
+        [
+            'both',
+            { decisions: [countDecision, donorsDecision] },
+            [
+                [SCOPE_HEAD, ['spec_1:measure_basis']],
+                [PLANNER_HEAD, ['decision:donor_count']],
+            ],
+        ],
+        [
+            'planner decisions only',
+            { decisions: [donorsDecision] },
+            [[PLANNER_HEAD, ['decision:donor_count']]],
+        ],
+        [
+            'scope choices only',
+            { decisions: [countDecision] },
+            [[SCOPE_HEAD, ['spec_1:measure_basis']]],
+        ],
+    ];
+
+    for (const [name, overrides, expected] of cases) {
+        await t.test(name, () => {
+            assert.deepEqual(heads(overrides), expected);
+        });
+    }
+});
+
+test("a planner decision's switch says it is replanning", () => {
+    assert.equal(switchPendingText(DONORS_PICK.choiceId), 'Replanning');
+    assert.equal(switchLine(DONORS_PICK.choiceId, 'Top 10'), 'Replanning with Top 10');
+    assert.equal(switchPendingText(PICK.choiceId), 'Updating plan');
+    assert.equal(switchLine(PICK.choiceId, 'Net disbursements'), 'Switching to Net disbursements');
+});
+
+test("a planner decision's switch that did not apply says the plan keeps its option", () => {
+    const waiting = startSwitch(planFromFrame(frame({ decisions: [donorsDecision] })), DONORS_PICK);
+
+    assert.equal(
+        stoppedQueuedSwitch(waiting).notice?.text,
+        'Stopped before switching to Top 10. The plan keeps Top 5.',
+    );
+    assert.equal(
+        refusedSwitch(waiting, { status: 429, detail: null, error: null }).notice?.text,
+        'Studio could not switch to Top 10. The plan keeps Top 5.',
+    );
 });

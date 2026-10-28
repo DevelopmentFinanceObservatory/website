@@ -46,6 +46,7 @@ import {
     stoppedQueuedSwitch,
     switchEnded,
     endedSwitch,
+    switchLine,
     switchReply,
     unreachableSwitch,
     optionLabel,
@@ -1141,17 +1142,18 @@ export const useChat = (initial?: ChatSnapshot) => {
         [resume],
     );
 
-    // A scope decision's option, picked on the plan card. The card stays,
-    // its controls waiting, until the harness re-offers the plan with what
-    // changed, or with `switch_failed` saying why it did not apply. A
-    // refusal that leaves the pause alone keeps the card live and says why on
-    // the choice's row (refusedSwitch); a stale one (the plan moved on
-    // elsewhere) is answered with the current card, and any other ends the
-    // card read-only. So does a stream that ends without a plan (it closed,
-    // broke, sent `done` or an error, or was stopped), once, closing the
-    // turn's Activity entry (endedSwitch) and leaving the reply alone. A
-    // request that never reached the harness keeps the card live, with "Try
-    // again".
+    // A scope choice's or planner decision's option, picked on the plan card.
+    // The card stays, its controls waiting, until the harness re-offers the
+    // plan with what changed, or with `switch_failed` saying why it did not
+    // apply. The page sets no deadline of its own, since a planner
+    // decision's replan takes tens of seconds. A refusal that leaves the
+    // pause alone keeps the card live and says why on the choice's row
+    // (refusedSwitch); a stale one (the plan moved on elsewhere) is answered
+    // with the current card, and any other ends the card read-only. So does
+    // a stream that ends without a plan (it closed, broke, sent `done` or an
+    // error, or was stopped), once, closing the turn's Activity entry
+    // (endedSwitch) and leaving the reply alone. A request that never reached
+    // the harness keeps the card live, with "Try again".
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -1177,7 +1179,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             pendingInterruptRef.current = { interruptId: pending.interruptId, plan: waiting };
             turnPlanRef.current = waiting;
             setState((prev) => ({
-                ...withLine(prev, label ? `Switching to ${label}` : 'Switching'),
+                ...withLine(prev, switchLine(choiceId, label)),
                 thinking: true,
                 plan: waiting,
             }));

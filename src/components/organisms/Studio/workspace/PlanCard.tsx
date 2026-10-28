@@ -21,9 +21,10 @@ type PlanCardProps = {
 
 /**
  * The research plan awaiting review, in the chat foot: the title and its
- * summary, the scope choices ("Counted as", each switchable in place), the
- * step that gives the answer, what to keep in mind about the answer, and
- * "View full plan" to every step in a modal. Then the "Start building?" bar
+ * summary, the scope choices ("Counted as") and planner decisions ("Choices
+ * the plan made"), each switchable in place, the step that gives the
+ * answer, what to keep in mind about the answer, and "View full plan" to
+ * every step in a modal. Then the "Start building?" bar
  * with Cancel and Approve. Changes travel through the chat input below
  * (ChatPanel repurposes it as "Propose changes or ask a follow up…" while
  * the plan is pending, wired to the amend decision).
