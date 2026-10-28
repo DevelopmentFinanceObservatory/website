@@ -3,7 +3,6 @@ import {
     readSlotCard,
     readSlotFile,
     SharesError,
-    SLOT_FILE_FORMATS,
     type CreateShareBody,
     type ShareRecord,
     type SharesBackend,
@@ -20,7 +19,6 @@ import {
     componentReadOf,
     drawnFrame,
     readComponent,
-    storedExport,
     type LiveBackend,
 } from './liveBackend.ts';
 import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
@@ -314,43 +312,16 @@ const noFile = (
         headers: NO_STORE,
     });
 
-/** The code of a live card's download that dfo-apis can write only on the
- *  card's own frame (a bundle, or Excel), refused while the slot serves
- *  newer data. */
-export const LIVE_FILE_UNAVAILABLE = 'live_file_unavailable';
-
-// A bundle or an Excel file of a live card: the stored revision's export,
-// which holds the rows the slot serves only while it serves the revision's
-// own frame.
-const storedFileOnServedFrame = async (
-    deps: SlotDeps,
-    shares: SharesBackend,
-    shareId: string,
-    slot: number,
-    options: { format: string; bundle: string },
-): Promise<Response> => {
-    const { body } = await readSlotCard(shares, shareId, slot);
-    const { card, frame } = componentReadOf(body ?? {});
-
-    if (!sameFrame(frame, drawnFrame(card))) {
-        throw new BackendError(LIVE_FILE_UNAVAILABLE, 422);
-    }
-
-    return storedExport(
-        bounded(publicReads(deps), EXPORT_DEADLINE_MS),
-        { component_id: card.component_id, revision: card.revision },
-        options,
-    );
-};
-
 /**
  * `GET /api/share/[id]/cards/[cardId]/data?format=&bundle=`. The rows of a
- * live card on the frame its slot serves now. An unbundled CSV or Parquet
- * file is dfo-apis' slot data route. A bundle or an Excel file is the stored
- * revision's export while the slot serves the revision's own frame, and
- * otherwise 422 `live_file_unavailable`. A download that cannot be served
- * answers a problem document under an error status, so a browser does not
- * save it as the file.
+ * live card on the frame its slot serves now, in every format and as a
+ * bundle or a bare file, from dfo-apis' slot data route. The route's
+ * defaults are the component export's (a CSV bundle), and the request names
+ * both explicitly, so the file is the one the browser asked for. dfo-apis
+ * refuses a format or bundle it cannot write (JSON as a bundle, or an
+ * unknown format) with 400. A download that cannot be served answers a
+ * problem document under an error status, so a browser does not save it as
+ * the file.
  */
 export const slotDataResponse = async (
     deps: SlotDeps,
@@ -375,15 +346,11 @@ export const slotDataResponse = async (
         return notFound();
     }
 
-    // dfo-apis' export defaults: a CSV bundle.
-    const format = query.get('format') ?? 'csv';
-    const bundle = query.get('bundle') ?? 'true';
-
     try {
-        const upstream =
-            bundle === 'false' && SLOT_FILE_FORMATS.includes(format)
-                ? await readSlotFile(shares, shareId, slot, format)
-                : await storedFileOnServedFrame(deps, shares, shareId, slot, { format, bundle });
+        const upstream = await readSlotFile(shares, shareId, slot, {
+            format: query.get('format') ?? 'csv',
+            bundle: query.get('bundle') ?? 'true',
+        });
         const headers = new Headers(NO_STORE);
 
         pick(upstream.headers, EXPORT_HEADERS, headers);

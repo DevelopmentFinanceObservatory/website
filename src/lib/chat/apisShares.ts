@@ -342,23 +342,17 @@ export const readSlotCard = async (
     return { body: res.status === 304 ? null : await json(res), etag, cacheControl };
 };
 
-/** The formats dfo-apis' slot data route writes a file in. */
-export const SLOT_FILE_FORMATS: readonly string[] = ['csv', 'parquet'];
-
 /** The rows behind slot `slot`'s card on the frame the slot serves, as a
- *  file in one of `SLOT_FILE_FORMATS`. */
+ *  file. dfo-apis' slot data route takes the same `format` and `bundle` as
+ *  the component export (a bundle is refused for JSON) and refuses a value
+ *  it cannot write with 400, so both go through as given. */
 export const readSlotFile = async (
     backend: SharesBackend,
     id: string,
     slot: number,
-    format: string,
-): Promise<Response> => {
-    if (!SLOT_FILE_FORMATS.includes(format)) {
-        throw new SharesError('request_invalid', { status: 400 });
-    }
-
-    return send(backend, `${sharePath(id)}/slots/${slot}/data?format=${format}`);
-};
+    { format, bundle }: { format: string; bundle: string },
+): Promise<Response> =>
+    send(backend, `${sharePath(id)}/slots/${slot}/data?${new URLSearchParams({ format, bundle })}`);
 
 /**
  * Make a share and keep its write token for `userId`, the signed-in maker.

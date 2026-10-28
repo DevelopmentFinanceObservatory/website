@@ -235,11 +235,21 @@ test('a slot card read passes If-None-Match on and gives the body, ETag and cach
     assert.equal(calls[0]?.headers.get('if-none-match'), null);
 });
 
-test("a slot file read asks dfo-apis' slot data route, in its formats only", async () => {
+test("a slot file read asks dfo-apis' slot data route for the format and bundle given", async () => {
     const { backend, calls } = backendOf(() => new Response('year,value\n'));
 
-    assert.equal(await (await readSlotFile(backend, 'Ab3dEf7h', 2, 'csv')).text(), 'year,value\n');
-    assert.equal(calls[0]?.url, `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=csv`);
-    await assert.rejects(readSlotFile(backend, 'Ab3dEf7h', 2, 'xlsx'), SharesError);
-    assert.equal(calls.length, 1);
+    assert.equal(
+        await (
+            await readSlotFile(backend, 'Ab3dEf7h', 2, { format: 'csv', bundle: 'true' })
+        ).text(),
+        'year,value\n',
+    );
+    await readSlotFile(backend, 'Ab3dEf7h', 2, { format: 'xlsx', bundle: 'false' });
+    assert.deepEqual(
+        calls.map(({ url }) => url),
+        [
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=csv&bundle=true`,
+            `${APIS}/api/presentation/shares/Ab3dEf7h/slots/2/data?format=xlsx&bundle=false`,
+        ],
+    );
 });

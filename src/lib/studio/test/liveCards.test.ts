@@ -13,7 +13,6 @@ import type { LiveCard, LiveFactSummary } from '../liveBackend.ts';
 import {
     cardLiveOf,
     LIVE_CLIENT_CODES,
-    LIVE_PENDING_CEILING_MS,
     LIVE_REFRESH_CONCURRENCY,
     liveCardFailure,
     leftOutOf,
@@ -348,11 +347,9 @@ type Reply = { status?: number; body: unknown } | Error;
 const CARD = liveCardOf(CURRENT.cmp_chart);
 
 // A site whose refresh route answers each card from its own script, one
-// reply per call, repeating the last. `clock` moves only when a card sleeps.
+// reply per call, repeating the last. The clock stands at 0.
 const site = (script: Record<string, Reply[]>) => {
     const calls: { cardId: string; init: RequestInit | undefined }[] = [];
-    const sleeps: number[] = [];
-    let clock = 0;
     const deps: LiveDeps = {
         fetch: async (input, init) => {
             const cardId = decodeURIComponent(/cards\/([^/]+)\/refresh$/.exec(String(input))![1]!);
@@ -367,14 +364,10 @@ const site = (script: Record<string, Reply[]>) => {
 
             return Response.json(reply.body, { status: reply.status ?? 200 });
         },
-        now: () => clock,
-        sleep: async (ms) => {
-            sleeps.push(ms);
-            clock += ms;
-        },
+        now: () => 0,
     };
 
-    return { deps, calls, sleeps };
+    return { deps, calls };
 };
 
 const settle = async (deps: LiveDeps, cardIds: string[], signal = new AbortController().signal) => {
@@ -395,7 +388,7 @@ const settle = async (deps: LiveDeps, cardIds: string[], signal = new AbortContr
 };
 
 test('each card settles on its own answer, and one failing card leaves the rest standing', async () => {
-    const { deps } = site({
+    const { deps, calls } = site({
         current: [{ body: { status: 'current', card: CARD } }],
         redrawn: [{ body: { status: 'redrawn', card: CARD } }],
         refused: [{ body: { status: 'error', code: 'recipe_missing' } }],
@@ -404,6 +397,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         offline: [new TypeError('fetch failed')],
         garbled: [{ body: { status: 'current' } }],
         broken: [{ status: 500, body: null }],
+        pending: [{ body: { status: 'pending', retry_after_s: 6 } }],
     });
     const { outcomes } = await settle(deps, [
         'current',
@@ -414,6 +408,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         'offline',
         'garbled',
         'broken',
+        'pending',
     ]);
 
     assert.deepEqual(outcomes, {
@@ -425,7 +420,11 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         offline: { status: 'error', code: 'network_error' },
         garbled: { status: 'error', code: 'refresh_invalid' },
         broken: { status: 'error', code: 'refresh_failed' },
+        // The route gives no pending answer, so one is outside its contract.
+        pending: { status: 'error', code: 'refresh_invalid' },
     });
+    // ... and is asked once, not again after its retry_after_s.
+    assert.equal(calls.filter(({ cardId }) => cardId === 'pending').length, 1);
 });
 
 test("a request is a bare GET to the share-gated route, left to the browser's cache", async () => {
@@ -450,33 +449,6 @@ test("a request is a bare GET to the share-gated route, left to the browser's ca
     assert.equal(calls[0]!.init?.headers, undefined);
 });
 
-test('a pending card is asked again after retry_after_s and drawn when it answers', async () => {
-    const { deps, calls, sleeps } = site({
-        slow: [
-            { body: { status: 'pending', retry_after_s: 6 } },
-            { body: { status: 'pending' } },
-            { body: { status: 'pending', retry_after_s: 600 } },
-            { body: { status: 'redrawn', card: CARD } },
-        ],
-    });
-    const { outcomes } = await settle(deps, ['slow']);
-
-    assert.deepEqual(outcomes['slow'], { status: 'ready', outcome: 'redrawn', card: CARD });
-    assert.equal(calls.length, 4);
-    // The route's value, 5 seconds when it names none, and at most 60.
-    assert.deepEqual(sleeps, [6_000, 5_000, 60_000]);
-});
-
-test('a card still pending at the ceiling shows refresh_timeout, without a further wait', async () => {
-    const { deps, sleeps } = site({ stuck: [{ body: { status: 'pending', retry_after_s: 50 } }] });
-    const { outcomes } = await settle(deps, ['stuck']);
-    const waited = sleeps.reduce((sum, ms) => sum + ms, 0);
-
-    assert.deepEqual(outcomes['stuck'], { status: 'error', code: 'refresh_timeout' });
-    assert.equal(waited, 150_000);
-    assert.ok(waited <= LIVE_PENDING_CEILING_MS);
-});
-
 test('requests run a few at a time, and a card is reported as soon as it answers', async () => {
     const cardIds = Array.from({ length: 11 }, (_, index) => `card_${index}`);
     const release = new Map<string, () => void>();
@@ -494,7 +466,6 @@ test('requests run a few at a time, and a card is reported as soon as it answers
             return Response.json({ status: 'current', card: CARD });
         },
         now: () => 0,
-        sleep: async () => undefined,
     };
     const order: string[] = [];
     const done = refreshLiveCards(deps, {
@@ -531,20 +502,20 @@ test('requests run a few at a time, and a card is reported as soon as it answers
 test('nothing is reported after the canvas goes away', async () => {
     const controller = new AbortController();
     const { deps } = site({
-        waiting: [{ body: { status: 'pending', retry_after_s: 6 } }],
+        leaving: [{ body: { status: 'current', card: CARD } }],
         answered: [{ body: { status: 'current', card: CARD } }],
     });
-    const sleep = deps.sleep;
+    const fetcher = deps.fetch;
 
-    deps.sleep = async (ms, signal) => {
+    deps.fetch = async (input, init) => {
         controller.abort();
 
-        return sleep(ms, signal);
+        return fetcher(input, init);
     };
 
-    const { order } = await settle(deps, ['waiting', 'answered'], controller.signal);
+    const { order } = await settle(deps, ['leaving', 'answered'], controller.signal);
 
-    assert.ok(!order.includes('waiting'));
+    assert.deepEqual(order, []);
 });
 
 test('a refreshed card names what its data leaves out, from its coverage_gap warnings alone', () => {
@@ -643,14 +614,7 @@ test('a failed card offers a retry only for a fault the same request can outlive
         'refresh_failed',
         'upstream_unavailable',
         LIVE_CLIENT_CODES.network,
-        LIVE_CLIENT_CODES.timeout,
         LIVE_CLIENT_CODES.invalid,
-    ];
-    const switchedOff = [
-        'live_unavailable',
-        'refresh_not_permitted',
-        'unauthorized',
-        'refresh_not_configured',
     ];
     const permanent = [
         'not_found',
@@ -669,21 +633,13 @@ test('a failed card offers a retry only for a fault the same request can outlive
         transient.map(() => true),
     );
     assert.deepEqual(
-        [...switchedOff, ...permanent].map((code) => liveCardFailure({ code }).retry),
-        [...switchedOff, ...permanent].map(() => false),
+        permanent.map((code) => liveCardFailure({ code }).retry),
+        permanent.map(() => false),
     );
-    // Three messages in all, one per group.
+    // Two messages in all, one per group.
     assert.equal(
-        new Set(
-            [...transient, ...switchedOff, ...permanent].map(
-                (c) => liveCardFailure({ code: c }).message,
-            ),
-        ).size,
-        3,
-    );
-    assert.notEqual(
-        liveCardFailure({ code: switchedOff[0]! }).message,
-        liveCardFailure({ code: permanent[0]! }).message,
+        new Set([...transient, ...permanent].map((c) => liveCardFailure({ code: c }).message)).size,
+        2,
     );
 });
 

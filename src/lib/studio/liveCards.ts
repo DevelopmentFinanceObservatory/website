@@ -175,8 +175,6 @@ export const liveNote = (createdAt: string | undefined): string => {
 export const LIVE_CLIENT_CODES = {
     // No response from the site.
     network: 'network_error',
-    // The card was still pending when `LIVE_PENDING_CEILING_MS` ran out.
-    timeout: 'refresh_timeout',
     // A response outside the route's contract.
     invalid: 'refresh_invalid',
     // A non-2xx response that names no code.
@@ -191,10 +189,6 @@ export type LiveCardFailure = { message: string; retry: boolean };
 const FAILURE_TRANSIENT: LiveCardFailure = {
     message: 'Current data is temporarily unavailable. Try again later.',
     retry: true,
-};
-const FAILURE_SWITCHED_OFF: LiveCardFailure = {
-    message: 'Live data is unavailable for this link.',
-    retry: false,
 };
 const FAILURE_PERMANENT: LiveCardFailure = {
     message: 'This card can no longer be refreshed.',
@@ -213,30 +207,19 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set([
     'backend_invalid',
     'refresh_failed',
     LIVE_CLIENT_CODES.network,
-    LIVE_CLIENT_CODES.timeout,
     LIVE_CLIENT_CODES.invalid,
     'upstream_unavailable',
-]);
-
-// The site holds no credential, or a back end refuses the one it holds
-// (dfo-apis' `refresh_not_permitted`, dfo-ai's `unauthorized`), or dfo-ai
-// has no dfo-apis credential of its own (`refresh_not_configured`).
-const SWITCHED_OFF_CODES: ReadonlySet<string> = new Set([
-    'live_unavailable',
-    'refresh_not_permitted',
-    'unauthorized',
-    'refresh_not_configured',
 ]);
 
 /**
  * What a card's error says about asking again. `transient`: the same request
  * can succeed later, because the back end said so (`retryable`) or the code
  * is one of the site's, the browser's, or dfo-ai's transient codes.
- * `switched_off`: the site cannot refresh any card. `permanent`: every other
- * refusal, one that names the card itself (its component, frame, or recipe
- * is gone or cannot be redrawn), which the same request meets again.
+ * `permanent`: every other refusal, one that names the card itself (its
+ * component, frame, or recipe is gone or cannot be redrawn), which the same
+ * request meets again.
  */
-export type LiveFailureKind = 'transient' | 'switched_off' | 'permanent';
+export type LiveFailureKind = 'transient' | 'permanent';
 
 export const liveFailureKind = ({
     code,
@@ -251,12 +234,11 @@ export const liveFailureKind = ({
         return 'transient';
     }
 
-    return SWITCHED_OFF_CODES.has(code) ? 'switched_off' : 'permanent';
+    return 'permanent';
 };
 
 const FAILURES: Record<LiveFailureKind, LiveCardFailure> = {
     transient: FAILURE_TRANSIENT,
-    switched_off: FAILURE_SWITCHED_OFF,
     permanent: FAILURE_PERMANENT,
 };
 
@@ -267,31 +249,17 @@ export const liveCardFailure = (error: { code: string; retryable?: boolean }): L
 /** How many refresh requests one canvas has in flight at once. */
 export const LIVE_REFRESH_CONCURRENCY = 4;
 
-/** How long a card may stay pending, from its first request, before it
- *  shows an error. */
-export const LIVE_PENDING_CEILING_MS = 180_000;
-
 // The route's own deadline for a refresh is 75 seconds (`REFRESH_DEADLINE_MS`).
 const REQUEST_TIMEOUT_MS = 90_000;
-
-// The route sends 2 to 60. A value outside that is held to it.
-const RETRY_MIN_S = 2;
-const RETRY_MAX_S = 60;
-const RETRY_DEFAULT_S = 5;
 
 export type LiveDeps = {
     fetch: typeof fetch;
     now: () => number;
-    // Resolves after `ms`, or at once when `signal` aborts.
-    sleep: (ms: number, signal: AbortSignal) => Promise<void>;
 };
 
 type ErrorAnswer = { status: 'error'; code: string; retryable?: boolean; retryAfterS?: number };
 
-type Answer =
-    | Exclude<LiveCardOutcome, { status: 'error' }>
-    | ErrorAnswer
-    | { status: 'pending'; retryAfterMs: number };
+type Answer = Exclude<LiveCardOutcome, { status: 'error' }> | ErrorAnswer;
 
 const failure = (code: string): ErrorAnswer => ({ status: 'error', code });
 
@@ -323,16 +291,6 @@ const readAnswer = (ok: boolean, body: unknown): Answer => {
 
     if ((status === 'current' || status === 'redrawn') && isLiveCard(card)) {
         return { status: 'ready', outcome: status, card };
-    }
-
-    if (status === 'pending') {
-        const seconds = body['retry_after_s'];
-        const held =
-            typeof seconds === 'number' && Number.isFinite(seconds)
-                ? Math.min(Math.max(seconds, RETRY_MIN_S), RETRY_MAX_S)
-                : RETRY_DEFAULT_S;
-
-        return { status: 'pending', retryAfterMs: held * 1000 };
     }
 
     if (status === 'error') {
@@ -372,52 +330,33 @@ const askOnce = async (
     }
 };
 
-// One card to its settled answer. A pending card waits out the route's
-// `retry_after_s` outside the gate, so it holds no request slot meanwhile.
+// One card to its settled answer.
 const refreshLiveCard = async (
     deps: LiveDeps,
     gate: Gate,
     url: string,
     signal: AbortSignal,
 ): Promise<LiveCardOutcome> => {
-    const started = deps.now();
+    const answer = await gate(() => askOnce(deps, url, signal));
 
-    for (;;) {
-        const answer = await gate(() => askOnce(deps, url, signal));
-
-        if (answer.status === 'error') {
-            const { retryAfterS, ...error } = answer;
-
-            return {
-                ...error,
-                ...(retryAfterS ? { retryAt: deps.now() + retryAfterS * 1000 } : {}),
-            };
-        }
-
-        if (answer.status !== 'pending') {
-            return answer;
-        }
-
-        if (deps.now() - started + answer.retryAfterMs > LIVE_PENDING_CEILING_MS) {
-            return { status: 'error', code: LIVE_CLIENT_CODES.timeout };
-        }
-
-        await deps.sleep(answer.retryAfterMs, signal);
-
-        if (signal.aborted) {
-            return { status: 'error', code: LIVE_CLIENT_CODES.network };
-        }
+    if (answer.status !== 'error') {
+        return answer;
     }
+
+    const { retryAfterS, ...error } = answer;
+
+    return {
+        ...error,
+        ...(retryAfterS ? { retryAt: deps.now() + retryAfterS * 1000 } : {}),
+    };
 };
 
 /**
  * Refresh the named cards of a live share, `LIVE_REFRESH_CONCURRENCY`
  * requests at a time, and report each card through `onSettled` as soon as
- * its own answer arrives. A `pending` answer is asked again after its
- * `retry_after_s` until `LIVE_PENDING_CEILING_MS` has passed since the
- * card's first request. Every failure is that card's `error` outcome. After
- * `signal` aborts nothing more is reported. Resolves when every card has
- * settled.
+ * its own answer arrives. Every failure, and any answer outside the route's
+ * contract, is that card's `error` outcome. After `signal` aborts nothing
+ * more is reported. Resolves when every card has settled.
  */
 export const refreshLiveCards = async (
     deps: LiveDeps,

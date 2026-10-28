@@ -225,54 +225,71 @@ test('a card no live slot draws is 404', async () => {
     assert.equal((await slotRefreshResponse(deps, 'Zz9yXx8w', 'c1')).status, 404);
 });
 
-test("a live card's rows are the slot's file, or the stored export while the slot serves the revision's frame", async () => {
-    const rows: [typeof DATASET_FRAME, Record<string, string>, string | number][] = [
-        // Unbundled CSV and Parquet are dfo-apis' slot data route, on any frame.
-        [
-            MOVED_FRAME,
-            { format: 'csv', bundle: 'false' },
-            '/api/presentation/shares/Ab3dEf7h/slots/1/data?format=csv',
-        ],
-        [
-            MOVED_FRAME,
-            { format: 'parquet', bundle: 'false' },
-            '/api/presentation/shares/Ab3dEf7h/slots/1/data?format=parquet',
-        ],
-        // A bundle or Excel file is the stored revision's export on its own frame.
-        [
-            DATASET_FRAME,
-            { format: 'csv', bundle: 'true' },
-            '/api/presentation/components/cmp_a/revisions/2/data?format=csv&bundle=true',
-        ],
-        [
-            DATASET_FRAME,
-            { format: 'xlsx', bundle: 'false' },
-            '/api/presentation/components/cmp_a/revisions/2/data?format=xlsx&bundle=false',
-        ],
-        // ... and refused on newer data, which only the slot data route draws.
-        [MOVED_FRAME, { format: 'csv', bundle: 'true' }, 422],
-        [MOVED_FRAME, { format: 'xlsx', bundle: 'false' }, 422],
+test("a live card's rows come from the slot data route in the format and bundle asked, on any frame", async () => {
+    const rows: [Record<string, string>, string][] = [
+        [{ format: 'csv', bundle: 'false' }, 'format=csv&bundle=false'],
+        [{ format: 'parquet', bundle: 'false' }, 'format=parquet&bundle=false'],
+        [{ format: 'csv', bundle: 'true' }, 'format=csv&bundle=true'],
+        [{ format: 'xlsx', bundle: 'false' }, 'format=xlsx&bundle=false'],
+        [{ format: 'xlsx', bundle: 'true' }, 'format=xlsx&bundle=true'],
+        // The components route's default, a CSV bundle, is sent explicitly.
+        [{}, 'format=csv&bundle=true'],
+        [{ format: 'parquet' }, 'format=parquet&bundle=true'],
     ];
 
-    for (const [served, query, expected] of rows) {
-        const { deps, calls } = depsOf(recordOf('live'), served);
-        const response = await slotDataResponse(deps, 'Ab3dEf7h', 'c1', new URLSearchParams(query));
-        const name = `${served.content_version} ${JSON.stringify(query)}`;
+    for (const served of [DATASET_FRAME, MOVED_FRAME]) {
+        for (const [query, expected] of rows) {
+            const { deps, calls } = depsOf(recordOf('live'), served);
+            const response = await slotDataResponse(
+                deps,
+                'Ab3dEf7h',
+                'c1',
+                new URLSearchParams(query),
+            );
+            const name = `${served.content_version} ${JSON.stringify(query)}`;
 
-        if (typeof expected === 'number') {
-            assert.equal(response.status, expected, name);
-            assert.equal((await response.json()).code, 'live_file_unavailable', name);
-            continue;
+            assert.equal(response.status, 200, name);
+            assert.equal(await response.text(), 'year,value\n2024,1\n', name);
+            assert.equal(
+                calls.at(-1)?.path,
+                `/api/presentation/shares/Ab3dEf7h/slots/1/data?${expected}`,
+                name,
+            );
+            // Never the stored revision's export, and no credential.
+            assert.ok(
+                calls.every(
+                    ({ path, headers }) =>
+                        !path.startsWith('/api/presentation/components/cmp_a/revisions') &&
+                        !headers.has('x-dfo-principal'),
+                ),
+                name,
+            );
         }
-
-        assert.equal(response.status, 200, name);
-        assert.equal(await response.text(), 'year,value\n2024,1\n', name);
-        assert.equal(calls.at(-1)?.path, expected, name);
-        assert.ok(
-            calls.every(({ headers }) => !headers.has('x-dfo-principal')),
-            name,
-        );
     }
+});
+
+test("dfo-apis' refusal of a live card's format or bundle comes back as a problem, not a file", async () => {
+    const record = recordOf('live');
+    const { deps } = depsOf(record);
+    const refusing: SlotDeps = {
+        shares: {
+            ...deps.shares,
+            fetch: async (input, init) =>
+                new URL(String(input)).pathname.endsWith('/data')
+                    ? Response.json({ code: 'request_invalid', retryable: false }, { status: 400 })
+                    : deps.shares.fetch(input, init),
+        },
+    };
+    const response = await slotDataResponse(
+        refusing,
+        'Ab3dEf7h',
+        'c1',
+        new URLSearchParams({ format: 'json', bundle: 'true' }),
+    );
+
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'request_invalid');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
 // A live share's create body: chart c1 in slot 0 and table c2 in slot 1.

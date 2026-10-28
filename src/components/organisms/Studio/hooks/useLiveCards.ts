@@ -16,23 +16,10 @@ import {
 
 const LOADING: LiveCardState = { status: 'loading' };
 
-/** The refresh client's clock, timer, and `fetch` in a browser. */
+/** The refresh client's clock and `fetch` in a browser. */
 export const browserLiveDeps: LiveDeps = {
     fetch: (...args) => fetch(...args),
     now: () => Date.now(),
-    sleep: (ms, signal) =>
-        new Promise((resolve) => {
-            const timer = window.setTimeout(resolve, ms);
-
-            signal.addEventListener(
-                'abort',
-                () => {
-                    window.clearTimeout(timer);
-                    resolve();
-                },
-                { once: true },
-            );
-        }),
 };
 
 // A settled card holds its state and the widget drawn from a `ready` answer.
