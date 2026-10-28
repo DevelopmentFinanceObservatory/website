@@ -1,16 +1,19 @@
 @use "variables" as *;
 @use "mixins" as *;
 
-// The plan card + the "Start building?" bar stack with a small seam.
+// The plan card + the "Start building?" bar stack with a small seam. The wrap
+// gives up height when the chat foot is short of room: the card scrolls inside
+// while the bar under it keeps its size, so Approve never leaves the panel.
 .planWrap {
     @include flex(column, flex-start, stretch);
 
-    flex-shrink: 0;
+    min-height: 0;
     gap: rem(8);
 }
 
 .plan {
-    overflow: hidden;
+    min-height: 0;
+    overflow-y: auto;
     background-color: var(--color-white);
     border: 1px solid var(--color-sage-light);
 
@@ -127,6 +130,8 @@
 // only, its bottom edge borrowed from the input's own top border (no gap, no
 // double line).
 .proceed {
+    flex-shrink: 0;
+
     // The extra bottom padding + the negative margin tuck the bar's lower
     // band UNDER the input that follows (the input paints over it).
     padding: rem(10) rem(10) rem(26) rem(16);
