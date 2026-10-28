@@ -152,6 +152,24 @@ export const shareCardResult = pgTable(
 export type ShareCardResultRow = typeof shareCardResult.$inferSelect;
 
 /**
+ * The write token dfo-apis issued for a share a signed-in user made, which
+ * the website sends on that user's replace and delete requests
+ * (src/lib/chat/shareTokens.ts). The share itself lives in dfo-apis, so
+ * `share_id` references no table here. A guest's share has no row: its
+ * token is never stored, and the share stays as made.
+ */
+export const shareToken = pgTable('share_token', {
+    shareId: text('share_id').primaryKey(),
+    userId: text('user_id')
+        .notNull()
+        .references(() => user.id, { onDelete: 'cascade' }),
+    writeToken: text('write_token').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ShareTokenRow = typeof shareToken.$inferSelect;
+
+/**
  * One row per (user, roadmap entry) vote: the "Under consideration" items
  * on /data/roadmap, which only signed-in people can vote for. The entry id
  * is the corpus' own, so a re-synced roadmap keeps its votes.

@@ -148,6 +148,13 @@
       "when": 1792794347981,
       "tag": "0021_account_daily_before_today",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793196112763,
+      "tag": "0022_share_token",
+      "breakpoints": true
     }
   ]
 }
