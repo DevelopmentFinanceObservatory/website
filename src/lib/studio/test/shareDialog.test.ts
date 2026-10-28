@@ -143,7 +143,7 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
             { refusal: { code: 'live_too_many_cards', limit: 20, count: 23 } },
         ],
         [false, { code: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
-        [false, { code: 'guest_limit' }, { refusal: { code: 'guest_limit' } }],
+        [false, { code: 'share_limit' }, { refusal: { code: 'share_limit' } }],
         // What a second try can outlive, and every answer outside the contract.
         [
             false,
@@ -152,7 +152,7 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
         ],
         [false, { code: 'unauthorized' }, { refusal: { code: 'failed' } }],
         // The old `{ error }` body is no longer read.
-        [false, { error: 'guest_limit' }, { refusal: { code: 'failed' } }],
+        [false, { error: 'share_limit' }, { refusal: { code: 'failed' } }],
         [false, { code: 'live_cards_blocked', cards: [] }, { refusal: { code: 'failed' } }],
         [false, null, { refusal: { code: 'failed' } }],
         [true, { title: 'no id' }, { refusal: { code: 'failed' } }],
@@ -382,7 +382,7 @@ test('a share the site refuses to make is withdrawn, failed or limited, with not
             { status: 'withdrawn', withdrawal: { reason: 'unavailable' } },
         ],
         [{ refusal: { code: 'failed' } }, { status: 'failed' }],
-        [{ refusal: { code: 'guest_limit' } }, { status: 'limited' }],
+        [{ refusal: { code: 'share_limit' } }, { status: 'limited' }],
     ];
 
     for (const [mint, expected] of rows) {

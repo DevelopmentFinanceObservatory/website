@@ -10,7 +10,7 @@ import { shareToken } from '../../../db/schema.ts';
  * test database.
  */
 
-export type ShareTokenDb = Pick<NodePgDatabase, 'select' | 'insert'>;
+export type ShareTokenDb = Pick<NodePgDatabase, 'select' | 'insert' | 'delete'>;
 
 /**
  * Store `writeToken` as `userId`'s token for `shareId`, replacing the token
@@ -46,4 +46,15 @@ export const readShareToken = async (
         .limit(1);
 
     return row?.writeToken ?? null;
+};
+
+/** Delete `userId`'s write token for `shareId`, once the share is taken
+ *  down. A token another user stored for it stays. */
+export const deleteShareToken = async (
+    db: ShareTokenDb,
+    { shareId, userId }: { shareId: string; userId: string },
+): Promise<void> => {
+    await db
+        .delete(shareToken)
+        .where(and(eq(shareToken.shareId, shareId), eq(shareToken.userId, userId)));
 };

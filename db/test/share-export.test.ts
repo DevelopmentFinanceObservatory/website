@@ -409,21 +409,14 @@ test('a share the export cannot place is refused with its reason', () => {
         [{ mode: 'pinned' }, 'mode "pinned" is not live or snapshot'],
         [{ kind: 'conversation', mode: 'live' }, 'a conversation share cannot be live'],
         [{ data: { widgets: [] } }, 'data has no widgets, pinnedIds and removedIds arrays'],
-        [
-            { data: canvas([table('c1', 1)]) },
-            "live card c1 has no component ref and frame in dfo-apis' form",
-        ],
-        [
-            { data: canvas([table('c1', 1, { ref: ref(1) })]) },
-            "live card c1 has no component ref and frame in dfo-apis' form",
-        ],
+        [{ data: canvas([table('c1', 1)]) }, "live card c1 has no component ref in dfo-apis' form"],
         [
             {
                 data: canvas([
                     table('c1', 1, { ref: { component_id: '../x', revision: 1 }, frame: FRAME }),
                 ]),
             },
-            "live card c1 has no component ref and frame in dfo-apis' form",
+            "live card c1 has no component ref in dfo-apis' form",
         ],
         [
             {
@@ -449,12 +442,36 @@ test('a share the export cannot place is refused with its reason', () => {
     for (const [overrides, refusal] of cases) {
         assert.deepEqual(placeShare(stored(overrides)), { refusal }, JSON.stringify(overrides));
     }
+});
 
-    // A snapshot keeps a card whose ref has no frame as stored, inline.
-    const snapshot = placeShare(
-        stored({ mode: 'snapshot', data: canvas([table('c1', 1, { ref: ref(1) })]) }),
-    );
+test('a card with a ref and no frame the website holds gets a slot with a null frame', () => {
+    for (const mode of ['live', 'snapshot']) {
+        const placed = placeShare(
+            stored({
+                mode,
+                data: canvas([
+                    table('c1', 1, { ref: ref(1) }),
+                    table('c2', 1, { ref: ref(2), frame: { spec_id: 'spec_aid' } }),
+                ]),
+            }),
+        );
 
-    assert.ok('line' in snapshot);
-    assert.deepEqual(snapshot.line.slots, []);
+        assert.ok('line' in placed, mode);
+        assert.deepEqual(
+            placed.line.slots,
+            [
+                { ...ref(1), frame: null },
+                { ...ref(2), frame: null },
+            ],
+            mode,
+        );
+        assert.deepEqual(
+            placed.line.payload.widgets,
+            [
+                { kind: 'table', id: 'c1', turn: 1, slot: 0 },
+                { kind: 'table', id: 'c2', turn: 1, slot: 1 },
+            ],
+            mode,
+        );
+    }
 });

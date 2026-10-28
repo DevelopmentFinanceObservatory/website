@@ -12,15 +12,8 @@
 import fs from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 
-import type { Pool } from 'pg';
-
-import {
-    buildRuntimePool,
-    connectCloudSqlRuntime,
-    resolveRuntimeConnection,
-    setCloudSqlRuntimeStream,
-} from '../db/connection.ts';
 import { exportShares, readShares } from '../db/share-export.ts';
+import { openPool } from './open-pool.ts';
 
 const USAGE = `usage: node scripts/export-shares.ts --since <ISO timestamp with offset> [--out <file>]
 
@@ -30,30 +23,6 @@ const USAGE = `usage: node scripts/export-shares.ts --since <ISO timestamp with 
 // An offset is required, so the moment does not depend on the session's
 // time zone.
 const WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
-
-const openPool = async (): Promise<{ pool: Pool; close: () => Promise<void> }> => {
-    const connection = resolveRuntimeConnection();
-
-    if (connection.kind === 'url') {
-        const pool = buildRuntimePool(process.env, { max: 1 });
-
-        return { pool, close: () => pool.end() };
-    }
-
-    const { connector, stream } = await connectCloudSqlRuntime(connection);
-
-    setCloudSqlRuntimeStream(stream);
-
-    const pool = buildRuntimePool(process.env, { max: 1 });
-
-    return {
-        pool,
-        close: async () => {
-            await pool.end();
-            connector.close();
-        },
-    };
-};
 
 const main = async (): Promise<void> => {
     const { values } = parseArgs({

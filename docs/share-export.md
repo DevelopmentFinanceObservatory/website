@@ -20,18 +20,18 @@ Each line is one JSON object with these members, and lines are ordered by `creat
 - `owner`: the website user id of the share's maker, or null for a guest's share. A guest's share imports with no write token, and nobody can change or delete it.
 - `created_at`: the stored moment in UTC to the microsecond, as `2026-09-01T10:00:00.000001Z`.
 - `title`: the stored title.
-- `slots`: the data cards dfo-apis holds, in display order, each `{"component_id": "cmp_…", "revision": 3, "frame": {"spec_id": "spec_…" or "ops_…", "content_version": "…"}}`. Only canvas and card shares have slots. Search and conversation shares have `[]`.
+- `slots`: the data cards dfo-apis holds, in display order, each `{"component_id": "cmp_…", "revision": 3, "frame": {"spec_id": "spec_…" or "ops_…", "content_version": "…"}}`. `frame` is `null` when the stored card names no frame in that form, and the import reads the frame from the component revision. Only canvas and card shares have slots. Search and conversation shares have `[]`.
 - `payload`: website-owned JSON that dfo-apis stores as given and does not read. It holds what the website needs to render the share beyond its slots.
 
 ## Where each stored share lands
 
-| Stored share                            | `mode`     | `slots`                                                 | `payload`                                                           |
-| --------------------------------------- | ---------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| Search, mode `live` or null             | `live`     | `[]`                                                    | `query` and `parts`                                                 |
-| Search, mode `snapshot`                 | `snapshot` | `[]`                                                    | `query` and `parts`, each part with its `content_version`           |
-| Canvas or card, mode `live`             | `live`     | every data card on the canvas                           | the stored copy, slotted cards held                                 |
-| Canvas or card, mode `snapshot` or null | `snapshot` | every data card on the canvas with a complete reference | the stored copy, slotted cards held, the other data cards as stored |
-| Conversation, mode `snapshot` or null   | `snapshot` | `[]`                                                    | the stored copy                                                     |
+| Stored share                            | `mode`     | `slots`                                                  | `payload`                                                           |
+| --------------------------------------- | ---------- | -------------------------------------------------------- | ------------------------------------------------------------------- |
+| Search, mode `live` or null             | `live`     | `[]`                                                     | `query` and `parts`                                                 |
+| Search, mode `snapshot`                 | `snapshot` | `[]`                                                     | `query` and `parts`, each part with its `content_version`           |
+| Canvas or card, mode `live`             | `live`     | every data card on the canvas                            | the stored copy, slotted cards held                                 |
+| Canvas or card, mode `snapshot` or null | `snapshot` | every data card on the canvas with a component reference | the stored copy, slotted cards held, the other data cards as stored |
+| Conversation, mode `snapshot` or null   | `snapshot` | `[]`                                                     | the stored copy                                                     |
 
 A search share's `query` is `share.data.query`, or the title when the row has none, as `getSearchShare` reads it. Its `parts` are the share's `share_ref` rows in `part_index` order, each with the members `part_index`, `spec_id`, `identity`, `entity_groups`, `variable_text`, `content_version`, `artifact_digest`, `operations`, and `assumptions`. A live search share's parts have null `content_version` and `artifact_digest` and replay their definitions. A snapshot made before the website stored `artifact_digest` has a null digest and keeps its `content_version`.
 
@@ -39,11 +39,11 @@ The stored copy of a canvas, card, or conversation share is its `share.data`, a 
 
 ## Slots
 
-The data cards on a canvas are the cards `canvasWidgetsOf` (`src/lib/chat/canvas.ts`) shows, other than text cards, in that order: the stored `widgets` the canvas displays, in stored order. A card share holds one. A data card has a complete reference when its `ref` names a component revision as `cmp_` plus up to 64 letters, digits, `_` or `-`, with a whole revision of 1 or more, and its `frame` names a `spec_` or `ops_` frame with a non-empty content version.
+The data cards on a canvas are the cards `canvasWidgetsOf` (`src/lib/chat/canvas.ts`) shows, other than text cards, in that order: the stored `widgets` the canvas displays, in stored order. A card share holds one. A data card has a component reference when its `ref` names a component revision as `cmp_` plus up to 64 letters, digits, `_` or `-`, with a whole revision of 1 or more. Its slot's `frame` is the card's `frame` when that names a `spec_` or `ops_` frame with a non-empty content version, and `null` otherwise. `slotCanvas` in `src/lib/chat/sharePayload.ts` places the cards, for this export and for every share the website makes in dfo-apis.
 
 Each such card becomes one slot. In the payload's `widgets` the card is held: it keeps `kind`, `id`, `turn`, and for a chart `chartType` and `horizontal`, and gains `slot`, the index of its slot in `slots`. Its numbers, title, source and description come from the slot's component revision. Two cards drawing the same revision get a slot each.
 
-A snapshot's data card without a complete reference, which includes every card stored before cards carried a `ref`, stays in `widgets` as stored, with the numbers it showed inline, and has no slot. Widgets the canvas does not show, such as removed cards and older turns' unpinned cards, stay in `widgets` with no slot, so the payload shows the same cards as the stored copy. In a snapshot they stay as stored. In a live share every data card is held, shown or not, because live share pages show none of the numbers stored with the share.
+A snapshot's data card without a component reference, which includes every card stored before cards carried a `ref`, stays in `widgets` as stored, with the numbers it showed inline, and has no slot. Widgets the canvas does not show, such as removed cards and older turns' unpinned cards, stay in `widgets` with no slot, so the payload shows the same cards as the stored copy. In a snapshot they stay as stored. In a live share every data card is held, shown or not, because live share pages show none of the numbers stored with the share.
 
 ## Refused shares
 
@@ -55,7 +55,7 @@ The script refuses a share whose:
 - kind is `conversation` and mode is `live`;
 - kind is `conversation`, `canvas`, or `card` and it has `share_ref` rows;
 - data, for a canvas or card, lacks `widgets`, `pinnedIds`, or `removedIds` arrays;
-- canvas or card is live and a data card on it has no complete reference;
+- canvas or card is live and a data card on it has no component reference;
 - search snapshot has a part with no `content_version`.
 
 ## Not exported

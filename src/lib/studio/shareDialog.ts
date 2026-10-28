@@ -31,7 +31,7 @@ export type ShareRefusal =
     | { code: 'live_cards_blocked'; cardIds: string[] }
     | { code: 'live_too_many_cards'; limit: number; count: number }
     | { code: 'live_unavailable' }
-    | { code: 'guest_limit' }
+    | { code: 'share_limit' }
     | { code: 'failed' };
 
 /** What `POST /api/share` came to: the share's id, or the refusal. */
@@ -55,7 +55,8 @@ export type Withdrawal =
  * Its URL is not shown yet. `ready`: the link to copy, in the mode it has
  * now, with the number of cards whose check failed for a passing reason.
  * `withdrawn`: no link, and why. `failed`: the share was not made and a
- * second try may make it. `limited`: a guest has made today's GUEST_SHARES.
+ * second try may make it. `limited`: this network has made today's shares
+ * (dfo-apis' share allowance).
  */
 export type ShareLink =
     | { status: 'checking'; id: string; checked: number; total: number }
@@ -119,7 +120,7 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
         return { refusal: { code, limit, count } };
     }
 
-    return code === 'live_unavailable' || code === 'guest_limit' ? { refusal: { code } } : FAILED;
+    return code === 'live_unavailable' || code === 'share_limit' ? { refusal: { code } } : FAILED;
 };
 
 /**
@@ -150,7 +151,7 @@ const withdrawalOf = (refusal: ShareRefusal, cards: SharedCard[]): Withdrawal | 
             return { reason: 'limit', limit: refusal.limit, count: refusal.count };
         case 'live_unavailable':
             return { reason: 'unavailable' };
-        case 'guest_limit':
+        case 'share_limit':
         case 'failed':
             return null;
     }
@@ -212,7 +213,7 @@ export const openShareLink = async (
         report(
             withdrawal
                 ? { status: 'withdrawn', withdrawal }
-                : { status: mint.refusal.code === 'guest_limit' ? 'limited' : 'failed' },
+                : { status: mint.refusal.code === 'share_limit' ? 'limited' : 'failed' },
         );
 
         return;

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
 import { pickExamples } from '@/lib/studio/examples';
-import { liveSharingAvailable } from '@/lib/studio/liveShare';
+import { liveSharingAvailable } from '@/lib/studio/slotCards';
 
 export const metadata: Metadata = {
     title: 'DFO Studio',

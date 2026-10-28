@@ -1,18 +1,15 @@
-import { asc, eq } from 'drizzle-orm';
-
-import { searchShareMode } from '@/lib/chat/shareMode';
-import { shortId } from '@/lib/chat/shareStore';
-import { db } from '@/lib/db';
+import { getShare, makeShare } from '@/lib/chat/shareStore';
 import type { Assumption, EntityGroup, Operation } from '@/lib/search/types';
 import { searchApiBase } from '@/lib/searchApi';
-import { share, shareRef } from '../../../db/schema';
 import { registerDefinitions } from './registerDefinitions.ts';
+import { searchShareOf, searchSharePayload, type Captured } from './searchSharePayload.ts';
 import type { SearchShareMode, SearchSharePart } from './searchShareRequest.ts';
 import { captureSnapshot } from './snapshot.ts';
 
 /**
- * Search shares (server only). A link to a search result stores no numbers:
- * one `share_ref` row per part holds the dataset it resolved to, and the
+ * Search shares (server only), held in dfo-apis as `kind: search` with the
+ * website's payload (searchSharePayload.ts). A link to a search result
+ * stores no numbers: each part holds the dataset it resolved to, and the
  * data comes back from the Datasets API when the link opens.
  *
  *   live     — each part's definition is registered, one
@@ -66,6 +63,7 @@ const capture = (part: SearchSharePart) =>
     });
 
 export const createSearchShare = async (
+    incoming: Headers,
     userId: string | null,
     mode: SearchShareMode,
     query: string,
@@ -74,10 +72,7 @@ export const createSearchShare = async (
     const ordered = [...parts].sort((a, b) => a.partIndex - b.partIndex);
     // Two parts can fold onto one dataset: register / capture each once.
     const distinct = [...new Map(ordered.map((part) => [part.specId, part])).values()];
-    const capturedBySpec = new Map<
-        string,
-        { specId: string; contentVersion: string; artifactDigest: string }
-    >();
+    const capturedBySpec = new Map<string, Captured>();
 
     if (mode === 'snapshot') {
         const results = await Promise.all(distinct.map(capture));
@@ -90,65 +85,21 @@ export const createSearchShare = async (
         });
     }
 
-    const captured = ordered.map((part) => capturedBySpec.get(part.specId) ?? null);
-    const id = shortId();
-
-    await db.transaction(async (tx) => {
-        await tx.insert(share).values({
-            id,
-            userId,
-            kind: 'search',
-            mode,
-            title: query,
-            data: { query },
-        });
-        await tx.insert(shareRef).values(
-            ordered.map((part, index) => ({
-                shareId: id,
-                partIndex: part.partIndex,
-                specId: captured?.[index]?.specId ?? part.specId,
-                identity: part.identity,
-                entityGroups: part.entityGroups ?? null,
-                variableText: part.variableText,
-                operations: part.operations,
-                assumptions: part.assumptions ?? null,
-                contentVersion: captured?.[index]?.contentVersion ?? null,
-                artifactDigest: captured?.[index]?.artifactDigest ?? null,
-            })),
-        );
+    return makeShare(incoming, userId, {
+        kind: 'search',
+        latest: mode === 'live',
+        title: query,
+        cards: [],
+        payload: searchSharePayload(
+            query,
+            ordered.map((part) => ({ part, captured: capturedBySpec.get(part.specId) ?? null })),
+        ),
     });
-
-    return { id };
 };
 
+/** A search share by id, or null for no share or a share of another kind. */
 export const getSearchShare = async (id: string): Promise<SearchShare | null> => {
-    const [row] = await db.select().from(share).where(eq(share.id, id)).limit(1);
+    const record = await getShare(id);
 
-    if (!row || row.kind !== 'search') {
-        return null;
-    }
-
-    const refs = await db
-        .select()
-        .from(shareRef)
-        .where(eq(shareRef.shareId, id))
-        .orderBy(asc(shareRef.partIndex));
-
-    return {
-        id: row.id,
-        mode: searchShareMode(row.mode),
-        query: (row.data as { query?: string })?.query ?? row.title,
-        createdAt: row.createdAt.toISOString(),
-        refs: refs.map((ref) => ({
-            partIndex: ref.partIndex,
-            variableText: ref.variableText,
-            specId: ref.specId,
-            identity: ref.identity,
-            entityGroups: ref.entityGroups,
-            operations: ref.operations,
-            assumptions: ref.assumptions,
-            contentVersion: ref.contentVersion,
-            artifactDigest: ref.artifactDigest,
-        })),
-    };
+    return record && searchShareOf(record);
 };

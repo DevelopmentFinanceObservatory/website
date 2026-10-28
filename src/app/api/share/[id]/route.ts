@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import { deleteShare, snapshotShare } from '@/lib/chat/shareStore';
-import type { OwnerWriteResult } from '@/lib/chat/shareWrites';
+import { SHARE_ID, SharesError } from '@/lib/chat/apisShares';
+import { writeOwnShare } from '@/lib/chat/shareStore';
 import {
     missingProblem,
     problem,
@@ -13,12 +13,10 @@ import { getSearchShare } from '@/lib/search/searchShare';
 
 type Context = { params: Promise<{ id: string }> };
 
-const SHARE_ID = /^[A-Za-z0-9]{8}$/;
-
 const noSuchShare = (): Response => missingProblem('There is no such share.');
 
 // GET /api/share/<id> → a search share's references ({ mode, query, refs }).
-// Public, like the link itself; conversation shares render server-side on
+// Public, like the link itself; Studio shares render server-side on
 // /s/<id> and never come through here.
 export const GET = async (_request: Request, { params }: Context) => {
     const { id } = await params;
@@ -31,12 +29,14 @@ export const GET = async (_request: Request, { params }: Context) => {
     return NextResponse.json(found, { headers: { 'Cache-Control': 'no-store' } });
 };
 
-// An owner's write to their own Studio share. A share that does not exist
-// and one that belongs to someone else both answer 404, so the answer does
+// An owner's write to their own share in dfo-apis, with the write token the
+// site kept when they made it. A share that does not exist, one the caller
+// holds no token for, and a guest's share all answer 404, so the answer does
 // not reveal which ids are taken.
 const ownerWrite = async (
+    request: Request,
     { params }: Context,
-    write: (id: string, userId: string) => Promise<OwnerWriteResult>,
+    action: 'snapshot' | 'delete',
     done: (id: string) => Response,
 ) => {
     const user = await getUser();
@@ -46,27 +46,39 @@ const ownerWrite = async (
     }
 
     const { id } = await params;
-    const result = SHARE_ID.test(id) ? await write(id, user.id) : 'not_found';
 
-    if (result === 'not_found') {
-        return noSuchShare();
-    }
+    try {
+        const result = await writeOwnShare(request.headers, {
+            shareId: id,
+            userId: user.id,
+            action,
+        });
 
-    if (result === 'unsupported_kind') {
+        return result === 'done' ? done(id) : noSuchShare();
+    } catch (error) {
+        if (!(error instanceof SharesError)) {
+            throw error;
+        }
+
+        console.error('share: dfo-apis refused an owner write', {
+            action,
+            code: error.code,
+            status: error.status,
+        });
+
         return problem({
-            status: 400,
-            code: 'unsupported_kind',
-            detail: 'Only a conversation, canvas, or card share can be changed here.',
-            retryable: false,
+            status: 502,
+            code: 'transient_unavailable',
+            detail: 'The share could not be changed right now. Try again in a minute.',
+            retryable: true,
         });
     }
-
-    return done(id);
 };
 
 // PATCH /api/share/<id> { mode: 'snapshot' } → { id, mode }
-// Switches the caller's live canvas or card share to snapshot. A snapshot
-// cannot be switched to live here.
+// Switches the caller's live share to snapshot under the same URLs, keeping
+// the data each card shows now. A snapshot answers as it is. A snapshot
+// cannot be switched to live.
 export const PATCH = async (request: Request, context: Context) => {
     const body = (await request.json().catch(() => null)) as { mode?: unknown } | null;
 
@@ -74,10 +86,12 @@ export const PATCH = async (request: Request, context: Context) => {
         return requestInvalidProblem('A share can only be switched to `snapshot`.', '/mode');
     }
 
-    return ownerWrite(context, snapshotShare, (id) => NextResponse.json({ id, mode: 'snapshot' }));
+    return ownerWrite(request, context, 'snapshot', (id) =>
+        NextResponse.json({ id, mode: 'snapshot' }),
+    );
 };
 
 // DELETE /api/share/<id> → 204
-// Removes the caller's conversation, canvas, or card share.
-export const DELETE = async (_request: Request, context: Context) =>
-    ownerWrite(context, deleteShare, () => new NextResponse(null, { status: 204 }));
+// Takes down the caller's share, of any kind.
+export const DELETE = async (request: Request, context: Context) =>
+    ownerWrite(request, context, 'delete', () => new NextResponse(null, { status: 204 }));

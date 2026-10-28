@@ -1,70 +1,72 @@
-import { eq } from 'drizzle-orm';
+import { headers } from 'next/headers';
+import { cache } from 'react';
 
-import type { StudioShareRequest } from './shareMode';
-import { pruneForShare, shareForViewer, type ShareKind } from './sharePrune';
 import {
-    deleteOwnedShare,
-    insertStudioShare,
-    spendGuestShare as spendGuestShareIn,
-    type NewStudioShare,
-    type OwnerWriteResult,
-} from './shareWrites';
+    createOwnedShare,
+    ownerShareWrite,
+    readShare,
+    type CreateShareBody,
+    type ShareRecord,
+    type SharesBackend,
+} from './apisShares';
+import type { ShareKind } from './sharePrune';
 
 import { apisFetch } from '@/lib/apisAuth';
-import { counterDb, db } from '@/lib/db';
-import { liveShareRefusal } from '@/lib/studio/liveShare';
-import { snapshotLiveShare } from '@/lib/studio/liveShareResults';
-import { share } from '../../../db/schema';
+import { db } from '@/lib/db';
+import { setApisCaller } from '@/lib/proxy/caller';
+import { searchApiBase } from '@/lib/searchApi';
+import { liveBackendFrom } from '@/lib/studio/liveBackend';
+import type { SlotDeps } from '@/lib/studio/slotCards';
 
 /**
- * Public shares (Postgres). A share is a pruned copy of a conversation under
- * a short id:
+ * Public shares, held in dfo-apis (src/lib/chat/apisShares.ts) and bound
+ * here to the server's pool, its dfo-apis origin, and the caller of the
+ * request at hand. A share is a pruned copy of what its maker was looking
+ * at under a short id that dfo-apis mints:
  *   conversation → chat + canvas, as saved
  *   canvas       → the canvas only (transcript and activity dropped, since
  *                  the link must not leak the chat the sharer didn't share)
  *   card         → one card, with just its layout/title/note/view
- * The stored copy is fixed at creation while the owner's conversation keeps
- * evolving. A snapshot share shows that copy as stored. A live canvas or
- * card share (`isLiveStudioShare` in shareMode.ts) is the same stored copy
- * with `share.mode` set to `live`, whose data cards the viewer redraws on
- * current data (src/lib/studio/liveShare.ts). `getShare` returns the row
- * through `shareForViewer`, so no read carries the owner's `sessionId`.
- *
- * The writes live in shareWrites.ts, which takes the database handle as an
- * argument. This module binds them to the server's pool.
+ *   search       → a search result's dataset references (lib/search/searchShare.ts)
+ * The data cards of a canvas or card share are its slots, and the rest of
+ * the copy is the website's payload (src/lib/chat/sharePayload.ts). A
+ * signed-in maker's write token is kept in `share_token`.
  */
 
-export type { ShareKind };
+export type { ShareKind, ShareRecord };
 
-export { shortId } from './shareWrites';
+/** dfo-apis' share routes, naming the caller of `incoming`. */
+export const sharesBackendFor = (incoming: Headers): SharesBackend => ({
+    base: searchApiBase(),
+    fetch: apisFetch,
+    nameCaller: (outgoing) => setApisCaller(outgoing, incoming),
+});
 
-export const createShare = (input: NewStudioShare): Promise<{ id: string; title: string }> =>
-    insertStudioShare(db, input);
+/** A share by id, or null. One read per request, however many readers. */
+export const getShare = cache(async (id: string): Promise<ShareRecord | null> =>
+    readShare(sharesBackendFor(await headers()), id),
+);
 
-/** Spend one of today's guest shares for `address`; false when spent. */
-export const spendGuestShare = (address: string): Promise<boolean> =>
-    spendGuestShareIn(counterDb, address);
+/** Make a share for `userId` (null for a guest), keeping a signed-in
+ *  maker's write token. */
+export const makeShare = (
+    incoming: Headers,
+    userId: string | null,
+    body: CreateShareBody,
+): Promise<{ id: string }> =>
+    createOwnedShare({ db, backend: sharesBackendFor(incoming) }, userId, body);
 
-/** Why the copy this request would store cannot be a live share, or null
- *  when it can. */
-export const liveShareRefusalFor = ({
-    saved,
-    kind,
-    cardId,
-}: StudioShareRequest): Promise<Response | null> =>
-    liveShareRefusal({ env: process.env, fetch: apisFetch }, pruneForShare(saved, kind, cardId));
+/** Switch the caller's live share to snapshot, or take it down. */
+export const writeOwnShare = (
+    incoming: Headers,
+    write: { shareId: string; userId: string; action: 'snapshot' | 'delete' },
+): Promise<'done' | 'not_found'> =>
+    ownerShareWrite({ db, backend: sharesBackendFor(incoming) }, write);
 
-export const getShare = async (id: string) => {
-    const [row] = await db.select().from(share).where(eq(share.id, id)).limit(1);
-
-    return row ? shareForViewer(row) : null;
-};
-
-/** Switch the caller's Studio share to snapshot, dropping the stored
- *  refresh answers of its cards. */
-export const snapshotShare = (id: string, userId: string): Promise<OwnerWriteResult> =>
-    snapshotLiveShare(db, id, userId);
-
-/** Delete the caller's Studio share. */
-export const deleteShare = (id: string, userId: string): Promise<OwnerWriteResult> =>
-    deleteOwnedShare(db, id, userId);
+/** What the share pages and live card routes draw with: dfo-apis' share
+ *  routes, and its render routes when this deployment holds the
+ *  live-refresh credential. */
+export const slotDepsFor = (incoming: Headers): SlotDeps => ({
+    shares: sharesBackendFor(incoming),
+    render: liveBackendFrom(process.env, apisFetch),
+});

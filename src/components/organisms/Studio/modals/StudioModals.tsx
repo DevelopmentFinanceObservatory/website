@@ -138,7 +138,7 @@ const StudioModals = ({
                 scope={modals.share.scope}
                 title={title}
                 data={shareData}
-                offerLive={liveSharing && sharesData && !guest}
+                offerLive={liveSharing && sharesData}
                 createShare={createShare}
                 guest={guest}
             />

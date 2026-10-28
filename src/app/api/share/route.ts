@@ -2,9 +2,10 @@
 import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { getUser } from '@/lib/auth/session';
-import { GUEST_SHARES, readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
-import { createShare, liveShareRefusalFor, spendGuestShare } from '@/lib/chat/shareStore';
-import { clientIp } from '@/lib/proxy/forward';
+import { SharesError } from '@/lib/chat/apisShares';
+import { studioShareBody } from '@/lib/chat/sharePayload';
+import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
+import { makeShare } from '@/lib/chat/shareStore';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { track } from '@/lib/events/track';
@@ -14,10 +15,35 @@ import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 // The largest share request read, in bytes; a larger one gets 413.
 const MAX_SHARE_BODY = 10_000_000;
 
+// What a refusal of dfo-apis' share create says to the browser. A spent
+// share allowance (counted by dfo-apis per network address) is 429
+// `share_limit`, with dfo-apis' Retry-After. Everything else is a fault the
+// sharer cannot fix, 502, retryable when dfo-apis said so.
+const sharesRefusal = (error: SharesError): Response => {
+    if (error.code === 'allowance_exhausted') {
+        return problem({
+            status: 429,
+            code: 'share_limit',
+            detail: "This network has made today's shares. Try again tomorrow.",
+            retryable: true,
+            headers: error.retryAfterS ? { 'Retry-After': String(error.retryAfterS) } : undefined,
+        });
+    }
+
+    console.error('share: dfo-apis refused the share', { code: error.code, status: error.status });
+
+    return problem({
+        status: 502,
+        code: 'transient_unavailable',
+        detail: 'The share could not be made right now. Try again in a minute.',
+        retryable: error.retryable || error.status === undefined || error.status >= 500,
+    });
+};
+
 // POST /api/share { kind: 'search', mode, query, parts } → { id }
 // A search result's link: dataset references only, no numbers. The search
-// page is public, so an account is optional here (the share is simply
-// unowned without one).
+// page is public, so an account is optional here. A signed-in sharer's
+// write token is kept; a guest's share stays as made.
 const shareSearch = async (body: any, headers: Headers) => {
     const request = readSearchShareRequest(body);
 
@@ -31,12 +57,17 @@ const shareSearch = async (body: any, headers: Headers) => {
 
     try {
         created = await createSearchShare(
+            headers,
             user?.id ?? null,
             request.mode,
             request.query,
             request.parts,
         );
     } catch (error) {
+        if (error instanceof SharesError) {
+            return sharesRefusal(error);
+        }
+
         // The platform refused the register/mint — say which, don't store a
         // link that can't open. The log names the datasets and the cause.
         const { message, cause } = error as Error;
@@ -71,14 +102,16 @@ const shareSearch = async (body: any, headers: Headers) => {
 };
 
 // POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
-// A pruned copy of what the caller is looking at, under a short public id.
-// An account is optional. A guest's share has no owner, so nobody can switch
-// or remove it: a guest gets snapshots only (403 `live_needs_account`), and
-// GUEST_SHARES a day per network address (429 `guest_limit`).
+// A pruned copy of what the caller is looking at, made in dfo-apis
+// (src/lib/chat/sharePayload, src/lib/chat/apisShares) under a short public
+// id. An account is optional. A signed-in sharer's write token is kept, so
+// they can switch the share to a snapshot or remove it later; a guest's
+// share, live or snapshot, stays as made. dfo-apis counts shares per
+// network address (429 `share_limit`).
 // `mode` is 'live' or 'snapshot' for a canvas or a card and 'snapshot' for a
 // conversation. A request that names none stores a snapshot. A live share is
-// refused when its data cards cannot all be refreshed (`liveShareRefusal` in
-// src/lib/studio/liveShare), and the refusal names the cards in the way.
+// refused when a data card it shows names no component revision
+// (400 `live_cards_blocked`, naming the cards).
 // Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
     const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
@@ -110,35 +143,36 @@ export const POST = async (request: NextRequest) => {
         return read;
     }
 
+    const share = studioShareBody(read);
+
+    if ('unslotted' in share) {
+        return problem({
+            status: 400,
+            code: 'live_cards_blocked',
+            detail: 'Some data cards cannot show live data, so the share cannot be live.',
+            retryable: false,
+            extra: { cards: share.unslotted.map((id) => ({ id, reason: 'missing_ref' })) },
+        });
+    }
+
+    // A card saved before cards kept their revision has nothing dfo-apis
+    // can draw, and a card share takes at least one card.
+    if (share.kind === 'card' && share.cards.length === 0) {
+        return requestInvalidProblem('This card has no saved revision, so it cannot be shared.');
+    }
+
     const user = await getUser();
+    let created: { id: string };
 
-    if (!user) {
-        if (read.mode === 'live') {
-            return problem({
-                status: 403,
-                code: 'live_needs_account',
-                detail: 'Sign in to make a live share. Without an account, a share is a snapshot.',
-                retryable: false,
-            });
+    try {
+        created = await makeShare(request.headers, user?.id ?? null, share);
+    } catch (error) {
+        if (error instanceof SharesError) {
+            return sharesRefusal(error);
         }
 
-        if (!(await spendGuestShare(clientIp(request)))) {
-            return problem({
-                status: 429,
-                code: 'guest_limit',
-                detail: `This network has made today's ${GUEST_SHARES} guest shares. Sign in to make more.`,
-                retryable: false,
-            });
-        }
+        throw error;
     }
-
-    const refusal = read.mode === 'live' ? await liveShareRefusalFor(read) : null;
-
-    if (refusal) {
-        return refusal;
-    }
-
-    const created = await createShare({ userId: user?.id ?? null, ...read });
 
     // Recorded after the response, so the link does not wait on analytics.
     after(() =>
@@ -149,5 +183,5 @@ export const POST = async (request: NextRequest) => {
         ),
     );
 
-    return NextResponse.json(created);
+    return NextResponse.json({ id: created.id, title: share.title });
 };

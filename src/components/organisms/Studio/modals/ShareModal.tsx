@@ -1,7 +1,6 @@
 'use client';
 
 import classNames from 'classnames';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { useCopied } from '../hooks/useCopied';
@@ -12,7 +11,7 @@ import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
-import { GUEST_SHARES, type ShareMode, type StudioShareKind } from '@/lib/chat/shareMode';
+import type { ShareMode, StudioShareKind } from '@/lib/chat/shareMode';
 import type { CardRef } from '@/lib/chat/widgets';
 import { downloadBlob } from '@/lib/download';
 import { DATASET_FORMATS, type DatasetFormat } from '@/lib/search/searchClient';
@@ -64,8 +63,8 @@ type ShareModalProps = {
     // has no mode choice and every link is a snapshot.
     offerLive: boolean;
     createShare: ShareLinkDeps['createShare'];
-    // Signed out: the links have no owner, so the dialog says they are
-    // permanent, and asks the guest to sign in once today's are made.
+    // Signed out: the site keeps no write token for the links, so the dialog
+    // says they are permanent and offers no switch to a snapshot.
     guest: boolean;
 };
 
@@ -108,8 +107,8 @@ const COPY = {
     toSnapshot:
         'To stop live updates, make this link a snapshot. Everyone who has the link then sees the numbers as they were when you made it. This cannot be undone.',
     nowSnapshot: 'This link is now a snapshot. It shows the numbers as they were when you made it.',
-    guest: 'Without an account, a link stays up as made and you cannot remove it later. Sign in to share live data and manage your links.',
-    guestLimit: `You've made today's ${GUEST_SHARES} guest links. Sign in to share more. It's free.`,
+    guest: 'Without an account, a link stays up as made: you cannot make it a snapshot or remove it later. Sign in to manage your links.',
+    shareLimit: "This network has made today's links. Try again tomorrow.",
 };
 
 const origin = () => (typeof window === 'undefined' ? '' : window.location.origin);
@@ -198,7 +197,6 @@ const ShareModal = ({
     createShare,
     guest,
 }: ShareModalProps) => {
-    const router = useRouter();
     const [tab, setTab] = useState<string>(scope.kind === 'whole' ? 'conversation' : 'link');
     const [mode, setMode] = useState<ShareMode>('live');
     // The links of this opening, by kind, card, and mode (`shareLinkKey`).
@@ -290,7 +288,7 @@ const ShareModal = ({
     const showEmbed = scope.kind === 'whole' ? tab === 'canvas' : tab === 'embed';
     // A live link made a snapshot keeps its tab and reads as a snapshot.
     const shownMode: ShareMode = link?.status === 'ready' ? link.mode : linkMode;
-    const canSwitch = hasMode && link?.status === 'ready' && link.mode === 'live';
+    const canSwitch = hasMode && !guest && link?.status === 'ready' && link.mode === 'live';
     const switchState = key ? switching[key] : undefined;
     const status = !hasMode
         ? null
@@ -390,20 +388,9 @@ const ShareModal = ({
                             </>
                         )}
                         {limited && (
-                            <>
-                                <p className={styles.error} role="alert">
-                                    {COPY.guestLimit}
-                                </p>
-                                <div className={styles.actions}>
-                                    <Button
-                                        variant="bordered"
-                                        small
-                                        onClick={() => router.push('/login?next=/studio')}
-                                    >
-                                        Sign in
-                                    </Button>
-                                </div>
-                            </>
+                            <p className={styles.error} role="alert">
+                                {COPY.shareLimit}
+                            </p>
                         )}
                         {withdrawal && (
                             <div className={styles.actions}>

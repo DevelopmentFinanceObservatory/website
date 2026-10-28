@@ -1,8 +1,8 @@
 import type { Pool } from 'pg';
 
-import { canvasWidgetsOf } from '../src/lib/chat/canvas.ts';
 import type { SavedConversation } from '../src/lib/chat/history.ts';
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
+import { slotCanvas, viewerCopy, type ShareSlot } from '../src/lib/chat/sharePayload.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 
 /**
@@ -14,11 +14,7 @@ import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
  */
 
 /** One data card of a share as dfo-apis holds it, in display order. */
-export type ExportSlot = {
-    component_id: string;
-    revision: number;
-    frame: { spec_id: string; content_version: string };
-};
+export type ExportSlot = ShareSlot;
 
 /** One line of the export. */
 export type ExportLine = {
@@ -62,72 +58,16 @@ export type Placement = { line: ExportLine } | { refusal: string };
 
 type LineBase = Pick<ExportLine, 'id' | 'owner' | 'created_at' | 'title'>;
 
-type StoredWidget = SavedConversation['widgets'][number];
-
-const COMPONENT_ID = /^cmp_[A-Za-z0-9_-]{1,64}$/;
-const FRAME_SPEC_ID = /^(spec|ops)_[A-Za-z0-9_-]+$/;
 const SHARE_ID = /^[A-Za-z0-9]{8}$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
-
-// The slot of a data card whose `ref` names a component revision in
-// dfo-apis' form and whose `frame` names a dataset or derived frame, or
-// null when either is absent or malformed.
-const slotOf = (widget: StoredWidget): ExportSlot | null => {
-    if (widget.kind === 'text') {
-        return null;
-    }
-
-    const { ref, frame } = widget;
-
-    if (
-        !isRecord(ref) ||
-        typeof ref.component_id !== 'string' ||
-        !COMPONENT_ID.test(ref.component_id) ||
-        !Number.isSafeInteger(ref.revision) ||
-        ref.revision < 1 ||
-        !isRecord(frame) ||
-        typeof frame.spec_id !== 'string' ||
-        !FRAME_SPEC_ID.test(frame.spec_id) ||
-        typeof frame.content_version !== 'string' ||
-        frame.content_version === ''
-    ) {
-        return null;
-    }
-
-    return {
-        component_id: ref.component_id,
-        revision: ref.revision,
-        frame: { spec_id: frame.spec_id, content_version: frame.content_version },
-    };
-};
-
-// A data card in the payload with none of what it showed: where it sits,
-// what shape it takes, and the index of the slot that draws it, if any.
-const heldCard = (widget: StoredWidget, slot: number | undefined): Record<string, unknown> => ({
-    kind: widget.kind,
-    id: widget.id,
-    turn: widget.turn,
-    ...(widget.kind === 'chart'
-        ? { chartType: widget.chartType, horizontal: widget.horizontal }
-        : {}),
-    slot,
-});
 
 const isCanvasState = (data: unknown): data is SavedConversation =>
     isRecord(data) &&
     Array.isArray(data.widgets) &&
     Array.isArray(data.pinnedIds) &&
     Array.isArray(data.removedIds);
-
-// A stored copy as a viewer reads it: no owner's harness session and no
-// inherited refs (src/lib/chat/sharePrune.ts, shareForViewer).
-const viewerCopy = (data: Record<string, unknown>): Record<string, unknown> => ({
-    ...data,
-    sessionId: null,
-    componentRefs: [],
-});
 
 const placeSearch = (row: StoredShare, base: LineBase): Placement => {
     if (row.mode !== null && row.mode !== 'live' && row.mode !== 'snapshot') {
@@ -187,40 +127,19 @@ const placeStudio = (
         return { refusal: 'data has no widgets, pinnedIds and removedIds arrays' };
     }
 
-    const saved = row.data;
-    const slots: ExportSlot[] = [];
-    const slotIndex = new Map<StoredWidget, number>();
+    const slotted = slotCanvas(row.data, mode);
 
-    // canvasWidgetsOf hands back the stored widget objects, so each slot is
-    // tied to its own widget even when two cards draw the same revision.
-    for (const widget of canvasWidgetsOf(saved)) {
-        if (widget.kind === 'text') {
-            continue;
-        }
-
-        const slot = slotOf(widget as StoredWidget);
-
-        if (slot) {
-            slotIndex.set(widget as StoredWidget, slots.length);
-            slots.push(slot);
-        } else if (mode === 'live') {
-            return {
-                refusal: `live card ${widget.id} has no component ref and frame in dfo-apis' form`,
-            };
-        }
+    if ('unslotted' in slotted) {
+        return {
+            refusal: `live card ${slotted.unslotted[0]} has no component ref in dfo-apis' form`,
+        };
     }
 
-    // A live share shows none of the numbers stored with it, as the live
-    // share pages withhold them today (withholdCardData), so a data card
-    // the canvas does not show is held too, with no slot.
-    const widgets = saved.widgets.map((widget) => {
-        const slot = slotIndex.get(widget);
-        const held = slot !== undefined || (mode === 'live' && widget.kind !== 'text');
+    const { slots, widgets } = slotted;
 
-        return held ? heldCard(widget, slot) : widget;
-    });
-
-    return { line: { ...base, kind, mode, slots, payload: { ...viewerCopy(saved), widgets } } };
+    return {
+        line: { ...base, kind, mode, slots, payload: { ...viewerCopy(row.data), widgets } },
+    };
 };
 
 /** Where one stored share lands in the export, or why it cannot. */
