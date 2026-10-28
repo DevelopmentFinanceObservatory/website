@@ -444,16 +444,20 @@ const unappliedNotice = (
     pick: PlanSwitch,
     detail: string | null,
     { retryable, retryAt }: Pick<PlanNotice, 'retryable' | 'retryAt'>,
-): PlanNotice => {
-    const decision = plan.decisions.find((candidate) => candidate.choice_id === pick.choiceId);
-    const still = decision ? ` The plan still counts ${activeLabel(decision)}.` : '';
-
-    return switchNotice(plan.decisions, pick, {
+): PlanNotice =>
+    switchNotice(plan.decisions, pick, {
         detail,
-        own: (picked) => `${studioCouldNotSwitch(picked)}${still}`,
+        own: (picked) => `${studioCouldNotSwitch(picked)}${stillCounts(plan, pick)}`,
         retryable,
         retryAt,
     });
+
+/** " The plan still counts gross disbursements.": the option the pick's
+ *  choice still holds, or nothing when the plan lacks the choice. */
+const stillCounts = (plan: PlanState, pick: PlanSwitch): string => {
+    const decision = plan.decisions.find((candidate) => candidate.choice_id === pick.choiceId);
+
+    return decision ? ` The plan still counts ${activeLabel(decision)}.` : '';
 };
 
 /**
@@ -581,6 +585,29 @@ export const unreachableSwitch = (plan: PlanState): PlanState => {
         : settled;
 };
 
+/** The card once the user stopped a switch before its request started (it
+ *  waited behind the stream that offered the plan). Nothing reached the
+ *  harness, so the pause still waits and the card stays live, saying
+ *  quietly on the choice's row that the plan is unchanged, with Try again. */
+export const stoppedQueuedSwitch = (plan: PlanState): PlanState => {
+    const pick = plan.switching;
+    const settled = { ...plan, switching: null };
+
+    return pick
+        ? {
+              ...settled,
+              notice: switchNotice(plan.decisions, pick, {
+                  detail: null,
+                  own: (picked) =>
+                      `Stopped before switching to ${picked}.${stillCounts(plan, pick)}`,
+                  retryable: true,
+                  retryAt: null,
+                  quiet: true,
+              }),
+          }
+        : settled;
+};
+
 /** An `approve` of `plan`, carrying its revision so the harness can tell an
  *  approval from an out-of-date card. */
 export const approveReply = (
@@ -627,21 +654,22 @@ export type SwitchStreamEnd = {
 /**
  * The read-only card a switch's stream ended on without a fresh plan, and
  * how its Activity entry closes. A stop the harness answered by closing the
- * stream or cancelling the turn is skipped. Every other end failed, the
- * switch did not apply: a refusal (its card), a harness error (its reason,
- * a stop before it included), or a stream that closed, broke or sent
- * `done`.
+ * stream, cancelling the turn or refusing the switch is skipped: the Stop's
+ * cancel can reach the harness before the switch, which then finds no pause
+ * (a 404 or 409). Every other end failed, the switch did not apply: a
+ * refusal (its card), a harness error (its reason, a stop before it
+ * included), or a stream that closed, broke or sent `done`.
  */
 export const endedSwitch = (
     waiting: PlanState,
     { error, stopped, refused }: SwitchStreamEnd,
 ): { plan: PlanState; activity: 'skipped' | 'failed' } => {
-    if (refused) {
-        return { plan: refused, activity: 'failed' };
-    }
-
     if (stopped && (!error || error.error === 'cancelled')) {
         return { plan: endedPlan(waiting, { stopped }), activity: 'skipped' };
+    }
+
+    if (refused) {
+        return { plan: refused, activity: 'failed' };
     }
 
     return { plan: endedPlan(waiting, { detail: error?.detail }), activity: 'failed' };
@@ -776,19 +804,21 @@ export const planView = (plan: PlanState): PlanView => {
 };
 
 export const approvedView = (plan: ApprovedPlan): PlanView => {
-    const answer = answerIndex(plan.steps);
+    // A stored message may lack either list, as approvedFromFrame allows.
+    const steps = plan.steps ?? [];
+    const answer = answerIndex(steps);
 
     return {
         title: plan.title,
         version: plan.version,
         summary: plan.summary || null,
-        steps: plan.steps.map((step, index) => ({
+        steps: steps.map((step, index) => ({
             key: String(index),
             label: step.label,
             description: null,
             givesAnswer: index === answer,
         })),
-        choices: plan.choices.map((choice, index) => ({
+        choices: (plan.choices ?? []).map((choice, index) => ({
             key: String(index),
             name: choice.question,
             value: choice.chosen,

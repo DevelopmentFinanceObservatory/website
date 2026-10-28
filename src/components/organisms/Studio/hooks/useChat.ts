@@ -43,6 +43,7 @@ import {
     refusedSwitch,
     stalePlan,
     startSwitch,
+    stoppedQueuedSwitch,
     switchEnded,
     endedSwitch,
     switchReply,
@@ -179,8 +180,15 @@ const withLine = (prev: ChatState, status: string, statusDetail: string | null =
 });
 
 // How a stream ended: its error frame, whether `done` arrived, whether the
-// user stopped it, and whether it broke.
-type StreamEnding = { error: ToolError | null; done: boolean; stopped: boolean; failed: boolean };
+// user stopped it, whether it broke, and whether its request started (a Stop
+// while it waited in the queue skips the request).
+type StreamEnding = {
+    error: ToolError | null;
+    done: boolean;
+    stopped: boolean;
+    failed: boolean;
+    sent: boolean;
+};
 
 // A turn's end on screen, however it ended: its Activity entry closes and
 // the chat line clears.
@@ -427,6 +435,8 @@ export const useChat = (initial?: ChatSnapshot) => {
             let harnessError: ToolError | null = null;
             let done = false;
             let failed = false;
+            // The request has started.
+            let sent = false;
             // The turn's end on screen has run (finish).
             let finished = false;
             let stopGrace: ReturnType<typeof setTimeout> | null = null;
@@ -741,22 +751,32 @@ export const useChat = (initial?: ChatSnapshot) => {
             // read until the harness ends it, so the request counts as in
             // flight, and queued sends wait, until the conversation is free.
             // A caller that ends the turn itself keeps the frames (a switch's
-            // stream may re-offer the plan). Returns whether this Stop was
-            // the stream's first, the one to send the cancel.
+            // stream may re-offer the plan); a Stop before the request
+            // started ends it at once, and the request is skipped. Returns
+            // whether to send the cancel: on the stream's first Stop, once
+            // its request has started.
             const halt = (): boolean => {
                 if (stopped || generationRef.current !== generation) {
                     return false;
                 }
 
                 stopped = true;
-                stopGrace = setTimeout(
-                    () => controller.abort(),
-                    onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
-                );
-
                 grace.cancel();
 
+                if (sent) {
+                    stopGrace = setTimeout(
+                        () => controller.abort(),
+                        onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
+                    );
+                }
+
                 if (onEnd) {
+                    if (!sent) {
+                        finish();
+
+                        return false;
+                    }
+
                     setState((prev) => withLine(prev, 'Stopping'));
 
                     return true;
@@ -776,7 +796,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                     return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
 
-                return true;
+                return sent;
             };
 
             // The end of a turn whose caller leaves it to the stream: `done`
@@ -812,7 +832,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             const finish = () => {
                 if (!finished) {
                     finished = true;
-                    (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed });
+                    (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
                 }
             };
 
@@ -825,14 +845,22 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
-            // that is running, not one still waiting here.
+            // that is running, not one still waiting here. The halt is
+            // published at once when no stream holds Stop (the one ahead
+            // paused on a plan but has not closed yet), so a Stop while this
+            // one waits skips its request.
+            if (haltRef.current === null) {
+                haltRef.current = halt;
+            }
+
             inFlightRef.current += 1;
             chainRef.current = chainRef.current
                 .then(() => {
-                    if (generationRef.current !== generation) {
+                    if (generationRef.current !== generation || stopped) {
                         return;
                     }
 
+                    sent = true;
                     abortRef.current = controller;
                     haltRef.current = halt;
                     stall.beat();
@@ -1165,9 +1193,18 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         return true;
                     },
-                    onEnd: ({ error, stopped }) => {
+                    onEnd: ({ error, stopped, sent }) => {
                         // A fresh plan or a refusal replaced the waiting card.
                         if (pendingInterruptRef.current?.plan !== waiting) {
+                            return;
+                        }
+
+                        // Stopped while it waited behind the stream that
+                        // offered the plan: nothing reached the harness, so
+                        // the pause still waits.
+                        if (!sent) {
+                            offerPlan(stoppedQueuedSwitch(waiting));
+
                             return;
                         }
 
@@ -1262,8 +1299,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, [applyChoice, send]);
 
     // The Stop control: end the running turn (see `halt` in stream()) and
-    // ask the harness to cancel, once per stream: on a switch, a second
-    // cancel would end the stream before the harness re-offers the plan.
+    // ask the harness to cancel, once per stream whose request started: on a
+    // switch, a second cancel would end the stream before the harness
+    // re-offers the plan.
     // Requests queued behind it also wait for the cancel request to answer.
     const stop = useCallback(() => {
         const conversation = sessionRef.current;

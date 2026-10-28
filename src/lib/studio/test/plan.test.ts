@@ -24,6 +24,7 @@ import {
     SWITCH_CANCELLED,
     stalePlan,
     startSwitch,
+    stoppedQueuedSwitch,
     switchEnded,
     switchReply,
     UNREACHABLE_NOTICE,
@@ -1094,10 +1095,12 @@ test('a switch stream that ends without a fresh plan closes its Activity entry b
             'Lost. Ask again to change the plan.',
         ],
         [
+            // The Stop's cancel reached the harness first, so the switch
+            // found no pause.
             'stopped, then a 404',
             { error: null, stopped: true, refused: gone },
-            'failed',
-            'The plan is gone. Ask again to change the plan.',
+            'skipped',
+            stoppedText,
         ],
     ];
 
@@ -1221,6 +1224,7 @@ test('a switch that does not apply clears the mark of the switch before it', asy
         ['a gone pause', refusedSwitch(waiting, { status: 404, detail: null, error: null })],
         ['a stream end without a plan', endedPlan(waiting, { detail: 'The harness stopped.' })],
         ['an unreachable harness', unreachableSwitch(waiting)],
+        ['a switch stopped before it was sent', stoppedQueuedSwitch(waiting)],
     ];
 
     assert.equal(applied.switched, PICK.choiceId);
@@ -1246,6 +1250,22 @@ test('a switch that never reached the harness keeps the card live, with Try agai
         ...PICK,
     });
     assert.ok(switchReply(unreached, PICK.choiceId, PICK.optionId));
+});
+
+test('a switch stopped before its request started keeps the card live, quietly', () => {
+    const stopped = stoppedQueuedSwitch(startSwitch(planFromFrame(frame()), PICK));
+
+    assert.equal(stopped.live, true);
+    assert.equal(stopped.switching, null);
+    assert.deepEqual(stopped.notice, {
+        lead: null,
+        text: 'Stopped before switching to Net disbursements. The plan still counts Gross disbursements.',
+        retryable: true,
+        retryAt: null,
+        quiet: true,
+        ...PICK,
+    });
+    assert.ok(switchReply(stopped, PICK.choiceId, PICK.optionId));
 });
 
 test('a plan re-offered after a switch names the switched choice, for focus to return to', () => {
@@ -1319,11 +1339,14 @@ test('a stored approved plan without steps or choices still gives a view', () =>
     const stored = JSON.parse(
         JSON.stringify({ ...approvedFrame, steps: undefined, choices: undefined }),
     ) as PlanApproved;
-    const view = approvedView(approvedFromFrame(stored));
 
-    assert.deepEqual(view.steps, []);
-    assert.deepEqual(view.choices, []);
-    assert.equal(answerStepOf(view), undefined);
+    for (const plan of [approvedFromFrame(stored), stored]) {
+        const view = approvedView(plan);
+
+        assert.deepEqual(view.steps, []);
+        assert.deepEqual(view.choices, []);
+        assert.equal(answerStepOf(view), undefined);
+    }
 });
 
 test('an approved plan with no step flagged answers with its last step', () => {
