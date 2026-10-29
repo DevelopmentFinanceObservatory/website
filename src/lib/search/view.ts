@@ -1259,6 +1259,9 @@ const lowerFirst = (text: string): string =>
 const assumptionSentence = (spec: SpecReading, assumption: Assumption): string => {
     const { kind, binding_ref: ref, text } = assumption;
 
+    // The text states the correction whole: '"Germny" read as Germany'.
+    if (kind === 'name_corrected') return `${text}.`;
+
     if (kind === 'place_scope') return `No place was named, so the answer covers ${text}.`;
 
     if (kind === 'open_role') {
@@ -1279,7 +1282,7 @@ const assumptionSentence = (spec: SpecReading, assumption: Assumption): string =
 };
 
 /** What a definite part's answer assumed: one sentence per item of the
- *  part's `assumptions` (a declared default, an open role, the place scope),
+ *  part's `assumptions` (a corrected name, a declared default, an open role, the place scope),
  *  in the API's order, then the year. "About this answer" reads this list
  *  (through resultNotes's aboutAnswerNotes). The year sentence keys on
  *  `headline.year_named` as well as `time_window_defaulted`, since a

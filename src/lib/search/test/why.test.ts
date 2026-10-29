@@ -140,6 +140,14 @@ test('many variables: rows name the role scope and the list reads the members do
         { label: 'Recipients', value: 'All 191 with data' },
     ]);
     // No time_window_defaulted on the wire: the headline's year_named says it.
+    assert.equal(
+        scopeAssumptions(
+            oda,
+            [{ ...openRecipients, kind: 'name_corrected', text: '"Germny" read as Germany' }],
+            [],
+        )[0],
+        '"Germny" read as Germany.',
+    );
     assert.deepEqual(scopeAssumptions(oda, [openRecipients], odaWarnings), [
         'The question left this role open, so the answer covers every recipient from Germany.',
         'No year was named, so the counts are for 2024, the latest year with data.',

@@ -116,7 +116,8 @@ export type DeclinedReason = wire.DeclinedAnswer['reason'];
 /** Which candidate universe the options door enumerates for a place role. */
 export type PlaceOptionsScope = Present<Known<wire.OptionsFor['scope']>>;
 
-/** What an assumption fills: a declared default, an open flow role, or the place scope. */
+/** What an assumption fills: a corrected name, a declared default, an open flow role, or the place
+ *  scope. */
 export type AssumptionKind = Known<wire.Assumption['kind']>;
 
 /** The block of the answer a sentence token belongs to. */

@@ -91,25 +91,33 @@ const isEntityGroups = (value: any): value is Record<string, EntityGroup> =>
 // Keyed by every kind the wire names, so a kind Search adds fails the type
 // check until this list takes it.
 const ASSUMPTION_KINDS: Record<AssumptionKind, true> = {
+    name_corrected: true,
     declared_default: true,
     open_role: true,
     place_scope: true,
 };
 
-// Search's own bounds on an echoed `Assumption`: a text of 1 to 200 code
-// points, at most one ref of at most 1024 characters, a binding ref of at
-// most 1036 characters, and at most 67 items in a part's list. A share
-// storing one past them cannot open.
+// Search's own bounds on an echoed `Assumption`: a text, and an `asked`, of
+// 1 to 200 code points, at most one ref of at most 1024 characters, a binding
+// ref of at most 1036 characters, and at most 67 items in a part's list. A
+// share storing one past them cannot open.
 const ASSUMPTION_TEXT_MAX_LENGTH = 200;
 const ASSUMPTION_MAX_REFS = 1;
 const ASSUMPTION_REF_MAX_LENGTH = 1024;
 const ASSUMPTION_BINDING_REF_MAX_LENGTH = 1036;
 const ASSUMPTIONS_MAX = 67;
 
+// Words within the bound span at most two UTF-16 units per code point.
+const isAssumptionWords = (value: unknown): boolean =>
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= ASSUMPTION_TEXT_MAX_LENGTH * 2 &&
+    [...value].length <= ASSUMPTION_TEXT_MAX_LENGTH;
+
 const isAssumption = (value: any): value is Assumption =>
     isPlainObject(value) &&
     Object.keys(value).every((member) =>
-        ['kind', 'binding_ref', 'refs', 'text'].includes(member),
+        ['kind', 'binding_ref', 'refs', 'text', 'asked'].includes(member),
     ) &&
     typeof value.kind === 'string' &&
     hasKey(ASSUMPTION_KINDS, value.kind) &&
@@ -123,11 +131,9 @@ const isAssumption = (value: any): value is Assumption =>
                 (ref: unknown) =>
                     typeof ref === 'string' && ref.length <= ASSUMPTION_REF_MAX_LENGTH,
             ))) &&
-    typeof value.text === 'string' &&
-    value.text.length > 0 &&
-    // A text within the bound spans at most two UTF-16 units per code point.
-    value.text.length <= ASSUMPTION_TEXT_MAX_LENGTH * 2 &&
-    [...value.text].length <= ASSUMPTION_TEXT_MAX_LENGTH;
+    isAssumptionWords(value.text) &&
+    // `asked` is set on a corrected name only, and absent or null on the rest.
+    (value.asked == null || isAssumptionWords(value.asked));
 
 /** A part's echoed list as Search takes it: within the item cap, every item
  *  an `Assumption` within its bounds. */
