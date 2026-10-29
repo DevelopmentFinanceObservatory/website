@@ -1,8 +1,7 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { IncomingMessage, ServerResponse } from 'node:http';
 
-import { isbot } from 'isbot';
-
+import { isBotAgent } from '../bot.ts';
 import { requestCaller } from './caller.ts';
 
 /**
@@ -95,9 +94,6 @@ const classifyRequest = (
     return { kind: prerender || !purpose.includes('prefetch') ? 'page' : 'prefetch', prerender };
 };
 
-/** A request with no user agent comes from a script, so it counts as a bot. */
-const isBot = (userAgent: string | null): boolean => !userAgent || isbot(userAgent);
-
 /** The log entry for a logged request. */
 export const requestLogEntry = (
     { path, method, headers }: RequestMetadata,
@@ -116,7 +112,7 @@ export const requestLogEntry = (
         kind,
         status,
         finished,
-        bot: isBot(headers.get('user-agent')),
+        bot: isBotAgent(headers.get('user-agent')),
         prerender,
     };
 };

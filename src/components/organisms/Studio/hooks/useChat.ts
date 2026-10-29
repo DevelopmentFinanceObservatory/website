@@ -58,7 +58,7 @@ import {
     type Pause,
     type PlanState,
 } from '@/lib/studio/plan';
-import { withAnswer } from '@/lib/studio/transcript';
+import { withAnswer, withRefundedPrompt } from '@/lib/studio/transcript';
 import {
     cancelTurn,
     fetchComponentRevision,
@@ -88,12 +88,14 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // so the transcript shows what the question was about. `answer` marks the
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
+// `refunded` marks a prompt whose turn was refused, which the site's prompt
+// meter gave back.
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
 // a reopened conversation can show it.
 export type ChatMessage =
-    | { role: 'user'; text: string; card?: { title: string }; answer?: true }
+    | { role: 'user'; text: string; card?: { title: string }; answer?: true; refunded?: true }
     | {
           role: 'bot';
           text: string;
@@ -412,7 +414,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // on screen. A caller without one gets `endOwn`. A caller with one (a
     // switch, whose harness may re-offer the plan after a Stop) also keeps
     // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
-    // line on "Stopping".
+    // line on "Stopping". `metered` marks a POST turn, whose prompt the
+    // site's meter gives back when the response is a refusal (meterTurn), so
+    // a refusal marks the turn's prompt refunded.
     const stream = useCallback(
         (
             turn: number,
@@ -421,10 +425,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                 onRefusal,
                 onUnreachable,
                 onEnd,
+                metered = false,
             }: {
                 onRefusal?: (refusal: StreamRefusal) => boolean;
                 onUnreachable?: () => boolean;
                 onEnd?: (ending: StreamEnding) => void;
+                metered?: boolean;
             } = {},
         ) => {
             const controller = new AbortController();
@@ -848,11 +854,17 @@ export const useChat = (initial?: ChatSnapshot) => {
             // handle() drops frames. A switch the user stopped then ends as
             // stopped (its `onEnd`), not on a live card whose buttons the
             // cancel has made useless.
-            const refuse = (refusal: StreamRefusal): boolean =>
-                generationRef.current !== generation ||
-                muted ||
-                stopped ||
-                (onRefusal?.(refusal) ?? false);
+            const refuse = (refusal: StreamRefusal): boolean => {
+                if (generationRef.current !== generation) {
+                    return true;
+                }
+
+                if (metered) {
+                    setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
+                }
+
+                return muted || stopped || (onRefusal?.(refusal) ?? false);
+            };
             const unreachable = (): boolean =>
                 generationRef.current !== generation ||
                 muted ||
@@ -1012,11 +1024,14 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             // A question handed over from search carries its seeds, the
             // datasets the user saw there, so the harness starts from them.
-            stream(turn, (handlers, signal) =>
-                runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
-                    ...(componentRef && { component_ref: componentRef }),
-                    ...(seeds && { seed_spec: seeds }),
-                }),
+            stream(
+                turn,
+                (handlers, signal) =>
+                    runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
+                        ...(componentRef && { component_ref: componentRef }),
+                        ...(seeds && { seed_spec: seeds }),
+                    }),
+                { metered: true },
             );
         },
         [holdTurn, startTurn, stream],
@@ -1318,6 +1333,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                 turn,
                 (handlers, signal) => runApplyChoice(conversation, chip, handlers, signal),
                 {
+                    metered: true,
                     onRefusal: (refusal) => {
                         const detail = chipRefusalDetail(refusal);
 

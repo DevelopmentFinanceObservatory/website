@@ -42,7 +42,7 @@ import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
-import { isPrompt } from '@/lib/studio/transcript';
+import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
 import type { Seed } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
@@ -165,20 +165,26 @@ const Studio = ({
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be
     // removed): the count follows the user turns in the transcript, so the
-    // queue's own drain is covered too. Only growth counts — New Chat empties
-    // the transcript without giving prompts back.
+    // queue's own drain is covered too. A prompt the harness refused before
+    // its turn started comes back, as the server's meter gives it back. Only
+    // growth counts, of either: New Chat empties the transcript without
+    // giving prompts back.
     const sentCount = conversation.messages.filter(isPrompt).length;
+    const refundedCount = conversation.messages.filter(isRefundedPrompt).length;
     const sentRef = useRef(sentCount);
+    const refundedRef = useRef(refundedCount);
 
     useEffect(() => {
-        const delta = sentCount - sentRef.current;
+        const spent = Math.max(0, sentCount - sentRef.current);
+        const refunded = Math.max(0, refundedCount - refundedRef.current);
 
         sentRef.current = sentCount;
+        refundedRef.current = refundedCount;
 
-        if (guest && delta > 0) {
-            writeGuestUsed(readGuestUsed() + delta);
+        if (guest && spent !== refunded) {
+            writeGuestUsed(Math.max(0, readGuestUsed() + spent - refunded));
         }
-    }, [guest, sentCount]);
+    }, [guest, sentCount, refundedCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
     const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;

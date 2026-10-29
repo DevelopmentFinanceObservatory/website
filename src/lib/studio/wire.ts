@@ -424,10 +424,13 @@ export type PlanSwitchFailed = {
 
 export type PlanApprovedStep = { label: string; gives_answer?: boolean | null };
 
-/** One choice of an approved plan: its short name, the option label it
- *  holds, and, when the user's switches moved it, the label it held on the
- *  turn's first plan. */
+/** One choice of an approved plan: its id (the plan card's
+ *  `PlanDecision.choice_id`, `decision/<slot>` for a planner decision), its
+ *  short name, the option label it holds, and, when the user's switches
+ *  moved it, the label it held on the turn's first plan. */
 export type PlanApprovedChoice = {
+    // Absent from a frame stored in a chat snapshot before the harness sent it.
+    choice_id?: string;
     question: string;
     chosen: string;
     changed_from?: string | null;

@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
         .filter(Boolean),
     // Share and embed links, the Studio, history and sign-in say noindex on
     // every response, redirects and errors included (src/lib/crawl.ts).
+    // src/proxy.ts sends /data's.
     async headers() {
         return noindexHeaders();
     },
