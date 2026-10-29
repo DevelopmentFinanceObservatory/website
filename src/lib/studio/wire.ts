@@ -334,7 +334,7 @@ export type PlanDecision = {
     // and the one the plan counts by now. A scope choice's `choice_id` is
     // built from the requirement and the axis, so it holds across a
     // conversation's switches (an older harness built it from a spec id a
-    // switch can re-pin). A planner decision's is `decision:<slot>`, with
+    // switch can re-pin). A planner decision's is `decision/<slot>`, with
     // option ids `option_<n>` in its options' order, and switching it
     // replans with the pick held. A decision without `choice_id` cannot be
     // switched.

@@ -170,7 +170,7 @@ export const optionLabel = (
 /** The `choice_id` prefix of a planner decision's row. Switching one replans
  *  with the user's pick held, which takes tens of seconds; switching a scope
  *  choice re-runs Search. */
-export const PLANNER_CHOICE_PREFIX = 'decision:';
+export const PLANNER_CHOICE_PREFIX = 'decision/';
 
 /** The choice is a planner decision's row (PLANNER_CHOICE_PREFIX). */
 export const isPlannerChoice = (choiceId: string): boolean =>

@@ -1470,7 +1470,7 @@ const donorsDecision: PlanDecision = {
     chosen: 'Top 5',
     reason: 'a short list reads best',
     resolved_by: 'default',
-    choice_id: 'decision:donor_count',
+    choice_id: 'decision/donor_count',
     active_option_id: 'option_1',
     options: [
         { option_id: 'option_1', label: 'Top 5', status: 'available', reason: null, years: null },
@@ -1478,7 +1478,7 @@ const donorsDecision: PlanDecision = {
     ],
 };
 
-const DONORS_PICK = { choiceId: 'decision:donor_count', optionId: 'option_2' };
+const DONORS_PICK = { choiceId: 'decision/donor_count', optionId: 'option_2' };
 
 test('the ledger heads scope choices and planner decisions apart', async (t) => {
     const heads = (overrides: Partial<PlanProposed>) =>
@@ -1492,13 +1492,13 @@ test('the ledger heads scope choices and planner decisions apart', async (t) => 
             { decisions: [countDecision, donorsDecision] },
             [
                 [SCOPE_HEAD, ['spec_1:measure_basis']],
-                [PLANNER_HEAD, ['decision:donor_count']],
+                [PLANNER_HEAD, ['decision/donor_count']],
             ],
         ],
         [
             'planner decisions only',
             { decisions: [donorsDecision] },
-            [[PLANNER_HEAD, ['decision:donor_count']]],
+            [[PLANNER_HEAD, ['decision/donor_count']]],
         ],
         [
             'scope choices only',
