@@ -49,6 +49,7 @@ const FIXTURE = `<!doctype html>
 <p class="twin">a</p><p class="twin">b</p>
 <p class="inline-used">styled inline</p>
 <div class="tall"></div>
+<div class="wrap"><p class="pin">pinned</p></div>
 <script>
 const context = document.querySelector('.chart').getContext('2d');
 context.fillStyle = 'rgb(0, 128, 0)';
@@ -59,6 +60,7 @@ context.fillRect(0, 0, 40, 20);
 const CSS = `
 body { margin: 0; padding-top: 3rem; font-size: 1rem; }
 .tall { height: 1000px; }
+.pin { position: fixed; top: 20px; right: 0; margin: 0; }
 .bar { position: fixed; top: 0; left: 0; right: 0; height: 2rem; }
 .tile { width: 50vw; background: url(/tile.png) repeat; }
 .tile:hover { outline: 2px solid rgb(0, 0, 255); }
@@ -336,6 +338,7 @@ test('a fixture page captures as static markup and the CSS its states use', asyn
         await page.goto(
             `${pathToFileURL(join(out, 'fixture/preview.html')).href}?state=filled&t=2`,
         );
+        await page.waitForFunction('film !== null');
         assert.equal(await page.locator('#error').textContent(), '');
         assert.equal(await page.locator('#state').inputValue(), 'filled');
         assert.equal(await page.locator('[data-v="field"]').inputValue(), 'Kenya');
@@ -350,6 +353,14 @@ test('a fixture page captures as static markup and the CSS its states use', asyn
             Math.abs(placed - (1080 - 600 * fit) / 2 - boxes.tile!.filled!.y * fit) < 2 * fit,
             `placed at ${placed}`,
         );
+
+        // A fixed element inside an unscrolled wrapper stays where it showed,
+        // 20 px from the top, however far down the page the wrapper starts.
+        const pinned = (await page.evaluate(
+            `film.box(document.querySelector('.dfo-frame .pin')).y`,
+        )) as number;
+
+        assert.ok(Math.abs(pinned - 20 * fit) < 2 * fit, `pinned at ${pinned}`);
 
         // The cue `in` the other state is left out.
         assert.ok(await page.locator('[data-v="field"]').isVisible());

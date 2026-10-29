@@ -344,7 +344,7 @@ export const writeFilm = async (target: string, files: Module[]): Promise<Module
         await writeFile(join(target, 'store/modules', `${file.name}.json`), storeDocument(file));
     }
 
-    await writeFile(join(target, 'preview.html'), previewHtml(basename(target), modules));
+    await writeFile(join(target, 'preview.html'), await previewHtml(basename(target), modules));
 
     return modules;
 };

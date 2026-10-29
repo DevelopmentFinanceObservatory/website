@@ -294,6 +294,17 @@ test('the Kenya film modules hold no motion, no outside URL and no unscoped rule
 
         try {
             await page.goto(pathToFileURL(join(out, 'preview.html')).href);
+            // The page mounts the film once the app's fonts have loaded.
+            await page.waitForFunction('film !== null');
+            assert.deepEqual(
+                await page.evaluate(`[...document.fonts]
+                    .filter((face) => face.status === 'loaded')
+                    .map((face) => face.family + ' ' + face.weight)`),
+                [
+                    ...[300, 400, 500, 600, 700, 800].map((weight) => `Outfit ${weight}`),
+                    ...[300, 400, 500].map((weight) => `"DM Mono" ${weight}`),
+                ],
+            );
 
             const film = await page.evaluate(() => {
                 const scrub = document.querySelector<HTMLInputElement>('#scrub')!;
@@ -344,6 +355,33 @@ test('the Kenya film modules hold no motion, no outside URL and no unscoped rule
             assert.ok(film.lines > 1, `prompt is ${film.lines} line(s) tall`);
             assert.deepEqual(film.pending, [true, false]);
             assert.deepEqual(film.approved, [false, true]);
+
+            // Two tab cues, to Activity at 5 s and back at 10 s: each holds
+            // only from its own time, whichever order the frames come in.
+            const views = (await page.evaluate(`(() => {
+                stage.replaceChildren();
+                const tabs = DFO.mount(kit, {}).cue([
+                    { v: 'view-activity', from: 'view-chat', kind: 'tab', at: 5 },
+                    { v: 'view-chat', from: 'view-activity', kind: 'tab', at: 10 },
+                ]);
+                const active = kit.json('manifest.json').classes.viewActive;
+                const shown = (t) => {
+                    tabs.render(t);
+                    return ['view-chat', 'view-activity'].find((v) =>
+                        document.querySelector('[data-v="' + v + '"]').classList.contains(active),
+                    );
+                };
+                return [12, 0, 7, 12, 7, 0].map(shown);
+            })()`)) as string[];
+
+            assert.deepEqual(views, [
+                'view-chat',
+                'view-chat',
+                'view-activity',
+                'view-chat',
+                'view-activity',
+                'view-chat',
+            ]);
         } finally {
             await page.close();
         }

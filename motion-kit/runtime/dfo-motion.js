@@ -178,11 +178,12 @@ window.DFO = (() => {
     };
 
     // Prepares one cue against the mounted fragment; returns `apply(t)`, the
-    // elements whose style it writes (`touches`), whether it sets attributes
-    // or classes instead (`attrs`) and the time it ends. Every
-    // frame starts from those elements' own inline styles (`mount` restores
-    // them), so a cue writes only what it shows at t, and cues apply in list
-    // order: a later cue on the same element wins.
+    // attributes it writes as [element, name] pairs (`touches`: `style` for
+    // most, `class` or the state's own for `tab` and `state`, which set
+    // `attrs`) and the time it ends. Every frame starts from those
+    // attributes' own values (`mount` restores them), so a cue writes only
+    // from its own time, and cues apply in list order: a later cue on the
+    // same element wins.
     const prepare = (kit, studio, cue) => {
         const { seg, eo, ei, eob, lerp } = kit;
 
@@ -209,7 +210,7 @@ window.DFO = (() => {
                 ),
             );
             return {
-                touches: runs.map((r) => r.el),
+                touches: runs.map((r) => [r.el, 'style']),
                 end: cue.at + end,
                 apply(t) {
                     for (const { el, play } of runs) {
@@ -225,21 +226,19 @@ window.DFO = (() => {
             // app does when the plan is approved (the prompt's placeholder).
             const attrs = studio.manifest.states?.[cue.to]?.attrs ?? {};
             const changes = Object.entries(attrs).flatMap(([hook, values]) =>
-                Object.entries(values).map(([name, value]) => {
-                    const el = studio.q(hook);
-                    return { el, name, value, was: el.getAttribute(name) };
-                }),
+                Object.entries(values).map(([name, value]) => ({
+                    el: studio.q(hook),
+                    name,
+                    value,
+                })),
             );
             return {
-                touches: [],
+                touches: changes.map((c) => [c.el, c.name]),
                 attrs: true,
                 end: cue.at,
                 apply(t) {
-                    for (const c of changes) {
-                        const v = t >= cue.at ? c.value : c.was;
-                        if (v == null) c.el.removeAttribute(c.name);
-                        else c.el.setAttribute(c.name, v);
-                    }
+                    if (t < cue.at) return;
+                    for (const c of changes) c.el.setAttribute(c.name, c.value);
                 },
             };
         }
@@ -247,7 +246,7 @@ window.DFO = (() => {
         const el = studio.q(cue.v, cue.sel);
         const s = el.style;
         const dur = cue.dur ?? 0.4;
-        const only = (end, apply) => ({ touches: [el], end, apply });
+        const only = (end, apply) => ({ touches: [[el, 'style']], end, apply });
         // An entering element takes no room before its time.
         const before = (t) => {
             if (t >= cue.at) return false;
@@ -297,7 +296,12 @@ window.DFO = (() => {
                 const points = cue.points ? studio.q(cue.points) : null;
                 const end = cue.at + (cue.dur ?? 1.6);
                 return {
-                    touches: points ? [el, points] : [el],
+                    touches: points
+                        ? [
+                              [el, 'style'],
+                              [points, 'style'],
+                          ]
+                        : [[el, 'style']],
                     end,
                     apply(t) {
                         if (before(t)) return;
@@ -355,13 +359,16 @@ window.DFO = (() => {
                 if (!active) throw new Error('DFO: a tab cue needs the Studio, not a page capture');
                 const from = studio.q(cue.from);
                 return {
-                    touches: [],
+                    touches: [
+                        [el, 'class'],
+                        [from, 'class'],
+                    ],
                     attrs: true,
                     end: cue.at,
                     apply(t) {
-                        const on = t >= cue.at;
-                        el.classList.toggle(active, on);
-                        from.classList.toggle(active, !on);
+                        if (t < cue.at) return;
+                        el.classList.add(active);
+                        from.classList.remove(active);
                     },
                 };
             }
@@ -447,11 +454,16 @@ window.DFO = (() => {
 
         const cues = [];
         let keys = [];
-        // Each element a cue styles, with its own inline style, which every
-        // frame starts from so no cue's value outlives its time.
+        // Each attribute a cue writes, by element and name, with its own value,
+        // which every frame starts from so no cue's value outlives its time.
         const own = new Map();
         const apply = (t) => {
-            for (const [el, style] of own) el.setAttribute('style', style);
+            for (const [el, values] of own) {
+                for (const [name, value] of values) {
+                    if (value == null) el.removeAttribute(name);
+                    else el.setAttribute(name, value);
+                }
+            }
             // Attributes and classes first (`state` and `tab`): a cue that
             // measures, such as the prompt's height under its placeholder,
             // must see this frame's.
@@ -539,8 +551,10 @@ window.DFO = (() => {
             cue(list) {
                 for (const c of list.filter(here)) {
                     const prepared = prepare(kit, studio, c);
-                    for (const el of prepared.touches) {
-                        if (!own.has(el)) own.set(el, el.getAttribute('style') ?? '');
+                    for (const [el, name] of prepared.touches) {
+                        if (!own.has(el)) own.set(el, new Map());
+                        const values = own.get(el);
+                        if (!values.has(name)) values.set(name, el.getAttribute(name));
                     }
                     cues.push(prepared);
                 }

@@ -12,15 +12,50 @@
  * paused at 4.2 s, and `?state=typed` opens a captured page's state. A
  * capture whose camera keys name states (`in`) also plays as the film,
  * switching to each state at its first key, as the film's scenes would.
+ *
+ * The stylesheet carries no `@font-face`, since a Motion film loads its
+ * fonts itself, so the page embeds Outfit and DM Mono from `@fontsource`
+ * and mounts the film once every face has loaded: text then wraps, and the
+ * camera measures, as in the film.
  */
 
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import type { Module } from './build.ts';
+
+// The faces the app's stylesheet uses, as the film's fonts load them.
+const FACES = [
+    ...[300, 400, 500, 600, 700, 800].map((weight) => ({
+        family: 'Outfit',
+        file: `@fontsource/outfit/files/outfit-latin-${weight}-normal.woff2`,
+        weight,
+    })),
+    ...[300, 400, 500].map((weight) => ({
+        family: 'DM Mono',
+        file: `@fontsource/dm-mono/files/dm-mono-latin-${weight}-normal.woff2`,
+        weight,
+    })),
+];
+
+const MODULES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../node_modules');
+
+const faces = () =>
+    Promise.all(
+        FACES.map(async ({ family, file, weight }) => ({
+            family,
+            weight,
+            data: (await readFile(join(MODULES_DIR, file))).toString('base64'),
+        })),
+    );
 
 // Escapes `<` so no module text can close the inline script.
 const inline = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 
-export const previewHtml = (title: string, modules: Module[]): string => {
+export const previewHtml = async (title: string, modules: Module[]): Promise<string> => {
     const texts = Object.fromEntries(modules.map((file) => [file.name, file.text]));
+    const fonts = await faces();
 
     return `<!doctype html>
 <html lang="en">
@@ -44,6 +79,7 @@ export const previewHtml = (title: string, modules: Module[]): string => {
 <div id="stage"></div>
 <script>
 const MODULES = ${inline(texts)};
+const FONTS = ${inline(fonts)};
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const stage = document.getElementById('stage');
 const kit = {
@@ -171,7 +207,18 @@ play.onclick = () => {
 };
 addEventListener('resize', fit);
 fit();
-mount(typeof html === 'string' ? undefined : select.value);
+Promise.all(
+    FONTS.map(async ({ family, weight, data }) => {
+        const face = new FontFace(family, 'url(data:font/woff2;base64,' + data + ')', {
+            weight: String(weight),
+        });
+        document.fonts.add(await face.load());
+    }),
+)
+    .then(() => mount(typeof html === 'string' ? undefined : select.value))
+    .catch((error) => {
+        document.getElementById('error').textContent = error.stack ?? String(error);
+    });
 </script>
 </html>
 `;

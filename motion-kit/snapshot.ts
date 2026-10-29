@@ -97,8 +97,9 @@ export function matchSelectors(selectors: string[]): boolean[] {
  *   `data-mk-focus`, `data-mk-focus-visible`, `data-mk-focus-within` and
  *   `data-mk-active`, which the stylesheet's dynamic pseudo-classes become;
  * - a scrolled element's children (the body's, for the window) are
- *   translated by the scroll offset, and a fixed or stuck element is moved
- *   back to where it shows.
+ *   translated by the scroll offset, past any element that holds a fixed
+ *   one, so fixed elements stay where they show, and a stuck element is
+ *   moved back to where it shows.
  *
  * Also returns the text of every stylesheet in the page.
  */
@@ -208,26 +209,45 @@ export async function snapshotPage({
 
         shift.set(element, { x: current.x + x, y: current.y + y });
     };
-    // What the scroll translation moved each live element's descendants by.
-    const scrolled = new Map<Element, { x: number; y: number }>();
     const scrollOf = (element: Element) =>
         element === document.body
             ? { x: scroller.scrollLeft, y: scroller.scrollTop }
             : { x: element.scrollLeft, y: element.scrollTop };
+    // A translated ancestor would become a fixed element's containing block
+    // and carry it away from where it shows, so the scroll moves an element
+    // that holds a fixed one by moving its other children instead.
+    const fixed = live.filter((_, index) => computed[index]!.position === 'fixed');
+    const scrollWith = (element: Element, x: number, y: number) => {
+        const index = live.indexOf(element);
+
+        if (computed[index]!.position === 'fixed') {
+            return;
+        }
+
+        if (!fixed.some((other) => element.contains(other))) {
+            addShift(element, x, y);
+
+            return;
+        }
+
+        if (
+            [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent?.trim())
+        ) {
+            drop(
+                `${copies[index]!.localName}: text beside a scrolled element's moved children stays unscrolled`,
+            );
+        }
+
+        for (const child of element.children) {
+            scrollWith(child, x, y);
+        }
+    };
 
     live.forEach((element, index) => {
         const { x, y } = scrollOf(element);
 
         if (!x && !y) {
             return;
-        }
-
-        scrolled.set(element, { x, y });
-
-        for (const child of element.children) {
-            if (getComputedStyle(child).position !== 'fixed') {
-                addShift(child, -x, -y);
-            }
         }
 
         if (
@@ -237,20 +257,9 @@ export async function snapshotPage({
                 `${copies[index]!.localName}: text beside the children of a scrolled element stays unscrolled`,
             );
         }
-    });
 
-    // A fixed element sits where it shows whatever its ancestors were moved by.
-    live.forEach((element, index) => {
-        if (computed[index]!.position !== 'fixed') {
-            return;
-        }
-
-        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-            const moved = shift.get(parent);
-
-            if (moved) {
-                addShift(element, -moved.x, -moved.y);
-            }
+        for (const child of element.children) {
+            scrollWith(child, -x, -y);
         }
     });
 
