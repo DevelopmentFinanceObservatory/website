@@ -1,15 +1,14 @@
 'use client';
 
-import type { ScriptableContext } from 'chart.js';
 import classNames from 'classnames';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 
+import { barDatasets, legendShown, lineDatasets } from '../chart/chartDatasets';
 import {
     buildChartOptions,
     checkerPattern,
     type RowsLayout,
-    seriesPair,
     seriesVars,
 } from '../chart/chartSetup';
 import cardStyles from './Card.module.scss';
@@ -21,14 +20,7 @@ import { cardEdges, type Fit, useFittedRows, useFontsReady } from './useFittedRo
 
 import type { ChartWidget } from '@/lib/chat/widgets';
 import { chartAlt } from '@/lib/studio/chartAlt';
-import {
-    BAR_THICKNESS,
-    CARD_BORDERS,
-    fittedRows,
-    plotHeight,
-    plotShape,
-} from '@/lib/studio/chartFit';
-import { lonePoints } from '@/lib/studio/linePoints';
+import { CARD_BORDERS, fittedRows, plotHeight, plotShape } from '@/lib/studio/chartFit';
 import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { ThemeDerived } from '@/lib/studio/theme';
 
@@ -164,90 +156,33 @@ const ChartCard = ({
             }),
         [widget, scale, theme, rows, fontsReady, onLayout],
     );
-    // A ranking's bars keep one thickness under their names.
-    const barCap = (rows ? BAR_THICKNESS : 28) * scale;
     const barData = useMemo(
         () => ({
             labels: widget.categories,
-            datasets: widget.series.map((s, si) => ({
-                label: s.label,
-                data: s.values,
-                hidden: hiddenSeries.includes(si),
-                // A transposed comparison runs as one series, so every bar
-                // takes the accent: colour would otherwise repeat the name
-                // the category axis already carries.
-                backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
-                // Hover resolves the weave into the solid base color.
-                hoverBackgroundColor: seriesPair(theme.series, si)[0],
-                // The cap is a fixed fraction of the bar's width — clearly
-                // rounded ("half-square") at every thickness, never a full
-                // bulb. Bar elements aren't measured when options resolve,
-                // so the width is derived from the scale: the category slot
-                // shared by the visible datasets, with Chart.js's default
-                // 0.8/0.9 category/bar percentages.
-                borderRadius: (ctx: ScriptableContext<'bar'>) => {
-                    const { chart } = ctx;
-                    // The category slot is measured across the index axis,
-                    // which is y once the chart is transposed.
-                    const indexScale = chart.scales[widget.horizontal ? 'y' : 'x'];
-                    const visible = chart.data.datasets.filter((_, i) =>
-                        chart.isDatasetVisible(i),
-                    ).length;
-                    const categories = chart.data.labels?.length || 1;
-
-                    if (!indexScale || !visible) {
-                        return 4 * scale;
-                    }
-
-                    const span = widget.horizontal ? indexScale.height : indexScale.width;
-                    const slot = (span / categories) * 0.8;
-                    const width = Math.min((slot / visible) * 0.9, barCap);
-
-                    return Math.max(1, width / 3);
-                },
-                borderSkipped: (widget.horizontal ? 'left' : 'bottom') as 'left' | 'bottom',
-                maxBarThickness: barCap,
-            })),
+            datasets: barDatasets({
+                widget,
+                scale,
+                theme,
+                hidden: hiddenSeries,
+                fill: (pair) => checkerPattern(pair, scale),
+                rows,
+            }),
         }),
-        [widget, scale, hiddenSeries, theme, barCap],
+        [widget, scale, hiddenSeries, theme, rows],
     );
-    const lineData = useMemo(() => {
-        const dotRadius = 3 * scale;
-        const hoverRadius = 3.5 * scale;
-        const borderWidth = 2.5 * scale;
-        // Chart.js resolves a hovered point's ring from pointHoverBorderWidth,
-        // then hoverBorderWidth, whose point default is 1.
-        const hoverBorderWidth = 1;
-        // Chart.js sizes the clip margin from the first and last points only,
-        // so an interior dot on an axis limit would be cut; clip to the outer
-        // edge of the lone dot or of the hover disc, whichever is larger.
-        const clip = Math.max(dotRadius + borderWidth / 2, hoverRadius + hoverBorderWidth / 2);
-
-        return {
+    const lineData = useMemo(
+        () => ({
             labels: widget.categories,
-            datasets: widget.series.map((s, si) => ({
-                label: s.label,
-                data: s.values,
-                hidden: hiddenSeries.includes(si),
-                borderColor: seriesPair(theme.series, si)[0],
-                // A missing value breaks the line, so a value with a gap on
-                // both sides has no segment. It gets a dot, which Chart.js
-                // fills from the dataset colours below, like the hover disc.
-                pointRadius: lonePoints(s.values).map((lone) => (lone ? dotRadius : 0)),
-                // The point fill (hover disc and lone dots): the checkered
-                // weave of the bars. The tooltip swatch comes from seriesPalette.
-                backgroundColor: () => checkerPattern(seriesPair(theme.series, si), scale),
-                borderWidth,
-                // Round joins keep a sharp dip or peak at an axis limit within
-                // half the line width, inside the clip margin.
-                borderJoinStyle: 'round' as const,
-                pointHoverRadius: hoverRadius,
-                pointHoverBorderWidth: hoverBorderWidth,
-                pointHitRadius: 8 * scale,
-                clip,
-            })),
-        };
-    }, [widget, scale, hiddenSeries, theme]);
+            datasets: lineDatasets({
+                widget,
+                scale,
+                theme,
+                hidden: hiddenSeries,
+                fill: (pair) => checkerPattern(pair, scale),
+            }),
+        }),
+        [widget, scale, hiddenSeries, theme],
+    );
 
     // What a screen reader is told the canvas shows: Chart.js marks it
     // role="img" and leaves it unnamed, and the card's title is a separate
@@ -259,11 +194,7 @@ const ChartCard = ({
     // away (QA-57).
     const names = useMemo(() => legendLabels(widget.series.map((s) => s.label)), [widget]);
 
-    // A legend tells series apart, so a chart of one series has none (the
-    // title names it), and neither has a transposed comparison, whose one
-    // series is the period already in the title.
-    const showLegend =
-        widget.series.length > 1 && widget.series.some((s) => s.label) && !widget.horizontal;
+    const showLegend = legendShown(widget);
 
     return (
         <article ref={cardRef} className={cardStyles.card}>
