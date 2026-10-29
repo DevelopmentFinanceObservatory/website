@@ -40,6 +40,15 @@ export const sharesRefusal = (error: SharesError): Response => {
         });
     }
 
+    if (error.code === 'account_deleting') {
+        return problem({
+            status: 403,
+            code: 'account_deleting',
+            detail: 'This account is being deleted, so it cannot make shares.',
+            retryable: false,
+        });
+    }
+
     console.error('share: dfo-apis refused the share', { code: error.code, status: error.status });
 
     if (isRetryable(error)) {

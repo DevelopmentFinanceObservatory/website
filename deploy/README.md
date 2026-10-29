@@ -136,6 +136,28 @@ A domain in `webmail_domain` is `Personal email` whatever its count. The table h
 
 A read with no rows fails the run and leaves the table as it was while `webmail_domain` is empty, since the view then holds no rows and webmail domains would show by name, and while the user table holds no account, which is a wrong database or an emptied table. When accounts exist and every one is from today, the run replaces the table with no rows, so a deleted account and the organisation it named leave the export. The view `account_daily_source` tells the cases apart, and the Job reads it in the same transaction as `account_daily`.
 
+## Shares left for cleanup
+
+Each signed-in owner's share in dfo-apis has its write token in `share_token`. When the website cannot take such a share down, it writes the share id, the owner, the token and dfo-apis' refusal code to `share_cleanup` and logs `share_cleanup_recorded` with the share id at error level. Two paths write a row: an account deletion whose take-down dfo-apis refuses with a `write_token_*` code (`takeDownUserShares` in `src/lib/chat/apisShares.ts`), and a new share whose token could not be stored and whose take-down failed too (`createOwnedShare`). The share stays public until an operator takes it down. The rows outlive the user. `share_cleanup_recorded` is the alert hook, so alert on that text and keep it unchanged in the code. A row the website could not write is logged as `share_cleanup_not_recorded`, with the share id, and needs the same take-down.
+
+To drain the table, list its rows against the website database:
+
+```sql
+select share_id, user_id, reason, recorded_at from share_cleanup order by recorded_at;
+```
+
+For each row, take the share down in dfo-apis with its maintenance command:
+
+```bash
+datasets-maintenance take-down-share <share_id>
+```
+
+Then delete the row:
+
+```sql
+delete from share_cleanup where share_id = '<share_id>';
+```
+
 ## GitHub vars and secrets
 
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the

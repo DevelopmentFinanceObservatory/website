@@ -184,8 +184,9 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
 // When each slot of a snapshot began to show the frame it serves, by slot:
 // the newest entry of the share's history with that slot and frame. The
 // history is read a page at a time until every framed slot has its entry
-// or the history ends. A slot is left out when no entry matches, or when a
-// page cannot be read (the page deadline included) before its entry turns up.
+// or the history ends, or names a page it has already given. A slot is left
+// out when no entry matches, or when a page cannot be read (the page deadline
+// included) before its entry turns up.
 const servedSince = async (
     shares: SharesBackend,
     record: ShareRecord,
@@ -194,6 +195,7 @@ const servedSince = async (
         card?.frame ? [{ slot, frame: card.frame }] : [],
     );
     const since = new Map<number, string>();
+    const seen = new Set<string>();
     let before: string | null = null;
 
     while (pending.length) {
@@ -221,10 +223,11 @@ const servedSince = async (
             }
         }
 
-        if (page.next === null) {
+        if (page.next === null || seen.has(page.next)) {
             break;
         }
 
+        seen.add(page.next);
         before = page.next;
     }
 

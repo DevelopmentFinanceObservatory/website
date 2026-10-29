@@ -169,7 +169,7 @@ test("a snapshot's slotted cards are drawn on the server on the frame each slot 
     // The slot card read, never the revision's own read, with no credential,
     // and one read of the share's history.
     assert.deepEqual(calls.map(({ path }) => path).toSorted(), [
-        '/api/presentation/shares/Ab3dEf7h/history?limit=500',
+        '/api/presentation/shares/Ab3dEf7h/history?limit=100',
         '/api/presentation/shares/Ab3dEf7h/slots/1',
     ]);
     assert.ok(calls.every(({ headers }) => headers.get('x-dfo-principal') === null));
@@ -217,8 +217,27 @@ test("a snapshot card's citation date is when its slot began to show the frame i
     assert.deepEqual(
         paged.calls.flatMap(({ path }) => (path.includes('/history') ? [path] : [])),
         [
-            '/api/presentation/shares/Ab3dEf7h/history?limit=500',
+            '/api/presentation/shares/Ab3dEf7h/history?limit=100',
             '/api/presentation/shares/Ab3dEf7h/history?limit=500&before=p2',
+        ],
+    );
+
+    // Cursors that come round again end the read at the first repeat.
+    const cycling = depsOf(record, DATASET_FRAME, undefined, (url) =>
+        Response.json({
+            id: record.id,
+            served: [history[0]],
+            next: url.searchParams.get('before') === 'p2' ? 'p3' : 'p2',
+        }),
+    );
+
+    assert.deepEqual((await sharedViewOfRecord(cycling.deps, record)).servedAt, {});
+    assert.deepEqual(
+        cycling.calls.flatMap(({ path }) => (path.includes('/history') ? [path] : [])),
+        [
+            '/api/presentation/shares/Ab3dEf7h/history?limit=100',
+            '/api/presentation/shares/Ab3dEf7h/history?limit=500&before=p2',
+            '/api/presentation/shares/Ab3dEf7h/history?limit=500&before=p3',
         ],
     );
 

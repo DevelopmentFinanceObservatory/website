@@ -12,6 +12,8 @@ import {
     fenceShareTokens,
     putShareToken,
     readShareToken,
+    refreshFence,
+    shareTokensFenced,
     unfenceShareTokens,
 } from '../../src/lib/chat/shareTokens.ts';
 import { applyMigrations } from '../apply-migrations.ts';
@@ -97,7 +99,21 @@ test('share write tokens', async (t) => {
         true,
     );
     await deleteShareToken(db, { ...other, shareId: 'Zz9yXw8v' });
-    await unfenceShareTokens(db, 'other');
+
+    // An attempt lifts only its own fence, and sets afresh only its own.
+    const first = await fenceShareTokens(db, 'other');
+    const second = await fenceShareTokens(db, 'other');
+
+    assert.notEqual(first, second);
+    assert.equal(await refreshFence(db, { userId: 'other', fence: first }), null);
+    await unfenceShareTokens(db, { userId: 'other', fence: first });
+    assert.equal(await shareTokensFenced(db, 'other'), true);
+
+    const refreshed = await refreshFence(db, { userId: 'other', fence: second });
+
+    assert.ok(refreshed !== null && refreshed !== second);
+    await unfenceShareTokens(db, { userId: 'other', fence: refreshed });
+    assert.equal(await shareTokensFenced(db, 'other'), false);
 
     await database.runtimePool().query(`delete from "user" where id = 'owner'`);
     assert.equal(
@@ -165,8 +181,21 @@ test("the token import stores each owner's token once, however often it runs", a
     assert.deepEqual(await importShareTokens(drizzle(pool), lines), {
         stored: 2,
         ownerGone: ['Gone0001'],
+        ownerDeleting: [],
         heldByOther: [],
     });
+
+    // An owner whose account is being deleted stores no token, and is named
+    // apart from a token another user holds.
+    const fence = await fenceShareTokens(drizzle(pool), 'other');
+
+    assert.deepEqual(
+        await importShareTokens(drizzle(pool), [
+            { id: 'New00002', owner: 'other', write_token: 'shw_e' },
+        ]),
+        { stored: 0, ownerGone: [], ownerDeleting: ['New00002'], heldByOther: [] },
+    );
+    await unfenceShareTokens(drizzle(pool), { userId: 'other', fence });
     assert.deepEqual(await tokens(), stored);
 
     // A token another user holds is left as it was and fails the run.

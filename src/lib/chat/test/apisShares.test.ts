@@ -87,6 +87,11 @@ const CREATE_BODY: CreateShareBody = {
     payload: null,
 };
 
+// The fence read of an account no deletion holds: its user row comes back.
+const unfencedSelect = () => ({
+    from: () => ({ where: () => ({ limit: async () => [{ id: 'owner' }] }) }),
+});
+
 // dfo-apis' form of a client-minted write token.
 const WRITE_TOKEN = /^shw_[A-Za-z0-9_-]{22}$/;
 
@@ -169,8 +174,9 @@ test('every call runs under its own deadline, so a timed-out create is tried aga
 });
 
 test('a share whose token cannot be kept is taken down with that token, and a retryable failure thrown', async () => {
-    // Only the token write is reached: it fails, or another user's row
-    // holds the id or the account is being deleted, so no row comes back.
+    // The account holds no fence when the create starts, then only the
+    // token write is reached: it fails, or another user's row holds the id
+    // or the account is being deleted, so no row comes back.
     const writes: [string, () => unknown][] = [
         [
             'write fails',
@@ -192,7 +198,7 @@ test('a share whose token cannot be kept is taken down with that token, and a re
         const { backend, calls } = backendOf((call) =>
             call.method === 'DELETE' ? new Response(null, { status: 204 }) : CREATED(call),
         );
-        const db = { insert } as unknown as ShareTokenDb;
+        const db = { select: unfencedSelect, insert } as unknown as ShareTokenDb;
 
         await assert.rejects(createOwnedShare({ db, backend }, 'owner', CREATE_BODY), thrown, name);
 
@@ -206,6 +212,34 @@ test('a share whose token cannot be kept is taken down with that token, and a re
             name,
         );
     }
+});
+
+test('a cleanup row that cannot be written keeps the retryable token_not_kept', async () => {
+    const { backend } = backendOf((call) =>
+        call.method === 'DELETE'
+            ? Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 })
+            : CREATED(call),
+    );
+    let inserts = 0;
+    // The token write stores nothing, then the cleanup row's write fails.
+    const insert = () =>
+        ++inserts === 1
+            ? { select: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }) }
+            : {
+                  values: () => ({
+                      onConflictDoNothing: async () => {
+                          throw new Error('share_cleanup write failed');
+                      },
+                  }),
+              };
+    const db = { select: unfencedSelect, insert } as unknown as ShareTokenDb;
+
+    await assert.rejects(createOwnedShare({ db, backend }, 'owner', CREATE_BODY), {
+        name: 'SharesError',
+        code: 'token_not_kept',
+        retryable: true,
+    });
+    assert.equal(inserts, 2);
 });
 
 test('a create is sent at most twice, and a refusal of the request or a spent allowance once', async () => {

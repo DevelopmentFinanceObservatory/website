@@ -4,7 +4,7 @@ import test from 'node:test';
 import { SharesError } from '../apisShares.ts';
 import { sharesReadFailure, sharesRefusal } from '../shareRefusal.ts';
 
-test("dfo-apis' refusals of a create become the site's own codes", async () => {
+test("refusals of a create become the site's own codes", async () => {
     const rows: [SharesError, number, string, boolean][] = [
         [new SharesError('payload_too_large', { status: 413 }), 413, 'payload_too_large', false],
         [
@@ -23,6 +23,7 @@ test("dfo-apis' refusals of a create become the site's own codes", async () => {
         [new SharesError('request_invalid', { status: 400 }), 422, 'share_refused', false],
         [new SharesError('frame_unavailable', { status: 404 }), 422, 'share_refused', false],
         [new SharesError('internal_error', { status: 500 }), 502, 'share_refused', false],
+        [new SharesError('account_deleting', { status: 409 }), 403, 'account_deleting', false],
     ];
 
     for (const [error, status, code, retryable] of rows) {

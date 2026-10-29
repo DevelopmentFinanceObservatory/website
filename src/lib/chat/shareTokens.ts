@@ -13,12 +13,25 @@ import { shareCleanup, shareToken, user } from '../../../db/schema.ts';
 
 export type ShareTokenDb = Pick<NodePgDatabase, 'select' | 'insert' | 'update' | 'delete'>;
 
-// How long a deletion's fence holds. Better Auth deletes the user row after
-// its before-delete hook with no hook after a failed delete, so a fence the
-// deletion left behind would otherwise stop the account sharing for good. A
-// deletion request finishes well inside this window, and each attempt sets
-// the fence afresh.
+// How long a fence holds after its deletion attempt last set it. A running
+// attempt sets it again before each take-down, which takes at most 35
+// seconds, so its fence does not lapse. The window ends a fence an attempt
+// left behind: Better Auth deletes the user row after its before-delete hook
+// with no hook after a failed delete, and a request can die mid-loop, so
+// such a fence would otherwise stop the account sharing for good.
 const FENCE_HOLDS = sql.raw(`interval '15 minutes'`);
+
+// `userId`'s row, when no deletion attempt holds a fence on it.
+const unfenced = (userId: string) =>
+    and(
+        eq(user.id, userId),
+        or(isNull(user.deletingAt), lt(user.deletingAt, sql`now() - ${FENCE_HOLDS}`)),
+    );
+
+/** One deletion attempt's fence: the `deleting_at` it set, as Postgres
+ *  prints it, so it compares equal to the stored value to the microsecond.
+ *  Null when the user row is gone. */
+export type Fence = string | null;
 
 /**
  * Store `writeToken` as `userId`'s token for `shareId`, replacing the token
@@ -47,15 +60,7 @@ export const putShareToken = async (
                     createdAt: sql<Date>`now()`.as('created_at'),
                 })
                 .from(user)
-                .where(
-                    and(
-                        eq(user.id, userId),
-                        or(
-                            isNull(user.deletingAt),
-                            lt(user.deletingAt, sql`now() - ${FENCE_HOLDS}`),
-                        ),
-                    ),
-                )
+                .where(unfenced(userId))
                 .for('share'),
         )
         .onConflictDoUpdate({
@@ -107,20 +112,62 @@ export const deleteShareToken = async (
         .where(and(eq(shareToken.shareId, shareId), eq(shareToken.userId, userId)));
 };
 
-/** Mark `userId`'s account as being deleted, after which no token is
- *  stored for it (`putShareToken`). Commits on its own, before the list of
- *  tokens to take down is read. */
-export const fenceShareTokens = async (db: ShareTokenDb, userId: string): Promise<void> => {
-    await db
-        .update(user)
-        .set({ deletingAt: sql`now()` })
-        .where(eq(user.id, userId));
+/** Whether no token can be stored for `userId` (`putShareToken`): a
+ *  deletion attempt holds a fence on the account, or the account is gone. */
+export const shareTokensFenced = async (db: ShareTokenDb, userId: string): Promise<boolean> => {
+    const [row] = await db.select({ id: user.id }).from(user).where(unfenced(userId)).limit(1);
+
+    return row === undefined;
 };
 
-/** Lift the fence from an account whose deletion stopped, so its user can
- *  share again. */
-export const unfenceShareTokens = async (db: ShareTokenDb, userId: string): Promise<void> => {
-    await db.update(user).set({ deletingAt: null }).where(eq(user.id, userId));
+/** Fence `userId`'s account for a deletion attempt, after which no token is
+ *  stored for it (`putShareToken`). Commits on its own, before the list of
+ *  tokens to take down is read. Returns the attempt's fence, which replaces
+ *  any other attempt's. */
+export const fenceShareTokens = async (db: ShareTokenDb, userId: string): Promise<Fence> => {
+    const [row] = await db
+        .update(user)
+        .set({ deletingAt: sql`now()` })
+        .where(eq(user.id, userId))
+        .returning({ fence: sql<string>`${user.deletingAt}::text` });
+
+    return row?.fence ?? null;
+};
+
+/** Set `fence` afresh, so it does not lapse while its attempt runs. Null
+ *  when the account no longer holds `fence`: another attempt replaced it,
+ *  or lifted its own in its place. */
+export const refreshFence = async (
+    db: ShareTokenDb,
+    { userId, fence }: { userId: string; fence: Fence },
+): Promise<Fence> => {
+    if (fence === null) {
+        return null;
+    }
+
+    const [row] = await db
+        .update(user)
+        .set({ deletingAt: sql`now()` })
+        .where(and(eq(user.id, userId), eq(user.deletingAt, sql`${fence}::timestamptz`)))
+        .returning({ fence: sql<string>`${user.deletingAt}::text` });
+
+    return row?.fence ?? null;
+};
+
+/** Lift `fence` from an account whose deletion attempt stopped, so its user
+ *  can share again. A fence another attempt has set since stays. */
+export const unfenceShareTokens = async (
+    db: ShareTokenDb,
+    { userId, fence }: { userId: string; fence: Fence },
+): Promise<void> => {
+    if (fence === null) {
+        return;
+    }
+
+    await db
+        .update(user)
+        .set({ deletingAt: null })
+        .where(and(eq(user.id, userId), eq(user.deletingAt, sql`${fence}::timestamptz`)));
 };
 
 /** Keep `shareId` and its token for an operator to take down, with the

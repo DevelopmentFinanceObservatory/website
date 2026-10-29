@@ -20,7 +20,7 @@ type Call = { url: string; method: string; token: string | null };
 
 // A dfo-apis that answers each call with `answer`, recording the method,
 // path, and the write token it was sent.
-const backendOf = (answer: (call: Call) => Response) => {
+const backendOf = (answer: (call: Call) => Response | Promise<Response>) => {
     const calls: Call[] = [];
     const backend: SharesBackend = {
         base: 'https://apis.example',
@@ -359,6 +359,138 @@ test('owner writes to shares held in dfo-apis', async (t) => {
         },
     );
 
+    // Until `done` holds, for at most 5 seconds.
+    const until = async (done: () => boolean) => {
+        const deadline = Date.now() + 5_000;
+
+        while (!done()) {
+            assert.ok(Date.now() < deadline, 'timed out');
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+    };
+    // A dfo-apis that holds each take-down until `open` is called, then
+    // answers it with `answer`.
+    const gated = (answer: () => Response) => {
+        let open = () => {};
+        const opened = new Promise<void>((resolve) => {
+            open = resolve;
+        });
+
+        return { ...backendOf(async () => opened.then(answer)), open };
+    };
+    const fenceMicros = async () =>
+        BigInt(
+            (
+                await database.runtimePool().query<{ us: string }>(
+                    `select (extract(epoch from deleting_at) * 1e6)::bigint::text as us
+                         from "user" where id = 'owner'`,
+                )
+            ).rows[0]!.us,
+        );
+    const reset = async () => {
+        await database.runtimePool().query('delete from share_token');
+        await database.runtimePool().query('delete from share_cleanup');
+        await database
+            .runtimePool()
+            .query(`update "user" set deleting_at = null where id = 'owner'`);
+    };
+
+    await t.test(
+        'an attempt that fails leaves the fence a later attempt set, which then finishes',
+        async () => {
+            await reset();
+            await putShareToken(db, { shareId: 'Aaaaaaa1', userId: 'owner', writeToken: 'shw_1' });
+
+            const first = gated(() =>
+                Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
+            );
+            const firstRun = takeDownUserShares({ db, backend: first.backend }, 'owner');
+
+            await until(() => first.calls.length === 1);
+
+            const second = gated(() => new Response(null, { status: 204 }));
+            const secondRun = takeDownUserShares({ db, backend: second.backend }, 'owner');
+
+            await until(() => second.calls.length === 1);
+
+            const held = await fenceMicros();
+
+            first.open();
+            await assert.rejects(firstRun, { code: 'service_unavailable' });
+            assert.equal(await fenceMicros(), held);
+            assert.equal(
+                await putShareToken(db, {
+                    shareId: 'Aaaaaaa2',
+                    userId: 'owner',
+                    writeToken: 'shw_2',
+                }),
+                false,
+            );
+
+            second.open();
+            await secondRun;
+            assert.equal(await readShareToken(db, { shareId: 'Aaaaaaa1', userId: 'owner' }), null);
+        },
+    );
+
+    await t.test(
+        'an attempt sets its fence afresh before each take-down, and takes down a token stored meanwhile',
+        async () => {
+            await reset();
+
+            for (const shareId of ['Aaaaaaa1', 'Aaaaaaa2']) {
+                await putShareToken(db, { shareId, userId: 'owner', writeToken: `shw_${shareId}` });
+            }
+
+            const fences: bigint[] = [];
+            const { backend, calls } = backendOf(async ({ url }) => {
+                fences.push(await fenceMicros());
+
+                // A token that reached the table past the fence, as one would
+                // once a fence lapsed.
+                if (url.endsWith('Aaaaaaa1')) {
+                    await database.adminPool().query(
+                        `insert into share_token (share_id, user_id, write_token)
+                             values ('Aaaaaaa9', 'owner', 'shw_Aaaaaaa9')`,
+                    );
+                }
+
+                return new Response(null, { status: 204 });
+            });
+
+            await takeDownUserShares({ db, backend }, 'owner');
+            assert.deepEqual(
+                calls.map(({ url, token }) => [url, token]),
+                [
+                    ['/api/presentation/shares/Aaaaaaa1', 'shw_Aaaaaaa1'],
+                    ['/api/presentation/shares/Aaaaaaa2', 'shw_Aaaaaaa2'],
+                    ['/api/presentation/shares/Aaaaaaa9', 'shw_Aaaaaaa9'],
+                ],
+            );
+            assert.ok(fences[0]! < fences[1]! && fences[1]! < fences[2]!, String(fences));
+            assert.equal(
+                (await database.runtimePool().query('select 1 from share_token')).rowCount,
+                0,
+            );
+        },
+    );
+
+    await t.test('a fenced account makes no share and calls dfo-apis for none', async () => {
+        await reset();
+        await database
+            .runtimePool()
+            .query(`update "user" set deleting_at = now() where id = 'owner'`);
+
+        const { backend, calls } = backendOf(created);
+
+        await assert.rejects(createOwnedShare({ db, backend }, 'owner', body), {
+            name: 'SharesError',
+            code: 'account_deleting',
+            retryable: false,
+        });
+        assert.equal(calls.length, 0);
+    });
+
     await t.test(
         'a share made once the account is fenced keeps no token and is taken down, or goes to cleanup when that fails',
         async () => {
@@ -401,6 +533,12 @@ test('owner writes to shares held in dfo-apis', async (t) => {
                 Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
             );
 
+            // With the fence lifted, another user's row holds the id, and the
+            // take-down fails.
+            await database
+                .runtimePool()
+                .query(`update "user" set deleting_at = null where id = 'owner'`);
+            await putShareToken(db, { shareId: 'Ab3dEf7h', userId: 'other', writeToken: 'shw_x' });
             await assert.rejects(createOwnedShare({ db, backend }, 'owner', body), {
                 code: 'token_not_kept',
             });

@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { putShareToken } from '../src/lib/chat/shareTokens.ts';
+import { putShareToken, shareTokensFenced } from '../src/lib/chat/shareTokens.ts';
 import { user } from './schema.ts';
 
 /**
@@ -65,9 +65,15 @@ export const readTokenLines = (text: string): { lines: TokenLine[]; invalid: num
 };
 
 /** What an import came to: how many tokens it stored, the shares whose
- *  owner is no longer a website user, and the shares whose token another
+ *  owner is no longer a website user, the shares whose owner's account is
+ *  being deleted, which store no token, and the shares whose token another
  *  user holds, which are left as they were. */
-export type TokenImport = { stored: number; ownerGone: string[]; heldByOther: string[] };
+export type TokenImport = {
+    stored: number;
+    ownerGone: string[];
+    ownerDeleting: string[];
+    heldByOther: string[];
+};
 
 export const importShareTokens = async (
     db: Pick<NodePgDatabase, 'select' | 'insert' | 'update' | 'delete'>,
@@ -81,13 +87,15 @@ export const importShareTokens = async (
               ),
           )
         : new Set<string>();
-    const result: TokenImport = { stored: 0, ownerGone: [], heldByOther: [] };
+    const result: TokenImport = { stored: 0, ownerGone: [], ownerDeleting: [], heldByOther: [] };
 
     for (const { id, owner, write_token: writeToken } of lines) {
         if (!present.has(owner)) {
             result.ownerGone.push(id);
         } else if (await putShareToken(db, { shareId: id, userId: owner, writeToken })) {
             result.stored += 1;
+        } else if (await shareTokensFenced(db, owner)) {
+            result.ownerDeleting.push(id);
         } else {
             result.heldByOther.push(id);
         }

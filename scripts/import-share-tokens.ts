@@ -10,8 +10,9 @@
 // DATABASE_URL, or from the WEBSITE_DB_* Cloud SQL variables the runtime
 // uses. A run of the same file again changes nothing. A file with a line it
 // cannot read is refused whole, with each such line named on stderr, and
-// nothing is stored. A share whose owner is no longer a user is skipped, and
-// one whose token another user holds is left as it was and fails the run.
+// nothing is stored. A share whose owner is no longer a user is skipped. One
+// whose owner's account is being deleted stores no token, and one whose token
+// another user holds is left as it was; either fails the run.
 import fs from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 
@@ -52,10 +53,17 @@ const main = async (): Promise<void> => {
     const { pool, close } = await openPool();
 
     try {
-        const { stored, ownerGone, heldByOther } = await importShareTokens(drizzle(pool), lines);
+        const { stored, ownerGone, ownerDeleting, heldByOther } = await importShareTokens(
+            drizzle(pool),
+            lines,
+        );
 
         for (const id of ownerGone) {
             console.error(`share ${id}: its owner is no longer a user; skipped`);
+        }
+
+        for (const id of ownerDeleting) {
+            console.error(`share ${id}: its owner's account is being deleted; not stored`);
         }
 
         for (const id of heldByOther) {
@@ -63,10 +71,10 @@ const main = async (): Promise<void> => {
         }
 
         console.error(
-            `${stored} tokens stored, ${ownerGone.length} skipped, ${heldByOther.length} held by another user`,
+            `${stored} tokens stored, ${ownerGone.length} skipped, ${ownerDeleting.length} owners being deleted, ${heldByOther.length} held by another user`,
         );
 
-        if (heldByOther.length) {
+        if (ownerDeleting.length || heldByOther.length) {
             process.exitCode = 1;
         }
     } finally {
