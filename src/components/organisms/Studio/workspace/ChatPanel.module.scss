@@ -586,12 +586,18 @@
 // long clarify) outgrows the panel: that card scrolls inside and the input
 // never leaves the screen. Everything else in it keeps its natural height
 // (flex items don't shrink below their content unless they opt in with
-// min-height: 0, which only the plan card and the picker do; the plan's
-// approve bar stays at full height).
+// min-height: 0, which only the picker does; the plan card shrinks to a
+// floor). On a screen too short for that floor, the foot itself scrolls, so
+// every control stays reachable and focus brings it into view.
 .chatFoot {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow-y: auto;
+
+    // Focus scrolls a textarea only as far as its caret line; this brings
+    // the rest of the input in with it.
+    scroll-padding-bottom: rem(24);
 }
 
 // The panel body: Chat (transcript + input) and Activity stacked in ONE grid
