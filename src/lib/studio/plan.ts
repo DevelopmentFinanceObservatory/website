@@ -5,6 +5,7 @@
  * the approved plan the answer keeps.
  */
 
+import type { Clarify } from './clarify';
 import type { StreamRefusal } from './studioClient';
 import type {
     InterruptResponse,
@@ -723,6 +724,48 @@ export const switchEnded = <TState extends { plan: PlanState | null }>(
     waiting: PlanState,
     ended: PlanState,
 ): TState => (state.plan === waiting ? { ...state, plan: ended } : state);
+
+/**
+ * The pause the turn waits on: its interrupt id, with the question
+ * (`clarify`) or the plan it asks the user to answer. `switch` is the
+ * waiting plan of a switch whose replan asked the question, so answering it
+ * resumes the switch.
+ */
+export type Pause = {
+    interruptId: string;
+    clarify?: Clarify;
+    plan?: PlanState;
+    switch?: PlanState;
+};
+
+/** The pause a planner question opens. A question asked while a switch
+ *  waits (the pending plan is switching) carries the waiting plan. */
+export const questionPause = (
+    clarify: Clarify,
+    pending: Pause | null,
+): Pause & { clarify: Clarify } => {
+    const waiting = pending?.plan?.switching ? pending.plan : null;
+
+    return { interruptId: clarify.interruptId, clarify, ...(waiting && { switch: waiting }) };
+};
+
+/** The conversation while a question waits: the question takes the place
+ *  of any plan card, including a switch's waiting card. */
+export const withQuestion = <TState extends { plan: PlanState | null; clarify: Clarify | null }>(
+    state: TState,
+    clarify: Clarify,
+): TState => ({ ...state, clarify, plan: null });
+
+/**
+ * What stays pending once the user answers `pause`: for a question a
+ * switch's replan asked, the switch's waiting plan, which the card shows
+ * again, so a fresh plan, its `switch_failed`, a Stop, or another question
+ * still read as the switch's. The card is a new object, so the end of the
+ * stream that asked the question, which knew the old one, leaves it alone.
+ * Nothing for any other pause.
+ */
+export const answeredPause = (pause: Pause | null): Pause | null =>
+    pause?.switch ? { interruptId: pause.interruptId, plan: { ...pause.switch } } : null;
 
 /** The approved plan an answer keeps, from its `plan.approved` frame. */
 export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({

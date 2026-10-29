@@ -51,7 +51,11 @@ import {
     unreachableSwitch,
     optionLabel,
     withApprovedPlan,
+    questionPause,
+    withQuestion,
+    answeredPause,
     type ApprovedPlan,
+    type Pause,
     type PlanState,
 } from '@/lib/studio/plan';
 import { withAnswer } from '@/lib/studio/transcript';
@@ -281,12 +285,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // The pending pause's addressing (interrupt_id) with, for elicitations,
     // the normalized clarify that answerClarify() builds its reply and
     // status note from, and that skipClarify() reads `skippable` from.
-    // For plans, the plan that switchChoice() checks a pick against.
-    const pendingInterruptRef = useRef<{
-        interruptId: string;
-        clarify?: Clarify;
-        plan?: PlanState;
-    } | null>(null);
+    // For plans, the plan that switchChoice() checks a pick against. A
+    // question a switch's replan asked carries the switch's waiting plan.
+    const pendingInterruptRef = useRef<Pause | null>(null);
     // The latest plan this turn offered, or is waiting on a switch of. A
     // fresh plan.proposed carries its baseline (what the turn's first plan
     // held) and learns which choice its switch moved. A new turn clears it.
@@ -693,20 +694,19 @@ export const useChat = (initial?: ChatSnapshot) => {
                         // follows re-renders the card.
                         break;
                     case 'elicitation.request': {
+                        // Also a question a switch's replan asks, which takes
+                        // the waiting card's place and carries the switch.
                         const clarify = clarifyFromFrame(frame);
 
                         stall.stop();
                         grace.cancel();
-                        pendingInterruptRef.current = {
-                            interruptId: clarify.interruptId,
+                        pendingInterruptRef.current = questionPause(
                             clarify,
-                        };
-                        setState((prev) => ({
-                            ...prev,
-                            ...NO_LINE,
-                            thinking: false,
-                            clarify,
-                        }));
+                            pendingInterruptRef.current,
+                        );
+                        setState((prev) =>
+                            withQuestion({ ...prev, ...NO_LINE, thinking: false }, clarify),
+                        );
                         break;
                     }
                     case 'suggestions': {
@@ -1027,11 +1027,98 @@ export const useChat = (initial?: ChatSnapshot) => {
         setState((prev) => ({ ...prev, queued: prev.queued.filter((item) => item.id !== id) }));
     }, []);
 
+    // A switch's stream, from the pick (switchChoice) or from the answer to
+    // a question its replan asked (resume), while `waiting` is the pending
+    // plan. A fresh plan.proposed, its `switch_failed` included, replaces
+    // the card through the stream; after Stop the frames are still read, so
+    // the plan the harness re-offers on cancel ends the switch. A stream that
+    // ends without a plan (it closed, broke, sent `done` or an error, or was
+    // stopped) ends the card read-only, once, closing the turn's Activity
+    // entry (endedSwitch) and leaving the reply alone. `refuse` gives the card
+    // for a refusal, which stays up when live and is the read-only end
+    // otherwise; `unreached` and `unsent` give the live card for a request
+    // that never reached the harness and one stopped before it started.
+    // Without them a refusal or an unreached request ends as an error, and a
+    // Stop before the request started as stopped.
+    const streamSwitch = useCallback(
+        (
+            turn: number,
+            waiting: PlanState,
+            start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
+            {
+                refuse,
+                unreached,
+                unsent,
+            }: {
+                refuse?: (refusal: StreamRefusal) => PlanState;
+                unreached?: () => PlanState;
+                unsent?: () => PlanState;
+            } = {},
+        ) => {
+            // The read-only card a refusal that may have used up the pause
+            // ends on.
+            let refused: PlanState | null = null;
+
+            stream(turn, start, {
+                onRefusal:
+                    refuse &&
+                    ((refusal) => {
+                        const card = refuse(refusal);
+
+                        if (card.live) {
+                            offerPlan(card);
+                        } else {
+                            refused = card;
+                        }
+
+                        return true;
+                    }),
+                onUnreachable:
+                    unreached &&
+                    (() => {
+                        offerPlan(unreached());
+
+                        return true;
+                    }),
+                onEnd: ({ error, stopped, sent }) => {
+                    // A fresh plan, a refusal or a question replaced the
+                    // waiting card.
+                    if (pendingInterruptRef.current?.plan !== waiting) {
+                        return;
+                    }
+
+                    if (!sent && unsent) {
+                        offerPlan(unsent());
+
+                        return;
+                    }
+
+                    const { plan: ended, activity } = endedSwitch(waiting, {
+                        error,
+                        stopped,
+                        refused,
+                    });
+
+                    pendingInterruptRef.current = null;
+                    turnPlanRef.current = null;
+                    setState((prev) => {
+                        const after = switchEnded(prev, waiting, ended);
+
+                        return after === prev ? prev : endTurn(after, turn, activity);
+                    });
+                },
+            });
+        },
+        [offerPlan, stream],
+    );
+
     // Continue a paused turn on /interrupt — shared by clarify answers, the
     // skip button and the plan actions. `answer` is what the user chose or
     // wrote, which enters the transcript.
     // A stale plan answer (an approve sent from an out-of-date card) is
     // refused with the current card, which replaces it to be answered again.
+    // The answer to a question a switch's replan asked puts the waiting card
+    // back and resumes as the switch (streamSwitch).
     const resume = useCallback(
         (
             reply: ClarifyReply | Pick<InterruptResponse, 'decision' | 'plan_revision'>,
@@ -1040,8 +1127,9 @@ export const useChat = (initial?: ChatSnapshot) => {
         ) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
+            const after = answeredPause(pending);
 
-            pendingInterruptRef.current = null;
+            pendingInterruptRef.current = after;
 
             setState((prev) => ({
                 // The decision shows on the status line; the user's answer
@@ -1051,31 +1139,35 @@ export const useChat = (initial?: ChatSnapshot) => {
                 messages: answer && pending ? withAnswer(prev.messages, answer) : prev.messages,
                 thinking: true,
                 clarify: null,
-                plan: null,
+                plan: after?.plan ?? null,
             }));
 
             if (!conversation || !pending) {
                 return;
             }
 
-            stream(
-                turnCount.current,
-                (handlers, signal) =>
-                    runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
-                {
-                    onRefusal: (refusal) => {
-                        const current = stalePlan(refusal, pending?.plan);
+            const start = (handlers: StreamHandlers, signal: AbortSignal) =>
+                runInterrupt(conversation, pending.interruptId, reply, handlers, signal);
 
-                        if (current) {
-                            offerPlan(current);
-                        }
+            if (after?.plan) {
+                streamSwitch(turnCount.current, after.plan, start);
 
-                        return current !== null;
-                    },
+                return;
+            }
+
+            stream(turnCount.current, start, {
+                onRefusal: (refusal) => {
+                    const current = stalePlan(refusal, pending?.plan);
+
+                    if (current) {
+                        offerPlan(current);
+                    }
+
+                    return current !== null;
                 },
-            );
+            });
         },
-        [offerPlan, stream],
+        [offerPlan, stream, streamSwitch],
     );
 
     // Answer every question of the pending clarify at once, keyed by
@@ -1149,11 +1241,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // decision's replan takes tens of seconds. A refusal that leaves the
     // pause alone keeps the card live and says why on the choice's row
     // (refusedSwitch); a stale one (the plan moved on elsewhere) is answered
-    // with the current card, and any other ends the card read-only. So does
-    // a stream that ends without a plan (it closed, broke, sent `done` or an
-    // error, or was stopped), once, closing the turn's Activity entry
-    // (endedSwitch) and leaving the reply alone. A request that never reached
-    // the harness keeps the card live, with "Try again".
+    // with the current card, and any other ends the card read-only. A
+    // request that never reached the harness keeps the card live, with "Try
+    // again". The rest of the switch's end is streamSwitch's.
     const switchChoice = useCallback(
         (choiceId: string, optionId: string) => {
             const conversation = sessionRef.current;
@@ -1167,9 +1257,6 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             const label = optionLabel(plan.decisions, choiceId, optionId);
             const turn = turnCount.current;
-            // The read-only card a refusal that may have used up the pause
-            // ends on.
-            let refused: PlanState | null = null;
 
             // The pause stays pending with the waiting plan. switchReply
             // refuses a second pick while it waits, and the plan the harness
@@ -1184,67 +1271,31 @@ export const useChat = (initial?: ChatSnapshot) => {
                 plan: waiting,
             }));
 
-            stream(
+            streamSwitch(
                 turn,
+                waiting,
                 (handlers, signal) =>
                     runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
                 {
-                    onRefusal: (refusal) => {
-                        const card = refusedSwitch(waiting, refusal);
-
-                        if (card.live) {
-                            offerPlan(card);
-                        } else {
-                            refused = card;
-                        }
-
+                    refuse: (refusal) => {
                         // The card shows only a harness ToolError's detail.
                         if (!refusal.error && refusal.detail) {
                             console.warn('Studio: a switch was refused', refusal);
                         }
 
-                        return true;
+                        return refusedSwitch(waiting, refusal);
                     },
                     // The request never reached the harness, so the pause
                     // waits.
-                    onUnreachable: () => {
-                        offerPlan(unreachableSwitch(waiting));
-
-                        return true;
-                    },
-                    onEnd: ({ error, stopped, sent }) => {
-                        // A fresh plan or a refusal replaced the waiting card.
-                        if (pendingInterruptRef.current?.plan !== waiting) {
-                            return;
-                        }
-
-                        // Stopped while it waited behind the stream that
-                        // offered the plan. Nothing reached the harness, so
-                        // the pause waits.
-                        if (!sent) {
-                            offerPlan(stoppedQueuedSwitch(waiting));
-
-                            return;
-                        }
-
-                        const { plan: ended, activity } = endedSwitch(waiting, {
-                            error,
-                            stopped,
-                            refused,
-                        });
-
-                        pendingInterruptRef.current = null;
-                        turnPlanRef.current = null;
-                        setState((prev) => {
-                            const after = switchEnded(prev, waiting, ended);
-
-                            return after === prev ? prev : endTurn(after, turn, activity);
-                        });
-                    },
+                    unreached: () => unreachableSwitch(waiting),
+                    // Stopped while it waited behind the stream that offered
+                    // the plan. Nothing reached the harness, so the pause
+                    // waits.
+                    unsent: () => stoppedQueuedSwitch(waiting),
                 },
             );
         },
-        [offerPlan, stream],
+        [streamSwitch],
     );
 
     // A clicked `apply_choice` chip runs a turn with the chip's choice and no
