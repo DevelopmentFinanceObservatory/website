@@ -170,6 +170,22 @@ export const shareToken = pgTable('share_token', {
 export type ShareTokenRow = typeof shareToken.$inferSelect;
 
 /**
+ * A share in dfo-apis that no stored write token could take down: its
+ * token was refused when the owner's account was deleted, or the take-down
+ * that follows a token the website could not keep failed. `user_id`
+ * references no table, so the row outlives the account. An operator takes
+ * each share down with dfo-apis' `datasets-maintenance take-down-share
+ * <id>` and deletes the row. `reason` is the code the take-down failed with.
+ */
+export const shareCleanup = pgTable('share_cleanup', {
+    shareId: text('share_id').primaryKey(),
+    userId: text('user_id').notNull(),
+    writeToken: text('write_token').notNull(),
+    reason: text('reason').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
  * One row per (user, roadmap entry) vote: the "Under consideration" items
  * on /data/roadmap, which only signed-in people can vote for. The entry id
  * is the corpus' own, so a re-synced roadmap keeps its votes.

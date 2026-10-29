@@ -3,9 +3,12 @@ import type { ShareMode } from './shareMode.ts';
 import type { ShareKind } from './sharePrune.ts';
 import {
     deleteShareToken,
+    fenceShareTokens,
     listShareTokens,
     putShareToken,
     readShareToken,
+    recordShareCleanup,
+    unfenceShareTokens,
     type ShareTokenDb,
 } from './shareTokens.ts';
 import type { CardRef, FrameRef } from './widgets.ts';
@@ -443,10 +446,12 @@ const takeDown = (backend: SharesBackend, id: string, token: string): Promise<Re
 /**
  * Make a share and keep its write token for `userId`, the signed-in maker.
  * A guest's share (`userId` null) keeps no token, so nobody can change or
- * remove it. When the token cannot be kept, because the write fails or
- * another user's row holds the id, the new share is deleted with it and a
- * retryable `token_not_kept` is thrown, so no share is left that its maker
- * cannot manage. A second try makes a share under a new id.
+ * remove it. When the token cannot be kept, because the write fails,
+ * another user's row holds the id, or the maker's account is being deleted,
+ * the new share is deleted with it and a retryable `token_not_kept` is
+ * thrown, so no share is left that its maker cannot manage. When that
+ * take-down fails too, the share and its token go to `share_cleanup` for an
+ * operator. A second try makes a share under a new id.
  */
 export const createOwnedShare = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
@@ -476,8 +481,15 @@ export const createOwnedShare = async (
     console.error('share: the write token was not kept, so the share was taken down', {
         share: id,
         removed,
-        error: kept === false ? 'another user holds its write token' : String(kept),
+        error:
+            kept === false
+                ? "another user holds its write token, or the maker's account is going"
+                : String(kept),
     });
+
+    if (removed !== 'deleted' && removed !== 'not_found') {
+        await recordShareCleanup(db, { shareId: id, userId, writeToken, reason: removed });
+    }
 
     throw new SharesError('token_not_kept', { retryable: true });
 };
@@ -551,32 +563,52 @@ export const ownerShareWrite = async (
 
 /**
  * Take down every share `userId` keeps a write token for, before their
- * account is deleted, dropping each token once its share is gone. A share
- * dfo-apis no longer has (`not_found`) counts as taken down, and so does one
- * whose token dfo-apis refuses (`write_token_*`), which is logged: nothing
- * can take that share down, and its lost token must not block the account's
- * deletion. Any other
- * failure throws its `SharesError`, and the shares not yet taken down keep
- * their tokens, so the account can be deleted again later and no share is
- * left without one.
+ * account is deleted, dropping each token once its share is gone. First the
+ * account is fenced (`fenceShareTokens`), so a share made meanwhile either
+ * stores its token before the list is read or is taken down by its own
+ * create. A share dfo-apis no longer has (`not_found`) counts as taken down.
+ * A share whose token dfo-apis refuses (`write_token_*`) is kept in
+ * `share_cleanup` with that token and logged, for an operator to take down
+ * with dfo-apis' `datasets-maintenance take-down-share <id>`, and does
+ * not block the deletion. Any other failure lifts the fence and throws, and
+ * the shares not yet taken down keep their tokens, so the account can be
+ * deleted again later and no share is left without one.
  */
 export const takeDownUserShares = async (
     { db, backend }: { db: ShareTokenDb; backend: SharesBackend },
     userId: string,
 ): Promise<void> => {
-    for (const { shareId, writeToken } of await listShareTokens(db, userId)) {
-        await takeDown(backend, shareId, writeToken).catch((error: unknown) => {
-            if (!(error instanceof SharesError && isLostShare(error))) {
-                throw error;
-            }
+    await fenceShareTokens(db, userId);
 
-            if (error.code !== 'not_found') {
-                console.error('share: dfo-apis refused the write token, so the share stays up', {
-                    share: shareId,
-                    code: error.code,
-                });
-            }
+    try {
+        for (const { shareId, writeToken } of await listShareTokens(db, userId)) {
+            await takeDown(backend, shareId, writeToken).catch(async (error: unknown) => {
+                if (!(error instanceof SharesError && isLostShare(error))) {
+                    throw error;
+                }
+
+                if (error.code !== 'not_found') {
+                    console.error('share: dfo-apis refused the write token, kept for cleanup', {
+                        share: shareId,
+                        code: error.code,
+                    });
+                    await recordShareCleanup(db, {
+                        shareId,
+                        userId,
+                        writeToken,
+                        reason: error.code,
+                    });
+                }
+            });
+            await deleteShareToken(db, { shareId, userId });
+        }
+    } catch (error) {
+        await unfenceShareTokens(db, userId).catch((cause: unknown) => {
+            console.error('share: the account stays fenced after its deletion stopped', {
+                cause: String(cause),
+            });
         });
-        await deleteShareToken(db, { shareId, userId });
+
+        throw error;
     }
 };

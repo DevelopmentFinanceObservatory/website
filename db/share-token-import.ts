@@ -70,7 +70,7 @@ export const readTokenLines = (text: string): { lines: TokenLine[]; invalid: num
 export type TokenImport = { stored: number; ownerGone: string[]; heldByOther: string[] };
 
 export const importShareTokens = async (
-    db: Pick<NodePgDatabase, 'select' | 'insert' | 'delete'>,
+    db: Pick<NodePgDatabase, 'select' | 'insert' | 'update' | 'delete'>,
     lines: TokenLine[],
 ): Promise<TokenImport> => {
     const owners = [...new Set(lines.map((line) => line.owner))];

@@ -170,7 +170,7 @@ test('every call runs under its own deadline, so a timed-out create is tried aga
 
 test('a share whose token cannot be kept is taken down with that token, and a retryable failure thrown', async () => {
     // Only the token write is reached: it fails, or another user's row
-    // holds the id, so no row comes back.
+    // holds the id or the account is being deleted, so no row comes back.
     const writes: [string, () => unknown][] = [
         [
             'write fails',
@@ -181,7 +181,7 @@ test('a share whose token cannot be kept is taken down with that token, and a re
         [
             'held by another user',
             () => ({
-                values: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }),
+                select: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }),
             }),
         ],
     ];

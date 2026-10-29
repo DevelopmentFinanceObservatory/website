@@ -7,7 +7,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
-import { deleteShareToken, putShareToken, readShareToken } from '../../src/lib/chat/shareTokens.ts';
+import {
+    deleteShareToken,
+    fenceShareTokens,
+    putShareToken,
+    readShareToken,
+    unfenceShareTokens,
+} from '../../src/lib/chat/shareTokens.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { importShareTokens, readTokenLines } from '../share-token-import.ts';
 import { user } from '../schema.ts';
@@ -76,7 +82,28 @@ test('share write tokens', async (t) => {
     assert.equal(await readShareToken(db, owner), null);
     assert.equal(await putShareToken(db, { ...owner, writeToken: 'shw_two' }), true);
 
+    // A fenced account, or one gone, stores no token.
+    await fenceShareTokens(db, 'other');
+    assert.equal(
+        await putShareToken(db, { ...other, shareId: 'Zz9yXw8v', writeToken: 'shw_x' }),
+        false,
+    );
+    // A fence older than 15 minutes is one a failed deletion left behind.
+    await database
+        .runtimePool()
+        .query(`update "user" set deleting_at = now() - interval '16 minutes' where id = 'other'`);
+    assert.equal(
+        await putShareToken(db, { ...other, shareId: 'Zz9yXw8v', writeToken: 'shw_x' }),
+        true,
+    );
+    await deleteShareToken(db, { ...other, shareId: 'Zz9yXw8v' });
+    await unfenceShareTokens(db, 'other');
+
     await database.runtimePool().query(`delete from "user" where id = 'owner'`);
+    assert.equal(
+        await putShareToken(db, { ...owner, shareId: 'Zz9yXw8v', writeToken: 'shw_x' }),
+        false,
+    );
     assert.equal(await putShareToken(db, { ...other, writeToken: 'shw_theirs' }), true);
     assert.equal(await readShareToken(db, other), 'shw_theirs');
 });

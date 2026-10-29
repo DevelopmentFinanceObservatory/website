@@ -68,6 +68,44 @@ test('owner writes to shares held in dfo-apis', async (t) => {
     ]);
 
     const body = { kind: 'canvas' as const, latest: true, title: 'T', cards: [], payload: {} };
+    const cleanups = async () =>
+        (
+            await database
+                .runtimePool()
+                .query(
+                    'select share_id, user_id, write_token, reason from share_cleanup order by share_id',
+                )
+        ).rows;
+    const deletingAt = async (id: string) =>
+        (
+            await database
+                .runtimePool()
+                .query<{ deleting_at: Date | null }>(
+                    'select deleting_at from "user" where id = $1',
+                    [id],
+                )
+        ).rows[0]?.deleting_at ?? null;
+    // Until a statement in this database waits on a lock, for at most 5 seconds.
+    const waitForLockWait = async () => {
+        const watcher = database.adminPool();
+        const until = Date.now() + 5_000;
+
+        while (Date.now() < until) {
+            const { rows } = await watcher.query(
+                `select 1 from pg_stat_activity
+                 where datname = $1 and wait_event_type = 'Lock'`,
+                [database.databaseName],
+            );
+
+            if (rows.length > 0) {
+                return;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        throw new Error('no statement waited on a lock');
+    };
 
     await t.test("a signed-in maker's token is kept, and a guest's is not", async () => {
         const { backend } = backendOf(created);
@@ -297,6 +335,17 @@ test('owner writes to shares held in dfo-apis', async (t) => {
                 },
             ]);
             assert.deepEqual(await tokens(), ['Aaaaaaa3', 'Bbbbbbb1']);
+            // The refused token is kept for an operator, and the stopped
+            // deletion lifts its fence, so the owner can share again.
+            assert.deepEqual(await cleanups(), [
+                {
+                    share_id: 'Aaaaaaa2',
+                    user_id: 'owner',
+                    write_token: 'shw_Aaaaaaa2',
+                    reason: 'write_token_invalid',
+                },
+            ]);
+            assert.equal(await deletingAt('owner'), null);
 
             const { backend, calls } = backendOf(() => new Response(null, { status: 204 }));
 
@@ -306,6 +355,68 @@ test('owner writes to shares held in dfo-apis', async (t) => {
                 ['/api/presentation/shares/Aaaaaaa3'],
             );
             assert.deepEqual(await tokens(), ['Bbbbbbb1']);
+            assert.notEqual(await deletingAt('owner'), null);
+        },
+    );
+
+    await t.test(
+        'a share made once the account is fenced keeps no token and is taken down, or goes to cleanup when that fails',
+        async () => {
+            await database.runtimePool().query('delete from share_cleanup');
+            await database
+                .runtimePool()
+                .query(`update "user" set deleting_at = null where id = 'owner'`);
+
+            const answering = (takeDown: () => Response) =>
+                backendOf((call) => (call.method === 'DELETE' ? takeDown() : created()));
+
+            // The fence is set, uncommitted, when the token insert starts: the
+            // insert waits on the user row, then sees the committed fence.
+            const fencer = await database.adminPool().connect();
+
+            try {
+                await fencer.query('begin');
+                await fencer.query(`update "user" set deleting_at = now() where id = 'owner'`);
+
+                const { backend, calls } = answering(() => new Response(null, { status: 204 }));
+                const making = assert.rejects(createOwnedShare({ db, backend }, 'owner', body), {
+                    code: 'token_not_kept',
+                });
+
+                await waitForLockWait();
+                await fencer.query('commit');
+                await making;
+                assert.deepEqual(
+                    calls.map(({ method, token }) => [method, token]),
+                    [
+                        ['POST', null],
+                        ['DELETE', 'shw_made'],
+                    ],
+                );
+            } finally {
+                fencer.release();
+            }
+
+            const { backend } = answering(() =>
+                Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
+            );
+
+            await assert.rejects(createOwnedShare({ db, backend }, 'owner', body), {
+                code: 'token_not_kept',
+            });
+            assert.equal(await readShareToken(db, { shareId: 'Ab3dEf7h', userId: 'owner' }), null);
+            assert.deepEqual(await cleanups(), [
+                {
+                    share_id: 'Ab3dEf7h',
+                    user_id: 'owner',
+                    write_token: 'shw_made',
+                    reason: 'service_unavailable',
+                },
+            ]);
+
+            // The row outlives the account.
+            await database.runtimePool().query(`delete from "user" where id = 'owner'`);
+            assert.equal((await cleanups()).length, 1);
         },
     );
 });

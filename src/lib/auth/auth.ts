@@ -97,11 +97,20 @@ export const auth = betterAuth({
         },
     },
     user: {
+        // Set while the account's deletion runs (takeDownUserShares), so no
+        // share token is stored for it meanwhile. Never sent or accepted.
+        additionalFields: {
+            deletingAt: { type: 'date', required: false, input: false, returned: false },
+        },
         // Delete account (account menu). With no password to confirm with,
         // Better Auth asks for a fresh session instead (session.freshAge).
         // The user's shares live in dfo-apis, out of reach of the user row's
-        // cascade, so each is taken down with its write token first. When
-        // one cannot be, the account stays and the dialog shows the message.
+        // cascade, so the account is fenced against new share tokens and
+        // each share is taken down with its write token first. A share whose
+        // token dfo-apis refuses is kept in `share_cleanup` for an operator
+        // and does not stop the deletion. When another share cannot be taken
+        // down, the fence is lifted, the account stays, and the dialog shows
+        // the message.
         deleteUser: {
             enabled: true,
             beforeDelete: async (doomed, request) => {
