@@ -311,9 +311,10 @@ export type PlanStep = {
     gives_answer?: boolean | null;
 };
 
-/** One way a scope decision can be counted. `partial` options cover only
- *  `years` (inclusive `[first, last]` ranges); `unavailable` ones say why in
- *  `reason`, reader copy written by the harness. */
+/** One option of a switchable decision. A scope choice's `partial` options
+ *  cover only `years` (inclusive `[first, last]` ranges); `unavailable` ones
+ *  say why in `reason`, reader copy written by the harness. A planner
+ *  decision's options are all `available`. */
 export type PlanDecisionOption = {
     option_id: string;
     label: string;
@@ -329,12 +330,14 @@ export type PlanDecision = {
     reason: string;
     resolved_by: 'default' | 'user';
     alternatives?: string[] | null;
-    // A scope decision the user can switch: the harness's ScopeChoice id,
-    // every option it offers, and the one the plan counts by now. A
-    // decision without `choice_id` is an ordinary planner decision.
-    // `choice_id` is built from the requirement and the axis, so it holds
-    // across a conversation's switches. An older harness built it from a
-    // spec id a switch can re-pin.
+    // A decision the user can switch: its row's id, every option it offers,
+    // and the one the plan counts by now. A scope choice's `choice_id` is
+    // built from the requirement and the axis, so it holds across a
+    // conversation's switches (an older harness built it from a spec id a
+    // switch can re-pin). A planner decision's is `decision/<slot>`, with
+    // option ids `option_<n>` in its options' order, and switching it
+    // replans with the pick held. A decision without `choice_id` cannot be
+    // switched.
     choice_id?: string | null;
     options?: PlanDecisionOption[] | null;
     active_option_id?: string | null;

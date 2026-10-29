@@ -1,10 +1,11 @@
 /**
- * The plan card's state and its `switch`: how a scope decision's options
- * read, which of them the user can pick, the interrupt reply a pick sends,
- * what the card says when a switch does not apply, and the approved plan the
- * answer keeps.
+ * The plan card's state and its `switch`: how the options of a scope choice
+ * or a planner decision read, which of them the user can pick, the interrupt
+ * reply a pick sends, what the card says when a switch does not apply, and
+ * the approved plan the answer keeps.
  */
 
+import type { Clarify } from './clarify';
 import type { StreamRefusal } from './studioClient';
 import type {
     InterruptResponse,
@@ -166,6 +167,27 @@ export const optionLabel = (
     decisions
         .find((decision) => decision.choice_id === choiceId)
         ?.options?.find((option) => option.option_id === optionId)?.label ?? null;
+
+/** The `choice_id` prefix of a planner decision's row. Switching one replans
+ *  with the user's pick held, which takes tens of seconds; switching a scope
+ *  choice re-runs Search. */
+export const PLANNER_CHOICE_PREFIX = 'decision/';
+
+/** The choice is a planner decision's row (PLANNER_CHOICE_PREFIX). */
+export const isPlannerChoice = (choiceId: string): boolean =>
+    choiceId.startsWith(PLANNER_CHOICE_PREFIX);
+
+/** The chat line while a switch to `label` runs: "Switching to net
+ *  disbursements", or "Replanning with top 10" on a planner decision. */
+export const switchLine = (choiceId: string, label: string | null): string => {
+    const [verb, link] = isPlannerChoice(choiceId) ? ['Replanning', 'with'] : ['Switching', 'to'];
+
+    return label ? `${verb} ${link} ${label}` : verb;
+};
+
+/** What the picked option says while its switch runs. */
+export const switchPendingText = (choiceId: string): string =>
+    isPlannerChoice(choiceId) ? 'Replanning' : 'Updating plan';
 
 /** The `switch_failed.code` of a switch the user stopped through `/cancel`,
  *  re-offering the unchanged plan. */
@@ -463,11 +485,18 @@ const unappliedNotice = (
     });
 
 /** The sentence " The plan still counts gross disbursements." for the option
- *  the pick's choice holds, or nothing when the plan lacks the choice. */
+ *  the pick's choice holds (" The plan keeps top 5." on a planner decision),
+ *  or nothing when the plan lacks the choice. */
 const stillCounts = (plan: PlanState, pick: PlanSwitch): string => {
     const decision = plan.decisions.find((candidate) => candidate.choice_id === pick.choiceId);
 
-    return decision ? ` The plan still counts ${activeLabel(decision)}.` : '';
+    if (!decision) {
+        return '';
+    }
+
+    const verb = isPlannerChoice(pick.choiceId) ? 'keeps' : 'still counts';
+
+    return ` The plan ${verb} ${activeLabel(decision)}.`;
 };
 
 /**
@@ -696,6 +725,48 @@ export const switchEnded = <TState extends { plan: PlanState | null }>(
     ended: PlanState,
 ): TState => (state.plan === waiting ? { ...state, plan: ended } : state);
 
+/**
+ * The pause the turn waits on: its interrupt id, with the question
+ * (`clarify`) or the plan it asks the user to answer. `switch` is the
+ * waiting plan of a switch whose replan asked the question, so answering it
+ * resumes the switch.
+ */
+export type Pause = {
+    interruptId: string;
+    clarify?: Clarify;
+    plan?: PlanState;
+    switch?: PlanState;
+};
+
+/** The pause a planner question opens. A question asked while a switch
+ *  waits (the pending plan is switching) carries the waiting plan. */
+export const questionPause = (
+    clarify: Clarify,
+    pending: Pause | null,
+): Pause & { clarify: Clarify } => {
+    const waiting = pending?.plan?.switching ? pending.plan : null;
+
+    return { interruptId: clarify.interruptId, clarify, ...(waiting && { switch: waiting }) };
+};
+
+/** The conversation while a question waits: the question takes the place
+ *  of any plan card, including a switch's waiting card. */
+export const withQuestion = <TState extends { plan: PlanState | null; clarify: Clarify | null }>(
+    state: TState,
+    clarify: Clarify,
+): TState => ({ ...state, clarify, plan: null });
+
+/**
+ * What stays pending once the user answers `pause`: for a question a
+ * switch's replan asked, the switch's waiting plan, which the card shows
+ * again, so a fresh plan, its `switch_failed`, a Stop, or another question
+ * still read as the switch's. The card is a new object, so the end of the
+ * stream that asked the question, which knew the old one, leaves it alone.
+ * Nothing for any other pause.
+ */
+export const answeredPause = (pause: Pause | null): Pause | null =>
+    pause?.switch ? { interruptId: pause.interruptId, plan: { ...pause.switch } } : null;
+
 /** The approved plan an answer keeps, from its `plan.approved` frame. */
 export const approvedFromFrame = (frame: PlanApproved): ApprovedPlan => ({
     plan_version_id: frame.plan_version_id,
@@ -729,9 +800,10 @@ export type PlanStepView = {
     givesAnswer: boolean;
 };
 
-/** One scope choice as a row: its name, the value it holds, what it held
- *  before a switch, why the plan holds it, and the decision behind it when
- *  the row can switch. */
+/** One switchable choice as a row: its name, the value it holds, what it
+ *  held before a switch, why the plan holds it, the decision behind it when
+ *  the row can switch, and whether it is a planner decision rather than a
+ *  scope choice (isPlannerChoice). */
 export type PlanChoiceView = {
     key: string;
     name: string;
@@ -740,6 +812,7 @@ export type PlanChoiceView = {
     changedReason: string | null;
     reason: string | null;
     decision: PlanDecision | null;
+    planner: boolean;
 };
 
 /** A choice a switch moved that has no row: what it held, what it holds
@@ -779,6 +852,7 @@ export const planView = (plan: PlanState): PlanView => {
                 changedReason: change?.reason ?? null,
                 reason: decision.reason || null,
                 decision,
+                planner: isPlannerChoice(choiceId),
             });
         } else {
             others.push({
@@ -835,12 +909,49 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
             changedReason: null,
             reason: null,
             decision: null,
+            planner: false,
         })),
         moved: [],
         others: [],
         // A plan saved before the harness sent caveats has none.
         caveats: plan.caveats ?? [],
     };
+};
+
+/** The ledger's head over the scope choices and the moves without a row. */
+export const SCOPE_HEAD = 'Counted as';
+
+/** The ledger's head over the planner decisions the user can switch. */
+export const PLANNER_HEAD = 'Choices the plan made';
+
+/** One group of the ledger: its head, its rows, and the moves listed under
+ *  them. */
+export type LedgerSection = {
+    key: 'scope' | 'planner';
+    head: string;
+    choices: PlanChoiceView[];
+    moved: PlanMoveView[];
+};
+
+/**
+ * The ledger's groups, each present only with something to show: the scope
+ * choices with the moves a switch made on choices without a row ("Counted
+ * as"), then the planner decisions ("Choices the plan made").
+ */
+export const ledgerSections = (view: PlanView): LedgerSection[] => {
+    const scope = view.choices.filter((choice) => !choice.planner);
+    const planner = view.choices.filter((choice) => choice.planner);
+    const sections: LedgerSection[] = [];
+
+    if (scope.length > 0 || view.moved.length > 0) {
+        sections.push({ key: 'scope', head: SCOPE_HEAD, choices: scope, moved: view.moved });
+    }
+
+    if (planner.length > 0) {
+        sections.push({ key: 'planner', head: PLANNER_HEAD, choices: planner, moved: [] });
+    }
+
+    return sections;
 };
 
 export const STEPS_UPDATED = 'Steps updated to match.';

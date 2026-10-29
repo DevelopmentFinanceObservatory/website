@@ -1,16 +1,20 @@
 @use "variables" as *;
 @use "mixins" as *;
 
-// The plan card + the "Start building?" bar stack with a small seam.
+// The plan card and the "Start building?" bar sit straight in the chat
+// foot's flex column (the wrapper only groups them in the markup), so the
+// card alone gives up height there and the bar keeps its natural height.
 .planWrap {
-    @include flex(column, flex-start, stretch);
-
-    flex-shrink: 0;
-    gap: rem(8);
+    display: contents;
 }
 
+// Squeezed, the card scrolls inside down to a usable floor; below that the
+// whole chat foot scrolls instead. The scroll container still clips its
+// rounded corners.
 .plan {
-    overflow: hidden;
+    min-height: rem(120);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background-color: var(--color-white);
     border: 1px solid var(--color-sage-light);
 
@@ -130,6 +134,9 @@
     // The extra bottom padding + the negative margin tuck the bar's lower
     // band UNDER the input that follows (the input paints over it).
     padding: rem(10) rem(10) rem(26) rem(16);
+
+    // The seam to the card above.
+    margin-top: rem(8);
     margin-bottom: rem(-18);
     background-color: var(--color-grid-bg-light);
     border: 1px solid var(--color-sage-light);

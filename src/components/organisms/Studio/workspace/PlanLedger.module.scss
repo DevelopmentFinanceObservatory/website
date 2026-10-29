@@ -35,7 +35,7 @@
     vertical-align: rem(1);
 }
 
-// --- "Counted as": the scope choices as a ruled ledger ----------------------
+// --- The switchable choices as a ruled ledger, one head a group ------------
 
 // A host sets --ledger-inset to align the rows with its own padding.
 .ledger {
@@ -49,6 +49,11 @@
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
+}
+
+// A group's head after another group's rows.
+.row + .head {
+    border-top: 1px solid var(--color-net-light);
 }
 
 .row {
