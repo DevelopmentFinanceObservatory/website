@@ -1,30 +1,33 @@
 // The share migration end to end, on a local website and the dfo-apis local
 // stack: seeds one share row per legacy case in the website database, runs
-// export-shares, dfo-apis' import-shares and import-share-tokens, renders
-// /s/<id> and /embed/<id> of each through the dev server, writes to the
-// signed-in owner's share with its imported token, and runs both imports
-// again to show they change nothing. docs/share-export.md says how to run it.
+// the share migration Job's function (db/share-migrate.ts) over them against
+// the stack's import route, renders /s/<id> and /embed/<id> of each through
+// the dev server, writes to the signed-in owner's share with its token, and
+// runs the migration again to show it changes nothing. docs/share-export.md
+// says how to run it.
 //
 //   node scripts/share-migration-round-trip.ts
 //
 // Reads DATABASE_URL (the dev server's database, migrated), BETTER_AUTH_SECRET
 // (the dev server's, to sign the owner's session cookie), WEBSITE_URL (the dev
-// server, default http://127.0.0.1:3000) and DFO_APIS_DIR (the dfo-apis
-// checkout whose `just local-stack` is up and seeded). Each check prints one
-// line, and the run exits 1 when any fails. It leaves its rows and shares in
-// place, under ids no other run uses.
-import { execFile } from 'node:child_process';
+// server, default http://127.0.0.1:3000), SEARCH_API_BASE (the stack's
+// dfo-apis, default http://127.0.0.1:58083) and DFO_APIS_DIR (the dfo-apis
+// checkout whose `just local-stack` is up and seeded, whose local.env names
+// the import principal). Each check prints one line, and the run exits 1 when
+// any fails. It leaves its rows and shares in place, under ids no other run
+// uses.
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
+import { drizzle } from 'drizzle-orm/node-postgres';
+
+import { readShares } from '../db/share-export.ts';
+import { importOverHttp, migrateShares } from '../db/share-migrate.ts';
 import { openPool } from './open-pool.ts';
 
-const run = promisify(execFile);
-
 const WEBSITE = (process.env.WEBSITE_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
+const APIS = process.env.SEARCH_API_BASE ?? 'http://127.0.0.1:58083';
 const APIS_DIR = process.env.DFO_APIS_DIR;
 const AUTH_SECRET = process.env.BETTER_AUTH_SECRET;
 // The address the site's front end would append for this script, a
@@ -160,11 +163,17 @@ const page = async (pathname: string) => {
     };
 };
 
-// The counts in import-shares' `presentation_shares_imported` line.
-const importCounts = (output: string): { imported?: number; unchanged?: number } =>
-    JSON.parse(
-        output.split('\n').find((line) => line.includes('presentation_shares_imported')) ?? '{}',
-    );
+// The principal the stack's dfo-apis takes on its share import route.
+const importPrincipal = async (apisDir: string): Promise<string> => {
+    const env = await fs.readFile(path.join(apisDir, 'scripts/local-stack/local.env'), 'utf8');
+    const principal = /^PRESENTATION_SHARE_IMPORT_PRINCIPAL=(.+)$/m.exec(env)?.[1]?.trim();
+
+    if (!principal) {
+        throw new Error('the local stack sets no PRESENTATION_SHARE_IMPORT_PRINCIPAL');
+    }
+
+    return principal;
+};
 
 const main = async (): Promise<void> => {
     if (!APIS_DIR || !AUTH_SECRET || !process.env.DATABASE_URL) {
@@ -176,6 +185,10 @@ const main = async (): Promise<void> => {
         return;
     }
 
+    const importShare = importOverHttp({
+        base: APIS,
+        principal: await importPrincipal(APIS_DIR),
+    });
     const readings = JSON.parse(
         await fs.readFile(path.join(APIS_DIR, 'runs/local-stack/seeded.json'), 'utf8'),
     ) as Reading[];
@@ -323,9 +336,6 @@ const main = async (): Promise<void> => {
         },
     ];
 
-    const work = await fs.mkdtemp(path.join(os.tmpdir(), 'share-round-trip-'));
-    const exported = path.join(work, 'shares.jsonl');
-    const tokens = path.join(work, 'share-tokens.jsonl');
     const { pool, close } = await openPool();
 
     try {
@@ -343,8 +353,7 @@ const main = async (): Promise<void> => {
                     row.write_token,
                 ]),
             );
-        // Every case is made after this moment, in case order, so the export
-        // takes exactly them.
+        // Every case is made after this moment, in case order.
         const since = new Date(Date.now() - 1000);
 
         await pool.query(
@@ -388,7 +397,7 @@ const main = async (): Promise<void> => {
             }
         }
 
-        console.log(`seeded ${cases.length} shares since ${since.toISOString()}:`);
+        console.log(`seeded ${cases.length} shares:`);
 
         for (const share of cases) {
             console.log(`  ${share.id}  ${share.label}`);
@@ -402,85 +411,39 @@ const main = async (): Promise<void> => {
             `${before.status}`,
         );
 
+        // The Job's run over this run's shares alone, as the database may
+        // hold earlier runs' shares.
+        const ids = new Set(cases.map(({ id }) => id));
         const migrate = async () => {
-            const out = await run(
-                process.execPath,
-                ['scripts/export-shares.ts', '--since', since.toISOString(), '--out', exported],
-                { env: process.env },
-            );
-            const imported = await run(
-                'uv',
-                [
-                    'run',
-                    '--no-sync',
-                    '--env-file',
-                    'scripts/local-stack/local.env',
-                    'datasets-maintenance',
-                    'import-shares',
-                    '--in',
-                    exported,
-                    '--tokens',
-                    tokens,
-                ],
-                { cwd: APIS_DIR, env: { ...process.env, PYTHONPATH: APIS_DIR } },
-            );
-            const stored = await run(
-                process.execPath,
-                ['scripts/import-share-tokens.ts', '--in', tokens],
-                { env: process.env },
-            );
+            const lines: string[] = [];
+            const status = await migrateShares({
+                db: drizzle(pool),
+                rows: (await readShares(pool)).filter(({ id }) => ids.has(id)),
+                importShare,
+                log: (line) => lines.push(line),
+            });
 
-            return {
-                export: out.stderr.trim(),
-                import: (imported.stdout + imported.stderr).trim(),
-                tokens: stored.stderr.trim(),
-            };
+            return { status, lines };
         };
 
         const first = await migrate();
 
-        console.log(`export-shares: ${first.export}`);
-        console.log(`import-shares: ${first.import}`);
-        console.log(`import-share-tokens: ${first.tokens}`);
-
-        const lines = (await fs.readFile(exported, 'utf8'))
-            .trimEnd()
-            .split('\n')
-            .map((line) => JSON.parse(line) as { id: string });
-
+        console.log(`migrate-shares: ${first.lines.join('\n  ')}`);
         check(
-            'the export holds every seeded share, in order',
-            JSON.stringify(lines.map(({ id }) => id)) === JSON.stringify(cases.map(({ id }) => id)),
-            lines.map(({ id }) => id).join(' '),
-        );
-        check(
-            'import-shares imported every share',
-            importCounts(first.import).imported === cases.length,
-            first.import,
+            'the migration imports every share',
+            first.status === 0 &&
+                first.lines.join('\n') === `${cases.length} shares: imported ${cases.length}`,
+            first.lines.join('\n'),
         );
 
-        const tokenLines = (await fs.readFile(tokens, 'utf8'))
-            .trimEnd()
-            .split('\n')
-            .map((line) => JSON.parse(line) as { id: string; owner: string; write_token: string });
         const owned = cases.filter(({ owned }) => owned).map(({ id }) => id);
+        const kept = (JSON.parse(await ownerTokens()) as [string, string][]).map(([id]) => id);
 
         check(
             "a token for each signed-in owner's share and none for a guest's",
-            JSON.stringify(tokenLines.map(({ id }) => id).sort()) ===
-                JSON.stringify([...owned].sort()) &&
-                tokenLines.every((line) => line.owner === owner),
-            tokenLines.map(({ id }) => id).join(' '),
+            JSON.stringify(kept) === JSON.stringify([...owned].sort()),
+            kept.join(' '),
         );
-
-        const reported = JSON.stringify(
-            tokenLines
-                .map((line) => [line.id, line.write_token])
-                .sort(([a = ''], [b = '']) => (a < b ? -1 : 1)),
-        );
-        const kept = await ownerTokens();
-
-        check('import-share-tokens kept each token for the owner', kept === reported, kept);
 
         for (const share of cases) {
             const shown = await page(`/s/${share.id}`);
@@ -611,7 +574,7 @@ const main = async (): Promise<void> => {
             (await page(`/s/${guest.id}`)).status === 200,
         );
 
-        // Both imports again change nothing in dfo-apis or the website. The
+        // The migration again changes nothing in dfo-apis or the website. The
         // reads go one at a time, since the shares door answers a retryable
         // 503 past four requests in flight.
         const readAll = async () => {
@@ -629,36 +592,28 @@ const main = async (): Promise<void> => {
         };
         const recordsBefore = await readAll();
         const tokensBefore = await ownerTokens();
-        const reportBefore = await fs.readFile(tokens, 'utf8');
         const again = await migrate();
 
-        console.log(`export-shares again: ${again.export}`);
-        console.log(`import-shares again: ${again.import}`);
-        console.log(`import-share-tokens again: ${again.tokens}`);
+        console.log(`migrate-shares again: ${again.lines.join('\n  ')}`);
         check(
-            'a second import-shares imports none and finds every share imported',
-            importCounts(again.import).imported === 0 &&
-                importCounts(again.import).unchanged === cases.length,
-            again.import,
-        );
-        check(
-            'a second import-shares writes no token line',
-            (await fs.readFile(tokens, 'utf8')) === reportBefore,
+            'a second migration imports none and finds every share unchanged',
+            again.status === 0 &&
+                again.lines.join('\n') === `${cases.length} shares: unchanged ${cases.length}`,
+            again.lines.join('\n'),
         );
         const recordsAfter = await readAll();
 
         check(
-            'dfo-apis holds the same shares after both imports again',
+            'dfo-apis holds the same shares after the migration again',
             recordsAfter === recordsBefore,
             `before ${recordsBefore}\nafter  ${recordsAfter}`,
         );
         check(
-            'share_token holds the same tokens after both imports again',
+            'share_token holds the same tokens after the migration again',
             (await ownerTokens()) === tokensBefore,
         );
     } finally {
         await close();
-        await fs.rm(work, { recursive: true, force: true });
     }
 
     console.log(failures ? `${failures} checks failed` : 'every check passed');

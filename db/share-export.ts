@@ -7,9 +7,9 @@ import { slotCanvas, viewerCopy, type ShareSlot } from '../src/lib/chat/sharePay
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 
 /**
- * The share export (scripts/export-shares.ts): every row of `share` made at
- * or after a moment, as the JSON lines docs/share-export.md defines, which
- * dfo-apis' `import-shares` reads. `placeShare` decides where each stored
+ * The share export: every row of `share` as the lines docs/share-export.md
+ * defines, which the share migration (db/share-migrate.ts) sends to
+ * dfo-apis' share import route. `placeShare` decides where each stored
  * share lands, and refuses a row it cannot place with the reason.
  * `share_card_result` rows are a cache of live refreshes and are not read.
  */
@@ -173,18 +173,17 @@ export const placeShare = (row: StoredShare): Placement => {
 };
 
 /**
- * Every share made at or after `since` (an ISO timestamp with its offset),
- * by `created_at` then id, each with its `share_ref` rows in part order.
- * Both reads run in one repeatable-read transaction, so they see the same
- * snapshot and a share changed between them still exports whole.
+ * Every share, by `created_at` then id, each with its `share_ref` rows in
+ * part order. Both reads run in one repeatable-read transaction, so they see
+ * the same snapshot and a share changed between them still reads whole.
  */
-export const readShares = async (pool: Pool, since: string): Promise<StoredShare[]> => {
+export const readShares = async (pool: Pool): Promise<StoredShare[]> => {
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
 
-        const rows = await readSharesIn(client, since);
+        const rows = await readSharesIn(client);
 
         await client.query('COMMIT');
 
@@ -198,23 +197,19 @@ export const readShares = async (pool: Pool, since: string): Promise<StoredShare
     }
 };
 
-const readSharesIn = async (client: PoolClient, since: string): Promise<StoredShare[]> => {
+const readSharesIn = async (client: PoolClient): Promise<StoredShare[]> => {
     const shares = await client.query<Omit<StoredShare, 'parts'>>(
         `SELECT id, kind, mode, user_id, title, data,
                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
          FROM share
-         WHERE created_at >= $1::timestamptz
          ORDER BY share.created_at, id`,
-        [since],
     );
     const parts = await client.query<StoredPart & { share_id: string }>(
         `SELECT r.share_id, r.part_index, r.spec_id, r.identity, r.entity_groups,
                 r.variable_text, r.content_version, r.artifact_digest, r.operations,
                 r.assumptions
-         FROM share_ref r JOIN share s ON s.id = r.share_id
-         WHERE s.created_at >= $1::timestamptz
+         FROM share_ref r
          ORDER BY r.share_id, r.part_index`,
-        [since],
     );
     const partsOf = new Map<string, StoredPart[]>();
 
@@ -223,24 +218,4 @@ const readSharesIn = async (client: PoolClient, since: string): Promise<StoredSh
     }
 
     return shares.rows.map((row) => ({ ...row, parts: partsOf.get(row.id) ?? [] }));
-};
-
-/** The export of `rows`: one JSON line each, or every refusal by share id. */
-export const exportShares = (
-    rows: StoredShare[],
-): { lines: ExportLine[]; refusals: { id: string; reason: string }[] } => {
-    const lines: ExportLine[] = [];
-    const refusals: { id: string; reason: string }[] = [];
-
-    for (const row of rows) {
-        const placement = placeShare(row);
-
-        if ('line' in placement) {
-            lines.push(placement.line);
-        } else {
-            refusals.push({ id: row.id, reason: placement.refusal });
-        }
-    }
-
-    return { lines, refusals };
 };

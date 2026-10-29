@@ -90,6 +90,26 @@ export const readShareToken = async (
     return row?.writeToken ?? null;
 };
 
+/**
+ * `userId`'s write token for `shareId`, read with their user row `FOR
+ * SHARE` as `putShareToken` reads it, so inside a transaction a fence being
+ * set waits for the transaction to end. Null when that user stored none,
+ * and when their account is being deleted or is gone.
+ */
+export const holdShareToken = async (
+    db: ShareTokenDb,
+    { shareId, userId }: { shareId: string; userId: string },
+): Promise<string | null> => {
+    const [row] = await db
+        .select({ writeToken: shareToken.writeToken })
+        .from(shareToken)
+        .innerJoin(user, eq(user.id, shareToken.userId))
+        .where(and(eq(shareToken.shareId, shareId), unfenced(userId)))
+        .for('share', { of: user });
+
+    return row?.writeToken ?? null;
+};
+
 /** Every share `userId` keeps a write token for, with that token. */
 export const listShareTokens = (
     db: ShareTokenDb,
