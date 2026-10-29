@@ -586,7 +586,8 @@
 // long clarify) outgrows the panel: that card scrolls inside and the input
 // never leaves the screen. Everything else in it keeps its natural height
 // (flex items don't shrink below their content unless they opt in with
-// min-height: 0, which only the plan and the picker do).
+// min-height: 0, which only the plan card and the picker do; the plan's
+// approve bar stays at full height).
 .chatFoot {
     display: flex;
     flex-direction: column;

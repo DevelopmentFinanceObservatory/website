@@ -1,16 +1,22 @@
 @use "variables" as *;
 @use "mixins" as *;
 
-// The plan card + the "Start building?" bar stack with a small seam.
+// The plan card + the "Start building?" bar stack with a small seam. When
+// the chat foot runs short of room the stack gives up height (min-height: 0),
+// and only the card itself shrinks: the bar keeps its natural height.
 .planWrap {
     @include flex(column, flex-start, stretch);
 
-    flex-shrink: 0;
+    min-height: 0;
     gap: rem(8);
 }
 
+// Squeezed, the card scrolls inside; the scroll container still clips its
+// rounded corners.
 .plan {
-    overflow: hidden;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background-color: var(--color-white);
     border: 1px solid var(--color-sage-light);
 
