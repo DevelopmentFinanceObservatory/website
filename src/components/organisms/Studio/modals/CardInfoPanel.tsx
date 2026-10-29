@@ -313,10 +313,9 @@ const LegacyPanel = ({
     </div>
 );
 
-/** The snapshot share a card is cited from: its id, when the share was
- *  made, and when the card's slot began to show the data it shows, which
- *  the citation prefers. Both times are ISO timestamps. */
-export type CitedSnapshot = { id: string; createdAt?: string; servedAt?: string };
+/** The snapshot share a card is cited from: its id, and when the card's
+ *  slot began to show the data it shows, an ISO timestamp. */
+export type CitedSnapshot = { id: string; servedAt?: string };
 
 // The link a snapshot share is cited by, read in the browser, where the
 // panel opens.
@@ -326,10 +325,11 @@ const snapshotUrlOf = (shareId: string | undefined): string | null =>
         : null;
 
 // The day a snapshot card's data dates from, in the reader's time zone:
-// when its slot began to show it, or when the share was made if that is
-// not known.
+// when its slot began to show it. Null when the share's history does not
+// say, so the citation gives no date. The day the share was made is no
+// stand-in: a live share made a snapshot later serves newer data.
 const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
-    const at = snapshot?.servedAt ?? snapshot?.createdAt;
+    const at = snapshot?.servedAt;
     const moment = at ? new Date(at) : null;
 
     return moment && !Number.isNaN(moment.getTime()) ? localDay(moment) : null;

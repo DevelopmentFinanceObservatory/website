@@ -725,7 +725,6 @@ const Studio = ({
                     shared?.live === false
                         ? {
                               id: shared.id,
-                              createdAt: shared.createdAt,
                               servedAt: infoWidget ? shared.servedAt?.[infoWidget.id] : undefined,
                           }
                         : undefined

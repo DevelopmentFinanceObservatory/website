@@ -91,13 +91,13 @@ const slotCard = (served: typeof DATASET_FRAME) => {
 };
 
 /** A dfo-apis holding `record`, whose slot 1 serves `served`. `slotReply`
- *  replaces its slot card answer, and `historyReply` its history, which
- *  otherwise lists nothing. */
+ *  replaces its slot card answer, and `historyReply` its history page for
+ *  the request's URL, which otherwise lists nothing. */
 const depsOf = (
     record: ShareRecord,
     served = DATASET_FRAME,
     slotReply?: (call: Call) => Response | Promise<Response>,
-    historyReply: () => Response = () => Response.json({ id: record.id, served: [] }),
+    historyReply: (url: URL) => Response = () => Response.json({ id: record.id, served: [] }),
 ): { deps: SlotDeps; calls: Call[] } => {
     const calls: Call[] = [];
     const fetcher: typeof fetch = async (input, init) => {
@@ -116,7 +116,7 @@ const depsOf = (
         }
 
         if (url.pathname === `/api/presentation/shares/${record.id}/history`) {
-            return historyReply();
+            return historyReply(url);
         }
 
         if (url.pathname === `/api/presentation/shares/${record.id}/slots/1`) {
@@ -169,7 +169,7 @@ test("a snapshot's slotted cards are drawn on the server on the frame each slot 
     // The slot card read, never the revision's own read, with no credential,
     // and one read of the share's history.
     assert.deepEqual(calls.map(({ path }) => path).toSorted(), [
-        '/api/presentation/shares/Ab3dEf7h/history',
+        '/api/presentation/shares/Ab3dEf7h/history?limit=500',
         '/api/presentation/shares/Ab3dEf7h/slots/1',
     ]);
     assert.ok(calls.every(({ headers }) => headers.get('x-dfo-principal') === null));
@@ -203,10 +203,43 @@ test("a snapshot card's citation date is when its slot began to show the frame i
         c1: '2026-10-28T15:00:00Z',
     });
 
-    // No entry for the slot's frame, or no history: no date, and the cards
-    // are drawn all the same.
+    // A slot that changes slowly has its entry on a later page: the cursor
+    // is followed until it turns up.
+    const paged = depsOf(record, DATASET_FRAME, undefined, (url) =>
+        url.searchParams.get('before') === 'p2'
+            ? Response.json({ id: record.id, served: history.slice(1), next: 'p3' })
+            : Response.json({ id: record.id, served: [history[0]], next: 'p2' }),
+    );
+
+    assert.deepEqual((await sharedViewOfRecord(paged.deps, record)).servedAt, {
+        c1: '2026-10-28T15:00:00Z',
+    });
+    assert.deepEqual(
+        paged.calls.flatMap(({ path }) => (path.includes('/history') ? [path] : [])),
+        [
+            '/api/presentation/shares/Ab3dEf7h/history?limit=500',
+            '/api/presentation/shares/Ab3dEf7h/history?limit=500&before=p2',
+        ],
+    );
+
+    // No entry for the slot's frame by the end of the history, a later page
+    // that fails, a cursor that names the page just read, or no history: no
+    // date, and the cards are drawn all the same.
     for (const reply of [
-        () => Response.json({ id: record.id, served: [history[2]] }),
+        (url: URL) =>
+            url.searchParams.has('before')
+                ? Response.json({ id: record.id, served: [history[2]], next: null })
+                : Response.json({ id: record.id, served: [history[0]], next: 'p2' }),
+        (url: URL) =>
+            url.searchParams.has('before')
+                ? Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 })
+                : Response.json({ id: record.id, served: [history[0]], next: 'p2' }),
+        (url: URL) =>
+            Response.json({
+                id: record.id,
+                served: [history[0]],
+                next: url.searchParams.get('before') ?? 'p2',
+            }),
         () => Response.json({ code: 'service_unavailable', retryable: true }, { status: 503 }),
         () => Response.json({ id: record.id, served: [{ slot: 1 }] }),
     ]) {

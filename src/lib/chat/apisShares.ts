@@ -134,6 +134,8 @@ const KINDS: readonly string[] = ['card', 'canvas', 'search', 'conversation'];
 const CODE = /^[a-z][a-z0-9_]{0,63}$/;
 // dfo-apis' bound on a title.
 const MAX_TITLE = 300;
+// dfo-apis' largest page of a share's history.
+const HISTORY_PAGE = 500;
 
 const sharePath = (id: string): string => {
     // The id is the viewer's URL segment, so only dfo-apis' own form reaches a path.
@@ -376,20 +378,33 @@ export const readShare = async (
     };
 };
 
-/** What each slot of a share showed, newest first, an entry each time it
- *  changed. dfo-apis records an entry at every write and at each read that
- *  serves something new. */
+/** One page of what each slot of a share showed, newest first, an entry
+ *  each time it changed: the page after `before`, or the newest page when
+ *  `before` is null. `next` is the cursor of the page after this one, or
+ *  null at the end of the history. dfo-apis records an entry at every write
+ *  and at each read that serves something new. */
 export const readShareHistory = async (
     backend: SharesBackend,
     id: string,
-): Promise<ServedEntry[]> => {
-    const body = await json(await send(backend, `${sharePath(id)}/history`));
+    before: string | null = null,
+): Promise<{ served: ServedEntry[]; next: string | null }> => {
+    const query = new URLSearchParams({
+        limit: String(HISTORY_PAGE),
+        ...(before === null ? {} : { before }),
+    });
+    const body = await json(await send(backend, `${sharePath(id)}/history?${query}`));
+    const next = body['next'] ?? null;
 
-    if (body['id'] !== id || !Array.isArray(body['served'])) {
+    // A cursor that names the page just read would read it again.
+    if (
+        body['id'] !== id ||
+        !Array.isArray(body['served']) ||
+        (next !== null && (typeof next !== 'string' || next === before))
+    ) {
         throw new SharesError('backend_invalid');
     }
 
-    return body['served'].map(servedOf);
+    return { served: body['served'].map(servedOf), next };
 };
 
 /** Slot `slot` (from 1) of a share: its card drawn on the frame the slot

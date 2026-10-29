@@ -41,7 +41,7 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
  * (`refreshLiveCards`) from `GET /api/share/[id]/cards/[cardId]/refresh?slot=`,
  * whose body is `slotRefreshResponse`. A snapshot card the server did not
  * read in time is filled the same way. A snapshot's page also reads the
- * share's history once, which says since when each slot has shown its
+ * share's history, which says since when each slot has shown its
  * frame (`servedAt`), the date a card's citation gives.
  *
  * A live slot serves the newest frame. dfo-apis checks for newer data at
@@ -182,43 +182,53 @@ const savedOf = (record: ShareRecord, widgets: SavedConversation['widgets']): Sa
     }) as SavedConversation;
 
 // When each slot of a snapshot began to show the frame it serves, by slot:
-// the newest entry of the share's history with that slot and frame. Empty
-// when no slot records a frame or the history cannot be read.
+// the newest entry of the share's history with that slot and frame. The
+// history is read a page at a time until every framed slot has its entry
+// or the history ends. A slot is left out when no entry matches, or when a
+// page cannot be read (the page deadline included) before its entry turns up.
 const servedSince = async (
     shares: SharesBackend,
     record: ShareRecord,
 ): Promise<Map<number, string>> => {
-    const framed = record.slots.flatMap(({ slot, card }) =>
+    const pending = record.slots.flatMap(({ slot, card }) =>
         card?.frame ? [{ slot, frame: card.frame }] : [],
     );
+    const since = new Map<number, string>();
+    let before: string | null = null;
 
-    if (!framed.length) {
-        return new Map();
-    }
+    while (pending.length) {
+        let page: { served: ServedEntry[]; next: string | null };
 
-    let served: ServedEntry[];
+        try {
+            page = await readShareHistory(shares, record.id, before);
+        } catch (error) {
+            console.error('share: the share history could not be read', {
+                share: record.id,
+                error: error instanceof SharesError ? error.code : String(error),
+            });
 
-    try {
-        served = await readShareHistory(shares, record.id);
-    } catch (error) {
-        console.error('share: the share history could not be read', {
-            share: record.id,
-            error: error instanceof SharesError ? error.code : String(error),
-        });
+            break;
+        }
 
-        return new Map();
-    }
-
-    return new Map(
-        framed.flatMap(({ slot, frame }) => {
-            const entry = served.find(
-                ({ slot: at, card }) =>
-                    at === slot && card !== null && sameFrame(card.frame, frame),
+        for (const { slot: at, card, firstServedAt } of page.served) {
+            const found = pending.findIndex(
+                ({ slot, frame }) => slot === at && card !== null && sameFrame(card.frame, frame),
             );
 
-            return entry ? [[slot, entry.firstServedAt] as const] : [];
-        }),
-    );
+            if (found !== -1) {
+                since.set(at, firstServedAt);
+                pending.splice(found, 1);
+            }
+        }
+
+        if (page.next === null) {
+            break;
+        }
+
+        before = page.next;
+    }
+
+    return since;
 };
 
 /**
@@ -229,9 +239,9 @@ const servedSince = async (
  * on the frame its slot recorded: the frame of the card's revision for a
  * share made as a snapshot, and the frame the slot served at the switch for
  * a live share made a snapshot. `servedAt` gives each held card of a
- * snapshot the moment its slot began to show that frame, from one read of
- * the share's history; a card is left out when that read fails or no entry
- * matches. The reads share `deadlineMs`. A card whose
+ * snapshot the moment its slot began to show that frame, from the share's
+ * history read a page at a time; a card is left out when no entry matches
+ * or a page it needs cannot be read. The reads share `deadlineMs`. A card whose
  * read fails or is not done by then stays held and is named in `undrawn`,
  * so the browser asks the refresh route for it, and the failure is logged.
  * A live share's cards stay held for the browser.

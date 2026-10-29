@@ -165,7 +165,6 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                         ? undefined
                         : {
                               id: shared.id,
-                              createdAt: shared.createdAt,
                               servedAt: infoWidget ? shared.servedAt[infoWidget.id] : undefined,
                           }
                 }
