@@ -1,0 +1,20 @@
+{
+    "name": "ids-source",
+    "path": "/data?q=External+debt+of+Kenya",
+    "viewport": { "width": 1280, "height": 800 },
+    "hooks": [{ "v": "title", "selector": "main h1" }],
+    "steps": [
+        { "type": "wait", "selector": "text=Rows in your data" },
+        { "type": "click", "selector": "button:has-text(\"About\")" },
+        { "type": "wait", "ms": 1000 },
+        { "type": "capture", "state": "about" },
+        {
+            "type": "click",
+            "selector": "a[href$=\"/WorldBankInternationalDebtStatistics\"]:has-text(\"(IDS)\")"
+        },
+        { "type": "wait", "selector": "text=Transformation Log", "ms": 1000 },
+        { "type": "capture", "state": "source" },
+        { "type": "scroll", "y": 700 },
+        { "type": "capture", "state": "scrolled" }
+    ]
+}
