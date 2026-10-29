@@ -436,11 +436,10 @@ window.DFO = (() => {
         // cannot scroll an element, so the same offset moves the transcript's
         // children with `translate`, which no cue uses.
         const transcript = frame.querySelector('[data-v="view-chat"] [class*="chatScroll"]');
-        let shift = 0;
         const pin = () => {
             if (!transcript) return;
             for (const child of transcript.children) child.style.translate = '';
-            shift = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
+            const shift = Math.max(0, transcript.scrollHeight - transcript.clientHeight);
             for (const child of transcript.children) {
                 child.style.translate = shift ? '0 ' + -shift + 'px' : '';
             }
@@ -460,25 +459,22 @@ window.DFO = (() => {
             for (const c of cues) if (!c.attrs) c.apply(t);
         };
 
-        // An element's box in stage px at z = 1, from layout offsets inside
-        // the frame, so the player's own scaling of the stage cannot skew it.
+        // An element's box in stage px at z = 1, as it shows inside the frame:
+        // the frame's own rendered size gives the scale above it (the fit, the
+        // camera and the player's scaling of the stage), so every transform
+        // inside the frame counts, the transcript pin and a capture's scroll
+        // offset among them.
         const box = (el) => {
-            let x = 0;
-            let y = 0;
-            let node = el;
-            while (node && node !== frame) {
-                x += node.offsetLeft;
-                y += node.offsetTop;
-                node = node.offsetParent;
-            }
-            if (node !== frame)
+            if (!frame.contains(el) || !el.getClientRects().length)
                 throw new Error('DFO: cannot place ' + (el.dataset.v ?? el.className));
-            if (transcript && transcript !== el && transcript.contains(el)) y -= shift;
+            const f = frame.getBoundingClientRect();
+            const r = el.getBoundingClientRect();
+            const scale = f.width / frame.offsetWidth;
             return {
-                x: left + x * fit,
-                y: top + y * fit,
-                w: el.offsetWidth * fit,
-                h: el.offsetHeight * fit,
+                x: left + ((r.left - f.left) / scale) * fit,
+                y: top + ((r.top - f.top) / scale) * fit,
+                w: (r.width / scale) * fit,
+                h: (r.height / scale) * fit,
             };
         };
 

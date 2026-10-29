@@ -19,7 +19,7 @@ House conventions:
 
 - Health aid is OECD CRS purposes 120 (health) plus 130 (population policies and reproductive health, which holds HIV/AIDS). Fetch with `breakdown {"code_system": "crsPurpose", "level": 1}` and sum both. Purpose 120 alone misses HIV money such as PEPFAR and undercounts Kenya's health aid by more than half.
 - Name the definition where the figure shows, as the Kenya answer does: "Health aid counts purposes 120 and 130, which covers HIV/AIDS."
-- Use the latest complete year DFO holds and current US dollars unless the question says otherwise, and round as the Studio does ($5.7bn, $741m).
+- Use the latest complete year DFO holds and current US dollars unless the question says otherwise, and round as the Studio does: billions to one decimal, millions whole.
 
 Before writing the spec, show the user the figures, their sources and any ratio built from them, and make the wording of each claim match its number ("nearly eight times" for 7.7).
 
@@ -72,7 +72,7 @@ pnpm motion-kit capture motion-kit/pages/<name>.json --base http://localhost:310
 
 The generator checks the spec and cue sheet against the render and lists every problem it finds: a missing hook, state or keyframe, a cue field of the wrong type, a module over 200 KiB, an outside URL. Fix them and run it again. Each run replaces `motion-kit/dist/<name>/`.
 
-Then open `motion-kit/dist/<name>/preview.html`. It plays the cue sheet through the film's own runtime, with a scrubber, `?t=9.5` to open at a time and a state menu for captures; a runtime error shows above the stage. The built-in browser cannot open `file://` pages, so serve the folder for it:
+Then open `motion-kit/dist/<name>/preview.html`. It plays the cue sheet through the film's own runtime, with a scrubber and `?t=9.5` to open at a time; a runtime error shows above the stage. A capture's menu offers each state and, when its camera keys name states, "film", which switches state at each state's first key as the film's scenes will. The built-in browser cannot open `file://` pages, so serve the folder for it:
 
 ```bash
 python3 -m http.server 8765 --bind 127.0.0.1 --directory motion-kit/dist
@@ -109,7 +109,7 @@ kit.scene('plan', {
 });
 ```
 
-For a page capture, each scene mounts its state, and the runtime keeps only the cues and keys for that state: `window.DFO.mount(kit, { state: 'results', keys: d.keys }).cue(d.cues)`.
+For a page capture, each scene mounts its state, and the runtime keeps only the cues and keys for that state: `window.DFO.mount(kit, { state: 'results', keys: d.keys }).cue(d.cues)`. Start each scene where its state's first camera key is, so the film cuts where the preview does. `desk` sets the colour around the page: use the page's own background (the data search is `#3d3d3d`) so the frame's edges do not show. `motion-kit/pages/uganda-oda-search.json` and its cue sheet are the worked example: a search typed, its match, the answer, the measure refined and the table.
 
 `scenes.json` follows the type's instructions. The Kenya film uses `"stage": "final"`, 1920×1080 at 60 fps, a `#ecece0` background, and the fonts the stylesheet points at: Outfit as `sans` and DM Mono as `mono`. Add music only when the user asks for it.
 

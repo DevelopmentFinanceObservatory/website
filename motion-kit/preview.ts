@@ -8,8 +8,10 @@
  * the film's scenes call: `stage`, `module`, `json`, `css`, `h`, `el`,
  * `seg`, `lerp`, the `eo`, `ei`, `eio` and `eob` eases and `typist`. A
  * scene's own timing is absent: the page plays the cue sheet from 0 to the
- * runtime's `end`, when its last cue or camera hold ends. `?t=4.2` opens it paused at 4.2 s, and
- * `?state=typed` opens a captured page's state.
+ * runtime's `end`, when its last cue or camera hold ends. `?t=4.2` opens it
+ * paused at 4.2 s, and `?state=typed` opens a captured page's state. A
+ * capture whose camera keys name states (`in`) also plays as the film,
+ * switching to each state at its first key, as the film's scenes would.
  */
 
 import type { Module } from './build.ts';
@@ -85,6 +87,19 @@ const select = document.getElementById('state');
 const html = kit.json('manifest.json').modules.html;
 let film = null;
 let playing = null;
+// A capture's states in the order their first camera key shows them, and
+// whether the page is playing them as the film.
+const FILM = '';
+const starts = [];
+for (const key of cues.keys) {
+    if (key.in != null && !starts.some((s) => s.state === key.in)) {
+        starts.push({ state: key.in, t: key.t });
+    }
+}
+starts.sort((a, b) => a.t - b.t);
+const stateAt = (t) => starts.filter((s) => s.t <= t).pop()?.state ?? starts[0].state;
+let auto = false;
+let mounted;
 
 const fit = () => {
     const scale = Math.min(innerWidth / 1920, (innerHeight - 60) / 1080);
@@ -96,6 +111,7 @@ const show = (t) => {
     scrub.value = t;
     time.textContent = (+t).toFixed(2) + ' s';
     try {
+        if (auto && stateAt(+t) !== mounted) mountState(stateAt(+t));
         film?.render(+t);
     } catch (error) {
         document.getElementById('error').textContent = error.stack;
@@ -103,22 +119,31 @@ const show = (t) => {
     }
 };
 
-const mount = (state) => {
+// Mounts one state (or the Studio's one fragment); returns when it ends.
+const mountState = (state) => {
     stage.replaceChildren();
     try {
         new Function('kit', MODULES['shared.js'])(kit);
         film = DFO.mount(kit, { keys: cues.keys, state }).cue(cues.cues);
-        length = Math.max(1, film.end);
-        scrub.max = length;
     } catch (error) {
         document.getElementById('error').textContent = error.stack;
         throw error;
     }
+    mounted = state;
+    return film.end;
+};
+
+const mount = (choice) => {
+    auto = choice === FILM;
+    const ends = auto ? starts.map((s) => mountState(s.state)) : [mountState(choice)];
+    length = Math.max(1, ...ends);
+    scrub.max = length;
     show(scrub.value);
 };
 
 if (typeof html !== 'string') {
     select.hidden = false;
+    if (starts.length) select.add(new Option('film', FILM));
     for (const name of Object.keys(html)) select.add(new Option(name, name));
     select.value = params.get('state') ?? select.value;
     select.onchange = () => mount(select.value);

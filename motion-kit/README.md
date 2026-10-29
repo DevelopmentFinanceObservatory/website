@@ -98,7 +98,7 @@ Every run writes `preview.html` beside the modules: one page with every module i
 open motion-kit/dist/kenya-debt-health/preview.html
 ```
 
-The page mounts the film with `shared.js` in a stand-in for Motion's stage and plays the cue sheet from 0 to the runtime's `end`, when the last cue finishes or the last camera hold ends, with a play button and a scrubber. `?t=9.5` opens it at 9.5 s; a page capture has a menu of its states, and `?state=typed` opens one. A runtime error shows above the stage. The stand-in implements the part of Motion's `kit` the runtime calls (`preview.ts`), so a scene's own timing and Motion's export are untested here: check the published film in Motion before sharing it.
+The page mounts the film with `shared.js` in a stand-in for Motion's stage and plays the cue sheet from 0 to the runtime's `end`, when the last cue finishes or the last camera hold ends, with a play button and a scrubber. `?t=9.5` opens it at 9.5 s; a page capture has a menu of its states, and `?state=typed` opens one. When a capture's camera keys name states, the menu also offers "film", the default, which mounts each state from its first key's time, as the film's scenes do. A runtime error shows above the stage. The stand-in implements the part of Motion's `kit` the runtime calls (`preview.ts`), so a scene's own timing and Motion's export are untested here: check the published film in Motion before sharing it.
 
 ### Hooks
 

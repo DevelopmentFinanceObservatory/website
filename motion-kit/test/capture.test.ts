@@ -339,6 +339,18 @@ test('a fixture page captures as static markup and the CSS its states use', asyn
         assert.equal(await page.locator('#error').textContent(), '');
         assert.equal(await page.locator('#state').inputValue(), 'filled');
         assert.equal(await page.locator('[data-v="field"]').inputValue(), 'Kenya');
+        // The runtime places a hook where the capture saw it, scrolled.
+        const placed = (await page.evaluate(
+            `film.box(document.querySelector('[data-v="tile"]')).y`,
+        )) as number;
+        const fit = Math.min(1920 / 800, 1080 / 600);
+
+        // Within two px of the page; ignoring the scroll puts it 40 px off.
+        assert.ok(
+            Math.abs(placed - (1080 - 600 * fit) / 2 - boxes.tile!.filled!.y * fit) < 2 * fit,
+            `placed at ${placed}`,
+        );
+
         // The cue `in` the other state is left out.
         assert.ok(await page.locator('[data-v="field"]').isVisible());
 
