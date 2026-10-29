@@ -1,19 +1,13 @@
-import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Pool, PoolClient } from 'pg';
 
 import { applyMigrations } from '../apply-migrations.ts';
-import { exportShares, placeShare, readShares, type StoredShare } from '../share-export.ts';
+import { placeShare, readShares, type StoredShare } from '../share-export.ts';
 import { createTestDatabase } from './harness.ts';
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
-const SCRIPT = path.resolve(import.meta.dirname, '../../scripts/export-shares.ts');
-const run = promisify(execFile);
 
 const FRAME = { spec_id: 'spec_aid', content_version: 'cv_1' };
 const DERIVED = { spec_id: 'ops_growth', content_version: 'ocv_2' };
@@ -281,8 +275,7 @@ const EXPECTED = [
 /**
  * The export over a migrated database holding one share per legacy case,
  * read as the runtime role: each lands with its mode, owner, slots and
- * payload, in `created_at` then id order, from `--since` on; and the
- * script writes the same lines, or refuses with nothing written.
+ * payload, in `created_at` then id order.
  */
 test('every legacy share case lands in the export', async (t) => {
     const database = await createTestDatabase();
@@ -331,65 +324,13 @@ test('every legacy share case lands in the export', async (t) => {
         `insert into share_card_result (share_id, card_id, status) values ('canvLiv1', 'c1', 'current')`,
     );
 
-    const all = exportShares(await readShares(pool, '2026-08-01T00:00:00Z'));
+    const lines = (await readShares(pool)).map(placeShare);
 
     // The lines are JSON, where a member left undefined is absent.
-    assert.deepEqual(JSON.parse(JSON.stringify(all)), { lines: EXPECTED, refusals: [] });
-
-    const later = exportShares(await readShares(pool, '2026-09-05T10:00:00+00:00'));
-
     assert.deepEqual(
-        later.lines.map(({ id }) => id),
-        ['cardLiv1', 'cardSnp2', 'convSnp1'],
+        JSON.parse(JSON.stringify(lines)),
+        EXPECTED.map((line) => ({ line })),
     );
-
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'share-export-'));
-    t.after(() => fs.rm(dir, { recursive: true, force: true }));
-
-    const out = path.join(dir, 'shares.jsonl');
-    const env = {
-        ...process.env,
-        DATABASE_URL: `postgres://${database.runtimeUser}:${database.runtimePassword}@${process.env.PGHOST ?? 'localhost'}:${process.env.PGPORT ?? 5433}/${database.databaseName}`,
-    };
-    const exported = await run(
-        process.execPath,
-        [SCRIPT, '--since', '2026-08-01T00:00:00Z', '--out', out],
-        { env },
-    );
-
-    const written = await fs.readFile(out, 'utf8');
-
-    assert.ok(written.endsWith('\n'));
-    assert.deepEqual(
-        written
-            .trimEnd()
-            .split('\n')
-            .map((line) => JSON.parse(line)),
-        EXPECTED,
-    );
-    assert.match(exported.stderr, /^7 shares exported since 2026-08-01T00:00:00Z: /m);
-
-    await pool.query(
-        `insert into share (id, kind, title, data, created_at)
-         values ('gallery1', 'gallery', 'G', '{}'::jsonb, '2026-09-07T10:00:00Z')`,
-    );
-
-    const refusedOut = path.join(dir, 'refused.jsonl');
-    const refused = await run(
-        process.execPath,
-        [SCRIPT, '--since', '2026-08-01T00:00:00Z', '--out', refusedOut],
-        { env },
-    ).catch((error: { code: number; stderr: string }) => error);
-
-    assert.equal('code' in refused && refused.code, 1);
-    assert.match(refused.stderr, /share gallery1: kind "gallery" is not a share kind/);
-    await assert.rejects(fs.access(refusedOut));
-
-    const noOffset = await run(process.execPath, [SCRIPT, '--since', '2026-08-01T00:00:00'], {
-        env,
-    }).catch((error: { code: number }) => error);
-
-    assert.equal('code' in noOffset && noOffset.code, 2);
 
     // A share's parts deleted between the read of the shares and the read of
     // their parts still export with it, as both reads see one snapshot.
@@ -399,7 +340,6 @@ test('every legacy share case lands in the export', async (t) => {
             raced = true;
             await database.adminPool().query(`delete from share_ref where share_id = 'srchSnp1'`);
         }),
-        '2026-09-02T00:00:00Z',
     );
 
     assert.ok(raced);

@@ -1,14 +1,38 @@
 # Share export
 
-`scripts/export-shares.ts` writes the website's shares as JSON lines, one share per line, and dfo-apis' `maintenance.py import-shares` reads them. The import keeps each 8-character id, so every `/s/<id>` and `/embed/<id>` link keeps working. The queries and the rule that places each share are in `db/share-export.ts`.
+The share migration Job copies the website's shares into dfo-apis, once per environment. It reads every row of `share`, places each as one export line (below), and sends it to dfo-apis' share import route. The import keeps each 8-character id, so every `/s/<id>` and `/embed/<id>` link keeps working. The queries and the rule that places each share are in `db/share-export.ts`, and the run is in `db/share-migrate.ts`.
 
 ```
-node scripts/export-shares.ts --since 2026-10-01T00:00:00Z --out shares.jsonl
+gcloud run jobs execute dfo-dev-website-staging-share-migrate --region northamerica-northeast1 --wait
 ```
 
-The script reads the database from `DATABASE_URL`, or from the `WEBSITE_DB_*` Cloud SQL variables the runtime uses, and writes nothing to it. `--since` takes an ISO timestamp with a `Z` or `+hh:mm` offset and exports every share whose `created_at` is at or after it. Without `--out` the lines go to stdout. A count by kind and mode goes to stderr. A bad `--since` exits 2.
+That is the Job on dev; deploy/README.md says how it is deployed. The Job runs `node dist/migrate-shares.cjs` (`db/migrate-shares.ts`, bundled by `pnpm build:migrate-shares`). It reads the database from the `WEBSITE_DB_*` Cloud SQL variables the runtime uses, or from `DATABASE_URL` locally, and calls dfo-apis at `SEARCH_API_BASE` through `apisFetch` (`src/lib/apisAuth.ts`), which adds the runtime service account's ID token as the service's calls do, with the secret `PRESENTATION_SHARE_IMPORT_PRINCIPAL` in `x-dfo-principal`, which must equal dfo-apis' own `PRESENTATION_SHARE_IMPORT_PRINCIPAL`.
 
-A share the script cannot place fails the run. The script prints `share <id>: <reason>` for each such share to stderr, exits 1, and writes no output, so a file on disk is always a whole export. Runs overlap safely, because the import is idempotent and a later run with an earlier `--since` writes the same lines for the same shares.
+Each share is one `PUT /api/presentation/shares/<id>/import`, whose body is the share's line without `id`, plus `write_token_sha256`. dfo-apis answers 201 when it imports the share and 200 when it already holds it with the same kind, `created_at` and digest. `SHARE_IMPORT` in `db/share-migrate.ts` holds the path, the header and these statuses.
+
+## Write tokens
+
+A guest's share goes with a null `write_token_sha256`, and nobody can change or delete it. A signed-in owner's share keeps its write token in `share_token`, and only the token's hex SHA-256 goes to dfo-apis. The Job takes two transactions per owned share:
+
+1. It reads the owner's token for the share, or mints one (`shw_` and 22 base64url characters) and stores it with `putShareToken`, and commits. A token stored once is reused by every later run.
+2. It reads the token again with the owner's `user` row locked `FOR SHARE`, sends the import, and then ends the transaction. An account deletion that fences the owner meanwhile waits for the lock and then finds the token, so it takes the imported share down. A deletion that fenced the account first leaves no row to read, and the share is skipped.
+
+## Outcomes
+
+A share that is neither imported nor unchanged prints `share <id>: <code> <detail>`, and the run carries on with the next share. The last line counts each code, as `7 shares: imported 6, share_id_taken 1`. The Job exits 0 when every share is imported or unchanged, and 1 otherwise. A run again is safe, so fix what the lines name and run it again.
+
+| Code                             | Meaning                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| `imported`                       | dfo-apis imported the share                                                           |
+| `unchanged`                      | dfo-apis already held the share as sent                                               |
+| `placement_refused`              | the share cannot be placed as a line (see "Refused shares")                           |
+| `token_not_stored`               | the owner's account is gone or being deleted, or another user holds the share's token |
+| `owner_deleted`                  | the owner's account was fenced for deletion after the token was stored                |
+| `unreachable`                    | the call got no answer within 30 seconds                                              |
+| `share_id_taken`                 | dfo-apis holds another share under the id, or the same share with another digest      |
+| `request_invalid`                | dfo-apis refused the line                                                             |
+| `not_found`, `frame_unavailable` | dfo-apis cannot find a slot's component revision or frame                             |
+| `http_<status>`                  | an answer with no problem code                                                        |
 
 ## Lines
 
@@ -47,7 +71,7 @@ A snapshot's data card without a component reference, which includes every card 
 
 ## Refused shares
 
-The script refuses a share whose:
+The migration refuses a share, with `placement_refused`, whose:
 
 - id is not 8 letters and digits;
 - kind is not one of the four;
@@ -60,11 +84,11 @@ The script refuses a share whose:
 
 ## Left out
 
-`share_card_result` rows cache live refreshes, and dfo-apis refreshes live slots itself, so the export leaves them out. It leaves out the `conversation_id` and `card_id` columns too, because no share page reads them.
+`share_card_result` rows cache live refreshes, and dfo-apis refreshes live slots itself, so the migration leaves them out. It leaves out the `conversation_id` and `card_id` columns too, because no share page reads them.
 
 ## Round trip on a local stack
 
-`scripts/share-migration-round-trip.ts` runs the whole migration on a local website and the dfo-apis local stack. It makes two cards in dfo-apis on the stack's seeded readings, seeds one share per legacy case (a search share with no mode from a guest, a search snapshot, a canvas with no mode holding a card with no component reference, a live canvas holding a card with no frame, a live card, a guest's snapshot card with no component reference, and a conversation with no mode), and runs `export-shares`, dfo-apis' `import-shares` and `import-share-tokens`. It then renders `/s/<id>` and `/embed/<id>` of each share through the dev server and checks what each shows: a search share redirects to `/data?share=<id>` and reads back its mode, query and parts from `/api/share/<id>`, a slotted card draws its component revision, a card with no component reference and a conversation's cards show as stored, and each live slot draws its card from `/api/v1/presentation/shares/<id>/slots/<n>`. The owner signs in with a session row and switches their live canvas to snapshot with its imported token, and cannot delete a guest's share. Last, it runs both imports again and checks that dfo-apis holds the same shares and `share_token` the same tokens.
+`scripts/share-migration-round-trip.ts` runs the whole migration on a local website and the dfo-apis local stack. It makes two cards in dfo-apis on the stack's seeded readings, seeds one share per legacy case (a search share with no mode from a guest, a search snapshot, a canvas with no mode holding a card with no component reference, a live canvas holding a card with no frame, a live card, a guest's snapshot card with no component reference, and a conversation with no mode), and runs the Job's `migrateShares` over them against the stack's import route, with the principal the stack's `local.env` sets. It checks that every share is imported and that the owner has a token for each of their shares and none for a guest's. It then renders `/s/<id>` and `/embed/<id>` of each share through the dev server and checks what each shows: a search share redirects to `/data?share=<id>` and reads back its mode, query and parts from `/api/share/<id>`, a slotted card draws its component revision, a card with no component reference and a conversation's cards show as stored, and each live slot draws its card from `/api/v1/presentation/shares/<id>/slots/<n>`. The owner signs in with a session row and switches their live canvas to snapshot with its token, and cannot delete a guest's share. Last, it runs the migration again and checks that every share is unchanged, that dfo-apis holds the same shares, and that `share_token` holds the same tokens.
 
 It needs the stack up and seeded (`just local-stack up` and `just local-stack seed` in dfo-apis), a migrated website database, and the dev server on that database in front of the stack, with the caller principal and HMAC key the stack uses:
 
@@ -79,4 +103,4 @@ SEARCH_API_BASE=http://127.0.0.1:58083 BETTER_AUTH_URL=http://127.0.0.1:3000 \
 DFO_APIS_DIR=/path/to/dfo-apis node scripts/share-migration-round-trip.ts
 ```
 
-The dev server runs on port 3000 because the stack's share links name `http://127.0.0.1:3000`. `WEBSITE_URL` points the script at another address. Each check prints one line, and the script exits 1 when any fails. Its shares, cards and rows stay in place under fresh ids, so it can run again on the same stack.
+The dev server runs on port 3000 because the stack's share links name `http://127.0.0.1:3000`. `WEBSITE_URL` and `SEARCH_API_BASE` point the script at another website and dfo-apis. Each check prints one line, and the script exits 1 when any fails. Its shares, cards and rows stay in place under fresh ids, so it can run again on the same stack.

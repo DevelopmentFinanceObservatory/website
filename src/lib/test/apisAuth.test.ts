@@ -98,21 +98,26 @@ test('off Cloud Run a request to apis goes out as given, with no mint', async ()
     assert.equal(sent[0]!.headers.get('accept'), 'application/json');
 });
 
-test('on Cloud Run a request to apis carries a token minted for the apis origin', async () => {
-    const { apisFetch, mints, sent } = stubbed();
+for (const [label, env] of [
+    ['a service', ON_CLOUD_RUN],
+    ['a Job', { CLOUD_RUN_JOB: 'dfo-dev-website-staging-share-migrate', SEARCH_API_BASE: APIS }],
+] as const) {
+    test(`on Cloud Run ${label}'s request to apis carries a token minted for the apis origin`, async () => {
+        const { apisFetch, mints, sent } = stubbed({ env });
 
-    await apisFetch(`${APIS}/api/search/resolve?q=aid`, {
-        headers: { authorization: 'Bearer caller', 'x-dfo-principal': 'p' },
+        await apisFetch(`${APIS}/api/search/resolve?q=aid`, {
+            headers: { authorization: 'Bearer caller', 'x-dfo-principal': 'p' },
+        });
+
+        assert.equal(mints.length, 1);
+        assert.equal(new URL(mints[0]!.url).searchParams.get('audience'), APIS);
+        assert.equal(new URL(mints[0]!.url).searchParams.get('format'), 'full');
+        assert.equal(mints[0]!.flavor, 'Google');
+        assert.equal(claimN(sent[0]!.headers), 1);
+        assert.equal(sent[0]!.headers.get('authorization'), 'Bearer caller');
+        assert.equal(sent[0]!.headers.get('x-dfo-principal'), 'p');
     });
-
-    assert.equal(mints.length, 1);
-    assert.equal(new URL(mints[0]!.url).searchParams.get('audience'), APIS);
-    assert.equal(new URL(mints[0]!.url).searchParams.get('format'), 'full');
-    assert.equal(mints[0]!.flavor, 'Google');
-    assert.equal(claimN(sent[0]!.headers), 1);
-    assert.equal(sent[0]!.headers.get('authorization'), 'Bearer caller');
-    assert.equal(sent[0]!.headers.get('x-dfo-principal'), 'p');
-});
+}
 
 test('a Request to apis keeps its own headers beside the token', async () => {
     const { apisFetch, sent } = stubbed();

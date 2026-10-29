@@ -41,6 +41,10 @@ RUN pnpm run build:migrate
 # and for the same reason.
 RUN pnpm run build:export-events
 
+# The share migration Job's command (db/migrate-shares.ts), bundled the
+# same way and for the same reason.
+RUN pnpm run build:migrate-shares
+
 FROM node:24-slim AS runtime
 
 # node:24-slim already ships a `node` user at UID 1000, so let useradd pick
@@ -67,6 +71,10 @@ COPY --from=builder --chown=app:app /app/db/migrations ./db/migrations
 # The event export Job's `command` override runs this bundle. It reads no
 # file at runtime, so the bundle travels alone.
 COPY --from=builder --chown=app:app /app/dist/export-events.cjs ./dist/export-events.cjs
+
+# The share migration Job's `command` override runs this bundle, which also
+# reads no file at runtime.
+COPY --from=builder --chown=app:app /app/dist/migrate-shares.cjs ./dist/migrate-shares.cjs
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
