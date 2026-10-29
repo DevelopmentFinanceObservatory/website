@@ -3,6 +3,7 @@
  * refuses before sending, and the card after a refusal or a fresh plan.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -755,7 +756,7 @@ test('an approve carries the revision of the card the user approved', () => {
     });
 });
 
-test('a stale switch without a current card keeps its revision, so an approve is refused', () => {
+test('a stale switch without a current card ends read-only, offering nothing the harness refuses', () => {
     const plan = startSwitch(planFromFrame(frame()), {
         choiceId: 'spec_1:measure_basis',
         optionId: 'measure_basis:net',
@@ -772,9 +773,9 @@ test('a stale switch without a current card keeps its revision, so an approve is
         choiceId: null,
         optionId: null,
     });
+    assert.equal(refused.live, false);
     assert.equal(canSwitch(refused), false);
     assert.equal(switchReply(refused, 'spec_1:measure_basis', 'measure_basis:net'), null);
-    assert.deepEqual(approveReply(refused), { decision: 'approve', plan_revision: 'rev-a' });
 });
 
 test('an unavailable option keeps the card and shows the harness reason', () => {
@@ -1390,9 +1391,20 @@ const approvedFrame: PlanApproved = {
         { label: 'Chart' },
     ],
     choices: [
-        { question: 'Basis', chosen: 'net disbursements', changed_from: 'gross disbursements' },
+        {
+            choice_id: 'spec_1:measure_basis',
+            question: 'Basis',
+            chosen: 'net disbursements',
+            changed_from: 'gross disbursements',
+        },
     ],
 };
+
+/** The harness's wire fixture (`services/harness/tests/wire_fixtures/studio`
+ *  in dfo-ai), copied. */
+const approvedFixture = JSON.parse(
+    readFileSync(new URL('./fixtures/event-16-plan-approved.json', import.meta.url), 'utf8'),
+) as PlanApproved;
 
 test('plan.approved rides on the reply the approve resumed and survives a save and a fork', () => {
     const messages: ChatMessage[] = [
@@ -1448,6 +1460,32 @@ test('a stored approved plan without steps or choices still gives a view', () =>
         assert.deepEqual(view.choices, []);
         assert.equal(answerStepOf(view), undefined);
     }
+});
+
+test('an approved plan files planner decisions under their own head, by choice id', () => {
+    assert.deepEqual(
+        ledgerSections(approvedView(approvedFromFrame(approvedFixture))).map((section) => [
+            section.head,
+            section.choices.map((choice) => choice.name),
+        ]),
+        [
+            [SCOPE_HEAD, ['Basis']],
+            [PLANNER_HEAD, ['Prices']],
+        ],
+    );
+
+    // Saved before the harness sent choice ids: every choice counts as scope.
+    const stored = JSON.parse(
+        JSON.stringify({
+            ...approvedFixture,
+            choices: approvedFixture.choices.map(({ question, chosen }) => ({ question, chosen })),
+        }),
+    ) as PlanApproved;
+
+    assert.deepEqual(
+        ledgerSections(approvedView(stored)).map((section) => section.head),
+        [SCOPE_HEAD],
+    );
 });
 
 test('an approved plan with no step flagged answers with its last step', () => {

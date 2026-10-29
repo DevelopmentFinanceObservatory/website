@@ -107,9 +107,17 @@ test('a part reads with its assumptions, [] and null included, and a malformed o
     const scope = { kind: 'place_scope', binding_ref: 'where:', refs: [], text: 'every country' };
     // The wire's `refs` is optional, so an item without it reads.
     const donors = { kind: 'open_role', binding_ref: 'origin:', text: 'every donor' };
+    const germany = {
+        kind: 'name_corrected',
+        binding_ref: 'origin:',
+        refs: ['country/DEU'],
+        text: '"Germny" read as Germany',
+        asked: 'Germny',
+    };
 
     assert.deepEqual(reads([oda, scope])?.assumptions, [oda, scope]);
     assert.deepEqual(reads([donors])?.assumptions, [donors]);
+    assert.deepEqual(reads([germany])?.assumptions, [germany]);
     assert.deepEqual(reads([])?.assumptions, []);
     assert.equal(reads(null)?.assumptions, null);
     assert.ok(reads(undefined));
@@ -121,6 +129,9 @@ test('a part reads with its assumptions, [] and null included, and a malformed o
         [{ ...oda, refs: null }],
         [{ ...oda, text: null }],
         [{ ...oda, note: 'extra' }],
+        [{ ...germany, asked: '' }],
+        [{ ...germany, asked: 'a'.repeat(201) }],
+        [{ ...germany, asked: 7 }],
         [{ ...oda, text: '' }],
         [{ ...oda, text: 'a'.repeat(201) }],
         [{ ...oda, refs: ['ODA', 'OOF'] }],

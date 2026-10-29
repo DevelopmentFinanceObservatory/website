@@ -1,0 +1,23 @@
+{
+    "name": "kenya-debt-search",
+    "path": "/data",
+    "viewport": { "width": 1280, "height": 800 },
+    "hooks": [
+        { "v": "prompt", "selector": "textarea[class*=\"DataPrompt\"]" },
+        { "v": "answer", "selector": "h1[class*=\"sentence\"]" }
+    ],
+    "steps": [
+        { "type": "capture", "state": "empty" },
+        { "type": "click", "selector": "textarea[class*=\"DataPrompt\"]" },
+        {
+            "type": "type",
+            "selector": "textarea[class*=\"DataPrompt\"]",
+            "text": "External debt of Kenya"
+        },
+        { "type": "wait", "selector": "text=Looks like a match" },
+        { "type": "capture", "state": "typed" },
+        { "type": "press", "key": "Enter" },
+        { "type": "wait", "selector": "text=Rows in your data", "ms": 3000 },
+        { "type": "capture", "state": "results" }
+    ]
+}

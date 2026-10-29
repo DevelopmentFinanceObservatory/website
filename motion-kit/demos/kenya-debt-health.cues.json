@@ -1,0 +1,199 @@
+{
+    "keys": [
+        {
+            "t": 0,
+            "hold": 1.0
+        },
+        {
+            "t": 1.9,
+            "hook": "prompt",
+            "z": 1.9,
+            "hold": 2.7
+        },
+        {
+            "t": 5.4,
+            "hook": "msg-1",
+            "z": 1.7,
+            "hold": 3.0
+        },
+        {
+            "t": 9.2,
+            "hook": "plan",
+            "z": 1.6,
+            "hold": 1.2
+        },
+        {
+            "t": 11.3,
+            "hook": "canvas",
+            "z": 1.2,
+            "hold": 3.3
+        },
+        {
+            "t": 15.4,
+            "hook": "card-debt-vs-health",
+            "z": 1.8,
+            "hold": 2.6,
+            "drift": [0, 0, 0.01]
+        },
+        {
+            "t": 18.8,
+            "z": 1,
+            "hold": 6
+        }
+    ],
+    "cues": [
+        {
+            "name": "Studio_module_board-in",
+            "kind": "animate",
+            "at": 0
+        },
+        {
+            "name": "Studio_module_bar-in",
+            "kind": "animate",
+            "at": 0
+        },
+        {
+            "name": "WorkspaceToolbar_module_ws-rise",
+            "kind": "animate",
+            "at": 0
+        },
+        {
+            "name": "ChatPanel_module_chat-in",
+            "kind": "animate",
+            "at": 0
+        },
+        {
+            "v": "prompt",
+            "kind": "type",
+            "at": 0.9,
+            "cps": 26,
+            "clearAt": 4.5,
+            "text": "Compare Kenya's external debt service with its health aid since 2015, including HIV"
+        },
+        {
+            "v": "send",
+            "kind": "press",
+            "at": 4.3
+        },
+        {
+            "v": "msg-0",
+            "kind": "show",
+            "at": 4.5,
+            "dur": 0
+        },
+        {
+            "v": "msg-1",
+            "sel": ".ChatPanel_module_botText",
+            "kind": "stream",
+            "at": 5.0,
+            "wps": 12
+        },
+        {
+            "v": "msg-1",
+            "sel": ".MessageFeedback_module_feedback",
+            "kind": "show",
+            "at": 8.3,
+            "dur": 0
+        },
+        {
+            "v": "plan",
+            "kind": "show",
+            "at": 8.6,
+            "dur": 0
+        },
+        {
+            "v": "plan-bar",
+            "kind": "show",
+            "at": 8.6,
+            "dur": 0
+        },
+        {
+            "v": "plan-approve",
+            "kind": "press",
+            "at": 10.0
+        },
+        {
+            "v": "plan",
+            "kind": "remove",
+            "at": 10.2
+        },
+        {
+            "v": "plan-bar",
+            "kind": "remove",
+            "at": 10.2
+        },
+        {
+            "kind": "state",
+            "to": "approved",
+            "at": 10.2
+        },
+        {
+            "v": "plan-pill",
+            "kind": "show",
+            "at": 10.2,
+            "dur": 0
+        },
+        {
+            "v": "card-debt-service-2024",
+            "kind": "animate",
+            "at": 11.4
+        },
+        {
+            "v": "card-health-aid-2024",
+            "kind": "animate",
+            "at": 11.8
+        },
+        {
+            "v": "card-debt-vs-health",
+            "kind": "animate",
+            "at": 12.3
+        },
+        {
+            "v": "msg-1",
+            "sel": ".WidgetChips_module_chips",
+            "kind": "show",
+            "at": 12.6,
+            "dur": 0
+        },
+        {
+            "v": "series-debt-vs-health-0",
+            "kind": "draw",
+            "at": 12.7,
+            "dur": 1.8
+        },
+        {
+            "v": "series-debt-vs-health-1",
+            "kind": "draw",
+            "at": 12.9,
+            "dur": 1.8
+        },
+        {
+            "v": "msg-2",
+            "sel": ".ChatPanel_module_botText",
+            "kind": "stream",
+            "at": 18.4,
+            "wps": 14
+        },
+        {
+            "v": "msg-2",
+            "sel": ".MessageFeedback_module_feedback",
+            "kind": "show",
+            "at": 21.6,
+            "dur": 0
+        },
+        {
+            "v": "msg-2",
+            "sel": ".WidgetChips_module_chips",
+            "kind": "show",
+            "at": 21.8,
+            "dur": 0
+        },
+        {
+            "v": "msg-2",
+            "sel": ".ChatPanel_module_followups",
+            "kind": "show",
+            "at": 22.0,
+            "dur": 0
+        }
+    ]
+}

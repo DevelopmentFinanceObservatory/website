@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isBotRequest } from '@/lib/bot';
 import { db } from '@/lib/db';
 import { event } from '../../../db/schema';
 import { logEvent } from './eventLog';
@@ -77,9 +78,16 @@ export type Who = {
  * Record one event. Fire-and-forget: analytics never cost a request, so a
  * failed insert or forward is logged and swallowed, and each sink fails
  * independently of the others. The log line goes first and cannot throw, so
- * Cloud Logging has the event whether the insert or the forward fails.
+ * Cloud Logging has the event whether the insert or the forward fails. An
+ * event whose request came from a crawler, link-preview fetcher or script
+ * (isBotRequest) is not recorded anywhere, since no stored row or log line
+ * keeps the user agent to tell it from a person's afterwards.
  */
 export const track = async (name: EventName, props: EventProps, who: Who) => {
+    if (isBotRequest(who.headers)) {
+        return;
+    }
+
     logEvent(name, props, who);
 
     try {
