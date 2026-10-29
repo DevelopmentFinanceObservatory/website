@@ -4,16 +4,26 @@
  * sitemap lists pages it may fetch and index.
  */
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import test from 'node:test';
 
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match.js';
-import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination.js';
+import metadataRoute from 'next/dist/lib/metadata/get-metadata-route.js';
+import { searchParamsToUrlQuery } from 'next/dist/shared/lib/router/utils/querystring.js';
 
 import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
 import robots from '../../app/robots.ts';
-import { dataPageMetadata, dataPageRobots, NOINDEX_ROUTES, noindexHeaders } from '../crawl.ts';
+import {
+    dataPageMetadata,
+    dataPageNoindex,
+    dataPageQuery,
+    dataPageRobots,
+    NOINDEX_ROUTES,
+    noindexHeaders,
+} from '../crawl.ts';
 import type { DocsPage } from '../docs/corpus.ts';
+import { galleryCard, pageOpenGraph, SITE_CARD, SITE_NAME } from '../site.ts';
 import { sitemapPaths } from '../sitemap.ts';
 
 // robots.txt matching as Google does it: a rule matches from the start of
@@ -31,22 +41,13 @@ const blocked = (path: string): boolean => {
     });
 };
 
-// The X-Robots-Tag next.config.ts sends for a URL, matched the way Next
-// matches a header rule's `source`, `has` and `missing`.
-const robotsHeader = (path: string): string | undefined => {
-    const url = new URL(path, 'https://example.org');
-    const query = Object.fromEntries(url.searchParams);
-    const request = { headers: {}, cookies: {} } as Parameters<typeof matchHas>[0];
-
-    return noindexHeaders(gallery)
-        .filter(
-            (rule) =>
-                getPathMatch(rule.source)(url.pathname) !== false &&
-                matchHas(request, query, rule.has, rule.missing) !== false,
-        )
+// The X-Robots-Tag next.config.ts sends for a path, matched the way Next
+// matches a header rule's `source`.
+const robotsHeader = (path: string): string | undefined =>
+    noindexHeaders()
+        .filter((rule) => getPathMatch(rule.source)(path) !== false)
         .flatMap((rule) => rule.headers)
         .find((header) => header.key === 'X-Robots-Tag')?.value;
-};
 
 const base = {
     title: 'Item',
@@ -97,25 +98,54 @@ test('every noindex route answers noindex, redirects and errors included', () =>
 });
 
 test('/data says noindex in its headers exactly where its metadata does', () => {
-    const queries: Record<string, string>[] = [
-        {},
-        { share: 'bbbbbbbb' },
-        { share: 'cccccccc' },
-        { share: 'aaaaaaaa' },
-        { spec: 'x' },
-        { spec: 'x', share: 'bbbbbbbb' },
-        { q: 'aid to Ghana' },
-    ];
+    for (const search of [
+        '',
+        'share=bbbbbbbb',
+        'share=cccccccc',
+        'share=aaaaaaaa',
+        'share=',
+        'spec=',
+        'spec=x',
+        'spec=x&share=bbbbbbbb',
+        'share=bbbbbbbb&share=bbbbbbbb',
+        'share=cccccccc&share=bbbbbbbb',
+        'q=aid+to+Ghana',
+    ]) {
+        const params = new URLSearchParams(search);
+        // The page's searchParams, as Next builds them from the URL.
+        const query = searchParamsToUrlQuery(params);
 
-    for (const query of queries) {
-        const path = `/data?${new URLSearchParams(query)}`;
-
-        assert.equal(
-            robotsHeader(path),
-            dataPageRobots(query, gallery) ? 'noindex, nofollow' : undefined,
-            path,
-        );
+        assert.deepEqual(dataPageQuery(params), query, search);
+        assert.equal(dataPageNoindex(params, gallery), !!dataPageRobots(query, gallery), search);
     }
+
+    assert.equal(dataPageNoindex(new URLSearchParams('share='), gallery), true);
+    assert.equal(
+        dataPageNoindex(new URLSearchParams('share=cccccccc&share=bbbbbbbb'), gallery),
+        true,
+    );
+    assert.equal(dataPageNoindex(new URLSearchParams('share=bbbbbbbb'), gallery), false);
+});
+
+test('a page that names itself keeps the site name and shows the site card', () => {
+    assert.deepEqual(pageOpenGraph({ title: 'About', description: 'Who we are.' }), {
+        type: 'article',
+        siteName: SITE_NAME,
+        title: 'About',
+        description: 'Who we are.',
+        images: SITE_CARD,
+    });
+    assert.equal('images' in pageOpenGraph({ title: 'A', description: 'B', image: null }), false);
+});
+
+test('a gallery item card sits where Next serves it', () => {
+    const segment = '/(studio)/insights/gallery/[slug]';
+
+    assert.ok(existsSync(new URL(`../../app${segment}/opengraph-image.tsx`, import.meta.url)));
+    assert.equal(
+        galleryCard('a-search').url,
+        metadataRoute.fillMetadataSegment(segment, { slug: 'a-search' }, 'opengraph-image', false),
+    );
 });
 
 test('crawlers may fetch the noindex routes and not the routes for programs', () => {
@@ -166,10 +196,10 @@ test('a gallery search carries its title and description, other shares do not', 
         description: 'Aid to Ghana since 2000.',
         openGraph: {
             type: 'article',
-            siteName: 'Development Finance Observatory',
+            siteName: SITE_NAME,
             title: 'Aid to Ghana',
             description: 'Aid to Ghana since 2000.',
-            images: '/opengraph-image',
+            images: galleryCard('a-search'),
         },
     });
     assert.deepEqual(dataPageMetadata({ share: 'cccccccc' }, gallery), {
@@ -197,12 +227,10 @@ test('every page the sitemap lists may be fetched and indexed', () => {
         const url = new URL(path, 'https://example.org');
 
         assert.equal(blocked(path), false, path);
-        assert.equal(robotsHeader(path), undefined, path);
+        assert.equal(robotsHeader(url.pathname), undefined, path);
 
         if (url.pathname === '/data') {
-            const query = Object.fromEntries(url.searchParams);
-
-            assert.equal(dataPageRobots(query, gallery), undefined, path);
+            assert.equal(dataPageNoindex(url.searchParams, gallery), false, path);
         }
     }
 });

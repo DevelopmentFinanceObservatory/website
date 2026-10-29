@@ -4,11 +4,11 @@
  * and say `noindex` themselves. Its one runtime import, lib/site.ts, has
  * none of its own, so next.config.ts and `node --test` can load it.
  */
-import type { Metadata, NextConfig } from 'next';
+import type { Metadata } from 'next';
 
 import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
-import { pageOpenGraph } from './site.ts';
+import { galleryCard, pageOpenGraph } from './site.ts';
 
 /**
  * The routes kept out of search results, each with everything under it:
@@ -18,44 +18,18 @@ import { pageOpenGraph } from './site.ts';
  */
 export const NOINDEX_ROUTES = ['/s', '/embed', '/studio', '/history', '/login', '/register'];
 
-type HeaderRule = Awaited<ReturnType<NonNullable<NextConfig['headers']>>>[number];
-
-const NOINDEX_HEADER = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
-
-/** A regular expression matching exactly the given values. */
-const anyOf = (values: readonly string[]): string =>
-    `(?:${values.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`;
+/** The header that keeps a response out of search results. */
+export const NOINDEX_HEADER = { key: 'X-Robots-Tag', value: 'noindex, nofollow' };
 
 /**
  * next.config.ts `headers()`: `X-Robots-Tag` on every response from a
  * noindex route, so its redirects, 404s and error pages say noindex too,
  * and a page whose metadata streams into `<body>` says it in the headers.
- * /data gets it for the URLs dataPageRobots keeps out of search: any
- * version link (?spec=) and any search share (?share=) no gallery item
- * opens.
+ * /data decides per URL, so src/proxy.ts sends its header
+ * (dataPageNoindex).
  */
-export const noindexHeaders = (gallery: readonly GalleryItem[]): HeaderRule[] => {
-    const gallerySearches = gallery.flatMap((item) =>
-        item.kind === 'dataset' ? [item.sharedFrom] : [],
-    );
-
-    return [
-        ...NOINDEX_ROUTES.map((route) => ({ source: `${route}/:path*`, headers: NOINDEX_HEADER })),
-        {
-            source: '/data',
-            has: [{ type: 'query', key: 'spec' }],
-            headers: NOINDEX_HEADER,
-        },
-        {
-            source: '/data',
-            has: [{ type: 'query', key: 'share' }],
-            ...(gallerySearches.length > 0 && {
-                missing: [{ type: 'query', key: 'share', value: anyOf(gallerySearches) }],
-            }),
-            headers: NOINDEX_HEADER,
-        },
-    ];
-};
+export const noindexHeaders = () =>
+    NOINDEX_ROUTES.map((route) => ({ source: `${route}/:path*`, headers: [NOINDEX_HEADER] }));
 
 const NOINDEX: Metadata['robots'] = { index: false, follow: false };
 
@@ -114,7 +88,11 @@ export const dataPageMetadata = (
         return {
             title: `${item.title} — DFO Gallery`,
             description: item.description,
-            openGraph: pageOpenGraph({ title: item.title, description: item.description }),
+            openGraph: pageOpenGraph({
+                title: item.title,
+                description: item.description,
+                image: galleryCard(item.slug),
+            }),
         };
     }
 
@@ -122,3 +100,29 @@ export const dataPageMetadata = (
 
     return robots ? { robots } : {};
 };
+
+/**
+ * A /data URL's query as the page's `searchParams` holds it: a key given
+ * once maps to its value, empty or not, and a repeated key to every value.
+ */
+export const dataPageQuery = (params: URLSearchParams): DataPageQuery => {
+    const query: Record<string, string | string[]> = {};
+
+    for (const key of new Set(params.keys())) {
+        const values = params.getAll(key);
+
+        query[key] = values.length > 1 ? values : (values[0] ?? '');
+    }
+
+    return query;
+};
+
+/**
+ * Whether src/proxy.ts sends `X-Robots-Tag: noindex` for a /data URL. It
+ * reads the URL through dataPageRobots, as the page's metadata does, so the
+ * header and the metadata cannot disagree.
+ */
+export const dataPageNoindex = (
+    params: URLSearchParams,
+    gallery: readonly GalleryItem[],
+): boolean => dataPageRobots(dataPageQuery(params), gallery) !== undefined;

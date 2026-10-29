@@ -290,11 +290,24 @@ test('entityChoiceGroups keeps one group per entity_choice, two written alike ap
     );
 });
 
-test('entityChoiceLabels numbers groups that share a wording, in entity_choice order', () => {
+test('entityChoiceLabels numbers groups that share a wording, in menu order', () => {
     const groups = entityChoiceGroups(congoToCongoNoData);
+    const [first, second] = congoToCongoNoData.options ?? [];
 
+    assert.ok(first && second);
     assert.deepEqual(entityChoiceLabels(groups), ['Congo (1)', 'Congo (2)']);
-    assert.deepEqual(entityChoiceLabels([...groups].reverse()), ['Congo (2)', 'Congo (1)']);
+    // One option settles its group by entity_choice, the other by mention:
+    // two keys of different kinds, one wording.
+    const mixed = entityChoiceGroups({
+        ...congoToCongoNoData,
+        options: [first, { ...second, entity_choice: null, mentions: ['Congo'] }],
+    });
+
+    assert.deepEqual(
+        mixed.map((group) => group.key),
+        [0, 'Congo'],
+    );
+    assert.deepEqual(entityChoiceLabels(mixed), ['Congo (1)', 'Congo (2)']);
     // A wording no other group shares keeps its own text.
     assert.deepEqual(entityChoiceLabels(entityChoiceGroups(odaToCongoNoData)), ['Congo']);
 });

@@ -9,10 +9,24 @@ import type { ShareMark } from '@/lib/chat/history';
 export const isPrompt = (message: ChatMessage): boolean =>
     message.role === 'user' && !message.answer;
 
-/** A prompt the harness refused before its turn started, which the site's
- *  prompt meter gave back, so it no longer counts against a guest's limit. */
+/** A prompt whose turn was refused, which the site's prompt meter gave
+ *  back, so it no longer counts against a guest's limit. */
 export const isRefundedPrompt = (message: ChatMessage): boolean =>
     message.role === 'user' && !!message.refunded;
+
+/** The transcript once the turn its last prompt opened was refused: that
+ *  prompt marked refunded. A refused turn is the latest, since a new turn
+ *  waits until the one in flight ends. */
+export const withRefundedPrompt = (messages: ChatMessage[]): ChatMessage[] => {
+    const index = messages.findLastIndex(isPrompt);
+    const prompt = messages[index];
+
+    if (prompt?.role !== 'user' || prompt.refunded) {
+        return messages;
+    }
+
+    return messages.map((message, at) => (at === index ? { ...prompt, refunded: true } : message));
+};
 
 /**
  * The transcript with the user's answer to a paused turn. It goes before the

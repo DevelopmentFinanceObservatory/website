@@ -3,7 +3,13 @@ import test from 'node:test';
 
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import type { ShareMark } from '../../chat/history.ts';
-import { isPrompt, isRefundedPrompt, shareMarkAfter, withAnswer } from '../transcript.ts';
+import {
+    isPrompt,
+    isRefundedPrompt,
+    shareMarkAfter,
+    withAnswer,
+    withRefundedPrompt,
+} from '../transcript.ts';
 
 const paused: ChatMessage[] = [
     { role: 'user', text: 'Show me aid to Kenya' },
@@ -45,12 +51,25 @@ test('only a turn-opening user message is a prompt', () => {
     assert.equal(isPrompt({ role: 'bot', text: 'According to the OECD…' }), false);
 });
 
-test('a refused chip stays a prompt and counts as refunded', () => {
-    const refused: ChatMessage = { role: 'user', text: 'Gross', refunded: true };
+test('a refused turn marks its prompt refunded, which still counts as a prompt', () => {
+    const messages: ChatMessage[] = [
+        { role: 'user', text: 'Show me aid to Kenya' },
+        { role: 'bot', text: 'USD 1.2bn' },
+        { role: 'user', text: 'By donor' },
+        { role: 'bot', text: '' },
+    ];
+    const refused = withRefundedPrompt(messages);
 
-    assert.equal(isPrompt(refused), true);
-    assert.equal(isRefundedPrompt(refused), true);
-    assert.equal(isRefundedPrompt({ role: 'user', text: 'Show me aid to Kenya' }), false);
+    assert.deepEqual(refused, [
+        ...messages.slice(0, 2),
+        { role: 'user', text: 'By donor', refunded: true },
+        messages[3],
+    ]);
+    assert.equal(refused.filter(isPrompt).length, 2);
+    assert.equal(refused.filter(isRefundedPrompt).length, 1);
+    // Marked once, and a transcript with no prompt is left as it was.
+    assert.equal(withRefundedPrompt(refused), refused);
+    assert.deepEqual(withRefundedPrompt([]), []);
 });
 
 // The mark useConversationSave records for a share of `messages`.

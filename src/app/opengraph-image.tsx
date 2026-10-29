@@ -3,9 +3,11 @@ import { join } from 'node:path';
 
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Development Finance Observatory: Development Finance Data. Simplified.';
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+import { CARD_SIZE, CARD_TYPE, SITE_CARD } from '@/lib/site';
+
+export const alt = SITE_CARD.alt;
+export const size = CARD_SIZE;
+export const contentType = CARD_TYPE;
 
 // Outfit, the site's typeface, from the @fontsource package the layout
 // already loads. The image has no request-time input, so it renders once at

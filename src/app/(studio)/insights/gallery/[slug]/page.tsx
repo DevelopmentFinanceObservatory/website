@@ -30,7 +30,7 @@ export const generateMetadata = async ({ params }: GalleryItemPageProps): Promis
         openGraph: pageOpenGraph({
             title: item.title,
             description: item.description,
-            ownCard: true,
+            image: null,
         }),
     };
 };

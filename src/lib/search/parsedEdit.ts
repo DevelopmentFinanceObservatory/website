@@ -139,17 +139,14 @@ export function entityChoiceGroups(noData: NoData | null | undefined): EntityCho
 
 /**
  * What each group's rows say in a menu that merges every group: the
- * wording, numbered in `entity_choice` order where two groups share it
- * ("aid from Congo to Congo" gives "Congo (1)", "Congo (2)").
+ * wording, numbered in menu order where two groups share it ("aid from
+ * Congo to Congo" gives "Congo (1)", "Congo (2)").
  */
 export function entityChoiceLabels(groups: readonly EntityChoiceGroup[]): string[] {
-    return groups.map(({ key, text }) => {
-        const alike = groups.filter((group) => group.text === text);
+    return groups.map(({ text }, index) => {
+        if (groups.filter((group) => group.text === text).length === 1) return text;
 
-        if (alike.length === 1) return text;
-
-        // Only entity_choice keys (numbers) can share a wording.
-        const place = alike.filter((group) => group.key < key).length + 1;
+        const place = groups.slice(0, index + 1).filter((group) => group.text === text).length;
 
         return `${text} (${place})`;
     });

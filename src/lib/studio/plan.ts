@@ -911,7 +911,9 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
             reason: null,
             decision: null,
             // A row saved before the harness sent choice ids counts as
-            // scope, as that harness listed only scope choices.
+            // scope. The production harness then listed only scope choices;
+            // a development harness before dfo-ai#106 also listed planner
+            // decisions without ids, so chats saved there file them as scope.
             planner: choice.choice_id !== undefined && isPlannerChoice(choice.choice_id),
         })),
         moved: [],
