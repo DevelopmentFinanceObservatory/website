@@ -335,7 +335,7 @@ const main = async (): Promise<void> => {
             JSON.stringify(
                 (
                     await pool.query(
-                        'select share_id, write_token from share_token where user_id = $1 order by share_id',
+                        'select share_id, write_token from share_token where user_id = $1 order by share_id collate "C"',
                         [owner],
                     )
                 ).rows.map((row: { share_id: string; write_token: string }) => [
