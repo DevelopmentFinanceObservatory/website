@@ -11,6 +11,7 @@ import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import Modal from '@/components/molecules/Modal/Modal';
 import type { CardInfo, Widget } from '@/lib/chat/widgets';
+import type { SharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     type DescribedView,
     type LegacyView,
@@ -312,6 +313,10 @@ const LegacyPanel = ({
     </div>
 );
 
+/** The snapshot share a card is cited from: its id, and when the card's
+ *  slot began to show the data it shows, an ISO timestamp. */
+export type CitedSnapshot = { id: string; servedAt?: string };
+
 // The link a snapshot share is cited by, read in the browser, where the
 // panel opens.
 const snapshotUrlOf = (shareId: string | undefined): string | null =>
@@ -319,10 +324,13 @@ const snapshotUrlOf = (shareId: string | undefined): string | null =>
         ? `${window.location.origin}/s/${encodeURIComponent(shareId)}`
         : null;
 
-// The day a snapshot share captured its data, in the reader's time zone,
-// as its banner reads it.
-const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
-    const moment = createdAt ? new Date(createdAt) : null;
+// The day a snapshot card's data dates from, in the reader's time zone:
+// when its slot began to show it. Null when the share's history does not
+// say, so the citation gives no date. The day the share was made is no
+// stand-in: a live share made a snapshot later serves newer data.
+const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
+    const at = snapshot?.servedAt;
+    const moment = at ? new Date(at) : null;
 
     return moment && !Number.isNaN(moment.getTime()) ? localDay(moment) : null;
 };
@@ -331,17 +339,18 @@ const snapshotAsOfOf = (createdAt: string | undefined): string | null => {
  * More Info, the back of the card. A card that carries a description shows
  * it as `DescribedPanel` lays it out, with no request. A card without one
  * shows the legacy panel. Download Data sits after the citation either way.
- * On a live share (`liveShareId`) it serves the refreshed rows. The card's
+ * On a share whose slot draws the card (`shared`) it serves the rows that
+ * slot serves. The card's
  * owner (`canShare`) is told how to get a link to cite. The full citation
  * is retrieved today. On a snapshot share (`snapshot`) it names the share's
- * link and the day the share captured its data.
+ * link and the day the card's data dates from.
  */
 const CardInfoPanel = ({
     info,
     widget,
     open,
     onOpenChange,
-    liveShareId,
+    shared,
     snapshot,
     canShare = false,
 }: {
@@ -350,9 +359,9 @@ const CardInfoPanel = ({
     widget: Widget | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    liveShareId?: string;
-    // The snapshot share the card is shown on, and when it was made.
-    snapshot?: { id: string; createdAt?: string };
+    shared?: SharedCardAddress | null;
+    // The snapshot share the card is shown on.
+    snapshot?: CitedSnapshot;
     canShare?: boolean;
 }) => {
     const view =
@@ -360,10 +369,10 @@ const CardInfoPanel = ({
         panelViewOf(info, {
             retrievedOn: localDay(new Date()),
             snapshotUrl: snapshotUrlOf(snapshot?.id),
-            snapshotAsOf: snapshotAsOfOf(snapshot?.createdAt),
+            snapshotAsOf: snapshotAsOfOf(snapshot),
             canShare,
         });
-    const download = widget && <CardDownload widget={widget} liveShareId={liveShareId} />;
+    const download = widget && <CardDownload widget={widget} shared={shared} />;
 
     return (
         <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">

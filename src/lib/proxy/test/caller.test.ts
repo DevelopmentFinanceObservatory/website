@@ -1,13 +1,14 @@
 /**
  * `caller.ts`: which X-Forwarded-For entry names the client, the digest it
- * becomes, the settings it reads, and that a client-sent x-dfo-caller never
- * survives.
+ * becomes, the settings it reads, what dfo-apis is sent, and that a
+ * client-sent x-dfo-caller never survives.
  */
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
 
 import {
+    apisCallerFor,
     assertTrustedHops,
     CALLER_HEADER,
     callerConfig,
@@ -54,6 +55,19 @@ test('resolveCaller: the digest is 32 hex characters and keyed', () => {
     assert.match(caller ?? '', /^ip:[0-9a-f]{32}$/);
     assert.notEqual(caller, resolveCaller('2001:db8::1', { key: 'other', hops: 0 }));
 });
+
+// The digest's input is the cross-service contract: dfo-apis hashes the same
+// string for a caller that reaches it directly.
+for (const [address, preimage] of [
+    ['2001:db8:1:2:aaaa::1', '2001:db8:1:2::/64'],
+    ['2001:db8::1', '2001:db8:0:0::/64'],
+    ['::ffff:203.0.113.7', '203.0.113.7'],
+    ['203.0.113.7', '203.0.113.7'],
+]) {
+    test(`resolveCaller: ${address} is digested as ${preimage}`, () => {
+        assert.equal(resolveCaller(address, { key: KEY, hops: 0 }), digest(preimage));
+    });
+}
 
 test('resolveCaller: a chain shorter than the hops gives no caller', () => {
     assert.equal(resolveCaller('3.3.3.3', { key: KEY, hops: 1 }), undefined);
@@ -166,3 +180,43 @@ for (const [address, bucket] of [
         assert.equal(limiterBucket(address), bucket);
     });
 }
+
+const API_ENV = { DFO_CALLER_PRINCIPAL: 'secret', CALLER_HMAC_KEY: KEY, TRUSTED_PROXY_HOPS: '1' };
+
+test('apisCallerFor: sends the principal and the caller digest', () => {
+    const caller = apisCallerFor(API_ENV, () => assert.fail('logged'));
+
+    assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), {
+        principal: 'secret',
+        caller: digest('1.1.1.1'),
+    });
+    assert.deepEqual(caller('2.2.2.2'), { principal: 'secret', caller: undefined });
+});
+
+test('apisCallerFor: without DFO_CALLER_PRINCIPAL sends neither and logs once', () => {
+    for (const principal of [undefined, '', ' ']) {
+        const logged: string[] = [];
+        const caller = apisCallerFor({ ...API_ENV, DFO_CALLER_PRINCIPAL: principal }, (message) =>
+            logged.push(message),
+        );
+
+        assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), {});
+        assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), {});
+        assert.equal(logged.length, 1);
+        assert.match(logged[0] ?? '', /DFO_CALLER_PRINCIPAL is unset/);
+    }
+});
+
+test('apisCallerFor: a principal without a usable key or hops goes alone and logs once', () => {
+    for (const env of [
+        { ...API_ENV, CALLER_HMAC_KEY: undefined },
+        { ...API_ENV, TRUSTED_PROXY_HOPS: 'two' },
+    ]) {
+        const logged: string[] = [];
+        const caller = apisCallerFor(env, (message) => logged.push(message));
+
+        assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), { principal: 'secret' });
+        assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), { principal: 'secret' });
+        assert.equal(logged.length, 1);
+    }
+});

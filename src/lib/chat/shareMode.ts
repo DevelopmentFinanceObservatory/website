@@ -19,10 +19,6 @@ export type ShareMode = 'live' | 'snapshot';
 
 export type StudioShareKind = Exclude<ShareKind, 'search'>;
 
-// Studio shares a day a guest may make from one network address. A guest's
-// share has no owner, so it is a snapshot, and nobody can switch or remove it.
-export const GUEST_SHARES = 10;
-
 const MODES: ShareMode[] = ['live', 'snapshot'];
 
 export const STUDIO_KINDS: StudioShareKind[] = ['conversation', 'canvas', 'card'];

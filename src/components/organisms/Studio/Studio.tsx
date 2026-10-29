@@ -37,6 +37,7 @@ import { latestTurnOf } from '@/lib/chat/canvas';
 import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
+import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
@@ -61,12 +62,18 @@ export type StudioProps = {
     // conversation, read-only — no input, no card actions, no saving, no
     // way back and no account: logo, title, filters and the sheet. A `live`
     // share's data cards arrive held and are filled from the refresh route
-    // (see useLiveCards); `createdAt` is when the share was made.
+    // (see useLiveCards), and so are a snapshot's `undrawn` cards. `slots`
+    // names the slot that draws each card, whose rows a download serves.
+    // `servedAt` is when each snapshot card's slot began to show its data,
+    // and `createdAt` when the share was made.
     shared?: {
         id: string;
         kind: ShareKind;
         saved: SavedConversation;
         live?: boolean;
+        undrawn?: string[];
+        slots?: Record<string, number>;
+        servedAt?: Record<string, string>;
         createdAt?: string;
     };
     // /studio/<id>: the conversation to open on arrival (a refresh, a link
@@ -78,9 +85,6 @@ export type StudioProps = {
     // A gallery item: the same read-only sheet, plus the one action a
     // curated session exists for — carrying it on in your own Studio.
     continuable?: boolean;
-    // The site can refresh a live share's cards (`liveSharingAvailable`,
-    // read on the server), so the Share dialog offers Live Data.
-    liveSharing?: boolean;
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
     examples?: readonly string[];
@@ -116,7 +120,6 @@ const Studio = ({
     openId,
     guest = false,
     continuable = false,
-    liveSharing = false,
     examples = [],
 }: StudioProps) => {
     const sharedSaved = shared?.saved;
@@ -478,8 +481,9 @@ const Studio = ({
     const latestTurn = latestTurnOf(chat.widgets);
 
     // A live share's canvas: its data cards drawn on current data as each
-    // refresh answers, and their states. A snapshot's and the owner's own
-    // widgets pass through untouched.
+    // refresh answers, and their states. A snapshot's cards its page could
+    // not draw are filled the same way. The owner's own widgets pass
+    // through untouched.
     const { widgets: visibleWidgets, live: liveCanvas } = useLiveCards(
         shared,
         doc.visibleWidgets(chat.widgets),
@@ -720,10 +724,17 @@ const Studio = ({
                 widget={infoWidget}
                 open={infoCardId !== null}
                 onOpenChange={(next) => !next && setInfoCardId(null)}
-                liveShareId={liveCanvas?.shareId}
-                // A share row's `live` is set either way (sharedViewOf). A
-                // gallery canvas leaves it unset and has no share link.
-                snapshot={shared?.live === false ? shared : undefined}
+                shared={infoWidget && sharedCardAddress(shared, infoWidget.id)}
+                // A share row's `live` is set either way (sharedViewOfRecord).
+                // A gallery canvas leaves it unset and has no share link.
+                snapshot={
+                    shared?.live === false
+                        ? {
+                              id: shared.id,
+                              servedAt: infoWidget ? shared.servedAt?.[infoWidget.id] : undefined,
+                          }
+                        : undefined
+                }
                 canShare={!readOnly}
             />
 
@@ -737,7 +748,7 @@ const Studio = ({
                     <CardDownload
                         widget={downloadWidget}
                         details
-                        liveShareId={liveCanvas?.shareId}
+                        shared={sharedCardAddress(shared, downloadWidget.id)}
                     />
                 )}
             </Modal>
@@ -750,7 +761,6 @@ const Studio = ({
                     title={title}
                     firstPrompt={firstPrompt}
                     shareData={shareData}
-                    liveSharing={liveSharing}
                     createShare={save.createShare}
                     guest={guest}
                 />

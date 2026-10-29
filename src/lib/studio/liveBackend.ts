@@ -261,7 +261,7 @@ const cardOf = (body: UnknownRecord): LiveCard => {
 // The frame a card was drawn on is the first input of its envelope's
 // provenance. A render's `stored_intent.frame_ref` is the stored revision's
 // own frame, not the one drawn.
-const drawnFrame = (card: LiveCard): FrameRef | null => {
+export const drawnFrame = (card: LiveCard): FrameRef | null => {
     const inputs = asRecord(card.payload['provenance'])?.['inputs'];
 
     return asFrameRef(Array.isArray(inputs) ? inputs[0] : undefined);
@@ -276,19 +276,22 @@ const drawnCard = (body: UnknownRecord): DrawnCard => {
 const retryAfter = (body: UnknownRecord): number | null =>
     typeof body['retry_after_s'] === 'number' ? body['retry_after_s'] : null;
 
-/** One stored revision, with the frame its stored intent names. */
-export const readComponent = async (backend: LiveBackend, ref: CardRef): Promise<DrawnCard> => {
-    const body = await json(
-        backend,
-        `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`,
-        {},
-    );
+/** A body in dfo-apis' component read shape: the card, with the frame its
+ *  stored intent names. A share slot's card has this shape too. */
+export const componentReadOf = (body: UnknownRecord): DrawnCard => ({
+    card: cardOf(body),
+    frame: asFrameRef(asRecord(body['stored_intent'])?.['frame_ref']),
+});
 
-    return {
-        card: cardOf(body),
-        frame: asFrameRef(asRecord(body['stored_intent'])?.['frame_ref']),
-    };
-};
+/** One stored revision, with the frame its stored intent names. */
+export const readComponent = async (backend: LiveBackend, ref: CardRef): Promise<DrawnCard> =>
+    componentReadOf(
+        await json(
+            backend,
+            `${backend.apisBase}${componentPath(ref)}?revision=${ref.revision}`,
+            {},
+        ),
+    );
 
 /** Whether a dataset frame is still its dataset's current rendering. */
 export const refreshFrame = async (

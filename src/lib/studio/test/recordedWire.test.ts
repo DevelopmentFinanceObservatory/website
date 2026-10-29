@@ -18,7 +18,7 @@ import {
     type LiveBackend,
 } from '../liveBackend.ts';
 import { refreshCard } from '../liveShare.ts';
-import { liveFailureKind, refreshLiveCards, widgetFromLiveCard } from '../liveCards.ts';
+import { liveFailureKind, widgetFromLiveCard } from '../liveCards.ts';
 import { pendingSeconds } from '../liveShareResults.ts';
 import { aiRedrawn, DERIVED_FRAME, ENV, json, PRINCIPAL, stubBackend } from './fixtures/live-backend-stub.ts';
 import { bodyOf, frameOfAnswer, PAIR_NAMES, pairOf, replayOf } from './fixtures/recorded-wire.ts';
@@ -104,34 +104,6 @@ test('a queued rebuild answers a fractional wait, which the site holds as whole 
     assert.deepEqual([0.4, 1.5, 2, 2.2, 59.2, 61.5].map(pendingSeconds), [2, 2, 2, 3, 60, 60]);
 });
 
-test('the browser holds a fractional wait between 2 and 60 seconds', async () => {
-    const waits: number[] = [];
-    const answers = [
-        { status: 'pending', retry_after_s: bodyOf('frame_refresh.pending')['retry_after_s'] },
-        { status: 'pending', retry_after_s: 0.5 },
-        { status: 'pending', retry_after_s: 60.5 },
-        { status: 'error', code: 'recipe_missing' },
-    ];
-
-    await refreshLiveCards(
-        {
-            fetch: async () => Response.json(answers.shift()),
-            now: () => 0,
-            sleep: async (ms) => {
-                waits.push(ms);
-            },
-        },
-        {
-            shareId: 'Ab12Cd34',
-            cardIds: ['card'],
-            signal: new AbortController().signal,
-            onSettled: () => undefined,
-        },
-    );
-
-    assert.deepEqual(waits, [2_000, 2_000, 60_000]);
-});
-
 test('a dataset card is stored on the frame its render’s envelope names, not the one asked for', async () => {
     const rendered = bodyOf('render.dataset_card');
     const drawn = { ...frameOfAnswer('frame_refresh.moved'), content_version: 'cv_drawn' };
@@ -209,7 +181,7 @@ const REFUSALS: [string, (backend: LiveBackend, body: Sent) => Promise<unknown>,
             'frame_refresh.refresh_not_permitted',
             (backend, body) => refreshFrame(backend, body),
             'refresh_not_permitted',
-            'switched_off',
+            'permanent',
         ],
         [
             'frame_refresh.frame_not_refreshable',
