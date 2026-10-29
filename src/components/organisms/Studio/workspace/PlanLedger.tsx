@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { Fragment, useEffect, useRef, useState, type RefObject } from 'react';
 
 import styles from './PlanLedger.module.scss';
 
@@ -9,7 +9,9 @@ import {
     canSwitch,
     isActiveOption,
     isSelectable,
+    ledgerSections,
     stepCount,
+    switchPendingText,
     switchReply,
     yearsText,
     type PlanChoiceView,
@@ -99,15 +101,16 @@ const NoticeRegion = ({ notice, onRetry }: { notice: PlanNotice | null; onRetry?
 );
 
 /**
- * One scope choice: its name, the value the plan counts by, "Changed" and
- * the value it held when a switch moved it, and "Change", which opens the
- * options in place, drawn as a radio list: buttons in a group, the active
- * one pressed, each picking its option at once. A partial option names the
- * years it covers and an unavailable one says why. While a switch is in
- * flight every option ignores clicks but keeps focus (`aria-disabled`), and
- * the picked one says the plan is updating. When the plan this row's switch
- * produced arrives and the option that held focus is gone, focus moves to
- * "Change".
+ * One scope choice or planner decision: its name, the value the plan holds,
+ * "Changed" and the value it held when a switch moved it, and "Change",
+ * which opens the options in place, drawn as a radio list: buttons in a
+ * group, the active one pressed, each picking its option at once. A partial
+ * option names the years it covers and an unavailable one says why. While a
+ * switch is in flight every option ignores clicks but keeps focus
+ * (`aria-disabled`), and the picked one says the plan is updating, or
+ * replanning on a planner decision, until the harness answers. When the plan
+ * this row's switch produced arrives and the option that held focus is gone,
+ * focus moves to "Change".
  */
 const ChoiceRow = ({
     choice,
@@ -224,7 +227,7 @@ const ChoiceRow = ({
                                 {isPending && (
                                     <span className={styles.optionTag}>
                                         <span className={styles.spin} />
-                                        Updating plan
+                                        {switchPendingText(choiceId)}
                                     </span>
                                 )}
                             </button>
@@ -238,9 +241,11 @@ const ChoiceRow = ({
 };
 
 /**
- * "Counted as": the plan's scope choices as a ruled ledger, one row each,
- * then a line for each choice the switch moved that has no row. `plan` and
- * `onSwitch` make the rows switchable. An approved plan passes neither.
+ * The plan's choices as a ruled ledger, one row each, in groups
+ * with their own heads (ledgerSections): "Counted as", the scope choices and
+ * a line for each choice the switch moved that has no row, then "Choices the
+ * plan made", the planner decisions. `plan` and `onSwitch` make the rows
+ * switchable. An approved plan passes neither.
  * `reasons` adds why the plan holds each choice. One row opens at a time:
  * the one being switched, else the one whose switch failed, until the user
  * opens or closes another.
@@ -283,7 +288,8 @@ export const PlanLedger = ({
             ? plan.notice
             : null;
 
-    const ruled = view.choices.length > 0 || view.moved.length > 0;
+    const sections = ledgerSections(view);
+    const ruled = sections.length > 0;
 
     // An approved plan without choices has nothing to show. A live plan keeps
     // its notice region mounted.
@@ -303,27 +309,32 @@ export const PlanLedger = ({
                 }
             }}
         >
-            {ruled && <p className={styles.head}>Counted as</p>}
-            {view.choices.map((choice) => (
-                <ChoiceRow
-                    key={choice.key}
-                    choice={choice}
-                    plan={plan}
-                    open={open === choice.key}
-                    reasons={reasons}
-                    refocus={hadFocusRef}
-                    onSwitch={onSwitch}
-                    onToggle={() =>
-                        setPicked({ plan, open: open === choice.key ? null : choice.key })
-                    }
-                />
-            ))}
-            {view.moved.map((move) => (
-                <p key={move.key} className={classNames(styles.row, styles.moved)}>
-                    <span className={styles.was}>
-                        Changed from {move.from} to {move.to}.{move.reason && ` ${move.reason}`}
-                    </span>
-                </p>
+            {sections.map((section) => (
+                <Fragment key={section.key}>
+                    <p className={styles.head}>{section.head}</p>
+                    {section.choices.map((choice) => (
+                        <ChoiceRow
+                            key={choice.key}
+                            choice={choice}
+                            plan={plan}
+                            open={open === choice.key}
+                            reasons={reasons}
+                            refocus={hadFocusRef}
+                            onSwitch={onSwitch}
+                            onToggle={() =>
+                                setPicked({ plan, open: open === choice.key ? null : choice.key })
+                            }
+                        />
+                    ))}
+                    {section.moved.map((move) => (
+                        <p key={move.key} className={classNames(styles.row, styles.moved)}>
+                            <span className={styles.was}>
+                                Changed from {move.from} to {move.to}.
+                                {move.reason && ` ${move.reason}`}
+                            </span>
+                        </p>
+                    ))}
+                </Fragment>
             ))}
             <div className={classNames(general && styles.row)}>
                 <NoticeRegion notice={general} />

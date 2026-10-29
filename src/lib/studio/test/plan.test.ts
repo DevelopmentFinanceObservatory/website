@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
     PLAN_REVISION_STALE,
+    answeredPause,
     approveReply,
     approvedFromFrame,
     approvedView,
@@ -17,8 +18,11 @@ import {
     SWITCH_OPTION_UNAVAILABLE,
     isActiveOption,
     isSelectable,
+    ledgerSections,
+    PLANNER_HEAD,
     planFromFrame,
     planView,
+    questionPause,
     refusedSwitch,
     endedPlan,
     endedSwitch,
@@ -27,14 +31,20 @@ import {
     startSwitch,
     stoppedQueuedSwitch,
     switchEnded,
+    switchLine,
     switchOutcome,
+    switchPendingText,
     switchReply,
+    SCOPE_HEAD,
     UNREACHABLE_NOTICE,
     unreachableSwitch,
     withApprovedPlan,
+    withQuestion,
     yearsText,
+    type Pause,
     type PlanState,
 } from '../plan.ts';
+import { clarifyFromFrame } from '../clarify.ts';
 import { withoutChips } from '../chips.ts';
 import type { StreamRefusal } from '../studioClient.ts';
 import type { PlanApproved, PlanDecision, PlanProposed, RetryMode } from '../wire.ts';
@@ -1456,4 +1466,173 @@ test('withApprovedPlan leaves a transcript that does not end on a reply', () => 
 
 test('yearsText joins ranges and prints a one-year range once', () => {
     assert.equal(yearsText(countDecision.options![1]!.years!), '2015–2019, 2022');
+});
+
+/** A planner decision the card can switch, as the harness sends it. */
+const donorsDecision: PlanDecision = {
+    id: 'd3',
+    question: 'How many donors?',
+    chosen: 'Top 5',
+    reason: 'a short list reads best',
+    resolved_by: 'default',
+    choice_id: 'decision/donor_count',
+    active_option_id: 'option_1',
+    options: [
+        { option_id: 'option_1', label: 'Top 5', status: 'available', reason: null, years: null },
+        { option_id: 'option_2', label: 'Top 10', status: 'available', reason: null, years: null },
+    ],
+};
+
+const DONORS_PICK = { choiceId: 'decision/donor_count', optionId: 'option_2' };
+
+test('the ledger heads scope choices and planner decisions apart', async (t) => {
+    const heads = (overrides: Partial<PlanProposed>) =>
+        ledgerSections(planView(planFromFrame(frame(overrides)))).map((section) => [
+            section.head,
+            section.choices.map((choice) => choice.key),
+        ]);
+    const cases: [string, Partial<PlanProposed>, [string, string[]][]][] = [
+        [
+            'both',
+            { decisions: [countDecision, donorsDecision] },
+            [
+                [SCOPE_HEAD, ['spec_1:measure_basis']],
+                [PLANNER_HEAD, ['decision/donor_count']],
+            ],
+        ],
+        [
+            'planner decisions only',
+            { decisions: [donorsDecision] },
+            [[PLANNER_HEAD, ['decision/donor_count']]],
+        ],
+        [
+            'scope choices only',
+            { decisions: [countDecision] },
+            [[SCOPE_HEAD, ['spec_1:measure_basis']]],
+        ],
+    ];
+
+    for (const [name, overrides, expected] of cases) {
+        await t.test(name, () => {
+            assert.deepEqual(heads(overrides), expected);
+        });
+    }
+});
+
+test("a planner decision's switch says it is replanning", () => {
+    assert.equal(switchPendingText(DONORS_PICK.choiceId), 'Replanning');
+    assert.equal(switchLine(DONORS_PICK.choiceId, 'Top 10'), 'Replanning with Top 10');
+    assert.equal(switchPendingText(PICK.choiceId), 'Updating plan');
+    assert.equal(switchLine(PICK.choiceId, 'Net disbursements'), 'Switching to Net disbursements');
+});
+
+test("a planner decision's switch that did not apply says the plan keeps its option", () => {
+    const waiting = startSwitch(planFromFrame(frame({ decisions: [donorsDecision] })), DONORS_PICK);
+
+    assert.equal(
+        stoppedQueuedSwitch(waiting).notice?.text,
+        'Stopped before switching to Top 10. The plan keeps Top 5.',
+    );
+    assert.equal(
+        refusedSwitch(waiting, { status: 429, detail: null, error: null }).notice?.text,
+        'Studio could not switch to Top 10. The plan keeps Top 5.',
+    );
+});
+
+/** A one-question planner question on pause `interruptId`. */
+const question = (interruptId: string) =>
+    clarifyFromFrame({
+        event: 'elicitation.request',
+        seq: 5,
+        interrupt_id: interruptId,
+        questions: [
+            { id: 'q1', question: 'Which year?', input: 'single_select', allow_free_text: true },
+        ],
+    });
+
+test("a question asked while a switch waits takes the card's place and carries the switch", () => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const clarify = question('int-q');
+    const pause = questionPause(clarify, { interruptId: waiting.interruptId, plan: waiting });
+
+    assert.equal(pause.interruptId, 'int-q');
+    assert.equal(pause.clarify, clarify);
+    assert.equal(pause.switch, waiting);
+
+    const screen = withQuestion({ ...pausedTurn(waiting), clarify: null }, clarify);
+
+    assert.equal(screen.plan, null);
+    assert.equal(screen.clarify, clarify);
+});
+
+test('a question with no switch waiting carries none, and its answer leaves nothing pending', async (t) => {
+    const live = planFromFrame(frame());
+    const cases: [string, Pause | null][] = [
+        ['no pause', null],
+        ['a plan not switching', { interruptId: live.interruptId, plan: live }],
+        ['a question', questionPause(question('int-0'), null)],
+    ];
+
+    for (const [name, pending] of cases) {
+        await t.test(name, () => {
+            const pause = questionPause(question('int-q'), pending);
+
+            assert.equal(pause.switch, undefined);
+            assert.equal(answeredPause(pause), null);
+        });
+    }
+});
+
+test("answering a switch's question resumes the switch: its fresh plan, switch_failed and Stop end it", () => {
+    const waiting = startSwitch(planFromFrame(frame()), PICK);
+    const pause = questionPause(question('int-q'), { interruptId: 'int-1', plan: waiting });
+    const resumed = answeredPause(pause);
+    const card = resumed?.plan;
+
+    assert.ok(card);
+    assert.equal(resumed?.interruptId, 'int-q');
+    assert.deepEqual(card, waiting);
+    // A new object, so the stream that asked the question cannot end it.
+    assert.notEqual(card, waiting);
+    assert.deepEqual(card.switching, PICK);
+
+    const before = pausedTurn(card);
+
+    assert.equal(switchEnded(before, waiting, endedPlan(waiting)), before);
+
+    // The fresh plan marks the switched choice.
+    assert.equal(planFromFrame(switchedFrame(), card).switched, PICK.choiceId);
+
+    // The plan re-offered on cancel says why on the choice's row.
+    const reoffered = planFromFrame(
+        frame({
+            interrupt_id: 'int-2',
+            switch_failed: {
+                choice_id: PICK.choiceId,
+                option_id: PICK.optionId,
+                code: SWITCH_CANCELLED,
+                reason: 'The switch was stopped. The plan still counts gross.',
+                retryable: true,
+            },
+        }),
+        card,
+    );
+
+    assert.equal(reoffered.notice?.choiceId, PICK.choiceId);
+    assert.equal(reoffered.live, true);
+
+    // A Stop with no plan re-offered ends the card read-only.
+    const { plan: ended, activity } = endedSwitch(card, {
+        error: null,
+        stopped: true,
+        refused: null,
+    });
+    const after = switchEnded(before, card, ended);
+
+    assert.equal(activity, 'skipped');
+    assert.equal(after.plan?.live, false);
+    assert.equal(after.plan?.notice?.choiceId, PICK.choiceId);
+
+    // A second question during the resumed switch carries it again.
+    assert.equal(questionPause(question('int-q2'), resumed).switch, card);
 });
