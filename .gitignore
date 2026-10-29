@@ -29,5 +29,6 @@ CLAUDE.md
 *.pem
 npm-debug.log*
 
-/.claude
+/.claude/*
+!/.claude/skills/
 /.idea
