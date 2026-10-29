@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { GALLERY_ITEMS, galleryItem } from '@/components/organisms/Gallery/galleryData';
 import Studio from '@/components/organisms/Studio/Studio';
 import { gallerySession } from '@/lib/gallery/sessions';
+import { pageOpenGraph } from '@/lib/site';
 
 type GalleryItemPageProps = { params: Promise<{ slug: string }> };
 
@@ -26,11 +27,11 @@ export const generateMetadata = async ({ params }: GalleryItemPageProps): Promis
         title: `${item.title} — DFO Gallery`,
         description: item.description,
         robots: { index: true, follow: true },
-        openGraph: {
-            type: 'article',
+        openGraph: pageOpenGraph({
             title: item.title,
             description: item.description,
-        },
+            ownCard: true,
+        }),
     };
 };
 

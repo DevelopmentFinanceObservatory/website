@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match.js';
+import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination.js';
 
 import type { GalleryItem } from '@/components/organisms/Gallery/galleryData';
 
@@ -30,13 +31,22 @@ const blocked = (path: string): boolean => {
     });
 };
 
-// The X-Robots-Tag next.config.ts sends for a path, matched the way Next
-// matches a header rule's `source`.
-const robotsHeader = (path: string): string | undefined =>
-    noindexHeaders()
-        .filter((rule) => getPathMatch(rule.source)(path) !== false)
+// The X-Robots-Tag next.config.ts sends for a URL, matched the way Next
+// matches a header rule's `source`, `has` and `missing`.
+const robotsHeader = (path: string): string | undefined => {
+    const url = new URL(path, 'https://example.org');
+    const query = Object.fromEntries(url.searchParams);
+    const request = { headers: {}, cookies: {} } as Parameters<typeof matchHas>[0];
+
+    return noindexHeaders(gallery)
+        .filter(
+            (rule) =>
+                getPathMatch(rule.source)(url.pathname) !== false &&
+                matchHas(request, query, rule.has, rule.missing) !== false,
+        )
         .flatMap((rule) => rule.headers)
         .find((header) => header.key === 'X-Robots-Tag')?.value;
+};
 
 const base = {
     title: 'Item',
@@ -83,6 +93,28 @@ test('every noindex route answers noindex, redirects and errors included', () =>
 
     for (const path of ['/', '/data', '/docs', '/insights/gallery/a-card', '/sources']) {
         assert.equal(robotsHeader(path), undefined, path);
+    }
+});
+
+test('/data says noindex in its headers exactly where its metadata does', () => {
+    const queries: Record<string, string>[] = [
+        {},
+        { share: 'bbbbbbbb' },
+        { share: 'cccccccc' },
+        { share: 'aaaaaaaa' },
+        { spec: 'x' },
+        { spec: 'x', share: 'bbbbbbbb' },
+        { q: 'aid to Ghana' },
+    ];
+
+    for (const query of queries) {
+        const path = `/data?${new URLSearchParams(query)}`;
+
+        assert.equal(
+            robotsHeader(path),
+            dataPageRobots(query, gallery) ? 'noindex, nofollow' : undefined,
+            path,
+        );
     }
 });
 
@@ -134,8 +166,10 @@ test('a gallery search carries its title and description, other shares do not', 
         description: 'Aid to Ghana since 2000.',
         openGraph: {
             type: 'article',
+            siteName: 'Development Finance Observatory',
             title: 'Aid to Ghana',
             description: 'Aid to Ghana since 2000.',
+            images: '/opengraph-image',
         },
     });
     assert.deepEqual(dataPageMetadata({ share: 'cccccccc' }, gallery), {
@@ -163,7 +197,7 @@ test('every page the sitemap lists may be fetched and indexed', () => {
         const url = new URL(path, 'https://example.org');
 
         assert.equal(blocked(path), false, path);
-        assert.equal(robotsHeader(url.pathname), undefined, path);
+        assert.equal(robotsHeader(path), undefined, path);
 
         if (url.pathname === '/data') {
             const query = Object.fromEntries(url.searchParams);

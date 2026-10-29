@@ -2,6 +2,7 @@ import { withSentryConfig } from '@sentry/nextjs/config';
 import path from 'path';
 import type { NextConfig } from 'next';
 
+import gallery from './src/content/gallery/index.ts';
 import { noindexHeaders } from './src/lib/crawl.ts';
 
 const nextConfig: NextConfig = {
@@ -21,9 +22,10 @@ const nextConfig: NextConfig = {
         .map((origin) => origin.trim())
         .filter(Boolean),
     // Share and embed links, the Studio, history and sign-in say noindex on
-    // every response, redirects and errors included (src/lib/crawl.ts).
+    // every response, redirects and errors included, and so do the /data
+    // links kept out of search (src/lib/crawl.ts).
     async headers() {
-        return noindexHeaders();
+        return noindexHeaders(gallery);
     },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the
     // same file the docs corpus was built from (src/app/docs-md).

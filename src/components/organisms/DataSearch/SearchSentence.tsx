@@ -92,6 +92,7 @@ import {
 } from '@/lib/search/measureMenu';
 import {
     entityChoiceGroups,
+    entityChoiceLabels,
     entityChoicePart,
     offersAmbiguousPicker,
     resolveTypedEdit,
@@ -1901,6 +1902,8 @@ export const SearchSentenceHeading = ({
                 }
 
                 if (!wordingParts.has(partIndex)) {
+                    const labels = entityChoiceLabels(groups);
+
                     return withMarker(
                         <SlotMenu
                             key={index}
@@ -1909,7 +1912,7 @@ export const SearchSentenceHeading = ({
                             ariaLabel={slotAriaLabel('Match', token.text)}
                             marked
                         >
-                            {groups.flatMap((group) =>
+                            {groups.flatMap((group, groupIndex) =>
                                 group.options.map((option, optionIndex) => (
                                     <DropdownMenu.Item
                                         key={`${group.key}:${optionIndex}`}
@@ -1918,7 +1921,9 @@ export const SearchSentenceHeading = ({
                                     >
                                         {/* Two ambiguous wordings share one
                                             menu, each row naming its own. */}
-                                        <OptionRow detail={groups.length > 1 ? group.text : null}>
+                                        <OptionRow
+                                            detail={groups.length > 1 ? labels[groupIndex] : null}
+                                        >
                                             {option.label}
                                         </OptionRow>
                                     </DropdownMenu.Item>

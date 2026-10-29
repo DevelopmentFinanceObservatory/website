@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
     applyRestatementEdit,
     entityChoiceGroups,
+    entityChoiceLabels,
     entityChoicePart,
     offersAmbiguousPicker,
     resolveTypedEdit,
@@ -287,6 +288,15 @@ test('entityChoiceGroups keeps one group per entity_choice, two written alike ap
             [1, 'Congo', [1, 1]],
         ],
     );
+});
+
+test('entityChoiceLabels numbers groups that share a wording, in entity_choice order', () => {
+    const groups = entityChoiceGroups(congoToCongoNoData);
+
+    assert.deepEqual(entityChoiceLabels(groups), ['Congo (1)', 'Congo (2)']);
+    assert.deepEqual(entityChoiceLabels([...groups].reverse()), ['Congo (2)', 'Congo (1)']);
+    // A wording no other group shares keeps its own text.
+    assert.deepEqual(entityChoiceLabels(entityChoiceGroups(odaToCongoNoData)), ['Congo']);
 });
 
 // ---------------------------------------------------------------------------

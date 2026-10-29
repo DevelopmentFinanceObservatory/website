@@ -3,7 +3,7 @@ import Script from 'next/script';
 
 import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
 import { EMBED_PREFIX } from '@/lib/embed';
-import { SITE_ORIGIN } from '@/lib/site';
+import { SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 import '@fontsource/outfit/300.css';
 import '@fontsource/outfit/400.css';
@@ -16,7 +16,6 @@ import '@fontsource/dm-mono/500.css';
 
 import '@/styles/main.scss';
 
-const SITE_NAME = 'Development Finance Observatory';
 const SITE_DESCRIPTION =
     'The Development Finance Observatory integrates aid, debt, climate and health finance, domestic budgets, and remittances into a single open platform, where every number is traceable to its source.';
 

@@ -88,12 +88,14 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // so the transcript shows what the question was about. `answer` marks the
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
+// `refunded` marks a prompt the harness refused before its turn started (a
+// chip that no longer applies), which the site's prompt meter gave back.
 // A bot turn's `followups` are prompts a click sends as the next message,
 // and its `chips` switch a scope choice of the answer's readings. `plan` is
 // the plan the user approved for this answer, saved with the transcript so
 // a reopened conversation can show it.
 export type ChatMessage =
-    | { role: 'user'; text: string; card?: { title: string }; answer?: true }
+    | { role: 'user'; text: string; card?: { title: string }; answer?: true; refunded?: true }
     | {
           role: 'bot';
           text: string;

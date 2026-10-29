@@ -130,7 +130,7 @@ export const PLAN_REVISION_STALE = 'plan_revision_stale';
 /** Shown when a stale refusal carries no current plan (a pause the harness
  *  stored before it kept cards). */
 export const STALE_NOTICE =
-    'This plan changed after this page received it, so it can no longer be switched here. Reload the conversation to see the current plan.';
+    'This plan changed after this page received it, so it can no longer be answered here. Reload the conversation to see the current plan.';
 
 /** The index of the step whose result answers the question, on a live
  *  plan and an approved one alike: the one the harness flags, else the last
@@ -381,7 +381,7 @@ export const planFromFrame = (frame: PlanProposed, previous?: PlanState): PlanSt
 
 /** The plan offers switching: it is live, lists the action and carries the
  *  revision a switch must echo. */
-export const canSwitch = (plan: PlanState): boolean =>
+export const canSwitch = (plan: PlanState): plan is PlanState & { revision: string } =>
     plan.live && plan.actions.includes('switch') && plan.revision !== null;
 
 /** A decision's switchable options, or null for an ordinary decision. */
@@ -414,7 +414,7 @@ export const switchReply = (
     choiceId: string,
     optionId: string,
 ): SwitchReply | null => {
-    if (!canSwitch(plan) || plan.switching || plan.revision === null) {
+    if (!canSwitch(plan) || plan.switching) {
         return null;
     }
 
@@ -444,8 +444,9 @@ export const startSwitch = (plan: PlanState, pick: PlanSwitch): PlanState => ({
     notice: null,
 });
 
+/** The harness refused a switch or approve sent against an older plan. */
 const isStale = (refusal: StreamRefusal): boolean =>
-    refusal.error?.constraint_id === PLAN_REVISION_STALE;
+    refusal.status === 409 && refusal.error?.constraint_id === PLAN_REVISION_STALE;
 
 /** The constraint_id of a switch the harness refused because the plan does
  *  not offer the option. */
@@ -531,8 +532,8 @@ const leavesPause = ({ status, error }: StreamRefusal): boolean =>
  * The card after the harness refused its switch. The card always stays.
  *
  * A 409 `plan_revision_stale` brings the current plan, and switching works
- * again on it. Without one the card keeps its revision, so an approve from it
- * is refused as stale, and drops the switch action. A refusal that leaves
+ * again on it. Without one the card ends read-only, saying to reload, since
+ * the harness refuses an approve or a switch from it as stale. A refusal that leaves
  * the pause alone (leavesPause) says on the choice's row that the switch did
  * not apply, with the harness's detail when a ToolError carries it and the
  * card's own words otherwise, since a proxy's text is written for
@@ -555,11 +556,11 @@ export const refusedSwitch = (
     const pick = plan.switching;
     const settled = { ...plan, switching: null };
 
-    if (refusal.status === 409 && refusal.error?.constraint_id === PLAN_REVISION_STALE) {
+    if (isStale(refusal)) {
         return (
             stalePlan(refusal, plan) ?? {
                 ...settled,
-                actions: plan.actions.filter((action) => action !== 'switch'),
+                live: false,
                 notice: planNotice({ text: STALE_NOTICE }),
             }
         );
@@ -909,7 +910,9 @@ export const approvedView = (plan: ApprovedPlan): PlanView => {
             changedReason: null,
             reason: null,
             decision: null,
-            planner: false,
+            // A row saved before the harness sent choice ids counts as
+            // scope, as that harness listed only scope choices.
+            planner: choice.choice_id !== undefined && isPlannerChoice(choice.choice_id),
         })),
         moved: [],
         others: [],

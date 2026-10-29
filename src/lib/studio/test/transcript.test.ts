@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { ChatMessage } from '../../../components/organisms/Studio/hooks/useChat.ts';
 import type { ShareMark } from '../../chat/history.ts';
-import { isPrompt, shareMarkAfter, withAnswer } from '../transcript.ts';
+import { isPrompt, isRefundedPrompt, shareMarkAfter, withAnswer } from '../transcript.ts';
 
 const paused: ChatMessage[] = [
     { role: 'user', text: 'Show me aid to Kenya' },
@@ -43,6 +43,14 @@ test('only a turn-opening user message is a prompt', () => {
     assert.equal(isPrompt({ role: 'user', text: 'Show me aid to Kenya' }), true);
     assert.equal(isPrompt({ role: 'user', text: 'Gross disbursements', answer: true }), false);
     assert.equal(isPrompt({ role: 'bot', text: 'According to the OECD…' }), false);
+});
+
+test('a refused chip stays a prompt and counts as refunded', () => {
+    const refused: ChatMessage = { role: 'user', text: 'Gross', refunded: true };
+
+    assert.equal(isPrompt(refused), true);
+    assert.equal(isRefundedPrompt(refused), true);
+    assert.equal(isRefundedPrompt({ role: 'user', text: 'Show me aid to Kenya' }), false);
 });
 
 // The mark useConversationSave records for a share of `messages`.

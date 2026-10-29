@@ -137,6 +137,24 @@ export function entityChoiceGroups(noData: NoData | null | undefined): EntityCho
     return [...groups.values()];
 }
 
+/**
+ * What each group's rows say in a menu that merges every group: the
+ * wording, numbered in `entity_choice` order where two groups share it
+ * ("aid from Congo to Congo" gives "Congo (1)", "Congo (2)").
+ */
+export function entityChoiceLabels(groups: readonly EntityChoiceGroup[]): string[] {
+    return groups.map(({ key, text }) => {
+        const alike = groups.filter((group) => group.text === text);
+
+        if (alike.length === 1) return text;
+
+        // Only entity_choice keys (numbers) can share a wording.
+        const place = alike.filter((group) => group.key < key).length + 1;
+
+        return `${text} (${place})`;
+    });
+}
+
 /** The part an entity choice posts: its option's one-part request,
  *  unchanged. Null for an option carrying no part. */
 export const entityChoicePart = (option: NoDataOption): ParsedPart | null =>

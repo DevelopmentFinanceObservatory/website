@@ -65,10 +65,12 @@ export const chipRefusalDetail = (refusal: StreamRefusal): string | null =>
         : null;
 
 /**
- * The transcript after the harness refused `chip`: the reply the click
- * opened says why, and carries the answer's other chips and follow-ups, so
- * the user can still pick one. `messages` ends with the user's chip label
- * and its empty reply; the answer that offered the chip comes before them.
+ * The transcript after the harness refused `chip`: the chip's label is
+ * marked refunded, since the refused turn never started and the site's
+ * prompt meter gave its prompt back, and the reply the click opened says
+ * why and carries the answer's other chips and follow-ups, so the user can
+ * still pick one. `messages` ends with the user's chip label and its empty
+ * reply; the answer that offered the chip comes before them.
  */
 export const withRefusedChip = (
     messages: ChatMessage[],
@@ -76,9 +78,10 @@ export const withRefusedChip = (
     detail: string,
 ): ChatMessage[] => {
     const reply = messages.at(-1);
+    const label = messages.at(-2);
     const answer = messages.at(-3);
 
-    if (reply?.role !== 'bot') {
+    if (reply?.role !== 'bot' || label?.role !== 'user') {
         return messages;
     }
 
@@ -86,7 +89,8 @@ export const withRefusedChip = (
     const chips = (offered?.chips ?? []).filter((other) => !sameChip(other, chip));
 
     return [
-        ...messages.slice(0, -1),
+        ...messages.slice(0, -2),
+        { ...label, refunded: true },
         {
             ...reply,
             text: `_${detail}_`,

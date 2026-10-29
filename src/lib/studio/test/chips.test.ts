@@ -95,7 +95,8 @@ test('withRefusedChip: the reply says why and keeps the answer’s other chips a
     ];
 
     assert.deepEqual(withRefusedChip(messages, sector, 'Nothing changed.'), [
-        ...messages.slice(0, 3),
+        ...messages.slice(0, 2),
+        { role: 'user', text: sector.label, refunded: true },
         { role: 'bot', text: '_Nothing changed._', followups: ['By donor'], chips: [region] },
     ]);
 });

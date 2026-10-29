@@ -9,6 +9,11 @@ import type { ShareMark } from '@/lib/chat/history';
 export const isPrompt = (message: ChatMessage): boolean =>
     message.role === 'user' && !message.answer;
 
+/** A prompt the harness refused before its turn started, which the site's
+ *  prompt meter gave back, so it no longer counts against a guest's limit. */
+export const isRefundedPrompt = (message: ChatMessage): boolean =>
+    message.role === 'user' && !!message.refunded;
+
 /**
  * The transcript with the user's answer to a paused turn. It goes before the
  * turn's reply, which the resumed stream goes on writing into.
