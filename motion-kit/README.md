@@ -83,7 +83,7 @@ A page capture takes a cue sheet the same way, `<page spec name>.cues.json`, che
 | File                        | Contents                                                                                                                                               |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `studio.html`               | One fragment: the header, the tools row, the chat panel and the whiteboard with every card placed, inside `<div class="dfo-ui">`.                      |
-| `dfo-ui.css`                | Everything the fragment needs, scoped under `.dfo-ui`. Split into `dfo-ui.css~1`, `dfo-ui.css~2` and so on when its store document would pass 200 KiB. |
+| `dfo-ui.css`                | Everything the fragment needs, scoped under `.dfo-ui`. Split into `dfo-ui-1.css`, `dfo-ui-2.css` and so on when its store document would pass 200 KiB. |
 | `manifest.json`             | The viewport, the hooks, the plan's states, card slots in cells and px, each chart's series with its path length, and the app's motion (below).        |
 | `cues.json`                 | The cue sheet, when the spec has one.                                                                                                                  |
 | `shared.js`                 | The runtime, `runtime/dfo-motion.js`, which Motion runs once before any scene.                                                                         |
@@ -234,14 +234,14 @@ The manifest's `dropped` lists everything removed that a viewer could have seen.
 
 ### Outputs
 
-| File                        | Contents                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `<state>.html`              | One fragment per captured state.                                                           |
-| `dfo-ui.css`                | The rules every state uses, split into `dfo-ui.css~1`, `~2` and so on past 200 KiB stored. |
-| `manifest.json`             | The viewport, the modules, the hooks and each hook's box in every state.                   |
-| `shared.js`                 | The runtime, as for the Studio.                                                            |
-| `store/modules/<file>.json` | Each file above as a Motion store document.                                                |
-| `preview.html`              | The film played in a browser, as for the Studio.                                           |
+| File                        | Contents                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `<state>.html`              | One fragment per captured state.                                                                     |
+| `dfo-ui.css`                | The rules every state uses, split into `dfo-ui-1.css`, `dfo-ui-2.css` and so on past 200 KiB stored. |
+| `manifest.json`             | The viewport, the modules, the hooks and each hook's box in every state.                             |
+| `shared.js`                 | The runtime, as for the Studio.                                                                      |
+| `store/modules/<file>.json` | Each file above as a Motion store document.                                                          |
+| `preview.html`              | The film played in a browser, as for the Studio.                                                     |
 
 A page's manifest names each state's fragment in `modules.html`, where the Studio's names its one fragment as a string:
 
@@ -251,7 +251,7 @@ A page's manifest names each state's fragment in `modules.html`, where the Studi
     "rootFontSize": 16,
     "path": "/data",
     "modules": {
-        "css": ["dfo-ui.css~1", "dfo-ui.css~2"],
+        "css": ["dfo-ui-1.css", "dfo-ui-2.css"],
         "html": { "empty": "empty.html", "typed": "typed.html", "results": "results.html" }
     },
     "hooks": ["prompt", "answer"],

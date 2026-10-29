@@ -237,12 +237,18 @@ export type Generated = {
 
 const bytes = (text: string) => Buffer.byteLength(text);
 
+// The names a Motion film's store takes for a module, and the most its
+// modules may hold together.
+const MODULE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const FILM_LIMIT = 2 * 1024 * 1024;
+
 /** A module as the film's store holds it, the document the limit applies to. */
 const storeDocument = ({ kind, text }: Pick<Module, 'kind' | 'text'>) =>
     JSON.stringify({ kind, text });
 
-/** The film's stylesheet as one `dfo-ui.css` module, or `dfo-ui.css~1`,
- *  `~2` and so on when its store document passes the module limit. Refuses
+/** The film's stylesheet as one `dfo-ui.css` module, or `dfo-ui-1.css`,
+ *  `dfo-ui-2.css` and so on when its store document passes the module
+ *  limit. Refuses
  *  a stylesheet that points outside the film. */
 export const cssModules = (css: string): Module[] => {
     const leaks = externalUrls(css);
@@ -260,7 +266,7 @@ export const cssModules = (css: string): Module[] => {
     );
 
     return pieces.map((text, index) => ({
-        name: pieces.length === 1 ? 'dfo-ui.css' : `dfo-ui.css~${index + 1}`,
+        name: pieces.length === 1 ? 'dfo-ui.css' : `dfo-ui-${index + 1}.css`,
         kind: 'css',
         text,
     }));
@@ -275,7 +281,8 @@ export const manifestModule = (manifest: Record<string, unknown>): Module => ({
 /**
  * Writes `files` plus the runtime as `shared.js` to `target`, each as a
  * file and as a Motion store document under `store/modules/`, after
- * checking every module's store document against the limit, and
+ * checking each module's name and store document, and their total, against
+ * what a film's store takes, and
  * `preview.html` to play them (`preview.ts`). Replaces a previous film at
  * `target`; refuses a non-empty directory without a `manifest.json`.
  */
@@ -291,14 +298,28 @@ export const writeFilm = async (target: string, files: Module[]): Promise<Module
         },
     ];
 
+    let total = 0;
+
     for (const file of modules) {
         const size = bytes(storeDocument(file));
+
+        if (!MODULE_NAME.test(file.name)) {
+            throw new Error(`motion-kit: ${file.name} is not a name a film's store takes`);
+        }
 
         if (size > MODULE_LIMIT) {
             throw new Error(
                 `motion-kit: ${file.name} is ${size} bytes stored, over the ${MODULE_LIMIT} limit`,
             );
         }
+
+        total += size;
+    }
+
+    if (total > FILM_LIMIT) {
+        throw new Error(
+            `motion-kit: the modules hold ${total} bytes, over the ${FILM_LIMIT} limit`,
+        );
     }
 
     const existing: string[] = await readdir(target).catch((error: NodeJS.ErrnoException) => {

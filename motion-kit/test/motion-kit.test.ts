@@ -400,13 +400,18 @@ test('the stylesheet splits so each store document, escaped, fits the module lim
 
     assert.ok(Buffer.byteLength(css) < MODULE_LIMIT);
     assert.ok(modules.length > 1);
+    // Named as a film's store takes them.
+    assert.deepEqual(
+        modules.map(({ name }) => name),
+        modules.map((_, index) => `dfo-ui-${index + 1}.css`),
+    );
 
     for (const { kind, text } of modules) {
         assert.ok(Buffer.byteLength(JSON.stringify({ kind, text })) <= MODULE_LIMIT);
     }
 });
 
-test('a film replaces a previous film, never a directory of other files', async () => {
+test('a film replaces a previous film, never a directory of other files or a bad name', async () => {
     const out = await mkdtemp(join(tmpdir(), 'motion-kit-out-'));
     const film = join(out, 'film');
     const manifest = { name: 'manifest.json', kind: 'json', text: '{}' } as const;
@@ -418,6 +423,10 @@ test('a film replaces a previous film, never a directory of other files', async 
         await writeFile(join(out, 'specs/demo.json'), '{}');
         await assert.rejects(writeFilm(join(out, 'specs'), [manifest]), /specs holds files/);
         assert.equal(await readFile(join(out, 'specs/demo.json'), 'utf8'), '{}');
+        await assert.rejects(
+            writeFilm(film, [manifest, { name: 'dfo-ui.css~1', kind: 'css', text: '' }]),
+            /dfo-ui.css~1 is not a name a film's store takes/,
+        );
     } finally {
         await rm(out, { recursive: true, force: true });
     }
