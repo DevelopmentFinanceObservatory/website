@@ -1,0 +1,510 @@
+{
+    "title": "Kenya: debt service against health aid",
+    "question": "Compare Kenya's external debt service with its health aid since 2015, including HIV",
+    "messages": [
+        {
+            "role": "user",
+            "text": "Compare Kenya's external debt service with its health aid since 2015, including HIV"
+        },
+        {
+            "role": "bot",
+            "text": "This compares two sources, the World Bank's debt statistics and the OECD's aid records, so here is a plan before I fetch anything. Health aid counts purposes 120 and 130, which covers HIV/AIDS."
+        },
+        {
+            "role": "bot",
+            "text": "Kenya paid **$5.7bn** in external debt service in 2024, nearly eight times the **$741m** it received in health aid.\n\nIn 2015 the two were close: $890m against $778m. Debt service has risen sixfold since, while health aid, HIV programmes included, has stayed between $600m and $930m a year.",
+            "followups": [
+                "Show debt service as a share of exports",
+                "Break health aid down by donor"
+            ],
+            "plan": {
+                "plan_version_id": "pv_3f8a61e2",
+                "version": 1,
+                "revision": "rev_7d2e91c4",
+                "title": "Kenya's external debt service against its health aid, 2015 to 2024",
+                "summary": "Counts Kenya's total external debt service from the World Bank and the health aid it received from the OECD, including HIV, in current US dollars, 2015 to 2024.",
+                "steps": [
+                    {
+                        "label": "Fetch Kenya's external debt service",
+                        "gives_answer": false
+                    },
+                    {
+                        "label": "Fetch health aid Kenya received",
+                        "gives_answer": false
+                    },
+                    {
+                        "label": "Align both series to a common basis",
+                        "gives_answer": false
+                    },
+                    {
+                        "label": "Compare debt service with health aid",
+                        "gives_answer": true
+                    }
+                ],
+                "choices": [
+                    {
+                        "question": "Health aid",
+                        "chosen": "Health and population (120, 130)"
+                    },
+                    {
+                        "question": "Aid flow",
+                        "chosen": "Gross disbursements"
+                    },
+                    {
+                        "question": "Comparison",
+                        "chosen": "Debt service as a multiple of health aid"
+                    }
+                ],
+                "caveats": [
+                    "Debt service and health aid come from different providers, so the two series are aligned on year but counted separately."
+                ]
+            }
+        }
+    ],
+    "plan": {
+        "title": "Kenya's external debt service against its health aid, 2015 to 2024",
+        "summary": "Counts Kenya's total external debt service from the World Bank and the health aid it received from the OECD, including HIV, in current US dollars, 2015 to 2024.",
+        "steps": [
+            {
+                "id": "retrieve_debt_service",
+                "label": "Fetch Kenya's external debt service",
+                "description": "Retrieves Kenya's total external debt service (DT.TDS.DECT.CD), 2015 to 2024."
+            },
+            {
+                "id": "retrieve_health_aid",
+                "label": "Fetch health aid Kenya received",
+                "description": "Retrieves gross ODA disbursements to Kenya for health (120) and population and reproductive health (130), which includes HIV/AIDS, 2015 to 2024."
+            },
+            {
+                "id": "align",
+                "label": "Align both series to a common basis",
+                "description": "Aligns both series on year, in current US dollars, 2015 to 2024."
+            },
+            {
+                "id": "compare",
+                "label": "Compare debt service with health aid",
+                "description": "Computes debt service as a multiple of health aid each year."
+            }
+        ],
+        "answerStepId": "compare",
+        "decisions": [
+            {
+                "id": "health_scope",
+                "question": "Health aid",
+                "chosen": "Health and population (120, 130)",
+                "reason": "Purpose 130 holds STD control including HIV/AIDS (13040), which the question asks to include.",
+                "resolved_by": "default",
+                "alternatives": ["Health only (120)"],
+                "choice_id": "health_aid/purpose",
+                "active_option_id": "purposes_120_130",
+                "options": [
+                    {
+                        "option_id": "purposes_120_130",
+                        "label": "Health and population (120, 130)",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    },
+                    {
+                        "option_id": "purpose_120",
+                        "label": "Health only (120)",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    }
+                ]
+            },
+            {
+                "id": "aid_flow",
+                "question": "Aid flow",
+                "chosen": "Gross disbursements",
+                "reason": "Disbursements count the aid that arrived in each year.",
+                "resolved_by": "default",
+                "alternatives": ["Net disbursements", "Commitments"],
+                "choice_id": "health_aid/flow",
+                "active_option_id": "gross_disbursements",
+                "options": [
+                    {
+                        "option_id": "gross_disbursements",
+                        "label": "Gross disbursements",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    },
+                    {
+                        "option_id": "net_disbursements",
+                        "label": "Net disbursements",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    },
+                    {
+                        "option_id": "commitments",
+                        "label": "Commitments",
+                        "status": "partial",
+                        "reason": null,
+                        "years": [[2017, 2024]]
+                    }
+                ]
+            },
+            {
+                "id": "comparison",
+                "question": "Comparison",
+                "chosen": "Debt service as a multiple of health aid",
+                "reason": "A multiple reads the gap between the two in one number a year.",
+                "resolved_by": "default",
+                "alternatives": ["Both series side by side"],
+                "choice_id": "decision/comparison",
+                "active_option_id": "option_0",
+                "options": [
+                    {
+                        "option_id": "option_0",
+                        "label": "Debt service as a multiple of health aid",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    },
+                    {
+                        "option_id": "option_1",
+                        "label": "Both series side by side",
+                        "status": "available",
+                        "reason": null,
+                        "years": null
+                    }
+                ]
+            }
+        ],
+        "caveats": [
+            "Debt service and health aid come from different providers, so the two series are aligned on year but counted separately."
+        ],
+        "movedElsewhere": [],
+        "version": 1,
+        "actions": ["approve", "amend", "reject", "switch"],
+        "interruptId": "int_5c1e0a9d2b7f4e31",
+        "live": true,
+        "revision": "rev_7d2e91c4",
+        "baseline": {
+            "health_aid/purpose": {
+                "optionId": "purposes_120_130",
+                "label": "Health and population (120, 130)"
+            },
+            "health_aid/flow": {
+                "optionId": "gross_disbursements",
+                "label": "Gross disbursements"
+            },
+            "decision/comparison": {
+                "optionId": "option_0",
+                "label": "Debt service as a multiple of health aid"
+            }
+        },
+        "changed": [],
+        "switched": null,
+        "stepsUpdated": false,
+        "switching": null,
+        "notice": null
+    },
+    "activity": [
+        {
+            "turn": 1,
+            "prompt": "Compare Kenya's external debt service with its health aid since 2015, including HIV",
+            "startedAt": 1793179200000,
+            "endedAt": 1793179209800,
+            "tools": [
+                {
+                    "id": "s1-fetch",
+                    "name": "Fetch the data",
+                    "args": {
+                        "tool": "get_data"
+                    },
+                    "summary": "10 observations · 2015 to 2024 · World Bank International Debt Statistics",
+                    "startedAt": 1793179201200,
+                    "durationMs": 420,
+                    "state": "complete"
+                },
+                {
+                    "id": "s1-card",
+                    "name": "Create a canvas component",
+                    "args": {
+                        "tool": "write_component"
+                    },
+                    "summary": "created",
+                    "startedAt": 1793179201700,
+                    "durationMs": 180,
+                    "widgetId": "debt-service-2024",
+                    "state": "complete"
+                },
+                {
+                    "id": "s2-fetch",
+                    "name": "Fetch the data",
+                    "args": {
+                        "tool": "get_data"
+                    },
+                    "summary": "10 observations · 2015 to 2024 · OECD Creditor Reporting System",
+                    "startedAt": 1793179202100,
+                    "durationMs": 460,
+                    "state": "complete"
+                },
+                {
+                    "id": "s2-card",
+                    "name": "Create a canvas component",
+                    "args": {
+                        "tool": "write_component"
+                    },
+                    "summary": "created",
+                    "startedAt": 1793179202700,
+                    "durationMs": 170,
+                    "widgetId": "health-aid-2024",
+                    "state": "complete"
+                },
+                {
+                    "id": "s3-align",
+                    "name": "Align both series to a common basis",
+                    "args": {
+                        "tool": "align"
+                    },
+                    "summary": "aligned on year, current USD, 2015-2024 overlap",
+                    "startedAt": 1793179203000,
+                    "durationMs": 90,
+                    "state": "complete"
+                },
+                {
+                    "id": "s4-compare",
+                    "name": "Compare debt service with health aid",
+                    "args": {
+                        "tool": "compare"
+                    },
+                    "summary": "debt service ÷ health aid: 1.14x in 2015, 7.65x in 2024",
+                    "startedAt": 1793179203200,
+                    "durationMs": 140,
+                    "state": "complete"
+                },
+                {
+                    "id": "s4-card",
+                    "name": "Create a canvas component",
+                    "args": {
+                        "tool": "write_component"
+                    },
+                    "summary": "created",
+                    "startedAt": 1793179203500,
+                    "durationMs": 210,
+                    "widgetId": "debt-vs-health",
+                    "state": "complete"
+                }
+            ]
+        }
+    ],
+    "cards": [
+        {
+            "widget": {
+                "kind": "key_number",
+                "id": "debt-service-2024",
+                "label": "Kenya's external debt service, 2024",
+                "value": "5.7B",
+                "unit": "USD",
+                "stat": {
+                    "value": 5670,
+                    "period": "2024",
+                    "unit": {
+                        "currency": "USD",
+                        "magnitude": "millions",
+                        "prices": "current",
+                        "base_year": null
+                    }
+                },
+                "ref": {
+                    "component_id": "cmp_ab5693efcac8",
+                    "revision": 1
+                },
+                "source": "World Bank International Debt Statistics (DT.TDS.DECT.CD)",
+                "info": {
+                    "label": "International Debt Statistics · 1 indicator(s)",
+                    "sourceId": "IDS",
+                    "sourceName": "World Bank International Debt Statistics",
+                    "sourceCount": 1,
+                    "indicatorCount": 1,
+                    "years": {
+                        "start": "2015",
+                        "end": "2024"
+                    },
+                    "unit": "US Dollar, current prices",
+                    "indicators": [
+                        {
+                            "id": "DT.TDS.DECT.CD",
+                            "name": "Debt service on external debt, total (TDS, current US$)",
+                            "description": "Total debt service is the sum of principal repayments and interest actually paid in currency, goods, or services on long-term debt, interest paid on short-term debt, and repayments to the IMF."
+                        }
+                    ],
+                    "licence": "CC BY 4.0",
+                    "dataThrough": "2024",
+                    "lastRefreshed": "2026-10-20",
+                    "citation": "World Bank, International Debt Statistics (DT.TDS.DECT.CD).",
+                    "sources": [
+                        {
+                            "id": "IDS",
+                            "name": "World Bank International Debt Statistics",
+                            "licence": "CC BY 4.0",
+                            "url": "https://www.worldbank.org/en/programs/debt-statistics/ids",
+                            "retrieved": "2026-10-20"
+                        }
+                    ]
+                }
+            },
+            "slot": {
+                "col": 1,
+                "row": 1
+            }
+        },
+        {
+            "widget": {
+                "kind": "key_number",
+                "id": "health-aid-2024",
+                "label": "Health aid to Kenya, incl. HIV, 2024",
+                "value": "741.0M",
+                "unit": "USD",
+                "stat": {
+                    "value": 741,
+                    "period": "2024",
+                    "unit": {
+                        "currency": "USD",
+                        "magnitude": "millions",
+                        "prices": "current",
+                        "base_year": null
+                    }
+                },
+                "ref": {
+                    "component_id": "cmp_104b23d4567e",
+                    "revision": 1
+                },
+                "source": "OECD CRS, gross ODA disbursements, purposes 120 + 130",
+                "info": {
+                    "label": "Creditor Reporting System · 1 indicator(s)",
+                    "sourceId": "CRS",
+                    "sourceName": "OECD Creditor Reporting System",
+                    "sourceCount": 1,
+                    "indicatorCount": 1,
+                    "years": {
+                        "start": "2015",
+                        "end": "2024"
+                    },
+                    "unit": "US Dollar, current prices",
+                    "indicators": [
+                        {
+                            "id": "CRS.ODA.GROSS.120_130",
+                            "name": "Gross ODA disbursements, health (120) and population and reproductive health (130)",
+                            "description": "Gross official development assistance disbursed to Kenya for health and for population policies and reproductive health, which includes STD control including HIV/AIDS (13040)."
+                        }
+                    ],
+                    "licence": "OECD Terms and Conditions",
+                    "dataThrough": "2024",
+                    "lastRefreshed": "2026-10-20",
+                    "citation": "OECD, Creditor Reporting System: gross ODA disbursements, purposes 120 and 130.",
+                    "sources": [
+                        {
+                            "id": "CRS",
+                            "name": "OECD Creditor Reporting System",
+                            "licence": "OECD Terms and Conditions",
+                            "url": "https://data-explorer.oecd.org/",
+                            "retrieved": "2026-10-20"
+                        }
+                    ]
+                }
+            },
+            "slot": {
+                "col": 1,
+                "row": 11
+            }
+        },
+        {
+            "widget": {
+                "kind": "chart",
+                "id": "debt-vs-health",
+                "chartType": "line",
+                "title": "Kenya: external debt service and health aid, 2015–2024",
+                "unit": "USD",
+                "categories": [
+                    "2015",
+                    "2016",
+                    "2017",
+                    "2018",
+                    "2019",
+                    "2020",
+                    "2021",
+                    "2022",
+                    "2023",
+                    "2024"
+                ],
+                "series": [
+                    {
+                        "label": "External debt service",
+                        "values": [
+                            890000000, 1119000000, 1546000000, 2791000000, 4492000000, 2833000000,
+                            2446000000, 3337000000, 3873000000, 5670000000
+                        ]
+                    },
+                    {
+                        "label": "Health aid, incl. HIV",
+                        "values": [
+                            778000000, 833000000, 927000000, 795000000, 729000000, 797000000,
+                            832000000, 812000000, 614000000, 741000000
+                        ]
+                    }
+                ],
+                "ref": {
+                    "component_id": "cmp_a373db60b862",
+                    "revision": 1
+                },
+                "source": "World Bank International Debt Statistics (DT.TDS.DECT.CD); OECD CRS, gross ODA disbursements, purposes 120 + 130",
+                "info": {
+                    "label": "International Debt Statistics; Creditor Reporting System · 2 indicator(s)",
+                    "sourceId": "IDS",
+                    "sourceName": "World Bank International Debt Statistics",
+                    "sourceCount": 2,
+                    "indicatorCount": 2,
+                    "years": {
+                        "start": "2015",
+                        "end": "2024"
+                    },
+                    "unit": "US Dollar, current prices",
+                    "indicators": [
+                        {
+                            "id": "DT.TDS.DECT.CD",
+                            "name": "Debt service on external debt, total (TDS, current US$)",
+                            "description": "Total debt service is the sum of principal repayments and interest actually paid in currency, goods, or services on long-term debt, interest paid on short-term debt, and repayments to the IMF."
+                        },
+                        {
+                            "id": "CRS.ODA.GROSS.120_130",
+                            "name": "Gross ODA disbursements, health (120) and population and reproductive health (130)",
+                            "description": "Gross official development assistance disbursed to Kenya for health and for population policies and reproductive health, which includes STD control including HIV/AIDS (13040)."
+                        }
+                    ],
+                    "licence": "CC BY 4.0; OECD Terms and Conditions",
+                    "dataThrough": "2024",
+                    "lastRefreshed": "2026-10-20",
+                    "citation": "World Bank, International Debt Statistics (DT.TDS.DECT.CD); OECD, Creditor Reporting System, gross ODA disbursements, purposes 120 and 130.",
+                    "sources": [
+                        {
+                            "id": "IDS",
+                            "name": "World Bank International Debt Statistics",
+                            "licence": "CC BY 4.0",
+                            "url": "https://www.worldbank.org/en/programs/debt-statistics/ids",
+                            "retrieved": "2026-10-20"
+                        },
+                        {
+                            "id": "CRS",
+                            "name": "OECD Creditor Reporting System",
+                            "licence": "OECD Terms and Conditions",
+                            "url": "https://data-explorer.oecd.org/",
+                            "retrieved": "2026-10-20"
+                        }
+                    ]
+                }
+            },
+            "slot": {
+                "col": 22,
+                "row": 1,
+                "w": 24,
+                "h": 21
+            }
+        }
+    ]
+}

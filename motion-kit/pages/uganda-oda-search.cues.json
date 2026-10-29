@@ -1,0 +1,37 @@
+{
+    "keys": [
+        { "t": 0, "hold": 0.7, "in": "empty" },
+        { "t": 1.5, "cx": 736, "cy": 370, "z": 1.5, "hold": 1.9, "in": "empty" },
+        { "t": 3.4, "cx": 736, "cy": 360, "z": 1.5, "hold": 0.6, "in": "typed" },
+        { "t": 4.8, "cx": 736, "cy": 720, "z": 1.5, "hold": 1.8, "in": "typed" },
+        { "t": 6.6, "hold": 0.9, "in": "answer" },
+        { "t": 8.0, "cx": 847, "cy": 477, "z": 1.35, "hold": 1.5, "in": "answer" },
+        { "t": 10.2, "cx": 1319, "cy": 323, "z": 1.9, "hold": 1.2, "in": "answer" },
+        { "t": 11.4, "cx": 661, "cy": 360, "z": 1.7, "hold": 3.2, "in": "menu" },
+        {
+            "t": 14.6,
+            "cx": 661,
+            "cy": 360,
+            "z": 1.7,
+            "hold": 3.8,
+            "drift": [0, 0, 0.01],
+            "in": "refined"
+        },
+        { "t": 18.4, "hold": 1.0, "in": "table" },
+        { "t": 20.0, "cx": 960, "cy": 560, "z": 1.15, "hold": 2.4, "in": "table" },
+        { "t": 23.2, "hold": 1.2, "in": "table" }
+    ],
+    "cues": [
+        {
+            "v": "prompt",
+            "kind": "type",
+            "text": "ODA to Uganda since 2015",
+            "at": 1.0,
+            "cps": 16,
+            "in": "empty"
+        },
+        { "v": "match", "kind": "show", "at": 3.8, "dur": 0.4, "in": "typed" },
+        { "v": "measure", "kind": "press", "at": 11.6, "in": "menu" },
+        { "v": "menu", "kind": "show", "at": 11.8, "dur": 0.3, "dy": 6, "in": "menu" }
+    ]
+}

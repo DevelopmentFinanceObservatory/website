@@ -1,0 +1,41 @@
+{
+    "name": "uganda-oda-search",
+    "path": "/data",
+    "viewport": { "width": 1280, "height": 800 },
+    "hooks": [
+        { "v": "prompt", "selector": "textarea[class*=\"DataPrompt\"]" },
+        { "v": "match", "selector": "[class*=\"__cardsTitle\"]" },
+        { "v": "answer", "selector": "h1[class*=\"__sentence\"]" },
+        {
+            "v": "measure",
+            "selector": "h1[class*=\"__sentence\"] > span[class*=\"__slot\"]:first-of-type"
+        },
+        { "v": "menu", "selector": "[role=\"menu\"][class*=\"__slotMenu\"]" },
+        { "v": "count", "selector": "[class*=\"__countRow\"]" },
+        { "v": "results", "selector": "div[class$=\"__results\"]" }
+    ],
+    "steps": [
+        { "type": "wait", "ms": 1500 },
+        { "type": "capture", "state": "empty" },
+        { "type": "click", "selector": "textarea[class*=\"DataPrompt\"]" },
+        {
+            "type": "type",
+            "selector": "textarea[class*=\"DataPrompt\"]",
+            "text": "ODA to Uganda since 2015"
+        },
+        { "type": "wait", "selector": "text=Looks like a match", "ms": 1500 },
+        { "type": "capture", "state": "typed" },
+        { "type": "press", "key": "Enter" },
+        { "type": "wait", "selector": "text=Rows in your data", "ms": 3000 },
+        { "type": "capture", "state": "answer" },
+        { "type": "click", "selector": "h1 >> text=Gross disbursements" },
+        { "type": "wait", "selector": "text=Select Measure", "ms": 800 },
+        { "type": "capture", "state": "menu" },
+        { "type": "click", "selector": "[role=\"menuitem\"]:has-text(\"net disbursements\")" },
+        { "type": "wait", "selector": "h1:has-text(\"Net disbursements\")", "ms": 3000 },
+        { "type": "capture", "state": "refined" },
+        { "type": "scroll", "y": 600 },
+        { "type": "wait", "ms": 800 },
+        { "type": "capture", "state": "table" }
+    ]
+}
