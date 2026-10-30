@@ -20,6 +20,12 @@ import {
 } from '@/lib/studio/chatLine';
 import { createCanvasEdits } from '@/lib/studio/canvasEdits';
 import {
+    chipRefusalDetail,
+    splitSuggestions,
+    withoutChips,
+    withRefusedChip,
+} from '@/lib/studio/chips';
+import {
     clarifyAnswer,
     clarifyFromFrame,
     clarifyNote,
@@ -30,24 +36,50 @@ import {
 } from '@/lib/studio/clarify';
 import { restoreCanvas, takeManifest, type CanvasBaseline } from '@/lib/studio/composition';
 import { plainTextFromNote } from '@/lib/studio/note';
-import { withAnswer } from '@/lib/studio/transcript';
+import {
+    approveReply,
+    approvedFromFrame,
+    planFromFrame,
+    refusedSwitch,
+    stalePlan,
+    startSwitch,
+    stoppedQueuedSwitch,
+    switchEnded,
+    endedSwitch,
+    switchLine,
+    switchReply,
+    unreachableSwitch,
+    optionLabel,
+    withApprovedPlan,
+    questionPause,
+    withQuestion,
+    answeredPause,
+    type ApprovedPlan,
+    type Pause,
+    type PlanState,
+} from '@/lib/studio/plan';
+import { withAnswer, withRefundedPrompt } from '@/lib/studio/transcript';
 import {
     cancelTurn,
     fetchComponentRevision,
     mutateComposition,
+    runApplyChoice,
     runInterrupt,
     runTurn,
     STOP_GRACE_MS,
+    SWITCH_STOP_GRACE_MS,
     type StreamHandlers,
+    type StreamRefusal,
 } from '@/lib/studio/studioClient';
 import { reviseWidget, widgetFromComponent } from '@/lib/studio/widgets';
 import type {
+    ApplyChoiceSuggestion,
     CompositionManifest,
+    InterruptResponse,
     MutationOperation,
-    PlanDecision,
-    PlanStep,
     Seed,
     StudioFrame,
+    ToolError,
 } from '@/lib/studio/wire';
 import { uuid } from '@/lib/uuid';
 import type { CardRef, Widget } from '@/lib/chat/widgets';
@@ -56,24 +88,27 @@ import type { CardRef, Widget } from '@/lib/chat/widgets';
 // so the transcript shows what the question was about. `answer` marks the
 // user's answer to a paused turn (a clarify choice or text, a plan
 // amendment): shown like any user message, but part of the turn it answers.
+// `refunded` marks a prompt whose turn was refused, which the site's prompt
+// meter gave back.
+// A bot turn's `followups` are prompts a click sends as the next message,
+// and its `chips` switch a scope choice of the answer's readings. `plan` is
+// the plan the user approved for this answer, saved with the transcript so
+// a reopened conversation can show it.
 export type ChatMessage =
-    | { role: 'user'; text: string; card?: { title: string }; answer?: true }
-    | { role: 'bot'; text: string; followups?: string[] };
+    | { role: 'user'; text: string; card?: { title: string }; answer?: true; refunded?: true }
+    | {
+          role: 'bot';
+          text: string;
+          followups?: string[];
+          chips?: ApplyChoiceSuggestion[];
+          plan?: ApprovedPlan;
+      };
 
 // A widget stamped with the send() turn it arrived in — the canvas keeps
 // only the latest turn's widgets plus whatever the user pinned.
 export type TurnWidget = Widget & { turn: number };
 
-// A plan awaiting the user's approve/amend/reject (the harness's
-// `plan.proposed` pause).
-export type PlanState = {
-    title: string;
-    steps: PlanStep[];
-    decisions: PlanDecision[];
-    version: number;
-    actions: ('approve' | 'amend' | 'reject')[];
-    interruptId: string;
-};
+export type { PlanState };
 
 /**
  * A card-scoped turn's target: which card the question is about, and whether
@@ -87,12 +122,14 @@ export type CardTarget = {
 };
 
 // A message sent while a request was in flight: it waits for the
-// conversation to be free and enters the transcript when it is sent.
+// conversation to be free and enters the transcript when it is sent. A
+// clicked `apply_choice` chip waits the same way, under its label.
 export type QueuedMessage = {
     id: string;
     text: string;
     card?: CardTarget;
     seeds?: Seed[];
+    chip?: ApplyChoiceSuggestion;
 };
 
 export type ChatState = {
@@ -120,7 +157,8 @@ export type ChatState = {
 };
 
 // A saved conversation's chat half — what hydrate() restores and what a
-// shared/forked copy starts from.
+// shared/forked copy starts from. Approved plans ride on their answers in
+// `messages`.
 export type ChatSnapshot = {
     sessionId: string | null;
     componentRefs?: CardRef[];
@@ -146,6 +184,26 @@ const withLine = (prev: ChatState, status: string, statusDetail: string | null =
     status,
     statusDetail,
     statusSince: status === prev.status ? prev.statusSince : Date.now(),
+});
+
+// How a stream ended: its error frame, whether `done` arrived, whether the
+// user stopped it, whether it broke, and whether its request started (a Stop
+// while it waited in the queue skips the request).
+type StreamEnding = {
+    error: ToolError | null;
+    done: boolean;
+    stopped: boolean;
+    failed: boolean;
+    sent: boolean;
+};
+
+// A turn's end on screen, however it ended: its Activity entry closes and
+// the chat line clears.
+const endTurn = (prev: ChatState, turn: number, open?: 'skipped' | 'failed'): ChatState => ({
+    ...prev,
+    activity: endTurnActivity(prev.activity, turn, open),
+    ...NO_LINE,
+    thinking: false,
 });
 
 // A conversation restored WITHOUT its server-side session (a fork of a
@@ -176,6 +234,12 @@ const buildRecap = (messages: ChatMessage[]): string | null => {
     )}\n\nNew message:\n`;
 };
 
+// A saved transcript as the chat shows it. Without its harness session the
+// conversation starts afresh on the harness, which holds none of the answers
+// that offered its chips, so they go.
+const restoredMessages = (saved: ChatSnapshot): ChatMessage[] =>
+    saved.sessionId ? saved.messages : withoutChips(saved.messages);
+
 /**
  * Drives one Studio conversation against the harness's `/api/studio/*`
  * frames. Pauses (`plan.proposed`, `elicitation.request`) END the stream and
@@ -188,7 +252,7 @@ const buildRecap = (messages: ChatMessage[]): string | null => {
  */
 export const useChat = (initial?: ChatSnapshot) => {
     const [state, setState] = useState<ChatState>(() => ({
-        messages: initial?.messages ?? [],
+        messages: initial ? restoredMessages(initial) : [],
         widgets: initial?.widgets ?? [],
         queued: [],
         activity: restoreActivity(initial?.activity),
@@ -201,8 +265,9 @@ export const useChat = (initial?: ChatSnapshot) => {
     // shares reopen the same server-side conversation.
     const sessionRef = useRef<string | null>(initial?.sessionId ?? null);
     const abortRef = useRef<AbortController | null>(null);
-    // Stops the running stream's turn (set while a request runs).
-    const haltRef = useRef<(() => void) | null>(null);
+    // Stops the running stream's turn (set while a request runs); true for
+    // the stream's first Stop.
+    const haltRef = useRef<(() => boolean) | null>(null);
     // The queue itself; `queued` in state mirrors it for rendering.
     const queueRef = useRef<QueuedMessage[]>([]);
     // Requests run one after another on this chain (the harness serves one
@@ -222,10 +287,13 @@ export const useChat = (initial?: ChatSnapshot) => {
     // The pending pause's addressing (interrupt_id) with, for elicitations,
     // the normalized clarify that answerClarify() builds its reply and
     // status note from, and that skipClarify() reads `skippable` from.
-    const pendingInterruptRef = useRef<{
-        interruptId: string;
-        clarify?: Clarify;
-    } | null>(null);
+    // For plans, the plan that switchChoice() checks a pick against. A
+    // question a switch's replan asked carries the switch's waiting plan.
+    const pendingInterruptRef = useRef<Pause | null>(null);
+    // The latest plan this turn offered, or is waiting on a switch of. A
+    // fresh plan.proposed carries its baseline (what the turn's first plan
+    // held) and learns which choice its switch moved. A new turn clears it.
+    const turnPlanRef = useRef<PlanState | null>(null);
     // The card an in-flight `edit` turn is changing. The harness answers an
     // edit with a REPLACEMENT component under a new id (and drops the old one
     // from its composition) rather than a component.revised, so the canvas has
@@ -323,6 +391,13 @@ export const useChat = (initial?: ChatSnapshot) => {
         },
         [syncCanvas],
     );
+    // Put a plan card up as the pending pause, whether from the stream or
+    // from a refusal that answered a stale card with the current one.
+    const offerPlan = useCallback((plan: PlanState) => {
+        pendingInterruptRef.current = { interruptId: plan.interruptId, plan };
+        turnPlanRef.current = plan;
+        setState((prev) => ({ ...prev, ...NO_LINE, thinking: false, plan }));
+    }, []);
     // Swap one widget in place, wherever it sits in the list.
     const patchWidget = useCallback((id: string, fn: (widget: TurnWidget) => TurnWidget) => {
         setState((prev) => ({
@@ -331,17 +406,51 @@ export const useChat = (initial?: ChatSnapshot) => {
         }));
     }, []);
 
+    // `onRefusal` answers an HTTP refusal of the request, and `onUnreachable`
+    // a request that got no response (see StreamHandlers); each returns true
+    // when it has dealt with it, and anything else ends the turn as an error.
+    // Once the stream ends, at its `done` or `error` frame or else when it
+    // closes, `onEnd` gets how it ended (see StreamEnding) and ends the turn
+    // on screen. A caller without one gets `endOwn`. A caller with one (a
+    // switch, whose harness may re-offer the plan after a Stop) also keeps
+    // the frames after Stop, for up to SWITCH_STOP_GRACE_MS, with the chat
+    // line on "Stopping". `metered` marks a POST turn, whose prompt the
+    // site's meter gives back when the response is a refusal (meterTurn), so
+    // a refusal marks the turn's prompt refunded.
     const stream = useCallback(
-        (turn: number, start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>) => {
+        (
+            turn: number,
+            start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
+            {
+                onRefusal,
+                onUnreachable,
+                onEnd,
+                metered = false,
+            }: {
+                onRefusal?: (refusal: StreamRefusal) => boolean;
+                onUnreachable?: () => boolean;
+                onEnd?: (ending: StreamEnding) => void;
+                metered?: boolean;
+            } = {},
+        ) => {
             const controller = new AbortController();
             const generation = generationRef.current;
-            // Set by Stop. The stream is read to its end and its frames are
-            // ignored.
+            // The user stopped the stream (Stop).
             let stopped = false;
+            // Set by Stop without `onEnd`: the stream is read to its end and
+            // its frames are ignored.
+            let muted = false;
+            let harnessError: ToolError | null = null;
+            let done = false;
+            let failed = false;
+            // The request has started.
+            let sent = false;
+            // The turn's end on screen has run (finish).
+            let finished = false;
             let stopGrace: ReturnType<typeof setTimeout> | null = null;
             // Runs from the request's start until the stream ends or pauses.
             const stall = createStallWatch((stalled) => {
-                if (generationRef.current === generation && !stopped) {
+                if (generationRef.current === generation && !muted) {
                     setState((prev) => ({ ...prev, stalled }));
                 }
             });
@@ -353,6 +462,17 @@ export const useChat = (initial?: ChatSnapshot) => {
                     setState((prev) => withLine(prev, WORKING));
                 }
             });
+
+            // A step's chat line. After Stop the line stays on "Stopping".
+            const showLine = (label: string, detail: string | null = null) => {
+                if (!stopped) {
+                    setState((prev) =>
+                        prev.status === label && prev.statusDetail === detail
+                            ? prev
+                            : withLine(prev, label, detail),
+                    );
+                }
+            };
 
             const patchActivity = (fn: (entry: ActivityEntry) => ActivityEntry) =>
                 setState((prev) => ({
@@ -387,7 +507,7 @@ export const useChat = (initial?: ChatSnapshot) => {
             const handle = (frame: StudioFrame) => {
                 // A stream that reset/hydrate walked away from, or that the
                 // user stopped, must not write into the conversation.
-                if (generationRef.current !== generation || stopped) {
+                if (generationRef.current !== generation || muted) {
                     return;
                 }
 
@@ -401,7 +521,7 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                             if (label) {
                                 grace.cancel();
-                                setState((prev) => withLine(prev, label));
+                                showLine(label);
                             }
 
                             break;
@@ -409,11 +529,7 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         // Deltas after the steps are the answer.
                         grace.cancel();
-                        setState((prev) =>
-                            prev.status === 'Writing the answer'
-                                ? prev
-                                : withLine(prev, 'Writing the answer'),
-                        );
+                        showLine('Writing the answer');
                         patchBot((last) => ({ ...last, text: last.text + frame.text }));
                         break;
                     case 'message.complete':
@@ -436,7 +552,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                             grace.idle();
                         } else if (line) {
                             grace.cancel();
-                            setState((prev) => withLine(prev, line.label, line.detail));
+                            showLine(line.label, line.detail);
                         }
 
                         // One Activity line per step_id. A later frame for the
@@ -552,54 +668,66 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         break;
                     }
-                    case 'plan.proposed':
+                    case 'plan.proposed': {
+                        // Also the answer to a switch or an amendment, whose
+                        // fresh plan replaces the card and marks what changed
+                        // since the turn's first plan.
                         stall.stop();
                         grace.cancel();
-                        pendingInterruptRef.current = { interruptId: frame.interrupt_id };
+                        offerPlan(planFromFrame(frame, turnPlanRef.current ?? undefined));
+
+                        // The turn waits on the user again, so a Stop has
+                        // nothing to cancel.
+                        if (haltRef.current === halt) {
+                            haltRef.current = null;
+                        }
+
+                        break;
+                    }
+                    case 'plan.approved': {
+                        // Comes first on the approve's stream, so the reply it
+                        // writes into is the transcript's last message.
+                        const approved = approvedFromFrame(frame);
+
                         setState((prev) => ({
                             ...prev,
-                            ...NO_LINE,
-                            thinking: false,
-                            plan: {
-                                title: frame.title,
-                                steps: frame.steps,
-                                decisions: frame.decisions ?? [],
-                                version: frame.version,
-                                actions: frame.actions,
-                                interruptId: frame.interrupt_id,
-                            },
+                            messages: withApprovedPlan(prev.messages, approved),
                         }));
                         break;
+                    }
                     case 'plan.versioned':
                         // Transient bookkeeping — the fresh plan.proposed that
                         // follows re-renders the card.
                         break;
                     case 'elicitation.request': {
+                        // Also a question a switch's replan asks, which takes
+                        // the waiting card's place and carries the switch.
                         const clarify = clarifyFromFrame(frame);
 
                         stall.stop();
                         grace.cancel();
-                        pendingInterruptRef.current = {
-                            interruptId: clarify.interruptId,
+                        pendingInterruptRef.current = questionPause(
                             clarify,
-                        };
-                        setState((prev) => ({
-                            ...prev,
-                            ...NO_LINE,
-                            thinking: false,
-                            clarify,
-                        }));
+                            pendingInterruptRef.current,
+                        );
+                        setState((prev) =>
+                            withQuestion({ ...prev, ...NO_LINE, thinking: false }, clarify),
+                        );
                         break;
                     }
-                    case 'suggestions':
-                        if (frame.items.length > 0) {
+                    case 'suggestions': {
+                        const { followups, chips } = splitSuggestions(frame.items);
+
+                        if (followups.length > 0 || chips.length > 0) {
                             patchBot((last) => ({
                                 ...last,
-                                followups: frame.items.map((item) => item.prompt),
+                                ...(followups.length > 0 && { followups }),
+                                ...(chips.length > 0 && { chips }),
                             }));
                         }
 
                         break;
+                    }
                     case 'composition.updated':
                         // The whiteboard keeps its own layout; a manifest only
                         // says which cards the harness took off the canvas.
@@ -608,40 +736,19 @@ export const useChat = (initial?: ChatSnapshot) => {
                     case 'error':
                         stall.stop();
                         grace.cancel();
-                        setState((prev) => {
-                            const messages = prev.messages.slice();
-                            const last = messages[messages.length - 1];
-
-                            if (last?.role === 'bot' && !last.text) {
-                                messages[messages.length - 1] = {
-                                    ...last,
-                                    text: `_${frame.error.detail}_`,
-                                };
-                            }
-
-                            return {
-                                ...prev,
-                                messages,
-                                activity: endTurnActivity(prev.activity, turn, 'failed'),
-                                ...NO_LINE,
-                                thinking: false,
-                            };
-                        });
+                        harnessError = frame.error;
+                        finish();
                         break;
                     case 'done':
                         stall.stop();
                         grace.cancel();
+                        done = true;
 
                         if (frame.composition) {
                             applyManifest(frame.composition);
                         }
 
-                        setState((prev) => ({
-                            ...prev,
-                            activity: endTurnActivity(prev.activity, turn),
-                            ...NO_LINE,
-                            thinking: false,
-                        }));
+                        finish();
                         break;
                 }
             };
@@ -650,15 +757,47 @@ export const useChat = (initial?: ChatSnapshot) => {
             // empty answer takes the preamble, else a note). The stream is
             // read until the harness ends it, so the request counts as in
             // flight, and queued sends wait, until the conversation is free.
-            const halt = () => {
+            // A caller that ends the turn itself keeps the frames (a switch's
+            // stream may re-offer the plan). A Stop before the request
+            // started ends it at once, and the request is skipped. Returns
+            // whether to send the cancel, which is true on the stream's
+            // first Stop once its request has started.
+            const halt = (): boolean => {
                 if (stopped || generationRef.current !== generation) {
-                    return;
+                    return false;
                 }
 
                 stopped = true;
-                stall.stop();
                 grace.cancel();
-                stopGrace = setTimeout(() => controller.abort(), STOP_GRACE_MS);
+
+                if (sent) {
+                    stopGrace = setTimeout(
+                        () => controller.abort(),
+                        onEnd ? SWITCH_STOP_GRACE_MS : STOP_GRACE_MS,
+                    );
+                }
+
+                if (onEnd) {
+                    if (!sent) {
+                        // Stop is free for the next stream queued behind this
+                        // one, which the chain has not reached yet.
+                        if (haltRef.current === halt) {
+                            haltRef.current = null;
+                        }
+
+                        finish();
+
+                        return false;
+                    }
+
+                    setState((prev) => withLine(prev, 'Stopping'));
+
+                    return true;
+                }
+
+                muted = true;
+                stall.stop();
+
                 setState((prev) => {
                     const messages = prev.messages.slice();
                     const last = messages[messages.length - 1];
@@ -667,47 +806,106 @@ export const useChat = (initial?: ChatSnapshot) => {
                         messages[messages.length - 1] = { ...last, text: stoppedReply(preamble) };
                     }
 
-                    return {
-                        ...prev,
-                        messages,
-                        activity: endTurnActivity(prev.activity, turn, 'skipped'),
-                        ...NO_LINE,
-                        thinking: false,
-                    };
+                    return endTurn({ ...prev, messages }, turn, 'skipped');
                 });
+
+                return sent;
             };
+
+            // The end of a turn whose caller leaves it to the stream: `done`
+            // ends it, an error frame ends it failed with its detail as an
+            // empty reply's text, and a broken stream ends it failed. A
+            // stream that paused leaves the turn open, and one the user
+            // stopped ended on screen at the Stop.
+            const endOwn = (ending: StreamEnding) => {
+                if (ending.stopped) {
+                    return;
+                }
+
+                const detail = ending.error?.detail;
+
+                if (detail !== undefined) {
+                    setState((prev) => {
+                        const messages = prev.messages.slice();
+                        const last = messages[messages.length - 1];
+
+                        if (last?.role === 'bot' && !last.text) {
+                            messages[messages.length - 1] = { ...last, text: `_${detail}_` };
+                        }
+
+                        return endTurn({ ...prev, messages }, turn, 'failed');
+                    });
+                } else if (ending.failed || ending.done) {
+                    setState((prev) => endTurn(prev, turn, ending.failed ? 'failed' : undefined));
+                }
+            };
+
+            // The turn's end on screen, once: at the `done` or `error` frame,
+            // or else when the stream closes.
+            const finish = () => {
+                if (!finished) {
+                    finished = true;
+                    (onEnd ?? endOwn)({ error: harnessError, done, stopped, failed, sent });
+                }
+            };
+
+            // A refusal or a failed fetch of a stream that reset/hydrate
+            // walked away from, or that the user stopped, is dropped, as
+            // handle() drops frames. A switch the user stopped then ends as
+            // stopped (its `onEnd`), not on a live card whose buttons the
+            // cancel has made useless.
+            const refuse = (refusal: StreamRefusal): boolean => {
+                if (generationRef.current !== generation) {
+                    return true;
+                }
+
+                if (metered) {
+                    setState((prev) => ({ ...prev, messages: withRefundedPrompt(prev.messages) }));
+                }
+
+                return muted || stopped || (onRefusal?.(refusal) ?? false);
+            };
+            const unreachable = (): boolean =>
+                generationRef.current !== generation ||
+                muted ||
+                stopped ||
+                (onUnreachable?.() ?? false);
 
             // Queue behind whatever is in flight. The controller is published
             // when the request actually starts, so reset aborts the fetch
-            // that is running, not one still waiting here.
-            let failed = false;
+            // that is running, not one still waiting here. The halt is
+            // published at once for a switch when no stream holds Stop (the
+            // one ahead paused on a plan but has not closed yet), so a Stop
+            // while it waits skips its request. A resume has no such halt:
+            // it has already cleared its card, so skipping its request would
+            // lose the approval while the pause waits.
+            if (onEnd && haltRef.current === null) {
+                haltRef.current = halt;
+            }
 
             inFlightRef.current += 1;
             chainRef.current = chainRef.current
                 .then(() => {
-                    if (generationRef.current !== generation) {
+                    if (generationRef.current !== generation || stopped) {
                         return;
                     }
 
+                    sent = true;
                     abortRef.current = controller;
                     haltRef.current = halt;
                     stall.beat();
 
                     return start(
-                        { onFrame: handle, onKeepAlive: stall.beat },
+                        {
+                            onFrame: handle,
+                            onKeepAlive: stall.beat,
+                            onRefusal: refuse,
+                            onUnreachable: unreachable,
+                        },
                         controller.signal,
                     ).catch((error: Error) => {
                         if (error.name !== 'AbortError' && generationRef.current === generation) {
                             failed = true;
-
-                            if (!stopped) {
-                                setState((prev) => ({
-                                    ...prev,
-                                    activity: endTurnActivity(prev.activity, turn, 'failed'),
-                                    ...NO_LINE,
-                                    thinking: false,
-                                }));
-                            }
                         }
                     });
                 })
@@ -727,6 +925,8 @@ export const useChat = (initial?: ChatSnapshot) => {
                         return;
                     }
 
+                    finish();
+
                     inFlightRef.current -= 1;
 
                     // A stream that broke mid-way says nothing about whether
@@ -737,61 +937,70 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                 });
         },
-        [applyManifest, patchWidget],
+        [applyManifest, offerPlan, patchWidget],
     );
+
+    // While a request is in flight a new turn waits its turn; the settle
+    // handler sends it (then the next) once the conversation is free. During
+    // a pause it also waits behind turns already held, so it cannot overtake
+    // them. Returns whether the turn was held.
+    const holdTurn = useCallback((item: Omit<QueuedMessage, 'id'>): boolean => {
+        if (
+            inFlightRef.current === 0 &&
+            (queueRef.current.length === 0 || pendingInterruptRef.current === null)
+        ) {
+            return false;
+        }
+
+        const queued: QueuedMessage = { id: uuid(), ...item };
+
+        queueRef.current.push(queued);
+        setState((prev) => ({ ...prev, queued: [...prev.queued, queued] }));
+
+        return true;
+    }, []);
+
+    // Open a turn on screen: the user's message and an empty reply join the
+    // transcript, the turn gets its Activity entry, and the chat line shows
+    // `line`. A new turn on a paused conversation abandons the pause (the
+    // contract's rule), so any plan or clarify card goes with it.
+    const startTurn = useCallback((user: ChatMessage & { role: 'user' }, line: string) => {
+        const conversation = sessionRef.current ?? uuid();
+
+        sessionRef.current = conversation;
+        turnCount.current += 1;
+        const turn = turnCount.current;
+
+        pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
+        editingRef.current = null;
+        setState((prev) => ({
+            ...withLine(prev, line),
+            messages: [...prev.messages, user, { role: 'bot', text: '' }],
+            activity: [
+                ...prev.activity,
+                { turn, prompt: user.text, startedAt: Date.now(), tools: [] },
+            ],
+            thinking: true,
+            clarify: null,
+            plan: null,
+        }));
+
+        return { turn, conversation };
+    }, []);
 
     const send = useCallback(
         (message: string, card?: CardTarget, seeds?: Seed[]) => {
             const text = message.trim();
 
-            if (!text) {
+            if (!text || holdTurn({ text, card, seeds })) {
                 return;
             }
 
-            // While a request is in flight the message waits its turn; the
-            // settle handler sends it (then the next) once the conversation
-            // is free. During a pause it also waits behind messages already
-            // held, so it cannot overtake them.
-            if (
-                inFlightRef.current > 0 ||
-                (queueRef.current.length > 0 && pendingInterruptRef.current !== null)
-            ) {
-                const item: QueuedMessage = { id: uuid(), text, card, seeds };
-
-                queueRef.current.push(item);
-                setState((prev) => ({ ...prev, queued: [...prev.queued, item] }));
-
-                return;
-            }
-
-            if (!sessionRef.current) {
-                sessionRef.current = uuid();
-            }
-
-            turnCount.current += 1;
-            const turn = turnCount.current;
-
-            // A new turn on a paused conversation abandons the pause (the
-            // contract's rule) — drop any pending plan/clarify card with it.
-            pendingInterruptRef.current = null;
-
-            setState((prev) => ({
-                ...withLine(prev, 'Resolving the question'),
-                messages: [
-                    ...prev.messages,
-                    { role: 'user', text, ...(card?.title && { card: { title: card.title } }) },
-                    { role: 'bot', text: '' },
-                ],
-                activity: [
-                    ...prev.activity,
-                    { turn, prompt: text, startedAt: Date.now(), tools: [] },
-                ],
-                thinking: true,
-                clarify: null,
-                plan: null,
-            }));
-
-            const conversation = sessionRef.current;
+            const { turn, conversation } = startTurn(
+                { role: 'user', text, ...(card?.title && { card: { title: card.title } }) },
+                'Resolving the question',
+            );
             const recap = recapRef.current;
 
             recapRef.current = null;
@@ -815,52 +1024,127 @@ export const useChat = (initial?: ChatSnapshot) => {
 
             // A question handed over from search carries its seeds, the
             // datasets the user saw there, so the harness starts from them.
-            stream(turn, (handlers, signal) =>
-                runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
-                    ...(componentRef && { component_ref: componentRef }),
-                    ...(seeds && { seed_spec: seeds }),
-                }),
+            stream(
+                turn,
+                (handlers, signal) =>
+                    runTurn(conversation, recap ? `${recap}${text}` : text, handlers, signal, {
+                        ...(componentRef && { component_ref: componentRef }),
+                        ...(seeds && { seed_spec: seeds }),
+                    }),
+                { metered: true },
             );
         },
-        [stream],
+        [holdTurn, startTurn, stream],
     );
-
-    // The queue head goes next, unless a pause (plan or clarify) is waiting
-    // on the user: a new turn would abandon it, so the answer goes first.
-    useEffect(() => {
-        drainRef.current = () => {
-            if (inFlightRef.current > 0 || pendingInterruptRef.current) {
-                return;
-            }
-
-            const next = queueRef.current.shift();
-
-            if (!next) {
-                return;
-            }
-
-            setState((prev) => ({
-                ...prev,
-                queued: prev.queued.filter((item) => item.id !== next.id),
-            }));
-            send(next.text, next.card, next.seeds);
-        };
-    }, [send]);
 
     const unqueue = useCallback((id: string) => {
         queueRef.current = queueRef.current.filter((item) => item.id !== id);
         setState((prev) => ({ ...prev, queued: prev.queued.filter((item) => item.id !== id) }));
     }, []);
 
+    // A switch's stream, from the pick (switchChoice) or from the answer to
+    // a question its replan asked (resume), while `waiting` is the pending
+    // plan. A fresh plan.proposed, its `switch_failed` included, replaces
+    // the card through the stream; after Stop the frames are still read, so
+    // the plan the harness re-offers on cancel ends the switch. A stream that
+    // ends without a plan (it closed, broke, sent `done` or an error, or was
+    // stopped) ends the card read-only, once, closing the turn's Activity
+    // entry (endedSwitch) and leaving the reply alone. `refuse` gives the card
+    // for a refusal, which stays up when live and is the read-only end
+    // otherwise; `unreached` and `unsent` give the live card for a request
+    // that never reached the harness and one stopped before it started.
+    // Without them a refusal or an unreached request ends as an error, and a
+    // Stop before the request started as stopped.
+    const streamSwitch = useCallback(
+        (
+            turn: number,
+            waiting: PlanState,
+            start: (handlers: StreamHandlers, signal: AbortSignal) => Promise<void>,
+            {
+                refuse,
+                unreached,
+                unsent,
+            }: {
+                refuse?: (refusal: StreamRefusal) => PlanState;
+                unreached?: () => PlanState;
+                unsent?: () => PlanState;
+            } = {},
+        ) => {
+            // The read-only card a refusal that may have used up the pause
+            // ends on.
+            let refused: PlanState | null = null;
+
+            stream(turn, start, {
+                onRefusal:
+                    refuse &&
+                    ((refusal) => {
+                        const card = refuse(refusal);
+
+                        if (card.live) {
+                            offerPlan(card);
+                        } else {
+                            refused = card;
+                        }
+
+                        return true;
+                    }),
+                onUnreachable:
+                    unreached &&
+                    (() => {
+                        offerPlan(unreached());
+
+                        return true;
+                    }),
+                onEnd: ({ error, stopped, sent }) => {
+                    // A fresh plan, a refusal or a question replaced the
+                    // waiting card.
+                    if (pendingInterruptRef.current?.plan !== waiting) {
+                        return;
+                    }
+
+                    if (!sent && unsent) {
+                        offerPlan(unsent());
+
+                        return;
+                    }
+
+                    const { plan: ended, activity } = endedSwitch(waiting, {
+                        error,
+                        stopped,
+                        refused,
+                    });
+
+                    pendingInterruptRef.current = null;
+                    turnPlanRef.current = null;
+                    setState((prev) => {
+                        const after = switchEnded(prev, waiting, ended);
+
+                        return after === prev ? prev : endTurn(after, turn, activity);
+                    });
+                },
+            });
+        },
+        [offerPlan, stream],
+    );
+
     // Continue a paused turn on /interrupt — shared by clarify answers, the
     // skip button and the plan actions. `answer` is what the user chose or
     // wrote, which enters the transcript.
+    // A stale plan answer (an approve sent from an out-of-date card) is
+    // refused with the current card, which replaces it to be answered again.
+    // The answer to a question a switch's replan asked puts the waiting card
+    // back and resumes as the switch (streamSwitch).
     const resume = useCallback(
-        (reply: ClarifyReply, note: string | null, answer?: string) => {
+        (
+            reply: ClarifyReply | Pick<InterruptResponse, 'decision' | 'plan_revision'>,
+            note: string | null,
+            answer?: string,
+        ) => {
             const conversation = sessionRef.current;
             const pending = pendingInterruptRef.current;
+            const after = answeredPause(pending);
 
-            pendingInterruptRef.current = null;
+            pendingInterruptRef.current = after;
 
             setState((prev) => ({
                 // The decision shows on the status line; the user's answer
@@ -870,18 +1154,35 @@ export const useChat = (initial?: ChatSnapshot) => {
                 messages: answer && pending ? withAnswer(prev.messages, answer) : prev.messages,
                 thinking: true,
                 clarify: null,
-                plan: null,
+                plan: after?.plan ?? null,
             }));
 
             if (!conversation || !pending) {
                 return;
             }
 
-            stream(turnCount.current, (handlers, signal) =>
-                runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
-            );
+            const start = (handlers: StreamHandlers, signal: AbortSignal) =>
+                runInterrupt(conversation, pending.interruptId, reply, handlers, signal);
+
+            if (after?.plan) {
+                streamSwitch(turnCount.current, after.plan, start);
+
+                return;
+            }
+
+            stream(turnCount.current, start, {
+                onRefusal: (refusal) => {
+                    const current = stalePlan(refusal, pending?.plan);
+
+                    if (current) {
+                        offerPlan(current);
+                    }
+
+                    return current !== null;
+                },
+            });
         },
-        [stream],
+        [offerPlan, stream, streamSwitch],
     );
 
     // Answer every question of the pending clarify at once, keyed by
@@ -922,9 +1223,14 @@ export const useChat = (initial?: ChatSnapshot) => {
     }, [resume]);
 
     // The plan card's three buttons. An amendment carries the user's change
-    // request; the stream then proposes a fresh plan version.
+    // request; the stream then proposes a fresh plan version. A read-only
+    // card has no pause to answer.
     const respondPlan = useCallback(
         (decision: 'approve' | 'amend' | 'reject', payload?: string) => {
+            if (!pendingInterruptRef.current?.plan) {
+                return;
+            }
+
             const note =
                 decision === 'approve'
                     ? '_Plan approved._'
@@ -933,7 +1239,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                       : `_Change requested: ${payload ?? ''}_`;
 
             resume(
-                { decision, ...(decision === 'amend' ? { payload } : {}) },
+                decision === 'approve'
+                    ? approveReply(pendingInterruptRef.current?.plan)
+                    : { decision, ...(decision === 'amend' ? { payload } : {}) },
                 note,
                 decision === 'amend' ? payload : undefined,
             );
@@ -941,21 +1249,156 @@ export const useChat = (initial?: ChatSnapshot) => {
         [resume],
     );
 
-    // The Stop control: ask the harness to cancel and end the running turn
-    // (see `halt` in stream()). Requests queued behind it also wait for the
-    // cancel request to answer.
+    // A scope choice's or planner decision's option, picked on the plan card.
+    // The card stays, its controls waiting, until the harness re-offers the
+    // plan with what changed, or with `switch_failed` saying why it did not
+    // apply. The page sets no deadline of its own, since a planner
+    // decision's replan takes tens of seconds. A refusal that leaves the
+    // pause alone keeps the card live and says why on the choice's row
+    // (refusedSwitch); a stale one (the plan moved on elsewhere) is answered
+    // with the current card, and any other ends the card read-only. A
+    // request that never reached the harness keeps the card live, with "Try
+    // again". The rest of the switch's end is streamSwitch's.
+    const switchChoice = useCallback(
+        (choiceId: string, optionId: string) => {
+            const conversation = sessionRef.current;
+            const pending = pendingInterruptRef.current;
+            const plan = pending?.plan;
+            const reply = plan ? switchReply(plan, choiceId, optionId) : null;
+
+            if (!conversation || !pending || !plan || !reply) {
+                return;
+            }
+
+            const label = optionLabel(plan.decisions, choiceId, optionId);
+            const turn = turnCount.current;
+
+            // The pause stays pending with the waiting plan. switchReply
+            // refuses a second pick while it waits, and the plan the harness
+            // re-offers is compared against it.
+            const waiting = startSwitch(plan, { choiceId, optionId });
+
+            pendingInterruptRef.current = { interruptId: pending.interruptId, plan: waiting };
+            turnPlanRef.current = waiting;
+            setState((prev) => ({
+                ...withLine(prev, switchLine(choiceId, label)),
+                thinking: true,
+                plan: waiting,
+            }));
+
+            streamSwitch(
+                turn,
+                waiting,
+                (handlers, signal) =>
+                    runInterrupt(conversation, pending.interruptId, reply, handlers, signal),
+                {
+                    refuse: (refusal) => {
+                        // The card shows only a harness ToolError's detail.
+                        if (!refusal.error && refusal.detail) {
+                            console.warn('Studio: a switch was refused', refusal);
+                        }
+
+                        return refusedSwitch(waiting, refusal);
+                    },
+                    // The request never reached the harness, so the pause
+                    // waits.
+                    unreached: () => unreachableSwitch(waiting),
+                    // Stopped while it waited behind the stream that offered
+                    // the plan. Nothing reached the harness, so the pause
+                    // waits.
+                    unsent: () => stoppedQueuedSwitch(waiting),
+                },
+            );
+        },
+        [streamSwitch],
+    );
+
+    // A clicked `apply_choice` chip runs a turn with the chip's choice and no
+    // message, which the transcript shows as the chip's label. A click while
+    // a request is in flight waits in the queue, as a typed message does. A
+    // chip the harness refuses (the answer moved on, or Search cannot serve
+    // the option) leaves the reply saying why, with the answer's other chips.
+    const applyChoice = useCallback(
+        (chip: ApplyChoiceSuggestion) => {
+            if (holdTurn({ text: chip.label, chip })) {
+                return;
+            }
+
+            const { turn, conversation } = startTurn(
+                { role: 'user', text: chip.label },
+                `Switching to ${chip.label}`,
+            );
+
+            stream(
+                turn,
+                (handlers, signal) => runApplyChoice(conversation, chip, handlers, signal),
+                {
+                    metered: true,
+                    onRefusal: (refusal) => {
+                        const detail = chipRefusalDetail(refusal);
+
+                        if (detail === null) {
+                            return false;
+                        }
+
+                        setState((prev) =>
+                            endTurn(
+                                { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
+                                turn,
+                                'failed',
+                            ),
+                        );
+
+                        return true;
+                    },
+                },
+            );
+        },
+        [holdTurn, startTurn, stream],
+    );
+
+    // The queue head goes next, unless a pause (plan or clarify) is waiting
+    // on the user: a new turn would abandon it, so the answer goes first.
+    useEffect(() => {
+        drainRef.current = () => {
+            if (inFlightRef.current > 0 || pendingInterruptRef.current) {
+                return;
+            }
+
+            const next = queueRef.current.shift();
+
+            if (!next) {
+                return;
+            }
+
+            setState((prev) => ({
+                ...prev,
+                queued: prev.queued.filter((item) => item.id !== next.id),
+            }));
+
+            if (next.chip) {
+                applyChoice(next.chip);
+            } else {
+                send(next.text, next.card, next.seeds);
+            }
+        };
+    }, [applyChoice, send]);
+
+    // The Stop control: end the running turn (see `halt` in stream()) and
+    // ask the harness to cancel, once per stream whose request started. On a
+    // switch, a second cancel would end the stream before the harness
+    // re-offers the plan. Requests queued behind it also wait for the cancel
+    // request to answer.
     const stop = useCallback(() => {
         const conversation = sessionRef.current;
-        const halt = haltRef.current;
 
-        if (!conversation || !halt) {
+        if (!conversation || !haltRef.current?.()) {
             return;
         }
 
         const cancelled = cancelTurn(conversation);
 
         chainRef.current = chainRef.current.then(() => cancelled);
-        halt();
     }, []);
 
     const reset = useCallback(() => {
@@ -979,6 +1422,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         canvasEditsRef.current?.reset();
         turnCount.current = 0;
         pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
         recapRef.current = null;
         setState({
             messages: [],
@@ -1005,6 +1449,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         inFlightRef.current = 0;
         queueRef.current = [];
         pendingInterruptRef.current = null;
+        turnPlanRef.current = null;
         sessionRef.current = saved.sessionId;
         revisionsRef.current = restoreCardRevisions(saved);
         canvasRef.current = restoreCanvas(saved);
@@ -1014,7 +1459,7 @@ export const useChat = (initial?: ChatSnapshot) => {
         recapRef.current = saved.sessionId ? null : buildRecap(saved.messages);
         turnCount.current = saved.turnCount;
         setState({
-            messages: saved.messages,
+            messages: restoredMessages(saved),
             widgets: saved.widgets,
             queued: [],
             activity: restoreActivity(saved.activity),
@@ -1050,6 +1495,8 @@ export const useChat = (initial?: ChatSnapshot) => {
         answerClarify,
         skipClarify,
         respondPlan,
+        switchChoice,
+        applyChoice,
         stop,
         reset,
         hydrate,

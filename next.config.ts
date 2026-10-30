@@ -2,6 +2,8 @@ import { withSentryConfig } from '@sentry/nextjs/config';
 import path from 'path';
 import type { NextConfig } from 'next';
 
+import { noindexHeaders } from './src/lib/crawl.ts';
+
 const nextConfig: NextConfig = {
     // Self-contained server bundle for the Cloud Run image (deploy/Dockerfile).
     output: 'standalone',
@@ -18,6 +20,12 @@ const nextConfig: NextConfig = {
         .split(',')
         .map((origin) => origin.trim())
         .filter(Boolean),
+    // Share and embed links, the Studio, history and sign-in say noindex on
+    // every response, redirects and errors included (src/lib/crawl.ts).
+    // src/proxy.ts sends /data's.
+    async headers() {
+        return noindexHeaders();
+    },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the
     // same file the docs corpus was built from (src/app/docs-md).
     async rewrites() {

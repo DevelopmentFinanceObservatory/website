@@ -247,6 +247,12 @@
     }
 }
 
+// A chip that switches the answer's reading is the follow-up chip, dashed, so
+// it reads as a change to this answer.
+.choiceChip {
+    border-style: dashed;
+}
+
 // Clarify picker: a card that stands in for the input while the agent waits
 // on a choice. rem(10) padding all round, options as bordered rows.
 .picker {
@@ -580,11 +586,18 @@
 // long clarify) outgrows the panel: that card scrolls inside and the input
 // never leaves the screen. Everything else in it keeps its natural height
 // (flex items don't shrink below their content unless they opt in with
-// min-height: 0, which only the plan and the picker do).
+// min-height: 0, which only the picker does; the plan card shrinks to a
+// floor). On a screen too short for that floor, the foot itself scrolls, so
+// every control stays reachable and focus brings it into view.
 .chatFoot {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow-y: auto;
+
+    // Focus scrolls a textarea only as far as its caret line; this brings
+    // the rest of the input in with it.
+    scroll-padding-bottom: rem(24);
 }
 
 // The panel body: Chat (transcript + input) and Activity stacked in ONE grid

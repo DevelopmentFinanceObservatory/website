@@ -19,8 +19,8 @@ import { hit, type Surface } from './rateLimit';
  * /codes call the route forwards, is rate-limited per IP: /mcp on its own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
  * headers go out only on a counted call). A call is forwarded with its
- * method, query, body, content headers, user-agent and every mcp-* header
- * (src/lib/proxy/headers), and the upstream's response streamed back: SSE
+ * method, query, body, content headers, user-agent, x-dfo-client and every
+ * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
  * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
  * or more is gzipped on the way for a client that accepts it
@@ -107,18 +107,6 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
 
     setCaller(headers, options.caller);
 
-    const earlyFailure = (error: unknown): Response => {
-        // A client that left aborted the read itself, so no one is answered.
-        if (!req.signal.aborted) {
-            console.error(
-                `relay failed before the first byte: ${new URL(options.target).pathname}`,
-                error,
-            );
-        }
-
-        return unreachableProblem(options.unreachable, limitHeaders);
-    };
-
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
     let upstream: Response;
 
@@ -136,14 +124,32 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
             signal: req.signal,
         } as RequestInit);
     } catch {
+        // No response, so the upstream is taken not to have received the
+        // call: a connection reset after the body went out reads the same.
         return unreachableProblem(options.unreachable, limitHeaders);
     }
 
+    // The upstream answered `status`, so it received the call, and the
+    // problem document says so (upstream_status).
+    const earlyFailure = (error: unknown, status: number): Response => {
+        // A client that left aborted the read itself, so no one is answered.
+        if (!req.signal.aborted) {
+            console.error(
+                `relay failed before the first byte: ${new URL(options.target).pathname}`,
+                error,
+            );
+        }
+
+        return unreachableProblem(options.unreachable, limitHeaders, status);
+    };
+
     if (options.rewrite) {
+        const { status } = upstream;
+
         try {
             upstream = await options.rewrite(upstream);
         } catch (error) {
-            return earlyFailure(error);
+            return earlyFailure(error, status);
         }
     }
 
@@ -157,7 +163,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         upstream,
         headers: out,
         compress: options.compress,
-        onEarlyFailure: earlyFailure,
+        onEarlyFailure: (error) => earlyFailure(error, upstream.status),
     });
 };
 

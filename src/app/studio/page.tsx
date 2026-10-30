@@ -7,6 +7,7 @@ import { liveSharingAvailable } from '@/lib/studio/liveShare';
 
 export const metadata: Metadata = {
     title: 'DFO Studio',
+    robots: { index: false, follow: false },
 };
 
 // Open to everyone; a guest gets a few free prompts and no history. The

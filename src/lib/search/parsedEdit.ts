@@ -99,25 +99,57 @@ export function resolveTypedEdit(
 }
 
 /** One ambiguous wording of an entity_ambiguous refusal and the options
- *  that settle it (`no_data.options` whose `mentions` hold the wording), in
- *  the order the refusal lists them. */
-export type EntityChoiceGroup = { text: string; options: NoDataOption[] };
+ *  that settle it, in the order the refusal lists them. `key` is the
+ *  options' `entity_choice` (the group's index in
+ *  `no_data.ambiguous_entities`) when they carry one, else the wording. */
+export type EntityChoiceGroup = { key: number | string; text: string; options: NoDataOption[] };
 
-/** The refusal's options grouped by the wording each settles, wordings in
- *  the order their first option comes. An option settling two wordings
- *  stands in both groups. Empty for every reason but entity_ambiguous. */
+/** The refusal's options grouped by what each settles, groups in the order
+ *  their first option comes. An option carrying `entity_choice` joins that
+ *  `ambiguous_entities` group, so two groups written alike ("aid from Congo
+ *  to Congo") stay apart. An option without it joins a group per wording in
+ *  its `mentions`. Empty for every reason but entity_ambiguous. */
 export function entityChoiceGroups(noData: NoData | null | undefined): EntityChoiceGroup[] {
     if (noData?.reason !== 'entity_ambiguous') return [];
 
-    const groups = new Map<string, NoDataOption[]>();
+    const groups = new Map<number | string, EntityChoiceGroup>();
+    const join = (key: number | string, text: string, option: NoDataOption) => {
+        const group = groups.get(key) ?? { key, text, options: [] };
+
+        group.options.push(option);
+        groups.set(key, group);
+    };
 
     for (const option of noData.options ?? []) {
-        for (const text of option.mentions) {
-            groups.set(text, [...(groups.get(text) ?? []), option]);
+        const choice = option.entity_choice;
+
+        if (typeof choice === 'number') {
+            join(
+                choice,
+                noData.ambiguous_entities?.[choice]?.text ?? option.mentions[0] ?? '',
+                option,
+            );
+        } else {
+            for (const text of option.mentions) join(text, text, option);
         }
     }
 
-    return [...groups].map(([text, options]) => ({ text, options }));
+    return [...groups.values()];
+}
+
+/**
+ * What each group's rows say in a menu that merges every group: the
+ * wording, numbered in menu order where two groups share it ("aid from
+ * Congo to Congo" gives "Congo (1)", "Congo (2)").
+ */
+export function entityChoiceLabels(groups: readonly EntityChoiceGroup[]): string[] {
+    return groups.map(({ text }, index) => {
+        if (groups.filter((group) => group.text === text).length === 1) return text;
+
+        const place = groups.slice(0, index + 1).filter((group) => group.text === text).length;
+
+        return `${text} (${place})`;
+    });
 }
 
 /** The part an entity choice posts: its option's one-part request,

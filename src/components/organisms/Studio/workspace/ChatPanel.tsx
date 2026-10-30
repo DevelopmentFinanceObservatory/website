@@ -87,13 +87,15 @@ const ChatPanel = ({
     }, [chat.messages, chat.queued, chat.status, chat.statusDetail, follow]);
 
     const sendFollow = () => {
-        if (!follow.trim()) {
+        // A plan switch in flight has the pause, so the text waits in the input.
+        if (!follow.trim() || chat.plan?.switching) {
             return;
         }
 
         // While a plan awaits review, the input is the "Propose changes"
-        // channel — the text travels as an amendment, not a new turn.
-        if (chat.plan) {
+        // channel, and the text travels as an amendment, not a new turn. A
+        // read-only card awaits nothing, so the text asks again.
+        if (chat.plan?.live) {
             chat.respondPlan('amend', follow.trim());
         } else if (editTarget) {
             chat.send(follow, {
@@ -149,6 +151,7 @@ const ChatPanel = ({
                                         onAdd={onAdd}
                                         onRemove={onRemove}
                                         onFollowup={chat.send}
+                                        onApplyChoice={chat.applyChoice}
                                         readOnly={readOnly}
                                     />
                                     {sharedAfter(index) && (
@@ -210,6 +213,9 @@ const ChatPanel = ({
                                     plan={chat.plan}
                                     onApprove={() => chat.respondPlan('approve')}
                                     onCancel={() => chat.respondPlan('reject')}
+                                    // Switching goes with amending, which the
+                                    // wall takes away with the input.
+                                    onSwitch={wall ? undefined : chat.switchChoice}
                                 />
                             )}
                             {wall ? (
@@ -244,14 +250,14 @@ const ChatPanel = ({
                                         onChange={setFollow}
                                         onSubmit={sendFollow}
                                         placeholder={
-                                            chat.plan
+                                            chat.plan?.live
                                                 ? 'Propose changes or ask a follow up...'
                                                 : editTarget
                                                   ? 'Ask about this card...'
                                                   : 'Ask a follow up...'
                                         }
                                         label={
-                                            chat.plan
+                                            chat.plan?.live
                                                 ? 'Propose changes'
                                                 : editTarget
                                                   ? 'Ask about this card'

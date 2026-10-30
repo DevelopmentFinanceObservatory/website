@@ -3,120 +3,171 @@
 import classNames from 'classnames';
 import { useState } from 'react';
 
+import { PlanApproveBar } from './PlanApproveBar';
+import { PlanCaveats, PlanLedger, PlanMeta } from './PlanLedger';
 import styles from './PlanModal.module.scss';
-import type { ChatState } from '../hooks/useChat';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
+import { answerStepOf, type PlanState, type PlanView } from '@/lib/studio/plan';
 
 type PlanModalProps = {
-    plan: NonNullable<ChatState['plan']>;
+    view: PlanView;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onApprove: () => void;
-    onCancel: () => void;
+    // The plan awaiting review, with its answers. An approved plan
+    // (read-only) passes none of these.
+    plan?: PlanState;
+    onApprove?: () => void;
+    onCancel?: () => void;
+    // Switches a scope choice to another option. Left out where the viewer
+    // cannot change the plan (a guest).
+    onSwitch?: (choiceId: string, optionId: string) => void;
 };
 
-/**
- * The full plan (design: "Proposed Research Plan – N Steps" modal): every
- * step on the dot rail with its description unfolded (a chevron folds it),
- * the agent's decisions under them, and the same "Start building?" bar
- * with Cancel and Approve pinned to the bottom.
- */
-const PlanModal = ({ plan, open, onOpenChange, onApprove, onCancel }: PlanModalProps) => {
-    // Steps start unfolded — the modal exists to read them.
-    const [folded, setFolded] = useState<Set<string>>(new Set());
+/** Every step on the dot rail, folded to its label. The step that gives the
+ *  answer starts open and carries a filled dot. */
+const Steps = ({ view }: { view: PlanView }) => {
+    const [openKeys, setOpenKeys] = useState(
+        () => new Set(view.steps.filter((step) => step.givesAnswer).map((step) => step.key)),
+    );
 
-    const toggleStep = (id: string) =>
-        setFolded((prev) => {
+    const toggle = (key: string) =>
+        setOpenKeys((prev) => {
             const next = new Set(prev);
 
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
+            if (!next.delete(key)) {
+                next.add(key);
             }
 
             return next;
         });
 
     return (
+        <ol className={styles.rail}>
+            {view.steps.map((step) => {
+                const isOpen = openKeys.has(step.key);
+                const label = (
+                    <span className={styles.stepLabel}>
+                        {step.givesAnswer && <span className={styles.kind}>Gives the answer</span>}
+                        {step.label}
+                    </span>
+                );
+
+                return (
+                    <li
+                        key={step.key}
+                        className={classNames(styles.step, step.givesAnswer && styles.stepAnswer)}
+                    >
+                        {step.description ? (
+                            <button
+                                type="button"
+                                className={styles.stepRow}
+                                aria-expanded={isOpen}
+                                onClick={() => toggle(step.key)}
+                            >
+                                {label}
+                                <Icon
+                                    name="chevron-down"
+                                    className={classNames(
+                                        styles.chevron,
+                                        isOpen && styles.chevronOpen,
+                                    )}
+                                />
+                            </button>
+                        ) : (
+                            <span className={styles.stepRow}>{label}</span>
+                        )}
+                        {step.description && isOpen && (
+                            <p className={styles.stepDetail}>{step.description}</p>
+                        )}
+                    </li>
+                );
+            })}
+        </ol>
+    );
+};
+
+/**
+ * The full plan: what it counts, the scope choices (switchable on a live
+ * plan) with why the plan holds each, what to keep in mind, the steps folded
+ * to labels with the answer step open, then the planner's other decisions.
+ * A live plan's footer asks to approve. An approved plan opens read-only
+ * from the pill under its answer.
+ */
+const PlanModal = ({
+    view,
+    open,
+    onOpenChange,
+    plan,
+    onApprove,
+    onCancel,
+    onSwitch,
+}: PlanModalProps) => {
+    const readOnly = !plan;
+    const ended = plan && !plan.live;
+    const busy = !!plan?.switching;
+    const answerKey = answerStepOf(view)?.key;
+
+    return (
         <Modal
             open={open}
             onOpenChange={onOpenChange}
             placement="center"
-            title={`${plan.title} – ${plan.steps.length} ${plan.steps.length === 1 ? 'Step' : 'Steps'}`}
+            title={view.title}
             className={styles.modal}
+            footer={
+                readOnly || ended ? (
+                    <div className={styles.proceed}>
+                        <p className={styles.note}>
+                            {readOnly
+                                ? 'Approved. Ask a follow up to change the scope.'
+                                : 'Ask again to change the plan.'}
+                        </p>
+                        <Button variant="bordered" onClick={() => onOpenChange(false)}>
+                            Close
+                        </Button>
+                    </div>
+                ) : (
+                    <PlanApproveBar busy={busy} onApprove={onApprove} onCancel={onCancel} />
+                )
+            }
         >
             <div className={styles.body}>
-                <ol className={styles.steps}>
-                    {plan.steps.map((step) => {
-                        const isOpen = !folded.has(step.id);
-
-                        return (
-                            <li key={step.id} className={styles.step}>
-                                {step.description ? (
-                                    <button
-                                        type="button"
-                                        className={styles.stepRow}
-                                        aria-expanded={isOpen}
-                                        onClick={() => toggleStep(step.id)}
-                                    >
-                                        <span className={styles.stepLabel}>{step.label}</span>
-                                        <Icon
-                                            name="chevron-down"
-                                            className={classNames(
-                                                styles.stepChevron,
-                                                isOpen && styles.stepChevronOpen,
-                                            )}
-                                        />
-                                    </button>
-                                ) : (
-                                    <span
-                                        className={classNames(styles.stepRow, styles.stepRowStatic)}
-                                    >
-                                        <span className={styles.stepLabel}>{step.label}</span>
-                                    </span>
-                                )}
-                                {step.description && (
-                                    <div
-                                        className={classNames(
-                                            styles.fold,
-                                            isOpen && styles.foldOpen,
-                                        )}
-                                        inert={!isOpen}
-                                    >
-                                        <div className={styles.foldInner}>
-                                            <p className={styles.stepDetail}>{step.description}</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ol>
-                {plan.decisions.length > 0 && (
-                    <ul className={styles.decisions}>
-                        {plan.decisions.map((decision) => (
-                            <li key={decision.id} className={styles.decision}>
-                                {decision.question} — <strong>{decision.chosen}</strong>
-                                {decision.reason ? ` (${decision.reason})` : ''}
-                            </li>
-                        ))}
-                    </ul>
+                <PlanMeta view={view} approved={readOnly} />
+                {view.summary && <p className={styles.summary}>{view.summary}</p>}
+                <PlanLedger
+                    view={view}
+                    plan={plan}
+                    onSwitch={onSwitch}
+                    reasons
+                    className={styles.ledger}
+                />
+                <PlanCaveats
+                    caveats={view.caveats}
+                    className={styles.section}
+                    headClassName={styles.sectionHead}
+                />
+                <section className={styles.section}>
+                    <p className={styles.sectionHead}>Steps</p>
+                    {/* A switch can move the answer step, and the open set
+                        starts again from the new one. */}
+                    <Steps key={answerKey} view={view} />
+                </section>
+                {view.others.length > 0 && (
+                    <section className={styles.section}>
+                        <p className={styles.sectionHead}>Other choices the plan made</p>
+                        <ul className={styles.others}>
+                            {view.others.map((other) => (
+                                <li key={other.key}>
+                                    {other.question}: <b>{other.chosen}</b>
+                                    {other.reason ? `. ${other.reason}` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 )}
-            </div>
-            <div className={styles.proceed}>
-                <p className={styles.proceedLabel}>Start building?</p>
-                <div className={styles.proceedActions}>
-                    <Button variant="bordered" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                    <Button variant="dark" onClick={onApprove}>
-                        Approve
-                    </Button>
-                </div>
             </div>
         </Modal>
     );

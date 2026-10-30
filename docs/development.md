@@ -211,17 +211,17 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 
 ## API client package
 
-The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock, so `pnpm-lock.yaml` carries the new tarball's integrity:
+The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock:
 
 ```sh
 cd <sdk checkout>/typescript
 pnpm install && pnpm run build
 pnpm pack --pack-destination <website checkout>/vendor
 cd <website checkout>
-pnpm install
+just relock-client
 ```
 
-A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it before re-locking. A rebuilt tarball keeps its file name, so a local re-vendor needs the client's directory under `node_modules/.pnpm` deleted before `pnpm install --frozen-lockfile` picks it up. Commit the tarball and the lockfile together.
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it, delete the old tarball, then re-lock. `just relock-client` deletes the client's stale directory under `node_modules/.pnpm` (pnpm keeps an installed `file:` package of the same name and version, so a rebuilt tarball is otherwise ignored), has pnpm re-resolve the client's lockfile entries from the tarball with `pnpm install --lockfile-only --fix-lockfile`, runs `pnpm install --frozen-lockfile`, and imports the client to prove it loads. The re-lock needs the registry. It changes the client's entries and those of any dependency the new tarball adds. pnpm 10.5.2 also fills in deprecation notices and writes `eslint-plugin-import`'s peer suffix in one of two equivalent forms, so a re-lock can touch those few lines too. Commit the tarball and the lockfile together.
 
 The tarball carries the statuses of the codes the proxy raises itself and not their descriptions. `src/lib/proxy/proxy-codes.json` holds the full file, copied from the spec-kit repository's `python/client-contract/src/dfo_client_contract/proxy-codes.json` and formatted with Prettier. Copy it again when the client contract changes it.
 

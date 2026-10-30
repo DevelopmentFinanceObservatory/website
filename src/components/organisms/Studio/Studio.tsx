@@ -39,10 +39,10 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
-import { GUEST_PROMPTS } from '@/lib/studio/promptAllowance';
+import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
-import { isPrompt } from '@/lib/studio/transcript';
+import { isPrompt, isRefundedPrompt } from '@/lib/studio/transcript';
 import type { Seed } from '@/lib/studio/wire';
 import { pushConversation } from '@/lib/chat/historyClient';
 import { uuid } from '@/lib/uuid';
@@ -165,42 +165,62 @@ const Studio = ({
     const guestUsed = useSyncExternalStore(subscribeGuest, readGuestUsed, () => 0);
     // A prompt counts once it is actually sent (a queued one can still be
     // removed): the count follows the user turns in the transcript, so the
-    // queue's own drain is covered too. Only growth counts — New Chat empties
-    // the transcript without giving prompts back.
+    // queue's own drain is covered too. A prompt the harness refused before
+    // its turn started comes back, as the server's meter gives it back. Only
+    // growth counts, of either: New Chat empties the transcript without
+    // giving prompts back.
     const sentCount = conversation.messages.filter(isPrompt).length;
+    const refundedCount = conversation.messages.filter(isRefundedPrompt).length;
     const sentRef = useRef(sentCount);
+    const refundedRef = useRef(refundedCount);
 
     useEffect(() => {
-        const delta = sentCount - sentRef.current;
+        const spent = Math.max(0, sentCount - sentRef.current);
+        const refunded = Math.max(0, refundedCount - refundedRef.current);
 
         sentRef.current = sentCount;
+        refundedRef.current = refundedCount;
 
-        if (guest && delta > 0) {
-            writeGuestUsed(readGuestUsed() + delta);
+        if (guest && spent !== refunded) {
+            writeGuestUsed(Math.max(0, readGuestUsed() + spent - refunded));
         }
-    }, [guest, sentCount]);
+    }, [guest, sentCount, refundedCount]);
 
     // Queued prompts hold their place in the limit until sent or removed.
     const walled = guest && guestUsed + conversation.queued.length >= GUEST_PROMPTS;
-    // Every prompt (landing, follow-up, card menu) goes through here: past
-    // the limit a guest's is dropped, the rest are counted as usage (turn,
-    // intent and length — never the text).
-    const send: typeof conversation.send = (text, options, seeds) => {
+    // Every prompt (landing, follow-up, card menu, a clicked chip) goes
+    // through here: past the limit a guest's is dropped, the rest are counted
+    // as usage (turn, intent and a typed prompt's length, never the text). A
+    // prompt the chat queues is counted here once; the queue's drain sends it
+    // inside the chat, past this gate.
+    const prompt = (
+        intent: PromptIntent | undefined,
+        length: number | undefined,
+        run: () => void,
+    ) => {
         // Read the count afresh: the `?q=` handover fires from the first
         // render's closure, before the stored count has synced in.
-        if (guest && readGuestUsed() + conversation.queued.length >= GUEST_PROMPTS) {
+        const event = promptEvent({
+            guest,
+            used: readGuestUsed(),
+            queued: conversation.queued.length,
+            sent: sentCount,
+            intent,
+            length,
+        });
+
+        if (!event) {
             return;
         }
 
-        track('studio.prompt', {
-            turn: sentCount + conversation.queued.length + 1,
-            intent: options?.intent ?? (sentCount === 0 ? 'new' : 'follow_up'),
-            length: text.trim().length,
-            guest,
-        });
-        conversation.send(text, options, seeds);
+        track('studio.prompt', event);
+        run();
     };
-    const chat = { ...conversation, send };
+    const send: typeof conversation.send = (text, options, seeds) =>
+        prompt(options?.intent, text.trim().length, () => conversation.send(text, options, seeds));
+    const applyChoice: typeof conversation.applyChoice = (chip) =>
+        prompt('apply_choice', undefined, () => conversation.applyChoice(chip));
+    const chat = { ...conversation, send, applyChoice };
 
     // Usage: each card the harness puts on the canvas, once (a reopened or
     // shared conversation's cards were counted when they were made).

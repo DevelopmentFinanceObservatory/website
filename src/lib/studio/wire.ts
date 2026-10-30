@@ -89,6 +89,12 @@ export type ToolError = {
     retry_after_seconds?: number | null;
 };
 
+/** The 409 `plan_revision_stale` body of POST /api/studio/interrupt: a
+ *  ToolError plus `current_plan`, the `plan.proposed` frame of the plan now
+ *  awaiting an answer, exactly as the stream sent it (`seq` included). Absent
+ *  only for a pause stored before the harness kept cards. */
+export type PlanRevisionStaleError = ToolError & { current_plan?: PlanProposed | null };
+
 export type ComponentType =
     | 'stat_card'
     | 'line_chart'
@@ -205,11 +211,23 @@ export type Seed = {
     operations: SeedOperation[];
 };
 
+/** A clicked `ApplyChoiceSuggestion`, echoed whole: the scope choice of a
+ *  stored reading, the option it moves to, the conversation turn whose answer
+ *  offered the chip (`turn`, from 1) and the reading it switches (`spec_id`). */
+export type ApplyChoice = {
+    choice_id: string;
+    option_id: string;
+    turn: number;
+    spec_id: string;
+};
+
 export type TurnRequest = {
     kind: 'turn.request';
     schema_version: 1;
     conversation_id: string;
-    message: string;
+    /** Absent only beside `apply_choice`. The harness reads an absent
+     *  message as "". */
+    message?: string;
     surface?: 'studio' | 'download' | 'embed';
     component_ref?: ComponentRef | null;
     /** The Search results a "… in Studio" action hands over, one per
@@ -217,9 +235,17 @@ export type TurnRequest = {
      *  planning and plans from those datasets and their operations. */
     seed_spec?: Seed[] | null;
     auto_add?: boolean;
+    /** A clicked chip. The turn applies the option to the reading the
+     *  answer used, with no search. It comes without `message`, `seed_spec`
+     *  or `component_ref`. A chip that no longer applies is refused 422
+     *  `constraint_violation` with `pointer: "/apply_choice"`
+     *  (`scope_choice_stale`, when a later turn has answered or a later
+     *  reading holds the choice, or `switch_option_unavailable`) and a
+     *  `detail` to show. */
+    apply_choice?: ApplyChoice | null;
 };
 
-export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'answer' | 'skip';
+export type InterruptDecision = 'approve' | 'amend' | 'reject' | 'switch' | 'answer' | 'skip';
 
 export type InterruptResponse = {
     kind: 'interrupt.response';
@@ -234,6 +260,15 @@ export type InterruptResponse = {
     // One answer per question of an `elicitation.request`, keyed by the
     // frame's question ids exactly. Sent with `answer` only.
     answers?: Record<string, ElicitationAnswer>;
+    // A plan's `switch`: the decision's `choice_id`, one of its options'
+    // `option_id`, and the `revision` of the plan the user saw. `approve`
+    // sends `plan_revision` alone. The harness refuses a stale revision with
+    // 409 `plan_revision_stale` (a `PlanRevisionStaleError`) and an option it
+    // did not offer, or offered as unavailable, with 422
+    // `switch_option_unavailable`.
+    choice_id?: string;
+    option_id?: string;
+    plan_revision?: string;
 };
 
 export type ElicitationAnswer =
@@ -267,7 +302,26 @@ export type CancelRequest = {
 // Frames — discriminated on `event`
 // ---------------------------------------------------------------------------
 
-export type PlanStep = { id: string; label: string; description?: string | null };
+/** One step of a plan. `gives_answer` is true on the one step whose result
+ *  answers the user's question; a harness that predates it sends none. */
+export type PlanStep = {
+    id: string;
+    label: string;
+    description?: string | null;
+    gives_answer?: boolean | null;
+};
+
+/** One option of a switchable decision. A scope choice's `partial` options
+ *  cover only `years` (inclusive `[first, last]` ranges); `unavailable` ones
+ *  say why in `reason`, reader copy written by the harness. A planner
+ *  decision's options are all `available`. */
+export type PlanDecisionOption = {
+    option_id: string;
+    label: string;
+    status: 'available' | 'partial' | 'unavailable';
+    reason: string | null;
+    years: [number, number][] | null;
+};
 
 export type PlanDecision = {
     id: string;
@@ -276,6 +330,52 @@ export type PlanDecision = {
     reason: string;
     resolved_by: 'default' | 'user';
     alternatives?: string[] | null;
+    // A decision the user can switch: its row's id, every option it offers,
+    // and the one the plan counts by now. A scope choice's `choice_id` is
+    // built from the requirement and the axis, so it holds across a
+    // conversation's switches (an older harness built it from a spec id a
+    // switch can re-pin). A planner decision's is `decision/<slot>`, with
+    // option ids `option_<n>` in its options' order, and switching it
+    // replans with the pick held. A decision without `choice_id` cannot be
+    // switched.
+    choice_id?: string | null;
+    options?: PlanDecisionOption[] | null;
+    active_option_id?: string | null;
+};
+
+export type PlanAction = 'approve' | 'amend' | 'reject' | 'switch';
+
+/** What a switch changed, one entry per scope decision it moved. */
+export type PlanMoved = {
+    choice_id: string;
+    from_label: string;
+    to_label: string;
+    reason: string;
+};
+
+/** One piece of evidence the plan needs, in words the harness composed. */
+export type PlanRequirement = {
+    id: string;
+    kind: string;
+    sentence: string;
+    decision_ids?: string[];
+};
+
+/** One computed step of the plan, in words. */
+export type PlanOperation = {
+    id: string;
+    kind: string;
+    sentence: string;
+    requirement_id?: string | null;
+};
+
+/** One output the user asked for: the step ids that answer it, or why the
+ *  plan does not compute it, or both when it answers in part. */
+export type PlanAsk = {
+    ask: string;
+    answered_by?: string[];
+    declined?: string | null;
+    not_computed?: string | null;
 };
 
 export type PlanProposed = {
@@ -286,9 +386,71 @@ export type PlanProposed = {
     version: number;
     title: string;
     steps: PlanStep[];
-    actions: ('approve' | 'amend' | 'reject')[];
+    // `switch` is listed only when some decision has a `choice_id` with
+    // another available option.
+    actions: PlanAction[];
     depth?: 'shallow' | 'standard' | 'deep' | null;
     decisions?: PlanDecision[] | null;
+    // The plan's approval key, a string distinct from the integer
+    // `version`. A `switch` echoes it as `plan_revision`.
+    revision?: string | null;
+    requirements?: PlanRequirement[] | null;
+    operations?: PlanOperation[] | null;
+    asks?: PlanAsk[] | null;
+    // Set on the plan a switch re-offers.
+    moved?: PlanMoved[] | null;
+    // One sentence: what is counted, for whom, when and from which source.
+    summary?: string | null;
+    // Set on the plan re-offered after a switch that did not apply.
+    switch_failed?: PlanSwitchFailed | null;
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
+};
+
+/** A switch that did not apply: the option the user picked, the refusal's
+ *  code, a reader's sentence saying why and what still holds, and whether
+ *  picking the option again could apply (false for a failure that would
+ *  repeat, such as an option Search cannot serve, and absent from a harness
+ *  that predates it). A switch stopped through `/cancel` re-offers the unchanged
+ *  plan with `code: "switch_cancelled"` and `retryable: true`. */
+export type PlanSwitchFailed = {
+    choice_id: string;
+    option_id: string;
+    code: string;
+    reason: string;
+    retryable?: boolean | null;
+};
+
+export type PlanApprovedStep = { label: string; gives_answer?: boolean | null };
+
+/** One choice of an approved plan: its id (the plan card's
+ *  `PlanDecision.choice_id`, `decision/<slot>` for a planner decision), its
+ *  short name, the option label it holds, and, when the user's switches
+ *  moved it, the label it held on the turn's first plan. */
+export type PlanApprovedChoice = {
+    // Absent from a frame stored in a chat snapshot before the harness sent it.
+    choice_id?: string;
+    question: string;
+    chosen: string;
+    changed_from?: string | null;
+};
+
+/** The plan the user approved, sent once on the `approve` answer before the
+ *  resumed run's first frame. */
+export type PlanApproved = {
+    event: 'plan.approved';
+    seq: number;
+    plan_version_id: string;
+    version: number;
+    revision?: string | null;
+    title: string;
+    summary?: string | null;
+    steps: PlanApprovedStep[];
+    choices: PlanApprovedChoice[];
+    // Each decision that qualifies the answer (providers differ, a derived
+    // whole) as one reader sentence; absent from a harness that predates it.
+    caveats?: string[] | null;
 };
 
 export type StepProgress = { completed: number; total: number };
@@ -385,10 +547,27 @@ export type LegacyElicitationRequest = {
     rationale?: string | null;
 };
 
+/** A chip that sends `prompt` as the user's next message. */
+export type SuggestionItem = { label: string; prompt: string };
+
+/** A chip that moves one scope choice of the answer's readings to another
+ *  option. A click sends a turn with `apply_choice` and no message. `label`
+ *  is the option's label, `turn` the conversation turn whose answer offers
+ *  the chip, counted from 1, and `spec_id` the reading the chip switches. */
+export type ApplyChoiceSuggestion = {
+    kind: 'apply_choice';
+    label: string;
+    choice_id: string;
+    option_id: string;
+    turn: number;
+    spec_id: string;
+};
+
 export type StudioFrame =
     | { event: 'message.delta'; seq: number; text: string }
     | { event: 'message.complete'; seq: number; text: string }
     | PlanProposed
+    | PlanApproved
     | {
           event: 'plan.versioned';
           seq: number;
@@ -403,6 +582,6 @@ export type StudioFrame =
     | { event: 'composition.updated'; seq: number; manifest: CompositionManifest }
     | ElicitationRequest
     | LegacyElicitationRequest
-    | { event: 'suggestions'; seq: number; items: { label: string; prompt: string }[] }
+    | { event: 'suggestions'; seq: number; items: (SuggestionItem | ApplyChoiceSuggestion)[] }
     | { event: 'error'; seq: number; error: ToolError }
     | { event: 'done'; seq: number; trace_id: string; composition?: CompositionManifest | null };

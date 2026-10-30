@@ -1,6 +1,6 @@
 import type { SavedConversation } from './history';
 
-import type { ConversationMeta } from '@/lib/chat/conversationStore';
+import type { ConversationMeta } from '@/lib/chat/conversationSearch';
 
 /**
  * Browser side of the account history: the /api/conversations calls the

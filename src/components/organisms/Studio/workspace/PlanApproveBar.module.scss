@@ -1,0 +1,26 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.bar {
+    @include flex(row, space-between, center);
+
+    gap: rem(10);
+}
+
+.label {
+    @include font-size(12px, 1.1);
+
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+// Approve is the one dark button. Cancel is plain.
+.actions {
+    @include flex(row, flex-end, center);
+
+    gap: rem(10);
+
+    --plain-color: var(--color-charcoal);
+}
