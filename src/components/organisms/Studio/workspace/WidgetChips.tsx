@@ -33,8 +33,11 @@ type WidgetChipsProps = {
     readOnly?: boolean;
 };
 
-// The row's icon shows the card's current visualisation.
-const iconOf = (widget: Widget, view?: CardView): 'chart-bar' | 'chart-line' | 'chart-table' => {
+export type CardIcon = 'chart-bar' | 'chart-line' | 'chart-table';
+
+/** A card's icon, showing its current visualisation. The chat's card rows
+ *  and the Activity tab's card chips both use it. */
+export const iconOf = (widget: Widget, view?: CardView): CardIcon => {
     if (view) {
         return view;
     }
@@ -50,7 +53,7 @@ const iconOf = (widget: Widget, view?: CardView): 'chart-bar' | 'chart-line' | '
     return 'chart-bar';
 };
 
-type GroupIcon = ReturnType<typeof iconOf> | 'menu';
+type GroupIcon = CardIcon | 'menu';
 
 type RowActions = Pick<WidgetChipsProps, 'onGo' | 'onAdd' | 'onRemove' | 'readOnly'>;
 

@@ -686,12 +686,18 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                     case 'plan.approved': {
                         // Comes first on the approve's stream, so the reply it
-                        // writes into is the transcript's last message.
+                        // writes into is the transcript's last message. The
+                        // turn's Activity entry records the approval time,
+                        // which places the plan among its steps.
                         const approved = approvedFromFrame(frame);
+                        const approvedAt = Date.now();
 
                         setState((prev) => ({
                             ...prev,
                             messages: withApprovedPlan(prev.messages, approved),
+                            activity: prev.activity.map((entry) =>
+                                entry.turn === turn ? { ...entry, approvedAt } : entry,
+                            ),
                         }));
                         break;
                     }

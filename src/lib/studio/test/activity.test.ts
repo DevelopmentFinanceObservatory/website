@@ -65,6 +65,16 @@ test('restore: fields of older saves are dropped', () => {
     assert.ok(restored && !('statusLine' in (restored.tools[0] ?? {})));
 });
 
+test('restore: the plan approval time is kept, and a save without it has none', () => {
+    const [stamped, unstamped] = restoreActivity([
+        { ...entry(1, ['complete']), approvedAt: 42 },
+        entry(2, ['complete']),
+    ]);
+
+    assert.equal(stamped?.approvedAt, 42);
+    assert.equal(unstamped?.approvedAt, undefined);
+});
+
 test('end turn: open steps settle by how the turn ended', async (t) => {
     const before = [
         entry(1, ['running']),

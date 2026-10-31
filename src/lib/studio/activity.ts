@@ -31,6 +31,9 @@ export type ActivityEntry = {
     prompt: string;
     startedAt: number;
     endedAt?: number;
+    // When the user approved the turn's plan. Saves made before it was kept
+    // lack it.
+    approvedAt?: number;
     tools: ActivityTool[];
 };
 
@@ -49,11 +52,12 @@ const isOpen = (state: StepState) => state === 'pending' || state === 'running';
  * state becomes complete.
  */
 export const restoreActivity = (saved: SavedActivityEntry[] | undefined): ActivityEntry[] =>
-    (saved ?? []).map(({ turn, prompt, startedAt, endedAt, tools }) => ({
+    (saved ?? []).map(({ turn, prompt, startedAt, endedAt, approvedAt, tools }) => ({
         turn,
         prompt,
         startedAt,
         endedAt,
+        approvedAt,
         tools: tools.map(({ id, name, args, summary, startedAt, durationMs, widgetId, state }) => ({
             id,
             name,

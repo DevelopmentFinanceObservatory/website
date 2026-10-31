@@ -556,7 +556,7 @@ const chatHooks = (html: string, spec: DemoSpec): string => {
         .forEach((turn, index) => {
             hook(turn, `activity-${index}`);
             within(turn)
-                .filter((el) => el.name === 'li' && hasClass(el, activityStyles.tool!))
+                .filter((el) => el.name === 'li' && hasClass(el, activityStyles.step!))
                 .forEach((line, step) => hook(line, `activity-${index}-${step}`));
         });
 
