@@ -32,11 +32,9 @@ at a mail catcher. To open the dev server from a
 phone/tablet on the same network, put the machine's LAN IP in
 `DEV_ORIGINS`.
 
-Live Studio shares need `LIVE_REFRESH_PRINCIPAL`, the credential dfo-apis
-and dfo-ai ask of a card refresh, set to the same value on all three. With
-it empty the Share dialog offers Snapshot only. A live card's refreshed
-answer stands for `LIVE_SHARE_WINDOW_S` seconds (default 300, at most 900)
-before the next viewer asks the back ends again.
+A live Studio share draws each card from dfo-apis' public slot card route
+(`GET /api/presentation/shares/{id}/slots/{n}`), which checks for newer data
+at most once per 15 minutes and takes no credential.
 
 ### Reach the dev APIs
 

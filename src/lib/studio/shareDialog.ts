@@ -1,22 +1,18 @@
+import { asRecord } from '../asRecord.ts';
 import type { SavedConversation } from '../chat/history.ts';
 import type { ShareMode, StudioShareKind } from '../chat/shareMode.ts';
 import { pruneForShare } from '../chat/sharePrune.ts';
 import type { Widget } from '../chat/widgets.ts';
-import { dataCardsOf, type LiveDeps, liveFailureKind, refreshLiveCards } from './liveCards.ts';
+import { dataCardsOf } from './liveCards.ts';
 
 /**
  * The Studio share dialog's links (`ShareModal`): one per share kind, card,
  * and mode, each made once per opening.
  *
- * A snapshot link is ready as soon as `POST /api/share` answers. A live
- * link is offered only when every data card it holds can refresh, so
- * `openShareLink` asks the refresh route for each card once the share
- * exists (the route a viewer hits, which leaves the answers stored for the
- * first one) and reports the count as cards settle. When the site refuses
- * to make the share, or a card settles on a failure that asking again
- * cannot fix, the link is withdrawn. The share is deleted and its URL is
- * not reported. A failure that asking again can fix leaves the link
- * standing, since the card asks again when the link opens.
+ * A link is ready as soon as `POST /api/share` answers. The site checks a
+ * live share's data cards before it makes the share. When they cannot show
+ * live data, no share is made, and the refusal withdraws the link and names
+ * the cards.
  *
  * The module has no React or path-alias dependency, so `node --test`
  * imports it.
@@ -25,13 +21,16 @@ import { dataCardsOf, type LiveDeps, liveFailureKind, refreshLiveCards } from '.
 /** A data card a share holds: its widget id and the title its owner sees. */
 export type SharedCard = { id: string; title: string };
 
-/** Why the site made no share. `failed` is every fault a second try can
- *  outlive: the network, a 5xx, a session that lapsed. */
+/** Why the site made no share. `payload_too_large` and `share_refused` are
+ *  refusals a second try would meet again. `failed` is every fault a second
+ *  try can outlive: the network, a 5xx, a session that lapsed. */
 export type ShareRefusal =
     | { code: 'live_cards_blocked'; cardIds: string[] }
     | { code: 'live_too_many_cards'; limit: number; count: number }
     | { code: 'live_unavailable' }
-    | { code: 'guest_limit' }
+    | { code: 'share_limit' }
+    | { code: 'payload_too_large' }
+    | { code: 'share_refused' }
     | { code: 'failed' };
 
 /** What `POST /api/share` came to: the share's id, or the refusal. */
@@ -42,27 +41,27 @@ export type ShareAnswer = { id: string } | { refusal: ShareRefusal };
 export type ShareMint = (ShareAnswer & { cards: SharedCard[] }) | { refusal: ShareRefusal };
 
 /** Why a live link is not offered. `cards` names the ones that cannot
- *  refresh. `limit` is the cap on a live share's data cards. `unavailable`
- *  is a site that cannot refresh any card. */
+ *  show live data. `limit` is the cap on a live share's data cards.
+ *  `unavailable` is a site that cannot refresh any card. */
 export type Withdrawal =
     | { reason: 'cards'; cards: SharedCard[] }
     | { reason: 'limit'; limit: number; count: number }
     | { reason: 'unavailable' };
 
 /**
- * One link of the dialog. A key with no entry is being made. `checking`: a
- * live share exists and `checked` of its `total` data cards have settled.
- * Its URL is not shown yet. `ready`: the link to copy, in the mode it has
- * now, with the number of cards whose check failed for a passing reason.
- * `withdrawn`: no link, and why. `failed`: the share was not made and a
- * second try may make it. `limited`: a guest has made today's GUEST_SHARES.
+ * One link of the dialog. A key with no entry is being made. `ready`: the
+ * link to copy, in the mode it has now. `withdrawn`: no link, and why.
+ * `failed`: the share was not made and a second try may make it. `limited`:
+ * this network has made today's shares (dfo-apis' share allowance).
+ * `refused`: the share cannot be made as it stands, because it is too large
+ * or dfo-apis refuses it, so no second try is offered.
  */
 export type ShareLink =
-    | { status: 'checking'; id: string; checked: number; total: number }
-    | { status: 'ready'; id: string; mode: ShareMode; unchecked: number }
+    | { status: 'ready'; id: string; mode: ShareMode }
     | { status: 'withdrawn'; withdrawal: Withdrawal }
     | { status: 'failed' }
-    | { status: 'limited' };
+    | { status: 'limited' }
+    | { status: 'refused'; reason: 'too_large' | 'refused' };
 
 /** The dialog's key for a link, which keeps one mode's link from showing for
  *  the other mode and one card's from showing for another. */
@@ -74,9 +73,9 @@ export const shareLinkKey = (
 
 /**
  * Whether the dialog offers the mode choice for a link of `kind`, and the
- * mode that link is made in. `offerLive` is false when the site cannot
- * refresh cards or the share would hold no data card. When it is false, and
- * for a conversation always, there is no choice and the link is a snapshot.
+ * mode that link is made in. `offerLive` is false when the share would
+ * hold no data card. When it is false, and for a conversation always, there
+ * is no choice and the link is a snapshot.
  */
 export const shareModeFor = (
     offerLive: boolean,
@@ -88,15 +87,14 @@ export const shareModeFor = (
     return { choice, mode: choice ? chosen : 'snapshot' };
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const FAILED: ShareAnswer = { refusal: { code: 'failed' } };
 
 /** The answer of `POST /api/share` for a Studio share, from the response's
  *  `ok` and its JSON body. */
-export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
-    if (!isRecord(body)) {
+export const readShareAnswer = (ok: boolean, answer: unknown): ShareAnswer => {
+    const body = asRecord(answer);
+
+    if (!body) {
         return FAILED;
     }
 
@@ -108,9 +106,11 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
     const { code, cards, limit, count } = body;
 
     if (code === 'live_cards_blocked' && Array.isArray(cards)) {
-        const cardIds = cards.flatMap((card) =>
-            isRecord(card) && typeof card['id'] === 'string' ? [card['id']] : [],
-        );
+        const cardIds = cards.flatMap((card) => {
+            const id = asRecord(card)?.['id'];
+
+            return typeof id === 'string' ? [id] : [];
+        });
 
         return cardIds.length ? { refusal: { code, cardIds } } : FAILED;
     }
@@ -119,7 +119,14 @@ export const readShareAnswer = (ok: boolean, body: unknown): ShareAnswer => {
         return { refusal: { code, limit, count } };
     }
 
-    return code === 'live_unavailable' || code === 'guest_limit' ? { refusal: { code } } : FAILED;
+    if (code === 'live_unavailable' || code === 'share_limit') {
+        return { refusal: { code } };
+    }
+
+    // A permanent refusal says so in `retryable`.
+    return (code === 'payload_too_large' || code === 'share_refused') && body['retryable'] === false
+        ? { refusal: { code } }
+        : FAILED;
 };
 
 /**
@@ -150,22 +157,15 @@ const withdrawalOf = (refusal: ShareRefusal, cards: SharedCard[]): Withdrawal | 
             return { reason: 'limit', limit: refusal.limit, count: refusal.count };
         case 'live_unavailable':
             return { reason: 'unavailable' };
-        case 'guest_limit':
+        case 'share_limit':
+        case 'payload_too_large':
+        case 'share_refused':
         case 'failed':
             return null;
     }
 };
 
 const shareUrl = (id: string): string => `/api/share/${encodeURIComponent(id)}`;
-
-/** Deletes the caller's own share (`DELETE /api/share/[id]`). */
-export const deleteShare = async (fetcher: typeof fetch, id: string): Promise<boolean> => {
-    try {
-        return (await fetcher(shareUrl(id), { method: 'DELETE' })).ok;
-    } catch {
-        return false;
-    }
-};
 
 /** Turns the caller's own live share into a snapshot
  *  (`PATCH /api/share/[id]`). */
@@ -189,17 +189,26 @@ export type ShareLinkDeps = {
         cardId: string | undefined,
         mode: ShareMode,
     ) => Promise<ShareMint>;
-    live: LiveDeps;
 };
 
-/**
- * Makes one link and reports each state it passes through, ending on
- * `ready`, `withdrawn`, or `failed`. It runs to its end whatever becomes of
- * the dialog, so a live share that must be withdrawn is deleted even after
- * the dialog closes.
- */
+// Where a refusal that withdraws no link leaves it.
+const unmadeLink = (refusal: ShareRefusal): ShareLink => {
+    switch (refusal.code) {
+        case 'share_limit':
+            return { status: 'limited' };
+        case 'payload_too_large':
+            return { status: 'refused', reason: 'too_large' };
+        case 'share_refused':
+            return { status: 'refused', reason: 'refused' };
+        default:
+            return { status: 'failed' };
+    }
+};
+
+/** Makes one link and reports where it ends: `ready`, `withdrawn`,
+ *  `limited`, `refused`, or `failed`. */
 export const openShareLink = async (
-    { createShare, live }: ShareLinkDeps,
+    { createShare }: ShareLinkDeps,
     request: { kind: StudioShareKind; cardId: string | undefined; mode: ShareMode },
     report: (link: ShareLink) => void,
 ): Promise<void> => {
@@ -209,67 +218,12 @@ export const openShareLink = async (
     if ('refusal' in mint) {
         const withdrawal = withdrawalOf(mint.refusal, 'cards' in mint ? mint.cards : []);
 
-        report(
-            withdrawal
-                ? { status: 'withdrawn', withdrawal }
-                : { status: mint.refusal.code === 'guest_limit' ? 'limited' : 'failed' },
-        );
+        report(withdrawal ? { status: 'withdrawn', withdrawal } : unmadeLink(mint.refusal));
 
         return;
     }
 
-    const { id, cards } = mint;
-
-    if (mode === 'snapshot' || cards.length === 0) {
-        report({ status: 'ready', id, mode, unchecked: 0 });
-
-        return;
-    }
-
-    const total = cards.length;
-    const blocked: SharedCard[] = [];
-    let checked = 0;
-    let unchecked = 0;
-    let switchedOff = false;
-
-    report({ status: 'checking', id, checked, total });
-
-    await refreshLiveCards(live, {
-        shareId: id,
-        cardIds: cards.map((card) => card.id),
-        // The signal is never aborted, so the checks finish and a withdrawal
-        // can follow them.
-        signal: new AbortController().signal,
-        onSettled: (settledId, outcome) => {
-            const failure = outcome.status === 'error' ? liveFailureKind(outcome) : null;
-
-            if (failure === 'permanent') {
-                blocked.push(...cards.filter((card) => card.id === settledId));
-            } else if (failure === 'switched_off') {
-                switchedOff = true;
-            } else if (failure === 'transient') {
-                unchecked += 1;
-            }
-
-            checked += 1;
-            report({ status: 'checking', id, checked, total });
-        },
-    });
-
-    if (!switchedOff && blocked.length === 0) {
-        report({ status: 'ready', id, mode, unchecked });
-
-        return;
-    }
-
-    await deleteShare(live.fetch, id);
-    report({
-        status: 'withdrawn',
-        withdrawal: switchedOff
-            ? { reason: 'unavailable' }
-            : // In the canvas's own order, whatever order the answers came in.
-              { reason: 'cards', cards: cards.filter((card) => blocked.includes(card)) },
-    });
+    report({ status: 'ready', id: mint.id, mode });
 };
 
 const NAMES = new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' });
@@ -299,22 +253,4 @@ export const withdrawalText = (withdrawal: Withdrawal, single: boolean): string 
             return `${quoted(cards)} cannot show live data, so this canvas has no live link.`;
         }
     }
-};
-
-/** The line shown while a live share's cards are checked. */
-export const checkingText = (checked: number, total: number): string =>
-    total === 1
-        ? 'Checking that the card can show live data.'
-        : `Checking that every card can show live data: ${checked} of ${total} done.`;
-
-/** The line under a ready live link when the check of `count` cards failed
- *  for a passing reason, or null when every card answered. */
-export const uncheckedText = (count: number): string | null => {
-    if (count === 0) {
-        return null;
-    }
-
-    return count === 1
-        ? '1 card could not be checked just now. It tries again when the link opens.'
-        : `${count} cards could not be checked just now. They try again when the link opens.`;
 };

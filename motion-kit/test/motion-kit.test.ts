@@ -5,7 +5,8 @@
  * checks on specs, cue sheets, selectors and units. The chart and Kenya
  * tests bundle render.tsx with esbuild (about a second), since the renderer
  * imports the app's SCSS modules and SVG icons; the Kenya test also reads
- * the motion in Chrome and is skipped where none is installed.
+ * the motion in Chrome and is skipped where none is installed, or fails
+ * under CI.
  */
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -17,13 +18,13 @@ import { after, before, test } from 'node:test';
 import postcss from 'postcss';
 import type { Browser } from 'playwright-core';
 
-import { launchBrowser } from '../browser.ts';
 import { cssModules, FONTS, generate, loadRenderer, MODULE_LIMIT, writeFilm } from '../build.ts';
 import { externalUrls, filmCss, mediaMatches, scopeSelector, toPx } from '../css.ts';
 import { readCues } from '../cues.ts';
 import { outfitMeasure, parseFont } from '../fontMetrics.ts';
 import type { Motion } from '../motion.ts';
 import { readSpec } from '../spec.ts';
+import { hasBrowser, startBrowser } from './browser.ts';
 import type { ChartWidget } from '../../src/lib/chat/widgets.ts';
 import { plotHeight, plotShape } from '../../src/lib/studio/chartFit.ts';
 
@@ -165,20 +166,20 @@ test('canvas font strings keep their weight with or without a style word', () =>
     assert.throws(() => measure('8px DM Mono', text), /not Outfit/);
 });
 
-let browser: Browser | null = null;
+let browser: Browser | string;
 
 before(async () => {
-    browser = await launchBrowser().catch(() => null);
+    browser = await startBrowser();
 });
 
 after(async () => {
-    await browser?.close();
+    if (typeof browser !== 'string') {
+        await browser.close();
+    }
 });
 
 test('the Kenya film modules hold no motion, no outside URL and no unscoped rule', async (t) => {
-    if (!browser) {
-        t.skip('Chrome is not installed');
-
+    if (!hasBrowser(t, browser)) {
         return;
     }
 

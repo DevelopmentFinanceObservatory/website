@@ -4,11 +4,10 @@ import { notFound, redirect } from 'next/navigation';
 import { after } from 'next/server';
 
 import Studio from '@/components/organisms/Studio/Studio';
-import { isLiveStudioShare, searchShareMode, type ShareMode } from '@/lib/chat/shareMode';
-import { getShare } from '@/lib/chat/shareStore';
+import { getShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { refererHost } from '@/lib/events/referer';
 import { track } from '@/lib/events/track';
-import { sharedViewOf } from '@/lib/studio/liveCards';
+import { sharedViewOfRecord } from '@/lib/studio/slotCards';
 
 type SharePageProps = { params: Promise<{ id: string }> };
 
@@ -20,24 +19,15 @@ export const generateMetadata = async ({ params }: SharePageProps): Promise<Meta
     // should find it in a search (the gallery is where curated sessions
     // are meant to be found).
     return {
-        title: row ? `${row.title} — DFO Studio` : 'DFO Studio',
+        title: row?.title ? `${row.title} — DFO Studio` : 'DFO Studio',
         robots: { index: false, follow: false },
     };
 };
 
-// The mode a stored share is served in: a Studio row with no stored mode is
-// a snapshot, a search row with none is live (shareMode.ts).
-const modeOf = (row: { kind: string; mode: string | null }): ShareMode => {
-    if (row.kind === 'search') {
-        return searchShareMode(row.mode);
-    }
-
-    return isLiveStudioShare(row) ? 'live' : 'snapshot';
-};
-
-// A public share: the Studio, read-only, on the stored copy. No account
-// needed to look. A live share's data cards leave the server held and are
-// filled in the browser on current data (sharedViewOf).
+// A public share: the Studio, read-only, on the share dfo-apis holds. No
+// account needed to look. A snapshot's data cards are drawn here from their
+// component revisions; a live share's leave the server held and are filled
+// in the browser on current data (src/lib/studio/slotCards).
 const SharePage = async ({ params }: SharePageProps) => {
     const { id } = await params;
     const row = await getShare(id);
@@ -54,7 +44,7 @@ const SharePage = async ({ params }: SharePageProps) => {
     after(() =>
         track(
             'share.open',
-            { shareId: row.id, kind: row.kind, mode: modeOf(row), host },
+            { shareId: row.id, kind: row.kind, mode: row.mode, host },
             { headers: incoming },
         ),
     );
@@ -65,7 +55,7 @@ const SharePage = async ({ params }: SharePageProps) => {
         redirect(`/data?share=${row.id}`);
     }
 
-    return <Studio shared={sharedViewOf(row)} />;
+    return <Studio shared={await sharedViewOfRecord(slotDepsFor(incoming), row)} />;
 };
 
 export default SharePage;

@@ -136,6 +136,38 @@ A domain in `webmail_domain` is `Personal email` whatever its count. The table h
 
 A read with no rows fails the run and leaves the table as it was while `webmail_domain` is empty, since the view then holds no rows and webmail domains would show by name, and while the user table holds no account, which is a wrong database or an emptied table. When accounts exist and every one is from today, the run replaces the table with no rows, so a deleted account and the organisation it named leave the export. The view `account_daily_source` tells the cases apart, and the Job reads it in the same transaction as `account_daily`.
 
+## Share migration
+
+A Cloud Run Job named by `SHARE_MIGRATE_JOB_WEBSITE` (`dfo-dev-website-staging-share-migrate` on dev) copies the website's `share` rows into dfo-apis once per environment. It runs the website image with the command `node dist/migrate-shares.cjs` (`db/migrate-shares.ts`, bundled by `pnpm build:migrate-shares`). `build-migrate-deploy.yml` points it at each new image after the service update, as it points the migration Job, and never executes it. An operator runs it once the image that carries it is deployed:
+
+```bash
+gcloud run jobs execute "$SHARE_MIGRATE_JOB_WEBSITE" --region <region> --wait
+```
+
+It exits 0 when every share is imported or unchanged. On exit 1, read the `share <id>: <code>` lines in its log, fix what they name, and run it again; a run again is safe. `docs/share-export.md` lists the codes. infra defines the Job. It runs as the runtime service account with the `WEBSITE_DB_*` settings, since it writes `share_token`, and has `SEARCH_API_BASE` and the secret `PRESENTATION_SHARE_IMPORT_PRINCIPAL`, which dfo-apis' share import route checks.
+
+## Shares left for cleanup
+
+Each signed-in owner's share in dfo-apis has its write token in `share_token`. When the website cannot take such a share down, it writes the share id, the owner, the token and dfo-apis' refusal code to `share_cleanup` and logs `share_cleanup_recorded` with the share id at error level. Two paths write a row: an account deletion whose take-down dfo-apis refuses with a `write_token_*` code (`takeDownUserShares` in `src/lib/chat/apisShares.ts`), and a new share whose token could not be stored and whose take-down failed too (`createOwnedShare`). The share stays public until an operator takes it down. The rows outlive the user. `share_cleanup_recorded` is the alert hook, so alert on that text and keep it unchanged in the code. A row the website could not write is logged as `share_cleanup_not_recorded`, with the share id, and needs the same take-down.
+
+To drain the table, list its rows against the website database:
+
+```sql
+select share_id, user_id, reason, recorded_at from share_cleanup order by recorded_at;
+```
+
+For each row, take the share down in dfo-apis with its maintenance command:
+
+```bash
+datasets-maintenance take-down-share <share_id>
+```
+
+Then delete the row:
+
+```sql
+delete from share_cleanup where share_id = '<share_id>';
+```
+
 ## GitHub vars and secrets
 
 `build-migrate-deploy.yml` reads these from a GitHub Environment matching the
@@ -146,16 +178,17 @@ doesn't change between environments, only the environment it targets does.
 These are the same names `ai` uses, except the service and migration Job
 vars, so the `infra` foundation outputs slot into both repos the same way.
 
-| Name                  | Kind   | Example value                                                                               | Who provides it                                 |
-| --------------------- | ------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `WIF_PROVIDER`        | secret | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-actions` | infra (WIF pool/provider)                       |
-| `WIF_SA`              | secret | `dfo-website-staging-deployer@dev-fin-observatory.iam.gserviceaccount.com`                  | infra (deployer service account)                |
-| `REGION`              | var    | `northamerica-northeast1` (dev), `europe-west1` (production)                                | infra                                           |
-| `PROJECT_ID`          | var    | `dev-fin-observatory` (dev)                                                                 | infra                                           |
-| `AR_REPO`             | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
-| `SERVICE_WEBSITE`     | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
-| `MIGRATE_JOB_WEBSITE` | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
-| `EXPORT_JOB_WEBSITE`  | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
+| Name                        | Kind   | Example value                                                                               | Who provides it                                 |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `WIF_PROVIDER`              | secret | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github-actions` | infra (WIF pool/provider)                       |
+| `WIF_SA`                    | secret | `dfo-website-staging-deployer@dev-fin-observatory.iam.gserviceaccount.com`                  | infra (deployer service account)                |
+| `REGION`                    | var    | `northamerica-northeast1` (dev), `europe-west1` (production)                                | infra                                           |
+| `PROJECT_ID`                | var    | `dev-fin-observatory` (dev)                                                                 | infra                                           |
+| `AR_REPO`                   | var    | `dfo-website-staging` (dev)                                                                 | infra (Artifact Registry repo, per environment) |
+| `SERVICE_WEBSITE`           | var    | `dfo-dev-website-staging` (dev)                                                             | infra                                           |
+| `MIGRATE_JOB_WEBSITE`       | var    | `dfo-dev-website-staging-migrate` (dev)                                                     | infra (migration Cloud Run Job)                 |
+| `EXPORT_JOB_WEBSITE`        | var    | `dfo-prod-website-export` (production only)                                                 | infra (event export Cloud Run Job)              |
+| `SHARE_MIGRATE_JOB_WEBSITE` | var    | `dfo-dev-website-staging-share-migrate` (dev)                                               | infra (share migration Cloud Run Job)           |
 
 The service names above are the ones infra defines; whatever appears in
 its `website` stack outputs goes in this var verbatim.
@@ -197,7 +230,8 @@ The app defines the definitive contract once it exists. Known so far:
 | `STUDIO_TOKEN`                        | Bearer token the studio proxy sends to the harness; secret reference set by infra                                                                                                                       |
 | `SEARCH_API_BASE`                     | The `dfo-apis` Search, Datasets and graph APIs; required, a production server without it refuses to start; plain env var set by infra                                                                   |
 | `MCP_API_TOKEN`                       | Bearer token the `/mcp` proxy sends to the harness; infra mounts it from Secret Manager (`dfo-dev-mcp-api-token`, the harness's own secret)                                                             |
-| `CALLER_HMAC_KEY`                     | HMAC key for the client-IP digest `/mcp` sends as `x-dfo-caller`; unset, none is sent; secret set by infra                                                                                              |
+| `CALLER_HMAC_KEY`                     | HMAC key for the client digest sent as `x-dfo-caller` (`/mcp`, and dfo-apis beside the principal); unset, none is sent; secret set by infra                                                             |
+| `DFO_CALLER_PRINCIPAL`                | Secret shared with dfo-apis (its `DFO_CALLER_PRINCIPAL`), sent as `x-dfo-caller-principal` on every dfo-apis call so dfo-apis trusts `x-dfo-caller`; unset, neither is sent                             |
 | `RATE_LIMIT_WINDOW_S`                 | Rate-limit window in seconds; default 60                                                                                                                                                                |
 | `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
 | `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
@@ -220,7 +254,12 @@ The proxy forwards `content-type`, `accept` and every `mcp-*` request header
 (`mcp-method` and `mcp-name` among them, which the harness checks against the
 request body), and returns `content-type`, `content-disposition`,
 `content-length`, `www-authenticate` and every `mcp-*` response header.
-`x-dfo-caller` is set by the proxy, whatever the client sent. `authorization`
+`x-dfo-caller` is set by the proxy, whatever the client sent. A call to
+dfo-apis carries `x-dfo-caller` beside `x-dfo-caller-principal` when
+`DFO_CALLER_PRINCIPAL` is set, and neither when it is unset. The digest's
+input is the client address folded as the rate limiter folds it (an IPv6
+address as its /64), so dfo-apis, which computes the same digest for a direct
+caller, keys both on one allowance. `authorization`
 is set by the proxy only when `MCP_API_TOKEN` is set; otherwise the client's
 own `authorization` header goes through to the harness. A malformed
 `TRUSTED_PROXY_HOPS` stops a production server at startup. If one reaches a

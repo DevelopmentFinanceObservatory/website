@@ -12,8 +12,9 @@ import type { Widget } from '../../chat/widgets.ts';
 import type { LiveCard, LiveFactSummary } from '../liveBackend.ts';
 import {
     cardLiveOf,
+    cardsToFill,
+    isLiveCanvas,
     LIVE_CLIENT_CODES,
-    LIVE_PENDING_CEILING_MS,
     LIVE_REFRESH_CONCURRENCY,
     liveCardFailure,
     leftOutOf,
@@ -326,10 +327,24 @@ test('a held card is drawn from the answer alone, whatever the share stored', ()
     }
 });
 
-test('an answer that resolves no component of the card kind draws nothing', () => {
+test('a held card takes the kind of the component its slot serves', () => {
+    // A share made through the Presentation API holds each slot as a table,
+    // and an owner's replace can put another kind of card in a slot.
+    const [heldChart] = sharedViewOf(row('canvas', 'live')).saved.widgets;
+    const stat = widgetFromLiveCard(heldChart!, liveCardOf(CURRENT.cmp_stat));
+    const expected = { ...drawn(CURRENT.cmp_stat), id: 'cmp_chart', turn: 2 };
+
+    assert.equal(stat?.kind, 'key_number');
+    assert.deepEqual(stat, {
+        ...expected,
+        source: 'OECD CRS',
+        info: { ...expected.info!, label: 'OECD CRS' },
+    });
+});
+
+test('an answer that resolves no component draws nothing', () => {
     const [heldChart] = sharedViewOf(row('canvas', 'live')).saved.widgets;
 
-    assert.equal(widgetFromLiveCard(heldChart!, liveCardOf(CURRENT.cmp_stat)), null);
     assert.equal(
         widgetFromLiveCard(heldChart!, {
             component_id: 'cmp_chart',
@@ -348,14 +363,14 @@ type Reply = { status?: number; body: unknown } | Error;
 const CARD = liveCardOf(CURRENT.cmp_chart);
 
 // A site whose refresh route answers each card from its own script, one
-// reply per call, repeating the last. `clock` moves only when a card sleeps.
+// reply per call, repeating the last. The clock stands at 0.
 const site = (script: Record<string, Reply[]>) => {
     const calls: { cardId: string; init: RequestInit | undefined }[] = [];
-    const sleeps: number[] = [];
-    let clock = 0;
     const deps: LiveDeps = {
         fetch: async (input, init) => {
-            const cardId = decodeURIComponent(/cards\/([^/]+)\/refresh$/.exec(String(input))![1]!);
+            const cardId = decodeURIComponent(
+                /cards\/([^/]+)\/refresh(\?|$)/.exec(String(input))![1]!,
+            );
             const replies = script[cardId]!;
             const reply = replies.length > 1 ? replies.shift()! : replies[0]!;
 
@@ -367,23 +382,24 @@ const site = (script: Record<string, Reply[]>) => {
 
             return Response.json(reply.body, { status: reply.status ?? 200 });
         },
-        now: () => clock,
-        sleep: async (ms) => {
-            sleeps.push(ms);
-            clock += ms;
-        },
     };
 
-    return { deps, calls, sleeps };
+    return { deps, calls };
 };
 
-const settle = async (deps: LiveDeps, cardIds: string[], signal = new AbortController().signal) => {
+const settle = async (
+    deps: LiveDeps,
+    cardIds: string[],
+    signal = new AbortController().signal,
+    slots: Record<string, number> = {},
+) => {
     const outcomes: Record<string, LiveCardOutcome> = {};
     const order: string[] = [];
 
     await refreshLiveCards(deps, {
         shareId: 'Ab12Cd34',
         cardIds,
+        slots,
         signal,
         onSettled: (cardId, outcome) => {
             outcomes[cardId] = outcome;
@@ -395,7 +411,7 @@ const settle = async (deps: LiveDeps, cardIds: string[], signal = new AbortContr
 };
 
 test('each card settles on its own answer, and one failing card leaves the rest standing', async () => {
-    const { deps } = site({
+    const { deps, calls } = site({
         current: [{ body: { status: 'current', card: CARD } }],
         redrawn: [{ body: { status: 'redrawn', card: CARD } }],
         refused: [{ body: { status: 'error', code: 'recipe_missing' } }],
@@ -404,6 +420,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         offline: [new TypeError('fetch failed')],
         garbled: [{ body: { status: 'current' } }],
         broken: [{ status: 500, body: null }],
+        pending: [{ body: { status: 'pending', retry_after_s: 6 } }],
     });
     const { outcomes } = await settle(deps, [
         'current',
@@ -414,6 +431,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         'offline',
         'garbled',
         'broken',
+        'pending',
     ]);
 
     assert.deepEqual(outcomes, {
@@ -425,11 +443,18 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         offline: { status: 'error', code: 'network_error' },
         garbled: { status: 'error', code: 'refresh_invalid' },
         broken: { status: 'error', code: 'refresh_failed' },
+        // The route gives no pending answer, so one is outside its contract.
+        pending: { status: 'error', code: 'refresh_invalid' },
     });
+    // ... and is asked once, not again after its retry_after_s.
+    assert.equal(calls.filter(({ cardId }) => cardId === 'pending').length, 1);
 });
 
-test('a request is a bare POST to the share-gated route', async () => {
-    const { deps, calls } = site({ 'cmp a/b': [{ body: { status: 'current', card: CARD } }] });
+test("a request is a bare GET to the share-gated route for the card's slot, left to the browser's cache", async () => {
+    const { deps, calls } = site({
+        'cmp a/b': [{ body: { status: 'current', card: CARD } }],
+        unslotted: [{ status: 404, body: { code: 'not_found' } }],
+    });
     const seen: string[] = [];
     const fetcher = deps.fetch;
 
@@ -439,39 +464,19 @@ test('a request is a bare POST to the share-gated route', async () => {
         return fetcher(input, init);
     };
 
-    await settle(deps, ['cmp a/b']);
+    await settle(deps, ['cmp a/b', 'unslotted'], undefined, { 'cmp a/b': 3 });
 
-    assert.deepEqual(seen, ['/api/share/Ab12Cd34/cards/cmp%20a%2Fb/refresh']);
-    assert.equal(calls[0]!.init?.method, 'POST');
+    // A card with no slot asks with none, which the route answers 404.
+    assert.deepEqual(seen, [
+        '/api/share/Ab12Cd34/cards/cmp%20a%2Fb/refresh?slot=3',
+        '/api/share/Ab12Cd34/cards/unslotted/refresh',
+    ]);
+    // A GET under the default cache mode, so the browser revalidates the
+    // card with the route's ETag.
+    assert.equal(calls[0]!.init?.method ?? 'GET', 'GET');
+    assert.equal(calls[0]!.init?.cache, undefined);
     assert.equal(calls[0]!.init?.body, undefined);
     assert.equal(calls[0]!.init?.headers, undefined);
-});
-
-test('a pending card is asked again after retry_after_s and drawn when it answers', async () => {
-    const { deps, calls, sleeps } = site({
-        slow: [
-            { body: { status: 'pending', retry_after_s: 6 } },
-            { body: { status: 'pending' } },
-            { body: { status: 'pending', retry_after_s: 600 } },
-            { body: { status: 'redrawn', card: CARD } },
-        ],
-    });
-    const { outcomes } = await settle(deps, ['slow']);
-
-    assert.deepEqual(outcomes['slow'], { status: 'ready', outcome: 'redrawn', card: CARD });
-    assert.equal(calls.length, 4);
-    // The route's value, 5 seconds when it names none, and at most 60.
-    assert.deepEqual(sleeps, [6_000, 5_000, 60_000]);
-});
-
-test('a card still pending at the ceiling shows refresh_timeout, without a further wait', async () => {
-    const { deps, sleeps } = site({ stuck: [{ body: { status: 'pending', retry_after_s: 50 } }] });
-    const { outcomes } = await settle(deps, ['stuck']);
-    const waited = sleeps.reduce((sum, ms) => sum + ms, 0);
-
-    assert.deepEqual(outcomes['stuck'], { status: 'error', code: 'refresh_timeout' });
-    assert.equal(waited, 150_000);
-    assert.ok(waited <= LIVE_PENDING_CEILING_MS);
 });
 
 test('requests run a few at a time, and a card is reported as soon as it answers', async () => {
@@ -490,8 +495,6 @@ test('requests run a few at a time, and a card is reported as soon as it answers
 
             return Response.json({ status: 'current', card: CARD });
         },
-        now: () => 0,
-        sleep: async () => undefined,
     };
     const order: string[] = [];
     const done = refreshLiveCards(deps, {
@@ -528,20 +531,20 @@ test('requests run a few at a time, and a card is reported as soon as it answers
 test('nothing is reported after the canvas goes away', async () => {
     const controller = new AbortController();
     const { deps } = site({
-        waiting: [{ body: { status: 'pending', retry_after_s: 6 } }],
+        leaving: [{ body: { status: 'current', card: CARD } }],
         answered: [{ body: { status: 'current', card: CARD } }],
     });
-    const sleep = deps.sleep;
+    const fetcher = deps.fetch;
 
-    deps.sleep = async (ms, signal) => {
+    deps.fetch = async (input, init) => {
         controller.abort();
 
-        return sleep(ms, signal);
+        return fetcher(input, init);
     };
 
-    const { order } = await settle(deps, ['waiting', 'answered'], controller.signal);
+    const { order } = await settle(deps, ['leaving', 'answered'], controller.signal);
 
-    assert.ok(!order.includes('waiting'));
+    assert.deepEqual(order, []);
 });
 
 test('a refreshed card names what its data leaves out, from its coverage_gap warnings alone', () => {
@@ -574,29 +577,16 @@ test('a refreshed card names what its data leaves out, from its coverage_gap war
     assert.ok(!('leftOut' in infoOf(answer)));
 });
 
-test('an error answer carries what the back end said about retrying and how long it stands', async () => {
+test('an error answer carries what the back end said about retrying', async () => {
     const { deps } = site({
-        stored: [
-            {
-                body: {
-                    status: 'error',
-                    code: 'release_mismatch',
-                    retryable: true,
-                    retry_after_s: 12,
-                },
-            },
-        ],
+        stored: [{ body: { status: 'error', code: 'release_mismatch', retryable: true } }],
         plain: [{ body: { status: 'error', code: 'recipe_missing' } }],
-        // A wait of nothing, or one that is not a number, is not a wait.
-        odd: [{ body: { status: 'error', code: 'recipe_missing', retry_after_s: 'soon' } }],
     });
-    const { outcomes } = await settle(deps, ['stored', 'plain', 'odd']);
+    const { outcomes } = await settle(deps, ['stored', 'plain']);
 
     assert.deepEqual(outcomes, {
-        // The moment (`deps.now`) from which a request reaches the back end again.
-        stored: { status: 'error', code: 'release_mismatch', retryable: true, retryAt: 12_000 },
+        stored: { status: 'error', code: 'release_mismatch', retryable: true },
         plain: { status: 'error', code: 'recipe_missing' },
-        odd: { status: 'error', code: 'recipe_missing' },
     });
 });
 
@@ -640,14 +630,7 @@ test('a failed card offers a retry only for a fault the same request can outlive
         'refresh_failed',
         'upstream_unavailable',
         LIVE_CLIENT_CODES.network,
-        LIVE_CLIENT_CODES.timeout,
         LIVE_CLIENT_CODES.invalid,
-    ];
-    const switchedOff = [
-        'live_unavailable',
-        'refresh_not_permitted',
-        'unauthorized',
-        'refresh_not_configured',
     ];
     const permanent = [
         'not_found',
@@ -666,21 +649,13 @@ test('a failed card offers a retry only for a fault the same request can outlive
         transient.map(() => true),
     );
     assert.deepEqual(
-        [...switchedOff, ...permanent].map((code) => liveCardFailure({ code }).retry),
-        [...switchedOff, ...permanent].map(() => false),
+        permanent.map((code) => liveCardFailure({ code }).retry),
+        permanent.map(() => false),
     );
-    // Three messages in all, one per group.
+    // Two messages in all, one per group.
     assert.equal(
-        new Set(
-            [...transient, ...switchedOff, ...permanent].map(
-                (c) => liveCardFailure({ code: c }).message,
-            ),
-        ).size,
-        3,
-    );
-    assert.notEqual(
-        liveCardFailure({ code: switchedOff[0]! }).message,
-        liveCardFailure({ code: permanent[0]! }).message,
+        new Set([...transient, ...permanent].map((c) => liveCardFailure({ code: c }).message)).size,
+        2,
     );
 });
 
@@ -717,6 +692,7 @@ test('a card of a live canvas retries itself, and a card off it has no live stat
     const retried: string[] = [];
     const canvas = {
         shareId: 'shr_1',
+        snapshot: false,
         createdAt: '2026-10-07T00:00:00.000Z',
         states: { cmp_chart: { status: 'error', code: 'backend_timeout' } as const },
         retry: (cardId: string) => retried.push(cardId),
@@ -727,4 +703,48 @@ test('a card of a live canvas retries itself, and a card off it has no live stat
     assert.deepEqual(retried, ['cmp_chart']);
     assert.equal(cardLiveOf(canvas, 'txt_1'), undefined);
     assert.equal(cardLiveOf(undefined, 'cmp_chart'), undefined);
+});
+
+test('the browser fills every data card of a live share, and only the undrawn cards of a snapshot', () => {
+    const widgets = [
+        {
+            kind: 'chart',
+            id: 'c1',
+            turn: 1,
+            chartType: 'line',
+            title: '',
+            categories: [],
+            series: [],
+        },
+        { kind: 'table', id: 't1', turn: 1, title: '', columns: [], rows: [] },
+        { kind: 'text', id: 'n1', title: 'Mine', body: 'Words' },
+    ] as Widget[];
+
+    assert.deepEqual(cardsToFill({ id: 'Ab3dEf7h', live: true }, widgets), {
+        shareId: 'Ab3dEf7h',
+        snapshot: false,
+        cardIds: ['c1', 't1'],
+    });
+    assert.deepEqual(cardsToFill({ id: 'Ab3dEf7h', live: false, undrawn: ['t1'] }, widgets), {
+        shareId: 'Ab3dEf7h',
+        snapshot: true,
+        cardIds: ['t1'],
+    });
+    // A snapshot whose page drew every card, a gallery snapshot, and no share.
+    assert.equal(cardsToFill({ id: 'Ab3dEf7h', live: false, undrawn: [] }, widgets), null);
+    assert.equal(cardsToFill({ id: 'gallery-slug' }, widgets), null);
+    assert.equal(cardsToFill(undefined, widgets), null);
+
+    // A snapshot's filled cards carry no live note.
+    const states = { t1: { status: 'loading' } as const };
+    const retry = () => {};
+
+    assert.equal(
+        isLiveCanvas({ shareId: 'Ab3dEf7h', snapshot: true, createdAt: undefined, states, retry }),
+        false,
+    );
+    assert.equal(
+        isLiveCanvas({ shareId: 'Ab3dEf7h', snapshot: false, createdAt: undefined, states, retry }),
+        true,
+    );
 });
