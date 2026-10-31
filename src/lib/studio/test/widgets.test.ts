@@ -803,7 +803,7 @@ test('More Info: the citation and every source, licence normalised', () => {
         { id: 'src_dc', name: 'dc/base/X', licence: null, url: null, retrieved: null },
     ]);
     assert.deepEqual([info?.sourceId, info?.licence], [SOURCE, 'CC BY 4.0']);
-    assert.equal(sourceLine(info!), 'OECD CRS; World Bank WDI; dc/base/X');
+    assert.deepEqual(sourceLine(info!), { lead: 'Sources:', first: 'OECD CRS', more: 2 });
 });
 
 test('More Info: a new card carries no indicators, even from a fact summary that lists them', () => {
@@ -840,7 +840,11 @@ test('a share card: its Percent unit puts "%" on the value axis, and it names bo
     const chart = asChart(widgetFromComponent(created));
 
     assert.equal(formatAxis(5.333, chart.unit), '5.33%');
-    assert.equal(sourceLine(chart.info!), 'World Bank IDS; World Development Indicators');
+    assert.deepEqual(sourceLine(chart.info!), {
+        lead: 'Sources:',
+        first: 'World Bank IDS',
+        more: 1,
+    });
 });
 
 const CRS_DCID = 'dc/base/OECD_CRS';

@@ -42,7 +42,7 @@ import {
     type StructuredUnit,
 } from './payload.ts';
 import type { Description } from './description.ts';
-import { gapsOf, licenceWords } from './descriptionBlocks.ts';
+import { gapsOf, isInputSource, licenceWords } from './descriptionBlocks.ts';
 import { formatPeriod } from './period.ts';
 import {
     cellNumber,
@@ -488,15 +488,18 @@ const sourceWidget = (
 const infoUnit = (facts: FactSummary): string | null => unitDescription(asUnit(facts.unit));
 
 // A described card's sources, from its description: the card face, Download
-// Data and analytics name them as they name a legacy card's.
+// Data and analytics name them as they name a legacy card's. A computed
+// version's inputs are what it read, no credit, and stay out.
 const describedSources = (description: Description): CardSource[] =>
-    description.sources.map((source) => ({
-        id: source.ref,
-        name: source.label,
-        licence: source.licence ?? null,
-        url: null,
-        retrieved: null,
-    }));
+    description.sources
+        .filter((source) => !isInputSource(source))
+        .map((source) => ({
+            id: source.ref,
+            name: source.label,
+            licence: source.licence ?? null,
+            url: null,
+            retrieved: null,
+        }));
 
 /** The card's More Info payload: attribution, window and unit from the fact
  *  summary; the citation, freshness and what the data leaves out

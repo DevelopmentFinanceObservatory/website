@@ -6,7 +6,7 @@ import { SharesError } from '@/lib/chat/apisShares';
 import { sharesRefusal } from '@/lib/chat/shareRefusal';
 import { studioShareBody } from '@/lib/chat/sharePayload';
 import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
-import { makeShare, slotDepsFor } from '@/lib/chat/shareStore';
+import { getShare, makeShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 import { track } from '@/lib/events/track';
@@ -78,7 +78,24 @@ const shareSearch = async (body: any, headers: Headers) => {
     return NextResponse.json(created);
 };
 
-// POST /api/share { kind, conversation, cardId?, mode? } → { id, title }
+// The moment a new snapshot's data dates from. A saved widget records no
+// moment its data was served, so a snapshot takes the share row's `createdAt`:
+// its slots begin to show their frames when it is made. Null when the row
+// cannot be read; the answer then gives no date and the share stands.
+const snapshotServedAt = async (id: string): Promise<string | null> => {
+    try {
+        return (await getShare(id))?.createdAt ?? null;
+    } catch (error) {
+        console.error('share: a new snapshot could not be read back for its date', {
+            share: id,
+            error: error instanceof SharesError ? error.code : String(error),
+        });
+
+        return null;
+    }
+};
+
+// POST /api/share { kind, conversation, cardId?, mode? } → { id, title, servedAt? }
 // A pruned copy of what the caller is looking at, made in dfo-apis
 // (src/lib/chat/sharePayload, src/lib/chat/apisShares) under a short public
 // id. An account is optional. A signed-in sharer's write token is kept, so
@@ -91,6 +108,8 @@ const shareSearch = async (body: any, headers: Headers) => {
 // when its cards fail: 400 `live_cards_blocked` names a data card it shows
 // that names no component revision, or one that cannot follow newer data,
 // and 400 `live_too_many_cards` gives the cap.
+// A snapshot's answer adds `servedAt`, the moment its data dates from, which
+// the card's citation gives as "data as of" (`snapshotServedAt`).
 // Every refusal is a problem document (src/lib/proxy/problem).
 export const POST = async (request: NextRequest) => {
     const text = await readBoundedText(request.body, MAX_SHARE_BODY).catch(() => '');
@@ -170,5 +189,11 @@ export const POST = async (request: NextRequest) => {
         ),
     );
 
-    return NextResponse.json({ id: created.id, title: share.title });
+    const servedAt = share.latest ? null : await snapshotServedAt(created.id);
+
+    return NextResponse.json({
+        id: created.id,
+        title: share.title,
+        ...(servedAt ? { servedAt } : {}),
+    });
 };

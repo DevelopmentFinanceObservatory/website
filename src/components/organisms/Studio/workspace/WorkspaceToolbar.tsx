@@ -1,22 +1,65 @@
 'use client';
 
 import classNames from 'classnames';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ChatTab } from './ChatPanel';
 import MoreMenu, { type MoreMenuItem } from './MoreMenu';
 import styles from './WorkspaceToolbar.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import SegmentedTabs, {
     type SegmentedTab,
 } from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 
-// The title shows at most this many characters, then an ellipsis — however
-// long it really is ("Kenya Debt Service Lorem ipsum dolor sit amed" = 45).
-const TITLE_MAX_CHARS = 45;
+// The title on one line, ending in an ellipsis where the row runs out of room.
+// A cut title opens whole in the house popup; one that fits stays plain text,
+// so it adds no control to the tab order.
+const TitleText = ({ title }: { title: string }) => {
+    const slot = useRef<HTMLSpanElement>(null);
+    const [cut, setCut] = useState(false);
 
-const clipTitle = (title: string) =>
-    title.length > TITLE_MAX_CHARS ? `${title.slice(0, TITLE_MAX_CHARS).trimEnd()}…` : title;
+    useEffect(() => {
+        const element = slot.current;
+
+        if (!element) {
+            return;
+        }
+
+        // The text element is the slot's only child, a span or the popup's button.
+        const measure = () => {
+            const text = element.firstElementChild;
+
+            setCut(!!text && text.scrollWidth > text.clientWidth);
+        };
+
+        measure();
+
+        const observer = new ResizeObserver(measure);
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, [title]);
+
+    return (
+        <span ref={slot} className={styles.titleSlot}>
+            {cut ? (
+                <HoverPopup
+                    label={title}
+                    triggerClassName={styles.titleText}
+                    contentClassName={styles.titleMenu}
+                    trigger={title}
+                >
+                    {title}
+                </HoverPopup>
+            ) : (
+                <span className={styles.titleText}>{title}</span>
+            )}
+        </span>
+    );
+};
 
 const CHAT_TABS = [
     { id: 'chat', label: 'Chat' },
@@ -157,9 +200,8 @@ const WorkspaceToolbar = ({
                     chatCollapsed && styles.titleShifted,
                     solo && styles.titleSolo,
                 )}
-                title={title}
             >
-                <span className={styles.titleText}>{clipTitle(title)}</span>
+                <TitleText title={title} />
                 {!readOnly && (
                     <button
                         type="button"

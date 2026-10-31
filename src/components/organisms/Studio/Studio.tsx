@@ -17,7 +17,7 @@ import StudioLanding from './landing/StudioLanding';
 import { type PromptField } from './prompt/PromptForm';
 import type { ShareDatum } from './modals/ShareModal';
 import CardDownload from './modals/CardDownload';
-import CardInfoPanel from './modals/CardInfoPanel';
+import CardInfoPanel, { type CitedSnapshot } from './modals/CardInfoPanel';
 import StudioModals from './modals/StudioModals';
 import { useStudioModals } from './modals/useStudioModals';
 import styles from './Studio.module.scss';
@@ -39,7 +39,7 @@ import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
-import { logRefusedDescriptions } from '@/lib/studio/infoPanel';
+import { citeLinkKey, citeLinkOf, logRefusedDescriptions } from '@/lib/studio/infoPanel';
 import { GUEST_PROMPTS, promptEvent, type PromptIntent } from '@/lib/studio/promptAllowance';
 import { takeSeeds } from '@/lib/studio/seedStore';
 import { deriveTheme, themeVars } from '@/lib/studio/theme';
@@ -156,6 +156,10 @@ const Studio = ({
     const [editTarget, setEditTarget] = useState<{ id: string; title: string } | null>(null);
     // The card whose More Info panel is open (its attribution line opens it).
     const [infoCardId, setInfoCardId] = useState<string | null>(null);
+    // The snapshot links made to cite cards, by card and the data it draws
+    // (`citeLinkKey`), kept for the session so More Info opened again on an
+    // unchanged card reuses its link and makes no second public share.
+    const [citeLinks, setCiteLinks] = useState<Record<string, CitedSnapshot>>({});
     // The card whose Download Data dialog is open (its menu opens it).
     const [downloadCardId, setDownloadCardId] = useState<string | null>(null);
     // The canvas hands up its fly-to-card function (Activity → "View on
@@ -736,6 +740,23 @@ const Studio = ({
                         : undefined
                 }
                 canShare={!readOnly}
+                citeLink={infoWidget ? citeLinks[citeLinkKey(infoWidget)] : undefined}
+                onCiteLink={
+                    infoWidget && !readOnly
+                        ? async () => {
+                              const key = citeLinkKey(infoWidget);
+                              const link = citeLinkOf(
+                                  await save.createShare('card', infoWidget.id, 'snapshot'),
+                              );
+
+                              if ('id' in link) {
+                                  setCiteLinks((now) => ({ ...now, [key]: link }));
+                              }
+
+                              return link;
+                          }
+                        : undefined
+                }
             />
 
             <Modal

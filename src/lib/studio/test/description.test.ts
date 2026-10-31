@@ -5,13 +5,20 @@
  * vector of dfo-spec-kit's `dfo_descriptions/vectors` and the kit's
  * described `line_chart` envelope
  * (`dfo_spec_kit_components/catalogue/fixtures/line_chart/payload_description.json`),
- * copied verbatim from dfo-spec-kit 894c2ff.
+ * copied verbatim from dfo-spec-kit 894c2ff; a sync may overwrite them. Two
+ * computed vectors are this site's own and no sync touches them:
+ * `description-computed-quotient-credited.json`, the kit's quotient vector
+ * with its inputs' sources credited ahead of the inputs, as dfo-apis serves
+ * a computed description (the kit's `description-computed-quotient.json`
+ * holds the inputs alone, the shape of an older save), and
+ * `description-computed-share.json`, a share of a total whose two sides name
+ * the same input.
  */
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { CardInfo, ChartWidget, Widget } from '../../chat/widgets.ts';
+import { type CardInfo, type ChartWidget, sourceLine, type Widget } from '../../chat/widgets.ts';
 import { readDescription, type Description } from '../description.ts';
 import {
     describedPanel as describedPanelOn,
@@ -23,6 +30,8 @@ import {
 } from '../descriptionBlocks.ts';
 import {
     cardDescription,
+    citeLinkKey,
+    citeLinkOf,
     logRefusedDescriptions,
     panelViewOf as panelViewOn,
 } from '../infoPanel.ts';
@@ -106,6 +115,8 @@ const shownTexts = (view: DescribedView): string[] =>
     [
         view.title,
         view.live,
+        view.calculation?.numerator,
+        view.calculation?.denominator,
         view.measure?.label,
         view.measure?.definition,
         ...view.rows.flatMap((row) => [row.label, row.value]),
@@ -116,10 +127,11 @@ const shownTexts = (view: DescribedView): string[] =>
         ...view.keepInMind,
         view.from,
         ...view.sources.flatMap((source) => [source.name, source.meta]),
+        ...view.inputs,
         view.cite.short,
         view.cite.full,
-        view.cite.hint,
-        ...(view.made?.steps ?? []),
+        view.cite.offer?.note,
+        ...(view.made?.steps.flatMap((step) => [step.verb, step.object, step.detail]) ?? []),
         ...(view.made?.notes ?? []),
         ...(view.made?.pages.map((page) => page.name) ?? []),
     ].filter((text) => typeof text === 'string');
@@ -300,6 +312,7 @@ test('the card vector shows what it draws, what it is within, its source, citati
             kind: 'described',
             title: 'Gross disbursements to Nigeria for health, 2010 to 2024',
             live: null,
+            calculation: null,
             // The measure has no definition, so it has no line.
             measure: null,
             rows: [
@@ -308,17 +321,25 @@ test('the card vector shows what it draws, what it is within, its source, citati
             ],
             keepInMind: [CAVEAT_TEXT, REACH_TEXT],
             from: null,
+            inputs: [],
             cite: {
                 short: 'OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory',
                 full: 'OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory. "Gross disbursements to Nigeria for health" [dataset]. Retrieved 12 October 2026.',
-                // Only the card's owner is told how to get a link.
-                hint: null,
+                // Only the card's owner is offered a link.
+                offer: null,
             },
             made: {
                 steps: [
-                    'Drew 3 series of gross disbursements to Nigeria for health, 2010 to 2024.',
+                    {
+                        key: 's1',
+                        verb: 'Show',
+                        object: '2010–2024',
+                        detail: 'Drew 3 series of gross disbursements to Nigeria for health, 2010 to 2024.',
+                        givesCard: true,
+                    },
                 ],
-                notes: ['The source does not say how many values are estimated or provisional.'],
+                // The source does not count estimates, which changes nothing a reader does.
+                notes: [],
                 pages: [
                     {
                         key: 'provenance/OECDCreditorReportingSystem#0',
@@ -364,7 +385,7 @@ test('the card vector shows what it draws, what it is within, its source, citati
             name: 'OECD Creditor Reporting System (CRS)',
             url: null,
             page: 'provenance/OECDCreditorReportingSystem',
-            meta: 'OECD · OECD Terms and Conditions',
+            meta: 'OECD Terms and Conditions',
             lookup: null,
         },
     ]);
@@ -472,30 +493,74 @@ test('a live rendering says so under its title and defines its measure', () => {
     });
 });
 
-test("the card's owner is told how to get a link to cite, and no one else is", () => {
-    const hintOf = (name: string, canShare: boolean) =>
-        describedPanel(described(vectorInput(name)), { canShare }).cite.hint;
+test("the card's owner is offered a snapshot link until the citation names one", () => {
+    const offerOf = (name: string, options: Partial<PanelOptions>) =>
+        describedPanel(described(vectorInput(name)), options).cite.offer;
+    const link = 'https://dfo.one.org/s/abc123';
 
     assert.deepEqual(
         [
-            hintOf('description-card-revision.json', true),
-            hintOf('description-card-live-rendering.json', true),
-            hintOf('description-card-revision.json', false),
-            hintOf('description-card-live-rendering.json', false),
+            offerOf('description-card-revision.json', { canShare: true }),
+            offerOf('description-card-live-rendering.json', { canShare: true }),
+            offerOf('description-card-revision.json', { canShare: false }),
+            offerOf('description-card-live-rendering.json', { canShare: false }),
+            offerOf('description-card-revision.json', { canShare: true, snapshotUrl: link }),
+        ],
+        [{ note: null }, { note: 'A live link can show new numbers later.' }, null, null, null],
+    );
+});
+
+test('a snapshot made for the citation is read from the share it came to', () => {
+    const cards = [{ id: 'w1', title: 'Gross ODA' }];
+
+    assert.deepEqual(
+        [
+            citeLinkOf({ id: 'abc123', cards }),
+            citeLinkOf({ id: 'abc123', servedAt: '2026-10-31T09:15:00Z', cards }),
+            citeLinkOf({ refusal: { code: 'share_limit' }, cards }),
+            citeLinkOf({ refusal: { code: 'failed' } }),
+            citeLinkOf({ refusal: { code: 'payload_too_large' }, cards }),
         ],
         [
-            'Add a link to cite: Share › Snapshot.',
-            'A live link can show new numbers later. Cite a snapshot: Share › Snapshot.',
-            null,
-            null,
+            { id: 'abc123' },
+            { id: 'abc123', servedAt: '2026-10-31T09:15:00Z' },
+            { refusal: 'limited' },
+            { refusal: 'failed' },
+            { refusal: 'failed' },
         ],
     );
 });
 
-test('the reference-list form is retrieved today and names a snapshot and its capture date', () => {
+test('a cite link is kept per card, revision and frame version', () => {
+    const card: ChartWidget = {
+        kind: 'chart',
+        id: 'w1',
+        chartType: 'line',
+        title: 'Gross ODA',
+        categories: [],
+        series: [],
+        ref: { component_id: 'cmp_1', revision: 2 },
+        frame: { spec_id: 'ops_1', content_version: 'ocv_1' },
+    };
+    const keys = [
+        card,
+        { ...card },
+        { ...card, ref: { component_id: 'cmp_1', revision: 3 } },
+        { ...card, frame: { spec_id: 'ops_1', content_version: 'ocv_2' } },
+        { ...card, id: 'w2' },
+    ].map(citeLinkKey);
+
+    // An equal card keeps its key; an edit, new data or another card does not.
+    assert.equal(keys[1], keys[0]);
+    assert.equal(new Set(keys).size, 4);
+});
+
+test('both forms name a snapshot, and the reference-list form is retrieved today with its capture date', () => {
     const description = described(vectorInput('description-card-revision.json'));
     const fullOf = (options: Partial<PanelOptions>) =>
         describedPanel(description, options).cite.full;
+    const shortOf = (options: Partial<PanelOptions>) =>
+        describedPanel(description, options).cite.short;
     const cited =
         'OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory. "Gross disbursements to Nigeria for health" [dataset].';
     const link = 'https://dfo.one.org/s/abc123';
@@ -513,6 +578,10 @@ test('the reference-list form is retrieved today and names a snapshot and its ca
             `${cited} Retrieved 12 October 2026 from ${link} (snapshot, data as of 28 Sep 2026).`,
             `${cited} Retrieved 12 October 2026 from ${link} (snapshot).`,
         ],
+    );
+    assert.deepEqual(
+        [shortOf({}), shortOf({ snapshotUrl: link })],
+        [description.cite.text, `${description.cite.text}. ${link}`],
     );
 });
 
@@ -535,36 +604,76 @@ test('a rendering without its frame, or a frame without its rendering, is refuse
     });
 });
 
-test('a computed card names its inputs, its own steps and the data it leaves out', () => {
-    const view = describedPanel(described(vectorInput('description-computed-quotient.json')));
+test('a computed card leads with its calculation, then its sources, steps and what it leaves out', () => {
+    const view = describedPanel(
+        described(vectorInput('description-computed-quotient-credited.json')),
+    );
     const unknownInput = describedPanel(
         described(vectorInput('description-computed-input-without-id.json')),
     );
+    const inputsOnly = describedPanel(described(vectorInput('description-computed-quotient.json')));
+    const uncalculated = describedPanel(described(vectorInput('description-unknown-op-gap.json')));
 
     assert.deepEqual(view.rows, [
         { label: 'Years', value: '2010–2024' },
         { label: 'Unit', value: 'Ratio' },
     ]);
+    assert.deepEqual(view.calculation, {
+        numerator: 'Gross ODA disbursements',
+        denominator: 'Gross national income',
+    });
     assert.equal(view.measure, null);
     assert.deepEqual(view.terms, []);
-    assert.equal(view.from, 'Computed by the Development Finance Observatory from');
+    assert.equal(view.from, 'Computed by the Development Finance Observatory.');
+    // It credits its inputs' sources, publisher first. The calculation names
+    // its inputs, so no list repeats them.
     assert.deepEqual(
         view.sources.map(({ name, page, meta }) => [name, page, meta]),
         [
-            ['Gross ODA disbursements', null, null],
-            ['Gross national income', null, null],
+            [
+                'OECD Creditor Reporting System (CRS)',
+                'provenance/OECDCreditorReportingSystem',
+                'OECD Terms and Conditions',
+            ],
+            [
+                'World Bank World Development Indicators',
+                'provenance/WorldBankWorldDevelopmentIndicators',
+                'CC BY 4.0',
+            ],
         ],
     );
-    assert.equal(view.made?.steps.length, 3);
+    assert.deepEqual(view.inputs, []);
+    // A computed description saved before it credited sources holds its
+    // inputs alone, which credit no one.
+    assert.deepEqual(
+        [inputsOnly.sources, inputsOnly.inputs, inputsOnly.from],
+        [[], [], 'Computed by the Development Finance Observatory.'],
+    );
+    // With no calculation to name them, its inputs are listed.
+    assert.deepEqual(
+        [uncalculated.calculation, uncalculated.sources, uncalculated.inputs],
+        [null, [], ['Gross ODA disbursements', 'Gross national income']],
+    );
+    assert.deepEqual(
+        view.made?.steps.map(({ key, verb, object, detail, givesCard }) => [
+            key,
+            verb,
+            object,
+            detail !== null,
+            givesCard,
+        ]),
+        [
+            ['s1', 'Get', 'Gross ODA disbursements', false, false],
+            ['s2', 'Get', 'Gross national income', false, false],
+            ['s3', 'Divide', 'Gross ODA disbursements ÷ Gross national income', true, true],
+        ],
+    );
     assert.deepEqual(view.made?.notes, []);
     // Its one caveat, then the series short of the latest period.
     assert.deepEqual(view.keepInMind.slice(1), ['32 of 38 series reach 2024.']);
     assert.match(view.cite.short, /processed by the Development Finance Observatory$/);
     // An input whose id is unknown stays by its label.
-    assert.deepEqual(
-        unknownInput.sources.map(({ name }) => name),
-        ['Gross ODA disbursements', 'Gross national income'],
-    );
+    assert.deepEqual(unknownInput.inputs, ['Gross ODA disbursements', 'Gross national income']);
     // A card drawn from a computed version is computed too, and one drawn from a
     // dataset version is not.
     const card = vectorInput('description-card-revision.json');
@@ -573,7 +682,7 @@ test('a computed card names its inputs, its own steps and the data it leaves out
 
     assert.deepEqual(
         [fromOf('ops_3c9e1f7a2b8d4e6f'), fromOf('spec_91d7345eec81a029629938b3d0ffd775')],
-        ['Computed by the Development Finance Observatory from', null],
+        ['Computed by the Development Finance Observatory.', null],
     );
 });
 
@@ -595,26 +704,12 @@ test('an unknown unit has no row and a sentence in Keep in mind; a unit of none 
     );
 });
 
-test('how a card was made says which steps and counts are unknown', () => {
+test('how a card was made says when its steps are unknown, and not that counts are', () => {
     const input = vectorInput('description-card-revision.json');
     const notesOf = (gaps: string[], steps: unknown = input['steps']) =>
         describedPanel(described({ ...input, steps, gaps })).made?.notes;
     const cases: [string[], unknown, string[]][] = [
-        [
-            ['freshness.estimated_values', 'freshness.provisional_values'],
-            input['steps'],
-            ['The source does not say how many values are estimated or provisional.'],
-        ],
-        [
-            ['freshness.estimated_values'],
-            input['steps'],
-            ['The source does not say how many values are estimated.'],
-        ],
-        [
-            ['freshness.provisional_values'],
-            input['steps'],
-            ['The source does not say how many values are provisional.'],
-        ],
+        [['freshness.estimated_values', 'freshness.provisional_values'], input['steps'], []],
         [[], input['steps'], []],
         [['steps'], null, ['The steps behind these figures are not known.']],
         [['steps.source_pipeline'], [], ['The steps behind these figures are not known.']],
@@ -677,17 +772,86 @@ test('keep in mind counts estimated and provisional values no caveat tells, and 
     );
 });
 
+test("the reader keeps a step's input label and a quotient's sides", () => {
+    const { steps } = described(vectorInput('description-computed-quotient.json'));
+
+    assert.deepEqual(
+        steps?.map((step) => [step.id, step.input?.label ?? null, step.inputs ?? null]),
+        [
+            ['s1', 'Gross ODA disbursements', null],
+            ['s2', 'Gross national income', null],
+            ['s3', null, { numerator: 's1', denominator: 's2' }],
+        ],
+    );
+});
+
+test('a share card shows what it divides by what, unless both sides name one input, when its rail reads the sentence', () => {
+    const input = vectorInput('description-computed-share.json');
+    const steps = input['steps'] as Record<string, unknown>[];
+    const share = steps.find((step) => step['op'] === 'share');
+    const total = 'Gross ODA disbursements to all sectors';
+    // The vector's share, its denominator retrieved from another input.
+    const twoInputs = describedPanel(
+        described({
+            ...input,
+            steps: steps.map((step) =>
+                step['id'] === 's2'
+                    ? { ...step, input: { ...(step['input'] as object), label: total } }
+                    : step,
+            ),
+        }),
+    );
+    const sameInput = describedPanel(described(input));
+    const lastRow = (view: DescribedView) => {
+        const row = view.made?.steps.at(-1);
+
+        return [row?.key, row?.verb, row?.object, row?.detail];
+    };
+
+    assert.deepEqual(
+        [sameInput.calculation, lastRow(sameInput)],
+        [null, ['s3', null, share?.['text'], null]],
+    );
+    assert.deepEqual(
+        [twoInputs.calculation, lastRow(twoInputs)],
+        [
+            { numerator: 'Gross ODA disbursements', denominator: total },
+            ['s3', 'Share', `Gross ODA disbursements of ${total}`, share?.['text']],
+        ],
+    );
+});
+
+test('a step whose operation the panel cannot name reads its sentence, and no calculation shows', () => {
+    const input = vectorInput('description-unknown-op-gap.json');
+    const view = describedPanel(described(input));
+    const unknown = (input['steps'] as { op: string; text: string }[]).find(
+        (step) => step.op === 'quotient_v2',
+    );
+
+    assert.equal(view.calculation, null);
+    assert.deepEqual(view.made?.steps.at(-1), {
+        key: 's3',
+        verb: null,
+        object: unknown?.text,
+        detail: null,
+        givesCard: true,
+    });
+});
+
 test("how a card was made holds the card's own steps and not the source pipeline's", () => {
     const pipeline = describedPanel(
         described(vectorInput('description-served-labels-over-steps-bound.json')),
     );
     const input = vectorInput('description-served-labels-over-steps-bound.json');
-    const own = (input['steps'] as { op: string; text: string }[])
+    const own = (input['steps'] as { id: string; op: string }[])
         .filter((step) => step.op !== 'source_step')
-        .map((step) => step.text);
+        .map((step) => step.id);
 
     assert.ok(own.length > 0);
-    assert.deepEqual(pipeline.made?.steps, own);
+    assert.deepEqual(
+        pipeline.made?.steps.map((step) => step.key),
+        own,
+    );
     assert.deepEqual(
         describedPanel(described(vectorInput('description-source-pipeline-steps.json'))).made
             ?.steps,
@@ -906,9 +1070,17 @@ test('a described created card needs no request for its panel', () => {
     });
 });
 
-test("a card's source id is its first source with a known ref, or none", () => {
+test("a card's source id is its first source with a known ref, or none, and no input is a source", () => {
     const input = vectorInput('description-computed-input-without-id.json');
-    const [known, unknown] = input['sources'] as Record<string, unknown>[];
+    // The vector's two inputs, one with no known ref, read as credited sources
+    // once they name no content version.
+    const [known, unknown] = (input['sources'] as Record<string, unknown>[]).map((source) => {
+        const credited = { ...source };
+
+        delete credited['content_version'];
+
+        return credited;
+    });
     const infoWith = (sources: Record<string, unknown>[]) =>
         (
             widgetFromComponent(
@@ -916,6 +1088,7 @@ test("a card's source id is its first source with a known ref, or none", () => {
             ) as ChartWidget
         ).info;
     const unknownFirst = infoWith([unknown!, known!]);
+    const inputsOnly = infoWith(input['sources'] as Record<string, unknown>[]);
 
     assert.deepEqual(
         unknownFirst?.sources?.map((source) => [source.id, source.name]),
@@ -926,6 +1099,49 @@ test("a card's source id is its first source with a known ref, or none", () => {
     );
     assert.equal(unknownFirst?.sourceId, 'spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e');
     assert.equal(infoWith([unknown!])?.sourceId, null);
+    assert.deepEqual(
+        [inputsOnly?.sources, inputsOnly?.sourceName, inputsOnly?.sourceId],
+        [[], null, null],
+    );
+});
+
+test("a computed card's face credits its inputs' sources, else DFO, and never its inputs", () => {
+    const infoOf = (name: string) =>
+        (
+            widgetFromComponent(
+                createdFrame({ ...ENVELOPE, description: vectorInput(name) }),
+            ) as ChartWidget
+        ).info!;
+    const current = infoOf('description-computed-quotient-credited.json');
+    const older = infoOf('description-computed-quotient.json');
+    // A card saved before inputs were kept out of its sources holds them.
+    const olderSave = {
+        ...older,
+        sources: ['Gross ODA disbursements', 'Gross national income'].map((name) => ({
+            id: null,
+            name,
+            licence: null,
+            url: null,
+            retrieved: null,
+        })),
+    };
+
+    assert.deepEqual(
+        current.sources?.map((source) => source.name),
+        ['OECD Creditor Reporting System (CRS)', 'World Development Indicators'],
+    );
+    assert.deepEqual(
+        [current, older, olderSave].map((info) => sourceLine(info)),
+        [
+            {
+                lead: 'Sources:',
+                first: 'OECD Creditor Reporting System (CRS)',
+                more: 1,
+            },
+            { lead: 'Source: DFO calculation', first: null, more: 0 },
+            { lead: 'Source: DFO calculation', first: null, more: 0 },
+        ],
+    );
 });
 
 test('a revised card keeps its description under lineage-only provenance', () => {

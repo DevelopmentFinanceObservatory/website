@@ -103,8 +103,8 @@ export type WhiteboardProps = {
 
 /**
  * The whiteboard sheet: cards pinned to exact pattern cells, its own grid
- * layer scrolling along, drag-to-rearrange via the hover grab bar, corner
- * resize, background panning, off-screen beacons and the arrival
+ * layer scrolling along, drag-to-rearrange by a card's head row and frame,
+ * corner resize, background panning, off-screen beacons and the arrival
  * shockwave. The sheet hugs its content in both axes (plus slack while
  * dragging) — the viewport is just a window onto it.
  */
@@ -497,20 +497,20 @@ const Whiteboard = ({
                         }
                     >
                         {/* The box carries the lift transform (tilt + scale),
-                            so the grab bar and the resize grip ride along with
-                            the card instead of hanging off the static slot.
+                            so the resize grip rides along with the card
+                            instead of hanging off the static slot.
 
-                            It is also the grab area: the whole card moves,
-                            not just the bar, which was 72px wide and left
-                            readers hunting for it (QA-20). The hook spares
-                            the controls inside. Only a fading card cannot be
-                            dragged — pinned ones still can, since the pin
-                            guards against INCOMING widgets, not the user. */}
+                            The card moves by its head row and its frame
+                            (cardPress.ts); the content clicks and selects.
+                            Only a fading card cannot be dragged. Pinned ones
+                            still can, since the pin guards against INCOMING
+                            widgets, not the user. */}
                         <div
                             className={styles.cardBox}
-                            // The cursor follows the handlers: a gallery card
-                            // or a fading one is not draggable, so it keeps the
-                            // board's own pan grab.
+                            data-card-box=""
+                            // Read by cardPress.ts and the cursors: a gallery
+                            // card or a fading one is not draggable, so a press
+                            // on it pans the board.
                             data-draggable={!isLeaving && !readOnly ? '' : undefined}
                             // The whole card is the note's hover target —
                             // and only a card that has one listens, so
@@ -550,9 +550,6 @@ const Whiteboard = ({
                                     width={slot.w * CELL}
                                     onRemove={extras.onRemoveNote}
                                 />
-                            )}
-                            {!isLeaving && !readOnly && (
-                                <span className={styles.handle} data-nowave="" />
                             )}
                             {!isLeaving && !readOnly && !isText && (
                                 <span

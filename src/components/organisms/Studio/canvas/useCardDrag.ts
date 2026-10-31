@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { edgeScrollSpeed, scrollerOf } from './board';
+import { cardPressAction, dragLifts } from './cardPress';
 import {
     clamp,
     liveRects,
@@ -24,24 +25,19 @@ import {
 } from './layout';
 
 /**
- * Drag-to-rearrange via the hover grab bar. Heavy-object drag: mass lives
- * in POSITION, not angle — the card trails the pointer through a viscous
- * follow and catches up (FOLLOW per frame), and leans slightly AGAINST its
- * own motion around the grab point. Everything is critically damped — no
- * spring, no oscillation, nothing jelly. Near the scroller's edges the
- * sheet auto-scrolls; the scrolled distance counts toward the drag.
+ * Drag-to-rearrange by the card's head row and frame (see cardPress.ts for
+ * which presses drag). A press there lifts the card only after a short move,
+ * so it can still be a click. Heavy-object drag: mass lives in POSITION, not
+ * angle — the card trails the pointer through a viscous follow and catches
+ * up (FOLLOW per frame), and leans slightly AGAINST its own motion around
+ * the grab point. Everything is critically damped — no spring, no
+ * oscillation, nothing jelly. Near the scroller's edges the sheet
+ * auto-scrolls; the scrolled distance counts toward the drag.
  *
  * While the dragged card covers another, the two trade places (a live swap
  * preview); otherwise the landing hint slides to the nearest spot the card
  * genuinely fits.
  */
-/**
- * Everything inside a card that owns its own press: a drag started here
- * would swallow the click. `data-no-drag` is the opt-out for anything the
- * selector cannot name, such as a region meant to be text-selected.
- */
-const INTERACTIVE = 'button, a, input, textarea, select, [role="menuitem"], [data-no-drag]';
-
 const FOLLOW = 0.18;
 const TILT_PER_VELOCITY = 0.75;
 const TILT_MAX = 12;
@@ -88,12 +84,17 @@ export const useCardDrag = ({
     // Where the card is held, relative to its slot — the rotation/scale pivot.
     // Persists after release so the settle animation keeps the same origin.
     const [grab, setGrab] = useState<{ id: string; x: number; y: number } | null>(null);
+    // The press that may become a drag; `lifted` once it has moved far
+    // enough to pick the card up. The grab point is measured at the press.
     const startRef = useRef<{
         id: string;
         x: number;
         y: number;
+        grabX: number;
+        grabY: number;
         scrollTop: number;
         scrollLeft: number;
+        lifted: boolean;
     } | null>(null);
     // Live mirror of the drag state — pointerup handlers can lag a render
     // behind the frame loop, so the commit reads the ref, not the state.
@@ -196,16 +197,15 @@ export const useCardDrag = ({
     };
 
     const startDrag = (id: string) => (event: React.PointerEvent<HTMLElement>) => {
-        // The whole card is the grab area, so the controls inside it have to
-        // be spared: a press on one of these is a press on the control, not
-        // the start of a drag. The resize grip stops propagation itself.
-        if ((event.target as HTMLElement).closest(INTERACTIVE)) {
+        // Only the head row and the frame drag; the board's pan handler reads
+        // the same decision, so a drag press needs no stopPropagation.
+        if (cardPressAction(event) !== 'drag') {
             return;
         }
 
+        // No text selection from a drag zone, and the moves stay with the
+        // card even if the pointer leaves it before the lift.
         event.preventDefault();
-        // The card moves — don't let the board see this and pan instead.
-        event.stopPropagation();
         event.currentTarget.setPointerCapture(event.pointerId);
 
         const scroller = scrollerOf(boardRef);
@@ -213,40 +213,60 @@ export const useCardDrag = ({
         // the pointer came down on.
         const slotRect = event.currentTarget.getBoundingClientRect();
 
-        setGrab({
-            id,
-            x: event.clientX - slotRect.left,
-            y: event.clientY - slotRect.top,
-        });
-
         startRef.current = {
             id,
             x: event.clientX,
             y: event.clientY,
+            grabX: event.clientX - slotRect.left,
+            grabY: event.clientY - slotRect.top,
             scrollTop: scroller?.scrollTop ?? 0,
             scrollLeft: scroller?.scrollLeft ?? 0,
+            lifted: false,
         };
         pointRef.current = { x: event.clientX, y: event.clientY };
+    };
+
+    // The press has moved far enough: pick the card up.
+    const lift = () => {
+        const start = startRef.current;
+
+        if (!start) {
+            return;
+        }
+
+        start.lifted = true;
+        setGrab({ id: start.id, x: start.grabX, y: start.grabY });
         posRef.current = { x: 0, y: 0 };
         prevXRef.current = 0;
         tiltRef.current = 0;
         scrollSpeedRef.current = { x: 0, y: 0 };
         // The grabbed card rides above everything it crosses — and stays there.
-        raise(id);
-        dragRef.current = { id, dx: 0, dy: 0, tilt: 0 };
+        raise(start.id);
+        dragRef.current = { id: start.id, dx: 0, dy: 0, tilt: 0 };
         setDrag(dragRef.current);
         cancelAnimationFrame(rafRef.current);
         rafRef.current = requestAnimationFrame(frame);
     };
 
     const moveDrag = (event: React.PointerEvent) => {
-        if (!startRef.current) {
+        const start = startRef.current;
+
+        if (!start) {
             return;
         }
 
         // The frame loop reads pointer positions per frame and derives the
         // acceleration itself — the handler only records where the pointer is.
         pointRef.current = { x: event.clientX, y: event.clientY };
+
+        if (!start.lifted) {
+            if (!dragLifts(event.clientX - start.x, event.clientY - start.y)) {
+                return;
+            }
+
+            lift();
+        }
+
         scrollSpeedRef.current = edgeScrollSpeed(
             scrollerOf(boardRef),
             event.clientX,
@@ -452,7 +472,7 @@ export const useCardDrag = ({
         swap,
         landing,
         // Read by frame-lag-safe checks (the arrival scroll skips a busy user).
-        isDragging: () => startRef.current !== null,
+        isDragging: () => !!startRef.current?.lifted,
         startDrag,
         moveDrag,
         endDrag,
