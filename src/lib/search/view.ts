@@ -61,7 +61,7 @@ import {
     type Warning,
 } from './types.ts';
 import { keyRef, sentenceOf } from './searchClient.ts';
-import { unitWithBasis } from './unitLabel.ts';
+import { unitRequest, unitWithBasis } from './unitLabel.ts';
 
 /** Display label of a slot/entity option, wherever the engine put it. */
 export const optionLabel = (option: OptionLike | null | undefined): string =>
@@ -936,6 +936,15 @@ const servedMembership = (
     return { count: statVars.member_count, exact: statVars.member_count_exact !== false };
 };
 
+/** Whether the answer may serve exactly one variable, the one case where
+ *  the members door's list changes "About this answer" (it names the
+ *  variable and its id). */
+export const maybeOneVariable = (spec: SpecReading): boolean => {
+    const membership = servedMembership(spec);
+
+    return membership?.count === 1 && membership.exact;
+};
+
 /** How many StatVars the answer serves: the settled served count, else the
  *  family's count. */
 export const servedSeriesCount = (spec: SpecReading): number | null =>
@@ -1044,32 +1053,46 @@ export function splitCurrentPick<T extends OptionLike>(
     };
 }
 
-export type WhyRow = { label: string; value: string; code?: string };
-
-export type WhyVariables = {
-    /** the variables the answer serves */
-    count: number;
-    /** false when count is a floor (stat_vars.member_count_exact) */
-    exact: boolean;
-    summary: string;
-    /** the served members, as the members door lists them */
-    members: WhyMembers;
-    /** the members counted by each value of an axis they differ on */
-    breakdown: WhyBreakdown[];
+/** One fact "About this answer" states: what the figure counts, who, when,
+ *  in what unit. A fact the search filled in carries `note`, why it holds
+ *  that value, and `bindingRef`, the identity binding whose edit changes it
+ *  ('when:', 'unit:', 'origin:', 'how:<property dcid>'), as the sentence's
+ *  own tokens and the part's assumptions name it. */
+export type WhyRow = {
+    label: string;
+    value: string;
+    note?: string;
+    bindingRef?: string;
+    /** the DFO variable id, on the Measure row of an answer serving one
+     *  variable */
+    variableId?: string;
+    /** the publisher series codes, on the Measure row */
+    sourceCodes?: WhySourceCodes;
 };
 
-/** The served members as the Why panel lists them: still being read from
- *  the members door, refused or failed, or listed. */
-export type WhyMembers =
-    | { state: 'loading' }
-    | { state: 'failed' }
-    | { state: 'listed'; items: { dcid: string; label: string }[] };
+/** The publisher series codes of the variables an answer serves
+ *  (`stat_vars.source_codes`), grouped by publisher. `exact` is true when
+ *  each code names the whole answer; otherwise the answer is built from
+ *  them. Each publisher lists its first codes and counts the rest as
+ *  `more`. */
+export type WhySourceCodes = {
+    exact: boolean;
+    publishers: { publisher: string; codes: string[]; more: number }[];
+};
+
+/** What an answer of several variables adds up: the shape the variables
+ *  share, and each open axis they differ on with its values, the ways the
+ *  total can be split. */
+export type WhyInside = {
+    summary: string | null;
+    breakdown: WhyBreakdown[];
+};
 
 /** One open axis the variables differ on ("By instrument"), its values with
  *  the most variables first, and how many values the list leaves out. */
 export type WhyBreakdown = {
     title: string;
-    values: { label: string; count: number }[];
+    values: string[];
     more: number;
 };
 
@@ -1082,31 +1105,30 @@ export type WhyMeasure = {
     years: string | null;
 };
 
-/** One value the answer holds and why: a facet axis ("Source", "Unit") or a
- *  slot a declared default filled, with the reason in words. */
-export type WhyChoice = { label: string; value: string; reason: string };
+/** One source the answer reads: its name, the Graph API route of its
+ *  document (null when the answer names none), and the line under it
+ *  (publisher, licence, and how the search chose it). */
+export type WhySource = {
+    ref: string;
+    label: string;
+    documentation: string | null;
+    meta: string[];
+};
 
 export type WhySummary = {
     measure: WhyMeasure;
     rows: WhyRow[];
-    /** how many variables the measure's family holds, when more than the
-     *  answer serves ("This answer uses 1 of at least 3 ...") */
-    family: string | null;
-    /** null for a single variable, which the Measure row names instead */
-    variables: WhyVariables | null;
-    /** `licence` is set when the answer serves one source, the only case
-     *  the API names a licence for */
-    sources: {
-        ref: string;
-        label: string;
-        /** the Graph API route of the source's document, null when the
-         *  answer names none */
-        documentation: string | null;
-        origin: string | null;
-        licence: string | null;
-    }[];
-    /** how each facet axis got its value */
-    chosen: WhyChoice[];
+    /** what an answer of several variables adds up, null for one variable
+     *  or when the variables differ on no axis */
+    inside: WhyInside | null;
+    sources: WhySource[];
+    /** 'source:' when the search picked the one source the answer reads,
+     *  so the source can be changed; null otherwise */
+    sourceBindingRef: string | null;
+    /** the citation line, null when the answer names no source */
+    cite: string | null;
+    /** what the answer assumed that no row states, one sentence each */
+    notes: string[];
 };
 
 // A time window as the user would say it: "since 2015", "2015 to 2020", "2023".
@@ -1145,9 +1167,6 @@ const ROLE_WORDS: Record<
     observationAbout: { noun: 'place', one: 'Place', many: 'Places', dimension: 'places' },
 };
 
-const orList = (labels: string[]): string =>
-    new Intl.ListFormat('en-GB', { type: 'disjunction' }).format(labels);
-
 // The years a DateRange spans.
 const dateRange = (range: DateRange | null | undefined): string | null => {
     const start = range?.start?.slice(0, 4) ?? null;
@@ -1185,20 +1204,6 @@ const yearsText = (spec: SpecReading): string | null => {
     const year = spec.headline?.year;
 
     return year != null && !spec.headline?.year_named ? `Latest is ${year}` : null;
-};
-
-// Every member of a spec shares its shape, so the shape label holds for all
-// of them.
-const variablesSummary = (count: number, exact: boolean, shapeLabel?: string | null): string => {
-    const counted = exact
-        ? `All ${formatCount(count)} variables`
-        : `At least ${formatCount(count)} variables`;
-
-    if (!shapeLabel) {
-        return `${counted} match.`;
-    }
-
-    return exact ? `${counted} are ${shapeLabel}.` : `${counted}, all ${shapeLabel}.`;
 };
 
 // The labels of the entities a spec binds to one role.
@@ -1255,7 +1260,8 @@ const slotLabelOf = (spec: SpecReading, bindingRef: string): string | null =>
 const lowerFirst = (text: string): string =>
     /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 
-// One assumption as the panel states it, in the words of its own `text`.
+// One assumption no row states, as the panel states it in a sentence of its
+// own, in the words of its own `text`.
 const assumptionSentence = (spec: SpecReading, assumption: Assumption): string => {
     const { kind, binding_ref: ref, text } = assumption;
 
@@ -1264,15 +1270,8 @@ const assumptionSentence = (spec: SpecReading, assumption: Assumption): string =
 
     if (kind === 'place_scope') return `No place was named, so the answer covers ${text}.`;
 
-    if (kind === 'open_role') {
-        // An open role reads "origin:" or "where:", the slot the destination
-        // shares with the subject.
-        const origin = ref === 'origin:';
-        const named = entityLabels(spec, origin ? 'destination' : 'origin');
-        const scope = named.length ? ` ${origin ? 'to' : 'from'} ${orList(named)}` : '';
-
-        return `The question left this role open, so the answer covers ${text}${scope}.`;
-    }
+    if (kind === 'open_role')
+        return `The question left this role open, so the answer covers ${text}.`;
 
     const label = slotLabelOf(spec, ref);
 
@@ -1281,101 +1280,40 @@ const assumptionSentence = (spec: SpecReading, assumption: Assumption): string =
         : `The question left this open, so the answer uses ${text}, the default for this measure.`;
 };
 
-/** What a definite part's answer assumed: one sentence per item of the
- *  part's `assumptions` (a corrected name, a declared default, an open role, the place scope),
- *  in the API's order, then the year. "About this answer" reads this list
- *  (through resultNotes's aboutAnswerNotes). The year sentence keys on
- *  `headline.year_named` as well as `time_window_defaulted`, since a
- *  role-bearing answer can say no year was named without sending that
- *  warning. */
-export const scopeAssumptions = (
-    spec: SpecReading,
-    assumptions: readonly Assumption[] | null | undefined,
-    warnings?: readonly Pick<Warning, 'code'>[] | null,
-): string[] => {
-    const sentences = (assumptions ?? []).map((assumption) => assumptionSentence(spec, assumption));
-    const yearDefaulted = (warnings ?? []).some(
-        (warning) => warning?.code === 'time_window_defaulted',
-    );
-
-    if (yearDefaulted || spec.headline?.year_named === false) {
-        const year = spec.headline?.year;
-
-        sentences.push(
-            year != null && spec.headline?.year_named === false
-                ? `No year was named, so the counts are for ${year}, the latest year with data.`
-                : 'No year was named, so every year with data is included.',
-        );
-    }
-
-    return sentences;
-};
+// The binding a role's row edits: the origin's own, and the where slot the
+// destination shares with the subject.
+const roleRef = (role: EntityRoleKey): string => (role === 'origin' ? 'origin:' : 'where:');
 
 // The values each axis lists before the rest are counted as "more".
 const BREAKDOWN_VALUES = 5;
 
-// The served variables counted by each value of every axis they differ on,
-// from open_axis_facts[].values, which the API counts over the distinct
-// served members.
+// Every axis the served variables differ on, with its values, the most
+// variables first, from open_axis_facts[].values.
 const variablesBreakdown = (spec: SpecReading): WhyBreakdown[] =>
     (spec.open_axis_facts ?? []).flatMap(({ property, varies, values }) =>
         varies && values?.length
             ? [
                   {
                       title: `By ${axisLabel(spec, property)}`,
-                      values: values.slice(0, BREAKDOWN_VALUES).map((entry) => ({
-                          label: capitalise(entry.value?.label ?? entry.value?.ref ?? ''),
-                          count: entry.count,
-                      })),
+                      values: values
+                          .slice(0, BREAKDOWN_VALUES)
+                          .map((entry) => capitalise(entry.value?.label ?? entry.value?.ref ?? '')),
                       more: Math.max(values.length - BREAKDOWN_VALUES, 0),
                   },
               ]
             : [],
     );
 
-// "This answer uses 1 of at least 3 variables.", null when
-// the answer serves every member stat_vars.member_count counts.
-const familyNote = (
-    served: number,
-    statVars: Partial<Pick<ResolvedStatVars, 'member_count' | 'member_count_exact'>>,
-): string | null => {
-    const members = statVars.member_count;
-
-    if (members == null || members <= served) {
-        return null;
-    }
-
-    const total = `${statVars.member_count_exact === false ? 'at least ' : ''}${formatCount(members)}`;
-
-    return `This answer uses ${formatCount(served)} of ${total} variables.`;
+// Why a facet axis holds its value (ResolvedFacet.basis), null for a value
+// the request set.
+const FACET_NOTES: Record<FacetBasis, string | null> = {
+    bound: null,
+    declared_default: 'The default for this measure.',
+    fallback: 'Picked by the search.',
 };
 
-const whyMembers = (members: MembersRead | null | undefined): WhyMembers => {
-    if (!members) return { state: 'loading' };
-    if (!members.ok) return { state: 'failed' };
-
-    return {
-        state: 'listed',
-        items: members.members.map((member) => ({
-            dcid: member.dcid,
-            label: member.label ?? member.dcid,
-        })),
-    };
-};
-
-// Why a facet axis holds its value (ResolvedFacet.basis).
-const CHOICE_REASONS: Record<FacetBasis, string> = {
-    bound: 'Set by your request.',
-    declared_default: 'Filled in from the default for this measure.',
-    fallback: 'Picked by the search, as the request left it open.',
-};
-
-// The facet axes the panel explains, with their row labels.
-const FACET_CHOICE_AXES = [
-    ['provenance', 'Source'],
-    ['measurementMethod', 'Method'],
-    ['unit', 'Unit'],
-] as const;
+const facetNote = (facet: ResolvedFacet | null | undefined): string | null =>
+    facet?.basis && hasKey(FACET_NOTES, facet.basis) ? FACET_NOTES[facet.basis] : null;
 
 const facetChoiceValue = (axis: string, facet: ResolvedFacet): string | null => {
     if (facet.selection === 'per_series') {
@@ -1391,53 +1329,126 @@ const facetChoiceValue = (axis: string, facet: ResolvedFacet): string | null => 
     return axis === 'measurementMethod' ? formatMethod(facet) : spaceCamel(raw);
 };
 
-// How each facet axis got its value (`resolved.facets[axis].basis`). A
-// slot a declared default filled is one of the part's `assumptions`, which
-// "What we assumed" states (scopeAssumptions).
-const whyChoices = (spec: SpecReading): WhyChoice[] =>
-    FACET_CHOICE_AXES.flatMap(([axis, label]) => {
-        const facet = spec.facets?.[axis];
-        const reason: string | undefined = facet && CHOICE_REASONS[facet.basis as FacetBasis];
-        const value = facet && reason ? facetChoiceValue(axis, facet) : null;
-
-        return reason && value ? [{ label, value, reason }] : [];
-    });
+// A fact row, with its note and binding when the search filled it in.
+const factRow = (label: string, value: string, note: string | null, bindingRef: string): WhyRow =>
+    note ? { label, value, note, bindingRef } : { label, value };
 
 // The licence label of the one source the answer serves, in words.
 const licenceText = (spec: SpecReading): string | null =>
     spec?.download?.licence?.label ? spaceCamel(spec.download.licence.label) : null;
 
-/** The "About this answer" summary for one definite part: what the search
- *  matched (rows), the variables when there is more than one, the sources
- *  with their licence, and how each facet was chosen. The
- *  scope assumptions come from resultNotes's aboutAnswerNotes.
+// The codes each publisher lists before the rest are counted as "more".
+const SOURCE_CODES = 3;
+
+// The publisher that issues a provenance's codes ("World Bank"), from
+// whichever provenance refs the spec carries, else the provenance's own
+// name, and "Source" when the spec names neither.
+const publisherOf = (spec: SpecReading, dcid: string): string => {
+    const refs: (ProvenanceRef | ResolvedFacet | null | undefined)[] = [
+        ...(spec?.resolution?.resolved_sources ?? []),
+        spec?.facets?.provenance,
+        ...(spec?.observations?.series ?? []).flatMap((series) => series?.source_refs ?? []),
+    ];
+    const ref = refs.find((entry) => entry?.ref === dcid);
+    const name = ref?.source?.label ?? (ref?.label ? sourceOptionLabel({ label: ref.label }) : '');
+
+    return name || 'Source';
+};
+
+// The publisher series codes the Measure row names: the exact codes, which
+// each name the whole answer, else every code the answer is built from.
+const sourceCodes = (spec: SpecReading): WhySourceCodes | null => {
+    const all = readStatVars(spec)?.source_codes ?? [];
+    const exactCodes = all.filter((entry) => entry.exact);
+    const shown = exactCodes.length > 0 ? exactCodes : all;
+    const byPublisher = new Map<string, string[]>();
+
+    for (const entry of shown) {
+        const publisher = publisherOf(spec, entry.provenance);
+
+        byPublisher.set(publisher, [...(byPublisher.get(publisher) ?? []), entry.code]);
+    }
+
+    return shown.length === 0
+        ? null
+        : {
+              exact: exactCodes.length > 0,
+              publishers: [...byPublisher].map(([publisher, codes]) => ({
+                  publisher,
+                  codes: codes.slice(0, SOURCE_CODES),
+                  more: Math.max(codes.length - SOURCE_CODES, 0),
+              })),
+          };
+};
+
+const DFO_NAME = 'Development Finance Observatory';
+
+// The citation line in the short form the Studio panel and downloads use
+// (dfo-apis description/citation.py citation_line): the sources and the
+// year they were read, then the DFO as the route. An answer the identity's
+// unit request converted holds the DFO's own figures, so it reads
+// "processed by". `unit_conversion` is only the offer of a conversion, so an
+// answer in its native unit reads "via".
+const citation = (spec: SpecReading, labels: string[], year: number): string | null => {
+    if (labels.length === 0) return null;
+
+    const route = unitRequest(spec) ? 'processed by' : 'via';
+
+    return `${andList(labels)} (${year}), ${route} the ${DFO_NAME}`;
+};
+
+/** A definite part as "About this answer" reads it. */
+export type WhyPart = {
+    warnings?: readonly Pick<Warning, 'code'>[] | null;
+    variable_text?: string | null;
+    assumptions?: readonly Assumption[] | null;
+};
+
+/** The "About this answer" summary for one definite part, in reading
+ *  order: the facts (rows), what several variables add up (`inside`), the
+ *  sources with their publisher and licence, and one citation. A fact the
+ *  search filled in, a year the question left open, a facet the search
+ *  picked or a part's `assumptions` item, carries its reason and binding on
+ *  its own row. An assumption no row states reads as a sentence in
+ *  `notes`.
  *
  *  The resolved membership decides the layout (`servedMembership`).
  *  `members` is the members door's answer (`useDefinitionMembers`),
- *  undefined while it is read. Once it lists the served members, one member
- *  names the measure and gives its code, and several fill the Variables
- *  group. Until then, and when the read fails, `stat_vars.served_count`
- *  chooses the layout, and the Measure row carries no code. With membership
- *  unsettled (`served_count` null) and no list, the layout follows
- *  `stat_vars.member_count`: one exact member takes the single-variable
- *  layout, and any other count shows the Variables group, marked as a floor
- *  when `member_count_exact` is false. `member_count` counts the measure's
- *  whole family with data at the place, which can be larger than the served
- *  set (life expectancy in Kenya serves 1 of 3), and feeds the family note.
- *  Coverage's "variables" dimension counts the variables with data in the
- *  answer's rows and chooses nothing here. */
+ *  undefined while it is read. Once it lists one served member, the
+ *  Measure row names it and carries its dcid as `variableId`. Until then,
+ *  and when the read fails, `stat_vars.served_count` chooses the layout,
+ *  and the Measure row carries no id. With membership unsettled
+ *  (`served_count` null) and no list, the layout follows
+ *  `stat_vars.member_count`. `member_count` counts the measure's whole
+ *  family with data at the place, which can be larger than the served set
+ *  (life expectancy in Kenya serves 1 of 3).
+ *  `retrieved` dates the citation. */
 export const buildWhySummary = (
     spec: SpecReading,
-    part?: Pick<Part, 'warnings' | 'variable_text'> | null,
+    part?: WhyPart | null,
     members?: MembersRead | null,
+    retrieved: Date = new Date(),
 ): WhySummary => {
-    const statVars = readStatVars(spec) ?? {};
     const listed = members?.ok ? members.members : null;
     const { count, exact } = servedMembership(spec, listed) ?? { count: 0, exact: true };
     const single = exact && count === 1;
     const member = single && listed?.length === 1 ? listed[0] : null;
     const codes = new Set((part?.warnings ?? []).map((warning) => warning?.code));
+    const assumptions = part?.assumptions ?? [];
+    const placed = new Set<Assumption>();
+    const notes: string[] = [];
     const sources = spec.resolution?.resolved_sources ?? [];
+
+    // The first assumption a row states, marked as placed.
+    const place = (match: (assumption: Assumption) => boolean): Assumption | null => {
+        const found = assumptions.find(
+            (assumption) => !placed.has(assumption) && match(assumption),
+        );
+
+        if (found) placed.add(found);
+
+        return found ?? null;
+    };
 
     const name = member
         ? (member.label ?? member.dcid)
@@ -1451,73 +1462,148 @@ export const buildWhySummary = (
     const rows: WhyRow[] = [];
 
     if (measure.name) {
+        const codesRead = sourceCodes(spec);
+
         rows.push({
             label: 'Measure',
             value: measure.name,
-            ...(measure.code ? { code: measure.code } : {}),
+            ...(measure.code ? { variableId: measure.code } : {}),
+            ...(codesRead ? { sourceCodes: codesRead } : {}),
         });
     }
 
-    if (measure.unit) {
-        rows.push({ label: 'Unit', value: measure.unit });
-    }
-
-    if (measure.years) {
-        rows.push({ label: 'Years', value: measure.years });
-    }
-
-    const open = openRoles(spec, codes);
     const roleOrder: EntityRoleKey[] = ['observationAbout', 'origin', 'destination'];
 
+    // The roles the request bound, each with a name it corrected.
     for (const role of roleOrder) {
-        const words = ROLE_WORDS[role];
         const labels = entityLabels(spec, role);
+        const ref = roleRef(role);
+        const corrected = labels.length
+            ? place((a) => a.kind === 'name_corrected' && a.binding_ref === ref)
+            : null;
 
         if (labels.length > 0) {
-            rows.push({
-                label: labels.length === 1 ? words.one : words.many,
-                value: labels.join(', '),
-            });
-        } else if (open.includes(role)) {
-            const scope =
-                role === 'observationAbout'
-                    ? placeScope(spec)
-                    : { many: words.many, count: dimensionCount(spec, words.dimension) };
-
-            rows.push({
-                label: scope.many,
-                value:
-                    scope.count != null
-                        ? `All ${formatCount(scope.count)} with data`
-                        : 'All with data',
-            });
+            rows.push(
+                factRow(
+                    labels.length === 1 ? ROLE_WORDS[role].one : ROLE_WORDS[role].many,
+                    labels.join(', '),
+                    corrected ? `${corrected.text}.` : null,
+                    ref,
+                ),
+            );
         }
     }
 
-    const variables: WhyVariables | null =
-        single || count === 0
-            ? null
-            : {
-                  count,
-                  exact,
-                  summary: variablesSummary(count, exact, spec.shape?.label),
-                  members: whyMembers(members),
-                  breakdown: variablesBreakdown(spec),
-              };
+    // The slots a declared default filled.
+    for (const assumption of assumptions) {
+        const label =
+            assumption.kind === 'declared_default' && slotLabelOf(spec, assumption.binding_ref);
+
+        if (label && place((a) => a === assumption)) {
+            rows.push(
+                factRow(
+                    capitalise(label),
+                    capitalise(assumption.text),
+                    `No ${lowerFirst(label)} was named, so the answer uses the default for this measure.`,
+                    assumption.binding_ref,
+                ),
+            );
+        }
+    }
+
+    // The roles the request left open, read across every member with data.
+    const open = openRoles(spec, codes);
+
+    for (const role of roleOrder.filter((entry) => open.includes(entry))) {
+        const words = ROLE_WORDS[role];
+        const ref = roleRef(role);
+        const scope =
+            role === 'observationAbout'
+                ? placeScope(spec)
+                : {
+                      noun: words.noun,
+                      many: words.many,
+                      count: dimensionCount(spec, words.dimension),
+                  };
+        const kind = role === 'observationAbout' ? 'place_scope' : 'open_role';
+        const assumed = place((a) => a.kind === kind && a.binding_ref === ref);
+
+        rows.push(
+            factRow(
+                scope.many,
+                scope.count != null ? `All ${formatCount(scope.count)} with data` : 'All with data',
+                assumed
+                    ? `No ${role === 'observationAbout' ? 'place' : words.noun} was named.`
+                    : null,
+                ref,
+            ),
+        );
+    }
+
+    // A year the question left open.
+    // The single-year sentence goes only beside the headline year itself.
+    // Beside a range it would contradict the row's value.
+    const year = spec.headline?.year;
+    const yearOpen =
+        codes.has('time_window_defaulted') || spec.headline?.year_named === false
+            ? year != null && measure.years === `Latest is ${year}`
+                ? `No year was named, so the figures are for ${year}, the latest year with data.`
+                : 'No year was named, so every year with data is included.'
+            : null;
+
+    if (measure.years) {
+        rows.push(factRow('Years', measure.years, yearOpen, 'when:'));
+    } else if (yearOpen) {
+        notes.push(yearOpen);
+    }
+
+    if (measure.unit) {
+        rows.push(factRow('Unit', measure.unit, facetNote(spec.facets?.unit), 'unit:'));
+    }
+
+    const method = spec.facets?.measurementMethod;
+    const methodText = method ? facetChoiceValue('measurementMethod', method) : null;
+
+    if (method && methodText) {
+        rows.push(factRow('Method', methodText, facetNote(method), 'method:'));
+    }
+
+    notes.push(
+        ...assumptions
+            .filter((assumption) => !placed.has(assumption))
+            .map((assumption) => assumptionSentence(spec, assumption)),
+    );
+
+    const breakdown = single ? [] : variablesBreakdown(spec);
+    const sourceNote = sources.length === 1 ? facetNote(spec.facets?.provenance) : null;
 
     return {
         measure,
         rows,
-        family: count > 0 ? familyNote(count, statVars) : null,
-        variables,
+        inside:
+            breakdown.length > 0
+                ? {
+                      summary: spec.shape?.label ? `All ${spec.shape.label}.` : null,
+                      breakdown,
+                  }
+                : null,
         sources: sources.map((ref) => ({
             ref: ref.ref,
             label: ref.label ?? ref.ref,
             documentation: ref.documentation ?? null,
-            origin: provenanceOrigin(ref),
-            licence: sources.length === 1 ? licenceText(spec) : null,
+            meta: [
+                provenanceOrigin(ref),
+                sources.length === 1 ? licenceText(spec) : null,
+                sourceNote ? lowerFirst(sourceNote.replace(/\.$/, '')) : null,
+            ].filter((entry): entry is string => !!entry),
         })),
-        chosen: whyChoices(spec),
+        sourceBindingRef: sourceNote ? 'source:' : null,
+        cite: citation(
+            spec,
+            sources.map((ref) => ref.label ?? ref.ref),
+            retrieved.getFullYear(),
+        ),
+        notes,
     };
 };
 
@@ -1550,11 +1636,14 @@ const roleScope = (count: number, members: number | null, noun: string): string 
     return `${formatCount(count)} of the ${formatCount(members)} ${noun}s that have data`;
 };
 
-/** The sentence under the headline for a role-bearing answer, composed
- *  from `headline` and `coverage.dimensions` so each number names its
- *  scope: the year the counts are for, the values in that year, and each
- *  open role's count against the members with data in any year. A named
- *  provider or recipient closes the sentence. Null without a headline. */
+/** The answer line "About this answer" opens with, composed from
+ *  `headline` and `coverage.dimensions`: the year the figures are for, then,
+ *  when the answer reads a role across its members, the values in that year
+ *  and each open role's count against the members with data in any year. A
+ *  named provider or recipient has its own row, so the line leaves it out,
+ *  and an answer with no open role ends at the year. Null without a
+ *  headline, and for a single year the question named and no open role,
+ *  which the Years row already states. */
 export const coverageSentence = (spec: SpecReading): string | null => {
     const headline = spec?.headline;
 
@@ -1562,24 +1651,18 @@ export const coverageSentence = (spec: SpecReading): string | null => {
         return null;
     }
 
-    const open: string[] = [];
-    const named: string[] = [];
-
-    for (const [role, property] of HEADLINE_ROLES) {
-        const labels = entityLabels(spec, role);
+    const open = HEADLINE_ROLES.flatMap(([role, property]) => {
         const count = headline.role_counts?.[property];
 
-        if (labels.length > 0) {
-            named.push(`${role === 'origin' ? 'from' : 'to'} ${andList(labels)}`);
-        } else if (count != null) {
-            const words = ROLE_WORDS[role];
-            const scope = roleScope(count, dimensionCount(spec, words.dimension), words.noun);
+        if (entityLabels(spec, role).length > 0 || count == null) return [];
 
-            open.push(`${role === 'origin' ? 'from' : 'for'} ${scope}`);
-        }
-    }
+        const words = ROLE_WORDS[role];
+        const scope = roleScope(count, dimensionCount(spec, words.dimension), words.noun);
 
-    const counted = [countNoun(headline.observations, 'value'), ...open, ...named].join(' ');
+        return [`${role === 'origin' ? 'from' : 'for'} ${scope}`];
+    });
+    const counted =
+        open.length > 0 ? [countNoun(headline.observations, 'value'), ...open].join(' ') : null;
     const window = headline.named_window;
     const oneYearNamed =
         headline.year_named &&
@@ -1587,14 +1670,14 @@ export const coverageSentence = (spec: SpecReading): string | null => {
         window?.end_year === headline.year;
 
     if (oneYearNamed) {
-        return `${headline.year} has ${counted}.`;
+        return counted ? `${headline.year} has ${counted}.` : null;
     }
 
     const latest = headline.year_named
         ? 'the latest year with data in the years asked'
         : 'the latest year with data';
 
-    return `${headline.year} is ${latest}, with ${counted}.`;
+    return `${headline.year} is ${latest}${counted ? `: ${counted}` : ''}.`;
 };
 
 /** The caption over the preview table for each part whose preview the API

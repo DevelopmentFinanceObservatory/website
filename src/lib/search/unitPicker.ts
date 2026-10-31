@@ -170,13 +170,13 @@ export const currentUnit = (spec: SpecReading | null | undefined): CurrentUnit =
 };
 
 /**
- * The rows `conversion` offers: US dollars, euros, then the currency of
- * each role's one entity, named by
- * that entity ("Guatemala's currency: Guatemalan quetzals"), then the
- * answer's own currency when it is none of those, so the current unit
- * always has a row. One row per code: a role currency that is also a
- * preset takes the preset's place under the entity's name. An entity with
- * no name is named by its role, and the row requests the role's currency.
+ * The rows `conversion` offers: US dollars, then the currency of each
+ * role's one entity, named by that entity ("Guatemala's currency:
+ * Guatemalan quetzals"), then the answer's own currency when it is none of
+ * those, so the current unit always has a row. Each code has one row, and
+ * a role currency that is also a preset takes the preset's place under the
+ * entity's name. An entity with no name is named by its role, and the row
+ * requests the role's currency.
  */
 export const unitPresets = (
     spec: SpecReading | null | undefined,
@@ -185,13 +185,15 @@ export const unitPresets = (
     if (!conversion) return [];
 
     const offered = new Set(conversion.currencies.map((currency) => currency.code));
-    const presets: UnitPreset[] = ['USD', 'EUR']
-        .filter((code) => offered.has(code))
-        .map((code) => ({
-            code,
-            label: capitalise(currencyName(code, conversion)),
-            currency: code,
-        }));
+    const presets: UnitPreset[] = offered.has('USD')
+        ? [
+              {
+                  code: 'USD',
+                  label: capitalise(currencyName('USD', conversion)),
+                  currency: 'USD',
+              },
+          ]
+        : [];
     const entities = spec?.entities ?? [];
 
     for (const [role, code] of Object.entries(conversion.role_currencies ?? {}) as [
@@ -227,6 +229,14 @@ export const unitPresets = (
     }
 
     return presets;
+};
+
+/** The search field's label: how many currencies `conversion` offers, so
+ *  the field reads as a search over any currency. */
+export const currencySearchLabel = (conversion: UnitConversion): string => {
+    const count = conversion.currencies.length;
+
+    return `Search ${count} ${count === 1 ? 'currency' : 'currencies'} by name or code`;
 };
 
 /** Every currency `conversion` offers whose name or code holds `query`, by

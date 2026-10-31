@@ -158,3 +158,50 @@ export const refineItemName = (item: RefineItem): string => {
 
     return item.slot.key?.label ?? 'value';
 };
+
+/** The token menus a heading draws, by plan index, each with the refs it
+ *  offers a choice for. */
+export type MenuChanges = ReadonlyMap<number, ReadonlySet<string>>;
+
+/** True when two MenuChanges hold the same refs at the same indices. */
+export const sameMenuChanges = (a: MenuChanges, b: MenuChanges): boolean =>
+    a.size === b.size &&
+    [...a].every(
+        ([index, refs]) =>
+            b.get(index)?.size === refs.size && [...refs].every((ref) => b.get(index)?.has(ref)),
+    );
+
+/** Where a binding is changed: the menu of the token at plan `index`, or
+ *  Refine at entry `key`. */
+export type ChangeTarget = { kind: 'token'; index: number } | { kind: 'refine'; key: string };
+
+/** Where binding `bindingRef` of part `partIndex` is changed: the menu of
+ *  the visible token that states it (statingTokenIndex) when that menu
+ *  offers a choice for it, else Refine at the entry that lists it. Null
+ *  when neither offers another value. A departure's action and a fact's
+ *  Change in "About this answer" both route through this rule. */
+export function changeTarget({
+    plan,
+    partCount,
+    partIndex,
+    bindingRef,
+    menuChanges,
+    refineKeys,
+}: {
+    plan: readonly SentenceToken[] | null | undefined;
+    partCount: number;
+    partIndex: number;
+    bindingRef: string;
+    menuChanges: MenuChanges;
+    refineKeys: ReadonlySet<string>;
+}): ChangeTarget | null {
+    const index = statingTokenIndex(plan, partCount, partIndex, bindingRef);
+
+    if (index !== -1) {
+        return menuChanges.get(index)?.has(bindingRef) ? { kind: 'token', index } : null;
+    }
+
+    const key = refineKey(partIndex, bindingRef);
+
+    return refineKeys.has(key) ? { kind: 'refine', key } : null;
+}
