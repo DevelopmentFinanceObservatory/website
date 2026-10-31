@@ -615,8 +615,14 @@ const redraw = (widget: Widget, payload: Record<string, unknown>): Widget | unde
         }
         case 'table': {
             const table = payloadTable(payload);
+            const held = { ...widget };
 
-            return table && { ...widget, ...payloadCells(table), data: tableData(table) };
+            // The new cells name their own `namesColumn`, or none when the
+            // table has no `stat_var` column. The previous revision's would
+            // shorten the new table's places as if they were variable names.
+            delete held.namesColumn;
+
+            return table && { ...held, ...payloadCells(table), data: tableData(table) };
         }
         case 'text': {
             const body = payloadNoteText(payload);

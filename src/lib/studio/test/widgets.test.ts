@@ -421,6 +421,30 @@ test("a table names each row's unit when units mix, and charts with it when the 
         ['Unreadable', '2023', '—', '5'],
     ]);
 
+    const byRecipient = asTable(
+        reviseWidget(mixed, {
+            ...revisedFrame(2),
+            payload: envelope({
+                type: 'table',
+                title,
+                columns: [
+                    { key: 'recipient', label: 'Recipient' },
+                    { key: 'value', label: 'Value' },
+                ],
+                rows: ['South Sudan', 'South Africa'].map((recipient) => ({
+                    series_id: 's_x',
+                    dimensions: { recipient },
+                    period: '2023',
+                    source_ref: SOURCE,
+                    unit: 'USD',
+                    value: 5,
+                })),
+            }),
+        }),
+    );
+
+    assert.equal(byRecipient.namesColumn, undefined);
+
     const constant = asTable(
         widgetFromComponent(frame('table', tableOf([row('ODA', 'USD'), row('Grants', 'USD')]))),
     );
