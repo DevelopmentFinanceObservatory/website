@@ -13,6 +13,7 @@ import {
     methodPicker,
     openEntityEntry,
     optionLabel,
+    roleRef,
     slotOffersChoice,
     slotOptionsEntry,
     sourceSlotOptions,
@@ -122,7 +123,7 @@ export function refineItems({
         });
 
         const roles = (['origin', 'destination'] as const).flatMap((role): RefineItem[] => {
-            const ref = `${role}:`;
+            const ref = roleRef(role);
             const entry = openEntityEntry(spec, entityOptionsBySpec, role);
 
             return entry && !stated(ref) && (entry.options.length > 0 || entry.truncated)

@@ -113,6 +113,29 @@ test("refineItems reads each part's own tokens in a multi-part answer and leaves
     };
 
     assert.deepEqual(refineOf(unstated, donors).at(-1)?.key, refineKey(0, 'origin:'));
+
+    // An open recipient role is keyed by the where: binding its token
+    // states, the ref About this answer's Change routes by: "Kenya" states
+    // it, and without that token Refine lists it after the origin.
+    const recipients: EntityOptionsBySpec = {
+        [aid]: [...donors[aid]!, { ...donors[aid]![0]!, role: 'destination' }],
+    };
+    const roleKeys = (plan: SentenceToken[]) =>
+        refineOf({ ...answer, plan }, recipients)
+            .filter((item) => item.kind === 'entity')
+            .map((item) => item.key);
+
+    assert.deepEqual(roleKeys(answer.plan), []);
+    assert.deepEqual(
+        roleKeys(
+            answer.plan.filter(
+                (token) =>
+                    token.part_index !== 0 ||
+                    (token.binding_ref !== 'origin:' && token.binding_ref !== 'where:'),
+            ),
+        ),
+        [refineKey(0, 'origin:'), refineKey(0, 'where:')],
+    );
 });
 
 test('refineItems lists a bound binding no token states with its current value, and leaves out one whose only option is its current value', () => {

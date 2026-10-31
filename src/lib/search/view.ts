@@ -1280,9 +1280,11 @@ const assumptionSentence = (spec: SpecReading, assumption: Assumption): string =
         : `The question left this open, so the answer uses ${text}, the default for this measure.`;
 };
 
-// The binding a role's row edits: the origin's own, and the where slot the
-// destination shares with the subject.
-const roleRef = (role: EntityRoleKey): string => (role === 'origin' ? 'origin:' : 'where:');
+/** The binding ref of entity role `role`, as the wire's tokens, departures
+ *  and assumptions name it: the origin's own, and the where slot the
+ *  destination shares with the subject. About rows and Refine entries both
+ *  key a role by it. */
+export const roleRef = (role: EntityRoleKey): string => (role === 'origin' ? 'origin:' : 'where:');
 
 // The values each axis lists before the rest are counted as "more".
 const BREAKDOWN_VALUES = 5;
