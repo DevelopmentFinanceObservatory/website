@@ -135,6 +135,10 @@ const ChartCard = ({
     // entry and drops out of the plot (the scale re-fits live).
     const [hiddenSeries, setHiddenSeries] = useState<number[]>([]);
 
+    // The series the plot's hover names. The legend fades the others' entries.
+    const [focusedSeries, setFocusedSeries] = useState<number | null>(null);
+    const showLegend = legendShown(widget);
+
     const toggleSeries = (index: number) =>
         setHiddenSeries((prev) =>
             prev.includes(index) ? prev.filter((other) => other !== index) : [...prev, index],
@@ -152,9 +156,11 @@ const ChartCard = ({
                 unit: widget.unit,
                 rows,
                 fontsReady,
+                legend: showLegend,
                 onLayout,
+                onFocus: setFocusedSeries,
             }),
-        [widget, scale, theme, rows, fontsReady, onLayout],
+        [widget, scale, theme, rows, fontsReady, showLegend, onLayout],
     );
     const barData = useMemo(
         () => ({
@@ -194,8 +200,6 @@ const ChartCard = ({
     // away (QA-57).
     const names = useMemo(() => legendLabels(widget.series.map((s) => s.label)), [widget]);
 
-    const showLegend = legendShown(widget);
-
     return (
         <article ref={cardRef} className={cardStyles.card}>
             <CardHead {...extras} />
@@ -216,6 +220,9 @@ const ChartCard = ({
                                 className={classNames(
                                     styles.legendItem,
                                     hiddenSeries.includes(index) && styles.legendOff,
+                                    focusedSeries !== null &&
+                                        focusedSeries !== index &&
+                                        styles.legendDim,
                                 )}
                                 onClick={() => toggleSeries(index)}
                             >

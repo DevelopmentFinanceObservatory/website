@@ -138,6 +138,25 @@ test('formatAxis and tableFromChart compact a number, rolling up at a letter bou
     ]);
 });
 
+test('tableFromChart marks the series names as the names column only when they run down', () => {
+    const chart = (categories: string[]): ChartWidget => ({
+        kind: 'chart',
+        id: 'cmp_1',
+        chartType: 'bar',
+        title: 'Aid',
+        categories,
+        series: [
+            { label: 'Gross ODA disbursements', values: [1, 2] },
+            { label: 'Net ODA disbursements', values: [3, 4] },
+        ],
+    });
+
+    // One year: one row per series, its names down the first column.
+    assert.equal(tableFromChart(chart(['2023'])).namesColumn, 0);
+    // Categories down (countries, years): names that must stay whole.
+    assert.equal(tableFromChart(chart(['South Sudan', 'South Africa'])).namesColumn, undefined);
+});
+
 test('formatAxis writes a percentage with its sign, two decimals at most and no letter', () => {
     const cases: [number, string | undefined, string][] = [
         [5.333, 'Percent', '5.33%'],

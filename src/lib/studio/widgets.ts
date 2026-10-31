@@ -240,7 +240,7 @@ const payloadPlot = (chart: PayloadChart): Plot => {
 };
 
 // A table card's cells: the sketch pivots periods down and series across.
-type Cells = Pick<TableWidget, 'columns' | 'rows'>;
+type Cells = Pick<TableWidget, 'columns' | 'rows' | 'namesColumn'>;
 
 const sketchCells = (facts: FactSummary): Cells | null => {
     const plot = sketchPlot(facts);
@@ -271,6 +271,7 @@ const STATUS_LABELS: Record<string, string> = {
 // The payload's resolved table, row for row, in its own column order. A
 // Unit column joins before Value when the rows mix units, as a table over
 // GDP and population does. A status row names its status in the Value cell.
+// The `stat_var` dimension is the column of variable names.
 const payloadCells = (table: PayloadTable): Cells => {
     const units = table.rows.map((row) => payloadUnitText(row.unit));
     const columns =
@@ -280,8 +281,11 @@ const payloadCells = (table: PayloadTable): Cells => {
               )
             : table.columns;
 
+    const namesColumn = columns.findIndex(({ key }) => key === 'stat_var');
+
     return {
         columns: columns.map((column) => column.label),
+        ...(namesColumn >= 0 ? { namesColumn } : {}),
         rows: table.rows.map((row, index) =>
             columns.map((column) => {
                 const { key } = column;

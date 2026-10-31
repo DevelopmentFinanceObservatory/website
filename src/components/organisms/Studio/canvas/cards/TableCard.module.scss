@@ -2,6 +2,24 @@
 @use "mixins" as *;
 @use "shared" as *;
 
+// What every row shares, said once above the table. The negative margin
+// pulls it toward the table, inside the card's gap.
+.caption {
+    @include font-size(10px, 1.35);
+
+    flex-shrink: 0;
+    margin-bottom: rem(-6);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+
+    b {
+        font-weight: 500;
+        color: var(--th-text, var(--color-charcoal));
+    }
+}
+
 // Rows past the cell-fixed card height scroll inside the card.
 .tableWrap {
     flex: 1 1 auto;
@@ -77,4 +95,38 @@
 
 .numeric {
     white-space: nowrap;
+}
+
+// Each header sorts its column. The button is see-through, so the th's
+// weave shows. It inherits the th's type and alignment.
+.sort {
+    display: inline-flex;
+    gap: rem(3);
+    align-items: center;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:focus-visible {
+        outline: 1px solid currentColor;
+        outline-offset: 2px;
+    }
+}
+
+// The arrow shows on the sorted column, and on hover where a press would
+// sort up.
+.arrow {
+    opacity: 0;
+    transition: opacity 0.15s $ease-out;
+
+    .sort:hover &,
+    .sort:focus-visible &,
+    th[aria-sort] & {
+        opacity: 1;
+    }
 }

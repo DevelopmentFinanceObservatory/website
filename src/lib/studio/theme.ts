@@ -49,10 +49,12 @@ const DEFAULT_SERIES: SeriesPair[] = [
     ['#bb6fdc', '#cf94e8'],
     ['#662d6e', '#7f4487'],
     ['#463138', '#5e474f'],
-    // Seventh and eighth (QA-84): the hues the six leave open — teal and
-    // gold — so eight lines never share a colour.
+    // Seventh to tenth, the hues the six leave open (teal, gold, green and
+    // brown), so ten lines never share a colour.
     ['#2a9d8f', '#35c5b4'],
     ['#c9a227', '#dbb848'],
+    ['#6b9e3f', '#86b55a'],
+    ['#9b6a3c', '#b5865a'],
 ];
 
 export const THEME_PRESETS: ThemePreset[] = [
@@ -83,10 +85,15 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#5c5c5c', '#757575'],
             ['#a9a9a9', '#bdbdbd'],
             ['#404040', '#585858'],
-            // A monochrome theme has only lightness to space eight series
-            // out with: these two fill its widest gaps.
+            // A monochrome theme has only lightness to space series out
+            // with, so these fill its widest gaps.
             ['#737373', '#8d8d8d'],
             ['#e0e0e0', '#ebebeb'],
+            // The ninth and tenth sit in the one gap left, below the accent
+            // and between it and #404040. The first eight keep their places,
+            // so saved charts keep their colours.
+            ['#000000', '#1a1a1a'],
+            ['#2d2d2d', '#434343'],
         ],
         swatches: ['#a3a3a3', '#d9d9d9', '#6b6b6b', '#1c1b1a', '#f4f4f4'],
     },
@@ -103,6 +110,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#b58fc9', '#c9adda'],
             ['#d99f9f', '#e7c4c4'],
             ['#a8b86b', '#bcc98d'],
+            ['#6fb3b8', '#8cc2c6'],
+            ['#8fa6e0', '#a5b8e6'],
         ],
         swatches: ['#2a2a30', '#1e1e22', '#d8d5c8', '#e6d3a3', '#111114'],
     },
@@ -119,6 +128,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#59616a', '#767e88'],
             ['#3fb8a0', '#61c9b4'],
             ['#d99a3f', '#e1b06a'],
+            ['#e07a6a', '#e69588'],
+            ['#8a6fc9', '#a18cd4'],
         ],
         swatches: ['#1d2a36', '#b3d9ea', '#1a3550', '#4fc3f7', '#eaf3f8'],
     },
@@ -135,6 +146,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#4a7c59', '#659374'],
             ['#a8683f', '#c18259'],
             ['#c9a227', '#dbb848'],
+            ['#5a7fa8', '#7b99b9'],
+            ['#8a5a7a', '#a17b95'],
         ],
         swatches: ['#2c5f2d', '#c8d9b0', '#4a7c59', '#1f3a1f', '#eef3e8'],
     },
@@ -151,6 +164,8 @@ export const THEME_PRESETS: ThemePreset[] = [
             ['#c8d3f6', '#d8e0f8'],
             ['#d9a23f', '#e1b76a'],
             ['#2f9e8f', '#3bc5b2'],
+            ['#e0705a', '#e68d7b'],
+            ['#8e5bc9', '#a57cd4'],
         ],
         swatches: ['#2b4fd8', '#c8d3f6', '#4d7cf6', '#14224a', '#eceff8'],
     },
@@ -245,28 +260,41 @@ const hslToHex = (h: number, sat: number, l: number): string => {
     return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
 };
 
-// An eight-series palette spun off one accent: the accent itself first,
+// A ten-series palette spun off one accent. The accent itself comes first,
 // then shades stepping around the hue wheel and through lightness so
-// neighbours stay distinguishable. Eight, because that is the most lines a
-// chart draws and none of them may share a colour (QA-84). Each series'
-// lighter partner is the weave's second square.
+// neighbours stay distinguishable. Ten, so a chart of up to ten series never
+// draws two the same colour. Each series' lighter partner is the weave's
+// second square.
 export const paletteFromAccent = (accent: string): SeriesPair[] => {
     const [h, sat, l] = hexToHsl(accent);
-    // The derived seven carry their own floors. The accent's own shade is
-    // whatever the user picked — black, grey, anything — and stepping the
+    // The derived nine carry their own floors. The accent's own shade is
+    // whatever the user picked (black, grey, anything), and stepping the
     // hue of a colour with no saturation, or lightening one that is nearly
-    // black, used to give seven shades of the same thing (QA-84).
+    // black, would give shades of the same thing without them.
     const spread = Math.min(0.9, Math.max(0.42, sat));
     // Away from the ends, where lightness has nowhere left to move.
     const anchor = Math.min(0.62, Math.max(0.36, l));
-    // Hue all the way round in even steps, lightness riding a short cycle
-    // on top, so neighbours differ in both.
-    const lift = [0, 0.12, -0.08, 0.06, -0.12, 0.1, -0.04];
+    // Each entry is the hue step from the accent and the lightness lift.
+    // The first seven go round the wheel in 45° steps, lightness riding a
+    // short cycle on top, so neighbours differ in both. The last two sit in
+    // the gaps either side of the accent's hue, lighter than it. They come
+    // last so the first eight colours of a saved chart hold.
+    const steps: [number, number][] = [
+        [45, 0],
+        [90, 0.12],
+        [135, -0.08],
+        [180, 0.06],
+        [225, -0.12],
+        [270, 0.1],
+        [315, -0.04],
+        [22.5, 0.16],
+        [337.5, 0.08],
+    ];
 
     return [
         [accent, hslToHex(h, sat, Math.min(0.92, l + 0.1))],
-        ...lift.map((dl, index): SeriesPair => {
-            const hue = h + (index + 1) * 45;
+        ...steps.map(([step, dl]): SeriesPair => {
+            const hue = h + step;
             const light = Math.min(0.78, Math.max(0.3, anchor + dl));
 
             return [

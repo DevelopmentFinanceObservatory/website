@@ -412,6 +412,7 @@ test("a table names each row's unit when units mix, and charts with it when the 
         [...unitTexts, null],
     );
     assert.deepEqual(mixed.columns, ['Indicator', 'Period', 'Unit', 'Value']);
+    assert.equal(mixed.namesColumn, 0);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
