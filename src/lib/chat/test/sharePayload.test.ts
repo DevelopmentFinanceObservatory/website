@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import gallery from '../../../content/gallery/index.ts';
 import type { SavedConversation } from '../history.ts';
-import { LIVE_CARD_TITLE, studioShareBody } from '../sharePayload.ts';
+import { LIVE_CARD_TITLE, liveSlotsOf, studioShareBody } from '../sharePayload.ts';
 
 const FRAME = { spec_id: 'spec_aid', content_version: 'cv_1' };
 
@@ -61,17 +63,45 @@ test('a live canvas sends a slot per shown data card and holds every data card',
 });
 
 test('a live share is refused with the shown data cards that have no ref', () => {
+    const canvas = saved([
+        chart('c1', { ref: { component_id: 'cmp_a', revision: 2 } }),
+        chart('c2'),
+    ]);
+
+    assert.deepEqual(studioShareBody({ saved: canvas, kind: 'canvas', mode: 'live' }), {
+        unslotted: ['c2'],
+    });
+    assert.throws(() => liveSlotsOf(canvas));
+});
+
+// The slots each live gallery item's prod share holds in dfo-apis, as the
+// share migration gives them (`slotCanvas` on the stored canvas, read from
+// the prod share pages). A card the canvas does not show has none.
+const GALLERY_SLOTS: Record<string, Record<string, number>> = {
+    upYQIqiL: { cmp_01M4R52ZWTCTQZM7Q2B6PYXJJB: 1, cmp_01M4R5306ZSAZTXVG7W6E2N51D: 2 },
+    yvuDeHc4: { cmp_01M4RD1ZV835QM8N6KBM0APJEC: 1 },
+    kng5T7HJ: { cmp_01M4R69BAF1F0P3DPX21F5ZVGX: 1 },
+    '4M8WwZFV': { cmp_01M4RBGGH9Q0BAM1EN9GPTK1W1: 1, cmp_01M4RBRR2XE6TRP8HTAZH3WQNH: 2 },
+};
+
+test('a live gallery item refreshes each card from the slot its prod share holds', () => {
+    const live = gallery.filter((item) => 'live' in item && item.live);
+
     assert.deepEqual(
-        studioShareBody({
-            saved: saved([
-                chart('c1', { ref: { component_id: 'cmp_a', revision: 2 } }),
-                chart('c2'),
-            ]),
-            kind: 'canvas',
-            mode: 'live',
-        }),
-        { unslotted: ['c2'] },
+        live.map((item) => item.sharedFrom).toSorted(),
+        Object.keys(GALLERY_SLOTS).toSorted(),
     );
+
+    for (const item of live) {
+        const session = JSON.parse(
+            readFileSync(
+                new URL(`../../../content/gallery/${item.slug}.json`, import.meta.url),
+                'utf8',
+            ),
+        ) as SavedConversation;
+
+        assert.deepEqual(liveSlotsOf(session), GALLERY_SLOTS[item.sharedFrom], item.slug);
+    }
 });
 
 test('a snapshot keeps a card with no ref as stored, with its numbers', () => {

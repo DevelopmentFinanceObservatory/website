@@ -138,6 +138,28 @@ export const slotCanvas = (saved: SavedConversation, mode: ShareMode): SlottedCa
     return { slots, widgets };
 };
 
+/**
+ * The slot (from 1) of each card a live share of `saved` has a slot for, by
+ * card id: the slots `slotCanvas` gives the share, so they match those a
+ * share made or imported from the same canvas holds in dfo-apis. Throws when
+ * a shown data card has no ref, since such a canvas cannot be live.
+ */
+export const liveSlotsOf = (saved: SavedConversation): Record<string, number> => {
+    const slotted = slotCanvas(saved, 'live');
+
+    if ('unslotted' in slotted) {
+        throw new Error(`live card ${slotted.unslotted[0]} has no component ref in dfo-apis' form`);
+    }
+
+    return Object.fromEntries(
+        slotted.widgets.flatMap((widget) => {
+            const { id, slot } = widget as { id: string; slot?: number };
+
+            return slot === undefined ? [] : [[id, slot + 1]];
+        }),
+    );
+};
+
 // The title a live card share gets when its sharer set none. The page title
 // and the embed's title come from the share, and a live card's own title is
 // withheld from the page with its data, so it stays out of them too.

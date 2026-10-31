@@ -16,6 +16,7 @@ import {
     slotRefreshResponse,
     type SlotDeps,
 } from '../slotCards.ts';
+import { canvasWidgetsOf } from '../../chat/canvas.ts';
 import { APIS, componentRead, DATASET_FRAME, MOVED_FRAME } from './fixtures/live-backend-stub.ts';
 
 type Call = { method: string; path: string; headers: Headers; signal?: AbortSignal | null };
@@ -391,6 +392,31 @@ test("a live share's data cards leave the server held, with their slot's ref", a
     assert.deepEqual(view.undrawn, []);
     assert.equal(calls.length, 0);
 });
+
+for (const mode of ['live', 'snapshot'] as const) {
+    test(`a ${mode} share's pages show only the cards its canvas shows, which leaves out a card held with no slot`, async () => {
+        // A newer turn hid c2, which is not pinned, so the live share held it
+        // with no slot.
+        const record = recordOf(mode);
+        const payload = record.payload as { widgets: Record<string, unknown>[] };
+
+        payload.widgets = payload.widgets.map((widget) =>
+            widget['id'] === 'c2' ? widget : { ...widget, turn: 2 },
+        );
+
+        const { deps } = depsOf(record);
+        const view = await sharedViewOfRecord(deps, record);
+
+        assert.deepEqual(
+            view.saved.widgets.map(({ id }) => id),
+            ['c1', 'c2', 'n1'],
+        );
+        assert.deepEqual(
+            canvasWidgetsOf(view.saved).map(({ id }) => id),
+            ['c1', 'n1'],
+        );
+    });
+}
 
 test("a live card is its slot's card from dfo-apis, under the slot's ETag and caching", async () => {
     for (const [served, status] of [
