@@ -95,11 +95,10 @@ export type TurnViewInput = {
     entry: ActivityEntry;
     // Card titles by widget id, renames applied.
     cardTitles: Record<string, string>;
-    // The plan the user approved for this turn, if any.
-    plan?: { title: string; steps: readonly unknown[] } | null;
-    // When the user approved it; without it the plan heads the rail and
-    // stays out of the timed log.
-    approvedAt?: number;
+    // The plan the user approved for this turn, if any; the entry holds when.
+    // Without that time the plan heads the rail and stays out of the timed
+    // log. A stored plan may lack its steps, as `approvedFromFrame` allows.
+    plan?: { title: string; steps?: readonly unknown[] | null } | null;
     // Whether this is the newest turn, whether its stream is running, and
     // whether a plan or question waits on the user. Any other turn that never
     // closed (an older one, or one restored from a save) reads as ended.
@@ -160,6 +159,16 @@ export const detailOf = (tool: ActivityTool): string | null => {
     return first.length > DETAIL_MAX ? `${first.slice(0, DETAIL_MAX - 1)}…` : first || null;
 };
 
+/**
+ * Whether `later` started after `failed` was done. By arrival order when the
+ * entry holds it; a save without it compares the clock, the later step's
+ * start against the failed try's start plus its duration.
+ */
+const startedAfter = (later: ActivityTool, failed: ActivityTool): boolean =>
+    later.startOrder != null && failed.settleOrder != null
+        ? later.startOrder > failed.settleOrder
+        : later.startedAt >= failed.startedAt + (failed.durationMs ?? 0);
+
 /** Each folded failed try mapped to the later step that took its place. */
 const foldRetries = (tools: ActivityTool[]): Map<ActivityTool, ActivityTool> => {
     const retriedBy = new Map<ActivityTool, ActivityTool>();
@@ -174,10 +183,10 @@ const foldRetries = (tools: ActivityTool[]): Map<ActivityTool, ActivityTool> => 
                 other.name === tool.name &&
                 other.args === tool.args &&
                 (other.state === 'complete' || isOpen(other)) &&
-                // A retry starts once the failed try has ended; a step
-                // that ran beside it (parallel searches share a label)
-                // is another step.
-                other.startedAt >= tool.startedAt + (tool.durationMs ?? 0),
+                // A retry starts once the failed try is done; a step that
+                // ran beside it (parallel searches share a label) is
+                // another step.
+                startedAfter(other, tool),
         );
 
         if (later) {
@@ -202,7 +211,6 @@ export const turnView = ({
     entry,
     cardTitles,
     plan,
-    approvedAt,
     isLast,
     thinking,
     waiting,
@@ -260,8 +268,8 @@ export const turnView = ({
         (tool.state === 'failed' && !retriedBy.has(tool)) ||
         (isWork(tool) && !retriedBy.has(tool));
 
-    const steps = tools.filter(onRail).map(stepRow);
-    const rows: RailRow[] = [...steps];
+    const railTools = tools.filter(onRail);
+    const rows: RailRow[] = railTools.map(stepRow);
     const log: LogLine[] = tools.map((tool) => {
         const retried = retriedBy.get(tool);
 
@@ -290,17 +298,22 @@ export const turnView = ({
             kind: 'plan',
             key: 'plan',
             title: plan.title,
-            stepCount: plan.steps.length,
+            stepCount: plan.steps?.length ?? 0,
         };
         // The plan goes before the first step that started after the
-        // approval, or heads the rail when that time is unknown.
-        const railAt =
-            approvedAt == null ? 0 : steps.findIndex((step) => step.startedAt > approvedAt);
+        // approval: by arrival order when the entry holds it, else by the
+        // clock. Without an approval time it heads the rail.
+        const { approvedAt, approvedOrder } = entry;
+        const afterApproval = (tool: ActivityTool) =>
+            approvedOrder != null && tool.startOrder != null
+                ? tool.startOrder > approvedOrder
+                : approvedAt != null && tool.startedAt > approvedAt;
+        const railAt = approvedAt == null ? 0 : railTools.findIndex(afterApproval);
 
         rows.splice(railAt < 0 ? rows.length : railAt, 0, planRow);
 
         if (approvedAt != null) {
-            const logAt = log.findIndex((line) => line.at > approvedAt);
+            const logAt = tools.findIndex(afterApproval);
 
             log.splice(logAt < 0 ? log.length : logAt, 0, {
                 key: 'plan',

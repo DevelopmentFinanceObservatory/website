@@ -354,7 +354,6 @@ const ActivityLog = ({
             entry,
             cardTitles,
             plan: plans[entry.turn],
-            approvedAt: entry.approvedAt,
             isLast: index === activity.length - 1,
             thinking,
             waiting,

@@ -182,6 +182,44 @@ test('parallel steps with one label stay apart: a failure beside a success stand
     assert.equal(result.outcome.notDone, 1);
 });
 
+test('arrival order decides a retry when the clock cannot', async (t) => {
+    await t.test('a retry that arrived in the same chunk as the failure folds', () => {
+        const tools = [
+            step(1_000, FETCH, 'get_data', 'failed', {
+                summary: FETCH_FAIL,
+                durationMs: 2_000,
+                startOrder: 1,
+                settleOrder: 2,
+            }),
+            step(1_000, FETCH, 'get_data', 'complete', { startOrder: 3, settleOrder: 4 }),
+        ];
+        const result = view({ entry: entry(tools, 9_000) });
+
+        assert.deepEqual(
+            stepRows(result.rows).map((row) => [row.state, row.retry?.attempts.length]),
+            [['complete', 2]],
+        );
+        assert.equal(result.outcome.notDone, 0);
+    });
+
+    await t.test('a step that started before the failure settled stays apart', () => {
+        const tools = [
+            step(1_000, 'Searching for data', 'search', 'failed', {
+                durationMs: 0,
+                startOrder: 1,
+                settleOrder: 3,
+            }),
+            step(9_000, 'Searching for data', 'search', 'complete', {
+                startOrder: 2,
+                settleOrder: 4,
+            }),
+        ];
+        const result = view({ entry: entry(tools, 9_500) });
+
+        assert.equal(result.outcome.notDone, 1);
+    });
+});
+
 test('a standing failure keeps its advice; a recovered try drops it', () => {
     const standing = view({
         entry: entry([step(1, FETCH, 'get_data', 'failed', { summary: FETCH_FAIL })], 5),
@@ -270,7 +308,7 @@ test('the approved plan sits before the first step after the approval', async (t
     const plan = { title: 'External debt since 2010', steps: [{}, {}, {}] };
 
     await t.test('with the approval time', () => {
-        const result = view({ entry: entry(tools, 9), plan, approvedAt: 4 });
+        const result = view({ entry: { ...entry(tools, 9), approvedAt: 4 }, plan });
 
         assert.deepEqual(
             result.rows.map((row) => row.kind),
@@ -281,6 +319,34 @@ test('the approved plan sits before the first step after the approval', async (t
             ['complete', 'plan', 'complete', 'complete'],
         );
         assert.equal(result.rows.find((row) => row.kind === 'plan')?.stepCount, 3);
+    });
+
+    await t.test('by arrival order when the clock ties', () => {
+        // A buffered chunk: everything arrived in one millisecond.
+        const ordered = [
+            step(5, 'Searching for data', 'search', 'complete', { startOrder: 1, settleOrder: 2 }),
+            step(5, 'Starting the plan', null, 'complete', { startOrder: 4, settleOrder: 5 }),
+            step(5, FETCH, 'get_data', 'complete', { startOrder: 6, settleOrder: 7 }),
+        ];
+        const result = view({
+            entry: { ...entry(ordered, 9), approvedAt: 5, approvedOrder: 3 },
+            plan,
+        });
+
+        assert.deepEqual(
+            result.rows.map((row) => row.kind),
+            ['step', 'plan', 'step'],
+        );
+        assert.deepEqual(
+            result.log.map((line) => line.state),
+            ['complete', 'plan', 'complete', 'complete'],
+        );
+    });
+
+    await t.test('a saved plan without its steps counts none', () => {
+        const result = view({ entry: entry(tools, 9), plan: { title: 'Saved without steps' } });
+
+        assert.equal(result.rows.find((row) => row.kind === 'plan')?.stepCount, 0);
     });
 
     await t.test('without it the plan heads the rail and stays out of the log', () => {

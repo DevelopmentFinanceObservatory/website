@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
     endTurnActivity,
+    recordApproval,
+    recordStep,
     restoreActivity,
     type ActivityEntry,
     type SavedActivityEntry,
@@ -557,38 +559,9 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         // One Activity line per step_id. A later frame for the
                         // same step closes or updates the line it opened.
-                        patchActivity((entry) => {
-                            const existing = entry.tools.find((tool) => tool.id === frame.step_id);
-                            const patch = {
-                                summary: frame.detail ?? undefined,
-                                durationMs: frame.duration_ms ?? undefined,
-                                widgetId: frame.produced?.component_id,
-                                state: frame.status,
-                            };
+                        const arrived = Date.now();
 
-                            if (!existing) {
-                                return {
-                                    ...entry,
-                                    tools: [
-                                        ...entry.tools,
-                                        {
-                                            id: frame.step_id,
-                                            name: frame.label,
-                                            args: frame.tool ?? undefined,
-                                            startedAt: Date.now(),
-                                            ...patch,
-                                        },
-                                    ],
-                                };
-                            }
-
-                            return {
-                                ...entry,
-                                tools: entry.tools.map((tool) =>
-                                    tool.id === frame.step_id ? { ...tool, ...patch } : tool,
-                                ),
-                            };
-                        });
+                        patchActivity((entry) => recordStep(entry, frame, arrived));
 
                         break;
                     }
@@ -696,7 +669,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                             ...prev,
                             messages: withApprovedPlan(prev.messages, approved),
                             activity: prev.activity.map((entry) =>
-                                entry.turn === turn ? { ...entry, approvedAt } : entry,
+                                entry.turn === turn ? recordApproval(entry, approvedAt) : entry,
                             ),
                         }));
                         break;

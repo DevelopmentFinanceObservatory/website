@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
     endTurnActivity,
+    recordApproval,
+    recordStep,
     restoreActivity,
     type ActivityEntry,
     type StepState,
@@ -111,4 +113,50 @@ test('end turn: open steps settle by how the turn ended', async (t) => {
             assert.deepEqual(after[0], before[0], 'other turns are untouched');
         });
     }
+});
+
+test('record: steps and the approval are numbered in arrival order', () => {
+    const frame = (step_id: string, status: StepState) => ({
+        step_id,
+        label: step_id,
+        status,
+        tool: 'search',
+    });
+    let entry: ActivityEntry = { turn: 1, prompt: 'p', startedAt: 0, tools: [] };
+
+    entry = recordStep(entry, frame('a', 'running'), 5);
+    entry = recordStep(entry, frame('b', 'running'), 5);
+    entry = recordStep(entry, frame('a', 'failed'), 5);
+    entry = recordApproval(entry, 5);
+    entry = recordStep(entry, frame('c', 'complete'), 5);
+    // A later frame for a settled step keeps its first settle.
+    entry = recordStep(entry, frame('a', 'failed'), 5);
+
+    assert.deepEqual(
+        entry.tools.map((tool) => [tool.id, tool.startOrder, tool.settleOrder]),
+        [
+            ['a', 1, 3],
+            ['b', 2, undefined],
+            ['c', 5, 5],
+        ],
+    );
+    assert.equal(entry.approvedOrder, 4);
+});
+
+test('restore: the arrival order is kept', () => {
+    const [restored] = restoreActivity([
+        {
+            turn: 1,
+            prompt: 'p',
+            startedAt: 0,
+            approvedOrder: 3,
+            tools: [{ ...step('s1', 'complete'), startOrder: 1, settleOrder: 2 }],
+        },
+    ]);
+
+    assert.equal(restored?.approvedOrder, 3);
+    assert.deepEqual(
+        restored?.tools.map((tool) => [tool.startOrder, tool.settleOrder]),
+        [[1, 2]],
+    );
 });
