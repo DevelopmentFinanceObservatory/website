@@ -25,7 +25,7 @@ import {
     type PanelStep,
     type PanelTerm,
 } from '@/lib/studio/descriptionBlocks';
-import { type CiteLink, panelViewOf } from '@/lib/studio/infoPanel';
+import { panelViewOf } from '@/lib/studio/infoPanel';
 
 type SourceDoc = { name: string | null; description: string | null; url: string | null };
 
@@ -483,7 +483,7 @@ export type CitedSnapshot = { id: string; servedAt?: string };
 
 // Where asking for a snapshot link to cite the card stands: being made, or
 // refused.
-type CiteAsk = 'minting' | 'failed' | 'limited';
+export type CiteAsk = 'minting' | 'failed' | 'limited';
 
 // Where the owner's snapshot link for the citation stands: none asked for,
 // asked for (`CiteAsk`), or made (`CitedSnapshot`).
@@ -514,7 +514,8 @@ const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
  * On a share whose slot draws the card (`shared`) it serves the rows that
  * slot serves. The card's
  * owner (`canShare`) can add a snapshot link to the citation, which
- * `onCiteLink` makes and `citeLink` hands back, so the card keeps one link
+ * `onCiteLink` asks for and `citeLink` reports: being made, refused or made.
+ * The caller keeps it, so the card keeps one link, and one request for it,
  * however often the panel opens on it. The full citation is retrieved
  * today. On a snapshot share (`snapshot`) it names the share's link and the
  * day the card's data dates from.
@@ -539,24 +540,14 @@ const CardInfoPanel = ({
     // The snapshot share the card is shown on.
     snapshot?: CitedSnapshot;
     canShare?: boolean;
-    // The snapshot link already made to cite the card.
-    citeLink?: CitedSnapshot;
-    // Makes a snapshot of the card for its citation, whose link comes back
-    // as `citeLink`.
-    onCiteLink?: () => Promise<CiteLink>;
+    // Where the snapshot link to cite the card stands, when it was asked for.
+    citeLink?: CitedSnapshot | CiteAsk;
+    // Asks for a snapshot of the card for its citation, whose progress and
+    // link come back as `citeLink`.
+    onCiteLink?: () => void;
 }) => {
-    // How the snapshot-link request stands for one card. It resets when the
-    // panel opens or closes or shows another card.
-    const [ask, setAsk] = useState<{ id: string; state: CiteAsk } | null>(null);
-    const [openedFor, setOpenedFor] = useState({ open, id: widget?.id });
-
-    if (openedFor.open !== open || openedFor.id !== widget?.id) {
-        setOpenedFor({ open, id: widget?.id });
-        setAsk(null);
-    }
-
-    const link: CiteLinkState = citeLink ?? ask?.state ?? 'idle';
-    const cited = snapshot ?? citeLink;
+    const link: CiteLinkState = citeLink ?? 'idle';
+    const cited = snapshot ?? (typeof citeLink === 'object' ? citeLink : undefined);
     const view =
         info &&
         panelViewOf(info, {
@@ -567,21 +558,6 @@ const CardInfoPanel = ({
         });
     const download = widget && <CardDownload widget={widget} shared={shared} />;
 
-    const addLink = async () => {
-        if (!onCiteLink || !widget || link === 'minting') {
-            return;
-        }
-
-        const { id } = widget;
-
-        setAsk({ id, state: 'minting' });
-        const made = await onCiteLink();
-
-        setAsk((now) =>
-            now?.id === id ? ('id' in made ? null : { id, state: made.refusal }) : now,
-        );
-    };
-
     return (
         <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">
             {view?.kind === 'described' && (
@@ -589,7 +565,7 @@ const CardInfoPanel = ({
                     view={view}
                     download={download}
                     link={link}
-                    onAddLink={onCiteLink && widget ? () => void addLink() : null}
+                    onAddLink={onCiteLink && widget ? onCiteLink : null}
                 />
             )}
             {view?.kind === 'legacy' && <LegacyPanel view={view} open={open} download={download} />}

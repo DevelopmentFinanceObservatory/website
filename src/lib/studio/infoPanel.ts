@@ -162,3 +162,26 @@ export const citeLinkKey = (widget: Widget): string => {
         frame ? `${frame.spec_id}@${frame.content_version}` : '',
     ].join('|');
 };
+
+/** Makes the snapshot link to cite the card kept under `key` (`citeLinkKey`),
+ *  or hands back the one already being made for it. A second ask while the
+ *  first is in flight, from the same panel or from More Info opened again,
+ *  makes no second public share. Once the first settles, another ask makes a
+ *  new one, which is how a failed link is tried again. */
+export const citeLinkOnce = (
+    inFlight: Map<string, Promise<CiteLink>>,
+    key: string,
+    make: () => Promise<CiteLink>,
+): Promise<CiteLink> => {
+    const running = inFlight.get(key);
+
+    if (running) {
+        return running;
+    }
+
+    const made = make().finally(() => inFlight.delete(key));
+
+    inFlight.set(key, made);
+
+    return made;
+};

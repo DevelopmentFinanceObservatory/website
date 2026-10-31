@@ -31,7 +31,9 @@ import {
 import {
     cardDescription,
     citeLinkKey,
+    type CiteLink,
     citeLinkOf,
+    citeLinkOnce,
     logRefusedDescriptions,
     panelViewOf as panelViewOn,
 } from '../infoPanel.ts';
@@ -529,6 +531,35 @@ test('a snapshot made for the citation is read from the share it came to', () =>
             { refusal: 'failed' },
         ],
     );
+});
+
+test('a cite link in flight is reused for its key and made again once it settles', async () => {
+    const inFlight = new Map<string, Promise<CiteLink>>();
+    const made: string[] = [];
+    const settle: Array<(link: CiteLink) => void> = [];
+    const make = (key: string) => () => {
+        made.push(key);
+
+        return new Promise<CiteLink>((resolve) => settle.push(resolve));
+    };
+
+    // A second ask for the same card, as from More Info opened again, joins
+    // the first; another card makes its own.
+    const first = citeLinkOnce(inFlight, 'w1', make('w1'));
+    const again = citeLinkOnce(inFlight, 'w1', make('w1'));
+    const other = citeLinkOnce(inFlight, 'w2', make('w2'));
+
+    assert.equal(again, first);
+    assert.notEqual(other, first);
+    assert.deepEqual(made, ['w1', 'w2']);
+
+    settle[0]({ refusal: 'failed' });
+    assert.deepEqual(await first, { refusal: 'failed' });
+
+    // Settled, the card can be tried again; the other card's ask is untouched.
+    void citeLinkOnce(inFlight, 'w1', make('w1'));
+    assert.deepEqual(made, ['w1', 'w2', 'w1']);
+    assert.deepEqual([...inFlight.keys()], ['w2', 'w1']);
 });
 
 test('a cite link is kept per card, revision and frame version', () => {
