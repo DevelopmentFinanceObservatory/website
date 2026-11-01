@@ -903,9 +903,9 @@ export async function fetchSearchCatalogue(
 export type DatasetOptionState = FormatOptionModel['state'];
 
 /** One enrichment the options document offers. `in_long_layout` says the long layout
- *  already writes it (a role's names, a party role's kind fields); the vendored client
- *  predates the field, and an API deployed before it leaves it out. */
-export type DatasetEnrichment = EnrichmentOptionModel & { in_long_layout?: boolean };
+ *  already writes it (a role's names, a party role's kind fields); an API deployed
+ *  before the field leaves it out. */
+export type DatasetEnrichment = EnrichmentOptionModel;
 
 export type DatasetOutputOptions = Omit<OutputOptionsModel, 'enrichments'> & {
     enrichments: DatasetEnrichment[];

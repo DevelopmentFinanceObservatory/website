@@ -948,7 +948,7 @@ packages:
       postcss-selector-parser: ^7.1.1
 
   '@developmentfinance/client@file:vendor/developmentfinance-client-0.1.0.tgz':
-    resolution: {integrity: sha512-BWxtOIB6AwYMn26yxtRykRyyEetVMNsRpBWhRl3anPkhSBq+ygoQ+JY7BC8kXdRZUo3RBivoGSWP2M1A8+zPMw==, tarball: file:vendor/developmentfinance-client-0.1.0.tgz}
+    resolution: {integrity: sha512-RgX4ndGu3KNM86AO+zKVhSwKqAQoBj70br2wgMYc/A8qe/tN8E3E6Gr6rHND/M4q6UcG10h3m3mL23G8zMYMSQ==, tarball: file:vendor/developmentfinance-client-0.1.0.tgz}
     version: 0.1.0
     engines: {node: '>=22.18'}
     peerDependencies:
