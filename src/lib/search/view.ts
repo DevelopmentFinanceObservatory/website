@@ -938,11 +938,13 @@ const servedMembership = (
 
 /** Whether the answer may serve exactly one variable, the one case where
  *  the members door's list changes "About this answer" (it names the
- *  variable and its id). */
+ *  variable and its id). Unsettled membership (`served_count` null) may
+ *  serve one variable whatever the family counts, so only the list can
+ *  tell. */
 export const maybeOneVariable = (spec: SpecReading): boolean => {
-    const membership = servedMembership(spec);
+    const statVars = readStatVars(spec);
 
-    return membership?.count === 1 && membership.exact;
+    return statVars != null && (statVars.served_count == null || statVars.served_count === 1);
 };
 
 /** How many StatVars the answer serves: the settled served count, else the

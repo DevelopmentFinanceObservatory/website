@@ -54,7 +54,8 @@ const TextCard = ({
 
     return (
         <article ref={cardRef} className={classNames(styles.card, styles.cardText)}>
-            <div ref={innerRef} className={styles.textInner}>
+            {/* data-card-frame: a press in the gaps between head and body moves the card (cardPress.ts). */}
+            <div ref={innerRef} className={styles.textInner} data-card-frame="">
                 <CardHead {...extras} />
                 <p className={styles.textBody}>{widget.body}</p>
             </div>

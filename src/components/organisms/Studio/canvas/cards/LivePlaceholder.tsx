@@ -24,7 +24,8 @@ type LivePlaceholderProps = {
  * shows the card's own outline with a sweep across it. On failure it shows
  * a sentence in the card's place, and "Try again" when asking again can
  * succeed (`liveCardFailure`). Neither state shows a number.
- * `data-live-status` and `data-live-code` name the state.
+ * `data-live-status` and `data-live-code` name the state. The title and the
+ * bones are the card's drag handle, as CardHead is on a drawn card.
  */
 const LivePlaceholder = ({ title, kind, live }: LivePlaceholderProps) => {
     const { state } = live;
@@ -39,7 +40,11 @@ const LivePlaceholder = ({ title, kind, live }: LivePlaceholderProps) => {
                 data-live-status="error"
                 data-live-code={state.code}
             >
-                {title && <p className={cardStyles.cardTitle}>{title}</p>}
+                {title && (
+                    <p className={cardStyles.cardTitle} data-drag-handle="">
+                        {title}
+                    </p>
+                )}
                 <div className={styles.failure}>
                     <p className={styles.failureText} role="status">
                         {failure.message}
@@ -62,9 +67,15 @@ const LivePlaceholder = ({ title, kind, live }: LivePlaceholderProps) => {
             aria-label={title ? `${title}: ${loading.toLowerCase()}` : loading}
         >
             {title ? (
-                <p className={cardStyles.cardTitle}>{title}</p>
+                <p className={cardStyles.cardTitle} data-drag-handle="">
+                    {title}
+                </p>
             ) : (
-                <span className={classNames(styles.bone, styles.boneTitle)} aria-hidden="true" />
+                <span
+                    className={classNames(styles.bone, styles.boneTitle)}
+                    aria-hidden="true"
+                    data-drag-handle=""
+                />
             )}
             <span
                 className={classNames(
@@ -72,6 +83,7 @@ const LivePlaceholder = ({ title, kind, live }: LivePlaceholderProps) => {
                     kind === 'key_number' ? styles.boneNumber : styles.boneBody,
                 )}
                 aria-hidden="true"
+                data-drag-handle=""
             />
             <p className={styles.status} role="status">
                 {loading}…

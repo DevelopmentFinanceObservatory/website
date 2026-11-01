@@ -17,8 +17,8 @@ import PromptForm from '../prompt/PromptForm';
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
-import type { ApprovedPlan } from '@/lib/studio/plan';
-import { isPrompt, shareMarkAfter } from '@/lib/studio/transcript';
+import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
+import { shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
 
@@ -121,16 +121,9 @@ const ChatPanel = ({
     const cardIcons = Object.fromEntries(
         chat.widgets.map((widget) => [widget.id, iconOf(widget, views[widget.id])]),
     );
-    const plans: Record<number, ApprovedPlan> = {};
-    let promptCount = 0;
-
-    for (const message of chat.messages) {
-        if (isPrompt(message)) {
-            promptCount += 1;
-        } else if (message.role === 'bot' && message.plan) {
-            plans[promptCount] = message.plan;
-        }
-    }
+    // Each message's turn, as its Activity entry and its cards number it.
+    const turns = messageTurns(chat.messages, chat.activity);
+    const plans = plansByTurn(chat.messages, turns);
 
     // A Chat + Canvas share point sits after message `index`?
     const sharedAfter = (index: number) =>
@@ -151,10 +144,7 @@ const ChatPanel = ({
                 >
                     <div ref={scrollRef} className={styles.chatScroll}>
                         {chat.messages.map((message, index) => {
-                            // The turn this bot message answers = the number
-                            // of prompts before it (send() numbers turns the
-                            // same way).
-                            const turn = chat.messages.slice(0, index).filter(isPrompt).length;
+                            const turn = turns[index];
 
                             return (
                                 <Fragment key={index}>

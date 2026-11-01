@@ -717,6 +717,60 @@ test('a computed card leads with its calculation, then its sources, steps and wh
     );
 });
 
+test('each division names its own sides, and a card made by two divisions states no single calculation', () => {
+    // The quotient vector with a third input and a share of the quotient in
+    // it: Get A, Get B, Get C, A ÷ B, then that quotient as a share of C.
+    const input = vectorInput('description-computed-quotient-credited.json');
+    const [getA, getB, quotient] = input['steps'] as Record<string, unknown>[];
+    const getC = {
+        id: 's3',
+        op: 'retrieve',
+        input: { id: 'spec_c', content_version: 'cv_c', label: 'Total ODA' },
+        options: {},
+        text: 'Retrieved total ODA.',
+    };
+    const share = {
+        id: 's5',
+        op: 'share',
+        inputs: { numerator: 's4', denominator: 's3' },
+        text: 'Took the ratio as a share of total ODA.',
+    };
+    const view = describedPanel(
+        described({
+            ...input,
+            sources: [
+                ...(input['sources'] as object[]),
+                { ref: 'spec_c', label: 'Total ODA', content_version: 'cv_c' },
+            ],
+            steps: [getA, getB, getC, { ...quotient, id: 's4' }, share],
+        }),
+    );
+
+    assert.equal(view.calculation, null);
+    assert.deepEqual(
+        view.made?.steps.map(({ key, verb, object }) => [key, verb, object]),
+        [
+            ['s1', 'Get', 'Gross ODA disbursements'],
+            ['s2', 'Get', 'Gross national income'],
+            ['s3', 'Get', 'Total ODA'],
+            ['s4', 'Divide', 'Gross ODA disbursements ÷ Gross national income'],
+            // One side is the quotient, which no input names.
+            ['s5', null, 'Took the ratio as a share of total ODA.'],
+        ],
+    );
+    // With no calculation to name them, all three inputs are listed beside
+    // the sources they credit.
+    assert.deepEqual(view.inputs, [
+        'Gross ODA disbursements',
+        'Gross national income',
+        'Total ODA',
+    ]);
+    assert.deepEqual(
+        view.sources.map(({ name }) => name),
+        ['OECD Creditor Reporting System (CRS)', 'World Bank World Development Indicators'],
+    );
+});
+
 test('an unknown unit has no row and a sentence in Keep in mind; a unit of none has neither', () => {
     const input = vectorInput('description-card-revision.json');
     const about = input['about'] as Record<string, unknown>;

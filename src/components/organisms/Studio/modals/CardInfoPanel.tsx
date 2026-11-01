@@ -377,7 +377,7 @@ const DescribedPanel = ({
             </div>
         )}
 
-        {(view.sources.length > 0 || view.inputs.length > 0) && (
+        {(view.from || view.sources.length > 0 || view.inputs.length > 0) && (
             <div className={styles.block} data-block="sources">
                 {view.sources.length > 0 && (
                     <>

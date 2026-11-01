@@ -207,6 +207,16 @@
             cursor: auto;
             user-select: text;
         }
+
+        // A layout wrapper such as TextCard's textInner is frame in its gaps;
+        // its rows keep the text cursor and inherit its text selection.
+        > [data-card-frame] {
+            cursor: grab;
+
+            > :not([data-drag-handle]) {
+                cursor: auto;
+            }
+        }
     }
 
     [data-drag-handle] {

@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { ActivityEntry, ActivityTool, StepState } from '../activity.ts';
+import type { ApprovedPlan } from '../plan.ts';
+
+import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 import {
     causeOf,
     detailOf,
+    messageTurns,
     outcomeParts,
+    plansByTurn,
     spanText,
     triesText,
     turnView,
@@ -510,5 +515,105 @@ test('the outcome line leaves out a zero count of cards and flags only a turn wi
     );
     await t.test('a live turn with no cards yet', () =>
         assert.deepEqual(keys({ state: 'live', startedAt: 0, cards: 0 }), [['length', false]]),
+    );
+});
+
+test('message turns count back from the last Activity entry', async (t) => {
+    const plan = (title: string) => ({ title }) as ApprovedPlan;
+    const turns = (count: number) =>
+        Array.from({ length: count }, (_, index) => ({ ...entry([]), turn: index + 1 }));
+    const exchange = (prompt: string, title?: string): ChatMessage[] => [
+        { role: 'user', text: prompt },
+        { role: 'bot', text: '', ...(title && { plan: plan(title) }) },
+    ];
+    const read = (
+        messages: ChatMessage[],
+        activity: ActivityEntry[],
+        widgets: { id: string; turn: number }[] = [],
+    ) => {
+        const numbered = messageTurns(messages, activity);
+
+        return {
+            turns: numbered,
+            plans: plansByTurn(messages, numbered),
+            // Each reply's cards, as the chat finds them by the reply's turn.
+            ...(widgets.length && {
+                cards: messages.flatMap((message, index) =>
+                    message.role === 'bot'
+                        ? [
+                              widgets
+                                  .filter((widget) => widget.turn === numbered[index])
+                                  .map((widget) => widget.id),
+                          ]
+                        : [],
+                ),
+            }),
+        };
+    };
+
+    await t.test('a live conversation numbers each prompt and its reply alike', () =>
+        assert.deepEqual(read([...exchange('one'), ...exchange('two', 'B')], turns(2)), {
+            turns: [1, 1, 2, 2],
+            plans: { 2: plan('B') },
+        }),
+    );
+
+    // A card share saves an empty transcript and Activity with `turnCount: 1`,
+    // so a fork's first prompt opens turn 2 and its card is numbered 2.
+    await t.test('a fork of a card share numbers its first reply from the saved count', () =>
+        assert.deepEqual(
+            read(exchange('two', 'B'), [{ ...entry([]), turn: 2 }], [{ id: 'w', turn: 2 }]),
+            {
+                turns: [2, 2],
+                plans: { 2: plan('B') },
+                cards: [['w']],
+            },
+        ),
+    );
+
+    // A canvas share keeps the owner's `turnCount`, here 5.
+    await t.test('a fork of a canvas share numbers its first reply from the saved count', () =>
+        assert.deepEqual(
+            read(exchange('six', 'F'), [{ ...entry([]), turn: 6 }], [{ id: 'w', turn: 6 }]),
+            {
+                turns: [6, 6],
+                plans: { 6: plan('F') },
+                cards: [['w']],
+            },
+        ),
+    );
+
+    await t.test("more prompts than the last entry's turn count from turn 1", () =>
+        assert.deepEqual(read([...exchange('one'), ...exchange('two', 'B')], turns(1)), {
+            turns: [1, 1, 2, 2],
+            plans: { 2: plan('B') },
+        }),
+    );
+
+    await t.test('a clarify answer continues its turn', () =>
+        assert.deepEqual(
+            read(
+                [
+                    { role: 'bot', text: 'Ask about development finance.' },
+                    { role: 'user', text: 'one' },
+                    { role: 'bot', text: 'Which?' },
+                    { role: 'user', text: 'Kenya', answer: true },
+                    { role: 'bot', text: '', plan: plan('A') },
+                ],
+                turns(1),
+            ),
+            { turns: [0, 1, 1, 1, 1], plans: { 1: plan('A') } },
+        ),
+    );
+
+    await t.test('a save made before Activity was kept counts from turn 1', () =>
+        assert.deepEqual(read([...exchange('one', 'A'), ...exchange('two')], []), {
+            turns: [1, 1, 2, 2],
+            plans: { 1: plan('A') },
+        }),
+    );
+
+    await t.test('a restore with no prompts has no turns or plans', () =>
+        assert.deepEqual(read([], turns(1)), { turns: [], plans: {} }),
     );
 });

@@ -760,12 +760,13 @@ const Studio = ({
                                   citeLinkOf(
                                       await save.createShare('card', infoWidget.id, 'snapshot'),
                                   ),
-                              ).then((link) =>
-                                  setCiteLinks((now) => ({
-                                      ...now,
-                                      [key]: 'id' in link ? link : link.refusal,
-                                  })),
-                              );
+                              )
+                                  .then((link): CitedSnapshot | CiteAsk =>
+                                      'id' in link ? link : link.refusal,
+                                  )
+                                  .then((settled) =>
+                                      setCiteLinks((now) => ({ ...now, [key]: settled })),
+                                  );
                           }
                         : undefined
                 }

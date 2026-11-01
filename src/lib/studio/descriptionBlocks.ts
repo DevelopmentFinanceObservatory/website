@@ -444,32 +444,40 @@ const ownSteps = (description: Description): ServedStep[] =>
 // The operations that divide one step's values by another's.
 const DIVIDING_OPS = new Set(['quotient', 'share']);
 
-/** What a quotient or share card divides by what: the labels of the inputs
- *  its dividing step's numerator and denominator retrieve. Null for a card
- *  with no such step, one whose sides do not name an input, and one whose
- *  sides name the same input, a share of a total whose narrowing the labels
- *  do not carry, which would read as a thing over itself. */
-export const calculationOf = (description: Description): PanelCalculation | null => {
-    const steps = ownSteps(description);
+/** What one dividing step divides by what: the labels of the inputs its
+ *  numerator and denominator retrieve. Null for a step whose sides do not
+ *  both name an input, as when a side is another step's result, and one
+ *  whose sides name the same input, a share of a total whose narrowing the
+ *  labels do not carry, which would read as a thing over itself. */
+const sidesOf = (step: ServedStep, steps: ServedStep[]): PanelCalculation | null => {
     const inputLabel = (id: string): string | null =>
-        steps.find((step) => step.id === id)?.input?.label ?? null;
-    const sides = steps.find((step) => DIVIDING_OPS.has(step.op))?.inputs;
-    const numerator = sides && inputLabel(sides.numerator);
-    const denominator = sides && inputLabel(sides.denominator);
+        steps.find((other) => other.id === id)?.input?.label ?? null;
+    const numerator = step.inputs && inputLabel(step.inputs.numerator);
+    const denominator = step.inputs && inputLabel(step.inputs.denominator);
 
     return numerator && denominator && numerator !== denominator
         ? { numerator, denominator }
         : null;
 };
 
+/** What a quotient or share card divides by what (`sidesOf`), when one
+ *  dividing step makes it. Null for a card with no such step, and for one
+ *  with several, whose figure no single pair of inputs states. */
+export const calculationOf = (description: Description): PanelCalculation | null => {
+    const steps = ownSteps(description);
+    const dividing = steps.filter((step) => DIVIDING_OPS.has(step.op));
+
+    return dividing.length === 1 ? sidesOf(dividing[0], steps) : null;
+};
+
 // A step as a verb and its object, or null for an operation the panel
 // cannot name. A retrieval says all its sentence says. The selection that
-// draws the card is shown by the years it draws. A division the card's
-// calculation does not name reads its sentence.
+// draws the card is shown by the years it draws. A division names its own
+// sides, and reads its sentence when it cannot (`sidesOf`).
 const stepRow = (
     step: ServedStep,
     description: Description,
-    calculation: PanelCalculation | null,
+    steps: ServedStep[],
 ): Pick<PanelStep, 'verb' | 'object' | 'detail'> | null => {
     const { about } = description;
     const period = about.drawn?.period ?? about.period;
@@ -482,22 +490,28 @@ const stepRow = (
 
             return object ? { verb: 'Show', object, detail: step.text } : null;
         }
-        case 'quotient':
-            return calculation
+        case 'quotient': {
+            const sides = sidesOf(step, steps);
+
+            return sides
                 ? {
                       verb: 'Divide',
-                      object: `${calculation.numerator} ÷ ${calculation.denominator}`,
+                      object: `${sides.numerator} ÷ ${sides.denominator}`,
                       detail: step.text,
                   }
                 : null;
-        case 'share':
-            return calculation
+        }
+        case 'share': {
+            const sides = sidesOf(step, steps);
+
+            return sides
                 ? {
                       verb: 'Share',
-                      object: `${calculation.numerator} of ${calculation.denominator}`,
+                      object: `${sides.numerator} of ${sides.denominator}`,
                       detail: step.text,
                   }
                 : null;
+        }
         default:
             return null;
     }
@@ -507,11 +521,10 @@ const stepRow = (
  *  step that draws the card. */
 export const stepRows = (description: Description): PanelStep[] => {
     const steps = ownSteps(description);
-    const calculation = calculationOf(description);
 
     return steps.map((step, index) => ({
         key: step.id,
-        ...(stepRow(step, description, calculation) ?? {
+        ...(stepRow(step, description, steps) ?? {
             verb: null,
             object: step.text,
             detail: null,

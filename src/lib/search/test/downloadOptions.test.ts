@@ -274,16 +274,22 @@ test('the extras list leaves out every enrichment flagged in_long_layout', () =>
             flagged('financingProvider', 'party_class', true),
             flagged('financingProvider', 'party_whole', true),
             flagged('financingProvider', 'iso3', false),
+            flagged('financingRecipient', 'label', true),
+            flagged('financingRecipient', 'iso3', false),
         ],
-        // The flag decides alone, so a default listing iso3 does not hide it.
+        // The flag decides alone, so a default listing iso3 does not hide it,
+        // and the in-file note reads the same flags.
         long_layout_defaults: ['financingProvider_iso3'],
     });
+    const groups = enrichmentGroups({ options, dimensions: flowDimensions });
 
     assert.deepEqual(
-        enrichmentGroups({ options, dimensions: flowDimensions }).flatMap((group) =>
-            group.entries.map((entry) => entry.token),
-        ),
-        ['financingProvider_iso3'],
+        groups.flatMap((group) => group.entries.map((entry) => entry.token)),
+        ['financingProvider_iso3', 'financingRecipient_iso3'],
+    );
+    assert.equal(
+        inFileNote(groups),
+        'The file already names each provider and recipient, and says what kind each provider is, such as official, private or a total.',
     );
 });
 
@@ -310,6 +316,25 @@ test('without the flag, the extras list leaves out a long_layout_defaults token'
         tokens(enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })),
         ['financingRecipient_label', 'financingRecipient_iso3'],
     );
+
+    // A listed `{column}_kind` puts the role's party fields in the file: the
+    // note says so, and the extras leave them out.
+    const kinded = enrichmentGroups({
+        options: outputOptions({
+            enrichments: [
+                enrichment('financingProvider', 'party_kind'),
+                enrichment('financingProvider', 'iso3'),
+            ],
+            long_layout_defaults: ['financingProvider_label', 'financingProvider_kind'],
+        }),
+        dimensions: flowDimensions,
+    });
+
+    assert.deepEqual(tokens(kinded), ['financingProvider_iso3']);
+    assert.equal(
+        inFileNote(kinded),
+        'The file already names each provider and says what kind each is, such as official, private or a total.',
+    );
 });
 
 test('inFileNote names the roles whose names and kinds the long layout writes', () => {
@@ -328,7 +353,19 @@ test('inFileNote names the roles whose names and kinds the long layout writes', 
 
     assert.equal(
         inFileNote(enrichmentGroups({ options, dimensions: flowDimensions })),
-        'The file already names each provider and recipient and says what kind each is, such as official, private or a total.',
+        'The file already names each provider and recipient, and says what kind each provider is, such as official, private or a total, and what kind each recipient is, such as a country or organisation, private or a total.',
+    );
+    // A role column with no known axis reads the kinds both sides share.
+    assert.equal(
+        inFileNote(
+            enrichmentGroups({
+                options: {
+                    ...options,
+                    long_layout_defaults: ['financingProvider_label', 'financingProvider_kind'],
+                },
+            }),
+        ),
+        'The file already names each financing provider and says what kind each is, such as private or a total.',
     );
     assert.equal(
         inFileNote(
@@ -338,6 +375,22 @@ test('inFileNote names the roles whose names and kinds the long layout writes', 
             }),
         ),
         'The file already names each recipient.',
+    );
+    assert.equal(
+        inFileNote(
+            enrichmentGroups({
+                options: {
+                    ...options,
+                    long_layout_defaults: [
+                        'financingProvider_label',
+                        'financingRecipient_label',
+                        'financingRecipient_kind',
+                    ],
+                },
+                dimensions: flowDimensions,
+            }),
+        ),
+        'The file already names each provider and recipient, and says what kind each recipient is, such as a country or organisation, private or a total.',
     );
     assert.equal(
         inFileNote(enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })),

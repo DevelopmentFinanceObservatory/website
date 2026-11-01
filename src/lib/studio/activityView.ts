@@ -16,6 +16,10 @@
  */
 
 import type { ActivityEntry, ActivityTool } from './activity';
+import type { ApprovedPlan } from './plan';
+import { isPrompt } from './transcript.ts';
+
+import type { ChatMessage } from '@/components/organisms/Studio/hooks/useChat';
 
 // A step this long shows its duration without a hover.
 export const SLOW_MS = 10_000;
@@ -211,6 +215,51 @@ const cardOf = (tool: ActivityTool, titles: Record<string, string>) => {
 
 const plural = (count: number, one: string, many = `${one}s`) =>
     `${count} ${count === 1 ? one : many}`;
+
+/**
+ * The turn of each message in a transcript: a prompt opens its turn, and the
+ * replies and answers after it belong to that turn. A message before any
+ * prompt has turn 0. The prompts are numbered back from the last Activity
+ * entry's turn, so the last prompt takes that turn. This holds because each
+ * prompt is appended with its entry, and a card or canvas share empties both
+ * the transcript and Activity while keeping `turnCount` (1 for a card share),
+ * from which a fork numbers its new entries and cards. Counting prompts from
+ * the start would number a fork's turns too low. A save made before Activity
+ * was kept has no entries, and a transcript holding more prompts than the last
+ * entry's turn cannot align, so both count from turn 1.
+ */
+export const messageTurns = (
+    messages: readonly ChatMessage[],
+    activity: readonly ActivityEntry[],
+): number[] => {
+    const prompts = messages.filter(isPrompt).length;
+    const dropped = Math.max(0, (activity.at(-1)?.turn ?? prompts) - prompts);
+    let seen = 0;
+
+    return messages.map((message) => {
+        if (isPrompt(message)) {
+            seen += 1;
+        }
+
+        return seen === 0 ? 0 : dropped + seen;
+    });
+};
+
+/** Each turn's approved plan, found on the reply it produced. */
+export const plansByTurn = (
+    messages: readonly ChatMessage[],
+    turns: readonly number[],
+): Record<number, ApprovedPlan> => {
+    const plans: Record<number, ApprovedPlan> = {};
+
+    messages.forEach((message, index) => {
+        if (message.role === 'bot' && message.plan && turns[index] > 0) {
+            plans[turns[index]] = message.plan;
+        }
+    });
+
+    return plans;
+};
 
 /** The view of one turn of the Activity tab. */
 export const turnView = ({

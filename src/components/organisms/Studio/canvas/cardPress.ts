@@ -2,8 +2,12 @@
  * What a press on the whiteboard does, decided in one place for both the
  * card's drag handler and the board's pan handler.
  *
- * A card moves by its head row (`[data-drag-handle]` on CardHead) and its
- * frame (the card's own box: its padding and the gaps between its rows).
+ * A card moves by its head row (`[data-drag-handle]` on CardHead and on a
+ * LivePlaceholder's title) and its frame (the card's own box: its padding and
+ * the gaps between its rows). A wrapper inside the article that only lays
+ * rows out, such as TextCard's measured `textInner`, carries
+ * `data-card-frame`: a press on the wrapper itself is frame, a press on a row
+ * inside it is that row's.
  * With a mouse or pen a press on the content clicks and selects text; with
  * touch it pans the board, as does any press on a read-only card. Controls
  * keep the press to themselves.
@@ -54,7 +58,7 @@ export const pressAction = ({ pointerType, zone, readOnly }: Press): PressAction
 // A pending drag lifts the card once the pointer has moved far enough.
 export const dragLifts = (dx: number, dy: number): boolean => Math.hypot(dx, dy) >= DRAG_THRESHOLD;
 
-type PressTarget = Pick<Element, 'closest' | 'tagName'>;
+type PressTarget = Pick<Element, 'closest' | 'hasAttribute' | 'tagName'>;
 
 export const pressZone = (target: PressTarget, box: unknown): PressZone => {
     if (target.closest(CONTROLS)) {
@@ -63,7 +67,12 @@ export const pressZone = (target: PressTarget, box: unknown): PressZone => {
 
     // The box itself answers for a filtered-out card, whose article ignores
     // the pointer.
-    if (target === box || target.tagName === 'ARTICLE' || target.closest('[data-drag-handle]')) {
+    if (
+        target === box ||
+        target.tagName === 'ARTICLE' ||
+        target.hasAttribute('data-card-frame') ||
+        target.closest('[data-drag-handle]')
+    ) {
         return 'handle';
     }
 
