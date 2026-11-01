@@ -9,13 +9,15 @@ import styles from './ChatPanel.module.scss';
 import ClarifyPicker from './ClarifyPicker';
 import PlanCard from './PlanCard';
 import StatusLine from './StatusLine';
-import type { CardView } from '../canvas/layout';
+import { iconOf } from './WidgetChips';
+import { widgetTitle, type CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
 import PromptForm from '../prompt/PromptForm';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
+import type { ApprovedPlan } from '@/lib/studio/plan';
 import { isPrompt, shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
@@ -110,6 +112,25 @@ const ChatPanel = ({
 
         setFollow('');
     };
+
+    // The Activity tab's card titles (renames applied), icons, and each turn's
+    // approved plan, found on the reply it produced.
+    const cardTitles = Object.fromEntries(
+        chat.widgets.map((widget) => [widget.id, titles[widget.id] ?? widgetTitle(widget)]),
+    );
+    const cardIcons = Object.fromEntries(
+        chat.widgets.map((widget) => [widget.id, iconOf(widget, views[widget.id])]),
+    );
+    const plans: Record<number, ApprovedPlan> = {};
+    let promptCount = 0;
+
+    for (const message of chat.messages) {
+        if (isPrompt(message)) {
+            promptCount += 1;
+        } else if (message.role === 'bot' && message.plan) {
+            plans[promptCount] = message.plan;
+        }
+    }
 
     // A Chat + Canvas share point sits after message `index`?
     const sharedAfter = (index: number) =>
@@ -278,7 +299,16 @@ const ChatPanel = ({
                     aria-hidden={tab !== 'activity'}
                 >
                     <div className={styles.chatScroll}>
-                        <ActivityLog activity={chat.activity} onViewCard={onGo} />
+                        <ActivityLog
+                            activity={chat.activity}
+                            cardTitles={cardTitles}
+                            cardIcons={cardIcons}
+                            plans={plans}
+                            thinking={chat.thinking}
+                            waiting={!!(chat.plan || chat.clarify)}
+                            onCanvas={onCanvas}
+                            onViewCard={onGo}
+                        />
                     </div>
                 </div>
             </div>
