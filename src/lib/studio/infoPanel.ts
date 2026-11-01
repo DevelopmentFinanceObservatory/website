@@ -167,7 +167,8 @@ export const citeLinkKey = (widget: Widget): string => {
  *  or hands back the one already being made for it. A second ask while the
  *  first is in flight, from the same panel or from More Info opened again,
  *  makes no second public share. Once the first settles, another ask makes a
- *  new one, which is how a failed link is tried again. */
+ *  new one, which is how a failed link is tried again. A snapshot that could
+ *  not be built or saved (`make` throws) settles as a failed link. */
 export const citeLinkOnce = (
     inFlight: Map<string, Promise<CiteLink>>,
     key: string,
@@ -179,7 +180,13 @@ export const citeLinkOnce = (
         return running;
     }
 
-    const made = make().finally(() => inFlight.delete(key));
+    const made = (async () => make())()
+        .catch((error: unknown): CiteLink => {
+            console.warn('Studio: a cite link could not be made', { key, error });
+
+            return { refusal: 'failed' };
+        })
+        .finally(() => inFlight.delete(key));
 
     inFlight.set(key, made);
 

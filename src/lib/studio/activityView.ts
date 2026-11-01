@@ -213,19 +213,21 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 /**
  * The turn of each message in a transcript: a prompt opens its turn, and the
  * replies and answers after it belong to that turn. A message before any
- * prompt has turn 0. Every turn adds its prompt and its Activity entry
- * together, and pruning a share drops them together, so the prompts left in
- * a transcript are the last turns and the last prompt is the last entry's turn.
- * A fork of a card share keeps entries whose prompts it dropped, so counting
- * prompts from the start would number its turns too low. A save made before
- * Activity was kept has no entries, and its prompts count from turn 1.
+ * prompt has turn 0. The prompts are numbered back from the last Activity
+ * entry's turn, so the last prompt takes that turn. This holds because each
+ * prompt is appended with its entry, and a card or canvas share empties both
+ * the transcript and Activity while keeping `turnCount` (1 for a card share),
+ * from which a fork numbers its new entries and cards. Counting prompts from
+ * the start would number a fork's turns too low. A save made before Activity
+ * was kept has no entries, and a transcript holding more prompts than the last
+ * entry's turn cannot align, so both count from turn 1.
  */
 export const messageTurns = (
     messages: readonly ChatMessage[],
     activity: readonly ActivityEntry[],
 ): number[] => {
     const prompts = messages.filter(isPrompt).length;
-    const dropped = (activity.at(-1)?.turn ?? prompts) - prompts;
+    const dropped = Math.max(0, (activity.at(-1)?.turn ?? prompts) - prompts);
     let seen = 0;
 
     return messages.map((message) => {

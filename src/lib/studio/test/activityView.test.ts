@@ -482,10 +482,29 @@ test('message turns count back from the last Activity entry', async (t) => {
         { role: 'user', text: prompt },
         { role: 'bot', text: '', ...(title && { plan: plan(title) }) },
     ];
-    const read = (messages: ChatMessage[], activity: ActivityEntry[]) => {
+    const read = (
+        messages: ChatMessage[],
+        activity: ActivityEntry[],
+        widgets: { id: string; turn: number }[] = [],
+    ) => {
         const numbered = messageTurns(messages, activity);
 
-        return { turns: numbered, plans: plansByTurn(messages, numbered) };
+        return {
+            turns: numbered,
+            plans: plansByTurn(messages, numbered),
+            // Each reply's cards, as the chat finds them by the reply's turn.
+            ...(widgets.length && {
+                cards: messages.flatMap((message, index) =>
+                    message.role === 'bot'
+                        ? [
+                              widgets
+                                  .filter((widget) => widget.turn === numbered[index])
+                                  .map((widget) => widget.id),
+                          ]
+                        : [],
+                ),
+            }),
+        };
     };
 
     await t.test('a live conversation numbers each prompt and its reply alike', () =>
@@ -495,13 +514,35 @@ test('message turns count back from the last Activity entry', async (t) => {
         }),
     );
 
-    // A fork of a card share keeps the Activity of turns whose prompts it
-    // dropped, and its cards keep their turns, so the reply to the prompt left
-    // takes turn 3's cards and plan.
-    await t.test('a forked restore with fewer prompts than turns aligns from the last', () =>
-        assert.deepEqual(read(exchange('three', 'C'), turns(3)), {
-            turns: [3, 3],
-            plans: { 3: plan('C') },
+    // A card share saves an empty transcript and Activity with `turnCount: 1`,
+    // so a fork's first prompt opens turn 2 and its card is numbered 2.
+    await t.test('a fork of a card share numbers its first reply from the saved count', () =>
+        assert.deepEqual(
+            read(exchange('two', 'B'), [{ ...entry([]), turn: 2 }], [{ id: 'w', turn: 2 }]),
+            {
+                turns: [2, 2],
+                plans: { 2: plan('B') },
+                cards: [['w']],
+            },
+        ),
+    );
+
+    // A canvas share keeps the owner's `turnCount`, here 5.
+    await t.test('a fork of a canvas share numbers its first reply from the saved count', () =>
+        assert.deepEqual(
+            read(exchange('six', 'F'), [{ ...entry([]), turn: 6 }], [{ id: 'w', turn: 6 }]),
+            {
+                turns: [6, 6],
+                plans: { 6: plan('F') },
+                cards: [['w']],
+            },
+        ),
+    );
+
+    await t.test("more prompts than the last entry's turn count from turn 1", () =>
+        assert.deepEqual(read([...exchange('one'), ...exchange('two', 'B')], turns(1)), {
+            turns: [1, 1, 2, 2],
+            plans: { 2: plan('B') },
         }),
     );
 

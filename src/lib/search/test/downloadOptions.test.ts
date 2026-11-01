@@ -316,6 +316,25 @@ test('without the flag, the extras list leaves out a long_layout_defaults token'
         tokens(enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })),
         ['financingRecipient_label', 'financingRecipient_iso3'],
     );
+
+    // A listed `{column}_kind` puts the role's party fields in the file: the
+    // note says so, and the extras leave them out.
+    const kinded = enrichmentGroups({
+        options: outputOptions({
+            enrichments: [
+                enrichment('financingProvider', 'party_kind'),
+                enrichment('financingProvider', 'iso3'),
+            ],
+            long_layout_defaults: ['financingProvider_label', 'financingProvider_kind'],
+        }),
+        dimensions: flowDimensions,
+    });
+
+    assert.deepEqual(tokens(kinded), ['financingProvider_iso3']);
+    assert.equal(
+        inFileNote(kinded),
+        'The file already names each provider and says what kind each is, such as official, private or a total.',
+    );
 });
 
 test('inFileNote names the roles whose names and kinds the long layout writes', () => {

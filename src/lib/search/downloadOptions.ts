@@ -61,21 +61,47 @@ export const parseDownloadChoices = (raw: string | null): DownloadChoices => {
     };
 };
 
+// The enrichment fields the long layout reads into a party role's
+// `{column}_kind` column.
+const KIND_FIELDS: readonly string[] = ['party_kind', 'party_class', 'party_whole'];
+
+/** The role column the long layout writes an enrichment field into, by its
+ *  suffix: a role's names go to `{column}_label`, its party fields to
+ *  `{column}_kind`. Null for a field the long layout writes under its own
+ *  token. */
+const longLayoutSuffix = (field: string): 'label' | 'kind' | null => {
+    if (field === 'label') {
+        return 'label';
+    }
+
+    return KIND_FIELDS.includes(field) ? 'kind' : null;
+};
+
 /**
  * Whether the long layout, the one Get Data downloads, already writes this
- * enrichment, so ticking it would add nothing. Reads the options document's
- * `in_long_layout` flag (a role's names, a party role's kind fields).
+ * enrichment, so ticking it would add nothing. The options document's
+ * `in_long_layout` flag decides where it is served. An API that leaves the
+ * flag out still lists the columns the long layout writes in
+ * `long_layout_defaults`: a label is in the file when `{column}_label` is
+ * listed, a party field (kind, class, whole) when `{column}_kind` is, and any
+ * other field when its own token is.
  */
 export const enrichmentAlreadyInFile = (
     entry: DatasetEnrichment,
     options: DatasetOutputOptions,
-): boolean =>
-    typeof entry.in_long_layout === 'boolean'
-        ? entry.in_long_layout
-        : // An API that leaves the flag out still lists the role
-          // columns the long layout writes, `{column}_label` and `{column}_kind`, in
-          // `long_layout_defaults`. A label token matches one, a party field token none.
-          (options.long_layout_defaults?.includes(entry.token) ?? false);
+): boolean => {
+    if (typeof entry.in_long_layout === 'boolean') {
+        return entry.in_long_layout;
+    }
+
+    const suffix = longLayoutSuffix(entry.field);
+
+    return (
+        options.long_layout_defaults?.includes(
+            suffix ? `${entry.column}_${suffix}` : entry.token,
+        ) ?? false
+    );
+};
 
 /** The extra columns an answer can join: `available` and `partial` alike, a
  *  partial one saying on its row which entities it leaves blank. An
@@ -213,10 +239,6 @@ const FIELD_WORDS: Record<
     },
 };
 
-// The enrichment fields the long layout reads into a party role's
-// `{column}_kind` column.
-const KIND_FIELDS: readonly string[] = ['party_kind', 'party_class', 'party_whole'];
-
 // The kinds the long layout writes for a party role, by the axis its column
 // serves: a provider is official or private, a recipient a country or
 // organisation or private, and either side can be a total. A role column with
@@ -229,25 +251,25 @@ const SHARED_KINDS = 'private or a total';
 
 /**
  * Whether the long layout writes a role column's names (`label`) or kinds
- * (the party fields). Where any of the column's enrichments of those fields
- * carries `in_long_layout`, the same flag that keeps them off the extras list,
- * the flags decide. Otherwise `long_layout_defaults` decides through the column
- * it lists (`{column}_label`, `{column}_kind`).
+ * (`kind`), by the rule `enrichmentAlreadyInFile` applies to each enrichment:
+ * where any of the column's enrichments of that suffix carries
+ * `in_long_layout`, the flags decide; otherwise `long_layout_defaults` decides
+ * through `{column}_{suffix}`.
  */
 const longLayoutWrites = (
     options: DatasetOutputOptions,
-    { column, fields, written }: { column: string; fields: readonly string[]; written: string },
+    { column, suffix }: { column: string; suffix: 'label' | 'kind' },
 ): boolean => {
     const flagged = (options.enrichments ?? []).filter(
         (entry) =>
             entry.column === column &&
-            fields.includes(entry.field) &&
+            longLayoutSuffix(entry.field) === suffix &&
             typeof entry.in_long_layout === 'boolean',
     );
 
     return flagged.length
         ? flagged.some((entry) => entry.in_long_layout)
-        : (options.long_layout_defaults?.includes(written) ?? false);
+        : (options.long_layout_defaults?.includes(`${column}_${suffix}`) ?? false);
 };
 
 type Noun = { singular: string; plural: string };
@@ -386,16 +408,8 @@ export const enrichmentGroups = ({
                 column: entry.column,
                 heading,
                 singular: heading.toLowerCase(),
-                named: longLayoutWrites(options, {
-                    column: entry.column,
-                    fields: ['label'],
-                    written: `${entry.column}_label`,
-                }),
-                kinds: longLayoutWrites(options, {
-                    column: entry.column,
-                    fields: KIND_FIELDS,
-                    written: `${entry.column}_kind`,
-                })
+                named: longLayoutWrites(options, { column: entry.column, suffix: 'label' }),
+                kinds: longLayoutWrites(options, { column: entry.column, suffix: 'kind' })
                     ? (KIND_EXAMPLES[dimension?.axis ?? ''] ?? SHARED_KINDS)
                     : null,
                 entries: [],
