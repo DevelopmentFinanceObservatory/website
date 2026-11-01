@@ -57,27 +57,46 @@ const commonSuffix = (labels: string[], prefix: number): number => {
     return length;
 };
 
+/** Labels split into the text they all share and what tells them apart. */
+export type SplitLabels = {
+    /** The shared head with its edges trimmed, empty when nothing was dropped there. */
+    prefix: string;
+    /** The shared tail with its edges trimmed, empty when nothing was dropped there. */
+    suffix: string;
+    /** Each label without the shared text, in input order. */
+    names: string[];
+};
+
 /**
- * `labels` with the text they all share removed, or the labels unchanged
- * when nothing can be dropped without losing what tells them apart.
+ * `labels` split into the text they all share and what tells them apart.
+ * When nothing can be dropped without losing what tells them apart, the
+ * names are the labels unchanged and nothing is shared.
  */
-export const legendLabels = (labels: string[]): string[] => {
+export const splitLabels = (labels: string[]): SplitLabels => {
+    const unchanged = { prefix: '', suffix: '', names: labels };
+
     if (labels.length < 2 || labels.some((label) => !label)) {
-        return labels;
+        return unchanged;
     }
 
     const prefix = commonPrefix(labels);
     const suffix = commonSuffix(labels, prefix);
 
     if (prefix + suffix === 0) {
-        return labels;
+        return unchanged;
     }
 
     const cut = labels.map((label) => trimEdges(label.slice(prefix, label.length - suffix)));
 
     if (cut.some((label) => !label) || new Set(cut).size !== new Set(labels).size) {
-        return labels;
+        return unchanged;
     }
+
+    const first = labels[0]!;
+    const shared = {
+        prefix: trimEdges(first.slice(0, prefix)),
+        suffix: trimEdges(first.slice(first.length - suffix)),
+    };
 
     // One more pass where it is free: when the leading clause alone already
     // tells every series apart, the rest is the query repeating itself.
@@ -85,5 +104,14 @@ export const legendLabels = (labels: string[]): string[] => {
     // syntax — the full name is a hover away either way.)
     const heads = cut.map((label) => trimEdges(label.split(/,\s|\s·\s/)[0] ?? ''));
 
-    return heads.every((head) => head) && new Set(heads).size === cut.length ? heads : cut;
+    return {
+        ...shared,
+        names: heads.every((head) => head) && new Set(heads).size === cut.length ? heads : cut,
+    };
 };
+
+/**
+ * `labels` with the text they all share removed, or the labels unchanged
+ * when nothing can be dropped without losing what tells them apart.
+ */
+export const legendLabels = (labels: string[]): string[] => splitLabels(labels).names;

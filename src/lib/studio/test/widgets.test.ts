@@ -412,6 +412,7 @@ test("a table names each row's unit when units mix, and charts with it when the 
         [...unitTexts, null],
     );
     assert.deepEqual(mixed.columns, ['Indicator', 'Period', 'Unit', 'Value']);
+    assert.equal(mixed.namesColumn, 0);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
@@ -419,6 +420,30 @@ test("a table names each row's unit when units mix, and charts with it when the 
         ['ODA per person, euros', '2023', 'Euro (constant 2020 prices) per Total population', '5'],
         ['Unreadable', '2023', '—', '5'],
     ]);
+
+    const byRecipient = asTable(
+        reviseWidget(mixed, {
+            ...revisedFrame(2),
+            payload: envelope({
+                type: 'table',
+                title,
+                columns: [
+                    { key: 'recipient', label: 'Recipient' },
+                    { key: 'value', label: 'Value' },
+                ],
+                rows: ['South Sudan', 'South Africa'].map((recipient) => ({
+                    series_id: 's_x',
+                    dimensions: { recipient },
+                    period: '2023',
+                    source_ref: SOURCE,
+                    unit: 'USD',
+                    value: 5,
+                })),
+            }),
+        }),
+    );
+
+    assert.equal(byRecipient.namesColumn, undefined);
 
     const constant = asTable(
         widgetFromComponent(frame('table', tableOf([row('ODA', 'USD'), row('Grants', 'USD')]))),

@@ -127,6 +127,10 @@ export type TableWidget = {
     title: string;
     columns: string[];
     rows: string[][];
+    /** The column holding variable (series) names, the only one whose
+     *  shared words the table may move to its caption. Other columns hold
+     *  places, donors or periods, whose shared words are part of the name. */
+    namesColumn?: number;
     ref?: CardRef;
     frame?: FrameRef;
     data?: CardData;
@@ -260,6 +264,7 @@ export const tableFromChart = (widget: ChartWidget): TableWidget => {
             id: widget.id,
             title: widget.title,
             columns: ['', widget.categories[0]!],
+            namesColumn: 0,
             rows: widget.series.map((series) => [
                 series.label,
                 series.values[0] != null ? cellNumber(series.values[0]!) : '—',

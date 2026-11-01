@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { legendLabels } from '../seriesLabels.ts';
+import { legendLabels, splitLabels } from '../seriesLabels.ts';
 
 const who = (category: string) =>
     `Health expenditure as a share of a reference expenditure aggregate [Health expenditure category=${category}, Reference expenditure category=Current health expenditure] / Kenya`;
@@ -62,4 +62,19 @@ test('cutting that would make two names the same leaves them whole', () => {
     const labels = ['Spend (a) / Kenya', 'Spend [a] / Kenya'];
 
     assert.deepEqual(legendLabels(labels), labels);
+});
+
+test('splitLabels returns the shared head and tail, edges trimmed', () => {
+    assert.deepEqual(
+        splitLabels([
+            'Spend [scheme=Public health, unit=USD, year=2020] / Kenya',
+            'Spend [scheme=Private care, unit=EUR, year=2021] / Kenya',
+        ]),
+        { prefix: 'Spend [scheme', suffix: 'Kenya', names: ['Public health', 'Private care'] },
+    );
+    assert.deepEqual(splitLabels(['Kenya', 'Ghana']), {
+        prefix: '',
+        suffix: '',
+        names: ['Kenya', 'Ghana'],
+    });
 });

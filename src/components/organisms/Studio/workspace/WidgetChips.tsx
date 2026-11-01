@@ -1,22 +1,23 @@
 'use client';
 
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import styles from './WidgetChips.module.scss';
-import type { CardView } from '../canvas/layout';
+import { widgetTitle, type CardView } from '../canvas/layout';
 import type { TurnWidget } from '../hooks/useChat';
 
 import Icon from '@/components/atoms/Icon/Icon';
 import type { Widget } from '@/lib/chat/widgets';
+import { cardsSummary, removableIds, type TurnCardRow } from '@/lib/studio/turnCards';
 
 /**
- * The cards a bot turn produced, listed under its text as chips (the demo
- * does the same, one line per card). Each chip names the card and says
- * whether it's on the whiteboard: "Remove" (takes it off the sheet; the
- * title click scrolls to it) or, once removed / dropped by a newer turn,
- * "Add" (puts it back, unpinned). The chevron opens the card's meta (type,
- * source, size).
+ * The cards a bot turn produced, under its text. One card is one slim row.
+ * Several collapse to one row ("6 cards") that opens into a one-line row per
+ * card. A row's title flies the canvas to the card. Remove comes up on
+ * hovering or focusing the row, and a removed card's row offers Add (puts it
+ * back, unpinned). The collapsed row's menu removes them all.
  */
 type WidgetChipsProps = {
     widgets: TurnWidget[];
@@ -27,19 +28,12 @@ type WidgetChipsProps = {
     onGo: (id: string) => void;
     onAdd: (id: string) => void;
     onRemove: (id: string) => void;
-    // A shared (read-only) transcript: the chips stay — title, meta, jump to
-    // the card — but there's no Add / Remove.
+    // A shared (read-only) transcript: the rows name the cards and fly to
+    // them, with no Add / Remove.
     readOnly?: boolean;
 };
 
-const KIND_LABEL: Record<Widget['kind'], string> = {
-    key_number: 'Key number',
-    chart: 'Chart',
-    table: 'Table',
-    text: 'Text card',
-};
-
-// The chip's icon follows the card's CURRENT visualisation, not its wire type.
+// The row's icon shows the card's current visualisation.
 const iconOf = (widget: Widget, view?: CardView): 'chart-bar' | 'chart-line' | 'chart-table' => {
     if (view) {
         return view;
@@ -56,148 +50,159 @@ const iconOf = (widget: Widget, view?: CardView): 'chart-bar' | 'chart-line' | '
     return 'chart-bar';
 };
 
-const titleOf = (widget: Widget): string =>
-    widget.kind === 'key_number' ? widget.label : widget.title;
+type GroupIcon = ReturnType<typeof iconOf> | 'menu';
 
-// "12 rows · 3 columns", "24 points × 2 series" — the card's shape at a glance.
-const sizeOf = (widget: Widget): string | null => {
-    if (widget.kind === 'chart') {
-        const points = widget.categories.length;
-        const series = widget.series.length;
+type RowActions = Pick<WidgetChipsProps, 'onGo' | 'onAdd' | 'onRemove' | 'readOnly'>;
 
-        return `${points} point${points === 1 ? '' : 's'}${
-            series > 1 ? ` × ${series} series` : ''
-        }`;
-    }
+// A card's title (the way to the card) and its state action.
+const CardRow = ({ row, onGo, onAdd, onRemove, readOnly }: { row: TurnCardRow } & RowActions) => (
+    <>
+        <button
+            type="button"
+            className={styles.title}
+            onClick={() => onGo(row.id)}
+            disabled={!row.added}
+            title={row.title}
+        >
+            {row.title}
+        </button>
+        {readOnly ? null : row.added ? (
+            <button
+                type="button"
+                className={classNames(styles.iconBtn, styles.remove, styles.onHover)}
+                onClick={() => onRemove(row.id)}
+                aria-label={`Remove “${row.title}” from the canvas`}
+                title="Remove from the canvas"
+            >
+                <Icon name="remove" className={styles.removeIcon} />
+            </button>
+        ) : (
+            <button
+                type="button"
+                className={styles.add}
+                onClick={() => onAdd(row.id)}
+                aria-label={`Add “${row.title}” back to the canvas`}
+            >
+                <span className={styles.plus} aria-hidden>
+                    +
+                </span>
+                Add
+            </button>
+        )}
+    </>
+);
 
-    if (widget.kind === 'table') {
-        return `${widget.rows.length} row${widget.rows.length === 1 ? '' : 's'} · ${
-            widget.columns.length
-        } column${widget.columns.length === 1 ? '' : 's'}`;
-    }
+const GroupMenu = ({ ids, onRemove }: { ids: string[]; onRemove: (id: string) => void }) => (
+    <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Trigger asChild>
+            <button
+                type="button"
+                className={classNames(styles.iconBtn, styles.onHover)}
+                aria-label="Card actions"
+            >
+                <Icon name="kebab" className={styles.kebabIcon} />
+            </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+            <DropdownMenu.Content
+                className={styles.menu}
+                side="bottom"
+                align="end"
+                sideOffset={4}
+                collisionPadding={10}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+            >
+                <DropdownMenu.Item asChild onSelect={() => ids.forEach(onRemove)}>
+                    <button type="button" className={styles.menuRow}>
+                        <Icon name="remove" className={styles.menuIcon} />
+                        <span className={styles.menuLabel}>
+                            Remove all {ids.length} from the canvas
+                        </span>
+                    </button>
+                </DropdownMenu.Item>
+            </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+);
 
-    return null;
-};
-
-const WidgetChip = ({
-    widget,
-    title,
-    view,
-    added,
-    onGo,
-    onAdd,
-    onRemove,
-    readOnly,
-}: {
-    widget: TurnWidget;
-    title: string;
-    view?: CardView;
-    added: boolean;
-    onGo: () => void;
-    onAdd: () => void;
-    onRemove: () => void;
-    readOnly?: boolean;
-}) => {
+const CardGroup = ({
+    rows,
+    icon,
+    ...actions
+}: { rows: TurnCardRow[]; icon: GroupIcon } & RowActions) => {
     const [open, setOpen] = useState(false);
-    const kind = view === 'chart-table' ? 'table' : view ? 'chart' : widget.kind;
-    const size = sizeOf(widget);
+    const listId = useId();
+    const removable = removableIds(rows);
 
     return (
-        <div className={classNames(styles.chip, open && styles.chipOpen)}>
-            <div className={styles.row}>
-                <Icon name={iconOf(widget, view)} className={styles.kindIcon} />
-                {/* The title is the way to the card (as in the demo's chip). */}
+        <div className={classNames(styles.chips, open && styles.chipOpen)}>
+            <div className={styles.head}>
+                <Icon name={icon} className={styles.kindIcon} />
                 <button
                     type="button"
-                    className={styles.title}
-                    onClick={onGo}
-                    disabled={!added}
-                    title={added ? 'Show on the whiteboard' : undefined}
+                    className={styles.summary}
+                    onClick={() => setOpen((prev) => !prev)}
+                    aria-expanded={open}
+                    aria-controls={listId}
                 >
-                    {title}
+                    {cardsSummary(rows)}
                 </button>
+                {!actions.readOnly && removable.length > 0 && (
+                    <GroupMenu ids={removable} onRemove={actions.onRemove} />
+                )}
+                {/* The summary is the keyboard's way in, and the chevron is
+                    its picture for the mouse. */}
                 <button
                     type="button"
                     className={styles.toggle}
                     onClick={() => setOpen((prev) => !prev)}
-                    aria-expanded={open}
-                    aria-label={open ? 'Hide details' : 'Show details'}
+                    tabIndex={-1}
+                    aria-hidden
                 >
                     <Icon name="chevron-down" className={styles.chevron} />
                 </button>
-                {readOnly ? null : added ? (
-                    <button type="button" className={styles.remove} onClick={onRemove}>
-                        <Icon name="remove" className={styles.stateIcon} />
-                        Remove
-                    </button>
-                ) : (
-                    <button type="button" className={styles.add} onClick={onAdd}>
-                        <span className={styles.plus} aria-hidden>
-                            +
-                        </span>
-                        Add
-                    </button>
-                )}
             </div>
-            <div className={styles.details}>
-                <div className={styles.detailsInner}>
-                    <dl className={styles.meta}>
-                        <dt>Type</dt>
-                        <dd>{KIND_LABEL[kind]}</dd>
-                        {size && (
-                            <>
-                                <dt>Size</dt>
-                                <dd>{size}</dd>
-                            </>
-                        )}
-                        {widget.source && (
-                            <>
-                                <dt>Source</dt>
-                                <dd>{widget.source}</dd>
-                            </>
-                        )}
-                        {widget.kind === 'key_number' && (
-                            <>
-                                <dt>Value</dt>
-                                <dd>{[widget.value, widget.unit].filter(Boolean).join(' ')}</dd>
-                            </>
-                        )}
-                    </dl>
-                </div>
+            <div className={styles.list} id={listId} inert={!open}>
+                <ul>
+                    {rows.map((row) => (
+                        <li
+                            key={row.id}
+                            className={classNames(styles.item, !row.added && styles.off)}
+                        >
+                            <CardRow row={row} {...actions} />
+                        </li>
+                    ))}
+                </ul>
             </div>
         </div>
     );
 };
 
-const WidgetChips = ({
-    widgets,
-    titles,
-    views,
-    onCanvas,
-    onGo,
-    onAdd,
-    onRemove,
-    readOnly,
-}: WidgetChipsProps) => {
-    if (widgets.length === 0) {
+const WidgetChips = ({ widgets, titles, views, onCanvas, ...actions }: WidgetChipsProps) => {
+    const rows = widgets.map((widget) => ({
+        id: widget.id,
+        title: titles[widget.id] ?? widgetTitle(widget),
+        added: onCanvas(widget.id),
+    }));
+    const [first] = widgets;
+    const [single, ...rest] = rows;
+
+    if (!first || !single) {
         return null;
     }
 
+    // Cards of one kind show its icon, and a mix shows a plain list.
+    const kinds = new Set(widgets.map((widget) => iconOf(widget, views[widget.id])));
+    const icon: GroupIcon = kinds.size > 1 ? 'menu' : iconOf(first, views[first.id]);
+
+    if (rest.length > 0) {
+        return <CardGroup rows={rows} icon={icon} {...actions} />;
+    }
+
     return (
-        <div className={styles.chips}>
-            {widgets.map((widget) => (
-                <WidgetChip
-                    key={widget.id}
-                    widget={widget}
-                    title={titles[widget.id] ?? titleOf(widget)}
-                    view={views[widget.id]}
-                    added={onCanvas(widget.id)}
-                    onGo={() => onGo(widget.id)}
-                    onAdd={() => onAdd(widget.id)}
-                    onRemove={() => onRemove(widget.id)}
-                    readOnly={readOnly}
-                />
-            ))}
+        <div className={classNames(styles.chips, styles.single, !single.added && styles.off)}>
+            <Icon name={icon} className={styles.kindIcon} />
+            <CardRow row={single} {...actions} />
         </div>
     );
 };

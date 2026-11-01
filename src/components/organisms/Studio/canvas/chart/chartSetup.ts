@@ -18,7 +18,9 @@ import styles from '../cards/ChartCard.module.scss';
 
 import { formatAxis } from '@/lib/chat/widgets';
 import { GUTTER_SHARE, LABEL_LINE_HEIGHT, labelFontSize, wrapLabel } from '@/lib/studio/chartFit';
+import { largestFirst, nearestPoint, separatingAxis } from '@/lib/studio/chartHover';
 import { tooltipValue, valueAxisTitle, valueUnitOption } from '@/lib/studio/chartValue';
+import { legendLabels } from '@/lib/studio/seriesLabels';
 import type { SeriesPair, ThemeDerived } from '@/lib/studio/theme';
 
 /**
@@ -159,48 +161,168 @@ const elideLabel = (label: string): string =>
 const escapeHtml = (text: string): string =>
     text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-// The external tooltip: ONE .chartTip element for all charts, parented to
-// <body> and positioned in viewport space — no card's overflow can clip it.
-// Built from the tooltip model — title = category, one row per series with
-// a checkered swatch, wrapped label and bold value. Placed above the hovered
-// index and clamped to the viewport.
-let sharedTip: HTMLDivElement | null = null;
+type ChartTooltip = TooltipModel<'bar'> | TooltipModel<'line'>;
 
-const htmlTooltip = ({
-    chart,
-    tooltip,
-}: {
-    chart: ChartJS;
-    tooltip: TooltipModel<'bar'> | TooltipModel<'line'>;
-}) => {
-    if (!sharedTip) {
-        sharedTip = document.createElement('div');
-        sharedTip.className = styles.chartTip!;
-        document.body.appendChild(sharedTip);
+// Where the pointer last stood over each chart, in canvas px, and the
+// series its hover names. A chart without an entry in `focused` has nothing
+// hovered.
+const pointers = new WeakMap<ChartJS, { x: number; y: number }>();
+const focused = new WeakMap<ChartJS, number>();
 
-        // Touch: the tip shows on a tap (see `events` below) and goes away on
-        // the next touch anywhere else — there's no mouseout to do it.
-        document.addEventListener(
-            'pointerdown',
-            (event) => {
-                if (
-                    event.pointerType === 'touch' &&
-                    !(event.target as HTMLElement).closest('canvas')
-                ) {
-                    sharedTip!.style.opacity = '0';
-                }
-            },
-            { capture: true, passive: true },
-        );
+// Whether Shift is held (it lists every series in the tip), and whether the
+// tip on show was drawn with it.
+let shiftHeld = false;
+let tipShift = false;
+
+// What the card hears of the hover: the series named, or null when none.
+type SeriesFocusOptions = { onFocus?: (index: number | null) => void };
+
+const setFocus = (chart: ChartJS, index: number | undefined) => {
+    if (focused.get(chart) === index) {
+        return;
     }
 
-    const tip = sharedTip;
+    if (index === undefined) {
+        focused.delete(chart);
+    } else {
+        focused.set(chart, index);
+    }
 
-    if (tooltip.opacity === 0 || !tooltip.dataPoints?.length) {
-        tip.style.opacity = '0';
+    (chart.options.plugins as { seriesFocus?: SeriesFocusOptions }).seriesFocus?.onFocus?.(
+        index ?? null,
+    );
+};
+
+// The opacity of every series other than the one the hover names.
+const DIMMED = 0.25;
+
+// A parsed point's value, read along y, or along x on a transposed chart.
+const valueOf = (chart: ChartJS, parsed: unknown): number | null | undefined =>
+    (parsed as { x?: number | null; y?: number | null })[
+        chart.options.indexAxis === 'y' ? 'x' : 'y'
+    ];
+
+// The hovered slot's point nearest the pointer (lib/studio/chartHover),
+// measured across the slot for bars and by height for lines.
+const nearestOf = (chart: ChartJS, tooltip: ChartTooltip) => {
+    const points = tooltip.opacity === 0 ? [] : (tooltip.dataPoints ?? []);
+    const indexAxis = chart.options.indexAxis === 'y' ? 'y' : 'x';
+    const at = nearestPoint(
+        points.map(({ element, parsed }) => ({
+            x: element.x,
+            y: element.y,
+            value: valueOf(chart, parsed),
+        })),
+        pointers.get(chart) ?? { x: tooltip.caretX, y: tooltip.caretY },
+        separatingAxis((chart.config as { type?: string }).type === 'bar', indexAxis),
+    );
+
+    return at == null ? undefined : points[at];
+};
+
+// The external tooltip: ONE .chartTip element for all charts, parented to
+// <body> and positioned in viewport space — no card's overflow can clip it.
+// It names the one series nearest the pointer, under the category as its
+// title, with a checkered swatch, the series' legend name and its value.
+// Holding Shift lists every series in the slot instead, largest first, the
+// nearest marked. It sits up and to the right of the hovered point, clear of it,
+// and flips to the other side of the point at the viewport's edges.
+let sharedTip: HTMLDivElement | null = null;
+// The chart whose hover the tip shows.
+let tipChart: ChartJS | null = null;
+
+const hoverless = (): boolean => window.matchMedia('(hover: none)').matches;
+
+// Hides the tip of the chart that owns it, and with it that chart's hover:
+// the guide, the solid bar and the faded series.
+const dismissTip = () => {
+    const chart = tipChart;
+
+    if (!chart?.tooltip) {
+        return;
+    }
+
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    chart.setActiveElements([]);
+    setFocus(chart, undefined);
+    chart.draw();
+};
+
+// Redraws the tip on show when Shift goes down or up.
+const onShift = (event: KeyboardEvent) => {
+    const held = event.shiftKey;
+
+    if (event.key !== 'Shift' || held === shiftHeld) {
+        return;
+    }
+
+    shiftHeld = held;
+
+    if (tipChart?.tooltip && focused.has(tipChart)) {
+        htmlTooltip({ chart: tipChart, tooltip: tipChart.tooltip });
+    }
+};
+
+const createTip = (): HTMLDivElement => {
+    const tip = document.createElement('div');
+
+    tip.className = styles.chartTip!;
+    document.body.appendChild(tip);
+
+    // Touch: the tip shows on a tap (see `events` below) and goes away on
+    // the next touch anywhere else, since there is no mouseout to do it.
+    document.addEventListener(
+        'pointerdown',
+        (event) => {
+            if (event.pointerType === 'touch' && !(event.target as HTMLElement).closest('canvas')) {
+                dismissTip();
+            }
+        },
+        { capture: true, passive: true },
+    );
+    document.addEventListener('keydown', onShift);
+    document.addEventListener('keyup', onShift);
+
+    return tip;
+};
+
+// One row of the tip: the series' swatch, name and value.
+const tipRow = (
+    chart: ChartJS,
+    point: ChartTooltip['dataPoints'][number],
+    name: string,
+    near: boolean,
+): string => {
+    const [dark, light] = seriesPair(
+        (chart.options as { seriesPalette?: SeriesPair[] }).seriesPalette ?? [],
+        point.datasetIndex,
+    ) ?? ['#484842', '#5e5e52'];
+    const rowClass = near ? `${styles.chartTipRow} ${styles.chartTipNear}` : styles.chartTipRow;
+
+    return `<span class="${rowClass}"><span class="${styles.chartTipDot}" style="--series-dark:${dark};--series-light:${light}"></span><span class="${styles.chartTipLabel}">${escapeHtml(name)}</span><span class="${styles.chartTipValue}">${escapeHtml(tooltipValue(chart, point.parsed))}</span></span>`;
+};
+
+const htmlTooltip = ({ chart, tooltip }: { chart: ChartJS; tooltip: ChartTooltip }) => {
+    sharedTip ??= createTip();
+
+    const tip = sharedTip;
+    const near = nearestOf(chart, tooltip);
+
+    if (!near) {
+        setFocus(chart, undefined);
+
+        // Another chart's tip stays where it is.
+        if (tipChart === chart) {
+            tip.style.opacity = '0';
+            tipChart = null;
+        }
 
         return;
     }
+
+    setFocus(chart, near.datasetIndex);
+    tipChart = chart;
+    tipShift = shiftHeld;
 
     // Theme variables live on the canvas root — copy them across so the
     // portaled tip picks up the same popup face and ink.
@@ -212,39 +334,131 @@ const htmlTooltip = ({
         }
     }
 
-    const title = tooltip.title.join(' ');
-    const rows = tooltip.dataPoints
-        .map((point) => {
-            const [dark, light] = seriesPair(
-                (chart.options as { seriesPalette?: SeriesPair[] }).seriesPalette ?? [],
-                point.datasetIndex,
-            ) ?? ['#484842', '#5e5e52'];
-            const label = String(point.dataset.label ?? '');
-            const value = tooltipValue(chart, point.parsed);
+    // The legend's short name (what tells this series from the others) when
+    // the card shows a legend carrying the text they share, otherwise the
+    // full name.
+    const labels = chart.data.datasets.map((dataset) => String(dataset.label ?? ''));
+    const names = (chart.options as { seriesShortNames?: boolean }).seriesShortNames
+        ? legendLabels(labels)
+        : labels;
+    const points = tooltip.dataPoints ?? [];
+    // The slot's series with a value, largest first.
+    const order = largestFirst(points.map(({ parsed }) => valueOf(chart, parsed)));
+    const title = `<span class="${styles.chartTipTitle}">${escapeHtml(tooltip.title.join(' '))}</span>`;
 
-            return `<span class="${styles.chartTipRow}"><span class="${styles.chartTipDot}" style="--series-dark:${dark};--series-light:${light}"></span><span class="${styles.chartTipLabel}">${escapeHtml(label)}</span><span class="${styles.chartTipValue}">${escapeHtml(value)}</span></span>`;
-        })
-        .join('');
+    if (shiftHeld) {
+        tip.innerHTML =
+            title +
+            order
+                .map((at) => {
+                    const point = points[at]!;
 
-    tip.innerHTML = `<span class="${styles.chartTipTitle}">${escapeHtml(title)}</span>${rows}`;
+                    return tipRow(
+                        chart,
+                        point,
+                        names[point.datasetIndex] ?? '',
+                        point.datasetIndex === near.datasetIndex,
+                    );
+                })
+                .join('');
+    } else {
+        // Only a pointer can hold Shift.
+        const hint =
+            order.length > 1 && !hoverless()
+                ? `<span class="${styles.chartTipHint}">Shift: every series</span>`
+                : '';
+
+        tip.innerHTML = title + tipRow(chart, near, names[near.datasetIndex] ?? '', false) + hint;
+    }
+
     tip.style.opacity = '1';
 
-    // Anchor in viewport space: the canvas' rect + the tooltip's caret.
+    // Anchor in viewport space from the canvas' rect plus the hovered point.
     const rect = chart.canvas.getBoundingClientRect();
+    const pointX = rect.left + near.element.x;
+    const pointY = rect.top + near.element.y;
     const tipW = tip.offsetWidth;
     const tipH = tip.offsetHeight;
-    const gap = 8;
-    let x = rect.left + tooltip.caretX - tipW / 2;
-    let y = rect.top + tooltip.caretY - tipH - gap;
+    const gap = 12;
+    const edge = 8;
+    let x = pointX + gap;
+    let y = pointY - gap - tipH;
 
-    x = Math.max(gap, Math.min(window.innerWidth - tipW - gap, x));
-
-    if (y < gap) {
-        y = rect.top + tooltip.caretY + gap;
+    if (x + tipW > window.innerWidth - edge) {
+        x = pointX - gap - tipW;
     }
+
+    if (y < edge) {
+        y = pointY + gap;
+    }
+
+    x = Math.max(edge, Math.min(window.innerWidth - tipW - edge, x));
 
     tip.style.transform = `translate(${x}px, ${y}px)`;
 };
+
+// Whether the hover names a series other than `index`.
+const isDimmed = (chart: ChartJS, index: number): boolean => {
+    const named = focused.get(chart);
+
+    return named !== undefined && named !== index;
+};
+
+// The hover's focus. The pointer and Shift are tracked on every event.
+// Chart.js calls the tooltip only when the slot changes, so this plugin
+// redraws it when the nearest series changes within a slot (the pointer
+// moving up a column of lines) or Shift goes down or up. While a series is
+// named, every other series draws faded, and the card hears which
+// (`onFocus`) to fade the others' legend entries. Registered after Tooltip,
+// so its afterEvent runs once the tooltip has taken the event.
+const seriesFocus: Plugin<'bar' | 'line', SeriesFocusOptions> = {
+    id: 'seriesFocus',
+    beforeEvent: (chart, { event }) => {
+        if (event.x != null && event.y != null) {
+            pointers.set(chart, { x: event.x, y: event.y });
+        }
+
+        if (event.native instanceof MouseEvent) {
+            shiftHeld = event.native.shiftKey;
+        }
+    },
+    afterEvent: (chart, args) => {
+        const { tooltip } = chart;
+        const shown = focused.get(chart);
+
+        if (
+            tooltip &&
+            (nearestOf(chart, tooltip)?.datasetIndex !== shown ||
+                (shown !== undefined && tipShift !== shiftHeld))
+        ) {
+            htmlTooltip({ chart, tooltip });
+            args.changed = true;
+        }
+    },
+    // A card removed mid-hover takes its tip with it.
+    beforeDestroy: (chart) => {
+        if (tipChart === chart) {
+            tipChart = null;
+
+            if (sharedTip) {
+                sharedTip.style.opacity = '0';
+            }
+        }
+    },
+    beforeDatasetDraw: (chart, { index }) => {
+        if (isDimmed(chart, index)) {
+            chart.ctx.save();
+            chart.ctx.globalAlpha = DIMMED;
+        }
+    },
+    afterDatasetDraw: (chart, { index }) => {
+        if (isDimmed(chart, index)) {
+            chart.ctx.restore();
+        }
+    },
+};
+
+ChartJS.register(seriesFocus);
 
 // Options are built per scale factor and theme — Chart.js draws in raw px,
 // so every font/padding rides the same fluid factor as the grid, and every
@@ -264,13 +478,20 @@ export const buildChartOptions = (
         unit,
         rows = false,
         fontsReady = true,
+        legend = false,
         onLayout,
+        onFocus,
     }: {
         horizontal?: boolean;
         unit?: string;
         rows?: boolean;
         fontsReady?: boolean;
+        // Whether the card shows a legend, which carries the text the series
+        // names share, so the tooltip can name a series by what is left.
+        legend?: boolean;
         onLayout?: (layout: RowsLayout) => void;
+        // Hears the series the hover names, null when none.
+        onFocus?: (index: number | null) => void;
     } = {},
 ) => {
     // Small tick type on both axes — long names fit more text per line.
@@ -349,12 +570,14 @@ export const buildChartOptions = (
         // The HTML tooltip reads the palette and the unit off the options
         // (it only gets the chart, not our closure).
         seriesPalette: theme.series,
+        seriesShortNames: legend,
         ...valueUnitOption(unit),
         // Hover finds the nearest category slot, no need to touch the bar
         // itself — near-zero values stay hittable from the slot's full
         // width. The search runs ACROSS the slots, so it follows the index
         // axis: down the rows on a transposed comparison, along the columns
-        // otherwise.
+        // otherwise. The tooltip then names the slot's series nearest the
+        // pointer (seriesFocus above).
         interaction: {
             mode: 'index' as const,
             intersect: false,
@@ -364,9 +587,10 @@ export const buildChartOptions = (
             legend: { display: false },
             hoverGuide: { color: theme.muted },
             layoutReport: { onLayout: rows ? reportLayout : undefined },
-            // The house popup as HTML (Chart.js's external tooltip): full
-            // control of type and wrapping — series names wrap to two lines,
-            // values are bold — see .chartTip in the SCSS.
+            seriesFocus: { onFocus },
+            // The house popup as HTML (Chart.js's external tooltip) gives full
+            // control of type and wrapping. The series name wraps to two
+            // lines and the value is bold (see .chartTip in the SCSS).
             tooltip: {
                 enabled: false,
                 external: htmlTooltip,

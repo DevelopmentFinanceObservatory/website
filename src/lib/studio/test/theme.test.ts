@@ -1,16 +1,17 @@
 /**
- * `theme.ts`: every palette carries eight distinct series colours, so a
- * chart at its eight-line limit never draws two series the same (QA-84).
+ * `theme.ts`: every palette carries ten distinct series colours, so a chart
+ * of up to ten series never draws two the same, and the first eight stay the
+ * colours saved charts were drawn in.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { paletteFromAccent, THEME_PRESETS, deriveTheme } from '../theme.ts';
 
-const CHART_LINES = 8;
+const CHART_LINES = 10;
 
 // CIE76: the eye's distance between two colours, roughly. Under ~2 they are
-// the same colour; the hand-tuned palettes sit at 9 (Mono, which has only
+// the same colour; the hand-tuned palettes sit at 8.6 (Mono, which has only
 // lightness to work with) to 20.
 const lab = (hex: string): [number, number, number] => {
     const n = parseInt(hex.slice(1), 16);
@@ -43,7 +44,7 @@ const closest = (colours: string[]): number => {
     return least;
 };
 
-test('every preset has a colour for each of the eight lines', () => {
+test('every preset has a colour for each of ten lines', () => {
     for (const preset of THEME_PRESETS) {
         assert.ok(
             preset.series.length >= CHART_LINES,
@@ -57,7 +58,7 @@ test('every preset has a colour for each of the eight lines', () => {
     }
 });
 
-test('a palette spun off a custom accent has eight of its own', () => {
+test('a palette spun off a custom accent has ten of its own', () => {
     for (const accent of ['#6467de', '#2c5f2d', '#888888', '#101010', '#f6f6e8']) {
         const palette = paletteFromAccent(accent);
 
@@ -76,11 +77,79 @@ test('a palette spun off a custom accent has eight of its own', () => {
     }
 });
 
-test('a custom accent on a preset still resolves to eight', () => {
+test('a custom accent on a preset still resolves to ten', () => {
     const derived = deriveTheme({ preset: 'forest', overrides: { accent: '#2b4fd8' } });
 
     assert.equal(
         new Set(derived.series.slice(0, CHART_LINES).map(([base]) => base)).size,
         CHART_LINES,
+    );
+});
+
+// The first eight series colours of each palette. A saved chart stores its
+// theme, so these colours must hold.
+const FIRST_EIGHT: Record<string, string[]> = {
+    default: [
+        '#6467de',
+        '#f6935a',
+        '#f46f58',
+        '#bb6fdc',
+        '#662d6e',
+        '#463138',
+        '#2a9d8f',
+        '#c9a227',
+    ],
+    mono: ['#1c1b1a', '#8a8a8a', '#c4c4c4', '#5c5c5c', '#a9a9a9', '#404040', '#737373', '#e0e0e0'],
+    dark: ['#e6d3a3', '#d8d5c8', '#9fa8b8', '#c98a6b', '#7fa78a', '#b58fc9', '#d99f9f', '#a8b86b'],
+    tech: ['#1d2a36', '#4fc3f7', '#7fb2c9', '#2f6f9f', '#b3d9ea', '#59616a', '#3fb8a0', '#d99a3f'],
+    forest: [
+        '#2c5f2d',
+        '#97bc62',
+        '#1f3a1f',
+        '#c8d9b0',
+        '#6b8e4e',
+        '#4a7c59',
+        '#a8683f',
+        '#c9a227',
+    ],
+    cobalt: [
+        '#2b4fd8',
+        '#9fb4f4',
+        '#4d7cf6',
+        '#14224a',
+        '#7c8fd8',
+        '#c8d3f6',
+        '#d9a23f',
+        '#2f9e8f',
+    ],
+};
+
+test('every preset keeps the first eight colours saved charts were drawn in', () => {
+    assert.deepEqual(
+        THEME_PRESETS.map(({ id }) => id),
+        Object.keys(FIRST_EIGHT),
+    );
+
+    for (const preset of THEME_PRESETS) {
+        assert.deepEqual(
+            preset.series.slice(0, 8).map(([base]) => base),
+            FIRST_EIGHT[preset.id],
+            preset.id,
+        );
+    }
+});
+
+test('a custom accent keeps its first eight colours, 45° apart', () => {
+    assert.deepEqual(
+        paletteFromAccent('#6467de')
+            .slice(0, 8)
+            .map(([base]) => base),
+        ['#6467de', '#ba5fdd', '#e892bf', '#d6603e', '#e2e078', '#5ad22d', '#89e6b5', '#4ebad9'],
+    );
+    assert.deepEqual(
+        paletteFromAccent('#101010')
+            .slice(0, 8)
+            .map(([base]) => base),
+        ['#101010', '#826f35', '#7aae47', '#2c6d3c', '#3e9898', '#2c3c6d', '#7544a7', '#742f63'],
     );
 });
