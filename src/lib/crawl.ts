@@ -74,9 +74,15 @@ export const dataPageRobots = (
     return gallerySearch(query, gallery) ? undefined : NOINDEX;
 };
 
+const DATA_TITLE = 'Data — DFO';
+
+const DATA_DESCRIPTION =
+    'Search aid, debt, climate and health finance data in plain language, and trace every number to its source.';
+
 /**
  * The metadata for /data: a gallery search carries its item's title and
- * description, as its gallery page would, and the rest keep the site's.
+ * description, as its gallery page would, and every other render is the
+ * Data page, with the robots rule for its URL.
  */
 export const dataPageMetadata = (
     query: DataPageQuery,
@@ -98,7 +104,12 @@ export const dataPageMetadata = (
 
     const robots = dataPageRobots(query, gallery);
 
-    return robots ? { robots } : {};
+    return {
+        title: DATA_TITLE,
+        description: DATA_DESCRIPTION,
+        openGraph: pageOpenGraph({ title: 'Data', description: DATA_DESCRIPTION }),
+        ...(robots && { robots }),
+    };
 };
 
 /**
