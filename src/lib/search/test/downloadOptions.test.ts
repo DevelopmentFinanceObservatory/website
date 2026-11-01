@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    type BoundEntity,
     choicesNeedOptions,
-    coverageNote,
     DEFAULT_DOWNLOAD_CHOICES,
     enrichmentGroups,
-    enrichmentLabel,
+    inFileNote,
     mintColumns,
     parseDownloadChoices,
     resolveChoices,
@@ -53,8 +53,18 @@ const flowOptions = outputOptions({
 });
 
 const flowDimensions = [
-    { label: 'financingProvider', count: 1, axis: 'origin' as const },
-    { label: 'financingRecipient', count: 145, axis: 'destination' as const },
+    {
+        label: 'financingProvider',
+        count: 1,
+        axis: 'origin' as const,
+        noun: { singular: 'provider', plural: 'providers' },
+    },
+    {
+        label: 'financingRecipient',
+        count: 145,
+        axis: 'destination' as const,
+        noun: { singular: 'recipient', plural: 'recipients' },
+    },
     { label: 'years', count: 42 },
 ];
 
@@ -160,39 +170,201 @@ test.describe('enrichmentGroups heading for a column without a flow axis', () =>
     }
 });
 
-test('enrichment rows read their field in words and a partial one its coverage', () => {
-    assert.equal(enrichmentLabel(enrichment('a', 'type')), 'Entity types');
-    assert.equal(enrichmentLabel(enrichment('a', 'incomeGroup')), 'Income group');
-    assert.equal(
-        coverageNote(enrichment('a', 'iso3', 'partial', { entities: 132, covered: 118 })),
-        '118 of 132',
-    );
-    assert.equal(coverageNote(enrichment('a', 'iso3')), null);
+test.describe('an extra column reads as a plain name and an example from the answer', () => {
+    // ODA to Mozambique from Official donors and France: the first provider has
+    // no country code, the second has.
+    const bound = [
+        { ref: 'country/MOZ', label: 'Mozambique', role: 'destination', entity_type: 'Country' },
+        { ref: 'dc/official', label: 'Official donors', role: 'origin', entity_type: null },
+        { ref: 'country/FRA', label: 'France', role: 'origin', entity_type: 'Country' },
+    ];
+    const cases: [string, DatasetEnrichment, BoundEntity[], string | null][] = [
+        [
+            "the recipient's bound country code",
+            enrichment('financingRecipient', 'iso3'),
+            bound,
+            'MOZ, for example',
+        ],
+        [
+            'the first bound provider that has a code',
+            enrichment('financingProvider', 'iso3'),
+            bound,
+            'FRA, for example',
+        ],
+        ['no example for an open role', enrichment('financingProvider', 'iso3'), [], null],
+        [
+            'no example where the answer holds no value, and the blanks in words',
+            enrichment('financingRecipient', 'iso2', 'partial', { entities: 45, covered: 36 }),
+            bound,
+            'blank for the 9 recipients that are not countries',
+        ],
+        [
+            'one blank',
+            enrichment('financingRecipient', 'iso3', 'partial', { entities: 45, covered: 44 }),
+            bound,
+            'MOZ, for example; blank for the 1 recipient that is not a country',
+        ],
+        [
+            'a partial field that is not a country code',
+            enrichment('financingProvider', 'type', 'partial', { entities: 45, covered: 40 }),
+            bound,
+            'Country, for example; blank for the 5 providers',
+        ],
+        [
+            'a field with no words of its own',
+            enrichment('financingProvider', 'incomeGroup'),
+            bound,
+            null,
+        ],
+    ];
+
+    for (const [name, entry, entities, detail] of cases) {
+        test(name, () => {
+            const [group] = enrichmentGroups({
+                options: outputOptions({ enrichments: [entry] }),
+                dimensions: flowDimensions,
+                entities,
+            });
+
+            assert.equal(group?.entries[0]?.detail, detail);
+        });
+    }
+
+    test('names read in plain words', () => {
+        const [group] = enrichmentGroups({
+            options: outputOptions({
+                enrichments: ['iso3', 'iso2', 'label', 'type', 'incomeGroup'].map((field) =>
+                    enrichment('financingProvider', field),
+                ),
+            }),
+            dimensions: flowDimensions,
+        });
+
+        assert.deepEqual(
+            group?.entries.map((entry) => entry.name),
+            ['ISO 3-letter code', 'ISO 2-letter code', 'Name', 'Type', 'Income group'],
+        );
+    });
+
+    test('a partial field on a column with no noun counts what it leaves blank', () => {
+        const [group] = enrichmentGroups({
+            options: outputOptions({
+                enrichments: [
+                    enrichment('financingChannel', 'type', 'partial', {
+                        entities: 12,
+                        covered: 10,
+                    }),
+                ],
+            }),
+        });
+
+        assert.equal(group?.entries[0]?.detail, 'blank for 2 of 12');
+    });
 });
 
-test('the extras list leaves out a column the long layout already writes', () => {
+test('the extras list leaves out every enrichment flagged in_long_layout', () => {
+    const flagged = (column: string, field: string, inLongLayout: boolean) => ({
+        ...enrichment(column, field),
+        in_long_layout: inLongLayout,
+    });
     const options = outputOptions({
         enrichments: [
-            enrichment('financingRecipient', 'party_kind'),
-            enrichment('financingRecipient', 'iso3'),
+            flagged('financingProvider', 'label', true),
+            flagged('financingProvider', 'party_kind', true),
+            flagged('financingProvider', 'party_class', true),
+            flagged('financingProvider', 'party_whole', true),
+            flagged('financingProvider', 'iso3', false),
         ],
-        long_layout_defaults: ['financingRecipient_label', 'financingRecipient_party_kind'],
+        // The flag decides alone, so a default listing iso3 does not hide it.
+        long_layout_defaults: ['financingProvider_iso3'],
     });
 
     assert.deepEqual(
         enrichmentGroups({ options, dimensions: flowDimensions }).flatMap((group) =>
             group.entries.map((entry) => entry.token),
         ),
-        ['financingRecipient_iso3'],
+        ['financingProvider_iso3'],
     );
+});
+
+test('without the flag, the extras list leaves out a long_layout_defaults token', () => {
+    const options = outputOptions({
+        enrichments: [
+            enrichment('financingRecipient', 'label'),
+            enrichment('financingRecipient', 'iso3'),
+        ],
+        long_layout_defaults: ['financingRecipient_label', 'financingRecipient_kind'],
+    });
+    const tokens = (groups: ReturnType<typeof enrichmentGroups>) =>
+        groups.flatMap((group) => group.entries.map((entry) => entry.token));
+
+    assert.deepEqual(tokens(enrichmentGroups({ options, dimensions: flowDimensions })), [
+        'financingRecipient_iso3',
+    ]);
     assert.deepEqual(
-        mintColumns(['financingRecipient_party_kind', 'financingRecipient_iso3'], options),
+        mintColumns(['financingRecipient_label', 'financingRecipient_iso3'], options),
         ['financingRecipient_iso3'],
     );
     // A long layout that writes no defaults offers everything it lists.
+    assert.deepEqual(
+        tokens(enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })),
+        ['financingRecipient_label', 'financingRecipient_iso3'],
+    );
+});
+
+test('inFileNote names the roles whose names and kinds the long layout writes', () => {
+    const options = outputOptions({
+        enrichments: [
+            enrichment('financingProvider', 'iso3'),
+            enrichment('financingRecipient', 'iso3'),
+        ],
+        long_layout_defaults: [
+            'financingProvider_label',
+            'financingProvider_kind',
+            'financingRecipient_label',
+            'financingRecipient_kind',
+        ],
+    });
+
     assert.equal(
-        enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })[0]?.entries.length,
-        2,
+        inFileNote(enrichmentGroups({ options, dimensions: flowDimensions })),
+        'The file already names each provider and recipient and says what kind each is, such as official, private or a total.',
+    );
+    assert.equal(
+        inFileNote(
+            enrichmentGroups({
+                options: { ...options, long_layout_defaults: ['financingRecipient_label'] },
+                dimensions: flowDimensions,
+            }),
+        ),
+        'The file already names each recipient.',
+    );
+    assert.equal(
+        inFileNote(enrichmentGroups({ options: { ...options, long_layout_defaults: [] } })),
+        null,
+    );
+});
+
+test("the group heading and the in-file note name a role with the answer's one word", () => {
+    // A debt answer: its recipient column is the debtor side.
+    const groups = enrichmentGroups({
+        options: outputOptions({
+            enrichments: [enrichment('financingRecipient', 'iso3')],
+            long_layout_defaults: ['financingRecipient_label'],
+        }),
+        dimensions: [
+            {
+                label: 'financingRecipient',
+                count: 1,
+                axis: 'destination',
+                noun: { singular: 'debtor', plural: 'debtors' },
+            },
+        ],
+    });
+
+    assert.deepEqual(
+        [groups[0]?.heading, inFileNote(groups)],
+        ['Debtor', 'The file already names each debtor.'],
     );
 });
 

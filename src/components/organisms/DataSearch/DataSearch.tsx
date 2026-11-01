@@ -13,6 +13,7 @@ import SearchPanel from './SearchPanel';
 import SearchShareModal from './SearchShareModal';
 import type { CreateSearchShare } from './SearchShare';
 import {
+    answerPlan,
     answerRefineItems,
     headingTokens,
     SearchSentenceBody,
@@ -23,6 +24,7 @@ import {
 import SearchTable from './SearchTable';
 import type { DatasetDownloaded } from './useDatasetDownload';
 import { useSearchRun } from './useSearchRun';
+import type { ChangeAction } from './WhyPanel';
 
 import Button from '@/components/atoms/Button/Button';
 import DataPrompt from '@/components/molecules/DataPrompt/DataPrompt';
@@ -48,6 +50,7 @@ import {
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
 import { searchSharePart } from '@/lib/search/searchShareRequest';
+import { changeTarget, sameMenuChanges, type MenuChanges } from '@/lib/search/refineMenu';
 import {
     downloadNote,
     noDataCardParts,
@@ -192,6 +195,32 @@ const DataSearch = ({
     // at an entry, and the actions row's Refine button lists it.
     const refine = answerRefineItems({ response, parts, optionsBySpec, entityOptionsBySpec });
     const [refineOpen, setRefineOpen] = useState<RefineOpen | null>(null);
+
+    // The heading's open token menu, and the menus it last drew with the
+    // refs each can change, so a fact's Change in "About this answer"
+    // opens the same menu a departure would (changeTarget).
+    const [openMenu, setOpenMenu] = useState<number | null>(null);
+    const [menuChanges, setMenuChanges] = useState<MenuChanges>(() => new Map());
+    const reportMenuChanges = useCallback(
+        (next: MenuChanges) =>
+            setMenuChanges((current) => (sameMenuChanges(current, next) ? current : next)),
+        [],
+    );
+    const changeAction: ChangeAction = (partIndex, bindingRef) => {
+        const target = changeTarget({
+            plan: answerPlan({ response, parts }),
+            partCount: parts.length,
+            partIndex,
+            bindingRef,
+            menuChanges,
+            refineKeys: new Set(refine.map((item) => item.key)),
+        });
+
+        if (target?.kind === 'token') return () => setOpenMenu(target.index);
+        if (target?.kind === 'refine') return () => setRefineOpen({ at: target.key });
+
+        return null;
+    };
 
     const [suggestionSlot] = useState(createSuggestionSlot);
 
@@ -1085,6 +1114,9 @@ const DataSearch = ({
                                     onStudio={openStudio}
                                     refine={refine}
                                     onRefineOpen={setRefineOpen}
+                                    openMenu={openMenu}
+                                    onOpenMenuChange={setOpenMenu}
+                                    onMenuChanges={reportMenuChanges}
                                     fallback={
                                         earlyTokens ? (
                                             <EarlySentenceHeading
@@ -1123,6 +1155,7 @@ const DataSearch = ({
                                         }
                                         refineOpen={refineOpen}
                                         onRefineOpenChange={setRefineOpen}
+                                        changeAction={changeAction}
                                     />
                                 )}
                             </div>
