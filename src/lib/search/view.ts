@@ -6,6 +6,7 @@
 
 import { originLine, viaLabel } from '../dataCommons.ts';
 import { capitalise } from '../capitalise.ts';
+import { groupSourceCodes, type SourceCodeGroups } from '../sourceCodes.ts';
 import { spaceCamel } from '../spaceCamel.ts';
 import type { MemberRef, MembersRead } from './definitionMembers.ts';
 import { coverageRichness, coverageState, partitionOptions } from './optionCoverage.ts';
@@ -1113,10 +1114,7 @@ export type WhyRow = {
  *  each code names the whole answer; otherwise the answer is built from
  *  them. Each publisher lists its first codes and counts the rest as
  *  `more`. */
-export type WhySourceCodes = {
-    exact: boolean;
-    publishers: { publisher: string; codes: string[]; more: number }[];
-};
+export type WhySourceCodes = SourceCodeGroups;
 
 /** What an answer of several variables adds up: the shape the variables
  *  share, and each open axis they differ on with its values, the ways the
@@ -1377,49 +1375,24 @@ const factRow = (label: string, value: string, note: string | null, bindingRef: 
 const licenceText = (spec: SpecReading): string | null =>
     spec?.download?.licence?.label ? spaceCamel(spec.download.licence.label) : null;
 
-// The codes each publisher lists before the rest are counted as "more".
-const SOURCE_CODES = 3;
-
 // The publisher that issues a provenance's codes ("World Bank"), from
 // whichever provenance refs the spec carries, else the provenance's own
-// name, and "Source" when the spec names neither.
-const publisherOf = (spec: SpecReading, dcid: string): string => {
+// name, and null when the spec names neither.
+const publisherOf = (spec: SpecReading, dcid: string): string | null => {
     const refs: (ProvenanceRef | ResolvedFacet | null | undefined)[] = [
         ...(spec?.resolution?.resolved_sources ?? []),
         spec?.facets?.provenance,
         ...(spec?.observations?.series ?? []).flatMap((series) => series?.source_refs ?? []),
     ];
     const ref = refs.find((entry) => entry?.ref === dcid);
-    const name = ref?.source?.label ?? (ref?.label ? sourceOptionLabel({ label: ref.label }) : '');
 
-    return name || 'Source';
+    return ref?.source?.label ?? (ref?.label ? sourceOptionLabel({ label: ref.label }) : null);
 };
 
 // The publisher series codes the Measure row names: the exact codes, which
 // each name the whole answer, else every code the answer is built from.
-const sourceCodes = (spec: SpecReading): WhySourceCodes | null => {
-    const all = readStatVars(spec)?.source_codes ?? [];
-    const exactCodes = all.filter((entry) => entry.exact);
-    const shown = exactCodes.length > 0 ? exactCodes : all;
-    const byPublisher = new Map<string, string[]>();
-
-    for (const entry of shown) {
-        const publisher = publisherOf(spec, entry.provenance);
-
-        byPublisher.set(publisher, [...(byPublisher.get(publisher) ?? []), entry.code]);
-    }
-
-    return shown.length === 0
-        ? null
-        : {
-              exact: exactCodes.length > 0,
-              publishers: [...byPublisher].map(([publisher, codes]) => ({
-                  publisher,
-                  codes: codes.slice(0, SOURCE_CODES),
-                  more: Math.max(codes.length - SOURCE_CODES, 0),
-              })),
-          };
-};
+const sourceCodes = (spec: SpecReading): WhySourceCodes | null =>
+    groupSourceCodes(readStatVars(spec)?.source_codes ?? [], (dcid) => publisherOf(spec, dcid));
 
 const DFO_NAME = 'Development Finance Observatory';
 

@@ -8,10 +8,12 @@ import CardDownload from './CardDownload';
 import styles from './CardInfoPanel.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import SourceCodes from '@/components/atoms/SourceCodes/SourceCodes';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import Modal from '@/components/molecules/Modal/Modal';
 import type { CardInfo, Widget } from '@/lib/chat/widgets';
+import { sourceCodeChips, sourceCodeText } from '@/lib/sourceCodes';
 import type { SharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     type DescribedView,
@@ -143,9 +145,25 @@ const Items = ({ items }: { items: string[] }) => (
     </ul>
 );
 
+// The publisher's codes for the series holding a value the card shows,
+// beside its name, with the sentence Get Data says them in as their title.
+// Codes past those listed are counted after the chips.
+const TermCodes = ({ codes }: { codes: NonNullable<PanelTerm['codes']> }) => {
+    const chips = sourceCodeChips(codes);
+
+    return (
+        <span className={styles.termCodes} title={sourceCodeText(codes)}>
+            {chips.codes.map((code, index) => (
+                <code key={`${code}#${index}`}>{code}</code>
+            ))}
+            {chips.more > 0 && <span className={styles.termMore}>+{chips.more} more</span>}
+        </span>
+    );
+};
+
 // A value the card shows or is fixed to, by name. One with a definition
 // opens it in the house popup, on hover, click, tap or the keyboard.
-const Term = ({ term }: { term: PanelTerm }) =>
+const TermName = ({ term }: { term: PanelTerm }) =>
     term.definition ? (
         <HoverPopup
             label={term.name}
@@ -163,6 +181,13 @@ const Term = ({ term }: { term: PanelTerm }) =>
     ) : (
         <span className={styles.termPlain}>{term.name}</span>
     );
+
+const Term = ({ term }: { term: PanelTerm }) => (
+    <>
+        <TermName term={term} />
+        {term.codes && <TermCodes codes={term.codes} />}
+    </>
+);
 
 // What a failed snapshot link says, by why it failed.
 const CITE_LINK_TEXT = {
@@ -353,6 +378,7 @@ const DescribedPanel = ({
                 <b>{view.measure.label}</b>. {view.measure.definition}
             </p>
         )}
+        {view.codes && <SourceCodes codes={view.codes} className={styles.codes} />}
 
         <div>
             {view.rows.length > 0 && <Rows rows={view.rows} />}
