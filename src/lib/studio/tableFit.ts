@@ -34,6 +34,12 @@ export const TABLE_ROWS_COLLAPSED = 10;
  *  sort arrow together. */
 export const HEADER_LABEL_MAX = 84;
 
+/** The widest a body row's label runs in the held first column, in px,
+ *  before it ends in an ellipsis: 39% of the narrowest table card's table
+ *  (SPAN_MIN.table.w, 406 px inside the card), so the value columns keep
+ *  most of every card. */
+export const ROW_LABEL_MAX = 160;
+
 // Type: 10 px Outfit in the table at line height 1.3, and the caption at 1.35.
 // The title and the source line are weight 300 at 12 px.
 const TABLE_TYPE = 10;
@@ -175,15 +181,17 @@ const headerBox = (label: string): { width: number; lines: number } => {
 };
 
 // The table's natural width in px: each column as wide as its widest cell
-// (body cells bold but the first, on one line) or its header label.
+// (body cells bold but the first, on one line) or its header label. The
+// first column's body labels stop at ROW_LABEL_MAX.
 const tableWidthPx = (view: TableView): number =>
     view.columns.reduce((sum, label, index) => {
-        const body = Math.max(
+        const widest = Math.max(
             0,
             ...view.rows.map((row) =>
                 textWidth(row[index]?.text ?? '', index === 0 ? 400 : 700, TABLE_TYPE),
             ),
         );
+        const body = index === 0 ? Math.min(widest, ROW_LABEL_MAX) : widest;
 
         return sum + Math.max(body, headerBox(label).width) + 2 * CELL_PAD_X;
     }, 0);

@@ -250,11 +250,26 @@ const TableCard = ({
                             {shown.map((rowIndex, at) => (
                                 <tr key={rowIndex}>
                                     {view.rows[rowIndex]!.map((cell, cellIndex) => (
-                                        <td key={cellIndex} title={cell.full}>
+                                        <td
+                                            key={cellIndex}
+                                            // A row label can end in an
+                                            // ellipsis, so its title holds
+                                            // it whole.
+                                            title={
+                                                cell.full ??
+                                                (cellIndex === 0 ? cell.text : undefined)
+                                            }
+                                        >
                                             {/* A name repeating the row above is hidden from
                                                 the eye only, so each row still reads whole. */}
-                                            {cellIndex === 0 && repeated[at] ? (
-                                                <span className={styles.repeat}>{cell.text}</span>
+                                            {cellIndex === 0 ? (
+                                                <span
+                                                    className={
+                                                        repeated[at] ? styles.repeat : styles.label
+                                                    }
+                                                >
+                                                    {cell.text}
+                                                </span>
                                             ) : (
                                                 cell.text
                                             )}

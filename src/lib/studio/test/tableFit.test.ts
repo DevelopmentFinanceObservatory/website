@@ -229,6 +229,20 @@ test('the estimated width grows with the text and holds the padding when empty',
     assert.ok(tableWidthCells(tableDisplay(widget({ columns: [], rows: [] }))) >= 2);
 });
 
+test('a row label past the cap adds no width, as its ellipsis adds none on the card', () => {
+    const labelled = (label: string): number => {
+        const table = recipients(3);
+
+        table.rows[0]![0] = label;
+
+        return tableWidthCells(tableDisplay(table));
+    };
+    const long = 'Bureau of Population, Refugees and Migration, United States';
+
+    assert.ok(labelled(long) > labelled('Kenya'));
+    assert.equal(labelled(`${long}, Department of State`), labelled(long));
+});
+
 test('the estimated height runs 28 px a row, and stops at the collapsed rows', () => {
     const rows = (count: number, expanded = false) =>
         tableRows({ widget: recipients(count), widthCells: 22, expanded });

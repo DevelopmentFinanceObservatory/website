@@ -618,10 +618,13 @@ const redraw = (widget: Widget, payload: Record<string, unknown>): Widget | unde
             const table = payloadTable(payload);
             const held = { ...widget };
 
-            // The new cells name their own `namesColumn`, or none when the
-            // table has no `stat_var` column. The previous revision's would
-            // shorten the new table's places as if they were variable names.
+            // The new cells carry their own `namesColumn` and `series`, or
+            // none. The previous revision's `namesColumn` would shorten the
+            // new table's places as if they were variable names, and a
+            // sketch's `series` would transpose the payload's dimension
+            // columns and pad its years as values.
             delete held.namesColumn;
+            delete held.series;
 
             return table && { ...held, ...payloadCells(table), data: tableData(table) };
         }
