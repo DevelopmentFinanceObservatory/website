@@ -77,38 +77,54 @@ test('restore: the plan approval time is kept, and a save without it has none', 
     assert.equal(unstamped?.approvedAt, undefined);
 });
 
-test('end turn: open steps settle by how the turn ended', async (t) => {
+test('end turn: open steps settle by how the turn ended, and a failure with no answer fails the turn', async (t) => {
     const before = [
         entry(1, ['running']),
         entry(2, ['pending', 'running', 'complete', 'failed', 'skipped']),
     ];
+    const SKIPPED: StepState[] = ['skipped', 'skipped', 'complete', 'failed', 'skipped'];
+    const FAILED: StepState[] = ['failed', 'failed', 'complete', 'failed', 'skipped'];
     const cases: {
         name: string;
         open: 'skipped' | 'failed' | undefined;
+        answered: boolean;
         expected: StepState[];
+        failed?: true;
     }[] = [
         {
-            name: 'stop skips them',
+            name: 'stop skips them, unanswered',
             open: 'skipped',
-            expected: ['skipped', 'skipped', 'complete', 'failed', 'skipped'],
+            answered: false,
+            expected: SKIPPED,
+        },
+        { name: 'stop skips them, answered', open: 'skipped', answered: true, expected: SKIPPED },
+        {
+            name: 'an error before any answer fails them and the turn',
+            open: 'failed',
+            answered: false,
+            expected: FAILED,
+            failed: true,
         },
         {
-            name: 'an error or a broken stream fails them',
+            name: 'an error after some answer fails them, not the turn',
             open: 'failed',
-            expected: ['failed', 'failed', 'complete', 'failed', 'skipped'],
+            answered: true,
+            expected: FAILED,
         },
         {
             name: 'done leaves them as their frames left them',
             open: undefined,
+            answered: false,
             expected: ['pending', 'running', 'complete', 'failed', 'skipped'],
         },
     ];
 
-    for (const { name, open, expected } of cases) {
+    for (const { name, open, answered, expected, failed } of cases) {
         await t.test(name, () => {
-            const after = endTurnActivity(before, 2, open);
+            const after = endTurnActivity(before, 2, open, answered);
 
             assert.deepEqual(states(after, 2), expected);
+            assert.equal(after[1]?.failed, failed);
             assert.equal(typeof after[1]?.endedAt, 'number');
             assert.deepEqual(after[0], before[0], 'other turns are untouched');
         });
@@ -143,18 +159,20 @@ test('record: steps and the approval are numbered in arrival order', () => {
     assert.equal(entry.approvedOrder, 4);
 });
 
-test('restore: the arrival order is kept', () => {
+test('restore: the arrival order and a failed turn are kept', () => {
     const [restored] = restoreActivity([
         {
             turn: 1,
             prompt: 'p',
             startedAt: 0,
             approvedOrder: 3,
+            failed: true,
             tools: [{ ...step('s1', 'complete'), startOrder: 1, settleOrder: 2 }],
         },
     ]);
 
     assert.equal(restored?.approvedOrder, 3);
+    assert.equal(restored?.failed, true);
     assert.deepEqual(
         restored?.tools.map((tool) => [tool.startOrder, tool.settleOrder]),
         [[1, 2]],

@@ -46,6 +46,9 @@ export type ActivityEntry = {
     approvedAt?: number;
     // The approval's place in the turn's arrival order.
     approvedOrder?: number;
+    // Set when the turn ended in an error, a broken stream or a refusal
+    // before its reply had any text. Saves made before it was kept lack it.
+    failed?: true;
     tools: ActivityTool[];
 };
 
@@ -128,55 +131,62 @@ export const recordApproval = (entry: ActivityEntry, now: number): ActivityEntry
  * state becomes complete.
  */
 export const restoreActivity = (saved: SavedActivityEntry[] | undefined): ActivityEntry[] =>
-    (saved ?? []).map(({ turn, prompt, startedAt, endedAt, approvedAt, approvedOrder, tools }) => ({
-        turn,
-        prompt,
-        startedAt,
-        endedAt,
-        approvedAt,
-        approvedOrder,
-        tools: tools.map(
-            ({
-                id,
-                name,
-                args,
-                summary,
-                startedAt,
-                durationMs,
-                widgetId,
-                state,
-                startOrder,
-                settleOrder,
-            }) => ({
-                id,
-                name,
-                args,
-                summary,
-                startedAt,
-                durationMs,
-                widgetId,
-                state: state === undefined ? 'complete' : isOpen(state) ? 'skipped' : state,
-                startOrder,
-                settleOrder,
-            }),
-        ),
-    }));
+    (saved ?? []).map(
+        ({ turn, prompt, startedAt, endedAt, approvedAt, approvedOrder, failed, tools }) => ({
+            turn,
+            prompt,
+            startedAt,
+            endedAt,
+            approvedAt,
+            approvedOrder,
+            failed,
+            tools: tools.map(
+                ({
+                    id,
+                    name,
+                    args,
+                    summary,
+                    startedAt,
+                    durationMs,
+                    widgetId,
+                    state,
+                    startOrder,
+                    settleOrder,
+                }) => ({
+                    id,
+                    name,
+                    args,
+                    summary,
+                    startedAt,
+                    durationMs,
+                    widgetId,
+                    state: state === undefined ? 'complete' : isOpen(state) ? 'skipped' : state,
+                    startOrder,
+                    settleOrder,
+                }),
+            ),
+        }),
+    );
 
 /**
  * Marks `turn` ended. With `open` set, its steps still pending or running
  * take that state: `skipped` when the user stopped the turn, `failed` when
- * the stream failed, since no further frame will settle them.
+ * the stream failed, since no further frame will settle them. A turn that
+ * failed before its reply had any text (`answered` false) is marked failed;
+ * one the user stopped, or that failed after some answer, is not.
  */
 export const endTurnActivity = (
     activity: ActivityEntry[],
     turn: number,
     open?: 'skipped' | 'failed',
+    answered = true,
 ): ActivityEntry[] =>
     activity.map((entry) =>
         entry.turn === turn
             ? {
                   ...entry,
                   endedAt: Date.now(),
+                  ...(open === 'failed' && !answered && { failed: true as const }),
                   tools: open
                       ? entry.tools.map((tool) =>
                             isOpen(tool.state) ? { ...tool, state: open } : tool,

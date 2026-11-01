@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import styles from './ActivityLog.module.scss';
 import PlanModal from './PlanModal';
@@ -74,6 +74,7 @@ const CardChip = ({
 
 const stepClass: Record<StepRow['state'], string | undefined> = {
     complete: undefined,
+    errored: undefined,
     failed: styles.stepFailed,
     skipped: styles.stepSkipped,
     pending: styles.stepSkipped,
@@ -104,6 +105,9 @@ const Step = ({ row, now, ...actions }: { row: StepRow; now: number } & CardActi
             <div className={styles.row}>
                 <span className={styles.label}>
                     {running && <span className={railStyles.stepKind}>Now</span>}
+                    {row.state === 'errored' && (
+                        <span className={railStyles.stepKind}>Hit an error</span>
+                    )}
                     {row.state === 'failed' && (
                         <span className={classNames(railStyles.stepKind, styles.kindFailed)}>
                             Not done
@@ -196,6 +200,7 @@ const lineState: Record<LogLine['state'], string | undefined> = {
     plan: undefined,
     pending: styles.lineSkipped,
     running: undefined,
+    errored: undefined,
     failed: styles.lineFailed,
     retried: styles.lineRetried,
     skipped: styles.lineSkipped,
@@ -241,31 +246,41 @@ const FullLog = ({ log, now, ...actions }: { log: LogLine[]; now: number } & Car
     </ol>
 );
 
-// The turn's outcome line, led on a live turn by its state.
+// The turn's outcome line, led on a live turn by its state. Each part keeps
+// to one line with the dot before it, so the line wraps only between parts.
 const Outcome = ({ outcome, now }: { outcome: TurnOutcome; now: number }) => (
-    <>
-        {outcome.state === 'live' && <span className={styles.live} aria-hidden="true" />}
+    <span className={styles.outcome}>
         {outcome.state !== 'ended' && (
             <span className={styles.now}>
+                {outcome.state === 'live' && <span className={styles.live} aria-hidden="true" />}
                 {outcome.state === 'live' ? 'Working' : 'Waiting for you'}
             </span>
         )}
         {outcomeParts(outcome, now).map((part, index) => (
-            <Fragment key={part.key}>
+            <span key={part.key} className={styles.part}>
                 {(index > 0 || outcome.state !== 'ended') && <i aria-hidden="true">·</i>}
-                {part.alert ? <b>{part.text}</b> : <span>{part.text}</span>}
-            </Fragment>
+                {part.alert ? <b>{part.text}</b> : part.text}
+            </span>
         ))}
-    </>
+    </span>
 );
 
 const Turn = ({
     view,
     plan,
+    latest,
     now,
     ...actions
-}: { view: TurnView; plan: ApprovedPlan | undefined; now: number } & CardActions) => {
-    const [open, setOpen] = useState(true);
+}: {
+    view: TurnView;
+    plan: ApprovedPlan | undefined;
+    // The newest turn, open until the user folds it; any other starts folded.
+    latest: boolean;
+    now: number;
+} & CardActions) => {
+    // Null until the user folds or opens the turn.
+    const [chosen, setChosen] = useState<boolean | null>(null);
+    const open = chosen ?? latest;
     const [showAll, setShowAll] = useState(false);
 
     return (
@@ -274,7 +289,7 @@ const Turn = ({
                 type="button"
                 className={styles.head}
                 aria-expanded={open}
-                onClick={() => setOpen((was) => !was)}
+                onClick={() => setChosen(!open)}
             >
                 <span className={styles.question}>
                     <span className={styles.questionText}>{view.question}</span>
@@ -327,7 +342,7 @@ const Turn = ({
  * its question and outcome, then the steps that did work on the planner
  * rail with the approved plan in its place, a card's title one click from
  * the card, and the full log with times one click down. The newest turn is
- * last, like the transcript.
+ * last, like the transcript, and the only one open at first.
  */
 const ActivityLog = ({
     activity,
@@ -367,11 +382,12 @@ const ActivityLog = ({
 
     return (
         <div className={styles.log}>
-            {views.map((view) => (
+            {views.map((view, index) => (
                 <Turn
                     key={view.turn}
                     view={view}
                     plan={plans[view.turn]}
+                    latest={index === views.length - 1}
                     now={now}
                     cardIcons={cardIcons}
                     onCanvas={onCanvas}

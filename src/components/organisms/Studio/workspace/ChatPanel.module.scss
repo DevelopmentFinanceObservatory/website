@@ -582,6 +582,13 @@
     );
 }
 
+// The Activity view starts its scroll at the panel's top edge, so its top
+// fade lies in the panel's padding and the first question sits 24 px down
+// rather than the 44 px of padding and fade stacked.
+.activityScroll {
+    margin-top: rem(-20);
+}
+
 // The foot gives up height only when what sits above the input (a plan, a
 // long clarify) outgrows the panel: that card scrolls inside and the input
 // never leaves the screen. Everything else in it keeps its natural height

@@ -74,8 +74,9 @@
     -webkit-line-clamp: 2;
 }
 
+// The outcome line, then the chevron on its first line.
 .meta {
-    @include flex(row, flex-start, center);
+    @include flex(row, flex-start, flex-start);
     @include font-size(10px, 1.3);
 
     gap: rem(6);
@@ -92,6 +93,23 @@
         font-weight: 400;
         color: var(--color-red);
     }
+}
+
+// The parts wrap as wholes, each with the dot before it.
+.outcome {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(2) rem(6);
+    min-width: 0;
+}
+
+.part,
+.now {
+    @include flex(row, flex-start, center);
+
+    gap: rem(6);
+    white-space: nowrap;
 }
 
 .now {

@@ -199,11 +199,24 @@ type StreamEnding = {
     sent: boolean;
 };
 
+// Whether the turn's reply has text: the last message is the bot's, with any.
+const hasAnswer = (messages: ChatMessage[]): boolean => {
+    const last = messages.at(-1);
+
+    return last?.role === 'bot' && !!last.text;
+};
+
 // A turn's end on screen, however it ended: its Activity entry closes and
-// the chat line clears.
-const endTurn = (prev: ChatState, turn: number, open?: 'skipped' | 'failed'): ChatState => ({
+// the chat line clears. `answered` is read before a failure's detail fills
+// an empty reply, so a caller that fills it passes the earlier messages'.
+const endTurn = (
+    prev: ChatState,
+    turn: number,
+    open?: 'skipped' | 'failed',
+    answered = hasAnswer(prev.messages),
+): ChatState => ({
     ...prev,
-    activity: endTurnActivity(prev.activity, turn, open),
+    activity: endTurnActivity(prev.activity, turn, open, answered),
     ...NO_LINE,
     thinking: false,
 });
@@ -812,7 +825,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                             messages[messages.length - 1] = { ...last, text: `_${detail}_` };
                         }
 
-                        return endTurn({ ...prev, messages }, turn, 'failed');
+                        return endTurn(
+                            { ...prev, messages },
+                            turn,
+                            'failed',
+                            hasAnswer(prev.messages),
+                        );
                     });
                 } else if (ending.failed || ending.done) {
                     setState((prev) => endTurn(prev, turn, ending.failed ? 'failed' : undefined));
@@ -1098,7 +1116,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                     setState((prev) => {
                         const after = switchEnded(prev, waiting, ended);
 
-                        return after === prev ? prev : endTurn(after, turn, activity);
+                        return after === prev
+                            ? prev
+                            : endTurn(after, turn, activity, hasAnswer(prev.messages));
                     });
                 },
             });
@@ -1325,6 +1345,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
                                 turn,
                                 'failed',
+                                hasAnswer(prev.messages),
                             ),
                         );
 
