@@ -129,9 +129,16 @@ export type DescriptionFreshness = {
     inputs?: InputRef[];
 };
 
-/** A step as served: its record, which the panel does not read, and the
- *  composer's sentence for it. */
-export type ServedStep = { id: string; op: string; text: string };
+/** A step as served: the composer's sentence for it, and of its record the
+ *  parts the panel reads, the input a step retrieves or selects from
+ *  (`input`) and the steps a quotient divides (`inputs`, by step id). */
+export type ServedStep = {
+    id: string;
+    op: string;
+    text: string;
+    input?: InputRef;
+    inputs?: { numerator: string; denominator: string };
+};
 
 /** A fact about the data, naming what it applies to, with the composer's
  *  sentence for it. The panel shows every caveat by its `text`, whatever
@@ -481,13 +488,30 @@ const asFreshness: Reader<DescriptionFreshness> = (value) => {
         : undefined;
 };
 
+// A quotient step's sides, each the id of the step it reads.
+const asQuotientSides: Reader<{ numerator: string; denominator: string }> = (value) => {
+    const record = asRecord(value);
+    const numerator = asText(record?.['numerator']);
+    const denominator = asText(record?.['denominator']);
+
+    return numerator && denominator ? { numerator, denominator } : undefined;
+};
+
 const asStep: Reader<ServedStep> = (value) => {
     const record = asRecord(value);
     const id = asText(record?.['id']);
     const op = asText(record?.['op']);
     const text = asText(record?.['text']);
 
-    return id && op && text ? { id, op, text } : undefined;
+    return record && id && op && text
+        ? {
+              id,
+              op,
+              text,
+              ...optional(record, 'input', asInputRef),
+              ...optional(record, 'inputs', asQuotientSides),
+          }
+        : undefined;
 };
 
 const asCaveat: Reader<Caveat> = (value) => {

@@ -4,7 +4,7 @@
 // The whiteboard sheet: carries its own grid pattern (so lines scroll with
 // the cards) and hosts absolutely-placed cards pinned to exact cells. It
 // sizes itself to the content (inline width/height, never below the window)
-// and grabbing it — cards included — pans the view.
+// and grabbing it pans the view.
 .board {
     position: relative;
     min-width: 100%;
@@ -12,8 +12,8 @@
     cursor: grab;
     touch-action: none;
 
-    // A whiteboard, not a document — dragging around must never start
-    // selecting card text.
+    // Panning and dragging must not select text; an editable card's content
+    // turns selection back on (.cardBox below).
     user-select: none;
 }
 
@@ -90,8 +90,8 @@
 
 // Filtered out by the card-type tabs: faded down, never fully gone, and
 // inert except for moving/resizing — the card's own controls and hovers are
-// switched off (Card.module.scss reads the slot's data-dimmed; the grab bar
-// and grip sit outside the card, so they keep working).
+// switched off (Card.module.scss reads the slot's data-dimmed; the box and
+// the grip sit outside the card, so they keep working).
 .slotDimmed {
     opacity: 0.4;
 }
@@ -132,43 +132,9 @@
     // (The lifted card's sage tint lives in Card.module.scss, off the
     // slot's data-dragging.)
     .cardBox,
-    .handle {
+    .cardBox * {
         cursor: grabbing;
     }
-
-    .handle {
-        opacity: 1;
-    }
-}
-
-// The grab bar: a slim dark pill just inside the card's top edge (per the
-// design), inside a generous hit area, shown on card hover.
-.handle {
-    @include flex(row, center, center);
-
-    position: absolute;
-    top: rem(2);
-    left: 50%;
-    z-index: 2;
-    width: rem(72);
-    height: rem(16);
-    cursor: grab;
-    touch-action: none;
-    opacity: 0;
-    translate: -50% 0;
-    transition: opacity 0.2s ease;
-
-    &::after {
-        content: "";
-        width: rem(40);
-        height: rem(2);
-        background-color: var(--th-text, var(--color-charcoal));
-        border-radius: rem(2);
-    }
-}
-
-.slot:hover .handle {
-    opacity: 1;
 }
 
 // The resize grip: a corner glyph at the card's bottom-right, hover-only.
@@ -209,8 +175,8 @@
     opacity: 1;
 }
 
-// The card's transform box: grab bar + resize grip + the card itself, so
-// the lift (tilt + scale) carries all three together.
+// The card's transform box: resize grip + the card itself, so the lift
+// (tilt + scale) carries both together.
 .cardBox {
     position: relative;
     width: 100%;
@@ -229,18 +195,37 @@
         scale 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-// The whole card is the grab area, so it answers for the cursor instead of
-// inheriting the board's pan grab, and a finger drag moves the card rather
-// than scrolling the sheet out from under it.
-.cardBox[data-draggable] {
-    cursor: grab;
-    touch-action: none;
+// An editable card moves by its frame (the card's padding and the gaps
+// between its rows) and its head row; the content clicks and selects text
+// (cardPress.ts). The board's touch-action covers the box. Mid-drag the
+// whole card shows the grabbing cursor (.slotDragging).
+.slot:not(.slotDragging) .cardBox[data-draggable] {
+    article {
+        cursor: grab;
+
+        > * {
+            cursor: auto;
+            user-select: text;
+        }
+    }
+
+    [data-drag-handle] {
+        cursor: grab;
+        user-select: none;
+    }
+
+    // The frame lights up under the pointer, to show it can be held.
+
+    @media (hover: hover) {
+        &:hover article {
+            border-color: $color-sage;
+        }
+    }
 }
 
-// No hover on touch: the grab bar and the grip stay visible.
+// No hover on touch: the grip stays visible.
 
 @media (hover: none) {
-    .handle,
     .resizeGrip {
         opacity: 1;
     }

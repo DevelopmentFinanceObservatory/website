@@ -33,8 +33,10 @@ export type ShareRefusal =
     | { code: 'share_refused' }
     | { code: 'failed' };
 
-/** What `POST /api/share` came to: the share's id, or the refusal. */
-export type ShareAnswer = { id: string } | { refusal: ShareRefusal };
+/** What `POST /api/share` came to: the share's id, with the moment a
+ *  snapshot's data dates from (`servedAt`, ISO) when the site gives one, or
+ *  the refusal. */
+export type ShareAnswer = { id: string; servedAt?: string } | { refusal: ShareRefusal };
 
 /** A made share with the data cards it holds, or the refusal with the cards
  *  the share would have held. */
@@ -99,7 +101,13 @@ export const readShareAnswer = (ok: boolean, answer: unknown): ShareAnswer => {
     }
 
     if (ok) {
-        return typeof body['id'] === 'string' && body['id'] ? { id: body['id'] } : FAILED;
+        const { id, servedAt } = body;
+
+        if (typeof id !== 'string' || !id) {
+            return FAILED;
+        }
+
+        return typeof servedAt === 'string' && servedAt ? { id, servedAt } : { id };
     }
 
     // Every refusal is a problem document; its `code` says which.

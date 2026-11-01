@@ -89,6 +89,13 @@ test('the mode choice is offered for a canvas or a card only, and only when live
 test("the site's answer to a new share is its id or the refusal it names", () => {
     const rows: [boolean, unknown, unknown][] = [
         [true, { id: 'Ab12Cd34', title: 'T' }, { id: 'Ab12Cd34' }],
+        // A snapshot's answer gives the moment its data dates from.
+        [
+            true,
+            { id: 'Ab12Cd34', title: 'T', servedAt: '2026-10-31T09:15:00Z' },
+            { id: 'Ab12Cd34', servedAt: '2026-10-31T09:15:00Z' },
+        ],
+        [true, { id: 'Ab12Cd34', servedAt: 42 }, { id: 'Ab12Cd34' }],
         [
             false,
             {

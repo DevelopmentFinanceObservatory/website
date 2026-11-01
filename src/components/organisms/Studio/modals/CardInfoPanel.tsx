@@ -1,5 +1,6 @@
 'use client';
 
+import classNames from 'classnames';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { useCopied } from '../hooks/useCopied';
@@ -17,8 +18,11 @@ import {
     type LegacyView,
     localDay,
     type PanelBlock,
+    type PanelCite,
+    type PanelMade,
     type PanelRow,
     type PanelSource,
+    type PanelStep,
     type PanelTerm,
 } from '@/lib/studio/descriptionBlocks';
 import { panelViewOf } from '@/lib/studio/infoPanel';
@@ -160,23 +164,190 @@ const Term = ({ term }: { term: PanelTerm }) =>
         <span className={styles.termPlain}>{term.name}</span>
     );
 
-const CiteForm = ({ kind, text, label }: { kind: string; text: string; label: string }) => (
-    <>
-        <p className={styles.citeKind}>{kind}</p>
-        <span className={styles.citeRow}>
-            <span className={styles.citationText}>{text}</span>
-            <CopyButton value={text} label={label} />
+// What a failed snapshot link says, by why it failed.
+const CITE_LINK_TEXT = {
+    failed: 'Could not make a link. Try again.',
+    limited: "This network has made today's links. Try again tomorrow.",
+} as const;
+
+type CiteForm = 'short' | 'full';
+
+const CITE_FORMS: Record<CiteForm, { label: string; copy: string }> = {
+    short: { label: 'Short', copy: 'Copy short citation' },
+    full: { label: 'Reference list', copy: 'Copy full citation' },
+};
+
+// The citation in one form at a time, with a switch between them, then the
+// owner's offer to create a public snapshot link and what came of it: the
+// link (`madeLink`), or why there is none.
+const CiteBlock = ({
+    cite,
+    link,
+    madeLink,
+    onAddLink,
+}: {
+    cite: PanelCite;
+    link: CiteLinkState;
+    madeLink: string | null;
+    onAddLink: (() => void) | null;
+}) => {
+    const [form, setForm] = useState<CiteForm>('short');
+    const text = cite[form];
+
+    return (
+        <div className={styles.cite} data-block="cite">
+            <div className={styles.citeHead}>
+                <p className={styles.fieldLabel}>Cite as</p>
+                <span className={styles.citeSwitch} role="group" aria-label="Citation form">
+                    {(['short', 'full'] as const).map((entry) => (
+                        <button
+                            key={entry}
+                            type="button"
+                            aria-pressed={entry === form}
+                            onClick={() => setForm(entry)}
+                        >
+                            {CITE_FORMS[entry].label}
+                        </button>
+                    ))}
+                </span>
+            </div>
+            <span className={styles.citeRow}>
+                <span className={styles.citationText}>{text}</span>
+                <CopyButton value={text} label={CITE_FORMS[form].copy} />
+            </span>
+            {cite.offer && onAddLink && link !== 'limited' && (
+                <p className={styles.hint}>
+                    {cite.offer.note && <>{cite.offer.note} </>}
+                    <button
+                        type="button"
+                        className={styles.addLink}
+                        disabled={link === 'minting'}
+                        onClick={onAddLink}
+                    >
+                        {link === 'minting'
+                            ? 'Creating a public link…'
+                            : 'Create a public link to cite'}
+                    </button>
+                </p>
+            )}
+            {madeLink && (
+                <p className={styles.hint} role="status">
+                    Public snapshot link added:{' '}
+                    <a
+                        className={styles.madeLinkUrl}
+                        href={madeLink}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        {madeLink}
+                    </a>
+                </p>
+            )}
+            {(link === 'failed' || link === 'limited') && (
+                <p className={styles.hint} role="alert">
+                    {CITE_LINK_TEXT[link]}
+                </p>
+            )}
+        </div>
+    );
+};
+
+// One step on the rail: its verb and object, and the step's sentence one
+// click away. The step that draws the card has a filled dot.
+const StepRow = ({ step }: { step: PanelStep }) => {
+    const [open, setOpen] = useState(false);
+    const label = (
+        <span className={styles.stepLabel}>
+            {step.givesCard && <span className={styles.stepKind}>Gives the card</span>}
+            {step.verb ? (
+                <>
+                    <b>{step.verb}</b>
+                    <i className={styles.stepDot}>·</i>
+                    {step.object}
+                </>
+            ) : (
+                step.object
+            )}
         </span>
-    </>
+    );
+
+    return (
+        <li className={classNames(styles.step, step.givesCard && styles.stepCard)}>
+            {step.detail ? (
+                <button
+                    type="button"
+                    className={styles.stepRow}
+                    aria-expanded={open}
+                    onClick={() => setOpen((was) => !was)}
+                >
+                    {label}
+                    <Icon
+                        name="chevron-down"
+                        className={classNames(styles.stepChevron, open && styles.stepChevronOpen)}
+                    />
+                </button>
+            ) : (
+                <span className={styles.stepRow}>{label}</span>
+            )}
+            {step.detail && open && <p className={styles.stepDetail}>{step.detail}</p>}
+        </li>
+    );
+};
+
+const MadeBlock = ({ made }: { made: PanelMade }) => (
+    <details className={styles.indicator} data-block="made">
+        <summary className={styles.indicatorHead}>
+            <span className={styles.indicatorName}>How this card was made</span>
+            <Icon name="chevron-down" className={styles.indicatorChevron} />
+        </summary>
+        <div className={styles.made}>
+            {made.steps.length > 0 && (
+                <ol className={styles.rail}>
+                    {made.steps.map((step) => (
+                        <StepRow key={step.key} step={step} />
+                    ))}
+                </ol>
+            )}
+            {made.notes.length > 0 && <Items items={made.notes} />}
+            {made.pages.map((page) => (
+                <SourceLink key={page.key} className={styles.madeLink} dcid={page.page}>
+                    {page.name}
+                    <Icon name="arrow-up-right" className={styles.madeLinkIcon} />
+                </SourceLink>
+            ))}
+        </div>
+    </details>
 );
 
-// A described card's panel holds what it shows and what its measure means,
-// what to keep in mind, its sources, how to cite it, its download, then how it
-// was made, collapsed.
-const DescribedPanel = ({ view, download }: { view: DescribedView; download: ReactNode }) => (
+// A described card's panel holds, in order, what a quotient or share card
+// divides by what, what the card shows and what its measure means, what to
+// keep in mind, its sources (with a computed card's inputs when no
+// calculation names them), how to cite it, its download, then how it was
+// made, collapsed.
+const DescribedPanel = ({
+    view,
+    download,
+    link,
+    onAddLink,
+}: {
+    view: DescribedView;
+    download: ReactNode;
+    link: CiteLinkState;
+    onAddLink: (() => void) | null;
+}) => (
     <div className={styles.panel}>
         <p className={styles.title}>{view.title}</p>
         {view.live && <p className={styles.live}>{view.live}</p>}
+        {view.calculation && (
+            <div className={styles.formula} data-block="calculation">
+                <p className={styles.formulaLabel}>Calculated as</p>
+                <div className={styles.fraction}>
+                    <p>{view.calculation.numerator}</p>
+                    <hr />
+                    <p>{view.calculation.denominator}</p>
+                </div>
+            </div>
+        )}
         {view.measure && (
             <p className={styles.measure}>
                 <b>{view.measure.label}</b>. {view.measure.definition}
@@ -206,48 +377,41 @@ const DescribedPanel = ({ view, download }: { view: DescribedView; download: Rea
             </div>
         )}
 
-        {view.sources.length > 0 && (
+        {(view.sources.length > 0 || view.inputs.length > 0) && (
             <div className={styles.block} data-block="sources">
-                <p className={styles.fieldLabel}>
-                    {view.sources.length > 1 ? 'Sources' : 'Source'}
-                </p>
+                {view.sources.length > 0 && (
+                    <>
+                        <p className={styles.fieldLabel}>
+                            {view.sources.length > 1 ? 'Sources' : 'Source'}
+                        </p>
+                        <ul className={styles.sources}>
+                            {/* A described source holds its name and page, so there is nothing to look up. */}
+                            {view.sources.map((source) => (
+                                <SourceEntry key={source.key} source={source} open={false} />
+                            ))}
+                        </ul>
+                    </>
+                )}
+                {view.inputs.length > 0 && (
+                    <>
+                        <p className={styles.fieldLabel}>Calculated from</p>
+                        <Items items={view.inputs} />
+                    </>
+                )}
                 {view.from && <p className={styles.from}>{view.from}</p>}
-                <ul className={styles.sources}>
-                    {/* A described source holds its name and page, so there is nothing to look up. */}
-                    {view.sources.map((source) => (
-                        <SourceEntry key={source.key} source={source} open={false} />
-                    ))}
-                </ul>
             </div>
         )}
 
-        <div className={styles.cite} data-block="cite">
-            <p className={styles.fieldLabel}>Cite as</p>
-            <CiteForm kind="Short form" text={view.cite.short} label="Copy short citation" />
-            <CiteForm kind="Reference list" text={view.cite.full} label="Copy full citation" />
-            {view.cite.hint && <p className={styles.hint}>{view.cite.hint}</p>}
-        </div>
+        <CiteBlock
+            cite={view.cite}
+            link={link}
+            madeLink={typeof link === 'object' ? snapshotUrlOf(link.id) : null}
+            onAddLink={onAddLink}
+        />
 
         {download}
 
-        {view.made && (
-            <details className={styles.indicator} data-block="made">
-                <summary className={styles.indicatorHead}>
-                    <span className={styles.indicatorName}>How this card was made</span>
-                    <Icon name="chevron-down" className={styles.indicatorChevron} />
-                </summary>
-                <div className={styles.made}>
-                    {view.made.steps.length > 0 && <Items items={view.made.steps} />}
-                    {view.made.notes.length > 0 && <Items items={view.made.notes} />}
-                    {view.made.pages.map((page) => (
-                        <SourceLink key={page.key} className={styles.madeLink} dcid={page.page}>
-                            {page.name}
-                            <Icon name="arrow-up-right" className={styles.madeLinkIcon} />
-                        </SourceLink>
-                    ))}
-                </div>
-            </details>
-        )}
+        {view.made && <MadeBlock made={view.made} />}
     </div>
 );
 
@@ -317,6 +481,14 @@ const LegacyPanel = ({
  *  slot began to show the data it shows, an ISO timestamp. */
 export type CitedSnapshot = { id: string; servedAt?: string };
 
+// Where asking for a snapshot link to cite the card stands: being made, or
+// refused.
+export type CiteAsk = 'minting' | 'failed' | 'limited';
+
+// Where the owner's snapshot link for the citation stands: none asked for,
+// asked for (`CiteAsk`), or made (`CitedSnapshot`).
+type CiteLinkState = 'idle' | CiteAsk | CitedSnapshot;
+
 // The link a snapshot share is cited by, read in the browser, where the
 // panel opens.
 const snapshotUrlOf = (shareId: string | undefined): string | null =>
@@ -341,9 +513,12 @@ const snapshotAsOfOf = (snapshot: CitedSnapshot | undefined): string | null => {
  * shows the legacy panel. Download Data sits after the citation either way.
  * On a share whose slot draws the card (`shared`) it serves the rows that
  * slot serves. The card's
- * owner (`canShare`) is told how to get a link to cite. The full citation
- * is retrieved today. On a snapshot share (`snapshot`) it names the share's
- * link and the day the card's data dates from.
+ * owner (`canShare`) can add a snapshot link to the citation, which
+ * `onCiteLink` asks for and `citeLink` reports: being made, refused or made.
+ * The caller keeps it, so the card keeps one link, and one request for it,
+ * however often the panel opens on it. The full citation is retrieved
+ * today. On a snapshot share (`snapshot`) it names the share's link and the
+ * day the card's data dates from.
  */
 const CardInfoPanel = ({
     info,
@@ -353,6 +528,8 @@ const CardInfoPanel = ({
     shared,
     snapshot,
     canShare = false,
+    citeLink,
+    onCiteLink,
 }: {
     info: CardInfo | null;
     // The card itself, for Download Data.
@@ -363,20 +540,34 @@ const CardInfoPanel = ({
     // The snapshot share the card is shown on.
     snapshot?: CitedSnapshot;
     canShare?: boolean;
+    // Where the snapshot link to cite the card stands, when it was asked for.
+    citeLink?: CitedSnapshot | CiteAsk;
+    // Asks for a snapshot of the card for its citation, whose progress and
+    // link come back as `citeLink`.
+    onCiteLink?: () => void;
 }) => {
+    const link: CiteLinkState = citeLink ?? 'idle';
+    const cited = snapshot ?? (typeof citeLink === 'object' ? citeLink : undefined);
     const view =
         info &&
         panelViewOf(info, {
             retrievedOn: localDay(new Date()),
-            snapshotUrl: snapshotUrlOf(snapshot?.id),
-            snapshotAsOf: snapshotAsOfOf(snapshot),
+            snapshotUrl: snapshotUrlOf(cited?.id),
+            snapshotAsOf: snapshotAsOfOf(cited),
             canShare,
         });
     const download = widget && <CardDownload widget={widget} shared={shared} />;
 
     return (
         <Modal open={open && view !== null} onOpenChange={onOpenChange} title="More Info">
-            {view?.kind === 'described' && <DescribedPanel view={view} download={download} />}
+            {view?.kind === 'described' && (
+                <DescribedPanel
+                    view={view}
+                    download={download}
+                    link={link}
+                    onAddLink={onCiteLink && widget ? onCiteLink : null}
+                />
+            )}
             {view?.kind === 'legacy' && <LegacyPanel view={view} open={open} download={download} />}
         </Modal>
     );

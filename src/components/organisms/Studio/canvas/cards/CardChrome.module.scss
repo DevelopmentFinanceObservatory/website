@@ -2,14 +2,14 @@
 @use "mixins" as *;
 @use "shared" as *;
 
-// The card's bottom bar: Source Name (· User Note) left, Built with right.
+// The card's bottom bar: the source line left, Built with right.
 // Pinned to the card's bottom and NEVER crushed or clipped — the content
 // above it is what gives way.
 .chrome {
     @include flex(row, space-between, flex-end);
 
     // Air between the source line and "Built with". The source may run to a
-    // second line (see .sourceLabel); the mark stays on the last one.
+    // second line (see .sourceLine); the mark stays on the last one.
     gap: rem(10);
     flex-shrink: 0;
     margin-top: auto;
@@ -97,48 +97,81 @@ button.leftOut {
     }
 }
 
-// The attribution line opens More Info, so it has to read as a control and
-// not as the caption it sits among: a pointer rather than the hover-popup
-// tags' help cursor, and an underline on hover (QA-21).
-.sourceAction {
-    // A wrapping label puts the icon beside the first line, not in the
-    // middle of the block; the offset centres it optically on that line.
-    align-items: flex-start;
-    cursor: pointer;
+// The attribution line: "Source:", the first name dotted underlined as a
+// link, "+N more" and the info mark. The whole line opens More Info; the mark
+// is the quiet sign that it does. The name, count and mark wrap as one piece
+// under the lead when the line is too narrow for both, and the name clips
+// with an ellipsis, so the line takes two lines at most. Under a left-out
+// line it keeps to one, so the foot never takes more than two: there the name
+// gives way with an ellipsis, and the lead, count and mark keep their width.
+// A line with no name, a computed card crediting DFO's calculation alone,
+// lets its lead give way instead.
+.sourceLine {
+    @include flex(row, flex-start, center);
+    @include font-size(12px, 1.3);
 
-    .sourceIcon {
-        margin-top: rem(3);
-    }
-
-    &:hover .sourceLabel {
-        text-decoration: underline;
-        text-underline-offset: 0.2em;
-    }
-}
-
-// Sources are the point of a card, so the name wraps rather than being cut
-// at the first thing that does not fit (QA-25): on the narrowest card the
-// line has room for about twenty characters, and a source name is routinely
-// twice that.
-.sourceLabel {
+    flex-wrap: wrap;
+    column-gap: rem(4);
     min-width: 0;
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--th-caption, var(--color-gray-1500));
     text-align: left;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: color 0.2s ease;
+
+    &:hover {
+        color: var(--th-muted, var(--color-stone));
+    }
+
+    .foot & {
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
 }
 
-// The name takes the width it needs, up to two lines, then an ellipsis — a
-// bar that grows without end would eat the card instead.
-.sourceName {
-    display: -webkit-box;
+.creditLead {
+    min-width: 0;
     overflow: hidden;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    .sourceLine:has(.creditName) & {
+        flex-shrink: 0;
+    }
 }
 
-// The count always starts its own line, under the name rather than trailing
-// off its last word — on its own line the separator dot has nothing to
-// separate, so it is gone.
-.sourceCount {
-    display: block;
+.creditTail {
+    @include flex(row, flex-start, center);
+
+    gap: rem(4);
+    min-width: 0;
+    max-width: 100%;
+}
+
+.creditName {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--th-muted, var(--color-stone));
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--th-caption, var(--color-gray-1500));
+    text-underline-offset: 0.22em;
+
+    .sourceLine:hover & {
+        text-decoration-style: solid;
+        text-decoration-color: currentColor;
+    }
+}
+
+.creditMore {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .sourceIcon {

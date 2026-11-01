@@ -1,6 +1,7 @@
 @use "variables" as *;
 @use "mixins" as *;
 @use "breakpoints" as *;
+@use "../canvas/cards/shared" as *;
 
 // rem(77) from the viewport top (the bar above is rem(60) tall), rem(5) above
 // the chat/canvas line — which lands that line exactly at --ws-top (110).
@@ -72,16 +73,51 @@
     margin-left: calc(var(--ws-collapsed-left) - var(--ws-left) - #{rem(34)} + #{rem(10)});
 }
 
+.titleSlot {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
 .titleText {
     min-width: 0;
     overflow: hidden;
 
     // Overflow clips at the padding edge — the vertical padding (cancelled
     // by the margins) keeps the tight 0.9 line-height's descenders visible.
-    padding-block: 0.2em;
+    padding: 0.2em 0;
     margin-block: -0.2em;
+    font: inherit;
+    color: inherit;
+    text-align: left;
     text-overflow: ellipsis;
+    letter-spacing: inherit;
     white-space: nowrap;
+    background: none;
+    border: 0;
+}
+
+// A cut title's whole text, in the house popup under it.
+.titleMenu {
+    @include font-size(13px, 1.35);
+    @include popup-motion;
+
+    z-index: $z-header + 11;
+    max-width: rem(560);
+    max-height: var(--radix-popover-content-available-height);
+    padding: rem(8) rem(10);
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    background-color: var(--color-popup);
+    border-radius: rem(4);
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
 }
 
 // The pencil: a 1em box on the text's line, the rem(20) glyph overflowing it.

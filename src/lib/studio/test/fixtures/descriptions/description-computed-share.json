@@ -1,0 +1,205 @@
+{
+  "id": "description-computed-share",
+  "description": "The description of an ops_ version computed as one input's share of itself, narrowed to a sector, so both sides carry the same input label, is accepted.",
+  "schema": "description",
+  "input": {
+    "describes": {
+      "kind": "computed_version",
+      "id": "ops_5d7e9f1a3b5c7d9e",
+      "content_version": "ocv_2b4d6f8a1c3e5a7c"
+    },
+    "title": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+    "about": {
+      "name": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+      "series": 38,
+      "period": {
+        "start": "2010",
+        "end": "2024",
+        "grain": "year"
+      },
+      "unit": {
+        "numerator": {
+          "ref": "USDollar",
+          "label": "US dollars"
+        },
+        "denominator": {
+          "ref": "USDollar",
+          "label": "US dollars"
+        }
+      }
+    },
+    "sources": [
+      {
+        "ref": "provenance/OECDCreditorReportingSystem",
+        "label": "OECD Creditor Reporting System (CRS)",
+        "publisher": "OECD",
+        "licence": "OECD Terms and Conditions",
+        "series": 38,
+        "documentation": "/api/graph/documentation/provenance/OECDCreditorReportingSystem"
+      },
+      {
+        "ref": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+        "label": "Gross ODA disbursements",
+        "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "description": "/api/datasets/spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e/cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0/description"
+      }
+    ],
+    "freshness": {
+      "computed": "2026-10-11",
+      "inputs": [
+        {
+          "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+          "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "label": "Gross ODA disbursements"
+        }
+      ],
+      "latest_period": "2024",
+      "series_reaching_it": 38,
+      "estimated_values": 0,
+      "provisional_values": 0
+    },
+    "steps": [
+      {
+        "id": "s1",
+        "op": "retrieve",
+        "input": {
+          "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+          "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "label": "Gross ODA disbursements"
+        },
+        "options": {},
+        "text": "Retrieved gross ODA disbursements."
+      },
+      {
+        "id": "s2",
+        "op": "retrieve",
+        "input": {
+          "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+          "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "label": "Gross ODA disbursements"
+        },
+        "options": {},
+        "text": "Retrieved gross ODA disbursements."
+      },
+      {
+        "id": "s3",
+        "op": "share",
+        "inputs": {
+          "numerator": "s1",
+          "denominator": "s2"
+        },
+        "policy": "share_of_intersect_periods",
+        "params": {
+          "numerator_by": [
+            "recipient"
+          ],
+          "numerator_entity": {
+            "ref": "sector/120",
+            "label": "health"
+          }
+        },
+        "kept": {
+          "entities": 38,
+          "periods": 15,
+          "entities_with_fewer_periods": 0
+        },
+        "left_out": [],
+        "unit": {
+          "numerator": {
+            "ref": "USDollar",
+            "label": "US dollars"
+          },
+          "denominator": {
+            "ref": "USDollar",
+            "label": "US dollars"
+          }
+        },
+        "period_coverage": [
+          {
+            "period": "2010",
+            "entities": 38
+          },
+          {
+            "period": "2011",
+            "entities": 38
+          },
+          {
+            "period": "2012",
+            "entities": 38
+          },
+          {
+            "period": "2013",
+            "entities": 38
+          },
+          {
+            "period": "2014",
+            "entities": 38
+          },
+          {
+            "period": "2015",
+            "entities": 38
+          },
+          {
+            "period": "2016",
+            "entities": 38
+          },
+          {
+            "period": "2017",
+            "entities": 38
+          },
+          {
+            "period": "2018",
+            "entities": 38
+          },
+          {
+            "period": "2019",
+            "entities": 38
+          },
+          {
+            "period": "2020",
+            "entities": 38
+          },
+          {
+            "period": "2021",
+            "entities": 38
+          },
+          {
+            "period": "2022",
+            "entities": 38
+          },
+          {
+            "period": "2023",
+            "entities": 38
+          },
+          {
+            "period": "2024",
+            "entities": 38
+          }
+        ],
+        "text": "Took gross ODA disbursements to health as a share of all gross ODA disbursements for each year: 38 recipients kept."
+      }
+    ],
+    "caveats": [],
+    "cite": {
+      "title": "Gross ODA disbursements to health as a share of gross ODA disbursements",
+      "text": "OECD Creditor Reporting System (CRS) (2026), processed by the Development Finance Observatory",
+      "id": "ops_5d7e9f1a3b5c7d9e",
+      "content_version": "ocv_2b4d6f8a1c3e5a7c",
+      "retrieved": "2026-10-11",
+      "data": "/api/presentation/frames/ops_5d7e9f1a3b5c7d9e/ocv_2b4d6f8a1c3e5a7c",
+      "inputs": [
+        {
+          "id": "spec_4b1f0c2d9e8a7b6c5d4e3f2a1b0c9d8e",
+          "content_version": "cv_0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "label": "Gross ODA disbursements"
+        }
+      ]
+    },
+    "gaps": [],
+    "built_from": {
+      "facts_schema": 1,
+      "vocabulary": "voc_5e1d9a3c7b2f8e64"
+    }
+  },
+  "expect": "accept"
+}

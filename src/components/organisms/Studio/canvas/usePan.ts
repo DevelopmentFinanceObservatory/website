@@ -3,10 +3,12 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { scrollerOf } from './board';
+import { cardPressAction } from './cardPress';
 
 /**
- * Grab-the-background panning: the empty sheet (cards included — only truly
- * interactive bits keep the pointer) drags the view around. The view eases
+ * Grab-the-background panning: the empty sheet drags the view around, and
+ * so do the cards wherever cardPress.ts says a press pans (touch on card
+ * content, any card on a read-only canvas). The view eases
  * toward the grab point viscously while held, and glides out on decaying
  * momentum after release. `flyTo` scrolls smoothly to a board point,
  * killing any lingering glide first (its frame loop would fight the flight).
@@ -70,10 +72,12 @@ export const usePan = (boardRef: RefObject<HTMLDivElement | null>) => {
     };
 
     const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
-        // Panning starts anywhere on the sheet — cards included. Only truly
-        // interactive bits (pin button, beacons, inputs; the grab bar stops
-        // propagation itself) keep the pointer to themselves.
+        // Interactive bits on the sheet (beacons, inputs) keep the pointer to
+        // themselves; on a card, the card's press decision rules.
+        const card = cardPressAction(event);
+
         if (
+            (card !== null && card !== 'pan') ||
             (event.target as HTMLElement).closest(
                 'button, a, input, textarea, select, [data-beacon]',
             )

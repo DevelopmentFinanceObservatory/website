@@ -1,7 +1,5 @@
 'use client';
 
-import classNames from 'classnames';
-
 import styles from './CardChrome.module.scss';
 
 import Logo from '@/assets/svg/logo.svg';
@@ -31,28 +29,36 @@ const InfoTag = ({ label, content }: { label: string; content?: string }) =>
         <span className={styles.source}>{label}</span>
     );
 
-// The attribution line: the source name, or every source's joined on a card
-// citing several, with the indicator count on its own line under it. A click
-// opens the More Info panel, which the card menu also offers. Without the
-// frame's info (a text card, an older save) it stays the plain tag.
-const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) => (
-    <button
-        type="button"
-        className={classNames(styles.source, styles.sourceAction)}
-        aria-label="More Info about this card"
-        onClick={onInfo}
-    >
-        <Icon name="info" className={styles.sourceIcon} />
-        <span className={styles.sourceLabel}>
-            <span className={styles.sourceName}>{sourceLine(info)}</span>
-            {info.indicatorCount > 0 && (
-                <span className={styles.sourceCount}>
-                    {`${info.indicatorCount} indicator${info.indicatorCount === 1 ? '' : 's'}`}
-                </span>
-            )}
-        </span>
-    </button>
-);
+// The attribution line: "Source:" and the first source's name, how many more
+// the card cites, and an info mark at its end. A card DFO computed from
+// sources it credits none of reads "Source: DFO calculation". A click
+// anywhere on it opens the More Info panel, which lists
+// every source in full; a card that names no source shows the mark alone.
+// Without the frame's info (a text card, an older save) the bar keeps the
+// plain tag.
+const SourceLine = ({ info, onInfo }: { info: CardInfo; onInfo: () => void }) => {
+    const credit = sourceLine(info);
+
+    return (
+        <button
+            type="button"
+            className={styles.sourceLine}
+            aria-label={credit ? undefined : 'More Info about this card'}
+            title="More Info"
+            onClick={onInfo}
+        >
+            {credit && <span className={styles.creditLead}>{credit.lead}</span>}
+            {/* Spaces the line's accessible name; a flex row drops it. */}{' '}
+            <span className={styles.creditTail}>
+                {credit?.first && <span className={styles.creditName}>{credit.first}</span>}{' '}
+                {credit && credit.more > 0 && (
+                    <span className={styles.creditMore}>+{credit.more} more</span>
+                )}
+                <Icon name="info" className={styles.sourceIcon} />
+            </span>
+        </button>
+    );
+};
 
 // What the card's data leaves out, on one line above the source. It shows
 // the first gap in the platform's words, clipped to the card's width, and
