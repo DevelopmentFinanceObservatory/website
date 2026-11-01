@@ -305,6 +305,15 @@
     vertical-align: 1px;
 }
 
+.termMore {
+    @include font-size(10px, 1.4);
+
+    align-self: center;
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+}
+
 .codes code,
 .termCodes code {
     @include font-size(10px, 1.4);

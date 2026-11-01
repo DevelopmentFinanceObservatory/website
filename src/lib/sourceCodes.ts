@@ -83,6 +83,15 @@ export const sourceCodeParts = ({ exact, publishers }: SourceCodeGroups): Source
     return parts;
 };
 
+/** The codes to show as chips, across publishers, and how many more the
+ *  groups count without listing. */
+export const sourceCodeChips = ({
+    publishers,
+}: SourceCodeGroups): { codes: string[]; more: number } => ({
+    codes: publishers.flatMap((publisher) => publisher.codes),
+    more: publishers.reduce((total, publisher) => total + publisher.more, 0),
+});
+
 /** The sentence naming the codes as plain text. */
 export const sourceCodeText = (groups: SourceCodeGroups): string =>
     sourceCodeParts(groups)

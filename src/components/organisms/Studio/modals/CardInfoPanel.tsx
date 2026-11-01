@@ -13,7 +13,7 @@ import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import HoverPopup from '@/components/molecules/HoverPopup/HoverPopup';
 import Modal from '@/components/molecules/Modal/Modal';
 import type { CardInfo, Widget } from '@/lib/chat/widgets';
-import { sourceCodeText } from '@/lib/sourceCodes';
+import { sourceCodeChips, sourceCodeText } from '@/lib/sourceCodes';
 import type { SharedCardAddress } from '@/lib/studio/cardDownload';
 import {
     type DescribedView,
@@ -147,13 +147,19 @@ const Items = ({ items }: { items: string[] }) => (
 
 // The publisher's codes for the series holding a value the card shows,
 // beside its name, with the sentence Get Data says them in as their title.
-const TermCodes = ({ codes }: { codes: NonNullable<PanelTerm['codes']> }) => (
-    <span className={styles.termCodes} title={sourceCodeText(codes)}>
-        {codes.publishers.flatMap((publisher) =>
-            publisher.codes.map((code) => <code key={code}>{code}</code>),
-        )}
-    </span>
-);
+// Codes past those listed are counted after the chips.
+const TermCodes = ({ codes }: { codes: NonNullable<PanelTerm['codes']> }) => {
+    const chips = sourceCodeChips(codes);
+
+    return (
+        <span className={styles.termCodes} title={sourceCodeText(codes)}>
+            {chips.codes.map((code, index) => (
+                <code key={`${code}#${index}`}>{code}</code>
+            ))}
+            {chips.more > 0 && <span className={styles.termMore}>+{chips.more} more</span>}
+        </span>
+    );
+};
 
 // A value the card shows or is fixed to, by name. One with a definition
 // opens it in the house popup, on hover, click, tap or the keyboard.

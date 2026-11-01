@@ -437,6 +437,33 @@ test('each value the card shows names its own exact code, and the full list is n
     assert.equal(view.codes, null);
 });
 
+test('a card code that no shown value carries is still named once', () => {
+    const input = vectorInput(CODES_VECTOR);
+    const about = input['about'] as Record<string, unknown> & Description['about'];
+    const dimension = about.drawn?.dimensions?.[0];
+
+    assert.ok(dimension?.values);
+
+    const multilateral = { ...dimension.values[1], source_codes: undefined };
+    const view = describedPanel(
+        described({
+            ...input,
+            about: {
+                ...about,
+                drawn: {
+                    ...about.drawn,
+                    dimensions: [{ ...dimension, values: [dimension.values[0], multilateral] }],
+                },
+            },
+        }),
+    );
+
+    assert.deepEqual(view.codes, {
+        exact: false,
+        publishers: [{ publisher: 'World Bank', codes: ['DT.DIS.MLAT.CB.CD'], more: 0 }],
+    });
+});
+
 test('a card of one series names its exact code once, with its publisher from the source credited', () => {
     const input = vectorInput(CODES_VECTOR);
     const about = input['about'] as Description['about'];

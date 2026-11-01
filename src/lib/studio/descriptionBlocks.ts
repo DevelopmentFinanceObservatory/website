@@ -325,23 +325,32 @@ const termOf =
         codes: codesOf(description, value.source_codes),
     });
 
+// The values the card lists by name: those it draws on each dimension that
+// lists them all, then the values its version is fixed to that carry a
+// definition.
+const shownValues = (description: Description) => {
+    const { about } = description;
+    const drawn = (about.drawn?.dimensions ?? []).filter(
+        (dimension) => dimension.values && dimension.values.length > 0,
+    );
+    const defined = (about.fixed ?? [])
+        .map(({ value }) => value)
+        .filter((value) => value.definition !== undefined);
+
+    return { drawn, defined };
+};
+
 /** What the card shows, by name. These are the values it draws on each
  *  dimension that lists them all, under "Shows" when one dimension does and
  *  under each dimension's name when several do. Then what it is within, the
  *  values its version is fixed to that carry a definition. */
 export const termLists = (description: Description): PanelTerms[] => {
-    const { about } = description;
-    const listed = (about.drawn?.dimensions ?? []).filter(
-        (dimension) => dimension.values && dimension.values.length > 0,
-    );
+    const { drawn: listed, defined } = shownValues(description);
     const drawn = listed.map(({ property, values = [] }): PanelTerms => ({
         key: `drawn:${property.ref}`,
         label: listed.length > 1 ? pluralLabel(property.label) : 'Shows',
         terms: values.map(termOf(description)),
     }));
-    const defined = (about.fixed ?? [])
-        .map(({ value }) => value)
-        .filter((value) => value.definition !== undefined);
 
     return [
         ...drawn,
@@ -349,6 +358,25 @@ export const termLists = (description: Description): PanelTerms[] => {
             ? [{ key: 'within', label: 'Within', terms: defined.map(termOf(description)) }]
             : []),
     ];
+};
+
+// The card's own codes that no value it draws and lists carries, so a card whose
+// values name some of their codes still names the rest once.
+const unlistedCodes = (description: Description): SourceCodeGroups | null => {
+    const carried = new Set(
+        shownValues(description)
+            .drawn.flatMap(({ values = [] }) => values)
+            .flatMap((value) =>
+                (value.source_codes ?? []).map(({ provenance, code }) => `${provenance}\n${code}`),
+            ),
+    );
+
+    return codesOf(
+        description,
+        (description.about.source_codes ?? []).filter(
+            ({ provenance, code }) => !carried.has(`${provenance}\n${code}`),
+        ),
+    );
 };
 
 const UNIT_UNKNOWN = 'The unit is not known.';
@@ -607,9 +635,6 @@ export const describedPanel = (
     const { measure } = description.about;
     const calculation = calculationOf(description);
     const terms = termLists(description);
-    // A card whose values each name their codes does not list them all again.
-    const codesPerValue = terms.some((list) => list.terms.some((term) => term.codes));
-
     return {
         kind: 'described',
         title: description.title,
@@ -618,7 +643,7 @@ export const describedPanel = (
         measure: measure?.definition
             ? { label: capitalise(measure.label), definition: measure.definition }
             : null,
-        codes: codesPerValue ? null : codesOf(description, description.about.source_codes),
+        codes: unlistedCodes(description),
         rows: aboutRows(description),
         terms,
         keepInMind: keepInMind(description),
