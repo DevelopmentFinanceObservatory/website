@@ -8,7 +8,9 @@
  * caption too, keeping what tells the rows apart, as the chart legend does.
  * Other columns hold names of places, donors and periods, whose shared
  * words are part of the name ("South Sudan", "South Africa"), so they stay
- * whole. Display only: the download and the widget keep the cells as they
+ * whole. The unit, when the caller gives one, heads the value column or
+ * leads the caption. Each numeric column's plain numbers show one count of
+ * decimals. Display only: the download and the widget keep the cells as they
  * came.
  */
 import { splitLabels } from './seriesLabels.ts';
@@ -70,9 +72,51 @@ const splitNames = (cells: string[]): SplitNames | null => {
         : null;
 };
 
+/** Where `tableView` says the card's unit: in place of the value column's
+ *  header, or as the caption's first detail. */
+export type TableUnit = { text: string; place: 'header' | 'caption' };
+
+export type TableViewOptions = { unit?: TableUnit | null };
+
+// A plain number as `cellNumber` writes it below 1,000, with its decimals.
+const PLAIN_NUMBER = /^-?\d+(?:\.(\d+))?$/;
+
+/** The most decimals a column's plain numbers are padded to. */
+export const MAX_DECIMALS = 2;
+
+// The column's cells with every plain number padded to the most decimals any
+// of them shows, up to MAX_DECIMALS: "5" beside "4.25" reads "5.00". A number
+// with a K, M, B or T keeps its one decimal, and any other text stays.
+const alignDecimals = (cells: string[]): string[] => {
+    const places = Math.min(
+        MAX_DECIMALS,
+        Math.max(0, ...cells.map((cell) => PLAIN_NUMBER.exec(cell)?.[1]?.length ?? 0)),
+    );
+
+    return cells.map((cell) => {
+        const match = PLAIN_NUMBER.exec(cell);
+        const shown = match?.[1]?.length ?? 0;
+
+        if (!match || shown >= places) {
+            return cell;
+        }
+
+        return `${cell}${shown ? '' : '.'}${'0'.repeat(places - shown)}`;
+    });
+};
+
 /** `columns` and `rows` with shared text moved to a caption. `namesColumn`
- *  is the column of variable names, the one whose shared text may go. */
-export const tableView = (columns: string[], rows: string[][], namesColumn?: number): TableView => {
+ *  is the column of variable names, the one whose shared text may go.
+ *  `options.unit` puts the card's one unit in the value (last) column's
+ *  header or first in the caption's details; the caller decides which. Every
+ *  numeric column's plain numbers are padded to the same decimals, at most
+ *  two, and still read back through `cellValue`. */
+export const tableView = (
+    columns: string[],
+    rows: string[][],
+    namesColumn?: number,
+    { unit }: TableViewOptions = {},
+): TableView => {
     const last = columns.length - 1;
     const column = (index: number) => rows.map((row) => row[index] ?? BLANK);
 
@@ -107,18 +151,25 @@ export const tableView = (columns: string[], rows: string[][], namesColumn?: num
           ? `… ${shortened.suffix}`
           : undefined;
     const details = [
+        ...(unit?.place === 'caption' ? [unit.text] : []),
         ...(shortened?.prefix && shortened.suffix ? [shortened.suffix] : []),
         ...columns.flatMap((name, index) =>
             constant[index] ? [`${name}: ${rows[0]?.[index] ?? ''}`] : [],
         ),
     ];
 
+    const aligned = columns.map((_, index) =>
+        numeric[index] ? alignDecimals(column(index)) : null,
+    );
+
     return {
         caption: lead || details.length ? { ...(lead ? { lead } : {}), details } : null,
-        columns: kept.map((index) => columns[index]!),
-        rows: rows.map((row) =>
+        columns: kept.map((index) =>
+            index === last && unit?.place === 'header' ? unit.text : columns[index]!,
+        ),
+        rows: rows.map((row, rowIndex) =>
             kept.map((index) => {
-                const text = row[index] ?? BLANK;
+                const text = aligned[index]?.[rowIndex] ?? row[index] ?? BLANK;
                 const short = index === namesColumn ? shortened?.names.get(text) : undefined;
 
                 return short !== undefined && short !== text
@@ -132,6 +183,22 @@ export const tableView = (columns: string[], rows: string[][], namesColumn?: num
             : {}),
     };
 };
+
+/** For each row of `order` (the displayed order, from `sortOrder`), whether
+ *  its first cell repeats the one shown above it, so the card may hide it and
+ *  name each run once. The first displayed row, a blank cell and a table of
+ *  one column (its first column is its values) never repeat. Hidden text is
+ *  for the eye only, and the caller keeps it for screen readers. */
+export const repeatedNames = (
+    view: Pick<TableView, 'rows' | 'columns'>,
+    order: number[],
+): boolean[] =>
+    order.map((rowIndex, at) => {
+        const text = view.rows[rowIndex]?.[0]?.text;
+        const above = at > 0 ? view.rows[order[at - 1]!]?.[0]?.text : undefined;
+
+        return view.columns.length > 1 && text !== undefined && !isBlank(text) && text === above;
+    });
 
 // A cell's sort key: its number in a numeric column, its shown text in another,
 // null when blank (blanks sort last whichever way the column runs).

@@ -23,7 +23,6 @@ import {
 
 import type { CardLayout } from '@/lib/chat/history';
 import type { Widget } from '@/lib/chat/widgets';
-import { FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
 
 type UseSlotsArgs = {
     widgets: Widget[];
@@ -45,8 +44,8 @@ type UseSlotsArgs = {
  * vanished (replaced by a newer turn, or a reset) fade out in place before
  * their slot is pruned. Newcomers get PRIORITY: they take the highest spot
  * honouring only pinned cards, and any unpinned veteran they crowd slides to
- * the nearest place that still fits. Also owns the content-fit of text cards
- * and chart views (rows follow the content) and the z-order counter.
+ * the nearest place that still fits. Also owns the content-fit of every card
+ * but a stat card (rows follow the content) and the z-order counter.
  */
 export const useSlots = ({
     widgets,
@@ -210,8 +209,8 @@ export const useSlots = ({
         onLayoutChange(layout);
     }, [slots, onLayoutChange]);
 
-    // Sets the slot's rows for a derived height (a text card, a chart view),
-    // between the kind's minimum and the cap, and lets the neighbours make
+    // Sets the slot's rows for a derived height (every card but a stat card),
+    // within the range of its current view, and lets the neighbours make
     // room. Pinned ones move too, since the card cannot take less.
     const fitRows = useCallback(
         (id: string, rows: number) => {
@@ -222,7 +221,11 @@ export const useSlots = ({
                     return prev;
                 }
 
-                const h = clamp(rows, SPAN_MIN[slot.widget.kind].h, FITTED_ROWS_MAX);
+                const { min, max } = heightRange(
+                    slot.widget,
+                    resolveCardView(slot.widget, views[id]).view,
+                );
+                const h = clamp(rows, min, max);
 
                 if (h === slot.h) {
                     return prev;
@@ -231,7 +234,7 @@ export const useSlots = ({
                 return settleAround({ ...prev, [id]: { ...slot, h } }, [id], pinnedIds, true);
             });
         },
-        [pinnedIds],
+        [pinnedIds, views],
     );
 
     // Lift a card above everything else (a grab): it stays there.

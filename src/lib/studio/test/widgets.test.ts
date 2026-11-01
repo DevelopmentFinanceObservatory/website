@@ -16,6 +16,7 @@ import {
     type TextWidget,
 } from '../../chat/widgets.ts';
 import { keyNumberFace } from '../statFace.ts';
+import { tableDisplay } from '../tableFit.ts';
 import { reviseWidget, widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated, ComponentType, FactSummary } from '../wire.ts';
 import {
@@ -291,6 +292,8 @@ test('table: the payload columns and rows, a status cell named by its status', (
     const widget = asTable(widgetFromComponent(frame('table', payload)));
 
     assert.deepEqual(widget.columns, ['Donor', 'Period', 'Value']);
+    // A payload table's headers name its dimensions.
+    assert.equal(widget.series, undefined);
     assert.deepEqual(widget.rows, [
         ['Germany', '2022', '35.0 K'],
         ['Germany', '2023', 'Suppressed'],
@@ -715,6 +718,56 @@ test('a payload without a resolved component draws the fact-summary sketch', () 
         ['Germany', '2015', 30_000, null],
         ['Germany', '2023', 37_000, null],
     ]);
+
+    // As a table the sketch runs periods down and series across, and says so.
+    const table = asTable(widgetFromComponent(frame('table', oldCreated)));
+
+    assert.deepEqual(table.columns, ['Period', 'United States', 'Germany']);
+    assert.equal(table.series, true);
+
+    // Redrawn from a payload table, the sketch's series flag goes with its
+    // cells: the payload's dimension columns stay across and its period
+    // stays a period.
+    const columns = [
+        { key: 'donor', label: 'Donor' },
+        { key: 'recipient', label: 'Recipient' },
+        { key: 'sector', label: 'Sector' },
+        { key: 'channel', label: 'Channel of delivery' },
+        { key: 'period', label: 'Period' },
+        { key: 'value', label: 'Value' },
+    ];
+    const redrawn = asTable(
+        reviseWidget(table, {
+            ...revisedFrame(2),
+            payload: envelope({
+                type: 'table',
+                title,
+                columns,
+                rows: [
+                    {
+                        series_id: 's_x',
+                        dimensions: {
+                            donor: 'United States',
+                            recipient: 'Democratic Republic of the Congo',
+                            sector: 'Basic health care',
+                            channel: 'Multilateral organisations',
+                        },
+                        period: '2023',
+                        source_ref: SOURCE,
+                        unit: 'USD',
+                        value: 64_000,
+                    },
+                ],
+            }),
+        }),
+    );
+
+    assert.equal(redrawn.series, undefined);
+    assert.deepEqual(
+        redrawn.columns,
+        columns.map(({ label }) => label),
+    );
+    assert.equal(tableDisplay(redrawn).transposed, false);
 });
 
 test('a revision redraws from its payload', () => {

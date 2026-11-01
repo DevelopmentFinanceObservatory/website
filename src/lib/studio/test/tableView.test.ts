@@ -1,12 +1,20 @@
 /**
- * `tableView.ts`: shared text moves to the caption, and columns sort by
- * the numbers their cells were formatted from.
+ * `tableView.ts`: shared text moves to the caption, the unit heads the value
+ * column or leads the caption, decimals line up, repeated names show once,
+ * and columns sort by the numbers their cells were formatted from.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { cellNumber } from '../statFace.ts';
-import { cellValue, sortOrder, type TableCell, type TableSort, tableView } from '../tableView.ts';
+import {
+    cellValue,
+    repeatedNames,
+    sortOrder,
+    type TableCell,
+    type TableSort,
+    tableView,
+} from '../tableView.ts';
 
 const debt = (currency: string) =>
     `Outstanding external debt denominated in ${currency} (% of public or publicly guaranteed external debt)`;
@@ -122,6 +130,75 @@ test('one row keeps every column, and the value column always stays', () => {
     );
 
     assert.deepEqual(same.columns, ['Recipient', 'Value']);
+});
+
+test('the unit heads the value column, or leads the caption details', () => {
+    const rows = [
+        ['Kenya', '2023', '5.14'],
+        ['Ghana', '2023', '4.48'],
+    ];
+    const header = tableView(['Recipient', 'Period', 'Value'], rows, undefined, {
+        unit: { text: 'US$ per person', place: 'header' },
+    });
+
+    assert.deepEqual(header.columns, ['Recipient', 'US$ per person']);
+    assert.deepEqual(header.caption?.details, ['Period: 2023']);
+
+    const caption = tableView(['Recipient', 'Period', 'Value'], rows, undefined, {
+        unit: { text: 'US Dollar, millions, constant 2023 prices', place: 'caption' },
+    });
+
+    assert.deepEqual(caption.columns, ['Recipient', 'Value']);
+    assert.deepEqual(caption.caption?.details, [
+        'US Dollar, millions, constant 2023 prices',
+        'Period: 2023',
+    ]);
+});
+
+test('a numeric column pads its plain numbers to its most decimals, two at most', () => {
+    const view = tableView(
+        ['Period', 'Kenya', 'Ghana'],
+        [
+            ['2020', '5', '1'],
+            ['2021', '4.25', '37.0 K'],
+            ['2022', '1.5', '—'],
+            ['2023', '—', 'Missing'],
+        ],
+    );
+    const column = (index: number) => view.rows.map((row) => row[index]!.text);
+
+    assert.deepEqual(column(0), ['2020', '2021', '2022', '2023']);
+    assert.deepEqual(column(1), ['5.00', '4.25', '1.50', '—']);
+    // A lettered number keeps its one decimal and sets no width for the rest.
+    assert.deepEqual(column(2), ['1', '37.0 K', '—', 'Missing']);
+    assert.deepEqual(column(1).map(cellValue), [5, 4.25, 1.5, null]);
+});
+
+test('a name repeated down the shown rows shows once a run', () => {
+    const view = tableView(
+        ['Recipient', 'Period', 'Value'],
+        [
+            ['Kenya', '2022', '1.0'],
+            ['Kenya', '2023', '3.0'],
+            ['Ghana', '2023', '2.0'],
+            ['—', '2023', '4.0'],
+            ['—', '2024', '5.0'],
+        ],
+    );
+
+    assert.deepEqual(repeatedNames(view, [0, 1, 2, 3, 4]), [false, true, false, false, false]);
+    // Sorting by value breaks the run, so the name shows again.
+    assert.deepEqual(
+        repeatedNames(
+            view,
+            sortOrder(view.rows, view.numeric, { column: 2, direction: 'ascending' }),
+        ),
+        [false, false, false, false, false],
+    );
+
+    const values = tableView(['Value'], [['1.0'], ['1.0']]);
+
+    assert.deepEqual(repeatedNames(values, [0, 1]), [false, false]);
 });
 
 test('cellValue reads back what cellNumber wrote, in the same order', () => {

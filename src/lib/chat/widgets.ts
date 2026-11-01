@@ -131,6 +131,11 @@ export type TableWidget = {
      *  shared words the table may move to its caption. Other columns hold
      *  places, donors or periods, whose shared words are part of the name. */
     namesColumn?: number;
+    /** Set on a table pivoted from series, as a chart shown as a table is. Its
+     *  headers (or, with one period, its rows) name series and its cells
+     *  are values, so the unit goes to the caption and the table may be
+     *  shown transposed (`tableDisplay`). */
+    series?: true;
     ref?: CardRef;
     frame?: FrameRef;
     data?: CardData;
@@ -265,6 +270,7 @@ export const tableFromChart = (widget: ChartWidget): TableWidget => {
             title: widget.title,
             columns: ['', widget.categories[0]!],
             namesColumn: 0,
+            series: true,
             rows: widget.series.map((series) => [
                 series.label,
                 series.values[0] != null ? cellNumber(series.values[0]!) : '—',
@@ -278,6 +284,7 @@ export const tableFromChart = (widget: ChartWidget): TableWidget => {
         id: widget.id,
         title: widget.title,
         columns: ['', ...widget.series.map((series) => series.label)],
+        series: true,
         rows: widget.categories.map((category, index) => [
             category,
             ...widget.series.map((series) => {
