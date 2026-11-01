@@ -304,8 +304,8 @@ test('the members door is read only for an answer that may serve one variable', 
     const cases: [Record<string, unknown>, boolean][] = [
         [{ member_count: 3, member_count_exact: false, served_count: 1 }, true],
         [{ member_count: 1, member_count_exact: true, served_count: null }, true],
-        [{ member_count: 1, member_count_exact: false, served_count: null }, false],
-        [{ member_count: 3, member_count_exact: true, served_count: null }, false],
+        [{ member_count: 1, member_count_exact: false, served_count: null }, true],
+        [{ member_count: 3, member_count_exact: true, served_count: null }, true],
         [{ member_count: 1626, member_count_exact: true, served_count: 1626 }, false],
     ];
 

@@ -57,6 +57,11 @@ const MARKS: Record<string, string> = {
     '[data-drag-handle]': 'handle',
 };
 
+const ATTRIBUTES: Record<string, string> = {
+    'data-draggable': 'draggable',
+    'data-card-frame': 'frame',
+};
+
 const fake = (tagName: string, marks: string[], parent: Fake | null): Fake => {
     const node: Fake = {
         tagName,
@@ -77,7 +82,7 @@ const fake = (tagName: string, marks: string[], parent: Fake | null): Fake => {
 
             return null;
         },
-        hasAttribute: (name) => name === 'data-draggable' && marks.includes('draggable'),
+        hasAttribute: (name) => marks.includes(ATTRIBUTES[name] ?? ''),
     };
 
     return node;
@@ -98,6 +103,17 @@ describe('pressZone and cardPressAction', () => {
         assert.equal(pressZone(title, box), 'handle');
         assert.equal(pressZone(pin, box), 'control');
         assert.equal(pressZone(plot, box), 'content');
+    });
+
+    it('moves a text card by the gaps in its wrapper, and keeps its text content', () => {
+        const textInner = fake('DIV', ['frame'], fake('ARTICLE', [], box));
+        const textHead = fake('HEADER', ['handle'], textInner);
+        const textBody = fake('P', [], textInner);
+
+        assert.equal(pressZone(textInner, box), 'handle');
+        assert.equal(pressZone(fake('P', [], textHead), box), 'handle');
+        assert.equal(pressZone(textBody, box), 'content');
+        assert.equal(pressZone(fake('STRONG', [], textBody), box), 'content');
     });
 
     it('routes a press from the DOM', () => {

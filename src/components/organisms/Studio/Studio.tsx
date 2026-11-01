@@ -760,12 +760,23 @@ const Studio = ({
                                   citeLinkOf(
                                       await save.createShare('card', infoWidget.id, 'snapshot'),
                                   ),
-                              ).then((link) =>
-                                  setCiteLinks((now) => ({
-                                      ...now,
-                                      [key]: 'id' in link ? link : link.refusal,
-                                  })),
-                              );
+                              )
+                                  .then((link): CitedSnapshot | CiteAsk =>
+                                      'id' in link ? link : link.refusal,
+                                  )
+                                  // A snapshot that could not be built or saved
+                                  // reads as a failed link, which can be asked again.
+                                  .catch((error: unknown): CiteAsk => {
+                                      console.warn('Studio: a cite link could not be made', {
+                                          key,
+                                          error,
+                                      });
+
+                                      return 'failed';
+                                  })
+                                  .then((settled) =>
+                                      setCiteLinks((now) => ({ ...now, [key]: settled })),
+                                  );
                           }
                         : undefined
                 }

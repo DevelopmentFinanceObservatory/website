@@ -290,12 +290,13 @@
 .studio {
     position: static;
 
-    // The bar's height must stay what it always was — rem(60): rem(16)
-    // padding around the rem(28) back/logo row. The two-line title row
-    // (rem(35.2)) is taller than that row, so the vertical padding shrinks
-    // to keep the total at rem(60) and the workspace below (laid out from
-    // --ws-top) never shifts.
-    padding: calc(#{rem(12.4)} + env(safe-area-inset-top)) rem(10) rem(12.4) rem(14);
+    // The bar is $header-height tall. The two-line title row (rem(35.2)) is
+    // taller than the rem(28) back/logo row, so the vertical padding shrinks to
+    // keep the total and the workspace below (laid out from --ws-top) never
+    // shifts.
+    $studio-pad: calc((#{$header-height} - #{rem(35.2)}) / 2);
+
+    padding: calc(#{$studio-pad} + env(safe-area-inset-top)) rem(10) $studio-pad rem(14);
     color: var(--color-charcoal);
 
     .logo {

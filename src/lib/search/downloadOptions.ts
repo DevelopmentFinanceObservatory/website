@@ -72,7 +72,9 @@ export const enrichmentAlreadyInFile = (
 ): boolean =>
     typeof entry.in_long_layout === 'boolean'
         ? entry.in_long_layout
-        : // Fallback for an API that does not serve the flag yet. Remove once it does.
+        : // An API that leaves the flag out still lists the role
+          // columns the long layout writes, `{column}_label` and `{column}_kind`, in
+          // `long_layout_defaults`. A label token matches one, a party field token none.
           (options.long_layout_defaults?.includes(entry.token) ?? false);
 
 /** The extra columns an answer can join: `available` and `partial` alike, a
@@ -211,6 +213,43 @@ const FIELD_WORDS: Record<
     },
 };
 
+// The enrichment fields the long layout reads into a party role's
+// `{column}_kind` column.
+const KIND_FIELDS: readonly string[] = ['party_kind', 'party_class', 'party_whole'];
+
+// The kinds the long layout writes for a party role, by the axis its column
+// serves: a provider is official or private, a recipient a country or
+// organisation or private, and either side can be a total. A role column with
+// no known axis gets the kinds both sides share.
+const KIND_EXAMPLES: Record<string, string> = {
+    origin: 'official, private or a total',
+    destination: 'a country or organisation, private or a total',
+};
+const SHARED_KINDS = 'private or a total';
+
+/**
+ * Whether the long layout writes a role column's names (`label`) or kinds
+ * (the party fields). Where any of the column's enrichments of those fields
+ * carries `in_long_layout`, the same flag that keeps them off the extras list,
+ * the flags decide. Otherwise `long_layout_defaults` decides through the column
+ * it lists (`{column}_label`, `{column}_kind`).
+ */
+const longLayoutWrites = (
+    options: DatasetOutputOptions,
+    { column, fields, written }: { column: string; fields: readonly string[]; written: string },
+): boolean => {
+    const flagged = (options.enrichments ?? []).filter(
+        (entry) =>
+            entry.column === column &&
+            fields.includes(entry.field) &&
+            typeof entry.in_long_layout === 'boolean',
+    );
+
+    return flagged.length
+        ? flagged.some((entry) => entry.in_long_layout)
+        : (options.long_layout_defaults?.includes(written) ?? false);
+};
+
 type Noun = { singular: string; plural: string };
 
 /** Which entities a partial enrichment leaves blank, in words: "blank for the
@@ -304,9 +343,11 @@ export type EnrichmentGroup = {
     heading: string;
     // The heading in lower case ("provider"), for the in-file note.
     singular: string;
-    // Whether the long layout already writes the column's names and kinds.
+    // Whether the long layout already writes the column's names, and the
+    // kinds it writes for the column in words ("official, private or a
+    // total"), null when it writes none.
     named: boolean;
-    kinds: boolean;
+    kinds: string | null;
     entries: ExtraColumn[];
 };
 
@@ -327,8 +368,11 @@ export const enrichmentGroups = ({
     // example value.
     entities?: BoundEntity[] | null;
 }): EnrichmentGroup[] => {
+    if (!options) {
+        return [];
+    }
+
     const groups = new Map<string, EnrichmentGroup>();
-    const defaults = options?.long_layout_defaults ?? [];
 
     for (const entry of enrichmentChoices(options)) {
         let group = groups.get(entry.column);
@@ -342,8 +386,18 @@ export const enrichmentGroups = ({
                 column: entry.column,
                 heading,
                 singular: heading.toLowerCase(),
-                named: defaults.includes(`${entry.column}_label`),
-                kinds: defaults.includes(`${entry.column}_kind`),
+                named: longLayoutWrites(options, {
+                    column: entry.column,
+                    fields: ['label'],
+                    written: `${entry.column}_label`,
+                }),
+                kinds: longLayoutWrites(options, {
+                    column: entry.column,
+                    fields: KIND_FIELDS,
+                    written: `${entry.column}_kind`,
+                })
+                    ? (KIND_EXAMPLES[dimension?.axis ?? ''] ?? SHARED_KINDS)
+                    : null,
                 entries: [],
             };
             groups.set(entry.column, group);
@@ -361,21 +415,48 @@ export const enrichmentGroups = ({
 
 /** What the long layout already writes for the roles that offer extras, so
  *  the viewer sees why names and kinds are not on the list: "The file already
- *  names each provider and recipient and says what kind each is." Null when
- *  it writes neither. */
+ *  names each provider and says what kind each is, such as official, private
+ *  or a total". Each role's kinds are its own, and roles that share them share
+ *  one clause: "names each provider and recipient, and says what kind each
+ *  provider is, such as …, and what kind each recipient is, such as …". Null
+ *  when it writes neither. */
 export const inFileNote = (groups: readonly EnrichmentGroup[]): string | null => {
+    const list = (roles: string[]) =>
+        new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(roles);
     const named = groups.filter((group) => group.named).map((group) => group.singular);
+    // The roles under each kinds text, in wire order.
+    const byKinds = new Map<string, EnrichmentGroup[]>();
 
-    if (named.length === 0) {
-        return null;
+    for (const group of groups) {
+        if (group.kinds !== null) {
+            byKinds.set(group.kinds, [...(byKinds.get(group.kinds) ?? []), group]);
+        }
     }
 
-    const who = new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(named);
-    const kinds = groups.some((group) => group.named && group.kinds)
-        ? ' and says what kind each is, such as official, private or a total'
-        : '';
+    const kinded = [...byKinds.values()].flat();
 
-    return `The file already names each ${who}${kinds}.`;
+    if (kinded.length === 0) {
+        return named.length ? `The file already names each ${list(named)}.` : null;
+    }
+
+    // Every named role has the same kinds, so one short clause covers them.
+    if (
+        byKinds.size === 1 &&
+        kinded.length === named.length &&
+        kinded.every((group) => group.named)
+    ) {
+        return `The file already names each ${list(named)} and says what kind each is, such as ${kinded[0]?.kinds}.`;
+    }
+
+    const kindClauses = [...byKinds].map(
+        ([kinds, roles]) =>
+            `what kind each ${list(roles.map((group) => group.singular))} is, such as ${kinds}`,
+    );
+    const says = `says ${kindClauses.join(', and ')}`;
+
+    return named.length
+        ? `The file already names each ${list(named)}, and ${says}.`
+        : `The file already ${says}.`;
 };
 
 /**

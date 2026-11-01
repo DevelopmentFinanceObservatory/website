@@ -77,3 +77,8 @@ $container-padding: 1.5rem;
 $z-hero: 9;
 $z-footer: 200;
 $z-header: 300;
+
+// The desktop Studio bar's height below the safe-area inset: rem(16) padding
+// around its rem(28) row. On phones the site header is about 52px. (rem()
+// lives in _mixins, which imports this file.)
+$header-height: 3.75rem;
