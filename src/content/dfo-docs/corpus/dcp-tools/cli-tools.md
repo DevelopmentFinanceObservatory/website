@@ -21,7 +21,8 @@ Every command, including `dcp-tools` itself, accepts `-h`/`--help` for its full 
 
 - **`--settings-file PATH`**: a JSON file using the settings' alias keys, all uppercase
   (`LOCAL_PATH`, `GCP_PROJECT_ID`, `GCS_BUCKET_NAME`, and so on).
-- **`--env-file PATH`**: a `.env` file using the same keys.
+- **`--env-file PATH`**: a `.env` file using the same keys. Other variables in the file are
+  ignored.
 
 If both are given, `--settings-file` wins and `--env-file` is ignored. If neither is given,
 settings are read from a `.env` file in the current directory.
@@ -36,7 +37,6 @@ settings are read from a `.env` file in the current directory.
   "GCS_BUCKET_NAME": "one-dcp-import",
   "GCS_INPUT_FOLDER_PATH": "climate-finance",
   "GCS_OUTPUT_FOLDER_PATH": "climate-finance/output",
-  "INGESTION_PREP_JOB_NAME": "dcp-prep-job",
   "INGESTION_WORKFLOW_NAME": "dcp-ingestion-workflow"
 }
 ```
@@ -48,18 +48,20 @@ GCP_REGION=us-central1
 GCS_BUCKET_NAME=one-dcp-import
 GCS_INPUT_FOLDER_PATH=climate-finance
 GCS_OUTPUT_FOLDER_PATH=climate-finance/output
-INGESTION_PREP_JOB_NAME=dcp-prep-job
 INGESTION_WORKFLOW_NAME=dcp-ingestion-workflow
 ```
 
 > [!NOTE]
 > `GCP_CREDENTIALS` and `INGESTION_SERVICE_ACCOUNT` are optional and omitted above. Without
 > `GCP_CREDENTIALS`, GCP calls fall back to Application Default Credentials
-> (`gcloud auth application-default login`).
+> (`gcloud auth application-default login`). `LOCAL_PATH`, `GCS_INPUT_FOLDER_PATH` and
+> `GCS_OUTPUT_FOLDER_PATH` are optional too.
 
 ## Exit status
 
-All four subcommands return `0` on success. Argument errors, such as a missing required argument
+All four subcommands return `0` on success. With `--wait`, `ingest` and `pipeline` return `1`
+when the ingestion execution finishes in any state other than `SUCCEEDED`, or when `--timeout`
+runs out. Argument errors, such as a missing required argument
 or an invalid `--node-type` choice, print a usage message to stderr and exit non-zero before any
 subcommand code runs. Errors raised by the underlying Python API (a pydantic validation error from
 a malformed CSV, a Google Cloud auth failure) propagate as an uncaught exception and also exit
@@ -158,9 +160,10 @@ dcp-tools upload [--settings-file PATH] [--env-file PATH] [--directory PATH] [--
 
 - **`--settings-file PATH`**, **`--env-file PATH`**: see [Global options](#global-options).
 - **`--directory PATH`** (default: the directory configured as `LOCAL_PATH` in settings): local
-  directory to upload. Files are matched recursively. Anything under it that isn't `.csv`,
-  `.json`, or `.mcf` is skipped with a warning. The local directory structure is preserved under
-  the bucket's input folder.
+  directory to upload. Required when `LOCAL_PATH` is unset. Files are matched recursively.
+  Anything under it that isn't `.csv`, `.json`, or `.mcf` is skipped with a warning. The local
+  directory structure is preserved under the bucket's input folder. A file whose MD5 matches the
+  blob already at its remote path is skipped and logged as unchanged.
 - **`--sync`** (default: off): after uploading, delete remote blobs that no longer have a local
   counterpart. Deletion is scoped to import subdirectories that have local files present. An
   import missing from `--directory` entirely, or present but empty, is left untouched remotely. When `--directory` holds `.csv`, `.json`, or `.mcf` files at its top level, stale blobs directly under the input folder are deleted too.
@@ -172,16 +175,19 @@ $ dcp-tools upload --settings-file customDC.json --directory export/
 2026-07-21 09:14:02 | INFO     | dcp-tools | Uploaded export/config.json to climate-finance/config.json
 2026-07-21 09:14:02 | INFO     | dcp-tools | Uploaded export/provenance.mcf to climate-finance/provenance.mcf
 2026-07-21 09:14:03 | INFO     | dcp-tools | Uploaded export/custom_nodes.mcf to climate-finance/custom_nodes.mcf
-2026-07-21 09:14:03 | INFO     | dcp-tools | Uploaded 3 files to climate-finance in GCS bucket one-dcp-import
+2026-07-21 09:14:03 | INFO     | dcp-tools | Uploaded 3 files to climate-finance in GCS bucket one-dcp-import, skipped 0 unchanged
 ```
 
 ## `dcp-tools ingest`
 
 Triggers the DCP ingestion workflow that loads uploaded files into the knowledge graph, wrapping
 `run_ingestion_workflow`.
+`ingest` and `pipeline` need a DCP 1.1.6 instance.
 
 ```
 dcp-tools ingest [--settings-file PATH] [--env-file PATH] [--imports a,b,c]
+                 [--skip-workflow-contract-check]
+                 [--wait [--timeout SECONDS] [--poll-interval SECONDS]]
 ```
 
 **Options**
@@ -189,6 +195,17 @@ dcp-tools ingest [--settings-file PATH] [--env-file PATH] [--imports a,b,c]
 - **`--settings-file PATH`**, **`--env-file PATH`**: see [Global options](#global-options).
 - **`--imports a,b,c`** (default: every import): comma-separated import names to scope the run
   to. Omit it to ingest everything under the configured GCS input folder.
+- **`--skip-workflow-contract-check`**: start the workflow without first reading its definition
+  to confirm it comes from a DCP 1.1.6 stack. Use it only when the identity starting the
+  ingestion can't be granted `roles/workflows.viewer` and you know the stack runs 1.1.6. See
+  [Loading data](loading-data.md).
+- **`--wait`**: block until the ingestion execution finishes, logging its state and current steps
+  as they change, and exit `1` if it ends in any state other than `SUCCEEDED`. Wraps `wait_for_ingestion`.
+- **`--timeout SECONDS`** (default: no limit): with `--wait`, give up after this many seconds and
+  exit `1`. The execution keeps running.
+- **`--poll-interval SECONDS`** (default: `30`): with `--wait`, seconds between state checks.
+
+`--timeout` and `--poll-interval` without `--wait` are rejected as argument errors.
 
 **Example**
 
@@ -196,6 +213,19 @@ dcp-tools ingest [--settings-file PATH] [--env-file PATH] [--imports a,b,c]
 $ dcp-tools ingest --settings-file customDC.json --imports climate-finance
 2026-07-21 09:15:10 | INFO     | dcp-tools | Starting data ingestion workflow 'dcp-ingestion-workflow'
 2026-07-21 09:15:11 | INFO     | dcp-tools | Started workflow execution 'projects/one-climate-finance/locations/us-central1/workflows/dcp-ingestion-workflow/executions/a1b2c3'
+```
+
+With `--wait`, the command returns once the execution finishes:
+
+```
+$ dcp-tools ingest --settings-file customDC.json --imports climate-finance --wait --timeout 7200
+2026-07-21 09:15:10 | INFO     | dcp-tools | Starting data ingestion workflow 'dcp-ingestion-workflow'
+2026-07-21 09:15:11 | INFO     | dcp-tools | Started workflow execution 'projects/one-climate-finance/locations/us-central1/workflows/dcp-ingestion-workflow/executions/a1b2c3'
+2026-07-21 09:15:11 | INFO     | dcp-tools | Execution 'projects/.../executions/a1b2c3' is ACTIVE (current steps: main.run_preprocessing)
+2026-07-21 09:41:42 | INFO     | dcp-tools | Execution 'projects/.../executions/a1b2c3' is SUCCEEDED (current steps: none)
+2026-07-21 09:41:42 | INFO     | dcp-tools | Execution 'projects/.../executions/a1b2c3' succeeded
+$ echo $?
+0
 ```
 
 > [!NOTE]
@@ -211,12 +241,18 @@ Runs `upload` followed by `ingest` for every import in one call, wrapping
 
 ```
 dcp-tools pipeline [--settings-file PATH] [--env-file PATH] [--directory PATH] [--sync]
+                   [--skip-workflow-contract-check]
+                   [--wait [--timeout SECONDS] [--poll-interval SECONDS]]
 ```
 
 **Options**
 
 - **`--settings-file PATH`**, **`--env-file PATH`**, **`--directory PATH`**, **`--sync`**: same
   flags and defaults as [`upload`](#dcp-tools-upload).
+- **`--skip-workflow-contract-check`**: same as for [`ingest`](#dcp-tools-ingest). Without it,
+  `pipeline` checks the workflow before uploading, so it uploads nothing to an older stack.
+- **`--wait`**, **`--timeout SECONDS`**, **`--poll-interval SECONDS`**: same as for
+  [`ingest`](#dcp-tools-ingest).
 
 > [!WARNING]
 > `pipeline` has no `--imports` flag. It always calls `ingest` with no import filter, loading
