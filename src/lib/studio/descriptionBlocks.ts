@@ -12,15 +12,17 @@
  */
 
 import type {
-    DefinedRef,
     Description,
+    DescriptionSourceCode,
     DescriptionUnit,
+    DrawnValue,
     ServedStep,
     SimpleUnit,
     Span,
     UnitSide,
 } from './description.ts';
 import { capitalise } from '../capitalise.ts';
+import { groupSourceCodes, type SourceCodeGroups } from '../sourceCodes.ts';
 import { shortDateText } from '../sources/updateDates.ts';
 import { formatPeriod, formatWindow } from './period.ts';
 
@@ -62,8 +64,14 @@ export type LegacyView = {
 };
 
 /** A value the card shows or is fixed to, by name, with its definition
- *  where the graph holds one. */
-export type PanelTerm = { key: string; name: string; definition: string | null };
+ *  where the graph holds one, and the publisher's codes for the series
+ *  that hold a value the card draws, where it has any. */
+export type PanelTerm = {
+    key: string;
+    name: string;
+    definition: string | null;
+    codes: SourceCodeGroups | null;
+};
 
 /** Values by name under one label, either those the card draws on a
  *  dimension ("Shows", or the dimension's name when several list theirs) or
@@ -107,7 +115,9 @@ export type PanelCalculation = { numerator: string; denominator: string };
 /** A described card's view. `live` is a short line under the title saying
  *  the card is drawn live from current data. `calculation` is a quotient or
  *  share card's numerator over its denominator, shown first. `measure` is
- *  present only when the measure has a definition. `sources` are the sources
+ *  present only when the measure has a definition. `codes` are the publisher's
+ *  codes for the series the card draws, null when it has none or names them
+ *  on each value it shows. `sources` are the sources
  *  the card credits. `inputs` names the versions a computed card read when
  *  no calculation names them, and is empty otherwise. `from` closes a
  *  computed card's sources. `made` is null when there is nothing to tell. */
@@ -117,6 +127,7 @@ export type DescribedView = {
     live: string | null;
     calculation: PanelCalculation | null;
     measure: { label: string; definition: string } | null;
+    codes: SourceCodeGroups | null;
     rows: PanelRow[];
     terms: PanelTerms[];
     keepInMind: string[];
@@ -287,11 +298,32 @@ export const aboutRows = (description: Description): PanelRow[] => {
     ];
 };
 
-const termOf = (value: DefinedRef, index: number): PanelTerm => ({
-    key: `${value.ref}#${index}`,
-    name: value.label,
-    definition: value.definition ?? null,
-});
+// The publisher that issues a provenance's codes: the publisher of the
+// source the description credits under that provenance, else its name.
+// Null when no source is that provenance, as with a computed card's codes,
+// whose sources are its inputs.
+const publisherOf =
+    (description: Description) =>
+    (provenance: string): string | null => {
+        const source = description.sources.find((entry) => entry.ref === provenance);
+
+        return source ? (source.publisher ?? source.label) : null;
+    };
+
+// A list of codes grouped by publisher, as Get Data names them.
+const codesOf = (
+    description: Description,
+    codes: readonly DescriptionSourceCode[] | undefined,
+): SourceCodeGroups | null => groupSourceCodes(codes ?? [], publisherOf(description));
+
+const termOf =
+    (description: Description) =>
+    (value: DrawnValue, index: number): PanelTerm => ({
+        key: `${value.ref}#${index}`,
+        name: value.label,
+        definition: value.definition ?? null,
+        codes: codesOf(description, value.source_codes),
+    });
 
 /** What the card shows, by name. These are the values it draws on each
  *  dimension that lists them all, under "Shows" when one dimension does and
@@ -305,7 +337,7 @@ export const termLists = (description: Description): PanelTerms[] => {
     const drawn = listed.map(({ property, values = [] }): PanelTerms => ({
         key: `drawn:${property.ref}`,
         label: listed.length > 1 ? pluralLabel(property.label) : 'Shows',
-        terms: values.map(termOf),
+        terms: values.map(termOf(description)),
     }));
     const defined = (about.fixed ?? [])
         .map(({ value }) => value)
@@ -313,7 +345,9 @@ export const termLists = (description: Description): PanelTerms[] => {
 
     return [
         ...drawn,
-        ...(defined.length ? [{ key: 'within', label: 'Within', terms: defined.map(termOf) }] : []),
+        ...(defined.length
+            ? [{ key: 'within', label: 'Within', terms: defined.map(termOf(description)) }]
+            : []),
     ];
 };
 
@@ -572,6 +606,9 @@ export const describedPanel = (
 ): DescribedView => {
     const { measure } = description.about;
     const calculation = calculationOf(description);
+    const terms = termLists(description);
+    // A card whose values each name their codes does not list them all again.
+    const codesPerValue = terms.some((list) => list.terms.some((term) => term.codes));
 
     return {
         kind: 'described',
@@ -581,8 +618,9 @@ export const describedPanel = (
         measure: measure?.definition
             ? { label: capitalise(measure.label), definition: measure.definition }
             : null,
+        codes: codesPerValue ? null : codesOf(description, description.about.source_codes),
         rows: aboutRows(description),
-        terms: termLists(description),
+        terms,
         keepInMind: keepInMind(description),
         from: isComputed(description) ? COMPUTED_BY : null,
         sources: sourceEntries(description),

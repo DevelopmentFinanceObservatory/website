@@ -286,6 +286,38 @@
     }
 }
 
+// The publisher's codes: a sentence under the measure, or the codes alone
+// beside each value the card shows, each in the mono chip Get Data's "About
+// this answer" sets them in.
+.codes {
+    @include font-size(13px, 1.6);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+}
+
+.termCodes {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: rem(4);
+    margin-left: rem(8);
+    vertical-align: 1px;
+}
+
+.codes code,
+.termCodes code {
+    @include font-size(10px, 1.4);
+
+    padding: rem(2) rem(6);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+    background-color: var(--color-grid-bg-light);
+    border-radius: rem(4);
+}
+
 // The "Shows" and "Within" blocks hold a label over the values by name, on
 // a hairline under the rows.
 .termBlock {

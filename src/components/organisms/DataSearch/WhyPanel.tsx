@@ -4,6 +4,7 @@ import styles from './DataSearch.module.scss';
 import { useDefinitionMembers } from './GraphInfo';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import SourceCodes from '@/components/atoms/SourceCodes/SourceCodes';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
 import { useCopied } from '@/components/organisms/Studio/hooks/useCopied';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
@@ -14,7 +15,6 @@ import {
     type SlotOptionsEntry,
     type WhyInside,
     type WhyRow,
-    type WhySourceCodes,
     type WhySummary,
 } from '@/lib/search/view';
 
@@ -79,28 +79,6 @@ const Change = ({ run, what }: { run: ReturnType<ChangeAction>; what: string }) 
         </button>
     ) : null;
 
-// The publisher's own series codes: "World Bank code DT.TDS.DEGG.CD", or
-// "Built from World Bank codes A, B and C" when no code names the whole
-// answer.
-const SourceCodes = ({ codes }: { codes: WhySourceCodes }) => (
-    <span className={styles.whyCodes}>
-        {!codes.exact && 'Built from '}
-        {codes.publishers.map(({ publisher, codes: list, more }, at) => (
-            <span key={publisher}>
-                {at > 0 && (at === codes.publishers.length - 1 ? ' and ' : ', ')}
-                {publisher} {list.length + more === 1 ? 'code' : 'codes'}{' '}
-                {list.map((code, index) => (
-                    <span key={code}>
-                        {index > 0 && (index === list.length - 1 && more === 0 ? ' and ' : ', ')}
-                        <code>{code}</code>
-                    </span>
-                ))}
-                {more > 0 && ` and ${more} more`}
-            </span>
-        ))}
-    </span>
-);
-
 const FactRow = ({ row, run }: { row: WhyRow; run: ReturnType<ChangeAction> }) => (
     <div className={styles.whyRow}>
         <dt>{row.label}</dt>
@@ -113,7 +91,7 @@ const FactRow = ({ row, run }: { row: WhyRow; run: ReturnType<ChangeAction> }) =
                     hint={row.variableId}
                 />
             )}
-            {row.sourceCodes && <SourceCodes codes={row.sourceCodes} />}
+            {row.sourceCodes && <SourceCodes codes={row.sourceCodes} className={styles.whyCodes} />}
             {row.note && <span className={styles.whyNote}>{row.note}</span>}
         </dd>
         <Change run={run} what={row.label} />

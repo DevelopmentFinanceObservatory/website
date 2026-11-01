@@ -317,6 +317,8 @@ test('the card vector shows what it draws, what it is within, its source, citati
             calculation: null,
             // The measure has no definition, so it has no line.
             measure: null,
+            // Its variables carry no publisher code, so none is named.
+            codes: null,
             rows: [
                 { label: 'Years', value: '2010–2024' },
                 { label: 'Unit', value: 'US dollars, current prices' },
@@ -368,6 +370,7 @@ test('the card vector shows what it draws, what it is within, its source, citati
             ],
         ],
     ]);
+    assert.ok(view.terms.every((list) => list.terms.every((term) => term.codes === null)));
     // "Within" names only the fixed values a definition explains, so not the recipient or provider.
     const about = vectorInput('description-card-revision.json')['about'] as Description['about'];
     const within = describedPanel(
@@ -391,6 +394,147 @@ test('the card vector shows what it draws, what it is within, its source, citati
             lookup: null,
         },
     ]);
+});
+
+// The kit's card vector whose drawn values each carry their World Bank code.
+const CODES_VECTOR = 'description-card-source-codes.json';
+const IDS = 'provenance/WorldBankInternationalDebtStatistics';
+
+test('each value the card shows names its own exact code, and the full list is not repeated', () => {
+    const view = describedPanel(described(vectorInput(CODES_VECTOR)));
+
+    assert.deepEqual(
+        view.terms.map(({ label, terms }) => [
+            label,
+            terms.map(({ name, codes }) => [name, codes]),
+        ]),
+        [
+            [
+                'Shows',
+                [
+                    [
+                        'bilateral',
+                        {
+                            exact: true,
+                            publishers: [
+                                { publisher: 'World Bank', codes: ['DT.DIS.BLAT.CB.CD'], more: 0 },
+                            ],
+                        },
+                    ],
+                    [
+                        'multilateral',
+                        {
+                            exact: true,
+                            publishers: [
+                                { publisher: 'World Bank', codes: ['DT.DIS.MLAT.CB.CD'], more: 0 },
+                            ],
+                        },
+                    ],
+                ],
+            ],
+        ],
+    );
+    assert.equal(view.codes, null);
+});
+
+test('a card of one series names its exact code once, with its publisher from the source credited', () => {
+    const input = vectorInput(CODES_VECTOR);
+    const about = input['about'] as Description['about'];
+    const oneSeries = (sources: unknown[]) =>
+        describedPanel(
+            described({
+                ...input,
+                about: {
+                    measure: {
+                        label: 'debt service',
+                        definition: 'Repayments of principal and interest.',
+                    },
+                    drawn: { series: 1, period: about.drawn?.period },
+                    unit: about.unit,
+                    source_codes: [{ provenance: IDS, code: 'DT.TDS.DEGG.CD', exact: true }],
+                },
+                sources,
+            }),
+        );
+    const ids = (input['sources'] as Record<string, unknown>[])[0];
+
+    assert.deepEqual(oneSeries(input['sources'] as unknown[]).codes, {
+        exact: true,
+        publishers: [{ publisher: 'World Bank', codes: ['DT.TDS.DEGG.CD'], more: 0 }],
+    });
+    // A source without its publisher names the code by the source's name.
+    assert.deepEqual(oneSeries([{ ...ids, publisher: null }]).codes?.publishers, [
+        { publisher: 'International Debt Statistics', codes: ['DT.TDS.DEGG.CD'], more: 0 },
+    ]);
+});
+
+test("a computed card's codes read as what it is built from, by each input's publisher", () => {
+    const input = vectorInput('description-computed-quotient-credited.json');
+    const view = describedPanel(
+        described({
+            ...input,
+            about: {
+                ...(input['about'] as Record<string, unknown>),
+                source_codes: [
+                    { provenance: 'provenance/OECDCreditorReportingSystem', code: 'CRS.ODA.GROSS' },
+                    { provenance: 'provenance/Unlisted', code: 'X1' },
+                    {
+                        provenance: 'provenance/WorldBankWorldDevelopmentIndicators',
+                        code: 'NY.GNP.MKTP.CD',
+                    },
+                ],
+            },
+        }),
+    );
+
+    // A provenance no source credits is named as Get Data names it, never by its ref.
+    assert.deepEqual(view.codes, {
+        exact: false,
+        publishers: [
+            { publisher: 'OECD', codes: ['CRS.ODA.GROSS'], more: 0 },
+            { publisher: 'Source', codes: ['X1'], more: 0 },
+            { publisher: 'World Bank', codes: ['NY.GNP.MKTP.CD'], more: 0 },
+        ],
+    });
+});
+
+test('a malformed code list is left out, and the description still reads', () => {
+    const input = vectorInput(CODES_VECTOR);
+    const about = input['about'] as Record<string, unknown> & Description['about'];
+    const dimension = about.drawn?.dimensions?.[0];
+
+    assert.ok(dimension?.values);
+
+    const description = described({
+        ...input,
+        about: {
+            ...about,
+            drawn: {
+                ...about.drawn,
+                dimensions: [
+                    {
+                        ...dimension,
+                        values: [
+                            { ...dimension.values[0], source_codes: [{ provenance: IDS }] },
+                            { ...dimension.values[1], source_codes: 'DT.DIS.MLAT.CB.CD' },
+                        ],
+                    },
+                ],
+            },
+            source_codes: [{ code: 'DT.DIS.BLAT.CB.CD' }],
+        },
+    });
+    const view = describedPanel(description);
+
+    assert.equal(description.about.source_codes, undefined);
+    assert.deepEqual(
+        view.terms[0]?.terms.map(({ name, codes }) => [name, codes]),
+        [
+            ['bilateral', null],
+            ['multilateral', null],
+        ],
+    );
+    assert.equal(view.codes, null);
 });
 
 test('a drawn dimension without its values reads its count, and several dimensions read by name', () => {
