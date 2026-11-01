@@ -298,7 +298,7 @@ const ChatPanel = ({
                     className={classNames(styles.view, tab === 'activity' && styles.viewActive)}
                     aria-hidden={tab !== 'activity'}
                 >
-                    <div className={styles.chatScroll}>
+                    <div className={classNames(styles.chatScroll, styles.activityScroll)}>
                         <ActivityLog
                             activity={chat.activity}
                             cardTitles={cardTitles}

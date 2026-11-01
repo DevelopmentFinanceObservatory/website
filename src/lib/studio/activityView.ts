@@ -9,7 +9,10 @@
  * unless it is running or failed for good. A failed work step folds into a
  * later step of the same label and tool in the same turn that did not fail,
  * as one of its tries. The harness sends no link between the tries, so this
- * match by label and tool is the only one the client can make.
+ * match by label and tool is the only one the client can make, and it misses
+ * a retry the agent corrected. A failure no later try matched therefore reads
+ * as an error the step hit, and only a turn that ended without its answer
+ * marks its failures as steps not done.
  */
 
 import type { ActivityEntry, ActivityTool } from './activity';
@@ -38,8 +41,9 @@ export type StepRow = {
     kind: 'step';
     key: string;
     label: string;
-    // `failed` here is a failure no later try fixed.
-    state: 'complete' | 'failed' | 'skipped' | 'pending' | 'running';
+    // `errored` and `failed` are a failure no later try matched: `failed` in a
+    // turn that ended without its answer, `errored` in any other.
+    state: 'complete' | 'errored' | 'failed' | 'skipped' | 'pending' | 'running';
     detail: string | null;
     startedAt: number;
     durationMs: number | null;
@@ -63,7 +67,8 @@ export type LogLine = {
     key: string;
     at: number;
     label: string;
-    state: 'complete' | 'failed' | 'retried' | 'skipped' | 'pending' | 'running' | 'plan';
+    state:
+        'complete' | 'errored' | 'failed' | 'retried' | 'skipped' | 'pending' | 'running' | 'plan';
     // True for a status line, false for a step that did work.
     quiet: boolean;
     durationMs: number | null;
@@ -73,14 +78,15 @@ export type LogLine = {
 };
 
 export type TurnOutcome =
-    | { state: 'live' | 'waiting'; startedAt: number; cards: number; notDone: number }
+    | { state: 'live' | 'waiting'; startedAt: number; cards: number }
     | {
           state: 'ended';
           startedAt: number;
           // Null for a turn saved before it ended.
           durationMs: number | null;
           cards: number;
-          notDone: number;
+          // The turn ended without its answer.
+          failed: boolean;
       };
 
 export type TurnView = {
@@ -223,12 +229,14 @@ export const turnView = ({
         triesOf.set(later, [...(triesOf.get(later) ?? []), failed]);
     }
 
-    const standing = tools.filter((tool) => tool.state === 'failed' && !retriedBy.has(tool));
+    // A failure no later try matched: a step not done when the turn ended
+    // without its answer, else an error the step hit.
+    const failedAs = entry.failed ? 'failed' : 'errored';
     const cards = new Set(tools.flatMap((tool) => (tool.widgetId ? [tool.widgetId] : []))).size;
 
     const stepRow = (tool: ActivityTool): StepRow => {
         const tries = triesOf.get(tool) ?? [];
-        const state = tool.state;
+        const state = tool.state === 'failed' ? failedAs : tool.state;
         const durationMs = tool.durationMs ?? null;
 
         return {
@@ -237,7 +245,7 @@ export const turnView = ({
             label: tool.name,
             state,
             detail:
-                state === 'failed'
+                tool.state === 'failed'
                     ? (tool.summary?.trim() ?? null)
                     : state === 'complete'
                       ? detailOf(tool)
@@ -277,7 +285,7 @@ export const turnView = ({
             key: tool.id,
             at: tool.startedAt,
             label: tool.name,
-            state: retried ? 'retried' : tool.state,
+            state: retried ? 'retried' : tool.state === 'failed' ? failedAs : tool.state,
             quiet: !isWork(tool),
             durationMs: tool.durationMs ?? null,
             detail:
@@ -329,14 +337,15 @@ export const turnView = ({
         }
     }
 
-    const base = { startedAt: entry.startedAt, cards, notDone: standing.length };
     const open = entry.endedAt == null && isLast && (thinking || waiting);
     const outcome: TurnOutcome = open
-        ? { state: thinking ? 'live' : 'waiting', ...base }
+        ? { state: thinking ? 'live' : 'waiting', startedAt: entry.startedAt, cards }
         : {
               state: 'ended',
-              ...base,
+              startedAt: entry.startedAt,
               durationMs: entry.endedAt != null ? entry.endedAt - entry.startedAt : null,
+              cards,
+              failed: entry.failed === true,
           };
 
     return { turn: entry.turn, question: entry.prompt, outcome, rows, log };
@@ -363,14 +372,15 @@ export const spanText = (ms: number): string => {
     return total < 60 ? `${total} s` : `${Math.floor(total / 60)} min ${total % 60} s`;
 };
 
-// One part of a turn's outcome line; `alert` marks the failures in red.
+// One part of a turn's outcome line; `alert` marks a turn without its
+// answer in red.
 export type OutcomePart = { key: string; text: string; alert?: true };
 
 /**
  * The outcome line after the question. An ended turn: its start, its
- * length, the cards it made, and the steps that stand failed. A live or
- * waiting turn: its time so far and the cards made yet. A count of zero
- * cards or failures is left out.
+ * length, the cards it made, and "No answer" when it ended without one. A
+ * live or waiting turn: its time so far and the cards made yet. A count of
+ * zero cards is left out.
  */
 export const outcomeParts = (outcome: TurnOutcome, now: number): OutcomePart[] => {
     const parts: (OutcomePart | null)[] =
@@ -385,8 +395,8 @@ export const outcomeParts = (outcome: TurnOutcome, now: number): OutcomePart[] =
 
     parts.push(
         outcome.cards ? { key: 'cards', text: plural(outcome.cards, 'card') } : null,
-        outcome.notDone
-            ? { key: 'notDone', text: `${plural(outcome.notDone, 'step')} not done`, alert: true }
+        outcome.state === 'ended' && outcome.failed
+            ? { key: 'failed', text: 'No answer', alert: true }
             : null,
     );
 

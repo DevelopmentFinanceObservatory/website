@@ -73,7 +73,7 @@ test('a turn with no failures: work steps on the rail, status lines in the log o
         startedAt: 0,
         durationMs: 123_000,
         cards: 1,
-        notDone: 0,
+        failed: false,
     });
     assert.equal(result.question, 'How has external debt changed in Kenya and Nigeria since 2010?');
     assert.equal(stepRows(result.rows)[0]?.detail, 'Found Outstanding external debt');
@@ -103,7 +103,6 @@ test('a retry that worked folds into its step with every try', () => {
         ],
     );
     assert.equal(rows[0]?.retry?.cause, 'The data this step needed has changed or is not held.');
-    assert.equal(result.outcome.notDone, 0);
     assert.deepEqual(
         result.log.map((line) => [line.state, line.retriedAt]),
         [
@@ -132,14 +131,13 @@ test('a retry matches by label and tool: another tool or label stands', async (t
 
             assert.deepEqual(
                 stepRows(result.rows).map((row) => row.state),
-                ['failed', 'complete'],
+                ['errored', 'complete'],
             );
-            assert.equal(result.outcome.notDone, 1);
         });
     }
 });
 
-test('a standing failure then a skipped step: Not done with its cause, then Not run', () => {
+test('a standing failure then a skipped step: an error with its cause, then Not run', () => {
     const tools = [
         step(1, 'Fetch External debt owed to China', 'get_data', 'failed', {
             summary: 'The data is not broken down the way that was asked.',
@@ -154,11 +152,10 @@ test('a standing failure then a skipped step: Not done with its cause, then Not 
     assert.deepEqual(
         rows.map((row) => [row.state, row.detail]),
         [
-            ['failed', 'The data is not broken down the way that was asked.'],
+            ['errored', 'The data is not broken down the way that was asked.'],
             ['skipped', null],
         ],
     );
-    assert.equal(result.outcome.notDone, 1);
 });
 
 test('parallel steps with one label stay apart: a failure beside a success stands', () => {
@@ -175,11 +172,10 @@ test('parallel steps with one label stay apart: a failure beside a success stand
     assert.deepEqual(
         stepRows(result.rows).map((row) => [row.state, row.retry]),
         [
-            ['failed', null],
+            ['errored', null],
             ['complete', null],
         ],
     );
-    assert.equal(result.outcome.notDone, 1);
 });
 
 test('arrival order decides a retry when the clock cannot', async (t) => {
@@ -199,7 +195,6 @@ test('arrival order decides a retry when the clock cannot', async (t) => {
             stepRows(result.rows).map((row) => [row.state, row.retry?.attempts.length]),
             [['complete', 2]],
         );
-        assert.equal(result.outcome.notDone, 0);
     });
 
     await t.test('a step that started before the failure settled stays apart', () => {
@@ -216,7 +211,10 @@ test('arrival order decides a retry when the clock cannot', async (t) => {
         ];
         const result = view({ entry: entry(tools, 9_500) });
 
-        assert.equal(result.outcome.notDone, 1);
+        assert.deepEqual(
+            stepRows(result.rows).map((row) => row.state),
+            ['errored', 'complete'],
+        );
     });
 });
 
@@ -241,15 +239,44 @@ test('a standing failure keeps its advice; a recovered try drops it', () => {
     );
 });
 
-test('a failed status line that stands goes on the rail and counts', () => {
+test('a failed status line that stands goes on the rail', () => {
     const tools = [step(1, 'Working out the next step', null, 'failed')];
     const result = view({ entry: entry(tools, 5) });
 
     assert.deepEqual(
-        result.rows.map((row) => row.key),
-        [tools[0]!.id],
+        stepRows(result.rows).map((row) => [row.key, row.state]),
+        [[tools[0]!.id, 'errored']],
     );
-    assert.equal(result.outcome.notDone, 1);
+});
+
+test('a failure that stands is an error the step hit, unless the turn has no answer', async (t) => {
+    const tools = [
+        step(1, FETCH, 'get_data', 'failed', { summary: FETCH_FAIL }),
+        step(2, 'Draw the chart', 'write_component', 'complete', { widgetId: 'w1' }),
+    ];
+    const cases = [
+        { name: 'the turn answered', failed: undefined, expected: 'errored' },
+        { name: 'the turn ended without its answer', failed: true, expected: 'failed' },
+    ] as const;
+
+    for (const { name, failed, expected } of cases) {
+        await t.test(name, () => {
+            const result = view({ entry: { ...entry(tools, 5), failed } });
+
+            assert.deepEqual(
+                stepRows(result.rows).map((row) => [row.state, row.detail]),
+                [
+                    [expected, FETCH_FAIL],
+                    ['complete', null],
+                ],
+            );
+            assert.deepEqual(
+                result.log.map((line) => line.state),
+                [expected, 'complete'],
+            );
+            assert.equal(result.outcome.state === 'ended' && result.outcome.failed, !!failed);
+        });
+    }
 });
 
 test('a running turn: the running step shows whatever its kind, the head is live', () => {
@@ -280,8 +307,8 @@ test('a restored turn that never closed reads as ended, with no length', () => {
         state: 'ended',
         startedAt: 0,
         cards: 0,
-        notDone: 0,
         durationMs: null,
+        failed: false,
     });
 });
 
@@ -296,7 +323,6 @@ test('a failed try with its retry still running folds into the running step', ()
         stepRows(result.rows).map((row) => row.state),
         ['running'],
     );
-    assert.equal(result.outcome.notDone, 0);
 });
 
 test('the approved plan sits before the first step after the approval', async (t) => {
@@ -443,28 +469,46 @@ test('formats: spans and tries', () => {
     );
 });
 
-test('the outcome line leaves out a zero count of cards or failures', async (t) => {
+test('the outcome line leaves out a zero count of cards and flags only a turn with no answer', async (t) => {
     const keys = (outcome: Parameters<typeof outcomeParts>[0]) =>
         outcomeParts(outcome, 38_000).map((part) => [part.key, part.alert ?? false]);
     const ended = { state: 'ended', startedAt: 0, durationMs: 123_000 } as const;
 
-    await t.test('an ended turn with cards and a failure', () =>
-        assert.deepEqual(keys({ ...ended, cards: 2, notDone: 1 }), [
+    await t.test('an ended turn with cards and steps that hit errors', () =>
+        assert.deepEqual(
+            keys(
+                view({
+                    entry: entry(
+                        [
+                            step(1, FETCH, 'get_data', 'failed', { summary: FETCH_FAIL }),
+                            step(2, 'Draw', 'write_component', 'complete', { widgetId: 'w1' }),
+                            step(3, 'Draw', 'write_component', 'complete', { widgetId: 'w2' }),
+                        ],
+                        123_000,
+                    ),
+                }).outcome,
+            ),
+            [
+                ['start', false],
+                ['length', false],
+                ['cards', false],
+            ],
+        ),
+    );
+    await t.test('an ended turn without its answer', () =>
+        assert.deepEqual(keys({ ...ended, cards: 0, failed: true }), [
             ['start', false],
             ['length', false],
-            ['cards', false],
-            ['notDone', true],
+            ['failed', true],
         ]),
     );
-    await t.test('an ended turn with neither', () =>
-        assert.deepEqual(keys({ ...ended, cards: 0, notDone: 0 }), [
+    await t.test('an ended turn with no cards', () =>
+        assert.deepEqual(keys({ ...ended, cards: 0, failed: false }), [
             ['start', false],
             ['length', false],
         ]),
     );
     await t.test('a live turn with no cards yet', () =>
-        assert.deepEqual(keys({ state: 'live', startedAt: 0, cards: 0, notDone: 0 }), [
-            ['length', false],
-        ]),
+        assert.deepEqual(keys({ state: 'live', startedAt: 0, cards: 0 }), [['length', false]]),
     );
 });
