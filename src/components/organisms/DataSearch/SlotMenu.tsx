@@ -78,7 +78,8 @@ export const slotAriaLabel = (field: string, value: string, variable?: string | 
  *  names the trigger, and the menu takes its name from the trigger. Passing
  *  `open` makes the menu controlled, so something outside the trigger (a
  *  departure's action) can open it; `onOpenChange` then reports every
- *  request to open or close. `about` (a TokenAbout) heads the panel, above
+ *  request to open or close. `anchor` (see `tokenAnchor`) marks the
+ *  trigger so a fact's Change can scroll to it before opening the menu. `about` (a TokenAbout) heads the panel, above
  *  the options. A token with nothing to pick passes it with no children. */
 export const SlotMenu = ({
     label,
@@ -87,6 +88,7 @@ export const SlotMenu = ({
     ariaLabel,
     open,
     onOpenChange,
+    anchor,
     about,
     children,
 }: {
@@ -96,6 +98,7 @@ export const SlotMenu = ({
     ariaLabel: string;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    anchor?: string;
     about?: React.ReactNode;
     children?: React.ReactNode;
 }) => {
@@ -108,7 +111,12 @@ export const SlotMenu = ({
                     role="button"
                     tabIndex={0}
                     aria-label={ariaLabel}
-                    className={classNames(styles.slot, marked && styles.slotMarked)}
+                    className={classNames(
+                        styles.slot,
+                        marked && styles.slotMarked,
+                        anchor && styles.menuAnchor,
+                    )}
+                    data-menu-anchor={anchor}
                 >
                     {label}
                 </span>

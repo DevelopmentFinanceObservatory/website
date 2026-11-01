@@ -2561,6 +2561,13 @@ span.slotMarked {
     }
 }
 
+// A heading menu's trigger that a fact's Change scrolls to first
+// (menuReveal.ts): it lands below the fixed site header, the clearance the
+// docs headings keep, with the rest of the viewport free for the menu.
+.menuAnchor {
+    scroll-margin-top: rem(100);
+}
+
 // Refine, first in .actions: the outline Button with gold text. The
 // `.actions` prefix outranks Button's own `.outline .label` colour.
 .actions .refineButton > span {

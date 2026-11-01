@@ -29,6 +29,7 @@ import type { ChangeAction } from './WhyPanel';
 import Button from '@/components/atoms/Button/Button';
 import DataPrompt from '@/components/molecules/DataPrompt/DataPrompt';
 import StatTiles from '@/components/molecules/StatTiles/StatTiles';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import {
     catalogueChips,
@@ -50,6 +51,7 @@ import {
     type VersionLinkResult,
 } from '@/lib/search/searchClient';
 import { searchSharePart } from '@/lib/search/searchShareRequest';
+import { REFINE_ANCHOR, revealThenOpen, tokenAnchor } from '@/lib/search/menuReveal';
 import { changeTarget, sameMenuChanges, type MenuChanges } from '@/lib/search/refineMenu';
 import {
     downloadNote,
@@ -206,6 +208,18 @@ const DataSearch = ({
             setMenuChanges((current) => (sameMenuChanges(current, next) ? current : next)),
         [],
     );
+    // A Change scrolls the menu's trigger into view before the menu opens
+    // (revealThenOpen). Each Change, a new answer, and unmounting abort the
+    // wait, so a stale Change never opens a menu.
+    const reducedMotion = usePrefersReducedMotion();
+    const revealRef = useRef<AbortController | null>(null);
+    useEffect(() => () => revealRef.current?.abort(), [response]);
+    const reveal = (anchorKey: string, open: () => void) => {
+        revealRef.current?.abort();
+        const controller = new AbortController();
+        revealRef.current = controller;
+        revealThenOpen(anchorKey, open, { signal: controller.signal, reduced: reducedMotion });
+    };
     const changeAction: ChangeAction = (partIndex, bindingRef) => {
         const target = changeTarget({
             plan: answerPlan({ response, parts }),
@@ -216,8 +230,13 @@ const DataSearch = ({
             refineKeys: new Set(refine.map((item) => item.key)),
         });
 
-        if (target?.kind === 'token') return () => setOpenMenu(target.index);
-        if (target?.kind === 'refine') return () => setRefineOpen({ at: target.key });
+        if (target?.kind === 'token') {
+            return () => reveal(tokenAnchor(target.index), () => setOpenMenu(target.index));
+        }
+
+        if (target?.kind === 'refine') {
+            return () => reveal(REFINE_ANCHOR, () => setRefineOpen({ at: target.key }));
+        }
 
         return null;
     };
