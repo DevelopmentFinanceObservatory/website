@@ -7,6 +7,7 @@ import { type HydratedPart, knownPart, type UnitConversion } from '../types.ts';
 import {
     currencyMatches,
     currencyRequest,
+    currencySearchLabel,
     currentUnit,
     priceBases,
     pricesRequest,
@@ -61,18 +62,34 @@ const patchOffer = (
     }),
 });
 
-test('unitPresets names role currencies by their entity and dedupes by code', () => {
+test('unitPresets offers dollars and role currencies, with no standing euro row', () => {
     assert.deepEqual(
         unitPresets(aid, aidOffer).map(({ code, label, currency }) => [code, label, currency]),
         [
             ['USD', 'US dollars', 'USD'],
-            ['EUR', "Germany's currency: euros", 'EUR'],
             ['GTQ', "Guatemala's currency: Guatemalan quetzales", 'GTQ'],
+            ['EUR', "Germany's currency: euros", 'EUR'],
         ],
     );
     assert.deepEqual(
         unitPresets(specOf(unitDebt), unitConversion(specOf(unitDebt))).map(({ label }) => label),
-        ['US dollars', 'Euros', "Ghana's currency: Ghanaian cedis"],
+        ['US dollars', "Ghana's currency: Ghanaian cedis"],
+    );
+
+    // A euro answer with no euro-area entity keeps a row for its own unit.
+    const euroDebt = partialSpec({
+        ...specOf(unitDebt),
+        identity: {
+            ...specOf(unitDebt).identity,
+            facets: {
+                unit: { state: 'value', request: { currency: 'EUR', prices: 'current' } },
+            },
+        },
+    });
+
+    assert.deepEqual(
+        unitPresets(euroDebt, unitConversion(euroDebt)).map(({ code }) => code),
+        ['USD', 'GHS', 'EUR'],
     );
 });
 
@@ -246,6 +263,18 @@ test('sharedOffer offers what every part serves', () => {
     // One offer is its own shared offer; no offer shares nothing.
     assert.deepEqual(sharedOffer([first!]), first);
     assert.equal(sharedOffer([]), null);
+});
+
+test('currencySearchLabel names how many currencies the offer holds', () => {
+    const count = (label: string) => Number(/\d+/.exec(label)?.[0]);
+    const smaller = patchOffer(aidOffer, { JPY: null, GTQ: null });
+
+    assert.equal(count(currencySearchLabel(aidOffer)), aidOffer.currencies.length);
+    assert.equal(count(currencySearchLabel(smaller)), aidOffer.currencies.length - 2);
+    assert.match(
+        currencySearchLabel({ ...aidOffer, currencies: aidOffer.currencies.slice(0, 1) }),
+        /1 currency/,
+    );
 });
 
 test('currencyMatches searches the convertible currencies by noun and code', () => {

@@ -152,6 +152,40 @@ export const shareCardResult = pgTable(
 export type ShareCardResultRow = typeof shareCardResult.$inferSelect;
 
 /**
+ * The write token dfo-apis issued for a share a signed-in user made, which
+ * the website sends on that user's replace and delete requests
+ * (src/lib/chat/shareTokens.ts). The share itself lives in dfo-apis, so
+ * `share_id` references no table here. A guest's share has no row and
+ * stays as made.
+ */
+export const shareToken = pgTable('share_token', {
+    shareId: text('share_id').primaryKey(),
+    userId: text('user_id')
+        .notNull()
+        .references(() => user.id, { onDelete: 'cascade' }),
+    writeToken: text('write_token').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type ShareTokenRow = typeof shareToken.$inferSelect;
+
+/**
+ * A share in dfo-apis that no stored write token could take down: its
+ * token was refused when the owner's account was deleted, or the take-down
+ * that follows a token the website could not keep failed. `user_id`
+ * references no table, so the row outlives the account. An operator takes
+ * each share down with dfo-apis' `datasets-maintenance take-down-share
+ * <id>` and deletes the row. `reason` is the code the take-down failed with.
+ */
+export const shareCleanup = pgTable('share_cleanup', {
+    shareId: text('share_id').primaryKey(),
+    userId: text('user_id').notNull(),
+    writeToken: text('write_token').notNull(),
+    reason: text('reason').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
  * One row per (user, roadmap entry) vote: the "Under consideration" items
  * on /data/roadmap, which only signed-in people can vote for. The entry id
  * is the corpus' own, so a re-synced roadmap keeps its votes.

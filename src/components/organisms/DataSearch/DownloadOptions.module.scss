@@ -1,8 +1,9 @@
 @use "variables" as *;
 @use "mixins" as *;
 
-// The Download options dialog: Format, Include and the extra columns as
-// stacked sections, each under a hairline, inside the Modal's scrolling body.
+// The Download options dialog: Format, Include and the folded extra columns
+// as stacked sections, each under a hairline, inside the Modal's scrolling
+// body.
 .options {
     @include flex(column, flex-start, stretch);
 
@@ -56,10 +57,143 @@
     text-transform: uppercase;
 }
 
-.pending,
 .note {
     @include font-size(12px, 1.3);
 
     font-family: var(--font-outfit);
     color: var(--color-stone);
+}
+
+.rows {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+// A checkbox row: a visible box, the name, and a quiet detail line.
+.check {
+    @include flex(row, flex-start, flex-start);
+
+    gap: rem(10);
+    width: 100%;
+    padding: 0;
+    color: var(--color-charcoal);
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: rem(4);
+        border-radius: rem(2);
+    }
+}
+
+.box {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(12);
+    height: rem(12);
+    margin-top: -1px;
+    color: var(--color-white);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(2);
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+
+    svg {
+        width: rem(10);
+        height: rem(10);
+        opacity: 0;
+    }
+
+    [aria-checked="true"] > & {
+        background: var(--color-charcoal);
+        border-color: var(--color-charcoal);
+
+        svg {
+            opacity: 1;
+        }
+    }
+}
+
+.checkText {
+    @include flex(column, flex-start, stretch);
+
+    flex: 1;
+    gap: rem(5);
+    min-width: 0;
+}
+
+.checkName {
+    @include font-size(10px, 1.2);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.checkDetail {
+    @include font-size(10px, 1.35);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+// "Extra columns · 6 available", closed until the viewer opens it.
+.disclose {
+    @include flex(row, flex-start, center);
+    @include font-size(14px, 1);
+
+    gap: rem(8);
+    width: 100%;
+    padding: 0;
+    font-family: var(--font-outfit);
+    font-weight: 500;
+    color: var(--color-charcoal);
+    text-align: left;
+    letter-spacing: -0.02em;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    svg {
+        width: rem(16);
+        height: rem(16);
+        margin-left: auto;
+        transition: rotate 0.3s ease;
+    }
+
+    &[aria-expanded="true"] svg {
+        rotate: 180deg;
+    }
+}
+
+.discloseCount {
+    @include font-size(11px, 1);
+
+    font-family: var(--font-dm-mono);
+    font-weight: 400;
+    color: var(--color-stone);
+}
+
+.extras {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(16);
+}
+
+// What the file already holds, so names and kinds need no row.
+.inFile {
+    @include font-size(12px, 1.4);
+
+    padding: rem(8) rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    background: var(--color-grid-bg-light);
+    border-radius: rem(4);
 }

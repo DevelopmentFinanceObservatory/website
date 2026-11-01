@@ -42,7 +42,7 @@ import {
     type StructuredUnit,
 } from './payload.ts';
 import type { Description } from './description.ts';
-import { gapsOf, licenceWords } from './descriptionBlocks.ts';
+import { gapsOf, isInputSource, licenceWords } from './descriptionBlocks.ts';
 import { formatPeriod } from './period.ts';
 import {
     cellNumber,
@@ -240,7 +240,7 @@ const payloadPlot = (chart: PayloadChart): Plot => {
 };
 
 // A table card's cells: the sketch pivots periods down and series across.
-type Cells = Pick<TableWidget, 'columns' | 'rows'>;
+type Cells = Pick<TableWidget, 'columns' | 'rows' | 'namesColumn' | 'series'>;
 
 const sketchCells = (facts: FactSummary): Cells | null => {
     const plot = sketchPlot(facts);
@@ -251,6 +251,7 @@ const sketchCells = (facts: FactSummary): Cells | null => {
 
     return {
         columns: ['Period', ...plot.series.map((entry) => entry.label)],
+        series: true,
         rows: plot.categories.map((period, index) => [
             period,
             ...plot.series.map((entry) => {
@@ -271,6 +272,7 @@ const STATUS_LABELS: Record<string, string> = {
 // The payload's resolved table, row for row, in its own column order. A
 // Unit column joins before Value when the rows mix units, as a table over
 // GDP and population does. A status row names its status in the Value cell.
+// The `stat_var` dimension is the column of variable names.
 const payloadCells = (table: PayloadTable): Cells => {
     const units = table.rows.map((row) => payloadUnitText(row.unit));
     const columns =
@@ -280,8 +282,11 @@ const payloadCells = (table: PayloadTable): Cells => {
               )
             : table.columns;
 
+    const namesColumn = columns.findIndex(({ key }) => key === 'stat_var');
+
     return {
         columns: columns.map((column) => column.label),
+        ...(namesColumn >= 0 ? { namesColumn } : {}),
         rows: table.rows.map((row, index) =>
             columns.map((column) => {
                 const { key } = column;
@@ -488,15 +493,18 @@ const sourceWidget = (
 const infoUnit = (facts: FactSummary): string | null => unitDescription(asUnit(facts.unit));
 
 // A described card's sources, from its description: the card face, Download
-// Data and analytics name them as they name a legacy card's.
+// Data and analytics name them as they name a legacy card's. A computed
+// version's inputs are what it read, no credit, and stay out.
 const describedSources = (description: Description): CardSource[] =>
-    description.sources.map((source) => ({
-        id: source.ref,
-        name: source.label,
-        licence: source.licence ?? null,
-        url: null,
-        retrieved: null,
-    }));
+    description.sources
+        .filter((source) => !isInputSource(source))
+        .map((source) => ({
+            id: source.ref,
+            name: source.label,
+            licence: source.licence ?? null,
+            url: null,
+            retrieved: null,
+        }));
 
 /** The card's More Info payload: attribution, window and unit from the fact
  *  summary; the citation, freshness and what the data leaves out
@@ -608,8 +616,17 @@ const redraw = (widget: Widget, payload: Record<string, unknown>): Widget | unde
         }
         case 'table': {
             const table = payloadTable(payload);
+            const held = { ...widget };
 
-            return table && { ...widget, ...payloadCells(table), data: tableData(table) };
+            // The new cells carry their own `namesColumn` and `series`, or
+            // none. The previous revision's `namesColumn` would shorten the
+            // new table's places as if they were variable names, and a
+            // sketch's `series` would transpose the payload's dimension
+            // columns and pad its years as values.
+            delete held.namesColumn;
+            delete held.series;
+
+            return table && { ...held, ...payloadCells(table), data: tableData(table) };
         }
         case 'text': {
             const body = payloadNoteText(payload);

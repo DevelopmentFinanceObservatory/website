@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 
 import { forward } from '@/lib/proxy/forward';
+import { dotSegmentProblem } from '@/lib/proxy/problem';
+import { isForwardablePath } from '@/lib/proxy/surfaces';
 import { searchApiBase } from '@/lib/searchApi';
 import { componentDataTarget } from '@/lib/studio/cardDownload';
 
@@ -14,6 +16,12 @@ export const GET = async (
     { params }: { params: Promise<{ id: string; revision: string }> },
 ) => {
     const { id, revision } = await params;
+
+    // encodeURIComponent leaves `.` and `..` as they are, so a bare dot id
+    // would climb out of the components path once fetch resolves the URL.
+    if (!isForwardablePath([id, revision])) {
+        return dotSegmentProblem();
+    }
 
     return forward(req, {
         surface: 'api',

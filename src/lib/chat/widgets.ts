@@ -3,6 +3,8 @@
  * (an agent's component, or the user's own text card).
  */
 
+import { asRecord } from '../asRecord.ts';
+import { isComputedBy, isInputSource } from '../studio/descriptionBlocks.ts';
 import {
     cellNumber,
     compact,
@@ -125,6 +127,15 @@ export type TableWidget = {
     title: string;
     columns: string[];
     rows: string[][];
+    /** The column holding variable (series) names, the only one whose
+     *  shared words the table may move to its caption. Other columns hold
+     *  places, donors or periods, whose shared words are part of the name. */
+    namesColumn?: number;
+    /** Set on a table pivoted from series, as a chart shown as a table is. Its
+     *  headers (or, with one period, its rows) name series and its cells
+     *  are values, so the unit goes to the caption and the table may be
+     *  shown transposed (`tableDisplay`). */
+    series?: true;
     ref?: CardRef;
     frame?: FrameRef;
     data?: CardData;
@@ -154,13 +165,81 @@ const shortLabel = (label: string): string => label.replace(/\s*\(.*?\)/g, '').t
 export const formatAxis = (value: number, unit?: string): string =>
     isPercentUnit(unit) ? `${percentNumber(value)}%` : compact(value);
 
-/** The card's source line: every source's name joined by "; " when the card
- *  cites more than one ("World Bank IDS; World Development Indicators"), else
- *  the one source's name, else the frame's attribution label. */
-export const sourceLine = (info: CardInfo): string => {
-    const names = [...new Set(info.sources?.map((source) => source.name))];
+/** A card's source credit, read as the lead, the first name, then "+{more} more":
+ *  "Source: OECD CRS", "Sources: OECD CRS +1 more", or "Source: DFO
+ *  calculation" for a computed card that credits no source. More Info lists
+ *  every source in full. */
+export type SourceCredit = {
+    lead: string;
+    // The first source's name, which the card links; null on a computed card
+    // that names no source.
+    first: string | null;
+    // How many further sources the card cites.
+    more: number;
+};
 
-    return names.length > 1 ? names.join('; ') : (info.sourceName ?? info.label);
+// The count the harness appends to a frame's attribution label ("IDS; WDI ·
+// 2 indicator(s)", "OECD DAC1 · 1 indicator"), and the placeholder the label
+// holds when the frame names no source.
+const LABEL_COUNT = /\s*·\s*\d+ indicators?(?:\(s\))?$/;
+const UNKNOWN_SOURCE = 'Unknown source';
+
+// The sources a frame's attribution label names, its count dropped.
+const labelSources = (label: string): string | null => {
+    const name = label.replace(LABEL_COUNT, '').trim();
+
+    return name && name !== UNKNOWN_SOURCE ? name : null;
+};
+
+// What the card face reads of a stored description, from the saved JSON
+// without a full read: whether DFO computed the card, and the names of the
+// sources it credits. A computed version's inputs record what it read and
+// credit no one. Null for a card that carries no description.
+const describedCredit = (description: unknown): { computed: boolean; names: string[] } | null => {
+    const stored = asRecord(description);
+
+    if (!stored) {
+        return null;
+    }
+
+    const sources = Array.isArray(stored['sources']) ? stored['sources'] : [];
+
+    return {
+        computed: isComputedBy(
+            asRecord(stored['describes'])?.['kind'],
+            asRecord(stored['cite'])?.['id'],
+        ),
+        names: sources.flatMap((value) => {
+            const source = asRecord(value);
+            const label = source?.['label'];
+
+            return source && typeof label === 'string' && label && !isInputSource(source)
+                ? [label]
+                : [];
+        }),
+    };
+};
+
+/** The card's source credit, or null when the card names no source and DFO
+ *  did not compute it. Each source counts once. A described card credits its
+ *  description's sources, a computed card's inputs left out, and a computed
+ *  card that credits none credits DFO's calculation. The bar's "Built with"
+ *  mark and More Info credit DFO already, so a named source stands alone. A
+ *  card without one credits its sources, else the one source a card saved before its
+ *  sources were kept held, else what its attribution label names. */
+export const sourceLine = (
+    info: Pick<CardInfo, 'sources' | 'sourceName' | 'label' | 'description'>,
+): SourceCredit | null => {
+    const described = describedCredit(info.description);
+    const listed = described ? described.names : (info.sources?.map((source) => source.name) ?? []);
+    const fallback = described ? null : (info.sourceName ?? labelSources(info.label));
+    const [first = fallback, ...rest] = [...new Set(listed)];
+
+    if (first === null) {
+        return described?.computed ? { lead: 'Source: DFO calculation', first, more: 0 } : null;
+    }
+
+    return { lead: rest.length > 0 ? 'Sources:' : 'Source:', first, more: rest.length };
 };
 
 /**
@@ -190,6 +269,8 @@ export const tableFromChart = (widget: ChartWidget): TableWidget => {
             id: widget.id,
             title: widget.title,
             columns: ['', widget.categories[0]!],
+            namesColumn: 0,
+            series: true,
             rows: widget.series.map((series) => [
                 series.label,
                 series.values[0] != null ? cellNumber(series.values[0]!) : '—',
@@ -203,6 +284,7 @@ export const tableFromChart = (widget: ChartWidget): TableWidget => {
         id: widget.id,
         title: widget.title,
         columns: ['', ...widget.series.map((series) => series.label)],
+        series: true,
         rows: widget.categories.map((category, index) => [
             category,
             ...widget.series.map((series) => {

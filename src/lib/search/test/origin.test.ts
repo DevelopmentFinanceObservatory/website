@@ -207,15 +207,15 @@ test('the why summary notes each resolved source with its origin and the route o
     );
 
     assert.deepEqual(
-        summary.sources.map((source) => [source.ref, source.origin, source.documentation]),
+        summary.sources.map((source) => [source.ref, source.meta, source.documentation]),
         [
-            [wdi.ref, 'World Bank via Data Commons by Google', wdi.documentation],
+            [wdi.ref, ['World Bank via Data Commons by Google'], wdi.documentation],
             [
                 crs.ref,
-                'Organisation for Economic Co-operation and Development (OECD)',
+                ['Organisation for Economic Co-operation and Development (OECD)'],
                 crs.documentation,
             ],
-            [unlinked.ref, null, null],
+            [unlinked.ref, [], null],
         ],
     );
 });

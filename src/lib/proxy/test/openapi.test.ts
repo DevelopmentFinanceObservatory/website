@@ -1,6 +1,6 @@
 /**
- * `openapi.ts`: the site's /openapi.json keeps the search, datasets and
- * graph paths under /api/v1 and /codes/* where it is, drops every other path
+ * `openapi.ts`: the site's /openapi.json keeps the search, datasets, graph
+ * and presentation card and share paths under /api/v1 and /codes/* where it is, drops every other path
  * and the schemas only those used, and drops `servers`, so a client calls
  * the host that served it. Anything but a 200 JSON document passes through
  * untouched.
@@ -35,7 +35,9 @@ const DOCUMENT = {
         '/api/datasets/{id}/versions': op('Versions'),
         '/api/graph/node/{dcid}': op('Node'),
         '/api/skills/{skill_id}': op('Skill'),
-        '/api/presentation/components': op('Component'),
+        '/api/presentation/components': op('Manifest'),
+        '/api/presentation/shares/{share_id}/slots/{n}/data': op('Manifest'),
+        '/api/presentation/frames/{frame_id}': op('Component'),
         '/api/searchlight': op('Skill'),
         '/codes/{code}': op('CodeRegistryEntry'),
     },
@@ -55,7 +57,7 @@ const DOCUMENT = {
     },
 };
 
-test('publicOpenApi: keeps the three surfaces under /api/v1 and /codes, and drops the upstream servers', () => {
+test('publicOpenApi: keeps the surfaces under /api/v1 and /codes, and drops the upstream servers', () => {
     const out = publicOpenApi(structuredClone(DOCUMENT));
 
     assert.equal(Object.hasOwn(out, 'servers'), false);
@@ -64,6 +66,9 @@ test('publicOpenApi: keeps the three surfaces under /api/v1 and /codes, and drop
         '/api/v1/datasets': DOCUMENT.paths['/api/datasets'],
         '/api/v1/datasets/{id}/versions': DOCUMENT.paths['/api/datasets/{id}/versions'],
         '/api/v1/graph/node/{dcid}': DOCUMENT.paths['/api/graph/node/{dcid}'],
+        '/api/v1/presentation/components': DOCUMENT.paths['/api/presentation/components'],
+        '/api/v1/presentation/shares/{share_id}/slots/{n}/data':
+            DOCUMENT.paths['/api/presentation/shares/{share_id}/slots/{n}/data'],
         '/codes/{code}': DOCUMENT.paths['/codes/{code}'],
     });
     assert.deepEqual(out.info, DOCUMENT.info);

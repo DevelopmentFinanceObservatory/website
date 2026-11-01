@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
     endTurnActivity,
+    recordApproval,
+    recordStep,
     restoreActivity,
     type ActivityEntry,
     type StepState,
@@ -65,40 +67,139 @@ test('restore: fields of older saves are dropped', () => {
     assert.ok(restored && !('statusLine' in (restored.tools[0] ?? {})));
 });
 
-test('end turn: open steps settle by how the turn ended', async (t) => {
+test('restore: the plan approval time is kept, and a save without it has none', () => {
+    const [stamped, unstamped] = restoreActivity([
+        { ...entry(1, ['complete']), approvedAt: 42 },
+        entry(2, ['complete']),
+    ]);
+
+    assert.equal(stamped?.approvedAt, 42);
+    assert.equal(unstamped?.approvedAt, undefined);
+});
+
+test('end turn: open steps settle by how the turn ended, and a failure with no answer fails the turn', async (t) => {
     const before = [
         entry(1, ['running']),
         entry(2, ['pending', 'running', 'complete', 'failed', 'skipped']),
     ];
+    const SKIPPED: StepState[] = ['skipped', 'skipped', 'complete', 'failed', 'skipped'];
+    const FAILED: StepState[] = ['failed', 'failed', 'complete', 'failed', 'skipped'];
     const cases: {
         name: string;
         open: 'skipped' | 'failed' | undefined;
+        answered: boolean;
+        carded?: true;
         expected: StepState[];
+        failed?: true;
     }[] = [
         {
-            name: 'stop skips them',
+            name: 'stop skips them, unanswered',
             open: 'skipped',
-            expected: ['skipped', 'skipped', 'complete', 'failed', 'skipped'],
+            answered: false,
+            expected: SKIPPED,
+        },
+        { name: 'stop skips them, answered', open: 'skipped', answered: true, expected: SKIPPED },
+        {
+            name: 'an error before any answer fails them and the turn',
+            open: 'failed',
+            answered: false,
+            expected: FAILED,
+            failed: true,
         },
         {
-            name: 'an error or a broken stream fails them',
+            name: 'an error after some answer fails them, not the turn',
             open: 'failed',
-            expected: ['failed', 'failed', 'complete', 'failed', 'skipped'],
+            answered: true,
+            expected: FAILED,
+        },
+        {
+            name: 'an error after a card but before any text fails them, not the turn',
+            open: 'failed',
+            answered: false,
+            carded: true,
+            expected: FAILED,
         },
         {
             name: 'done leaves them as their frames left them',
             open: undefined,
+            answered: false,
             expected: ['pending', 'running', 'complete', 'failed', 'skipped'],
         },
     ];
 
-    for (const { name, open, expected } of cases) {
+    for (const { name, open, answered, carded, expected, failed } of cases) {
         await t.test(name, () => {
-            const after = endTurnActivity(before, 2, open);
+            const start = carded
+                ? before.map((item) =>
+                      item.turn === 2
+                          ? {
+                                ...item,
+                                tools: [
+                                    ...item.tools,
+                                    {
+                                        ...step('card', 'complete'),
+                                        state: 'complete' as const,
+                                        widgetId: 'w1',
+                                    },
+                                ],
+                            }
+                          : item,
+                  )
+                : before;
+            const after = endTurnActivity(start, 2, open, answered);
 
-            assert.deepEqual(states(after, 2), expected);
+            assert.deepEqual(states(after, 2)?.slice(0, expected.length), expected);
+            assert.equal(after[1]?.failed, failed);
             assert.equal(typeof after[1]?.endedAt, 'number');
             assert.deepEqual(after[0], before[0], 'other turns are untouched');
         });
     }
+});
+
+test('record: steps and the approval are numbered in arrival order', () => {
+    const frame = (step_id: string, status: StepState) => ({
+        step_id,
+        label: step_id,
+        status,
+        tool: 'search',
+    });
+    let entry: ActivityEntry = { turn: 1, prompt: 'p', startedAt: 0, tools: [] };
+
+    entry = recordStep(entry, frame('a', 'running'), 5);
+    entry = recordStep(entry, frame('b', 'running'), 5);
+    entry = recordStep(entry, frame('a', 'failed'), 5);
+    entry = recordApproval(entry, 5);
+    entry = recordStep(entry, frame('c', 'complete'), 5);
+    // A later frame for a settled step keeps its first settle.
+    entry = recordStep(entry, frame('a', 'failed'), 5);
+
+    assert.deepEqual(
+        entry.tools.map((tool) => [tool.id, tool.startOrder, tool.settleOrder]),
+        [
+            ['a', 1, 3],
+            ['b', 2, undefined],
+            ['c', 5, 5],
+        ],
+    );
+    assert.equal(entry.approvedOrder, 4);
+});
+
+test('restore: the arrival order and a failed turn are kept', () => {
+    const [restored] = restoreActivity([
+        {
+            turn: 1,
+            prompt: 'p',
+            startedAt: 0,
+            approvedOrder: 3,
+            failed: true,
+            tools: [{ ...step('s1', 'complete'), startOrder: 1, settleOrder: 2 }],
+        },
+    ]);
+
+    assert.equal(restored?.approvedOrder, 3);
+    assert.equal(restored?.failed, true);
+    assert.deepEqual(
+        restored?.tools.map((tool) => [tool.startOrder, tool.settleOrder]),
+        [[1, 2]],
+    );
 });

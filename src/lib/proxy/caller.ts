@@ -2,10 +2,12 @@ import { createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 
 /**
- * Names the caller for the upstream's logs as `x-dfo-caller: ip:<digest>`,
- * where the digest is HMAC-SHA-256 of the client IP keyed by
- * CALLER_HMAC_KEY, hex, cut to 32 characters. The raw address never leaves
- * the site.
+ * Names the caller upstream as `x-dfo-caller: ip:<digest>`, where the digest
+ * is HMAC-SHA-256 of the client address's bucket (limiterBucket: an IPv6
+ * address as its /64, an IPv4-mapped one as its IPv4 address) keyed by
+ * CALLER_HMAC_KEY, hex, cut to 32 characters. dfo-apis computes the same
+ * digest for a caller that reaches it directly, so both paths share one key
+ * per client. The raw address never leaves the site.
  *
  * The client IP is the X-Forwarded-For entry TRUSTED_PROXY_HOPS places from
  * the right. Each proxy appends the address it saw, so entries to the left
@@ -15,8 +17,13 @@ import { isIP } from 'node:net';
  * one hop.
  *
  * Without CALLER_HMAC_KEY no caller is sent, and one warning is logged.
+ *
+ * dfo-apis believes x-dfo-caller only beside `x-dfo-caller-principal`
+ * carrying the secret it shares with the site (DFO_CALLER_PRINCIPAL), and
+ * resolves any other request from its own view of the client address.
  */
 export const CALLER_HEADER = 'x-dfo-caller';
+export const CALLER_PRINCIPAL_HEADER = 'x-dfo-caller-principal';
 
 const DIGEST_LENGTH = 32;
 
@@ -168,7 +175,10 @@ export const resolveCaller = (
         return undefined;
     }
 
-    const digest = createHmac('sha256', key).update(ip).digest('hex').slice(0, DIGEST_LENGTH);
+    const digest = createHmac('sha256', key)
+        .update(limiterBucket(ip))
+        .digest('hex')
+        .slice(0, DIGEST_LENGTH);
 
     return `ip:${digest}`;
 };
@@ -180,6 +190,75 @@ export const setCaller = (headers: Headers, caller: string | undefined): void =>
     if (caller) {
         headers.set(CALLER_HEADER, caller);
     }
+};
+
+/** What forward() sends dfo-apis to name the caller; see apisCallerFor. */
+export type ApisCaller = { principal?: string; caller?: string };
+
+/**
+ * The resolver for what names the caller to dfo-apis, from `env`: the
+ * DFO_CALLER_PRINCIPAL secret and the caller digest (resolveCaller).
+ *
+ * Without DFO_CALLER_PRINCIPAL neither is sent, since dfo-apis would ignore
+ * the caller, and one warning goes through `log`. With the secret but no
+ * usable CALLER_HMAC_KEY or TRUSTED_PROXY_HOPS, the secret goes alone and one
+ * error is logged: dfo-apis refuses a call that carries the secret without a
+ * caller, which is louder than putting every client of the site on one
+ * allowance. A request whose client address cannot be read goes the same way.
+ */
+export const apisCallerFor = (
+    env: Record<string, string | undefined>,
+    log: (message: string) => void = console.warn,
+): ((forwardedFor: string | null) => ApisCaller) => {
+    const principal = env.DFO_CALLER_PRINCIPAL?.trim();
+    const config = callerConfig(env);
+    let logged = false;
+    const logOnce = (message: string) => {
+        if (!logged) {
+            logged = true;
+            log(message);
+        }
+    };
+
+    if (!principal) {
+        return () => {
+            logOnce(
+                `DFO_CALLER_PRINCIPAL is unset; dfo-apis calls go without ${CALLER_HEADER}, so dfo-apis counts every client of the site as one caller`,
+            );
+
+            return {};
+        };
+    }
+
+    if ('problem' in config) {
+        return () => {
+            logOnce(
+                `${config.problem}; dfo-apis calls carry ${CALLER_PRINCIPAL_HEADER} without ${CALLER_HEADER}, which dfo-apis refuses`,
+            );
+
+            return { principal };
+        };
+    }
+
+    return (forwardedFor) => ({ principal, caller: resolveCaller(forwardedFor, config) });
+};
+
+const apisCaller = apisCallerFor(process.env);
+
+/**
+ * Name the caller of `incoming` on upstream headers bound for dfo-apis, from
+ * this process's env (see apisCallerFor), dropping any value already there.
+ */
+export const setApisCaller = (headers: Headers, incoming: Headers): void => {
+    const { principal, caller } = apisCaller(incoming.get('x-forwarded-for'));
+
+    headers.delete(CALLER_PRINCIPAL_HEADER);
+
+    if (principal) {
+        headers.set(CALLER_PRINCIPAL_HEADER, principal);
+    }
+
+    setCaller(headers, caller);
 };
 
 const config = callerConfig(process.env);

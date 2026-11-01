@@ -16,6 +16,7 @@ import {
 } from './descriptionBlocks.ts';
 import { formatWindow } from './period.ts';
 import { warnDescriptionRefused } from './payload.ts';
+import type { ShareMint } from './shareDialog.ts';
 
 // A `spec_` or `ops_` id names the card's own frame, a sum of indicators,
 // which no reader can look up.
@@ -130,4 +131,64 @@ export const panelViewOf = (info: CardInfo, options: PanelOptions): PanelView =>
     const description = cardDescription(info);
 
     return description ? describedPanel(description, options) : legacyPanel(info);
+};
+
+/** What asking for a snapshot link to cite came to: the snapshot share's
+ *  id and the moment its data dates from when known, or why there is none.
+ *  `limited` is a network that has made today's shares, which a second try
+ *  today meets again; `failed` is anything else. */
+export type CiteLink = { id: string; servedAt?: string } | { refusal: 'failed' | 'limited' };
+
+/** The citation's snapshot link from the share made for it. */
+export const citeLinkOf = (mint: ShareMint): CiteLink => {
+    if ('id' in mint) {
+        return mint.servedAt ? { id: mint.id, servedAt: mint.servedAt } : { id: mint.id };
+    }
+
+    return { refusal: mint.refusal.code === 'share_limit' ? 'limited' : 'failed' };
+};
+
+/** What a snapshot link made to cite a card is kept under for the session:
+ *  the card's id, the component revision it draws and the frame version its
+ *  data comes from. A card edited or drawn from new data since its link was
+ *  made has another key, so it gets a link of its own. */
+export const citeLinkKey = (widget: Widget): string => {
+    const ref = 'ref' in widget ? widget.ref : undefined;
+    const frame = 'frame' in widget ? widget.frame : undefined;
+
+    return [
+        widget.id,
+        ref ? `${ref.component_id}@${ref.revision}` : '',
+        frame ? `${frame.spec_id}@${frame.content_version}` : '',
+    ].join('|');
+};
+
+/** Makes the snapshot link to cite the card kept under `key` (`citeLinkKey`),
+ *  or hands back the one already being made for it. A second ask while the
+ *  first is in flight, from the same panel or from More Info opened again,
+ *  makes no second public share. Once the first settles, another ask makes a
+ *  new one, which is how a failed link is tried again. A snapshot that could
+ *  not be built or saved (`make` throws) settles as a failed link. */
+export const citeLinkOnce = (
+    inFlight: Map<string, Promise<CiteLink>>,
+    key: string,
+    make: () => Promise<CiteLink>,
+): Promise<CiteLink> => {
+    const running = inFlight.get(key);
+
+    if (running) {
+        return running;
+    }
+
+    const made = (async () => make())()
+        .catch((error: unknown): CiteLink => {
+            console.warn('Studio: a cite link could not be made', { key, error });
+
+            return { refusal: 'failed' };
+        })
+        .finally(() => inFlight.delete(key));
+
+    inFlight.set(key, made);
+
+    return made;
 };

@@ -1,26 +1,44 @@
 @use "variables" as *;
 @use "mixins" as *;
 
+// One answer's cards, with a paper fill and a sage line. A single card is
+// one slim row. Several are one row that opens into a list.
 .chips {
-    @include flex(column, flex-start, stretch);
-
-    gap: rem(6);
     width: 100%;
-    min-width: 0;
-}
-
-// One card's chip: paper fill, sage line, the state pill flush right.
-.chip {
     min-width: 0;
     padding: rem(9) rem(10);
     background-color: var(--color-grid-bg-light);
     border: 1px solid var(--color-gray-1600);
     border-radius: rem(12);
-    transition: border-color 0.25s ease;
 }
 
-.row {
+.single {
     @include flex(row, flex-start, flex-start);
+
+    gap: rem(8);
+
+    // The single title wraps to two lines before it clips.
+    .title {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    // The icon buttons and the Add pill are rem(20) tall, so they are pulled
+    // up to centre on the title's first line.
+    .iconBtn,
+    .add {
+        margin-top: rem(-3.4);
+    }
+
+    &.off {
+        border-style: dashed;
+    }
+}
+
+.head {
+    @include flex(row, flex-start, center);
 
     gap: rem(8);
     min-width: 0;
@@ -33,20 +51,11 @@
     color: var(--color-charcoal);
 }
 
-// The title wraps (never clips); everything else in the row hangs off its
-// first line — the icon sits on it, the chevron and the pill are taller
-// (rem(20)) so they pull up to centre on it.
-.toggle,
-.add,
-.remove {
-    margin-top: rem(-3.4);
-}
-
-.title {
+.title,
+.summary {
     @include font-size(12px, 1.1);
 
-    // flex-basis 0 + min-width 0: the title never dictates the chip's
-    // min-content width (a nowrap title would otherwise widen the panel).
+    // flex-basis 0 and min-width 0 stop a long title widening the panel.
     flex: 1 1 0;
     width: 0;
     min-width: 0;
@@ -56,7 +65,6 @@
     color: var(--color-charcoal);
     text-align: left;
     letter-spacing: -0.01em;
-    overflow-wrap: anywhere;
     cursor: pointer;
     background: none;
     border: 0;
@@ -65,10 +73,107 @@
     &:hover:not(:disabled) {
         opacity: 0.6;
     }
+}
+
+.title {
+    overflow-wrap: anywhere;
 
     &:disabled {
         cursor: default;
     }
+
+    .off & {
+        text-decoration: line-through;
+        text-decoration-thickness: 1px;
+        opacity: 0.45;
+    }
+}
+
+// A quiet rem(20) square for the per-card Remove and the group's menu.
+.iconBtn {
+    @include flex(row, center, center);
+
+    flex-shrink: 0;
+    width: rem(20);
+    height: rem(20);
+    padding: 0;
+    color: var(--color-stone);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    transition:
+        opacity 0.15s ease,
+        color 0.2s ease,
+        background-color 0.2s ease;
+
+    &:hover,
+    &[data-state="open"] {
+        color: var(--color-charcoal);
+        background-color: var(--color-net-light);
+    }
+}
+
+.remove:hover {
+    color: var(--color-red);
+    background-color: var(--color-red-light);
+}
+
+// Doubled specificity stops the Icon atom's per-name size winning here.
+.iconBtn .removeIcon,
+.iconBtn .kebabIcon {
+    width: rem(16);
+    height: rem(16);
+}
+
+// Remove and the menu come up on hovering or focusing their row (and stay
+// while the menu is open). Without hover (touch), they always show.
+.onHover {
+    opacity: 0;
+
+    &[data-state="open"] {
+        opacity: 1;
+    }
+
+    @media (hover: none) {
+        opacity: 1;
+    }
+}
+
+.single:is(:hover, :focus-within) .onHover,
+.head:is(:hover, :focus-within) .onHover,
+.item:is(:hover, :focus-within) .onHover {
+    opacity: 1;
+}
+
+// The mint "+ Add" pill brings a removed card back.
+.add {
+    @include flex(row, center, center);
+    @include font-size(11px, 1.09);
+
+    gap: rem(4);
+    flex-shrink: 0;
+    height: rem(20);
+    padding: 0 rem(4);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-mint-dark);
+    letter-spacing: -0.031em;
+    cursor: pointer;
+    background-color: var(--color-mint);
+    border: 1px solid transparent;
+    border-radius: rem(7);
+    transition: opacity 0.25s ease;
+
+    &:hover {
+        opacity: 0.75;
+    }
+}
+
+.plus {
+    @include font-size(14px, 1);
+
+    font-weight: 400;
 }
 
 .toggle {
@@ -78,6 +183,7 @@
     width: rem(20);
     height: rem(20);
     margin-left: rem(-4);
+    padding: 0;
     color: var(--color-charcoal);
     cursor: pointer;
     background: none;
@@ -100,71 +206,8 @@
     }
 }
 
-// State pills share one shape and a filled face: "Remove" red, "Add" mint.
-
-@mixin pill {
-    @include flex(row, center, center);
-    @include font-size(11px, 1.09);
-
-    gap: rem(4);
-    flex-shrink: 0;
-
-    // Fixed height (not padding-driven) so Add and Remove — icon or no icon
-    // — never change the chip's height when they swap.
-    height: rem(20);
-    padding: 0 rem(4);
-    font-family: var(--font-outfit);
-    font-weight: 400;
-    letter-spacing: -0.031em;
-    cursor: pointer;
-    border: 1px solid transparent;
-    border-radius: rem(7);
-    transition:
-        background-color 0.25s ease,
-        border-color 0.25s ease,
-        opacity 0.25s ease;
-}
-
-.remove {
-    @include pill;
-
-    color: var(--color-red);
-    background-color: var(--color-red-light);
-
-    &:hover {
-        opacity: 0.75;
-    }
-}
-
-.stateIcon {
-    width: rem(10);
-    height: rem(10);
-
-    // A touch heavier than the menu's X at this size.
-    path {
-        stroke-width: 1.5;
-    }
-}
-
-.add {
-    @include pill;
-
-    color: var(--color-mint-dark);
-    background-color: var(--color-mint);
-
-    &:hover {
-        opacity: 0.75;
-    }
-}
-
-.plus {
-    @include font-size(14px, 1);
-
-    font-weight: 400;
-}
-
-// Grid-rows accordion (the house convention) for the meta.
-.details {
+// Grid-rows accordion (the house convention) for the card list.
+.list {
     display: grid;
     grid-template-rows: 0fr;
     transition: grid-template-rows 0.3s $ease-custom;
@@ -172,34 +215,100 @@
     .chipOpen & {
         grid-template-rows: 1fr;
     }
+
+    ul {
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        list-style: none;
+    }
 }
 
-.detailsInner {
-    min-height: 0;
-    overflow: hidden;
+.item {
+    @include flex(row, flex-start, center);
+
+    gap: rem(8);
+    height: rem(26);
+    padding-left: rem(22);
+    border-top: 1px solid var(--color-net-light);
+
+    &:first-child {
+        margin-top: rem(8);
+    }
+
+    .title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
-.meta {
-    @include font-size(11px, 1.3);
+// The group menu, a sage popup with mono rows (MoreMenu's look).
+.menu {
+    z-index: $z-header;
+    display: flex;
+    flex-direction: column;
+    min-width: rem(150);
+    padding: rem(6);
+    background-color: var(--color-popup);
+    border-radius: rem(4);
 
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: rem(4) rem(12);
-    padding: rem(10) rem(4) rem(6) rem(22);
-    font-family: var(--font-outfit);
+    &[data-state="open"] {
+        animation: pop-in 0.25s $ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: pop-out 0.2s $ease-in forwards;
+    }
+}
+
+@keyframes pop-in {
+    from {
+        opacity: 0;
+        translate: 0 rem(-8);
+    }
+}
+
+@keyframes pop-out {
+    to {
+        opacity: 0;
+        translate: 0 rem(-8);
+    }
+}
+
+.menuRow {
+    @include font-size(10px, 1);
+
+    display: flex;
+    gap: rem(8);
+    align-items: center;
+    padding: rem(6) rem(4);
+    font-family: var(--font-dm-mono);
     font-weight: 400;
-    letter-spacing: -0.01em;
+    color: var(--color-red);
+    text-align: left;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+    outline: none;
+    transition: background-color 0.2s ease;
 
-    dt {
-        font-family: var(--font-dm-mono);
-        font-size: rem(10);
-        color: var(--color-stone);
-        letter-spacing: -0.02em;
+    &:hover,
+    &:focus-visible,
+    &[data-highlighted] {
+        background-color: rgb(255 255 255 / 45%);
     }
+}
 
-    dd {
-        min-width: 0;
-        color: var(--color-charcoal);
-        overflow-wrap: anywhere;
-    }
+.menuRow .menuIcon {
+    flex-shrink: 0;
+    width: rem(16);
+    height: auto;
+}
+
+.menuLabel {
+    translate: 0 rem(-1);
 }

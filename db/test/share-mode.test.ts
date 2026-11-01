@@ -4,13 +4,12 @@ import test from 'node:test';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { SavedConversation } from '../../src/lib/chat/history.ts';
-import { GUEST_SHARES, isLiveStudioShare, searchShareMode } from '../../src/lib/chat/shareMode.ts';
+import { LIVE_CARD_TITLE } from '../../src/lib/chat/sharePayload.ts';
+import { isLiveStudioShare, searchShareMode } from '../../src/lib/chat/shareMode.ts';
 import {
     deleteOwnedShare,
     insertStudioShare,
-    LIVE_CARD_TITLE,
     snapshotOwnedShare,
-    spendGuestShare,
 } from '../../src/lib/chat/shareWrites.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import { share, user } from '../schema.ts';
@@ -198,17 +197,6 @@ test('Studio share writes', async (t) => {
         assert.equal(await snapshotOwnedShare(db, id, 'owner'), 'not_found');
         assert.equal(await deleteOwnedShare(db, id, 'owner'), 'not_found');
         assert.equal((await stored(id))?.mode, 'live');
-    });
-
-    await t.test('a guest network gets GUEST_SHARES a day, counted by /64', async () => {
-        const spends = await Promise.all(
-            Array.from({ length: GUEST_SHARES + 1 }, (_, i) =>
-                spendGuestShare(db, `2001:db8:1:1::${i + 1}`),
-            ),
-        );
-
-        assert.equal(spends.filter(Boolean).length, GUEST_SHARES);
-        assert.equal(await spendGuestShare(db, '2001:db8:1:2::1'), true);
     });
 
     await t.test('a search share has no owner writes', async () => {

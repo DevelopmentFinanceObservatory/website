@@ -46,6 +46,7 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           SERVICE_WEBSITE: ${{ vars.SERVICE_WEBSITE }}
           MIGRATE_JOB_WEBSITE: ${{ vars.MIGRATE_JOB_WEBSITE }}
+          SHARE_MIGRATE_JOB_WEBSITE: ${{ vars.SHARE_MIGRATE_JOB_WEBSITE }}
           REGION: ${{ vars.REGION }}
           PROJECT_ID: ${{ vars.PROJECT_ID }}
           AR_REPO: ${{ vars.AR_REPO }}
@@ -53,7 +54,7 @@ jobs:
           WIF_SA: ${{ secrets.WIF_SA }}
         run: |
           missing=""
-          for v in SERVICE_WEBSITE MIGRATE_JOB_WEBSITE REGION PROJECT_ID AR_REPO WIF_PROVIDER WIF_SA; do
+          for v in SERVICE_WEBSITE MIGRATE_JOB_WEBSITE SHARE_MIGRATE_JOB_WEBSITE REGION PROJECT_ID AR_REPO WIF_PROVIDER WIF_SA; do
             [ -n "${!v}" ] || missing="$missing $v"
           done
           if [ -n "$missing" ]; then
@@ -142,6 +143,19 @@ jobs:
       - name: Point Cloud Run at the new image
         run: |
           gcloud run services update "${{ vars.SERVICE_WEBSITE }}" \
+            --image="${{ steps.pinned.outputs.image }}" \
+            --region="${{ vars.REGION }}" \
+            --project="${{ vars.PROJECT_ID }}" \
+            --quiet
+
+      # The share migration Job (db/migrate-shares.ts, `node
+      # dist/migrate-shares.cjs`) writes `share_token`, so it moves only once
+      # the migrations that make that table have run. An operator executes
+      # it; this step only points it at the new image, as for the migration
+      # Job above. infra defines the Job, its identity and its settings.
+      - name: Point the share migration job at the new image
+        run: |
+          gcloud run jobs update "${{ vars.SHARE_MIGRATE_JOB_WEBSITE }}" \
             --image="${{ steps.pinned.outputs.image }}" \
             --region="${{ vars.REGION }}" \
             --project="${{ vars.PROJECT_ID }}" \

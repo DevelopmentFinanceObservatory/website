@@ -4,6 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
 import {
     Fragment,
+    useEffect,
     useId,
     useState,
     type Dispatch,
@@ -33,7 +34,7 @@ import {
 import { GraphInfo, MeasureInfo, SourceInfo } from './GraphInfo';
 import { TokenAbout } from './TokenAbout';
 import { UnitPicker } from './UnitPicker';
-import WhyPanel from './WhyPanel';
+import WhyPanel, { type ChangeAction } from './WhyPanel';
 
 import Button from '@/components/atoms/Button/Button';
 import { capitalise } from '@/lib/capitalise';
@@ -43,11 +44,11 @@ import {
     isClosestMatch,
     refsStatedBesides,
     sentenceBlocks,
-    statingTokenIndex,
     tokenStates,
     type DepartureAction,
 } from '@/lib/search/departures';
 import { awaitingEntityOptions, awaitingSlotOptions } from '@/lib/search/menuState';
+import { REFINE_ANCHOR, tokenAnchor } from '@/lib/search/menuReveal';
 import { operationButtonLabel } from '@/lib/search/operations';
 import {
     entityOptionDcid,
@@ -100,9 +101,10 @@ import {
 import { collapsedCandidatesNote } from '@/lib/search/resultNotes';
 import { foldReadings } from '@/lib/search/readings';
 import {
+    changeTarget,
     refineItemName,
     refineItems,
-    refineKey,
+    type MenuChanges,
     type RefineItem,
     type RefinePart,
 } from '@/lib/search/refineMenu';
@@ -131,6 +133,8 @@ import {
     slotOffersChoice,
     sourceOptionLabel,
     sourceOrigin,
+    sharedEntityMenuRefs,
+    sourceMenuRefs,
     sourceSlotOptions,
     splitCurrentPick,
     sharedDirectionalEditRoute,
@@ -178,6 +182,20 @@ const refineParts = (parts: HydratedPart[]): RefinePart[] =>
             : [],
     );
 
+/** The answer's sentence plan as the heading draws it, a candidates part's
+ *  summary folded to one phrase (foldReadings). A token menu's plan index
+ *  indexes this plan. Empty before the response lands. */
+export const answerPlan = ({
+    response,
+    parts,
+}: Pick<SearchSentenceProps, 'response' | 'parts'>): readonly SentenceToken[] =>
+    response
+        ? foldReadings(
+              response.sentence_plan ?? [],
+              parts.map((part) => part.part),
+          )
+        : [];
+
 /** What Refine offers: the bindings no visible token states. DataSearch
  *  computes it once and hands the same list to the heading (whose
  *  departures open Refine at an entry) and the body (whose Refine button
@@ -194,10 +212,7 @@ export const answerRefineItems = ({
     response
         ? refineItems({
               parts: refineParts(parts),
-              plan: foldReadings(
-                  response.sentence_plan ?? [],
-                  parts.map((part) => part.part),
-              ),
+              plan: answerPlan({ response, parts }),
               partCount: parts.length,
               optionsBySpec,
               entityOptionsBySpec,
@@ -503,6 +518,14 @@ type SearchSentenceHeadingProps = Pick<
     // it at one of those entries.
     refine: RefineItem[];
     onRefineOpen: (open: RefineOpen) => void;
+    // The plan index of the token whose menu is open. DataSearch holds it,
+    // so a fact's Change in "About this answer" can open a token's menu.
+    openMenu: number | null;
+    onOpenMenuChange: Dispatch<SetStateAction<number | null>>;
+    // Reports, after each render, the token menus drawn and the refs each
+    // offers a choice for, so the Change resolver sees what the departures
+    // see.
+    onMenuChanges: (changes: MenuChanges) => void;
     // The early, pre-response heading's own rendered token text (see
     // lib/search/sentencePlan.ts's earlySentenceTokens), trimmed and
     // deduped. A resolved token whose text isn't among them is new since
@@ -525,6 +548,8 @@ type SearchSentenceBodyProps = Pick<
     optionsPending: boolean;
     refineOpen: RefineOpen | null;
     onRefineOpenChange: Dispatch<SetStateAction<RefineOpen | null>>;
+    // Opens the menu that changes a fact "About this answer" states.
+    changeAction?: ChangeAction;
 };
 
 /** Refine open, at the entry `at` names (`refineKey`) or at its top. */
@@ -744,16 +769,13 @@ export const SearchSentenceHeading = ({
     newTokenTexts,
     refine,
     onRefineOpen,
+    openMenu,
+    onOpenMenuChange: setOpenMenu,
+    onMenuChanges,
 }: SearchSentenceHeadingProps) => {
-    // The plan index of the token whose menu is open.
-    const [openMenu, setOpenMenu] = useState<number | null>(null);
-
     // A candidates part's summary reads as one marked phrase; its reading
     // cards draw the readings.
-    const rawPlan = foldReadings(
-        response?.sentence_plan ?? [],
-        parts.map((part) => part.part),
-    );
+    const rawPlan = answerPlan({ response, parts });
     const partCount = parts.length;
     // Each token's place in the plan: its React key and its menu's identity.
     const planIndex = new Map(rawPlan.map((token, index) => [token, index]));
@@ -778,7 +800,8 @@ export const SearchSentenceHeading = ({
 
     // The controlled-open props for the menu of the token at plan index
     // `index`, which can change the refs `changes` names, so a departure
-    // can open the menu of the token that states its ref. Closing clears
+    // can open the menu of the token that states its ref, and the anchor
+    // key a fact's Change scrolls to first. Closing clears
     // the state only when it is this menu's, so a menu closing as another
     // opens cannot close the new one.
     const tokenMenu = (index: number, changes: readonly string[]) => {
@@ -788,6 +811,7 @@ export const SearchSentenceHeading = ({
             open: openMenu === index,
             onOpenChange: (open: boolean) =>
                 setOpenMenu((current) => (open ? index : current === index ? null : current)),
+            anchor: tokenAnchor(index),
         };
     };
 
@@ -1062,7 +1086,8 @@ export const SearchSentenceHeading = ({
             const boundDcid =
                 sourceBinding?.kind === 'value' ? sourceBinding.value.ref?.ref : undefined;
 
-            // A lone source opens the menu too, its row the current pick.
+            // A lone source opens the menu too, its row the current pick,
+            // and reports no ref it changes (sourceMenuRefs).
             //
             // The engine can render the source it actually used even with
             // the slot unbound (a single observed source). That option is
@@ -1093,7 +1118,7 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel([keyRef(slots[sourceSlotIndex].key)])}
+                    {...panel(sourceMenuRefs(spec))}
                     label={token.text}
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text, variable)}
@@ -1597,7 +1622,7 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel(sourceSlot ? [keyRef(sourceSlot.key)] : [])}
+                    {...panel(sourceMenuRefs(representative))}
                     label={token.text}
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text)}
@@ -1661,7 +1686,9 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel()}
+                    {...panel(
+                        sharedEntityMenuRefs(token.binding_ref, sharedEntry, currentEntities),
+                    )}
                     label={label}
                     title={entityMenuTitle(entityRole)}
                     ariaLabel={slotAriaLabel(entityRoleLabel(entityRole), label)}
@@ -2053,10 +2080,10 @@ export const SearchSentenceHeading = ({
     const refineKeys = new Set(refine.map((item) => item.key));
 
     // The departure's action as a labelled run with the target it opens, or
-    // null when it has none the page can carry out: a token action needs
-    // the menu of the token that states its ref drawn with a choice for
-    // that ref, a Refine action
-    // needs Refine to list its binding.
+    // null when it has none the page can carry out (changeTarget). A token
+    // action needs the menu of the token that states its ref drawn with a
+    // choice for that ref, and a Refine action needs Refine to list its
+    // binding.
     const runAction = (action: DepartureAction, asked: string | null | undefined) => {
         if (action.kind === 'studio') {
             const operations = parts[action.partIndex]?.part?.operations ?? [];
@@ -2071,29 +2098,34 @@ export const SearchSentenceHeading = ({
             };
         }
 
-        if (action.kind === 'refine') {
-            const key = refineKey(action.partIndex, action.bindingRef);
+        const target = changeTarget({
+            plan: rawPlan,
+            partCount,
+            partIndex: action.partIndex,
+            bindingRef: action.bindingRef,
+            menuChanges,
+            refineKeys,
+        });
 
-            if (!refineKeys.has(key)) return null;
-
+        if (target?.kind === 'refine') {
             const label = slotLabel(action.partIndex, action.bindingRef);
 
             return {
-                target: `refine:${key}`,
+                target: `refine:${target.key}`,
                 label: label ? `Change ${lowerFirst(label)}` : 'Refine',
-                run: () => onRefineOpen({ at: key }),
+                run: () => onRefineOpen({ at: target.key }),
             };
         }
 
-        const index = statingTokenIndex(rawPlan, partCount, action.partIndex, action.bindingRef);
+        if (target?.kind === 'token') {
+            return {
+                target: `token:${target.index}`,
+                label: tokenActionLabel(rawPlan[target.index], action.partIndex, action.bindingRef),
+                run: () => setOpenMenu(target.index),
+            };
+        }
 
-        if (!menuChanges.get(index)?.has(action.bindingRef)) return null;
-
-        return {
-            target: `token:${index}`,
-            label: tokenActionLabel(rawPlan[index], action.partIndex, action.bindingRef),
-            run: () => setOpenMenu(index),
-        };
+        return null;
     };
 
     // One action per target: a second departure on the same token (a
@@ -2126,6 +2158,15 @@ export const SearchSentenceHeading = ({
                 studio: runnable.target === 'studio',
             },
         };
+    });
+
+    // The menus are known once the tokens are drawn. DataSearch keeps the
+    // last set it was told, and its sameMenuChanges check makes an unchanged
+    // set render nothing new, so the effect cannot loop. A new answer lags
+    // by one render: until the effect commits, a Change in "About this
+    // answer" reads the previous answer's menus.
+    useEffect(() => {
+        onMenuChanges(menuChanges);
     });
 
     return (
@@ -2326,7 +2367,7 @@ const RefineMenu = ({
             }
         >
             <DropdownMenu.Trigger asChild disabled={empty}>
-                <span>
+                <span className={styles.menuAnchor} data-menu-anchor={REFINE_ANCHOR}>
                     <Button
                         variant="outline"
                         className={styles.refineButton}
@@ -2388,6 +2429,7 @@ export const SearchSentenceBody = ({
     optionsPending,
     refineOpen,
     onRefineOpenChange,
+    changeAction,
 }: SearchSentenceBodyProps) => {
     const [whyOpen, setWhyOpen] = useState(false);
     const aboutId = useId();
@@ -2469,7 +2511,12 @@ export const SearchSentenceBody = ({
                     inert={!whyOpen}
                 >
                     <div className={styles.accordionInner}>
-                        <WhyPanel parts={aboutParts} open={whyOpen} optionsBySpec={optionsBySpec} />
+                        <WhyPanel
+                            parts={aboutParts}
+                            open={whyOpen}
+                            optionsBySpec={optionsBySpec}
+                            changeAction={changeAction}
+                        />
                     </div>
                 </div>
             )}

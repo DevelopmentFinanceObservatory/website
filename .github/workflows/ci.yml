@@ -139,3 +139,30 @@ jobs:
                     exit 1
                     ;;
                   esac
+
+            - name: Build share migration bundle
+              run: pnpm build:migrate-shares
+
+            # The same check for the share migration Job's bundle.
+            - name: Smoke test share migration bundle
+              run: |
+                  set +e
+                  stderr_output=$(node dist/migrate-shares.cjs 2>&1 >/dev/null)
+                  status=$?
+                  set -e
+
+                  echo "$stderr_output"
+
+                  if [ "$status" -eq 0 ]; then
+                    echo "::error::share migration bundle exited 0 with no environment configured; expected it to fail naming the missing PRESENTATION_SHARE_IMPORT_PRINCIPAL env var."
+                    exit 1
+                  fi
+
+                  case "$stderr_output" in
+                  *"missing required environment variable PRESENTATION_SHARE_IMPORT_PRINCIPAL"*)
+                    ;;
+                  *)
+                    echo "::error::share migration bundle's stderr did not mention the missing PRESENTATION_SHARE_IMPORT_PRINCIPAL env var -- it may have failed to load at all rather than failing its env check."
+                    exit 1
+                    ;;
+                  esac

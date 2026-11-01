@@ -21,12 +21,22 @@
  */
 
 import { asRecord } from '../asRecord.ts';
+import type { SourceCode } from '../sourceCodes.ts';
 
 export type Ref = { ref: string; label: string; at_mint?: true };
 
 /** A reference with the definition of what it names, absent when the graph
  *  holds none. */
 export type DefinedRef = Ref & { definition?: string };
+
+/** A publisher's code for a series (World Bank `DT.TDS.DEGG.CD`): the
+ *  provenance issuing it, and `exact` when the code names the whole of what
+ *  lists it, the card or the drawn value. */
+export type DescriptionSourceCode = SourceCode & { exact?: true };
+
+/** A value a card draws, with the codes of the drawn variables that hold
+ *  it, absent when none has one. */
+export type DrawnValue = DefinedRef & { source_codes?: DescriptionSourceCode[] };
 
 /** A computed version's input. Its `id` is `null` when the input's version
  *  is known by content version and label alone. */
@@ -83,7 +93,7 @@ export type OpenDimension = {
  *  values the card draws (`values`) only when it lists every one, as `count`
  *  entries with distinct refs. The reader leaves out a list that does not. */
 export type Drawn = {
-    dimensions?: { property: Ref; count: number; of: number; values?: DefinedRef[] }[];
+    dimensions?: { property: Ref; count: number; of: number; values?: DrawnValue[] }[];
     series?: number;
     period?: Span;
 };
@@ -98,6 +108,7 @@ export type About = {
     period?: Span | null;
     unit?: DescriptionUnit | null;
     drawn?: Drawn;
+    source_codes?: DescriptionSourceCode[];
 };
 
 /** A source used, or a computed version's input. Publisher and licence are
@@ -129,9 +140,16 @@ export type DescriptionFreshness = {
     inputs?: InputRef[];
 };
 
-/** A step as served: its record, which the panel does not read, and the
- *  composer's sentence for it. */
-export type ServedStep = { id: string; op: string; text: string };
+/** A step as served: the composer's sentence for it, and of its record the
+ *  parts the panel reads, the input a step retrieves or selects from
+ *  (`input`) and the steps a quotient divides (`inputs`, by step id). */
+export type ServedStep = {
+    id: string;
+    op: string;
+    text: string;
+    input?: InputRef;
+    inputs?: { numerator: string; denominator: string };
+};
 
 /** A fact about the data, naming what it applies to, with the composer's
  *  sentence for it. The panel shows every caveat by its `text`, whatever
@@ -234,6 +252,25 @@ const asDefinedRef: Reader<DefinedRef> = (value) => {
     const ref = asRef(value);
 
     return record && ref ? { ...ref, ...optional(record, 'definition', asText) } : undefined;
+};
+
+const asSourceCode: Reader<DescriptionSourceCode> = (value) => {
+    const record = asRecord(value);
+    const provenance = asText(record?.['provenance']);
+    const code = asText(record?.['code']);
+
+    return record && provenance && code
+        ? { provenance, code, ...(record['exact'] === true ? { exact: true as const } : {}) }
+        : undefined;
+};
+
+const asDrawnValue: Reader<DrawnValue> = (value) => {
+    const record = asRecord(value);
+    const defined = asDefinedRef(value);
+
+    return record && defined
+        ? { ...defined, ...optional(record, 'source_codes', listOf(asSourceCode)) }
+        : undefined;
 };
 
 const asVersion: Reader<Version> = (value) => {
@@ -381,9 +418,9 @@ const asOpenDimension: Reader<OpenDimension> = (value) => {
 // entries with distinct refs. A list that disagrees with its count would
 // show part of the values as all of them, so it does not read.
 const valuesCounted =
-    (count: number): Reader<DefinedRef[]> =>
+    (count: number): Reader<DrawnValue[]> =>
     (value) => {
-        const values = listOf(asDefinedRef)(value);
+        const values = listOf(asDrawnValue)(value);
 
         return values?.length === count && new Set(values.map((entry) => entry.ref)).size === count
             ? values
@@ -437,6 +474,7 @@ const asAbout: Reader<About> = (value) => {
               ...optional(record, 'period', orNull(asSpan)),
               ...optional(record, 'unit', orNull(asUnit)),
               ...optional(record, 'drawn', asDrawn),
+              ...optional(record, 'source_codes', listOf(asSourceCode)),
           }
         : undefined;
 };
@@ -481,13 +519,30 @@ const asFreshness: Reader<DescriptionFreshness> = (value) => {
         : undefined;
 };
 
+// A quotient step's sides, each the id of the step it reads.
+const asQuotientSides: Reader<{ numerator: string; denominator: string }> = (value) => {
+    const record = asRecord(value);
+    const numerator = asText(record?.['numerator']);
+    const denominator = asText(record?.['denominator']);
+
+    return numerator && denominator ? { numerator, denominator } : undefined;
+};
+
 const asStep: Reader<ServedStep> = (value) => {
     const record = asRecord(value);
     const id = asText(record?.['id']);
     const op = asText(record?.['op']);
     const text = asText(record?.['text']);
 
-    return id && op && text ? { id, op, text } : undefined;
+    return record && id && op && text
+        ? {
+              id,
+              op,
+              text,
+              ...optional(record, 'input', asInputRef),
+              ...optional(record, 'inputs', asQuotientSides),
+          }
+        : undefined;
 };
 
 const asCaveat: Reader<Caveat> = (value) => {

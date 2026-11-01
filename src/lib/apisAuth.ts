@@ -2,7 +2,7 @@
  * `fetch` that proves the site's identity to dfo-apis. The apis Cloud Run
  * service admits a caller whose Google ID token, minted for the service's
  * URL, names an identity granted `roles/run.invoker`. On Cloud Run (where
- * `K_SERVICE` is set) a request whose origin is the apis origin
+ * `K_SERVICE` is set for a service and `CLOUD_RUN_JOB` for a Job) a request whose origin is the apis origin
  * (`searchApiBase()`) gains `X-Serverless-Authorization: Bearer <token>`,
  * with a token the metadata server mints for the runtime service account and
  * that origin as its audience. Cloud Run checks that header ahead of
@@ -29,7 +29,7 @@
  *
  * No `server-only`, DOM or Node dependency, so `node --test` imports it and
  * the browser bundle that shares `datasetsFetch` can carry it (a browser has
- * no `K_SERVICE`, so it sends every request as given).
+ * neither variable, so it sends every request as given).
  */
 
 import { mintIdToken, type Fetch } from './googleIdToken.ts';
@@ -164,7 +164,7 @@ export const createApisFetch = ({
     };
 
     return async (input, init) => {
-        if (!env.K_SERVICE) {
+        if (!env.K_SERVICE && !env.CLOUD_RUN_JOB) {
             return fetchImpl(input, init);
         }
 

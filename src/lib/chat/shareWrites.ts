@@ -4,10 +4,9 @@ import { and, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { share } from '../../../db/schema.ts';
-import { limiterBucket } from '../proxy/caller.ts';
-import { reserveHit, type CounterDb } from '../proxy/limitCounter.ts';
 import type { SavedConversation } from './history.ts';
-import { GUEST_SHARES, isStudioKind, type ShareMode, type StudioShareKind } from './shareMode.ts';
+import { studioShareTitle } from './sharePayload.ts';
+import { isStudioKind, type ShareMode, type StudioShareKind } from './shareMode.ts';
 import { pruneForShare } from './sharePrune.ts';
 
 /**
@@ -32,11 +31,6 @@ export const shortId = (length = 8): string => {
     return out;
 };
 
-// The title a live card share gets when its sharer set none. The page title
-// and the embed's title come from the row, and a live card's own title is
-// withheld from the page with its data, so it stays out of them too.
-export const LIVE_CARD_TITLE = 'Live card';
-
 export type NewStudioShare = {
     // Null for a guest's share, which no one owns.
     userId: string | null;
@@ -46,28 +40,12 @@ export type NewStudioShare = {
     cardId?: string;
 };
 
-const DAY_S = 86_400;
-
-/**
- * Spend one of today's GUEST_SHARES for the guest at `address`, counted by
- * network (limiterBucket) per UTC day. False when they are spent. Throws what
- * the database throws.
- */
-export const spendGuestShare = async (db: CounterDb, address: string): Promise<boolean> =>
-    (await reserveHit(db, `share-guest:${limiterBucket(address)}`, GUEST_SHARES, DAY_S)).admitted;
-
 export const insertStudioShare = async (
     db: ShareDb,
     { userId, kind, mode, saved, cardId }: NewStudioShare,
 ): Promise<{ id: string; title: string }> => {
     const data = pruneForShare(saved, kind, cardId);
-    const storedTitle = () =>
-        data.widgets
-            .map((widget) => (widget.kind === 'key_number' ? widget.label : widget.title))
-            .find(Boolean) ?? data.textCards?.[0]?.title;
-    const cardTitle =
-        cardId && (data.titles?.[cardId] ?? (mode === 'live' ? LIVE_CARD_TITLE : storedTitle()));
-    const title = (kind === 'card' && cardTitle) || saved.title;
+    const title = studioShareTitle(data, { kind, mode, cardId, savedTitle: saved.title });
     const id = shortId();
 
     await db.insert(share).values({

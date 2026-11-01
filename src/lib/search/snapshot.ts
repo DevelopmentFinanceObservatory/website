@@ -107,6 +107,11 @@ const poster =
         return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) };
     };
 
+// A version's Datasets API path. The ids can come from a mint's manifest,
+// so each is encoded as one segment.
+const versionPath = (specId: string, contentVersion: string): string =>
+    `/api/datasets/${encodeURIComponent(specId)}/${encodeURIComponent(contentVersion)}`;
+
 type PinOptions = {
     base: string;
     specId: string;
@@ -133,7 +138,7 @@ export const pinArtifact = async ({
     fetchImpl = datasetsFetch,
 }: PinOptions): Promise<void> => {
     const pinned = await poster(base, fetchImpl)(
-        `/api/datasets/${specId}/${contentVersion}/pin`,
+        `${versionPath(specId, contentVersion)}/pin`,
         { schema_version: 1, artifact_digest: artifactDigest } satisfies PinRequest,
         { headers: { 'x-dfo-principal': principal }, timeoutMs: DOOR_TIMEOUT_MS },
     ).catch((error: unknown) => ({ ok: false, status: 0, body: null, error }));
@@ -265,7 +270,7 @@ export const pinVersionFrame = async ({
     ...capture
 }: FramePinOptions): Promise<'already_pinned' | 'pinned' | 'minted'> => {
     const { base, specId, principal, fetchImpl = datasetsFetch } = capture;
-    const res = await fetchImpl(`${base}/api/datasets/${specId}/${contentVersion}`, {
+    const res = await fetchImpl(`${base}${versionPath(specId, contentVersion)}`, {
         cache: 'no-store',
         signal: AbortSignal.timeout(DOOR_TIMEOUT_MS),
     });

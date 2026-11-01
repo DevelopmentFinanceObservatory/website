@@ -16,6 +16,7 @@ import {
     type TextWidget,
 } from '../../chat/widgets.ts';
 import { keyNumberFace } from '../statFace.ts';
+import { tableDisplay } from '../tableFit.ts';
 import { reviseWidget, widgetFromComponent } from '../widgets.ts';
 import type { ComponentCreated, ComponentType, FactSummary } from '../wire.ts';
 import {
@@ -291,6 +292,8 @@ test('table: the payload columns and rows, a status cell named by its status', (
     const widget = asTable(widgetFromComponent(frame('table', payload)));
 
     assert.deepEqual(widget.columns, ['Donor', 'Period', 'Value']);
+    // A payload table's headers name its dimensions.
+    assert.equal(widget.series, undefined);
     assert.deepEqual(widget.rows, [
         ['Germany', '2022', '35.0 K'],
         ['Germany', '2023', 'Suppressed'],
@@ -412,6 +415,7 @@ test("a table names each row's unit when units mix, and charts with it when the 
         [...unitTexts, null],
     );
     assert.deepEqual(mixed.columns, ['Indicator', 'Period', 'Unit', 'Value']);
+    assert.equal(mixed.namesColumn, 0);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
@@ -419,6 +423,30 @@ test("a table names each row's unit when units mix, and charts with it when the 
         ['ODA per person, euros', '2023', 'Euro (constant 2020 prices) per Total population', '5'],
         ['Unreadable', '2023', '—', '5'],
     ]);
+
+    const byRecipient = asTable(
+        reviseWidget(mixed, {
+            ...revisedFrame(2),
+            payload: envelope({
+                type: 'table',
+                title,
+                columns: [
+                    { key: 'recipient', label: 'Recipient' },
+                    { key: 'value', label: 'Value' },
+                ],
+                rows: ['South Sudan', 'South Africa'].map((recipient) => ({
+                    series_id: 's_x',
+                    dimensions: { recipient },
+                    period: '2023',
+                    source_ref: SOURCE,
+                    unit: 'USD',
+                    value: 5,
+                })),
+            }),
+        }),
+    );
+
+    assert.equal(byRecipient.namesColumn, undefined);
 
     const constant = asTable(
         widgetFromComponent(frame('table', tableOf([row('ODA', 'USD'), row('Grants', 'USD')]))),
@@ -690,6 +718,56 @@ test('a payload without a resolved component draws the fact-summary sketch', () 
         ['Germany', '2015', 30_000, null],
         ['Germany', '2023', 37_000, null],
     ]);
+
+    // As a table the sketch runs periods down and series across, and says so.
+    const table = asTable(widgetFromComponent(frame('table', oldCreated)));
+
+    assert.deepEqual(table.columns, ['Period', 'United States', 'Germany']);
+    assert.equal(table.series, true);
+
+    // Redrawn from a payload table, the sketch's series flag goes with its
+    // cells: the payload's dimension columns stay across and its period
+    // stays a period.
+    const columns = [
+        { key: 'donor', label: 'Donor' },
+        { key: 'recipient', label: 'Recipient' },
+        { key: 'sector', label: 'Sector' },
+        { key: 'channel', label: 'Channel of delivery' },
+        { key: 'period', label: 'Period' },
+        { key: 'value', label: 'Value' },
+    ];
+    const redrawn = asTable(
+        reviseWidget(table, {
+            ...revisedFrame(2),
+            payload: envelope({
+                type: 'table',
+                title,
+                columns,
+                rows: [
+                    {
+                        series_id: 's_x',
+                        dimensions: {
+                            donor: 'United States',
+                            recipient: 'Democratic Republic of the Congo',
+                            sector: 'Basic health care',
+                            channel: 'Multilateral organisations',
+                        },
+                        period: '2023',
+                        source_ref: SOURCE,
+                        unit: 'USD',
+                        value: 64_000,
+                    },
+                ],
+            }),
+        }),
+    );
+
+    assert.equal(redrawn.series, undefined);
+    assert.deepEqual(
+        redrawn.columns,
+        columns.map(({ label }) => label),
+    );
+    assert.equal(tableDisplay(redrawn).transposed, false);
 });
 
 test('a revision redraws from its payload', () => {
@@ -803,7 +881,7 @@ test('More Info: the citation and every source, licence normalised', () => {
         { id: 'src_dc', name: 'dc/base/X', licence: null, url: null, retrieved: null },
     ]);
     assert.deepEqual([info?.sourceId, info?.licence], [SOURCE, 'CC BY 4.0']);
-    assert.equal(sourceLine(info!), 'OECD CRS; World Bank WDI; dc/base/X');
+    assert.deepEqual(sourceLine(info!), { lead: 'Sources:', first: 'OECD CRS', more: 2 });
 });
 
 test('More Info: a new card carries no indicators, even from a fact summary that lists them', () => {
@@ -840,7 +918,11 @@ test('a share card: its Percent unit puts "%" on the value axis, and it names bo
     const chart = asChart(widgetFromComponent(created));
 
     assert.equal(formatAxis(5.333, chart.unit), '5.33%');
-    assert.equal(sourceLine(chart.info!), 'World Bank IDS; World Development Indicators');
+    assert.deepEqual(sourceLine(chart.info!), {
+        lead: 'Sources:',
+        first: 'World Bank IDS',
+        more: 1,
+    });
 });
 
 const CRS_DCID = 'dc/base/OECD_CRS';

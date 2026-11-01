@@ -2,7 +2,7 @@
  * Page capture: the page spec's validation, the sanitiser's leak check, and
  * captures of a small fixture page served from this process, so the tests
  * need Chrome (or CHROMIUM_PATH) but not the site. The browser tests skip
- * when no browser starts.
+ * when no browser starts, and fail under CI.
  */
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -15,10 +15,10 @@ import { after, before, test } from 'node:test';
 
 import type { Browser } from 'playwright-core';
 
-import { launchBrowser } from '../browser.ts';
 import { generatePage } from '../capture.ts';
 import { htmlLeaks } from '../html.ts';
 import { pageSteps, readPageSpec } from '../spec.ts';
+import { hasBrowser, startBrowser } from './browser.ts';
 
 const PNG = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
@@ -185,18 +185,20 @@ test('the leak check finds what a film cannot hold', () => {
     );
 });
 
-let browser: Browser | null = null;
+let browser: Browser | string;
 let fixture: Awaited<ReturnType<typeof serve>>;
 let out: string;
 
 before(async () => {
-    browser = await launchBrowser().catch(() => null);
+    browser = await startBrowser();
     fixture = await serve();
     out = await mkdtemp(join(tmpdir(), 'motion-kit-capture-'));
 });
 
 after(async () => {
-    await browser?.close();
+    if (typeof browser !== 'string') {
+        await browser.close();
+    }
     fixture.server.close();
     await rm(out, { recursive: true, force: true });
 });
@@ -214,15 +216,13 @@ const capture = async (spec: unknown, name = 'fixture', cues?: unknown) => {
         specPath,
         base: fixture.base,
         outDir: join(out, name),
-        browser: browser!,
+        browser: browser as Browser,
         stepTimeout: 10_000,
     });
 };
 
 test('a fixture page captures as static markup and the CSS its states use', async (t) => {
-    if (!browser) {
-        t.skip('no browser: install Chrome or set CHROMIUM_PATH');
-
+    if (!hasBrowser(t, browser)) {
         return;
     }
 
@@ -384,9 +384,7 @@ test('a fixture page captures as static markup and the CSS its states use', asyn
 });
 
 test('a hook must find one element: never none in every state, never two', async (t) => {
-    if (!browser) {
-        t.skip('no browser: install Chrome or set CHROMIUM_PATH');
-
+    if (!hasBrowser(t, browser)) {
         return;
     }
 
@@ -401,9 +399,7 @@ test('a hook must find one element: never none in every state, never two', async
 });
 
 test('a stylesheet the server no longer has fails the capture', async (t) => {
-    if (!browser) {
-        t.skip('no browser: install Chrome or set CHROMIUM_PATH');
-
+    if (!hasBrowser(t, browser)) {
         return;
     }
 

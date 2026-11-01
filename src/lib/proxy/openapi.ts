@@ -1,3 +1,4 @@
+import { asRecord } from '../asRecord.ts';
 import { SEARCH_API_SURFACES } from './surfaces.ts';
 
 /**
@@ -7,10 +8,9 @@ import { SEARCH_API_SURFACES } from './surfaces.ts';
  *
  * A path under one of SEARCH_API_SURFACES moves from /api/<surface>/* to the
  * site's public /api/v1/<surface>/*, and /codes/* (src/app/codes) keeps its
- * address. Every other path is dropped: the skills API, which the site does
- * not proxy, and the presentation API, whose component reads the site
- * proxies for the Studio (src/app/api/presentation/components/[id]) but does
- * not publish. The component schemas only those paths used go with them.
+ * address. Every other path is dropped: the skills API and the rest of the
+ * presentation API, which the site does not proxy. The component schemas
+ * only those paths used go with them.
  * The document carries no `servers`, so a client generated from it calls the
  * host that served it, whichever environment that is.
  */
@@ -23,7 +23,6 @@ export const OPENAPI_CACHE_CONTROL = 'private, max-age=300';
 // Paths the site serves at the same address as dfo-apis.
 const ROOT_PATHS = ['/codes/'];
 
-const SURFACE_PATH = /^\/api\/([^/]+)(\/.*)?$/;
 const SCHEMA_REF = '#/components/schemas/';
 const JSON_TYPE = /^application\/json\s*(?:;|$)/i;
 
@@ -34,13 +33,15 @@ type OpenApiDocument = JsonObject & {
     components?: JsonObject & { schemas?: JsonObject };
 };
 
-const isObject = (value: unknown): value is JsonObject =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isDocument = (value: unknown): value is OpenApiDocument => {
+    const document = asRecord(value);
 
-const isDocument = (value: unknown): value is OpenApiDocument =>
-    isObject(value) &&
-    isObject(value.paths) &&
-    (value.components === undefined || isObject(value.components));
+    return (
+        document !== undefined &&
+        asRecord(document.paths) !== undefined &&
+        (document.components === undefined || asRecord(document.components) !== undefined)
+    );
+};
 
 /** The site's address for a dfo-apis path, or undefined when the site does not serve it. */
 export const publicPath = (path: string): string | undefined => {
@@ -48,11 +49,11 @@ export const publicPath = (path: string): string | undefined => {
         return path;
     }
 
-    const [, surface, rest = ''] = SURFACE_PATH.exec(path) ?? [];
+    const surface = SEARCH_API_SURFACES.find(
+        (name) => path === `/api/${name}` || path.startsWith(`/api/${name}/`),
+    );
 
-    return (SEARCH_API_SURFACES as readonly string[]).includes(surface)
-        ? `/api/v1/${surface}${rest}`
-        : undefined;
+    return surface ? `/api/v1${path.slice('/api'.length)}` : undefined;
 };
 
 // A $ref's schema name: a URI fragment holding a JSON pointer (RFC 6901). A
@@ -74,8 +75,8 @@ const collectSchemas = (node: unknown, schemas: JsonObject, found: Set<string>):
         for (const item of node) {
             collectSchemas(item, schemas, found);
         }
-    } else if (isObject(node)) {
-        for (const [key, value] of Object.entries(node)) {
+    } else {
+        for (const [key, value] of Object.entries(asRecord(node) ?? {})) {
             if (key === '$ref' && typeof value === 'string' && value.startsWith(SCHEMA_REF)) {
                 const name = schemaName(value);
 

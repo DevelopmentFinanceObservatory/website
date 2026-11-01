@@ -9,14 +9,16 @@ import styles from './ChatPanel.module.scss';
 import ClarifyPicker from './ClarifyPicker';
 import PlanCard from './PlanCard';
 import StatusLine from './StatusLine';
-import type { CardView } from '../canvas/layout';
+import { iconOf } from './WidgetChips';
+import { widgetTitle, type CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
 import PromptForm from '../prompt/PromptForm';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
 import type { ShareMark } from '@/lib/chat/history';
-import { isPrompt, shareMarkAfter } from '@/lib/studio/transcript';
+import { messageTurns, plansByTurn } from '@/lib/studio/activityView';
+import { shareMarkAfter } from '@/lib/studio/transcript';
 
 export type ChatTab = 'chat' | 'activity';
 
@@ -111,6 +113,18 @@ const ChatPanel = ({
         setFollow('');
     };
 
+    // The Activity tab's card titles (renames applied), icons, and each turn's
+    // approved plan, found on the reply it produced.
+    const cardTitles = Object.fromEntries(
+        chat.widgets.map((widget) => [widget.id, titles[widget.id] ?? widgetTitle(widget)]),
+    );
+    const cardIcons = Object.fromEntries(
+        chat.widgets.map((widget) => [widget.id, iconOf(widget, views[widget.id])]),
+    );
+    // Each message's turn, as its Activity entry and its cards number it.
+    const turns = messageTurns(chat.messages, chat.activity);
+    const plans = plansByTurn(chat.messages, turns);
+
     // A Chat + Canvas share point sits after message `index`?
     const sharedAfter = (index: number) =>
         !readOnly && shareMarks.some((mark) => shareMarkAfter(chat.messages, mark) === index);
@@ -130,10 +144,7 @@ const ChatPanel = ({
                 >
                     <div ref={scrollRef} className={styles.chatScroll}>
                         {chat.messages.map((message, index) => {
-                            // The turn this bot message answers = the number
-                            // of prompts before it (send() numbers turns the
-                            // same way).
-                            const turn = chat.messages.slice(0, index).filter(isPrompt).length;
+                            const turn = turns[index];
 
                             return (
                                 <Fragment key={index}>
@@ -277,8 +288,17 @@ const ChatPanel = ({
                     className={classNames(styles.view, tab === 'activity' && styles.viewActive)}
                     aria-hidden={tab !== 'activity'}
                 >
-                    <div className={styles.chatScroll}>
-                        <ActivityLog activity={chat.activity} onViewCard={onGo} />
+                    <div className={classNames(styles.chatScroll, styles.activityScroll)}>
+                        <ActivityLog
+                            activity={chat.activity}
+                            cardTitles={cardTitles}
+                            cardIcons={cardIcons}
+                            plans={plans}
+                            thinking={chat.thinking}
+                            waiting={!!(chat.plan || chat.clarify)}
+                            onCanvas={onCanvas}
+                            onViewCard={onGo}
+                        />
                     </div>
                 </div>
             </div>

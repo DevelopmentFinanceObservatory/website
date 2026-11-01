@@ -10,18 +10,18 @@ import {
     CardDownloadError,
     cardDownloadMessage,
     fetchCardData,
-    type LiveCardAddress,
+    type SharedCardAddress,
 } from '@/lib/studio/cardDownload';
 
 /**
  * The download sheet's state for one card's own rows, over the export
- * route, or over the share's data route when `live` names the card on a
- * live share. Either route takes a format and the bundle flag only, so the
+ * route, or over the share's data route when `shared` names the card on a
+ * share. Either route takes a format and the bundle flag only, so the
  * sheet offers no extra columns, and keeps its choices for this card only.
  */
 export const useCardDownload = (
     ref: CardRef,
-    live: LiveCardAddress | null = null,
+    shared: SharedCardAddress | null = null,
 ): DownloadSheetState => {
     const [format, setFormat] = useState<DatasetFormat>('csv');
     const [bundle, setBundle] = useState(true);
@@ -34,7 +34,7 @@ export const useCardDownload = (
         setError(null);
 
         try {
-            const { blob, fileName } = await fetchCardData(ref, { format, bundle }, { live });
+            const { blob, fileName } = await fetchCardData(ref, { format, bundle }, { shared });
 
             downloadBlob(blob, fileName);
         } catch (caught) {

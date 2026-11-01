@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { refineItems, refineKey, type RefineItem } from '../refineMenu.ts';
+import {
+    changeTarget,
+    refineItems,
+    refineKey,
+    sameMenuChanges,
+    type RefineItem,
+} from '../refineMenu.ts';
 import type { PartSpec, SentenceToken } from '../types.ts';
 import type { EntityOptionsBySpec } from '../view.ts';
 import { servedAnswer, type ServedAnswer } from './fixtures/served-answer.ts';
@@ -107,6 +113,29 @@ test("refineItems reads each part's own tokens in a multi-part answer and leaves
     };
 
     assert.deepEqual(refineOf(unstated, donors).at(-1)?.key, refineKey(0, 'origin:'));
+
+    // An open recipient role is keyed by the where: binding its token
+    // states, the ref About this answer's Change routes by: "Kenya" states
+    // it, and without that token Refine lists it after the origin.
+    const recipients: EntityOptionsBySpec = {
+        [aid]: [...donors[aid]!, { ...donors[aid]![0]!, role: 'destination' }],
+    };
+    const roleKeys = (plan: SentenceToken[]) =>
+        refineOf({ ...answer, plan }, recipients)
+            .filter((item) => item.kind === 'entity')
+            .map((item) => item.key);
+
+    assert.deepEqual(roleKeys(answer.plan), []);
+    assert.deepEqual(
+        roleKeys(
+            answer.plan.filter(
+                (token) =>
+                    token.part_index !== 0 ||
+                    (token.binding_ref !== 'origin:' && token.binding_ref !== 'where:'),
+            ),
+        ),
+        [refineKey(0, 'origin:'), refineKey(0, 'where:')],
+    );
 });
 
 test('refineItems lists a bound binding no token states with its current value, and leaves out one whose only option is its current value', () => {
@@ -167,4 +196,37 @@ test('refineItems leaves out the source slot while a token states "source:", on 
         ),
         [[refineKey(0, 'source:'), null], method],
     );
+});
+
+test('changeTarget opens the token that states a binding when its menu offers a choice, else Refine', () => {
+    const plan: SentenceToken[] = [
+        { kind: 'slot', axis: 'what', text: 'debt service', segment: 'heading', states: [] },
+        { kind: 'text', text: ' in ', segment: 'heading' },
+        { kind: 'slot', axis: 'when', text: '2024', segment: 'heading', states: ['when:'] },
+        { kind: 'slot', axis: 'unit', text: 'US dollars', segment: 'byline', states: ['unit:'] },
+    ];
+    const target = (bindingRef: string, menuChanges: Map<number, Set<string>>) =>
+        changeTarget({
+            plan,
+            partCount: 1,
+            partIndex: 0,
+            bindingRef,
+            menuChanges,
+            refineKeys: new Set([refineKey(0, 'origin:')]),
+        });
+    const drawn = new Map([
+        [2, new Set(['when:'])],
+        [3, new Set<string>()],
+    ]);
+
+    assert.deepEqual(target('when:', drawn), { kind: 'token', index: 2 });
+    // The unit token states the ref, but its menu offers nothing else.
+    assert.equal(target('unit:', drawn), null);
+    // No token states the role: Refine lists it.
+    assert.deepEqual(target('origin:', drawn), { kind: 'refine', key: refineKey(0, 'origin:') });
+    // Neither a token nor Refine offers the slot.
+    assert.equal(target('how:crsTypeOfFlow', drawn), null);
+
+    assert.equal(sameMenuChanges(drawn, new Map(drawn)), true);
+    assert.equal(sameMenuChanges(drawn, new Map([[2, new Set(['when:'])]])), false);
 });

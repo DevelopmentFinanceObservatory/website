@@ -268,8 +268,18 @@ export function buildRequest(input: SearchInput, includeCoverage: boolean) {
  *  raw value. */
 type StatVarsValidation = { valid: true } | { valid: false; reason: string };
 
+// One `stat_vars.source_codes` entry: a provenance and the code it issues.
+const isSourceCode = (entry: unknown): boolean => {
+    if (!entry || typeof entry !== 'object') return false;
+
+    const { provenance, code } = entry as Record<string, unknown>;
+
+    return typeof provenance === 'string' && typeof code === 'string';
+};
+
 /** Validates that `value` carries the wire's ResolvedStatVars object shape
- *  ({member_count, member_count_exact, served_count, data_date_range}) — see types.ts's
+ *  ({member_count, member_count_exact, served_count, data_date_range,
+ *  source_codes}). See types.ts's
  *  ResolvedStatVars. A value that doesn't match it is a contract break, not
  *  a variant to tolerate (see the console.error below). Every user-visible
  *  count reads these fields, so a missing or mistyped one fails here rather
@@ -290,6 +300,14 @@ function validateResolvedStatVars(value: unknown): StatVarsValidation {
     }
     if (v.data_date_range != null && typeof v.data_date_range !== 'object') {
         return { valid: false, reason: 'data_date_range is not an object' };
+    }
+    // "About this answer" names each publisher code. The wire leaves the list
+    // out when no served StatVar has one.
+    if (
+        v.source_codes !== undefined &&
+        !(Array.isArray(v.source_codes) && v.source_codes.every(isSourceCode))
+    ) {
+        return { valid: false, reason: 'source_codes is not a list of {provenance, code}' };
     }
     return { valid: true };
 }
@@ -331,8 +349,8 @@ export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null 
     };
 
     // Contract boundary check, deliberately not a coercion. A `stat_vars`
-    // that isn't the {member_count, member_count_exact, served_count, data_date_range} object
-    // shape means the
+    // that isn't the {member_count, member_count_exact, served_count, data_date_range,
+    // source_codes} object shape means the
     // wire changed. Silently tolerating a second shape here would repeat the
     // failure that hid the September break (spec.stat_vars?.[0] swallowing
     // an object into `undefined`), and no deployment sends anything else to
@@ -345,7 +363,7 @@ export function flattenSpec(spec: WireSpec | null | undefined): PartSpec | null 
         if (!validation.valid) {
             console.error(
                 `[searchClient] spec ${spec_id}: stat_vars is not the wire's ` +
-                    `{member_count, member_count_exact, served_count, data_date_range} shape (ResolvedStatVars) — ${validation.reason} — got`,
+                    `{member_count, member_count_exact, served_count, data_date_range, source_codes} shape (ResolvedStatVars) — ${validation.reason} — got`,
                 resolved.stat_vars,
             );
 
@@ -884,9 +902,14 @@ export async function fetchSearchCatalogue(
  *  incomplete (see an enrichment's `coverage` and `missing`); anything else is off. */
 export type DatasetOptionState = FormatOptionModel['state'];
 
+/** One enrichment the options document offers. `in_long_layout` says the long layout
+ *  already writes it (a role's names, a party role's kind fields); an API deployed
+ *  before the field leaves it out. */
 export type DatasetEnrichment = EnrichmentOptionModel;
 
-export type DatasetOutputOptions = OutputOptionsModel;
+export type DatasetOutputOptions = Omit<OutputOptionsModel, 'enrichments'> & {
+    enrichments: DatasetEnrichment[];
+};
 
 /** One coverage dimension of a dataset: a frame column (or `years`) and its distinct count.
  *  `axis` names the flow direction a role column serves (financingProvider → origin). */

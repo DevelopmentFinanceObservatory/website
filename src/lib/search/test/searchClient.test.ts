@@ -77,6 +77,17 @@ test('flattenSpec reads a well-formed stat_vars, with the counts as the wire sen
 
     assert.equal(flat.stat_vars.member_count, 42);
     assert.equal(flat.stat_vars.served_count, 3);
+
+    const codes = [{ provenance: 'dc/base/WorldBankIDS', code: 'DT.TDS.DEGG.CD', exact: true }];
+
+    assert.deepEqual(
+        readable(
+            flattenSpec(
+                wireSpec({ member_count: 1, member_count_exact: true, source_codes: codes }),
+            ),
+        ).stat_vars.source_codes,
+        codes,
+    );
     assert.equal(
         statVarsUnreadable(
             flattenSpec(
@@ -98,6 +109,10 @@ for (const [name, statVars] of [
     [
         'a data_date_range that is not an object',
         { member_count: 1, member_count_exact: true, served_count: 1, data_date_range: '2020' },
+    ],
+    [
+        'a source code with no code',
+        { member_count: 1, member_count_exact: true, source_codes: [{ provenance: 'dc/base/X' }] },
     ],
 ] as const) {
     test(`flattenSpec flags a stat_vars ${name} as unreadable`, () => {

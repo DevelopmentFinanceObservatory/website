@@ -12,6 +12,9 @@ export const user = pgTable('user', {
         .defaultNow()
         .$onUpdate(() => /* @__PURE__ */ new Date())
         .notNull(),
+    // Set when the account's deletion begins (`user.additionalFields` in
+    // src/lib/auth/auth.ts), so no share token is stored for it after.
+    deletingAt: timestamp('deleting_at', { withTimezone: true }),
 });
 
 export const session = pgTable(

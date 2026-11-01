@@ -1,24 +1,28 @@
 /**
  * The More Info panel's view of a card. A described card's view answers
  * four questions in order: what the card shows and what its measure means,
- * what to keep in mind, where the data comes from, and how to cite it. The
- * card's own steps sit last, collapsed. A legacy card's view (`infoPanel.ts`)
- * is labelled blocks of rows and sentences. Both are plain data, so the logic
- * stays here, where `node --test` reaches it.
+ * what to keep in mind, where the data comes from, and how to cite it. A
+ * quotient or share card opens with what it divides by what. The card's own
+ * steps sit last, collapsed, as a rail of verbs and objects. A legacy card's
+ * view (`infoPanel.ts`) is labelled blocks of rows and sentences. Both are
+ * plain data, so the logic stays here, where `node --test` reaches it.
  *
  * A described view shows each fact once and no row whose value is 0, None or
  * Unknown. Identifiers stay in the download bundle.
  */
 
 import type {
-    DefinedRef,
     Description,
+    DescriptionSourceCode,
     DescriptionUnit,
+    DrawnValue,
+    ServedStep,
     SimpleUnit,
     Span,
     UnitSide,
 } from './description.ts';
 import { capitalise } from '../capitalise.ts';
+import { groupSourceCodes, type SourceCodeGroups } from '../sourceCodes.ts';
 import { shortDateText } from '../sources/updateDates.ts';
 import { formatPeriod, formatWindow } from './period.ts';
 
@@ -60,40 +64,76 @@ export type LegacyView = {
 };
 
 /** A value the card shows or is fixed to, by name, with its definition
- *  where the graph holds one. */
-export type PanelTerm = { key: string; name: string; definition: string | null };
+ *  where the graph holds one, and the publisher's codes for the series
+ *  that hold a value the card draws, where it has any. */
+export type PanelTerm = {
+    key: string;
+    name: string;
+    definition: string | null;
+    codes: SourceCodeGroups | null;
+};
 
 /** Values by name under one label, either those the card draws on a
  *  dimension ("Shows", or the dimension's name when several list theirs) or
  *  "Within", the defined values its version is fixed to. */
 export type PanelTerms = { key: string; label: string; terms: PanelTerm[] };
 
+/** The offer to add a snapshot link to the citation, made to the card's
+ *  owner while the citation names none. `note` is a sentence before it, for a
+ *  live card, whose link can show new numbers later. */
+export type PanelLinkOffer = { note: string | null };
+
 /** The citation in two forms: `short`, the description's own line, and
- *  `full`, the reference-list form. `hint` tells the card's owner how to get
- *  a link to cite, and is null for anyone else. */
-export type PanelCite = { short: string; full: string; hint: string | null };
+ *  `full`, the reference-list form, each naming the snapshot link when the
+ *  card is cited from one. `offer` is null for anyone but the
+ *  card's owner, and once the citation names a snapshot. */
+export type PanelCite = { short: string; full: string; offer: PanelLinkOffer | null };
 
 /** A page on this site that says how a source's data is processed. */
 export type PanelSourcePage = { key: string; name: string; page: string };
 
-/** How the card was made: its own steps, a sentence for a gap that changes
- *  how to read the numbers, and the pages of its documented sources. */
-export type PanelMade = { steps: string[]; notes: string[]; pages: PanelSourcePage[] };
+/** One step on the card's rail: a verb and its object ("Get" · "Gross
+ *  national income"), and the composer's sentence for it as the detail one
+ *  click away, null when the row says it all. A step whose operation the
+ *  panel cannot name has no verb, and its sentence is the object.
+ *  `givesCard` marks the last step, which draws the card. */
+export type PanelStep = {
+    key: string;
+    verb: string | null;
+    object: string;
+    detail: string | null;
+    givesCard: boolean;
+};
+
+/** How the card was made: its own steps, a sentence when they are unknown,
+ *  and the pages of its documented sources. */
+export type PanelMade = { steps: PanelStep[]; notes: string[]; pages: PanelSourcePage[] };
+
+/** What a computed card divides by what, by its inputs' labels. */
+export type PanelCalculation = { numerator: string; denominator: string };
 
 /** A described card's view. `live` is a short line under the title saying
- *  the card is drawn live from current data. `measure` is present only when
- *  the measure has a definition. `from` introduces a computed card's inputs
- *  in its sources. `made` is null when there is nothing to tell. */
+ *  the card is drawn live from current data. `calculation` is a quotient or
+ *  share card's numerator over its denominator, shown first. `measure` is
+ *  present only when the measure has a definition. `codes` are the publisher's
+ *  codes for the series the card draws, null when it has none or names them
+ *  on each value it shows. `sources` are the sources
+ *  the card credits. `inputs` names the versions a computed card read when
+ *  no calculation names them, and is empty otherwise. `from` closes a
+ *  computed card's sources. `made` is null when there is nothing to tell. */
 export type DescribedView = {
     kind: 'described';
     title: string;
     live: string | null;
+    calculation: PanelCalculation | null;
     measure: { label: string; definition: string } | null;
+    codes: SourceCodeGroups | null;
     rows: PanelRow[];
     terms: PanelTerms[];
     keepInMind: string[];
     from: string | null;
     sources: PanelSource[];
+    inputs: string[];
     cite: PanelCite;
     made: PanelMade | null;
 };
@@ -202,25 +242,42 @@ export const documentedSource = (documentation: string | undefined): string | nu
     }
 };
 
-/** Where it comes from: each source's name, linked to the page of the
- *  source its document describes, then its publisher and licence as
- *  recorded. A source with no document, such as a computed version's input,
- *  has no page. */
-export const sourceEntries = (description: Description): PanelSource[] =>
-    description.sources.map((source, index) => {
-        const meta = [source.publisher, source.licence].filter(
-            (part): part is string => typeof part === 'string',
-        );
+/** A source's name with its publisher first ("OECD Creditor Reporting
+ *  System"), unless the name already holds the publisher's. */
+export const publisherFirst = (label: string, publisher: string | null | undefined): string =>
+    publisher && !label.toLowerCase().includes(publisher.toLowerCase())
+        ? `${publisher} ${label}`
+        : label;
 
-        return {
-            key: `${source.ref ?? source.label}#${index}`,
-            name: source.label,
-            url: null,
-            page: documentedSource(source.documentation),
-            meta: meta.length ? meta.join(' · ') : null,
-            lookup: null,
-        };
-    });
+/** Whether a source entry is a computed version's input, which names the
+ *  content version it read, where a credited source names none. */
+export const isInputSource = (source: { content_version?: unknown }): boolean =>
+    source.content_version !== undefined;
+
+/** Where it comes from: each source the card credits by its publisher and
+ *  name, linked to the page of the source its document describes, then its
+ *  licence as recorded. A computed version's inputs are no credit and stay
+ *  out (`inputsOf`). */
+export const sourceEntries = (description: Description): PanelSource[] =>
+    description.sources.flatMap((source, index) =>
+        isInputSource(source)
+            ? []
+            : [
+                  {
+                      key: `${source.ref ?? source.label}#${index}`,
+                      name: publisherFirst(source.label, source.publisher),
+                      url: null,
+                      page: documentedSource(source.documentation),
+                      meta: typeof source.licence === 'string' ? source.licence : null,
+                      lookup: null,
+                  },
+              ],
+    );
+
+/** What a computed card's calculation used: each input version by name, once. */
+export const inputsOf = (description: Description): string[] => [
+    ...new Set(description.sources.filter(isInputSource).map((source) => source.label)),
+];
 
 /** How many values the card draws on each dimension that does not list
  *  them (a card stored without them, or one drawing more than 50),
@@ -241,34 +298,85 @@ export const aboutRows = (description: Description): PanelRow[] => {
     ];
 };
 
-const termOf = (value: DefinedRef, index: number): PanelTerm => ({
-    key: `${value.ref}#${index}`,
-    name: value.label,
-    definition: value.definition ?? null,
-});
+// The publisher that issues a provenance's codes: the publisher of the
+// source the description credits under that provenance, else its name.
+// Null when no source is that provenance, as with a computed card's codes,
+// whose sources are its inputs.
+const publisherOf =
+    (description: Description) =>
+    (provenance: string): string | null => {
+        const source = description.sources.find((entry) => entry.ref === provenance);
+
+        return source ? (source.publisher ?? source.label) : null;
+    };
+
+// A list of codes grouped by publisher, as Get Data names them.
+const codesOf = (
+    description: Description,
+    codes: readonly DescriptionSourceCode[] | undefined,
+): SourceCodeGroups | null => groupSourceCodes(codes ?? [], publisherOf(description));
+
+const termOf =
+    (description: Description) =>
+    (value: DrawnValue, index: number): PanelTerm => ({
+        key: `${value.ref}#${index}`,
+        name: value.label,
+        definition: value.definition ?? null,
+        codes: codesOf(description, value.source_codes),
+    });
+
+// The values the card lists by name: those it draws on each dimension that
+// lists them all, then the values its version is fixed to that carry a
+// definition.
+const shownValues = (description: Description) => {
+    const { about } = description;
+    const drawn = (about.drawn?.dimensions ?? []).filter(
+        (dimension) => dimension.values && dimension.values.length > 0,
+    );
+    const defined = (about.fixed ?? [])
+        .map(({ value }) => value)
+        .filter((value) => value.definition !== undefined);
+
+    return { drawn, defined };
+};
 
 /** What the card shows, by name. These are the values it draws on each
  *  dimension that lists them all, under "Shows" when one dimension does and
  *  under each dimension's name when several do. Then what it is within, the
  *  values its version is fixed to that carry a definition. */
 export const termLists = (description: Description): PanelTerms[] => {
-    const { about } = description;
-    const listed = (about.drawn?.dimensions ?? []).filter(
-        (dimension) => dimension.values && dimension.values.length > 0,
-    );
+    const { drawn: listed, defined } = shownValues(description);
     const drawn = listed.map(({ property, values = [] }): PanelTerms => ({
         key: `drawn:${property.ref}`,
         label: listed.length > 1 ? pluralLabel(property.label) : 'Shows',
-        terms: values.map(termOf),
+        terms: values.map(termOf(description)),
     }));
-    const defined = (about.fixed ?? [])
-        .map(({ value }) => value)
-        .filter((value) => value.definition !== undefined);
 
     return [
         ...drawn,
-        ...(defined.length ? [{ key: 'within', label: 'Within', terms: defined.map(termOf) }] : []),
+        ...(defined.length
+            ? [{ key: 'within', label: 'Within', terms: defined.map(termOf(description)) }]
+            : []),
     ];
+};
+
+// The card's own codes that no value it draws and lists carries, so a card whose
+// values name some of their codes still names the rest once.
+const unlistedCodes = (description: Description): SourceCodeGroups | null => {
+    const carried = new Set(
+        shownValues(description)
+            .drawn.flatMap(({ values = [] }) => values)
+            .flatMap((value) =>
+                (value.source_codes ?? []).map(({ provenance, code }) => `${provenance}\n${code}`),
+            ),
+    );
+
+    return codesOf(
+        description,
+        (description.about.source_codes ?? []).filter(
+            ({ provenance, code }) => !carried.has(`${provenance}\n${code}`),
+        ),
+    );
 };
 
 const UNIT_UNKNOWN = 'The unit is not known.';
@@ -354,16 +462,17 @@ export const localDay = (moment: Date): string =>
         String(moment.getDate()).padStart(2, '0'),
     ].join('-');
 
-const LIVE_HINT = 'A live link can show new numbers later. Cite a snapshot: Share › Snapshot.';
-const LINK_HINT = 'Add a link to cite: Share › Snapshot.';
+const LIVE_NOTE = 'A live link can show new numbers later.';
 
 /** The citation's short form, the description's line, and its
  *  reference-list form: `{text}. "{title}" [dataset]. Retrieved {date}.`,
- *  where the date is the day the reader reads the card (`retrievedOn`). On
- *  a snapshot share it ends ` from {url} (snapshot, data as of {date}).`,
+ *  where the date is the day the reader reads the card (`retrievedOn`).
+ *  Cited from a snapshot share (`snapshotUrl`), the short form ends `.
+ *  {url}` and the full form ` from {url} (snapshot, data as of {date}).`,
  *  the date the snapshot captured its data (`snapshotAsOf`), or
  *  `(snapshot)` alone when that date is unknown. Only the card's owner
- *  (`canShare`), who can make a snapshot, gets the hint. */
+ *  (`canShare`), who can make a snapshot, is offered one while the citation
+ *  names none. */
 export const citeForms = (
     description: Description,
     { retrievedOn, snapshotUrl, snapshotAsOf, canShare }: Required<PanelOptions>,
@@ -374,9 +483,12 @@ export const citeForms = (
     const from = snapshotUrl ? ` from ${snapshotUrl} (${snapshot})` : '';
 
     return {
-        short: cite.text,
+        short: snapshotUrl ? `${cite.text}. ${snapshotUrl}` : cite.text,
         full: `${cite.text}. "${cite.title}" [dataset]. Retrieved ${dateWords(retrievedOn)}${from}.`,
-        hint: canShare ? (description.rendering === 'live' ? LIVE_HINT : LINK_HINT) : null,
+        offer:
+            canShare && !snapshotUrl
+                ? { note: description.rendering === 'live' ? LIVE_NOTE : null }
+                : null,
     };
 };
 
@@ -388,34 +500,109 @@ const SOURCE_STEP = 'source_step';
 const STEP_GAPS = ['steps', 'steps.version', 'steps.source_pipeline'];
 const STEPS_UNKNOWN = 'The steps behind these figures are not known.';
 
-// What the source does not count, in words.
-const countsWords = (estimated: boolean, provisional: boolean): string | null => {
-    const unknown = [estimated && 'estimated', provisional && 'provisional'].filter(Boolean);
+const ownSteps = (description: Description): ServedStep[] =>
+    (description.steps ?? []).filter((step) => step.op !== SOURCE_STEP);
 
-    return unknown.length
-        ? `The source does not say how many values are ${unknown.join(' or ')}.`
+// The operations that divide one step's values by another's.
+const DIVIDING_OPS = new Set(['quotient', 'share']);
+
+/** What one dividing step divides by what: the labels of the inputs its
+ *  numerator and denominator retrieve. Null for a step whose sides do not
+ *  both name an input, as when a side is another step's result, and one
+ *  whose sides name the same input, a share of a total whose narrowing the
+ *  labels do not carry, which would read as a thing over itself. */
+const sidesOf = (step: ServedStep, steps: ServedStep[]): PanelCalculation | null => {
+    const inputLabel = (id: string): string | null =>
+        steps.find((other) => other.id === id)?.input?.label ?? null;
+    const numerator = step.inputs && inputLabel(step.inputs.numerator);
+    const denominator = step.inputs && inputLabel(step.inputs.denominator);
+
+    return numerator && denominator && numerator !== denominator
+        ? { numerator, denominator }
         : null;
 };
 
+/** What a quotient or share card divides by what (`sidesOf`), when one
+ *  dividing step makes it. Null for a card with no such step, and for one
+ *  with several, whose figure no single pair of inputs states. */
+export const calculationOf = (description: Description): PanelCalculation | null => {
+    const steps = ownSteps(description);
+    const dividing = steps.filter((step) => DIVIDING_OPS.has(step.op));
+
+    return dividing.length === 1 ? sidesOf(dividing[0], steps) : null;
+};
+
+// A step as a verb and its object, or null for an operation the panel
+// cannot name. A retrieval says all its sentence says. The selection that
+// draws the card is shown by the years it draws. A division names its own
+// sides, and reads its sentence when it cannot (`sidesOf`).
+const stepRow = (
+    step: ServedStep,
+    description: Description,
+    steps: ServedStep[],
+): Pick<PanelStep, 'verb' | 'object' | 'detail'> | null => {
+    const { about } = description;
+    const period = about.drawn?.period ?? about.period;
+
+    switch (step.op) {
+        case 'retrieve':
+            return step.input ? { verb: 'Get', object: step.input.label, detail: null } : null;
+        case 'select': {
+            const object = period ? formatWindow(period) : step.input?.label;
+
+            return object ? { verb: 'Show', object, detail: step.text } : null;
+        }
+        case 'quotient': {
+            const sides = sidesOf(step, steps);
+
+            return sides
+                ? {
+                      verb: 'Divide',
+                      object: `${sides.numerator} ÷ ${sides.denominator}`,
+                      detail: step.text,
+                  }
+                : null;
+        }
+        case 'share': {
+            const sides = sidesOf(step, steps);
+
+            return sides
+                ? {
+                      verb: 'Share',
+                      object: `${sides.numerator} of ${sides.denominator}`,
+                      detail: step.text,
+                  }
+                : null;
+        }
+        default:
+            return null;
+    }
+};
+
+/** The card's own steps as rail rows, in order, the last one marked as the
+ *  step that draws the card. */
+export const stepRows = (description: Description): PanelStep[] => {
+    const steps = ownSteps(description);
+
+    return steps.map((step, index) => ({
+        key: step.id,
+        ...(stepRow(step, description, steps) ?? {
+            verb: null,
+            object: step.text,
+            detail: null,
+        }),
+        givesCard: index === steps.length - 1,
+    }));
+};
+
 /** How the card was made: the steps that are the card's own, a sentence
- *  when its steps are unknown, one for the counts of estimated and
- *  provisional values the source does not give, and a link to each
- *  documented source's page. */
+ *  when its steps are unknown, and a link to each documented source's
+ *  page. */
 export const madeOf = (description: Description): PanelMade | null => {
-    const { freshness } = description;
     const gaps = gapsOf(description);
-    const counts = countsWords(
-        freshness.estimated_values === null && gaps.unknown('freshness.estimated_values'),
-        freshness.provisional_values === null && gaps.unknown('freshness.provisional_values'),
-    );
     const made: PanelMade = {
-        steps: (description.steps ?? [])
-            .filter((step) => step.op !== SOURCE_STEP)
-            .map((step) => step.text),
-        notes: [
-            ...(STEP_GAPS.some(gaps.unknown) ? [STEPS_UNKNOWN] : []),
-            ...(counts ? [counts] : []),
-        ],
+        steps: stepRows(description),
+        notes: STEP_GAPS.some(gaps.unknown) ? [STEPS_UNKNOWN] : [],
         pages: sourceEntries(description).flatMap(({ key, name, page }) =>
             page ? [{ key, name: `How ${name} data is processed`, page }] : [],
         ),
@@ -424,13 +611,19 @@ export const madeOf = (description: Description): PanelMade | null => {
     return made.steps.length || made.notes.length || made.pages.length ? made : null;
 };
 
-/** Whether the description is of a computed version, or of a card drawn
- *  from one, by the schema's own test, a `cite.id` in the `ops_` family. */
-const isComputed = (description: Description): boolean =>
-    description.describes.kind === 'computed_version' ||
-    (description.cite.id?.startsWith('ops_') ?? false);
+/** Whether a description is of a computed version, or of a card drawn from
+ *  one, by the schema's own test on its `describes.kind` and its `cite.id`
+ *  in the `ops_` family. It takes the two members as saved, so the card face
+ *  asks without reading the whole description. */
+export const isComputedBy = (kind: unknown, citeId: unknown): boolean =>
+    kind === 'computed_version' || (typeof citeId === 'string' && citeId.startsWith('ops_'));
 
-const COMPUTED_FROM = 'Computed by the Development Finance Observatory from';
+/** Whether the description is of a computed version, or of a card drawn
+ *  from one (`isComputedBy`). */
+export const isComputed = (description: Description): boolean =>
+    isComputedBy(description.describes.kind, description.cite.id);
+
+const COMPUTED_BY = 'Computed by the Development Finance Observatory.';
 
 export type PanelOptions = {
     // The day the reader reads the card (`2026-10-12`), in their own time
@@ -453,19 +646,24 @@ export const describedPanel = (
     { retrievedOn, snapshotUrl = null, snapshotAsOf = null, canShare = false }: PanelOptions,
 ): DescribedView => {
     const { measure } = description.about;
-
+    const calculation = calculationOf(description);
+    const terms = termLists(description);
     return {
         kind: 'described',
         title: description.title,
         live: description.rendering === 'live' ? 'Drawn live from the latest data' : null,
+        calculation,
         measure: measure?.definition
             ? { label: capitalise(measure.label), definition: measure.definition }
             : null,
+        codes: unlistedCodes(description),
         rows: aboutRows(description),
-        terms: termLists(description),
+        terms,
         keepInMind: keepInMind(description),
-        from: isComputed(description) ? COMPUTED_FROM : null,
+        from: isComputed(description) ? COMPUTED_BY : null,
         sources: sourceEntries(description),
+        // A calculation already names its inputs.
+        inputs: calculation ? [] : inputsOf(description),
         cite: citeForms(description, { retrievedOn, snapshotUrl, snapshotAsOf, canShare }),
         made: madeOf(description),
     };

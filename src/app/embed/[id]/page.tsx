@@ -4,10 +4,10 @@ import { notFound } from 'next/navigation';
 import { after } from 'next/server';
 
 import EmbedView from '@/components/organisms/EmbedView/EmbedView';
-import { getShare } from '@/lib/chat/shareStore';
+import { getShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { refererHost } from '@/lib/events/referer';
 import { track } from '@/lib/events/track';
-import { sharedViewOf } from '@/lib/studio/liveCards';
+import { sharedViewOfRecord } from '@/lib/studio/slotCards';
 
 type EmbedPageProps = { params: Promise<{ id: string }> };
 
@@ -17,14 +17,15 @@ export const generateMetadata = async ({ params }: EmbedPageProps): Promise<Meta
 
     // Embedded, so it rides someone else's page — never its own search hit.
     return {
-        title: row ? row.title : 'DFO Studio',
+        title: row?.title ?? 'DFO Studio',
         robots: { index: false, follow: false },
     };
 };
 
 // The iframe view of a share: just the read-only sheet, or the one card,
 // edge to edge. A search share has no sheet to embed. A live share's data
-// cards leave the server held and are filled in the browser (sharedViewOf).
+// cards leave the server held and are filled in the browser
+// (src/lib/studio/slotCards).
 const EmbedPage = async ({ params }: EmbedPageProps) => {
     const { id } = await params;
     const row = await getShare(id);
@@ -40,7 +41,7 @@ const EmbedPage = async ({ params }: EmbedPageProps) => {
     const host = refererHost(incoming.get('referer'));
     after(() => track('embed.view', { shareId: id, kind: row.kind, host }, { headers: incoming }));
 
-    return <EmbedView shared={sharedViewOf(row)} />;
+    return <EmbedView shared={await sharedViewOfRecord(slotDepsFor(incoming), row)} />;
 };
 
 export default EmbedPage;

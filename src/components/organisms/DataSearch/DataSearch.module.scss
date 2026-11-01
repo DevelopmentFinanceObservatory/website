@@ -1176,7 +1176,35 @@ span.slotMarked {
     }
 }
 
-// The unit picker's price switch and currency search, each below a rule.
+// The unit picker's currency search, first under the title. The input has a
+// search icon inside its left edge.
+.unitSearch {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.unitSearchIcon {
+    position: absolute;
+    top: rem(6);
+    left: rem(7);
+    width: rem(16);
+    height: rem(16);
+    color: var(--color-charcoal);
+    pointer-events: none;
+}
+
+.unitSearchInput {
+    width: 100%;
+    padding-left: rem(28);
+    border-color: var(--color-stone-light);
+
+    &::placeholder {
+        color: var(--color-charcoal);
+        opacity: 0.8;
+    }
+}
+
+// The unit picker's price switch, below a rule.
 .unitGroup {
     @include flex(column, flex-start, stretch);
 
@@ -1272,10 +1300,11 @@ span.slotMarked {
     margin-left: rem(12);
 }
 
-// "About this answer": boxed key/value rows like the Details panel, then
-// groups (assumptions, variables, how each value was chosen, sources) under
-// mono titles, with chip-styled dcids. With several parts, each part is a
-// section under its own title.
+// "About this answer": the answer line, boxed fact rows like the Details
+// panel (a fact the search filled in says why under its value and has its
+// own Change), then groups (keep in mind, inside this total, source, cite)
+// under mono titles. With several parts, each part is a section under its
+// own title.
 .why {
     @include font-size(14px, 1.4);
 
@@ -1315,7 +1344,7 @@ span.slotMarked {
     letter-spacing: -0.01em;
 }
 
-// The coverage sentence opens the section.
+// The answer line opens the section.
 .whyCoverage {
     margin-top: rem(12);
 }
@@ -1324,9 +1353,10 @@ span.slotMarked {
     margin-top: rem(4);
 }
 
+// Label, value, and the Change control when the row has one.
 .whyRow {
     display: grid;
-    grid-template-columns: rem(110) 1fr;
+    grid-template-columns: rem(110) 1fr auto;
     column-gap: rem(16);
     align-items: baseline;
     padding-block: rem(8);
@@ -1338,16 +1368,77 @@ span.slotMarked {
         color: var(--color-sage);
         letter-spacing: -0.01em;
     }
+}
 
-    dd code {
-        margin-left: rem(8);
+// Why the search filled a fact in, under its value.
+.whyNote {
+    @include font-size(12px, 1.35);
+
+    display: block;
+    margin-top: rem(2);
+    color: var(--color-sage);
+}
+
+// The publisher's series codes, under the measure.
+.whyCodes {
+    display: block;
+    margin-top: rem(4);
+}
+
+.whyChange {
+    @include font-size(11px, 1.4);
+
+    padding: 0;
+    font-family: var(--font-dm-mono);
+    color: var(--color-yellow-hover);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+
+    &:hover {
+        opacity: 0.75;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-yellow-hover);
+        outline-offset: 2px;
     }
 }
 
-// Sits under the rows' value column.
-.whyFamily {
-    margin: rem(4) 0 rem(12) rem(126);
+.whyCopy {
+    @include flex(row, center, center);
+
+    display: inline-flex;
+    flex-shrink: 0;
+    width: rem(16);
+    height: rem(16);
+    margin-left: rem(6);
+    padding: 0;
+    vertical-align: rem(-3);
     color: var(--color-sage);
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    svg {
+        width: rem(16);
+        height: rem(16);
+    }
+
+    &:hover,
+    &:focus-visible {
+        color: var(--color-yellow-hover);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--color-yellow-hover);
+        outline-offset: 2px;
+    }
 }
 
 .whyGroup {
@@ -1367,20 +1458,45 @@ span.slotMarked {
     letter-spacing: -0.01em;
 }
 
-.whyRef {
-    @include flex(row, flex-start, baseline);
-    @include font-size(14px, 1.4);
-
-    flex-wrap: wrap;
-    gap: rem(8);
-    margin-bottom: rem(6);
-}
-
 .whySummary {
     margin-bottom: rem(6);
 }
 
-// One axis's values with their variable counts, under the summary.
+// "Inside this total", folded under its title.
+.whyInside {
+    summary {
+        @include flex(row, space-between, center);
+
+        list-style: none;
+        cursor: pointer;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        .whyGroupTitle {
+            margin-bottom: 0;
+        }
+
+        svg {
+            flex-shrink: 0;
+            width: rem(12);
+            height: rem(12);
+            color: var(--color-sage);
+            transition: rotate 0.25s ease;
+        }
+    }
+
+    &[open] summary svg {
+        rotate: 180deg;
+    }
+}
+
+.whyInsideSummary {
+    margin-top: rem(6);
+}
+
+// One axis the total can be split by, and its values.
 .whyBreakdown {
     margin: rem(12) 0;
 }
@@ -1395,14 +1511,48 @@ span.slotMarked {
 }
 
 .whyBreakdownRow {
-    @include flex(row, space-between, baseline);
-
-    gap: rem(16);
     margin-bottom: rem(4);
 }
 
 .whyOrigin {
     color: var(--color-sage);
+}
+
+.whySource + .whySource {
+    margin-top: rem(8);
+}
+
+// A source's name, with Change at the far end.
+.whySourceName {
+    @include flex(row, space-between, baseline);
+
+    flex-wrap: wrap;
+    gap: rem(4) rem(12);
+}
+
+// Publisher, licence and how the source was chosen.
+.whyMeta {
+    @include font-size(11px, 1.4);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-sage);
+    letter-spacing: -0.02em;
+}
+
+.whyCite {
+    @include flex(row, flex-start, flex-start);
+
+    gap: rem(10);
+
+    span {
+        flex: 1;
+    }
+
+    .whyCopy {
+        width: rem(20);
+        height: rem(20);
+        margin-left: 0;
+    }
 }
 
 .whyLink {
@@ -1433,10 +1583,6 @@ span.slotMarked {
         outline: 1px solid var(--color-yellow-hover);
         outline-offset: 2px;
     }
-}
-
-.whyMore {
-    margin-top: rem(6);
 }
 
 // --- Right rail ------------------------------------------------------------
@@ -1598,28 +1744,6 @@ span.slotMarked {
     .slotOption {
         width: 100%;
         margin-inline: 0;
-    }
-}
-
-// The Download options dialog's checkbox groups (DownloadOptions.tsx): rows
-// sit flush left under their title with rem(16) of air between them.
-.downloadOptions {
-    display: flex;
-    flex-direction: column;
-    gap: rem(16);
-
-    .slotOption {
-        // DM Mono Medium 10/100%/-2% (the base row is the same face at 400).
-        // Compact checkbox rows — no full-bleed band here.
-        width: 100%;
-        margin-inline: 0;
-        padding: 0;
-        font-weight: 500;
-
-        &:hover,
-        &:focus-visible {
-            background-color: transparent;
-        }
     }
 }
 
@@ -2435,6 +2559,13 @@ span.slotMarked {
         visibility: hidden;
         border: 0;
     }
+}
+
+// A heading menu's trigger that a fact's Change scrolls to first
+// (menuReveal.ts): it lands below the fixed site header, the clearance the
+// docs headings keep, with the rest of the viewport free for the menu.
+.menuAnchor {
+    scroll-margin-top: rem(100);
 }
 
 // Refine, first in .actions: the outline Button with gold text. The

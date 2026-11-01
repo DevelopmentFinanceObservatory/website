@@ -2,17 +2,19 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import styles from './DataSearch.module.scss';
 import { OptionRow, stopMenuFieldTypeahead } from './SlotMenu';
 
 import Button from '@/components/atoms/Button/Button';
+import Icon from '@/components/atoms/Icon/Icon';
 import { currencyName } from '@/lib/search/tokenAbout';
 import type { IdentityUnitRequest, PartSpec, UnitConversion } from '@/lib/search/types';
 import {
     currencyMatches,
     currencyRequest,
+    currencySearchLabel,
     currentUnit,
     priceBases,
     pricesRequest,
@@ -22,18 +24,19 @@ import {
 } from '@/lib/search/unitPicker';
 
 /**
- * The unit token's options on a convertible answer: preset currencies
- * (US dollars, euros, and the currency of each role's entity), a current
- * or constant price switch with the base year, and a search over every
- * currency the rate tables hold. The current currency is checked. A
- * currency pick keeps the price basis and base year the switch shows where
- * the picked currency converts at them, and otherwise takes the basis it
- * converts at and the nearest base year it takes. A price pick keeps the
- * currency. Every pick posts one unit request through `onPick`. The switch
- * offers only the price bases the answer's currency converts at, and the
- * base year runs inside that currency's bounds. `conversion` is the offer
- * every part the token covers serves (`sharedOffer`), so a pick serves them
- * all.
+ * The unit token's options on a convertible answer: a search over every
+ * currency the rate tables hold, which names how many there are and
+ * replaces the preset rows with its matches while the reader types; the
+ * preset currencies (US dollars and the currency of each role's entity);
+ * and a current or constant price switch with the base year. The current
+ * currency is checked. A currency pick keeps the price basis and base year
+ * the switch shows where the picked currency converts at them, and
+ * otherwise takes the basis it converts at and the nearest base year it
+ * takes. A price pick keeps the currency. Every pick posts one unit request
+ * through `onPick`. The switch offers only the price bases the answer's
+ * currency converts at, and the base year runs inside that currency's
+ * bounds. `conversion` is the offer every part the token covers serves
+ * (`sharedOffer`), so a pick serves them all.
  *
  * The switch, the year and the search are menu fields, so the panel's
  * arrow keys reach them and typing in them never moves the menu's focus.
@@ -57,14 +60,9 @@ export const UnitPicker = ({
     const year = validBaseYear(yearText, bases);
     const name = current.currency ? currencyName(current.currency, conversion) : null;
     const unchanged = current.prices === 'constant' && year === current.baseYear;
+    const searching = query.trim() !== '';
     const matches = currencyMatches(conversion, query);
-    const searchRef = useRef<HTMLDivElement>(null);
-
-    // The matches print under the field, past the panel's scroll fold, so
-    // the panel scrolls them into view as they change.
-    useEffect(() => {
-        if (query.trim()) searchRef.current?.scrollIntoView({ block: 'nearest' });
-    }, [query]);
+    const searchLabel = currencySearchLabel(conversion);
 
     const pickPrices = (next: 'current' | 'constant', baseYear: number) => {
         const request = pricesRequest(current, next, baseYear);
@@ -108,8 +106,26 @@ export const UnitPicker = ({
 
     return (
         <>
-            {unitPresets(spec, conversion).map((preset) =>
-                currencyRow(preset.code, preset.label, preset.currency),
+            <div className={styles.unitSearch}>
+                <Icon name="search" className={styles.unitSearchIcon} />
+                <input
+                    className={classNames(styles.slotInput, styles.unitSearchInput)}
+                    data-menu-field="field"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={stopMenuFieldTypeahead}
+                    placeholder={searchLabel}
+                    aria-label={searchLabel}
+                    autoComplete="off"
+                />
+            </div>
+            {searching
+                ? matches.map(({ code, name }) => currencyRow(code, name, code))
+                : unitPresets(spec, conversion).map((preset) =>
+                      currencyRow(preset.code, preset.label, preset.currency),
+                  )}
+            {searching && matches.length === 0 && (
+                <p className={styles.slotNote}>No currency matches.</p>
             )}
             <div className={styles.unitGroup}>
                 <p className={styles.slotGroupTitle}>Prices</p>
@@ -173,22 +189,6 @@ export const UnitPicker = ({
                                 : `Use ${year} prices`}
                         </Button>
                     </form>
-                )}
-            </div>
-            <div ref={searchRef} className={styles.unitGroup}>
-                <input
-                    className={styles.slotInput}
-                    data-menu-field="field"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    onKeyDown={stopMenuFieldTypeahead}
-                    placeholder="Other currency…"
-                    aria-label="Other currency"
-                    autoComplete="off"
-                />
-                {matches.map(({ code, name }) => currencyRow(code, name, code))}
-                {query.trim() && matches.length === 0 && (
-                    <p className={styles.slotNote}>No currency matches.</p>
                 )}
             </div>
         </>

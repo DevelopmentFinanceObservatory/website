@@ -49,6 +49,7 @@ import {
     slotOffersChoice,
     seriesPreviewCaptions,
     sharedDirectionalEditRoute,
+    sharedEntityMenuRefs,
     sharedEntityOptions,
     showGroupHeadings,
     slotOptionLabel,
@@ -330,7 +331,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
             { label: 'variables', count: 39 },
         ],
     });
-    const cases = [
+    const cases: { spec: ReturnType<typeof partialSpec>; sentence: string | null }[] = [
         {
             spec: partialSpec({
                 headline: latest(155, 1, 61),
@@ -338,7 +339,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 coverage: dimensions(145),
             }),
             sentence:
-                '2024 is the latest year with data, with 155 values for 61 of the 145 recipients that have data from Germany.',
+                '2024 is the latest year with data: 155 values for 61 of the 145 recipients that have data.',
         },
         {
             spec: partialSpec({
@@ -346,8 +347,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 entities: nigeria,
                 coverage: { dimensions: [] },
             }),
-            sentence:
-                '2024 is the latest year with data, with 157 values from 34 providers to Nigeria.',
+            sentence: '2024 is the latest year with data: 157 values from 34 providers.',
         },
         {
             spec: partialSpec({
@@ -356,7 +356,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 coverage: dimensions(42),
             }),
             sentence:
-                '2024 is the latest year with data, with 5 values from 4 providers for 2 of the 42 recipients that have data.',
+                '2024 is the latest year with data: 5 values from 4 providers for 2 of the 42 recipients that have data.',
         },
         {
             spec: partialSpec({
@@ -365,7 +365,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 coverage: dimensions(1),
             }),
             sentence:
-                '2024 is the latest year with data, with 1 value for the one recipient that has data from Germany.',
+                '2024 is the latest year with data: 1 value for the one recipient that has data.',
         },
         {
             spec: partialSpec({
@@ -378,7 +378,7 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 entities: germany,
                 coverage: dimensions(30),
             }),
-            sentence: '2020 has 30 values for all 30 recipients that have data from Germany.',
+            sentence: '2020 has 30 values for all 30 recipients that have data.',
         },
         {
             spec: partialSpec({
@@ -392,9 +392,37 @@ test('coverageSentence names the scope of every count, with singular nouns for o
                 coverage: { dimensions: [] },
             }),
             sentence:
-                '2020 is the latest year with data in the years asked, with 157 values from 34 providers to Nigeria.',
+                '2020 is the latest year with data in the years asked: 157 values from 34 providers.',
         },
     ];
+
+    // With a named recipient and no open role, the line ends at the year. A
+    // single year the question named leaves nothing for the line to say.
+    const mozambique = [{ ref: 'country/MOZ', label: 'Mozambique', role: 'destination' }];
+
+    cases.push(
+        {
+            spec: partialSpec({
+                headline: { ...latest(1, 1, 1), role_counts: { financingRecipient: 1 } },
+                entities: mozambique,
+                coverage: { dimensions: [] },
+            }),
+            sentence: '2024 is the latest year with data.',
+        },
+        {
+            spec: partialSpec({
+                headline: {
+                    ...latest(1, 1, 1),
+                    role_counts: {},
+                    year_named: true,
+                    named_window: { start_year: 2024, end_year: 2024 },
+                },
+                entities: mozambique,
+                coverage: { dimensions: [] },
+            }),
+            sentence: null,
+        },
+    );
 
     for (const { spec, sentence } of cases) {
         assert.equal(coverageSentence(spec), sentence);
@@ -2084,6 +2112,19 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
     assert.equal(slotOffersChoice(set('Net', 'Gross'), one(279), spec), true);
     assert.equal(slotOffersChoice(set('Net', 'Gross'), one(1284), spec), false);
     assert.equal(slotOffersChoice(set('Female'), members('Female'), spec), false);
+});
+
+test('sharedEntityMenuRefs names the role while the menu lists another option or more than it shows', () => {
+    const refs = (dcids: string[], truncated: boolean, current: string[]) =>
+        sharedEntityMenuRefs(
+            'origin:',
+            { options: dcids.map((dcid) => slotOption(dcid)), truncated },
+            current,
+        );
+
+    assert.deepEqual(refs(['country/USA'], false, ['country/USA']), []);
+    assert.deepEqual(refs(['country/USA', 'country/GBR'], false, ['country/USA']), ['origin:']);
+    assert.deepEqual(refs(['country/USA'], true, ['country/USA']), ['origin:']);
 });
 
 test('rowsLabel reads a counted option, "up to" when inexact, and nothing for an uncounted one', () => {

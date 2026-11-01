@@ -1,6 +1,10 @@
 @use "variables" as *;
 @use "mixins" as *;
 
+// The rail, its dots and kind lines come from CardInfoPanel.module.scss
+// (.rail, .step, .stepCard, .stepKind); these rules add the Activity
+// states. Selectors under .rail outrank the shared single-class ones.
+
 .log {
     @include flex(column, flex-start, stretch);
 
@@ -29,143 +33,431 @@
     }
 }
 
-// The step log, with a state mark per line.
-.tools {
+// The turn's head: its question, then the outcome line and the fold chevron.
+.head {
     @include flex(column, flex-start, stretch);
 
-    gap: rem(10);
+    gap: rem(6);
+    width: 100%;
     padding: 0;
-    list-style: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: 0;
+
+    &:focus-visible {
+        outline: 1px solid var(--color-charcoal);
+        outline-offset: 2px;
+        border-radius: 3px;
+    }
 }
 
-.tool {
+.question {
+    @include font-size(12px, 1.2);
+
+    padding: rem(5) rem(11);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background-color: var(--color-net-light);
+    border-radius: 6px;
+}
+
+// Two lines at most. The clamp sits inside the padded box, so the padding
+// holds no part of a third line.
+.questionText {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+// The outcome line, then the chevron on its first line.
+.meta {
     @include flex(row, flex-start, flex-start);
+    @include font-size(10px, 1.3);
 
-    gap: rem(10);
-}
-
-.mark {
-    position: relative;
-    flex-shrink: 0;
-    width: rem(12);
-    height: rem(12);
-    margin-top: rem(2);
-    border: 1px solid var(--color-sage);
-    border-radius: 50%;
-}
-
-.markComplete::after {
-    content: "";
-    position: absolute;
-    top: rem(2);
-    left: rem(3.5);
-    width: rem(3);
-    height: rem(5);
-    border-right: 1px solid var(--color-charcoal);
-    border-bottom: 1px solid var(--color-charcoal);
-    rotate: 45deg;
-}
-
-.markPending {
-    border-style: dashed;
-}
-
-.markFailed {
-    background-color: var(--color-red-light);
-    border-color: var(--color-red);
-
-    &::before,
-    &::after {
-        content: "";
-        position: absolute;
-        top: rem(2.5);
-        left: rem(5);
-        width: 1px;
-        height: rem(5);
-        background-color: var(--color-red);
-        rotate: 45deg;
-    }
-
-    &::after {
-        rotate: -45deg;
-    }
-}
-
-.markSkipped {
-    border-color: var(--color-net-light);
-}
-
-.toolBody {
-    @include flex(column, flex-start, stretch);
-
-    flex: 1;
-    gap: rem(3);
-    min-width: 0;
-}
-
-.toolHead {
-    @include flex(row, flex-start, baseline);
-
-    gap: rem(8);
-}
-
-.time,
-.duration {
-    @include font-size(10px, 1);
-
+    gap: rem(6);
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
+
+    i {
+        font-style: normal;
+        color: var(--color-stone-light);
+    }
+
+    b {
+        font-weight: 400;
+        color: var(--color-red);
+    }
 }
 
-.duration {
+// The parts wrap as wholes, each with the dot before it.
+.outcome {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(2) rem(6);
+    min-width: 0;
+}
+
+.part,
+.now {
+    @include flex(row, flex-start, center);
+
+    gap: rem(6);
+    white-space: nowrap;
+}
+
+.now {
+    color: var(--color-charcoal);
+}
+
+// The live turn's dot, pinging.
+.live {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    width: rem(6);
+    height: rem(6);
+    background-color: var(--color-charcoal);
+    border-radius: 50%;
+
+    &::after {
+        position: absolute;
+        inset: rem(-3);
+        content: "";
+        border: 1px solid var(--color-charcoal);
+        border-radius: 50%;
+        animation: ping 1.6s ease-out infinite;
+    }
+}
+
+@keyframes ping {
+    from {
+        opacity: 0.6;
+        scale: 0.6;
+    }
+
+    to {
+        opacity: 0;
+        scale: 1.5;
+    }
+}
+
+.chevron {
+    flex-shrink: 0;
+    width: rem(12);
+    height: rem(12);
     margin-left: auto;
+    color: var(--color-charcoal);
+    transition: rotate 0.25s $ease-out;
 }
 
-.toolTitle {
-    @include font-size(12px, 1.2);
-
-    font-family: var(--font-outfit);
-    font-weight: 500;
-    letter-spacing: -0.01em;
+.chevronClosed {
+    rotate: -90deg;
 }
 
-.toolTitleFailed {
-    color: var(--color-red);
+.body {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(10);
 }
 
-.summary {
-    @include font-size(11px, 1.3);
+// --- The rail ----------------------------------------------------------------
 
-    font-family: var(--font-outfit);
-    font-weight: 300;
-    color: var(--color-stone);
-    letter-spacing: -0.01em;
-    overflow-wrap: anywhere;
+.rail {
+    .stepFailed::before {
+        background-color: var(--color-red-light);
+        border-color: var(--color-red);
+    }
+
+    .stepSkipped::before {
+        border: 1px dashed var(--color-stone-light);
+    }
+
+    .stepPlan::before {
+        background-color: var(--color-lime);
+    }
+
+    .stepRunning::before {
+        animation: dot 1.6s ease-in-out infinite;
+    }
+
+    // The line out of a step not run, and into the running one, is dashed.
+    .stepSkipped:not(:last-child)::after,
+    .step:has(+ .stepRunning)::after {
+        width: 0;
+        background: none;
+        border-left: 1px dashed var(--color-stone-light);
+    }
 }
 
-.viewLink {
-    @include font-size(11px, 1);
+@keyframes dot {
+    50% {
+        box-shadow: 0 0 0 3px rgb(72 72 66 / 12%);
+    }
+}
 
-    align-self: flex-start;
-    padding: 0;
+.step {
+    &:hover > .row {
+        background: linear-gradient(to right, var(--color-net-light), rgb(236 236 219 / 0%));
+    }
+}
+
+.row {
+    @include flex(row, space-between, flex-start);
+
+    gap: rem(8);
+    width: 100%;
+    padding: rem(6) 0;
+    border-radius: 4px;
+}
+
+.label {
+    @include flex(column, flex-start, flex-start);
+    @include font-size(12px, 1.34);
+
+    min-width: 0;
     font-family: var(--font-outfit);
     font-weight: 400;
     color: var(--color-charcoal);
-    text-decoration: underline;
+    letter-spacing: -0.031em;
+
+    .stepFailed & > .labelText {
+        color: var(--color-red);
+    }
+
+    .stepSkipped & > .labelText {
+        color: var(--color-stone);
+    }
+}
+
+.kindFailed {
+    color: var(--color-red);
+}
+
+.triesToggle {
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline dotted;
     text-underline-offset: 2px;
     cursor: pointer;
     background: none;
     border: 0;
-    transition: opacity 0.2s ease;
+}
+
+// A step's duration: on hover or focus, or always when it ran long.
+.duration {
+    @include font-size(10px, 1.3);
+
+    flex-shrink: 0;
+    padding-top: rem(2);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+    opacity: 0;
+    transition: opacity 0.15s;
+
+    .step:hover > .row &,
+    .step:focus-within > .row & {
+        opacity: 1;
+    }
+}
+
+.durationShown {
+    opacity: 1;
+}
+
+.detail {
+    @include font-size(11px, 1.4);
+
+    padding: 0 rem(20) rem(6) 0;
+    margin-top: rem(-3);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+    overflow-wrap: anywhere;
+}
+
+// The tries before a retry worked: the cause once, then each try.
+.tries {
+    @include flex(column, flex-start, stretch);
+    @include font-size(11px, 1.4);
+
+    gap: rem(3);
+    padding: rem(7) rem(9);
+    margin: rem(-2) 0 rem(8);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+    background-color: var(--color-net-light);
+    border-radius: 6px;
+
+    ol {
+        @include flex(column, flex-start, stretch);
+
+        gap: rem(2);
+        padding: 0;
+        list-style: none;
+    }
+
+    li {
+        @include flex(row, flex-start, baseline);
+        @include font-size(10px, 1.3);
+
+        gap: rem(8);
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        letter-spacing: -0.02em;
+
+        span:last-child {
+            margin-left: auto;
+        }
+    }
+}
+
+// A card the step made: its title, which brings the card into view.
+.card {
+    @include flex(row, flex-start, center);
+    @include font-size(11px, 1.2);
+
+    gap: rem(6);
+    max-width: 100%;
+    padding: rem(4) rem(8) rem(4) rem(6);
+    margin: 0 0 rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--color-sage-light);
+    border-radius: 6px;
+    transition: background-color 0.2s;
+
+    span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &:hover:not(:disabled) {
+        background-color: var(--color-net-light);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.5;
+    }
+}
+
+.cardIcon {
+    flex-shrink: 0;
+    width: rem(14);
+    height: rem(14);
+}
+
+.link {
+    @include font-size(11px, 1.3);
+
+    padding: 0;
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity 0.25s;
 
     &:hover {
         opacity: 0.6;
     }
 }
 
-// The toggle that folds a turn's finished lines.
-.foldToggle {
+// --- The full log ------------------------------------------------------------
+
+.full {
+    @include flex(column, flex-start, stretch);
+
+    padding: 0;
+    list-style: none;
+}
+
+.line {
+    display: grid;
+    grid-template-columns: rem(42) 1fr auto;
+    gap: 0 rem(8);
+    align-items: baseline;
+    padding: rem(4) 0;
+}
+
+.lineTime {
+    @include font-size(10px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+}
+
+.lineLabel {
+    @include font-size(12px, 1.3);
+
+    min-width: 0;
+    font-family: var(--font-outfit);
+    color: var(--color-charcoal);
+    letter-spacing: -0.031em;
+}
+
+.lineQuiet .lineLabel {
+    font-size: rem(11);
+    font-weight: 300;
+    color: var(--color-stone);
+}
+
+.lineFailed .lineLabel {
+    color: var(--color-red);
+}
+
+.lineRetried .lineLabel {
+    color: var(--color-stone);
+    text-decoration: line-through;
+    text-decoration-color: var(--color-stone-light);
+}
+
+.lineSkipped .lineLabel {
+    color: var(--color-stone);
+}
+
+.lineDetail {
+    @include font-size(11px, 1.4);
+
+    grid-column: 2 / 4;
+    padding-top: 1px;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-stone);
+    letter-spacing: -0.031em;
+    overflow-wrap: anywhere;
+}
+
+.lineCard {
+    grid-column: 2 / 4;
+    justify-self: start;
+    max-width: 100%;
+    margin-top: rem(4);
+}
+
+// The toggle between the rail and the full log.
+.fold {
     @include font-size(11px, 1);
 
     align-self: flex-start;

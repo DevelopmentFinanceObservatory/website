@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
     endTurnActivity,
+    recordApproval,
+    recordStep,
     restoreActivity,
     type ActivityEntry,
     type SavedActivityEntry,
@@ -197,11 +199,24 @@ type StreamEnding = {
     sent: boolean;
 };
 
+// Whether the turn's reply has text: the last message is the bot's, with any.
+const hasAnswer = (messages: ChatMessage[]): boolean => {
+    const last = messages.at(-1);
+
+    return last?.role === 'bot' && !!last.text;
+};
+
 // A turn's end on screen, however it ended: its Activity entry closes and
-// the chat line clears.
-const endTurn = (prev: ChatState, turn: number, open?: 'skipped' | 'failed'): ChatState => ({
+// the chat line clears. `answered` is read before a failure's detail fills
+// an empty reply, so a caller that fills it passes the earlier messages'.
+const endTurn = (
+    prev: ChatState,
+    turn: number,
+    open?: 'skipped' | 'failed',
+    answered = hasAnswer(prev.messages),
+): ChatState => ({
     ...prev,
-    activity: endTurnActivity(prev.activity, turn, open),
+    activity: endTurnActivity(prev.activity, turn, open, answered),
     ...NO_LINE,
     thinking: false,
 });
@@ -557,38 +572,9 @@ export const useChat = (initial?: ChatSnapshot) => {
 
                         // One Activity line per step_id. A later frame for the
                         // same step closes or updates the line it opened.
-                        patchActivity((entry) => {
-                            const existing = entry.tools.find((tool) => tool.id === frame.step_id);
-                            const patch = {
-                                summary: frame.detail ?? undefined,
-                                durationMs: frame.duration_ms ?? undefined,
-                                widgetId: frame.produced?.component_id,
-                                state: frame.status,
-                            };
+                        const arrived = Date.now();
 
-                            if (!existing) {
-                                return {
-                                    ...entry,
-                                    tools: [
-                                        ...entry.tools,
-                                        {
-                                            id: frame.step_id,
-                                            name: frame.label,
-                                            args: frame.tool ?? undefined,
-                                            startedAt: Date.now(),
-                                            ...patch,
-                                        },
-                                    ],
-                                };
-                            }
-
-                            return {
-                                ...entry,
-                                tools: entry.tools.map((tool) =>
-                                    tool.id === frame.step_id ? { ...tool, ...patch } : tool,
-                                ),
-                            };
-                        });
+                        patchActivity((entry) => recordStep(entry, frame, arrived));
 
                         break;
                     }
@@ -686,12 +672,18 @@ export const useChat = (initial?: ChatSnapshot) => {
                     }
                     case 'plan.approved': {
                         // Comes first on the approve's stream, so the reply it
-                        // writes into is the transcript's last message.
+                        // writes into is the transcript's last message. The
+                        // turn's Activity entry records the approval time,
+                        // which places the plan among its steps.
                         const approved = approvedFromFrame(frame);
+                        const approvedAt = Date.now();
 
                         setState((prev) => ({
                             ...prev,
                             messages: withApprovedPlan(prev.messages, approved),
+                            activity: prev.activity.map((entry) =>
+                                entry.turn === turn ? recordApproval(entry, approvedAt) : entry,
+                            ),
                         }));
                         break;
                     }
@@ -833,7 +825,12 @@ export const useChat = (initial?: ChatSnapshot) => {
                             messages[messages.length - 1] = { ...last, text: `_${detail}_` };
                         }
 
-                        return endTurn({ ...prev, messages }, turn, 'failed');
+                        return endTurn(
+                            { ...prev, messages },
+                            turn,
+                            'failed',
+                            hasAnswer(prev.messages),
+                        );
                     });
                 } else if (ending.failed || ending.done) {
                     setState((prev) => endTurn(prev, turn, ending.failed ? 'failed' : undefined));
@@ -1119,7 +1116,9 @@ export const useChat = (initial?: ChatSnapshot) => {
                     setState((prev) => {
                         const after = switchEnded(prev, waiting, ended);
 
-                        return after === prev ? prev : endTurn(after, turn, activity);
+                        return after === prev
+                            ? prev
+                            : endTurn(after, turn, activity, hasAnswer(prev.messages));
                     });
                 },
             });
@@ -1346,6 +1345,7 @@ export const useChat = (initial?: ChatSnapshot) => {
                                 { ...prev, messages: withRefusedChip(prev.messages, chip, detail) },
                                 turn,
                                 'failed',
+                                hasAnswer(prev.messages),
                             ),
                         );
 

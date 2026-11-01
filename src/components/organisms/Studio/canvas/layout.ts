@@ -1,5 +1,18 @@
-import { chartFromTable, type ChartWidget, type Widget } from '@/lib/chat/widgets';
-import { estimatedRows, FITTED_ROWS_MAX } from '@/lib/studio/chartFit';
+// Relative .ts imports, so the node test runner loads this module as it is.
+import {
+    chartFromTable,
+    type ChartWidget,
+    tableFromChart,
+    type TableWidget,
+    type Widget,
+} from '../../../../lib/chat/widgets.ts';
+import { estimatedRows, FITTED_ROWS_MAX } from '../../../../lib/studio/chartFit.ts';
+import {
+    TABLE_WIDTH_DEFAULT,
+    tableDisplay,
+    tableRows,
+    tableWidthCells,
+} from '../../../../lib/studio/tableFit.ts';
 
 /**
  * The whiteboard's geometry: cells, card footprints, the free-spot search
@@ -18,15 +31,24 @@ export const GAP = 1;
 // MAX_COLS is only a distant sanity cap for the placement math.
 export const MAX_COLS = 500;
 
+// The rows of the smallest table card: one body row, a one-line title and
+// one-line source, no caption.
+const TABLE_ROWS_MIN = tableRows({
+    widget: { title: '', columns: [''], rows: [['']] },
+    widthCells: TABLE_WIDTH_DEFAULT,
+});
+
 // Card footprints in cells: cards SPAWN at the default size, and the corner
 // grip can only take them between min and max.
 //
-// That holds for every width, and for the height of a stat card and of a
-// table view. A text card and a chart view have a DERIVED height (see
-// heightIsDerived): the card reports the rows it needs and the slot takes
-// them, between the kind's minimum and FITTED_ROWS_MAX. So `chart.h` and
-// `table.h` below are a table view's default and its grip's range, and the
-// floor of a chart view.
+// That holds for every width, and for the height of a stat card. Every other
+// card has a DERIVED height (see heightIsDerived): the card reports the rows
+// it needs and the slot takes them, between the minimum of the kind it reads
+// as (effectiveKind) and FITTED_ROWS_MAX. So `chart.h` is the floor of a
+// chart view, and `table.h` the floor of a table view, the smallest table
+// card (TABLE_ROWS_MIN). A fresh chart or
+// table takes the height its content is estimated to need (spawnSpan); their
+// default h serves cards placed without that estimate, such as the showcase.
 //
 // A stat card's height is budgeted, not guessed (QA-28). At rem(20) a cell,
 // its column needs: 32 padding, the title, the 20 gap under it, the number
@@ -49,21 +71,21 @@ export const MAX_COLS = 500;
 export const SPAN_DEFAULT: Record<Widget['kind'], { w: number; h: number }> = {
     key_number: { w: 20, h: 9 },
     chart: { w: 22, h: 14 },
-    table: { w: 22, h: 14 },
+    table: { w: TABLE_WIDTH_DEFAULT, h: 14 },
     text: { w: 14, h: 4 },
 };
 
 export const SPAN_MIN: Record<Widget['kind'], { w: number; h: number }> = {
     key_number: { w: 18, h: 9 },
     chart: { w: 22, h: 13 },
-    table: { w: 22, h: 13 },
+    table: { w: 22, h: TABLE_ROWS_MIN },
     text: { w: 14, h: 3 },
 };
 
 export const SPAN_MAX: Record<Widget['kind'], { w: number; h: number }> = {
     key_number: { w: 26, h: 13 },
     chart: { w: 34, h: 21 },
-    table: { w: 34, h: 21 },
+    table: { w: 34, h: FITTED_ROWS_MAX },
     text: { w: 14, h: FITTED_ROWS_MAX },
 };
 
@@ -266,6 +288,27 @@ export const chartSourceOf = (widget: Widget): ChartWidget | null => {
     return chart;
 };
 
+// The table a card in a table view shows: the widget itself, or a chart's
+// data as a table. A chart's table is derived once per widget, as
+// chartSourceOf derives a table's chart, so TableCard's measuring token and
+// its display table hold across renders.
+const chartTables = new WeakMap<ChartWidget, TableWidget>();
+
+export const tableOf = (widget: ChartWidget | TableWidget): TableWidget => {
+    if (widget.kind === 'table') {
+        return widget;
+    }
+
+    let table = chartTables.get(widget);
+
+    if (!table) {
+        table = tableFromChart(widget);
+        chartTables.set(widget, table);
+    }
+
+    return table;
+};
+
 // The card's current view: null = no switcher (a lone number, a note, or a
 // table whose data can't chart); otherwise the user's pick or the
 // natural default. A line needs at least two points — a saved 'chart-line'
@@ -302,35 +345,60 @@ export const resolveCardView = (
 
 type ResolvedView = Pick<ReturnType<typeof resolveCardView>, 'view' | 'chartSource'>;
 
-// Whether the card's height follows its content: a text card, and any card
-// showing as a chart. `view` is the resolved view (resolveCardView). Such a
-// card reports its rows through `onFit`; nothing else sets its height.
+// Whether the card's height follows its content: every card but a stat
+// card. `view` is the resolved view (resolveCardView). A table whose data
+// cannot chart has none and is derived all the same. Such a card reports its
+// rows through `onFit`; nothing else sets its height.
 export const heightIsDerived = (widget: Widget, view: CardView | null): boolean =>
-    widget.kind === 'text' || view === 'chart-bar' || view === 'chart-line';
+    widget.kind === 'text' || widget.kind === 'table' || view !== null;
 
-// The heights in cells a card may take in its current view.
+// The heights in cells a card may take in its current view, by the kind it
+// reads as. A chart shown as a table takes a table's floor, and a table shown
+// as a chart a chart's.
 export const heightRange = (
     widget: Widget,
     view: CardView | null,
-): { min: number; max: number } => ({
-    min: SPAN_MIN[widget.kind].h,
-    max: heightIsDerived(widget, view) ? FITTED_ROWS_MAX : SPAN_MAX[widget.kind].h,
-});
+): { min: number; max: number } => {
+    const kind = effectiveKind(widget, view ?? undefined);
 
-// The footprint a fresh card spawns at. A chart view takes the height its
-// shape is estimated to need at the default width, so the measured fit that
-// follows moves it by a cell or two at most.
+    return {
+        min: SPAN_MIN[kind].h,
+        max: heightIsDerived(widget, view) ? FITTED_ROWS_MAX : SPAN_MAX[kind].h,
+    };
+};
+
+// The footprint a fresh card spawns at, estimated from its content so the
+// measured fit that follows moves it by a cell or two at most. A chart view
+// takes the height its shape needs at the default width. A table view takes
+// the width its columns need, within the table's span, and the height its
+// rows need at that width; an empty table keeps the default.
 export const spawnSpan = (
     widget: Widget,
     { view, chartSource }: ResolvedView,
 ): { w: number; h: number } => {
     const span = SPAN_DEFAULT[widget.kind];
+    const { min, max } = heightRange(widget, view);
 
-    if (!chartSource || view === null || view === 'chart-table') {
+    if (widget.kind === 'key_number' || widget.kind === 'text') {
         return span;
     }
 
-    const { min, max } = heightRange(widget, view);
+    if (effectiveKind(widget, view ?? undefined) === 'table') {
+        const table = tableOf(widget);
+
+        if (table.columns.length === 0 || table.rows.length === 0) {
+            return SPAN_DEFAULT.table;
+        }
+
+        const display = tableDisplay(table);
+        const w = clamp(tableWidthCells(display), SPAN_MIN.table.w, SPAN_MAX.table.w);
+
+        return { w, h: clamp(tableRows({ widget: table, widthCells: w, display }), min, max) };
+    }
+
+    if (!chartSource) {
+        return span;
+    }
 
     return {
         w: span.w,

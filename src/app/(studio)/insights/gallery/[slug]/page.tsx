@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 
 import { GALLERY_ITEMS, galleryItem } from '@/components/organisms/Gallery/galleryData';
 import Studio from '@/components/organisms/Studio/Studio';
+import { liveSlotsOf } from '@/lib/chat/sharePayload';
 import { gallerySession } from '@/lib/gallery/sessions';
 import { pageOpenGraph } from '@/lib/site';
 
@@ -41,7 +42,10 @@ export const generateMetadata = async ({ params }: GalleryItemPageProps): Promis
  * own Studio, which forks it into your account. A live item opens the
  * copied layout and refreshes each data card through the prod share it came
  * from, `/api/share/<sharedFrom>/cards/<cardId>/refresh`, so its share id
- * is `sharedFrom`. A dataset item redirects to its saved search,
+ * is `sharedFrom`. Each card's refresh names its slot in that share, which
+ * `liveSlotsOf` derives from the copied session the way the share was given
+ * its slots (`slotCanvas`), so the two agree while the copy matches the share.
+ * A dataset item redirects to its saved search,
  * `/data?share=<sharedFrom>`, the page `/s/<id>` sends a search share to.
  */
 const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
@@ -55,6 +59,8 @@ const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
         redirect(`/data?share=${item.sharedFrom}`);
     }
 
+    const saved = gallerySession(item.slug);
+
     // The page is prerendered, and the Studio reads the URL (useSearchParams).
     return (
         <Suspense fallback={null}>
@@ -65,8 +71,9 @@ const GalleryItemPage = async ({ params }: GalleryItemPageProps) => {
                 shared={{
                     id: item.live ? item.sharedFrom : item.slug,
                     kind: item.kind,
-                    saved: gallerySession(item.slug),
+                    saved,
                     live: item.live,
+                    slots: item.live ? liveSlotsOf(saved) : undefined,
                 }}
             />
         </Suspense>

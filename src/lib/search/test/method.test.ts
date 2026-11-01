@@ -20,6 +20,7 @@ import {
     NO_METHOD_LABEL,
     sharedMethodPicker,
     sharedMethodServes,
+    sourceMenuRefs,
     sourceSlotOptions,
 } from '../view.ts';
 import { methodBound, methodUnbound } from './fixtures/index.ts';
@@ -465,6 +466,23 @@ test('sourceSlotOptions skips a provenance option with no ref', () => {
     provenance.options.push({ value: { value_kind: 'source' } });
 
     assert.equal(sourceSlotOptions(spec).length, 3);
+});
+
+test('sourceMenuRefs names the source slot only while its menu offers another source', () => {
+    // Three sources publish gross value added in India; the slot is unbound.
+    const spec = specOf(methodUnbound);
+
+    assert.deepEqual(sourceMenuRefs(spec), ['source:']);
+
+    // One source, the one the answer reads: the menu opens for its About
+    // block and changes nothing.
+    const lone = structuredClone(spec);
+    const provenance = lone.facet_options.find((entry: any) => entry.axis === 'provenance');
+
+    provenance.options = provenance.options.slice(0, 1);
+
+    assert.deepEqual(sourceMenuRefs(lone), []);
+    assert.deepEqual(sourceMenuRefs(null), []);
 });
 
 test('method labels read in sentence case while the posted ref keeps the dcid', () => {

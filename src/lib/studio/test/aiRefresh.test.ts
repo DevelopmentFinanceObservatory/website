@@ -109,10 +109,9 @@ test('redrawn: the card and the frame its dfo-apis read names', async () => {
 });
 
 // The class each documented code belongs to, by what the route says of it:
-// a retry can succeed (`transient`), the site or its credential is not set
-// up (`switched_off`), or the card itself cannot be redrawn (`permanent`).
+// a retry can succeed (`transient`), or it cannot (`permanent`).
 const CLASS_OF: Record<keyof typeof AI_REFUSALS, LiveFailureKind> = {
-    unauthorized: 'switched_off',
+    unauthorized: 'permanent',
     request_invalid: 'permanent',
     component_not_found: 'permanent',
     frame_unsupported: 'permanent',
@@ -121,7 +120,7 @@ const CLASS_OF: Record<keyof typeof AI_REFUSALS, LiveFailureKind> = {
     recipe_invalid: 'permanent',
     dfo_apis_refused: 'permanent',
     upstream_unavailable: 'transient',
-    refresh_not_configured: 'switched_off',
+    refresh_not_configured: 'permanent',
 };
 
 test('each documented refusal is its code, its status, and its class', async () => {

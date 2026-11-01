@@ -1,27 +1,27 @@
 'use client';
 
-import { useState } from 'react';
-
 import styles from './DataSearch.module.scss';
-import { OptionFilterInput } from './SlotMenu';
 import { useDefinitionMembers } from './GraphInfo';
 
-import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
+import SourceCodes from '@/components/atoms/SourceCodes/SourceCodes';
 import SourceLink from '@/components/atoms/SourceLink/SourceLink';
+import { useCopied } from '@/components/organisms/Studio/hooks/useCopied';
 import { aboutAnswerNotes, type AboutAnswerNotes } from '@/lib/search/resultNotes';
 import type { Assumption, PartSpec, Warning } from '@/lib/search/types';
 import {
     buildWhySummary,
-    formatCount,
+    maybeOneVariable,
     type SlotOptionsEntry,
-    type WhyBreakdown,
+    type WhyInside,
+    type WhyRow,
     type WhySummary,
-    type WhyVariables,
 } from '@/lib/search/view';
 
-// The variables listed before "Show all".
-const FIRST_VARIABLES = 10;
+/** What a Change control does for the binding a fact states on part
+ *  `partIndex`: open the menu that edits it (refineMenu.ts's
+ *  changeTarget). Null when nothing offers another value. */
+export type ChangeAction = (partIndex: number, bindingRef: string) => (() => void) | null;
 
 // A source's name, linked to its page when the answer names the source's
 // document, as the card panel links a described source. A source without
@@ -45,92 +45,58 @@ export const SourceName = ({
     );
 };
 
-// The variables counted by each value of an axis they differ on.
-const Breakdown = ({ breakdown }: { breakdown: WhyBreakdown }) => (
-    <div className={styles.whyBreakdown}>
-        <p className={styles.whyBreakdownTitle}>{breakdown.title}</p>
-        {breakdown.values.map((value) => (
-            <p key={value.label} className={styles.whyBreakdownRow}>
-                <span>{value.label}</span>
-                <span>{formatCount(value.count)}</span>
-            </p>
-        ))}
-        {breakdown.more > 0 && (
-            <p className={styles.whySummary}>
-                and {formatCount(breakdown.more)} more {breakdown.more === 1 ? 'value' : 'values'}
-            </p>
-        )}
-    </div>
-);
-
-// The summary, the breakdown by axis value when the variables differ on an
-// axis, and the list the members door answers. With a breakdown, "Show all"
-// opens the whole list. Without one, the first variables show before it.
-const VariablesGroup = ({ variables }: { variables: WhyVariables }) => {
-    const [filter, setFilter] = useState('');
-    const [showAll, setShowAll] = useState(false);
-
-    const items = variables.members.state === 'listed' ? variables.members.items : [];
-    const first = variables.breakdown.length > 0 ? 0 : FIRST_VARIABLES;
-    const needle = filter.trim().toLowerCase();
-    const matches = needle
-        ? items.filter(
-              (item) =>
-                  item.label.toLowerCase().includes(needle) ||
-                  item.dcid.toLowerCase().includes(needle),
-          )
-        : items;
-    const shown = needle || showAll ? matches : matches.slice(0, first);
-    const hidden = items.length - first;
+// Copies `value`, and shows a tick for a moment after. `hint` is the
+// tooltip, and `label` when absent. A value printed nowhere else passes
+// itself as the hint, so it stays readable when the clipboard refuses the
+// copy.
+const CopyButton = ({ value, label, hint }: { value: string; label: string; hint?: string }) => {
+    const { copied, copy } = useCopied();
 
     return (
-        <div className={styles.whyGroup}>
-            <p className={styles.whyGroupTitle}>
-                <span>Variables</span>
-                <span>
-                    {formatCount(variables.count)}
-                    {variables.exact ? '' : '+'}
-                </span>
-            </p>
-            <p className={styles.whySummary}>{variables.summary}</p>
-            {variables.breakdown.map((breakdown) => (
-                <Breakdown key={breakdown.title} breakdown={breakdown} />
-            ))}
-            {variables.members.state === 'loading' && (
-                <p className={styles.whySummary}>Reading the variables…</p>
-            )}
-            {variables.members.state === 'failed' && (
-                <p className={styles.whySummary}>The variables could not be listed.</p>
-            )}
-            {hidden > 0 && (first > 0 || showAll) && (
-                <OptionFilterInput
-                    value={filter}
-                    onChange={setFilter}
-                    label={`Filter ${formatCount(items.length)} variables`}
-                />
-            )}
-            {shown.map((item) => (
-                <p key={item.dcid} className={styles.whyRef}>
-                    {item.label} <code>{item.dcid}</code>
-                </p>
-            ))}
-            {needle && matches.length === 0 && (
-                <p className={styles.whySummary}>No variable matches the filter.</p>
-            )}
-            {!needle && hidden > 0 && (
-                <Button
-                    variant="plain"
-                    icon="chevron-down"
-                    className={styles.whyMore}
-                    data-open={showAll}
-                    onClick={() => setShowAll((open) => !open)}
-                >
-                    {showAll ? 'Show fewer' : `Show all ${formatCount(items.length)}`}
-                </Button>
-            )}
-        </div>
+        <button
+            type="button"
+            className={styles.whyCopy}
+            aria-label={copied ? 'Copied' : label}
+            title={copied ? 'Copied' : (hint ?? label)}
+            onClick={() => copy(value)}
+        >
+            <Icon name={copied ? 'check' : 'copy'} />
+        </button>
     );
 };
+
+// The Change control of a fact the search filled in, when a menu offers
+// another value for it. `what` names the fact for its accessible name.
+const Change = ({ run, what }: { run: ReturnType<ChangeAction>; what: string }) =>
+    run ? (
+        <button
+            type="button"
+            className={styles.whyChange}
+            aria-label={`Change ${what.toLowerCase()}`}
+            onClick={run}
+        >
+            Change
+        </button>
+    ) : null;
+
+const FactRow = ({ row, run }: { row: WhyRow; run: ReturnType<ChangeAction> }) => (
+    <div className={styles.whyRow}>
+        <dt>{row.label}</dt>
+        <dd>
+            {row.value}
+            {row.variableId && (
+                <CopyButton
+                    value={row.variableId}
+                    label="Copy the DFO variable id"
+                    hint={row.variableId}
+                />
+            )}
+            {row.sourceCodes && <SourceCodes codes={row.sourceCodes} className={styles.whyCodes} />}
+            {row.note && <span className={styles.whyNote}>{row.note}</span>}
+        </dd>
+        <Change run={run} what={row.label} />
+    </div>
+);
 
 // A titled group of plain sentences.
 const NoteGroup = ({ title, notes }: { title: string; notes: string[] }) =>
@@ -145,6 +111,35 @@ const NoteGroup = ({ title, notes }: { title: string; notes: string[] }) =>
         </div>
     );
 
+// The ways the total can be split, folded. Each axis the variables differ
+// on is listed with its values.
+const InsideGroup = ({ inside }: { inside: WhyInside }) => (
+    <div className={styles.whyGroup}>
+        <details className={styles.whyInside}>
+            <summary>
+                <span className={styles.whyGroupTitle}>Inside this total</span>
+                <Icon name="chevron-down" />
+            </summary>
+            {inside.summary && <p className={styles.whyInsideSummary}>{inside.summary}</p>}
+            {inside.breakdown.map((breakdown) => (
+                <div key={breakdown.title} className={styles.whyBreakdown}>
+                    <p className={styles.whyBreakdownTitle}>{breakdown.title}</p>
+                    {breakdown.values.map((value) => (
+                        <p key={value} className={styles.whyBreakdownRow}>
+                            {value}
+                        </p>
+                    ))}
+                    {breakdown.more > 0 && (
+                        <p className={styles.whyOrigin}>
+                            and {breakdown.more} more {breakdown.more === 1 ? 'value' : 'values'}
+                        </p>
+                    )}
+                </div>
+            ))}
+        </details>
+    </div>
+);
+
 /** One definite part, as the panel sections it. */
 export type AboutPart = {
     index: number;
@@ -158,110 +153,113 @@ const AboutSection = ({
     label,
     summary,
     notes,
+    change,
 }: {
     label: string | null;
     summary: WhySummary;
     notes: AboutAnswerNotes;
+    /** the Change action for a binding of this part */
+    change: (bindingRef: string | undefined) => ReturnType<ChangeAction>;
 }) => (
     <section className={styles.whySection} aria-label={label ?? undefined}>
         {label && <p className={styles.whySectionTitle}>{label}</p>}
         {notes.coverage && <p className={styles.whyCoverage}>{notes.coverage}</p>}
         <dl className={styles.whyRows}>
             {summary.rows.map((row) => (
-                <div key={row.label} className={styles.whyRow}>
-                    <dt>{row.label}</dt>
-                    <dd>
-                        {row.value}
-                        {/* The space keeps the dcid a word of its own in copied
-                            and read-aloud text. */}
-                        {row.code && (
-                            <>
-                                {' '}
-                                <code>{row.code}</code>
-                            </>
-                        )}
-                    </dd>
-                </div>
+                <FactRow key={row.label} row={row} run={change(row.bindingRef)} />
             ))}
         </dl>
-        {summary.family && <p className={styles.whyFamily}>{summary.family}</p>}
-        <NoteGroup title="What we assumed" notes={notes.assumptions} />
-        <NoteGroup title="What varies" notes={notes.variance} />
-        <NoteGroup title="Data not available" notes={notes.unavailable} />
-        {summary.variables && <VariablesGroup variables={summary.variables} />}
-        {summary.chosen.length > 0 && (
-            <div className={styles.whyGroup}>
-                <p className={styles.whyGroupTitle}>How this was chosen</p>
-                {summary.chosen.map((choice) => (
-                    <p key={`${choice.label}:${choice.value}`} className={styles.whyRef}>
-                        <span>
-                            {choice.label}: {choice.value}
-                        </span>
-                        <span className={styles.whyOrigin}>{choice.reason}</span>
-                    </p>
-                ))}
-            </div>
-        )}
+        <NoteGroup
+            title="Keep in mind"
+            notes={[...summary.notes, ...notes.variance, ...notes.unavailable]}
+        />
+        {summary.inside && <InsideGroup inside={summary.inside} />}
         {summary.sources.length > 0 && (
             <div className={styles.whyGroup}>
                 <p className={styles.whyGroupTitle}>
                     {summary.sources.length === 1 ? 'Source' : 'Sources'}
                 </p>
                 {summary.sources.map((source) => (
-                    <p key={source.ref} className={styles.whyRef}>
-                        <SourceName source={source} label={source.label} />
-                        {source.origin && <span className={styles.whyOrigin}>{source.origin}</span>}
-                        {source.licence && (
-                            <span className={styles.whyOrigin}>Licence: {source.licence}</span>
+                    <div key={source.ref} className={styles.whySource}>
+                        <p className={styles.whySourceName}>
+                            <SourceName source={source} label={source.label} />
+                            <Change
+                                run={change(summary.sourceBindingRef ?? undefined)}
+                                what="source"
+                            />
+                        </p>
+                        {source.meta.length > 0 && (
+                            <p className={styles.whyMeta}>{source.meta.join(' · ')}</p>
                         )}
-                    </p>
+                    </div>
                 ))}
+            </div>
+        )}
+        {summary.cite && (
+            <div className={styles.whyGroup}>
+                <p className={styles.whyGroupTitle}>Cite as</p>
+                <p className={styles.whyCite}>
+                    <span>{summary.cite}</span>
+                    <CopyButton value={summary.cite} label="Copy citation" />
+                </p>
             </div>
         )}
     </section>
 );
 
-// One part's section. Its served members are read from the members door
-// once the panel opens.
+// One part's section. Once the panel opens, its served members are read
+// from the members door to name a single variable's id, and only when the
+// answer may serve one variable, since no other list changes the section.
 const AboutPartSection = ({
     part,
     label,
     open,
     optionsBySpec,
+    changeAction,
 }: {
     part: AboutPart;
     label: string | null;
     open: boolean;
     optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>;
+    changeAction?: ChangeAction;
 }) => {
-    const members = useDefinitionMembers(open ? part.spec : null);
+    const members = useDefinitionMembers(open && maybeOneVariable(part.spec) ? part.spec : null);
 
     return (
         <AboutSection
             label={label}
             summary={buildWhySummary(
                 part.spec,
-                { warnings: part.warnings ?? [], variable_text: part.variableText },
+                {
+                    warnings: part.warnings ?? [],
+                    variable_text: part.variableText,
+                    assumptions: part.assumptions,
+                },
                 members,
             )}
-            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec, part.assumptions)}
+            notes={aboutAnswerNotes(part.spec, part.warnings, optionsBySpec)}
+            change={(ref) => (ref && changeAction ? changeAction(part.index, ref) : null)}
         />
     );
 };
 
 /** The "About this answer" panel: one section per definite part, each with
- *  the coverage sentence, what the search matched and assumed, the
- *  variables, how each facet was chosen, and the sources
- *  with their licence. A lone part carries no title. `open` is whether the
- *  panel shows, which starts the members reads. */
+ *  the answer line, the facts (a fact the search filled in says why and
+ *  offers Change), what to keep in mind, what the total holds, the sources
+ *  with their publisher and licence, and one citation. A lone part carries
+ *  no title. `open` is whether the panel shows, which starts the members
+ *  reads. `changeAction` opens the menu that edits a fact; without it no
+ *  Change shows. */
 const WhyPanel = ({
     parts,
     open,
     optionsBySpec,
+    changeAction,
 }: {
     parts: AboutPart[];
     open: boolean;
     optionsBySpec: Record<string, Record<string, SlotOptionsEntry>>;
+    changeAction?: ChangeAction;
 }) => (
     <div className={styles.why}>
         {parts.map((part, at) => (
@@ -271,6 +269,7 @@ const WhyPanel = ({
                 label={parts.length > 1 ? (part.variableText ?? `Part ${at + 1}`) : null}
                 open={open}
                 optionsBySpec={optionsBySpec}
+                changeAction={changeAction}
             />
         ))}
     </div>

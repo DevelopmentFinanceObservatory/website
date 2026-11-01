@@ -22,7 +22,7 @@ import {
     odaToCongoRestatement,
 } from './fixtures/ambiguous-congo.ts';
 import type { MeasureMenuSpec } from '../measureMenu.ts';
-import type { Assumption, Spec, Warning } from '../types.ts';
+import type { Spec, Warning } from '../types.ts';
 import { type DeepPartial, partialSpec } from './fixtures/partial.ts';
 
 // ---------------------------------------------------------------------------
@@ -79,18 +79,6 @@ const humanitarianWarnings: Warning[] = [
     },
 ];
 
-// The part's assumptions on the same answer. They hold the recipient role it
-// left open and the flow type its code system's default filled.
-const humanitarianAssumptions: Assumption[] = [
-    {
-        kind: 'declared_default',
-        binding_ref: 'how:crsTypeOfFlow',
-        refs: ['CRSTypeOfFlow10'],
-        text: 'official development assistance',
-    },
-    { kind: 'open_role', binding_ref: 'where:', refs: [], text: 'every recipient' },
-];
-
 // dfo-apis src/search/engine/region/un_system.py un_unavailable_warning, for
 // a record holding one refused place and one failed read of two variables,
 // with each variable's label in `variable_labels`.
@@ -107,7 +95,7 @@ const unSystemWarning = (variableLabels: string[]): Warning => ({
     },
 });
 
-test('aboutAnswerNotes holds the coverage sentence and assumptions -- humanitarian aid from Germany', () => {
+test('aboutAnswerNotes holds the answer line -- humanitarian aid from Germany', () => {
     // aboutAnswerNotes takes a spec_id, which partialSpec leaves optional; the fixture names one.
     const spec = partialSpec({
         ...humanitarianFixture,
@@ -118,14 +106,9 @@ test('aboutAnswerNotes holds the coverage sentence and assumptions -- humanitari
         },
     }) as MeasureMenuSpec;
 
-    assert.deepEqual(aboutAnswerNotes(spec, humanitarianWarnings, {}, humanitarianAssumptions), {
+    assert.deepEqual(aboutAnswerNotes(spec, humanitarianWarnings, {}), {
         coverage:
-            '2024 is the latest year with data, with 155 values for 61 of the 145 recipients that have data from Germany.',
-        assumptions: [
-            'No type of flow was named, so the answer uses official development assistance, the default for this measure.',
-            'The question left this role open, so the answer covers every recipient from Germany.',
-            'No year was named, so the counts are for 2024, the latest year with data.',
-        ],
+            '2024 is the latest year with data: 155 values for 61 of the 145 recipients that have data.',
         variance: [],
         unavailable: [],
     });
@@ -263,7 +246,6 @@ test('no warning a part states as a departure, or the API keeps internal, reache
     assert.equal(collapsedCandidatesNote(warnings), null);
     assert.deepEqual(aboutAnswerNotes(spec, warnings, {}), {
         coverage: null,
-        assumptions: [],
         variance: [],
         unavailable: [],
     });

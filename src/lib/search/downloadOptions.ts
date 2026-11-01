@@ -61,15 +61,59 @@ export const parseDownloadChoices = (raw: string | null): DownloadChoices => {
     };
 };
 
-/** The extra columns an answer can join: `available` and `partial` alike, a
- *  partial one showing its coverage on its row. A column the long layout
- *  already writes (`long_layout_defaults`) is not an extra. */
-export const enrichmentChoices = (options: DatasetOutputOptions | null | undefined) =>
-    (options?.enrichments ?? []).filter(
-        (entry) =>
-            (entry.state === 'available' || entry.state === 'partial') &&
-            !options?.long_layout_defaults?.includes(entry.token),
+// The enrichment fields the long layout reads into a party role's
+// `{column}_kind` column.
+const KIND_FIELDS: readonly string[] = ['party_kind', 'party_class', 'party_whole'];
+
+/** The role column the long layout writes an enrichment field into, by its
+ *  suffix: a role's names go to `{column}_label`, its party fields to
+ *  `{column}_kind`. Null for a field the long layout writes under its own
+ *  token. */
+const longLayoutSuffix = (field: string): 'label' | 'kind' | null => {
+    if (field === 'label') {
+        return 'label';
+    }
+
+    return KIND_FIELDS.includes(field) ? 'kind' : null;
+};
+
+/**
+ * Whether the long layout, the one Get Data downloads, already writes this
+ * enrichment, so ticking it would add nothing. The options document's
+ * `in_long_layout` flag decides where it is served. An API that leaves the
+ * flag out still lists the columns the long layout writes in
+ * `long_layout_defaults`: a label is in the file when `{column}_label` is
+ * listed, a party field (kind, class, whole) when `{column}_kind` is, and any
+ * other field when its own token is.
+ */
+export const enrichmentAlreadyInFile = (
+    entry: DatasetEnrichment,
+    options: DatasetOutputOptions,
+): boolean => {
+    if (typeof entry.in_long_layout === 'boolean') {
+        return entry.in_long_layout;
+    }
+
+    const suffix = longLayoutSuffix(entry.field);
+
+    return (
+        options.long_layout_defaults?.includes(
+            suffix ? `${entry.column}_${suffix}` : entry.token,
+        ) ?? false
     );
+};
+
+/** The extra columns an answer can join: `available` and `partial` alike, a
+ *  partial one saying on its row which entities it leaves blank. An
+ *  enrichment the long layout already writes is not an extra. */
+export const enrichmentChoices = (options: DatasetOutputOptions | null | undefined) =>
+    options
+        ? (options.enrichments ?? []).filter(
+              (entry) =>
+                  (entry.state === 'available' || entry.state === 'partial') &&
+                  !enrichmentAlreadyInFile(entry, options),
+          )
+        : [];
 
 /** The remembered tokens this answer offers, in the answer's own order, so a
  *  token only another answer offered is left out of this one's mint. */
@@ -142,14 +186,6 @@ export const resolveChoices = (
 export const choicesNeedOptions = (choices: DownloadChoices): boolean =>
     choices.enrichment.length > 0 || choices.format !== 'csv';
 
-// An enrichment names its field on the wire; these are the words for it.
-const ENRICHMENT_LABELS: Record<string, string> = {
-    iso3: 'ISO3 country codes',
-    iso2: 'ISO2 country codes',
-    label: 'Entity names',
-    type: 'Entity types',
-};
-
 // What a role column is called when the answer has a word for its role.
 const AXIS_HEADINGS: Record<string, string> = {
     origin: 'Provider',
@@ -170,23 +206,130 @@ const readableName = (raw: string): string => {
     return capitalise(words);
 };
 
-export const enrichmentLabel = (entry: DatasetEnrichment): string =>
-    ENRICHMENT_LABELS[entry.field] ?? readableName(entry.field);
+/** One of the answer's bound entities, as the spec carries it: `role` is
+ *  observationAbout, origin or destination, and a country's `ref` is its
+ *  Data Commons id, `country/` and its ISO 3-letter code. */
+export type BoundEntity = {
+    ref?: string;
+    label?: string | null;
+    role?: string;
+    entity_type?: string | null;
+};
 
-/** A partial enrichment's coverage ("118 of 132"), or null for a full one. */
-export const coverageNote = (entry: DatasetEnrichment): string | null => {
+const COUNTRY_REF = /^country\/([A-Z]{3})$/;
+
+// Each enrichment field in plain words, and its value for the role's bound
+// entity, the example a row shows. A field with no value to read (an ISO
+// 2-letter code, an open role) shows no example. `countries` marks a field
+// that holds a country code, so an entity without one is not a country.
+const FIELD_WORDS: Record<
+    string,
+    { name: string; example?: (entity: BoundEntity) => string | null; countries?: true }
+> = {
+    iso3: {
+        name: 'ISO 3-letter code',
+        example: (entity) => COUNTRY_REF.exec(entity.ref ?? '')?.[1] ?? null,
+        countries: true,
+    },
+    iso2: { name: 'ISO 2-letter code', countries: true },
+    label: { name: 'Name', example: (entity) => entity.label ?? null },
+    type: {
+        name: 'Type',
+        example: (entity) => (entity.entity_type ? readableName(entity.entity_type) : null),
+    },
+};
+
+// The kinds the long layout writes for a party role, by the axis its column
+// serves: a provider is official or private, a recipient a country or
+// organisation or private, and either side can be a total. A role column with
+// no known axis gets the kinds both sides share.
+const KIND_EXAMPLES: Record<string, string> = {
+    origin: 'official, private or a total',
+    destination: 'a country or organisation, private or a total',
+};
+const SHARED_KINDS = 'private or a total';
+
+/**
+ * Whether the long layout writes a role column's names (`label`) or kinds
+ * (`kind`), by the rule `enrichmentAlreadyInFile` applies to each enrichment:
+ * where any of the column's enrichments of that suffix carries
+ * `in_long_layout`, the flags decide; otherwise `long_layout_defaults` decides
+ * through `{column}_{suffix}`.
+ */
+const longLayoutWrites = (
+    options: DatasetOutputOptions,
+    { column, suffix }: { column: string; suffix: 'label' | 'kind' },
+): boolean => {
+    const flagged = (options.enrichments ?? []).filter(
+        (entry) =>
+            entry.column === column &&
+            longLayoutSuffix(entry.field) === suffix &&
+            typeof entry.in_long_layout === 'boolean',
+    );
+
+    return flagged.length
+        ? flagged.some((entry) => entry.in_long_layout)
+        : (options.long_layout_defaults?.includes(`${column}_${suffix}`) ?? false);
+};
+
+type Noun = { singular: string; plural: string };
+
+/** Which entities a partial enrichment leaves blank, in words: "blank for the
+ *  9 providers that are not countries". Null for a full one. */
+const blankNote = (entry: DatasetEnrichment, noun: Noun | null, countries: boolean) => {
     if (entry.state !== 'partial') {
         return null;
     }
 
     const { covered, entities } = entry.coverage ?? {};
 
-    return covered == null || entities == null ? 'partial' : `${covered} of ${entities}`;
+    if (covered == null || entities == null) {
+        return 'blank for some';
+    }
+
+    const missing = entities - covered;
+
+    if (missing <= 0) {
+        return null;
+    }
+
+    if (!noun && !countries) {
+        return `blank for ${missing} of ${entities}`;
+    }
+
+    const one = missing === 1;
+    const who = noun ? ` ${one ? noun.singular : noun.plural}` : '';
+    const why = countries ? (one ? ' that is not a country' : ' that are not countries') : '';
+
+    return `blank for the ${missing}${who}${why}`;
 };
 
-/** What a role column is called for the viewer: Provider or Recipient for a
- *  flow's role column (its coverage dimension's axis), the bound entity's type
- *  for observationAbout ("Country"), and the column's own name otherwise. */
+/** One extra column as the dialog shows it: the token it posts, a plain name,
+ *  and a detail line with an example and the entities it leaves blank. */
+export type ExtraColumn = { token: string; name: string; detail: string | null };
+
+const extraColumn = (
+    entry: DatasetEnrichment,
+    { bound, noun }: { bound: readonly BoundEntity[]; noun: Noun | null },
+): ExtraColumn => {
+    const words = FIELD_WORDS[entry.field];
+    // The first bound entity with a value: Official donors has no code, France has.
+    const value = bound.map((entity) => words?.example?.(entity)).find(Boolean);
+    const example = value ? `${value}, for example` : null;
+    const blank = blankNote(entry, noun, words?.countries ?? false);
+
+    return {
+        token: entry.token,
+        name: words?.name ?? readableName(entry.field),
+        detail: [example, blank].filter(Boolean).join('; ') || null,
+    };
+};
+
+/** What a role column is called for the viewer, the one word the dialog uses
+ *  for it: its coverage dimension's noun ("Debtor"), else Provider or
+ *  Recipient for a flow's role column (the dimension's axis), the bound
+ *  entity's type for observationAbout ("Country"), and the column's own name
+ *  otherwise. */
 const roleHeading = ({
     column,
     dimensions,
@@ -195,9 +338,14 @@ const roleHeading = ({
     column: string;
     dimensions?: DatasetCoverageDimension[] | null;
     // The answer's bound entities, which name observationAbout's type.
-    entities?: { role?: string; entity_type?: string | null }[] | null;
+    entities?: BoundEntity[] | null;
 }): string => {
-    const axis = (dimensions ?? []).find((dimension) => dimension.label === column)?.axis;
+    const dimension = dimensions?.find((candidate) => candidate.label === column);
+    const axis = dimension?.axis;
+
+    if (dimension?.noun) {
+        return capitalise(dimension.noun.singular);
+    }
 
     if (axis && AXIS_HEADINGS[axis]) {
         return AXIS_HEADINGS[axis];
@@ -215,7 +363,14 @@ const roleHeading = ({
 export type EnrichmentGroup = {
     column: string;
     heading: string;
-    entries: DatasetEnrichment[];
+    // The heading in lower case ("provider"), for the in-file note.
+    singular: string;
+    // Whether the long layout already writes the column's names, and the
+    // kinds it writes for the column in words ("official, private or a
+    // total"), null when it writes none.
+    named: boolean;
+    kinds: string | null;
+    entries: ExtraColumn[];
 };
 
 /**
@@ -231,26 +386,91 @@ export const enrichmentGroups = ({
 }: {
     options: DatasetOutputOptions | null | undefined;
     dimensions?: DatasetCoverageDimension[] | null;
-    // The answer's bound entities, which name observationAbout's type.
-    entities?: { role?: string; entity_type?: string | null }[] | null;
+    // The answer's bound entities: observationAbout's type, and each row's
+    // example value.
+    entities?: BoundEntity[] | null;
 }): EnrichmentGroup[] => {
+    if (!options) {
+        return [];
+    }
+
     const groups = new Map<string, EnrichmentGroup>();
 
     for (const entry of enrichmentChoices(options)) {
-        const group = groups.get(entry.column);
+        let group = groups.get(entry.column);
+        const dimension = dimensions?.find((candidate) => candidate.label === entry.column);
+        const noun = dimension?.noun ?? null;
 
-        if (group) {
-            group.entries.push(entry);
-        } else {
-            groups.set(entry.column, {
+        if (!group) {
+            const heading = roleHeading({ column: entry.column, dimensions, entities });
+
+            group = {
                 column: entry.column,
-                heading: roleHeading({ column: entry.column, dimensions, entities }),
-                entries: [entry],
-            });
+                heading,
+                singular: heading.toLowerCase(),
+                named: longLayoutWrites(options, { column: entry.column, suffix: 'label' }),
+                kinds: longLayoutWrites(options, { column: entry.column, suffix: 'kind' })
+                    ? (KIND_EXAMPLES[dimension?.axis ?? ''] ?? SHARED_KINDS)
+                    : null,
+                entries: [],
+            };
+            groups.set(entry.column, group);
         }
+
+        // A flow role's entity carries its axis as its role (origin).
+        const role = dimension?.axis ?? entry.column;
+        const bound = entities?.filter((entity) => entity.role === role) ?? [];
+
+        group.entries.push(extraColumn(entry, { bound, noun }));
     }
 
     return [...groups.values()];
+};
+
+/** What the long layout already writes for the roles that offer extras, so
+ *  the viewer sees why names and kinds are not on the list: "The file already
+ *  names each provider and says what kind each is, such as official, private
+ *  or a total". Each role's kinds are its own, and roles that share them share
+ *  one clause: "names each provider and recipient, and says what kind each
+ *  provider is, such as …, and what kind each recipient is, such as …". Null
+ *  when it writes neither. */
+export const inFileNote = (groups: readonly EnrichmentGroup[]): string | null => {
+    const list = (roles: string[]) =>
+        new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(roles);
+    const named = groups.filter((group) => group.named).map((group) => group.singular);
+    // The roles under each kinds text, in wire order.
+    const byKinds = new Map<string, EnrichmentGroup[]>();
+
+    for (const group of groups) {
+        if (group.kinds !== null) {
+            byKinds.set(group.kinds, [...(byKinds.get(group.kinds) ?? []), group]);
+        }
+    }
+
+    const kinded = [...byKinds.values()].flat();
+
+    if (kinded.length === 0) {
+        return named.length ? `The file already names each ${list(named)}.` : null;
+    }
+
+    // Every named role has the same kinds, so one short clause covers them.
+    if (
+        byKinds.size === 1 &&
+        kinded.length === named.length &&
+        kinded.every((group) => group.named)
+    ) {
+        return `The file already names each ${list(named)} and says what kind each is, such as ${kinded[0]?.kinds}.`;
+    }
+
+    const kindClauses = [...byKinds].map(
+        ([kinds, roles]) =>
+            `what kind each ${list(roles.map((group) => group.singular))} is, such as ${kinds}`,
+    );
+    const says = `says ${kindClauses.join(', and ')}`;
+
+    return named.length
+        ? `The file already names each ${list(named)}, and ${says}.`
+        : `The file already ${says}.`;
 };
 
 /**
@@ -273,7 +493,7 @@ export const totalsNote = ({
 }: {
     options: DatasetOutputOptions | null | undefined;
     dimensions?: DatasetCoverageDimension[] | null;
-    entities?: { role?: string; entity_type?: string | null }[] | null;
+    entities?: BoundEntity[] | null;
     format: DatasetFormat;
     bundle: boolean;
     bundleOffered: boolean;

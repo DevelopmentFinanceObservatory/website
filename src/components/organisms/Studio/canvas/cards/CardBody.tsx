@@ -4,9 +4,9 @@ import LivePlaceholder from './LivePlaceholder';
 import TableCard from './TableCard';
 import TextCard from './TextCard';
 import type { CardExtras } from './types';
-import type { CardView } from '../layout';
+import { type CardView, tableOf } from '../layout';
 
-import { type ChartWidget, tableFromChart, type Widget } from '@/lib/chat/widgets';
+import type { ChartWidget, Widget } from '@/lib/chat/widgets';
 import type { ThemeDerived } from '@/lib/studio/theme';
 
 type CardBodyProps = {
@@ -16,7 +16,7 @@ type CardBodyProps = {
     chartSource: ChartWidget | null;
     scale: number;
     theme: ThemeDerived;
-    // Text and chart cards report the rows their content needs.
+    // Text, chart and table cards report the rows their content needs.
     widthCells: number;
     // The card's current height in cells. A chart keeps it while it fits.
     heightCells?: number;
@@ -56,9 +56,15 @@ const CardBody = ({
     }
 
     if (view === 'chart-table') {
-        const asTable = widget.kind === 'table' ? widget : tableFromChart(widget);
-
-        return <TableCard key={view} widget={asTable} {...extras} />;
+        return (
+            <TableCard
+                key={view}
+                widget={tableOf(widget)}
+                widthCells={widthCells}
+                onFit={onFit}
+                {...extras}
+            />
+        );
     }
 
     if (view && chartSource) {
@@ -78,7 +84,9 @@ const CardBody = ({
     }
 
     // A table whose data can't chart falls back to itself.
-    return widget.kind === 'table' ? <TableCard widget={widget} {...extras} /> : null;
+    return widget.kind === 'table' ? (
+        <TableCard widget={widget} widthCells={widthCells} onFit={onFit} {...extras} />
+    ) : null;
 };
 
 export default CardBody;

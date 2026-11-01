@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
+    type BoundEntity,
     choicesNeedOptions,
     DEFAULT_DOWNLOAD_CHOICES,
     type DownloadChoices,
@@ -96,8 +97,9 @@ export type DatasetDownloadTarget = {
     // for a spec it has not registered.
     definition?: unknown;
     // The answer's bound entities, whose type heads the observationAbout
-    // group of extra columns ("Country").
-    entities?: { role?: string; entity_type?: string | null }[] | null;
+    // group of extra columns ("Country") and whose values the extra columns
+    // show as examples ("MOZ, for example").
+    entities?: BoundEntity[] | null;
     // Called as a download starts. The function it returns is called once
     // the file opens, with what was rendered, so a caller can bind the
     // record to what was on screen when the visitor clicked.

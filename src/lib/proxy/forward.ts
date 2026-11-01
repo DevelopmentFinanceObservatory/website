@@ -4,9 +4,15 @@ import type { NextRequest } from 'next/server';
 
 import { apisFetch } from '@/lib/apisAuth';
 
-import { limiterKeyFor, setCaller, trustedHops } from './caller';
+import { limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import { relayBody } from './compress';
-import { clientResponseHeaders, dropEncodedLength, pick, upstreamRequestHeaders } from './headers';
+import {
+    clientResponseHeaders,
+    dropEncodedLength,
+    pick,
+    upstreamRequestHeaders,
+    type HeaderPass,
+} from './headers';
 import { rateLimitedProblem, unreachableProblem } from './problem';
 import { rateHeaders } from './rateHeaders';
 import { hit, type Surface } from './rateLimit';
@@ -28,7 +34,8 @@ import { hit, type Surface } from './rateLimit';
  * as the upstream sent them.
  *
  * Upstreams:
- *   /api/v1/search|datasets|graph/*  → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
+ *   /api/v1/search|datasets|graph/*, /api/v1/presentation/components|shares/*
+ *                                    → SEARCH_API_BASE (dfo-apis, src/lib/searchApi)
  *   /openapi.json, /codes/{code}     → SEARCH_API_BASE, the same paths; the
  *                                    document is cut to this host's paths
  *                                    (src/lib/proxy/openapi)
@@ -36,8 +43,10 @@ import { hit, type Surface } from './rateLimit';
  *                                    → STUDIO_API_BASE (dfo-ai), STUDIO_TOKEN
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
- * (src/lib/apisAuth matches on the target's origin). The other upstreams get
- * none.
+ * (src/lib/apisAuth matches on the target's origin), and names the caller in
+ * x-dfo-caller beside the x-dfo-caller-principal secret (setApisCaller in
+ * src/lib/proxy/caller), matched on the same origin. The other upstreams get
+ * neither.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -65,9 +74,12 @@ type ForwardOptions = {
     // A bearer the proxy attaches on the caller's behalf; when unset, the
     // caller's own Authorization header goes through instead.
     bearer?: string;
-    // The x-dfo-caller value to send (src/lib/proxy/caller). Any value the
-    // client sent is dropped either way.
+    // The x-dfo-caller value to send to an upstream other than dfo-apis,
+    // which gets its own (src/lib/proxy/caller). Any value the client sent is
+    // dropped either way.
     caller?: string;
+    // Headers carried beyond the defaults (src/lib/proxy/headers).
+    pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
     unreachable: string;
     // False sends every body back unencoded, whatever its type.
@@ -79,6 +91,16 @@ type ForwardOptions = {
     // public document). A throw, such as a body that fails while it is read,
     // answers as an unreachable upstream.
     rewrite?: (upstream: Response) => Promise<Response>;
+};
+
+// Whether `target` is on dfo-apis, read from SEARCH_API_BASE at call time as
+// src/lib/apisAuth reads it.
+const isApisTarget = (target: string): boolean => {
+    const base = process.env.SEARCH_API_BASE?.trim();
+
+    return (
+        base !== undefined && URL.canParse(base) && new URL(target).origin === new URL(base).origin
+    );
 };
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
@@ -95,7 +117,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         return refusal;
     }
 
-    const headers = upstreamRequestHeaders(req.headers);
+    const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);
 
     const callerAuth = req.headers.get('authorization');
 
@@ -105,7 +127,11 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         headers.set('authorization', callerAuth);
     }
 
-    setCaller(headers, options.caller);
+    if (isApisTarget(options.target)) {
+        setApisCaller(headers, req.headers);
+    } else {
+        setCaller(headers, options.caller);
+    }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
     let upstream: Response;
@@ -156,6 +182,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     const out = clientResponseHeaders(
         upstream.headers,
         new Headers({ 'Cache-Control': 'no-cache', ...limitHeaders }),
+        options.pass?.response,
     );
 
     return relayBody({
