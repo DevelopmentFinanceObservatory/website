@@ -49,6 +49,7 @@ import {
     slotOffersChoice,
     seriesPreviewCaptions,
     sharedDirectionalEditRoute,
+    sharedEntityMenuRefs,
     sharedEntityOptions,
     showGroupHeadings,
     slotOptionLabel,
@@ -2111,6 +2112,19 @@ test('slotOffersChoice offers a value binding its other options, and an unbound 
     assert.equal(slotOffersChoice(set('Net', 'Gross'), one(279), spec), true);
     assert.equal(slotOffersChoice(set('Net', 'Gross'), one(1284), spec), false);
     assert.equal(slotOffersChoice(set('Female'), members('Female'), spec), false);
+});
+
+test('sharedEntityMenuRefs names the role while the menu lists another option or more than it shows', () => {
+    const refs = (dcids: string[], truncated: boolean, current: string[]) =>
+        sharedEntityMenuRefs(
+            'origin:',
+            { options: dcids.map((dcid) => slotOption(dcid)), truncated },
+            current,
+        );
+
+    assert.deepEqual(refs(['country/USA'], false, ['country/USA']), []);
+    assert.deepEqual(refs(['country/USA', 'country/GBR'], false, ['country/USA']), ['origin:']);
+    assert.deepEqual(refs(['country/USA'], true, ['country/USA']), ['origin:']);
 });
 
 test('rowsLabel reads a counted option, "up to" when inexact, and nothing for an uncounted one', () => {

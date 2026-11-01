@@ -978,6 +978,42 @@ export const slotOffersChoice = (
     return typeof served === 'number' && typeof total === 'number' && served < total;
 };
 
+/** The refs a source token's menu offers a choice for: the source slot's
+ *  ref when its options (sourceSlotOptions) offer another value
+ *  (slotOffersChoice), else none. A lone source still opens its menu, for
+ *  the source's About block, but changes nothing. */
+export const sourceMenuRefs = (spec: PartSpec | null): string[] => {
+    const slot = spec?.slots?.find((candidate) => candidate.key?.axis === 'source');
+
+    if (!spec || !slot) return [];
+
+    const entry = { options: sourceSlotOptions(spec), truncated: false };
+
+    return slotOffersChoice(slot, entry, spec) ? [keyRef(slot.key)] : [];
+};
+
+/** The refs the shared entity menu offers a choice for: `ref` (the token's
+ *  binding_ref) when `entry` is truncated or lists an option other than the
+ *  role's sole current binding (`currentDcids`), else none. A pick binds the
+ *  role to its one option and the menu has no "Any" row, so re-picking a
+ *  sole binding changes nothing. */
+export const sharedEntityMenuRefs = (
+    ref: string | null | undefined,
+    entry: Pick<EntityOptionsEntry, 'options' | 'truncated'>,
+    currentDcids: readonly string[],
+): string[] => {
+    const sole = currentDcids.length === 1 ? currentDcids[0] : null;
+    const offersOther =
+        entry.truncated ||
+        entry.options.some((option) => {
+            const dcid = option.value.ref?.ref;
+
+            return !!dcid && dcid !== sole;
+        });
+
+    return ref && offersOther ? [ref] : [];
+};
+
 /** True once the engine confirmed no data for an entity option
  *  (optionCoverage's 'probed-zero'): the row stays in its menu but reads
  *  muted rather than vanishing, whether or not it's also the current pick. */

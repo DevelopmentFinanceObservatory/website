@@ -133,6 +133,8 @@ import {
     slotOffersChoice,
     sourceOptionLabel,
     sourceOrigin,
+    sharedEntityMenuRefs,
+    sourceMenuRefs,
     sourceSlotOptions,
     splitCurrentPick,
     sharedDirectionalEditRoute,
@@ -1084,7 +1086,8 @@ export const SearchSentenceHeading = ({
             const boundDcid =
                 sourceBinding?.kind === 'value' ? sourceBinding.value.ref?.ref : undefined;
 
-            // A lone source opens the menu too, its row the current pick.
+            // A lone source opens the menu too, its row the current pick,
+            // and reports no ref it changes (sourceMenuRefs).
             //
             // The engine can render the source it actually used even with
             // the slot unbound (a single observed source). That option is
@@ -1115,7 +1118,7 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel([keyRef(slots[sourceSlotIndex].key)])}
+                    {...panel(sourceMenuRefs(spec))}
                     label={token.text}
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text, variable)}
@@ -1619,7 +1622,7 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel(sourceSlot ? [keyRef(sourceSlot.key)] : [])}
+                    {...panel(sourceMenuRefs(representative))}
                     label={token.text}
                     title="Select Data Source"
                     ariaLabel={slotAriaLabel('Data source', token.text)}
@@ -1683,7 +1686,9 @@ export const SearchSentenceHeading = ({
             return (
                 <SlotMenu
                     key={index}
-                    {...panel()}
+                    {...panel(
+                        sharedEntityMenuRefs(token.binding_ref, sharedEntry, currentEntities),
+                    )}
                     label={label}
                     title={entityMenuTitle(entityRole)}
                     ariaLabel={slotAriaLabel(entityRoleLabel(entityRole), label)}
