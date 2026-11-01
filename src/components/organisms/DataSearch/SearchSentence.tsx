@@ -48,6 +48,7 @@ import {
     type DepartureAction,
 } from '@/lib/search/departures';
 import { awaitingEntityOptions, awaitingSlotOptions } from '@/lib/search/menuState';
+import { REFINE_ANCHOR, tokenAnchor } from '@/lib/search/menuReveal';
 import { operationButtonLabel } from '@/lib/search/operations';
 import {
     entityOptionDcid,
@@ -797,7 +798,8 @@ export const SearchSentenceHeading = ({
 
     // The controlled-open props for the menu of the token at plan index
     // `index`, which can change the refs `changes` names, so a departure
-    // can open the menu of the token that states its ref. Closing clears
+    // can open the menu of the token that states its ref, and the anchor
+    // key a fact's Change scrolls to first. Closing clears
     // the state only when it is this menu's, so a menu closing as another
     // opens cannot close the new one.
     const tokenMenu = (index: number, changes: readonly string[]) => {
@@ -807,6 +809,7 @@ export const SearchSentenceHeading = ({
             open: openMenu === index,
             onOpenChange: (open: boolean) =>
                 setOpenMenu((current) => (open ? index : current === index ? null : current)),
+            anchor: tokenAnchor(index),
         };
     };
 
@@ -2359,7 +2362,7 @@ const RefineMenu = ({
             }
         >
             <DropdownMenu.Trigger asChild disabled={empty}>
-                <span>
+                <span className={styles.menuAnchor} data-menu-anchor={REFINE_ANCHOR}>
                     <Button
                         variant="outline"
                         className={styles.refineButton}
