@@ -499,9 +499,6 @@ $table-head-cover: rem(48);
 // the stone line shrinks away as the tint climbs from the bottom — the
 // underline reads as becoming the fill.
 .slot {
-    // Clears the fixed site header when SlotMenu scrolls a token into view
-    // to open it.
-    scroll-margin-top: calc(#{$header-height} + env(safe-area-inset-top) + #{rem(8)});
     padding: 0;
     font: inherit;
     color: var(--color-yellow-hover);

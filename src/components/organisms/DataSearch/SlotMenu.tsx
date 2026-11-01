@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { createContext, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useId, useState } from 'react';
 
 import styles from './DataSearch.module.scss';
 
@@ -79,10 +79,7 @@ export const slotAriaLabel = (field: string, value: string, variable?: string | 
  *  `open` makes the menu controlled, so something outside the trigger (a
  *  departure's action) can open it; `onOpenChange` then reports every
  *  request to open or close. `about` (a TokenAbout) heads the panel, above
- *  the options. A token with nothing to pick passes it with no children.
- *  Opening scrolls the trigger into view first: an outside opener (a fact's
- *  Change in "About this answer") can open it while the heading sits off
- *  screen, and Radix focuses the menu with preventScroll. */
+ *  the options. A token with nothing to pick passes it with no children. */
 export const SlotMenu = ({
     label,
     title,
@@ -102,29 +99,12 @@ export const SlotMenu = ({
     about?: React.ReactNode;
     children?: React.ReactNode;
 }) => {
-    const triggerRef = useRef<HTMLSpanElement>(null);
-
-    // The trigger's scroll-margin-top clears the fixed site header, so a
-    // trigger above it counts as off screen and scrolls to sit below it; a
-    // trigger already in view stays put.
-    useLayoutEffect(() => {
-        const trigger = triggerRef.current;
-        if (!open || !trigger) return;
-
-        const { top, bottom } = trigger.getBoundingClientRect();
-        const clear = parseFloat(getComputedStyle(trigger).scrollMarginTop) || 0;
-        if (top < clear || bottom > window.innerHeight) {
-            trigger.scrollIntoView({ block: 'nearest' });
-        }
-    }, [open]);
-
     return (
         <DropdownMenu.Root modal={false} open={open} onOpenChange={onOpenChange}>
             <DropdownMenu.Trigger asChild>
                 {/* A span, not a button: buttons are atomic inline-blocks (with a
                     UA text-align:center) and long phrases stop wrapping mid-text. */}
                 <span
-                    ref={triggerRef}
                     role="button"
                     tabIndex={0}
                     aria-label={ariaLabel}
