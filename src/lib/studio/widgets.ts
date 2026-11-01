@@ -240,7 +240,7 @@ const payloadPlot = (chart: PayloadChart): Plot => {
 };
 
 // A table card's cells: the sketch pivots periods down and series across.
-type Cells = Pick<TableWidget, 'columns' | 'rows' | 'namesColumn'>;
+type Cells = Pick<TableWidget, 'columns' | 'rows' | 'namesColumn' | 'series'>;
 
 const sketchCells = (facts: FactSummary): Cells | null => {
     const plot = sketchPlot(facts);
@@ -251,6 +251,7 @@ const sketchCells = (facts: FactSummary): Cells | null => {
 
     return {
         columns: ['Period', ...plot.series.map((entry) => entry.label)],
+        series: true,
         rows: plot.categories.map((period, index) => [
             period,
             ...plot.series.map((entry) => {

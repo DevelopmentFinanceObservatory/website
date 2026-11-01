@@ -2,6 +2,19 @@
 @use "mixins" as *;
 @use "shared" as *;
 
+// The sizes here are the ones lib/studio/tableFit estimates a card from:
+// the row pitch, the header's padding and label width, the caption's pull
+// and the "Show all" control. A change to one changes the other.
+
+// A row under the pointer, the scrollbar's track: a little darker than the
+// card. On a themed card the card and its rule colour are mixed; on the
+// house card both fall back to the same light sage.
+$tint: color-mix(
+    in sRGB,
+    var(--th-line, var(--color-grid-bg-light)) 45%,
+    var(--th-card, var(--color-grid-bg-light))
+);
+
 // What every row shares, said once above the table. The negative margin
 // pulls it toward the table, inside the card's gap.
 .caption {
@@ -20,22 +33,75 @@
     }
 }
 
-// Rows past the cell-fixed card height scroll inside the card.
+// Holds the scrolling table and the fade on its right edge, which stops
+// above the sideways scrollbar (its height comes inline as --scrollbar).
+.tableFrame {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+
+    &::after {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: var(--scrollbar, 0);
+        z-index: 3;
+        width: rem(40);
+        pointer-events: none;
+        content: "";
+        background: linear-gradient(90deg, transparent, var(--th-card, var(--color-white)));
+        opacity: 0;
+        transition: opacity 0.15s $ease-out;
+    }
+}
+
+// Only while more columns lie to the right.
+.fadeRight::after {
+    opacity: 1;
+}
+
+// Rows past the card's height scroll inside it; columns past its width
+// scroll sideways under a thin bar.
 .tableWrap {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    scrollbar-color: var(--th-caption, var(--color-gray-1500)) $tint;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+        width: rem(4);
+        height: rem(4);
+    }
+
+    &::-webkit-scrollbar-track {
+        background: $tint;
+        border-radius: rem(2);
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--th-caption, var(--color-gray-1500));
+        border-radius: rem(2);
+    }
+
+    &::-webkit-scrollbar-corner {
+        background: transparent;
+    }
 }
 
 .table {
     width: 100%;
+    font-variant-numeric: tabular-nums;
     border-collapse: separate;
     border-spacing: 0;
 
     // Sticky header strip: each th paints the weave (the first series pair),
     // offset by its own offsetLeft (set inline from TableCard) so all cells
     // share one tile origin and the pattern runs unbroken across column
-    // seams; the end cells clip its corners.
+    // seams; the end cells clip its corners. Labels sit on the bottom line
+    // when another header wraps.
     th {
         @include font-size(10px, 1.3);
 
@@ -52,13 +118,8 @@
         font-weight: 400;
         color: var(--th-card, var(--color-white));
         text-align: right;
+        vertical-align: bottom;
         letter-spacing: -0.01em;
-        white-space: nowrap;
-    }
-
-    th:first-child {
-        text-align: left;
-        border-radius: rem(4) 0 0 rem(4);
     }
 
     th:last-child {
@@ -73,14 +134,34 @@
         font-weight: 700;
         color: var(--th-text, var(--color-charcoal));
         text-align: right;
+        white-space: nowrap;
         letter-spacing: -0.01em;
+        background-color: var(--th-card, var(--color-white));
         border-bottom: 1px solid var(--th-line, var(--color-net-light));
     }
 
-    // Row labels read quiet against the bold values.
+    // Row labels read quiet against the bold values, and hold their place
+    // while the columns scroll sideways under the fade.
+    th:first-child,
     td:first-child {
+        position: sticky;
+        left: 0;
+    }
+
+    th:first-child {
+        z-index: 2;
+        text-align: left;
+        border-radius: rem(4) 0 0 rem(4);
+    }
+
+    td:first-child {
+        z-index: 1;
         font-weight: 400;
         text-align: left;
+    }
+
+    tbody tr:hover td {
+        background-color: $tint;
     }
 
     // A breath of air under the header pill.
@@ -93,21 +174,32 @@
     }
 }
 
-.numeric {
+// A name that repeats the row above: gone for the eye, read by a screen
+// reader.
+.repeat {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
     white-space: nowrap;
+    clip-path: inset(50%);
 }
 
 // Each header sorts its column. The button is see-through, so the th's
-// weave shows. It inherits the th's type and alignment.
+// weave shows. It inherits the th's type and alignment. The label wraps
+// within HEADER_LABEL_MAX (label and arrow together), and a word wider than
+// that widens the box.
 .sort {
     display: inline-flex;
     gap: rem(3);
-    align-items: center;
+    align-items: flex-end;
+    min-width: min-content;
+    max-width: rem(84);
     padding: 0;
     font: inherit;
     color: inherit;
+    text-align: inherit;
     letter-spacing: inherit;
-    white-space: nowrap;
     cursor: pointer;
     background: none;
     border: 0;
@@ -121,6 +213,7 @@
 // The arrow shows on the sorted column, and on hover where a press would
 // sort up.
 .arrow {
+    flex: none;
     opacity: 0;
     transition: opacity 0.15s $ease-out;
 
@@ -129,4 +222,41 @@
     th[aria-sort] & {
         opacity: 1;
     }
+}
+
+// "Show all N rows" / "Show fewer": full width under the table, a rule
+// above, in place of the card's gap.
+.more {
+    @include flex(row, center, center);
+    @include font-size(10px, 1.3);
+
+    flex-shrink: 0;
+    gap: rem(3);
+    width: 100%;
+    padding: rem(7) 0 0;
+    margin-top: rem(-16);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--th-muted, var(--color-stone));
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-top: 1px solid var(--th-line, var(--color-net-light));
+
+    &:focus-visible {
+        outline: 1px solid currentColor;
+        outline-offset: 2px;
+    }
+}
+
+.moreChevron {
+    flex: none;
+    width: rem(12);
+    height: rem(12);
+    transition: rotate 0.25s $ease-out;
+}
+
+.moreOpen {
+    rotate: 180deg;
 }

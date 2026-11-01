@@ -155,6 +155,9 @@ test('tableFromChart marks the series names as the names column only when they r
     assert.equal(tableFromChart(chart(['2023'])).namesColumn, 0);
     // Categories down (countries, years): names that must stay whole.
     assert.equal(tableFromChart(chart(['South Sudan', 'South Africa'])).namesColumn, undefined);
+    // Either way the table is pivoted from series.
+    assert.equal(tableFromChart(chart(['2023'])).series, true);
+    assert.equal(tableFromChart(chart(['South Sudan', 'South Africa'])).series, true);
 });
 
 test('formatAxis writes a percentage with its sign, two decimals at most and no letter', () => {

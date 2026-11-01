@@ -291,6 +291,8 @@ test('table: the payload columns and rows, a status cell named by its status', (
     const widget = asTable(widgetFromComponent(frame('table', payload)));
 
     assert.deepEqual(widget.columns, ['Donor', 'Period', 'Value']);
+    // A payload table's headers name its dimensions.
+    assert.equal(widget.series, undefined);
     assert.deepEqual(widget.rows, [
         ['Germany', '2022', '35.0 K'],
         ['Germany', '2023', 'Suppressed'],
@@ -715,6 +717,12 @@ test('a payload without a resolved component draws the fact-summary sketch', () 
         ['Germany', '2015', 30_000, null],
         ['Germany', '2023', 37_000, null],
     ]);
+
+    // As a table the sketch runs periods down and series across, and says so.
+    const table = asTable(widgetFromComponent(frame('table', oldCreated)));
+
+    assert.deepEqual(table.columns, ['Period', 'United States', 'Germany']);
+    assert.equal(table.series, true);
 });
 
 test('a revision redraws from its payload', () => {
