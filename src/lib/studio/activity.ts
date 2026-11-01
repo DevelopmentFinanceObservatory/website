@@ -47,7 +47,8 @@ export type ActivityEntry = {
     // The approval's place in the turn's arrival order.
     approvedOrder?: number;
     // Set when the turn ended in an error, a broken stream or a refusal
-    // before its reply had any text. Saves made before it was kept lack it.
+    // before its reply had any text or it made a card. Saves made before it
+    // was kept lack it.
     failed?: true;
     tools: ActivityTool[];
 };
@@ -172,8 +173,9 @@ export const restoreActivity = (saved: SavedActivityEntry[] | undefined): Activi
  * Marks `turn` ended. With `open` set, its steps still pending or running
  * take that state: `skipped` when the user stopped the turn, `failed` when
  * the stream failed, since no further frame will settle them. A turn that
- * failed before its reply had any text (`answered` false) is marked failed;
- * one the user stopped, or that failed after some answer, is not.
+ * failed with no answer, neither reply text (`answered` false) nor a card,
+ * is marked failed; one the user stopped, or that failed after some answer,
+ * is not.
  */
 export const endTurnActivity = (
     activity: ActivityEntry[],
@@ -186,7 +188,9 @@ export const endTurnActivity = (
             ? {
                   ...entry,
                   endedAt: Date.now(),
-                  ...(open === 'failed' && !answered && { failed: true as const }),
+                  ...(open === 'failed' &&
+                      !answered &&
+                      !entry.tools.some((tool) => tool.widgetId) && { failed: true as const }),
                   tools: open
                       ? entry.tools.map((tool) =>
                             isOpen(tool.state) ? { ...tool, state: open } : tool,

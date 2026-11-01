@@ -88,6 +88,7 @@ test('end turn: open steps settle by how the turn ended, and a failure with no a
         name: string;
         open: 'skipped' | 'failed' | undefined;
         answered: boolean;
+        carded?: true;
         expected: StepState[];
         failed?: true;
     }[] = [
@@ -112,6 +113,13 @@ test('end turn: open steps settle by how the turn ended, and a failure with no a
             expected: FAILED,
         },
         {
+            name: 'an error after a card but before any text fails them, not the turn',
+            open: 'failed',
+            answered: false,
+            carded: true,
+            expected: FAILED,
+        },
+        {
             name: 'done leaves them as their frames left them',
             open: undefined,
             answered: false,
@@ -119,11 +127,28 @@ test('end turn: open steps settle by how the turn ended, and a failure with no a
         },
     ];
 
-    for (const { name, open, answered, expected, failed } of cases) {
+    for (const { name, open, answered, carded, expected, failed } of cases) {
         await t.test(name, () => {
-            const after = endTurnActivity(before, 2, open, answered);
+            const start = carded
+                ? before.map((item) =>
+                      item.turn === 2
+                          ? {
+                                ...item,
+                                tools: [
+                                    ...item.tools,
+                                    {
+                                        ...step('card', 'complete'),
+                                        state: 'complete' as const,
+                                        widgetId: 'w1',
+                                    },
+                                ],
+                            }
+                          : item,
+                  )
+                : before;
+            const after = endTurnActivity(start, 2, open, answered);
 
-            assert.deepEqual(states(after, 2), expected);
+            assert.deepEqual(states(after, 2)?.slice(0, expected.length), expected);
             assert.equal(after[1]?.failed, failed);
             assert.equal(typeof after[1]?.endedAt, 'number');
             assert.deepEqual(after[0], before[0], 'other turns are untouched');
