@@ -7,34 +7,14 @@
     background-color: var(--color-bg);
 }
 
-// Title + count + lead + filters: the Sources page's hero rhythm.
+// Title + lead: the Publications page's hero.
 .title {
     @include font-size(60px, 0.95);
 
-    display: flex;
-    gap: rem(12);
-    align-items: flex-start;
     margin-bottom: rem(30);
     font-family: var(--font-outfit);
     font-weight: 800;
     letter-spacing: -0.04em;
-}
-
-.count {
-    @include flex(row, center, center);
-    @include font-size(14px, 1);
-
-    flex-shrink: 0;
-    width: rem(37);
-    height: rem(22);
-    margin-top: rem(4);
-    font-family: var(--font-dm-mono);
-    font-weight: 300;
-    color: var(--color-charcoal);
-    text-align: center;
-    letter-spacing: -0.02em;
-    background-color: var(--color-media-bg);
-    border-radius: rem(4);
 }
 
 .lead {
@@ -45,136 +25,6 @@
     font-family: var(--font-outfit);
     font-weight: 300;
     letter-spacing: -0.01em;
-}
-
-.filtersLabel {
-    @include font-size(16px, 1.3);
-
-    margin-top: rem(38);
-    margin-bottom: rem(24);
-    font-family: var(--font-dm-mono);
-    font-weight: 300;
-    color: var(--color-media-bg);
-    letter-spacing: -0.01em;
-}
-
-.filters {
-    @include flex(row, flex-start, center);
-
-    gap: rem(6);
-    flex-wrap: wrap;
-}
-
-// --- Filter pills -----------------------------------------------------------
-
-.filterPill {
-    @include flex(row, center, center);
-    @include font-size(12px, 1);
-
-    gap: rem(6);
-    padding: rem(8) rem(12);
-    font-family: var(--font-dm-mono);
-    font-weight: 400;
-    color: var(--color-charcoal);
-    letter-spacing: -0.02em;
-    cursor: pointer;
-    background-color: var(--color-media-bg);
-    border: 0;
-    border-radius: rem(4);
-    transition: background-color 0.25s ease;
-
-    &:hover {
-        background-color: var(--color-popup);
-    }
-}
-
-.filterPillActive {
-    background-color: var(--color-yellow-800);
-}
-
-.filterChevron {
-    width: rem(12);
-    height: rem(12);
-}
-
-// The option count: a tiny dark square INSIDE the pill, rem(2) off its top
-// and right edges, taking its place in the row (the pill's right padding is
-// the offset).
-.filterCount {
-    @include flex(row, center, center);
-    @include font-size(11px, 1);
-
-    align-self: flex-start;
-
-    // rem(2) off the pill's top and right edges: the pill pads rem(8)/rem(12).
-    margin: rem(-6) rem(-10) 0 0;
-    min-width: rem(14);
-    height: rem(14);
-    padding-inline: rem(3);
-    font-family: var(--font-dm-mono);
-    font-weight: 400;
-    color: var(--color-bg);
-    text-align: center;
-    letter-spacing: -0.02em;
-    background-color: var(--color-gray-2800);
-    border-radius: rem(3);
-}
-
-// --- Search (the hero's bottom-right aside) ---------------------------------
-
-.search {
-    @include flex(row, flex-start, center);
-
-    gap: rem(8);
-    width: rem(220);
-    height: rem(34);
-    padding-inline: rem(10);
-    color: var(--color-white);
-    background-color: var(--color-charcoal);
-
-    // Design's one-off border gray (no token holds it).
-    border: 1px solid #646464;
-    border-radius: rem(4);
-    transition: border-color 0.25s ease;
-
-    &:focus-within {
-        border-color: var(--color-stone);
-    }
-}
-
-.searchIcon {
-    flex-shrink: 0;
-    width: rem(14);
-    height: rem(14);
-    color: var(--color-gray-1600);
-}
-
-.searchInput {
-    @include font-size(12px, 1.1);
-
-    width: 100%;
-    font-family: var(--font-outfit);
-    font-weight: 500;
-    color: var(--color-white);
-    background: none;
-    border: 0;
-    outline: none;
-
-    &::placeholder {
-        color: var(--color-white);
-    }
-
-    // No native clear button — the field is quiet, backspace clears it.
-    &::-webkit-search-cancel-button {
-        display: none;
-        appearance: none;
-    }
-}
-
-// The in-box copy (under the filters) exists for the phone only; the aside
-// copy covers desktop and tablet.
-.searchInBox {
-    display: none;
 }
 
 // --- Tiles ------------------------------------------------------------------
@@ -256,16 +106,6 @@
     letter-spacing: -0.01em;
 }
 
-.empty {
-    @include font-size(16px, 1.3);
-
-    grid-column: 1 / -1;
-    padding: rem(60) rem(20);
-    font-family: var(--font-outfit);
-    font-weight: 300;
-    color: var(--color-text-muted);
-    text-align: center;
-}
 
 // --- The cover: the canvas miniature (design handoff PNG) -------------------
 
@@ -297,7 +137,6 @@
         opacity 0.6s ease;
 }
 
-
 // Below desktop the tiles ride the page gutter and the desktop gaps
 // (80/50 on a 768/375 rem base) would read as chasms — they tighten per
 // breakpoint.
@@ -319,14 +158,6 @@
         @include font-size(40px, 1.1);
     }
 
-    .count {
-        margin-top: rem(4);
-    }
-
-    .filtersLabel {
-        margin-top: rem(30);
-    }
-
     .grid {
         grid-template-columns: 1fr;
         gap: rem(20);
@@ -337,18 +168,5 @@
     .cardTitle,
     .cardText {
         max-width: none;
-    }
-
-    // The search swaps spots: full-bleed under the filters, the aside copy
-    // gone.
-    .searchAside {
-        display: none;
-    }
-
-    .searchInBox {
-        @include flex(row, flex-start, center);
-
-        width: 100%;
-        margin-top: rem(20);
     }
 }
