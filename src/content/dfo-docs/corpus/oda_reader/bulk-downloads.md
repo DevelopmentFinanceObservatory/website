@@ -23,6 +23,25 @@ For large-scale analysis, bulk downloads are faster and more reliable than repea
 - Exploratory analysis with changing queries
 - You only need recent data
 
+## How ODA Reader fetches bulk files
+
+OECD publishes the bulk files on `webfs-dcd.oecd.org`. ODA Reader downloads each file whole,
+keeps a local copy in the [bulk file cache](caching.md#bulk-file-cache) and answers every query
+from that copy. It never reads a bulk file remotely.
+
+Before a download, ODA Reader sends one single-byte request to read the file's version token
+(its `ETag`, or `Last-Modified` when no `ETag` is sent). It downloads the file only when it has
+no copy, when the token has changed, or when the copy is past its 90-day TTL. Otherwise it reads
+the copy it has. See [Cache invalidation on republish](caching.md#cache-invalidation-on-republish).
+
+OECD may change bulk file names, for example by adding a timestamp. ODA Reader does not hard-code
+them. On each online read it looks up the current file name in the SDMX dataflow annotations,
+and an offline read finds the cached copy by dataset, whatever name it was stored under.
+
+A scripted request can meet a Cloudflare challenge; see
+[Cloudflare challenge](#cloudflare-challenge-bulkdownloadchallengeerror). The supported route
+then is to download the file in a browser and pass it to `register_bulk_file`.
+
 ## CRS bulk downloads
 
 The full Creditor Reporting System dataset is available as a bare parquet file (1.18 GB, not zipped). ODA Reader can download and load it for you.
@@ -140,7 +159,7 @@ on-disk caching is skipped. This flag is available on `bulk_download_crs`,
 `bulk_download_dac2b`, and `bulk_download_multisystem`.
 
 See [Caching & Performance](caching.md#bulk-file-cache) for how the bulk
-cache is managed (LRU eviction, TTL, integrity validation).
+cache is managed (TTL, expiry, integrity validation).
 
 ## Year-specific CRS files
 
@@ -347,6 +366,75 @@ download_aiddata(save_to_path="./data/aiddata.parquet")
 
 **Note**: AidData filtering happens after download (Excel file is downloaded first, then filtered).
 
+## Query bulk files in place with `scan()`
+
+`scan()` returns a bulk dataset as one Parquet file on disk, which DuckDB, Polars or PyArrow can query without loading it into pandas. It covers `"dac1"`, `"dac2a"`, `"dac2b"`, `"crs"` and `"multisystem"`:
+
+```python
+import duckdb
+import oda_reader
+
+dac2a = oda_reader.scan("dac2a")
+dac2a.path      # PosixPath('.../bulk_files/<key>-<digest>.parquet')
+dac2a.release   # '0x8DF2539E5D52F9D'
+
+duckdb.sql(
+    f"SELECT year, sum(value) FROM '{dac2a.path}' "
+    "WHERE donor_code = 4 AND data_type_code = 'D' GROUP BY year"
+)
+```
+
+`scan()` returns a frozen `ScannedTable` with five fields: `path`, `release`, `label_release`, `downloaded` (UTC) and `columns`. Read the file in place and leave it unmodified.
+
+The returned path is named for its release, so its bytes stay the same after a later `scan()` downloads or converts a newer release. A DuckDB view built on it keeps reading the release it was built on. The files of the current and the previous release are kept until the cache is cleared, also after OECD moves a dataset to a new URL, and older ones are deleted.
+
+A reader that keeps a path for longer, through any number of newer releases, takes a lease. `oda_reader.lease(dataset)` scans as `scan()` does and returns a `TableLease`, whose `table` is the `ScannedTable`. No `scan()` deletes the file until the lease is closed:
+
+```python
+with oda_reader.lease("dac2a") as held:
+    duckdb.sql(f"SELECT count(*) FROM '{held.table.path}'")
+```
+
+The lease protects the file only while the `TableLease` object is kept open. A lease dropped without `close()`, as in `oda_reader.lease("dac2a").table.path`, releases at once and leaves the path unprotected. Use a `with` block or hold the object for as long as the path is read. Clearing the cache deletes a leased file.
+
+A lease is a lock the operating system releases when its process exits, so a crashed reader holds no file. Its empty lease file stays until a later prune of that release removes it.
+
+CRS is published as Parquet, so `scan("crs")` returns a hard link to the cached bulk file, which takes no extra disk space. DAC1, DAC2A, DAC2B and Multisystem are published as zipped CSVs. The first `scan()` of a release streams the CSV into Parquet beside the cached zip, and later calls return that file until the release token changes. On a 2026 release the conversion took 0.6 s for DAC1 (1,046,691 rows), 6.3 s for DAC2A (10,115,276 rows, about 0.5 GB of memory) and 3.3 s for Multisystem (1,145,632 rows). Row groups hold 122,880 rows. The files are sorted by year, so a filter on year skips most groups; a filter on donor or recipient does not.
+
+Converted columns are snake_case and unique case-insensitively. The raw `DONOR` and `Donor` collide in DuckDB, which is case-insensitive; they become `donor_code` and `donor_name`. The names match those `download_dac1()`, `download_dac2a()` and the CRS Parquet already use:
+
+| Raw column (DAC1, DAC2A, DAC2B)                                | Converted                                           | Type             |
+| -------------------------------------------------------------- | --------------------------------------------------- | ---------------- |
+| `DONOR` / `Donor`                                              | `donor_code` / `donor_name`                         | int32 / string   |
+| `RECIPIENT` / `Recipient` (DAC2A, DAC2B)                       | `recipient_code` / `recipient_name`                 | int32 / string   |
+| `PART` / `Part`                                                | `part_code` / `part_name`                           | int32 / string   |
+| `AIDTYPE` / `Aid type`                                         | `aidtype_code` / `aid_type`                         | int32 / string   |
+| `FLOWS` / `Fund flows` (DAC1)                                  | `flows_code` / `fund_flows`                         | int32 / string   |
+| `AMOUNTTYPE` (DAC1), `DATATYPE` (DAC2A, DAC2B) / `Amount type` | `amounttype_code`, `data_type_code` / `amount_type` | string           |
+| `TIME`                                                         | `year`                                              | int32            |
+| `Year`                                                         | dropped, it repeats `TIME`                          |                  |
+| `Value` / `Flags`                                              | `value` / `flags`                                   | float64 / string |
+
+Multisystem's CamelCase headers follow the CRS names: `Year` becomes `year`, `DonorCode` `donor_code`, `AgencyNameE` `agency_name`, `ChannelCode` `channel_code`, `RecipientCode` `recipient_code`, `Purposecode` `purpose_code`, `FlowType` `flow_type`, `AmountType` `amount_type`, `AidToOrThru` `aid_to_or_thru` and `Amount` `amount`. A column OECD adds later is kept as a string under its snake_case name.
+
+### Release tokens
+
+`oda_reader.release(dataset)` returns the token that names a published file: the file host's ETag, else its Last-Modified date, for every dataset. Two copies of the same file carry the same token, whenever they were downloaded, and a file OECD rewrites gets a new one. A file cached without either, such as one registered while the host was unreachable, gets `"sha256:<digest of the file>"`. `scan()` reports the same token for the same cached file. A download records the token its own response carried, so the token names the cached bytes even when OECD republishes the file during the download.
+
+CRS also carries the readable id OECD appends to its dataflow annotation, such as `"v20260803"`. It is `ScannedTable.label_release`, kept apart from the token because OECD can rewrite the file without changing the label. It is `None` for DAC1, DAC2A, DAC2B and Multisystem, and for a CRS file whose host token could not be read.
+
+Online, `release()` reads the token of the file OECD publishes now and downloads nothing. With `offline=True` it returns the cached copy's token.
+
+### Options
+
+`scan()` and `release()` take the same keyword arguments:
+
+- `offline=True` makes no network request and uses the cached or registered copy, whatever its age. A cold cache raises `BulkFileNotCachedError`.
+- `refresh=True` downloads the bulk file again and bypasses the cached dataflow annotations. It cannot be combined with `offline=True`.
+- `cache_dir=` reads and writes the bulk file and its conversion under another cache root for this call only, leaving the process-wide root unchanged. The dataflow annotations are still looked up through the process-wide HTTP cache.
+
+`oda_reader.cache_info()` lists the cached bulk files as `BulkFileInfo` records: `dataset`, `release`, `label_release`, `downloaded`, `size_bytes`, `derived_bytes`, `stale` and `path`. `derived_bytes` is the disk space of the Parquet files `scan()` made from the bulk file; a CRS hard link counts as 0.
+
 ## Bulk files use the .Stat schema
 
 **Critical difference**: Bulk download files from OECD use the **OECD.Stat schema**, not the Data Explorer API schema.
@@ -450,15 +538,71 @@ See [DAC2b bulk download](#dac2b-bulk-download) above for the full column list a
 
 **Slow download**: Bulk downloads depend on OECD's file server speed. Try again later if slow. Once downloaded, files are cached. Each attempt has a 10-second connect / 60-second read timeout, so a stalled connection fails with an error.
 
+**HTTP 429 or 503**: When the file server answers with a `Retry-After` of 300 seconds or less, ODA Reader waits that long and tries again, up to three times. A longer wait, a missing `Retry-After`, or a fourth throttled response raises `BulkDownloadHTTPError`, and its `retry_after` attribute holds the wait the server asked for in seconds.
+
 ### Cloudflare challenge (`BulkDownloadChallengeError`)
 
-Cloudflare can require an interactive browser check on an OECD bulk-file
-request. These checks require browser execution. ODA Reader raises
-`BulkDownloadChallengeError` and includes the `cf_ray` value supplied by
-OECD/Cloudflare. Include that value when reporting the failure to OECD.
+OECD supports downloading the bulk files in a browser. Scripted downloads,
+including the ones ODA Reader makes, are not a service OECD has committed
+to, so OECD's file server can challenge them at any time. A pipeline that
+must run unattended should be ready to handle `BulkDownloadChallengeError`.
 
-When bulk access is unavailable, choose a narrowly filtered API request
-explicitly.
+When ODA Reader meets a challenge it raises `BulkDownloadChallengeError`. Its message names
+the file and prints the call that registers a copy downloaded in a browser:
+
+```text
+Cloudflare presented an interactive challenge for https://webfs-dcd.oecd.org/.../CRS.parquet.
+Open that URL in a browser to download CRS.parquet, then register the file so
+oda-reader reads it from the cache:
+
+    import oda_reader
+    oda_reader.register_bulk_file('~/Downloads/CRS.parquet', dataset='crs', url='https://webfs-dcd.oecd.org/.../CRS.parquet', version='"5f1c..."')
+```
+
+The error also carries these values as attributes: `url`, `filename`,
+`dataset` (set when a named reader such as `bulk_download_crs()` made the
+request), `version` (the host's token, when it could be read) and `cf_ray`.
+
+#### Register a file downloaded in a browser
+
+Open the URL in a browser, let it save the file, then register it:
+
+```python
+import oda_reader
+
+oda_reader.register_bulk_file(
+    "~/Downloads/CRS.parquet", dataset="crs", url="<url from the error>"
+)
+crs = oda_reader.bulk_download_crs()  # reads the registered copy
+```
+
+`register_bulk_file` checks that the file is a valid zip or parquet payload,
+copies it into the bulk file cache and returns the cached path. You can
+delete the download afterwards. The registered copy does not expire. Online
+reads keep serving it until OECD publishes a new version of the file.
+`bulk_download_crs(offline=True)` reads it with no network request. A CRS year file registers with `url=` and reads
+offline through `bulk_download_parquet(url=..., offline=True)`. See
+[Registered files](caching.md#registered-files) and
+[Reading offline](caching.md#reading-offline).
+
+`dataset` takes one of these names:
+
+| `dataset`       | Reader                                    |
+| --------------- | ----------------------------------------- |
+| `"crs"`         | `bulk_download_crs()`                     |
+| `"crs-reduced"` | `bulk_download_crs(reduced_version=True)` |
+| `"dac1"`        | `bulk_download_dac1()`                    |
+| `"dac2a"`       | `bulk_download_dac2a()`                   |
+| `"dac2b"`       | `bulk_download_dac2b()`                   |
+| `"multisystem"` | `bulk_download_multisystem()`             |
+
+Without `url`, ODA Reader looks the URL up in OECD's SDMX metadata, which
+needs network access to `sdmx.oecd.org`. `version` is the file host's
+version token. The call the error prints includes it when the reader could
+read it.
+
+If the browser download is also blocked, report the `cf_ray` value to OECD
+and use a narrowly filtered API request instead.
 
 ```python
 from oda_reader import download_dac1
@@ -490,8 +634,8 @@ dimension.
 
 **`BulkPayloadCorruptError`**: The OECD's bulk endpoint occasionally serves a
 truncated or malformed file (a bad zip, or a bare parquet file that fails to
-parse). The corrupt entry is removed automatically before the exception is
-raised, so the next call cleanly re-downloads. Retry the call, or pass
+parse). The corrupt download is deleted before the exception is raised and
+never replaces the cached copy, so the next call cleanly re-downloads. Retry the call, or pass
 `use_raw_cache=False` to skip the cache for that invocation.
 
 ## Next steps

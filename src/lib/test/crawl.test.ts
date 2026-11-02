@@ -190,7 +190,7 @@ test('a search share is indexed only when a gallery item opens it', () => {
     });
 });
 
-test('a gallery search carries its title and description, other shares do not', () => {
+test('a gallery search carries its title and description, every other render is the Data page', () => {
     assert.deepEqual(dataPageMetadata({ share: 'bbbbbbbb' }, gallery), {
         title: 'Aid to Ghana — DFO Gallery',
         description: 'Aid to Ghana since 2000.',
@@ -202,13 +202,18 @@ test('a gallery search carries its title and description, other shares do not', 
             images: galleryCard('a-search'),
         },
     });
-    assert.deepEqual(dataPageMetadata({ share: 'cccccccc' }, gallery), {
-        robots: { index: false, follow: false },
-    });
-    assert.deepEqual(dataPageMetadata({ spec: 'x', share: 'bbbbbbbb' }, gallery), {
-        robots: { index: false, follow: false },
-    });
-    assert.deepEqual(dataPageMetadata({}, gallery), {});
+    // Every other render is the Data page: titled, described, and robots-marked per URL.
+    const unlisted = { index: false, follow: false };
+    const data = dataPageMetadata({}, gallery);
+
+    assert.equal(data.title, 'Data — DFO');
+    assert.ok(data.description);
+    assert.equal(data.openGraph?.title, 'Data');
+    assert.equal(data.robots, undefined);
+
+    for (const query of [{ share: 'cccccccc' }, { spec: 'x', share: 'bbbbbbbb' }]) {
+        assert.deepEqual(dataPageMetadata(query, gallery), { ...data, robots: unlisted });
+    }
 });
 
 test('the sitemap lists docs, gallery and source pages, but no redirect', () => {

@@ -3,6 +3,7 @@ import { notFound, permanentRedirect } from 'next/navigation';
 
 import Docs from '@/components/organisms/Docs/Docs';
 import {
+    DOCS_NAV,
     DOCS_PAGES,
     docsHref,
     docsPageByPath,
@@ -10,6 +11,9 @@ import {
     docsRedirectPaths,
 } from '@/lib/docs/corpus';
 import { markdownHref } from '@/lib/docs/links';
+import { docsTitler } from '@/lib/docs/title';
+
+const docsTitle = docsTitler(DOCS_PAGES, DOCS_NAV);
 
 type DocsPageProps = { params: Promise<{ slug: string[] }> };
 
@@ -28,7 +32,7 @@ export const generateMetadata = async ({ params }: DocsPageProps): Promise<Metad
 
     return page
         ? {
-              title: `${page.title} — DFO Docs`,
+              title: docsTitle(page),
               description: page.description,
               ...(markdown && { alternates: { types: { 'text/markdown': markdown } } }),
           }
