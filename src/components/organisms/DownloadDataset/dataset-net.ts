@@ -320,7 +320,19 @@ export function startDatasetNet(
         cursor.ty *= sy;
     }
 
-    const resizeObserver = new ResizeObserver(resize);
+    const reducedMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const resizeObserver = new ResizeObserver(() => {
+        resize();
+
+        // No loop runs under reduced motion, so the still frame is redrawn
+        // by hand whenever the section changes size.
+        if (reducedMotion) {
+            draw();
+        }
+    });
 
     resizeObserver.observe(innerEl);
 
@@ -403,7 +415,13 @@ export function startDatasetNet(
         frame = requestAnimationFrame(loop);
     }
 
-    frame = requestAnimationFrame(loop);
+    // Under reduced motion the field is one still frame: the squares sit at
+    // their home spots and nothing drifts.
+    if (reducedMotion) {
+        draw();
+    } else {
+        frame = requestAnimationFrame(loop);
+    }
 
     return () => {
         cancelAnimationFrame(frame);

@@ -476,3 +476,14 @@
         opacity: 0.6;
     }
 }
+
+@media (prefers-reduced-motion: reduce) {
+    // The live dot sits still: no ping ring, no pulse on the running step.
+    .live::after {
+        display: none;
+    }
+
+    .stepRunning::before {
+        animation: none;
+    }
+}

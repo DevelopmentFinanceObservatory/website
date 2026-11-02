@@ -17,3 +17,10 @@
         rotate: 360deg;
     }
 }
+
+@media (prefers-reduced-motion: reduce) {
+    // A frozen ring reads as a broken circle, so the spinner stays on, slowed.
+    .spinner {
+        animation-duration: 2.4s;
+    }
+}
