@@ -597,7 +597,9 @@ span.slotMarked {
 }
 
 // Content sits rem(10) from the panel edges; height follows the content.
-// Rows are stacked full-width Buttons with a hairline rhythm.
+// Rows are stacked full-width Buttons with a hairline rhythm. The site
+// hides every scrollbar (main.scss, on *); a long list of places needs its
+// cue back, so this opts in to a thin bar: a sage thumb, no track.
 .slotMenuBody {
     display: flex;
     flex-direction: column;
@@ -608,6 +610,22 @@ span.slotMarked {
     overflow-y: auto;
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
+    scrollbar-color: var(--color-sage-dark) transparent;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+        display: block;
+        width: rem(4);
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--color-sage-dark);
+        border-radius: rem(2);
+    }
 }
 
 // A list's filter box and its count (OptionFilterBar), pinned to the top of
