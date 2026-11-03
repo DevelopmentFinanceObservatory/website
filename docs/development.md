@@ -209,7 +209,7 @@ The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `
 
 ## API client package
 
-The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. To refresh it, pack that package into `vendor/` and re-lock:
+The Search, Datasets and Graph types come from `@developmentfinance/client`, vendored as `vendor/developmentfinance-client-0.1.0.tgz`. The tarball is the `typescript/` package of the sdk repository, built and packed. It records only its package version, so `vendor/developmentfinance-client.provenance.json` beside it names the sdk commit it was packed from and the spec-kit revision that commit's `contract/SOURCE` pins. To refresh the tarball, pack that package into `vendor/`, update the provenance file, and re-lock:
 
 ```sh
 cd <sdk checkout>/typescript
@@ -219,7 +219,9 @@ cd <website checkout>
 just relock-client
 ```
 
-A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` at it, delete the old tarball, then re-lock. `just relock-client` deletes the client's stale directory under `node_modules/.pnpm` (pnpm keeps an installed `file:` package of the same name and version, so a rebuilt tarball is otherwise ignored), has pnpm re-resolve the client's lockfile entries from the tarball with `pnpm install --lockfile-only --fix-lockfile`, runs `pnpm install --frozen-lockfile`, and imports the client to prove it loads. The re-lock needs the registry. It changes the client's entries and those of any dependency the new tarball adds. pnpm 10.5.2 also fills in deprecation notices and writes `eslint-plugin-import`'s peer suffix in one of two equivalent forms, so a re-lock can touch those few lines too. Commit the tarball and the lockfile together.
+Write the sdk checkout's `git rev-parse HEAD` as `sdk.commit` and its `contract/SOURCE` as `spec_kit.commit` in the provenance file, both as full hashes. Name the sdk commit in the subject of the commit that vendors the tarball, as the earlier ones do (`chore(deps): vendor the client at sdk 82701c8`), and keep it in the pull request title, since a squash merge takes its subject from there. CI's `pnpm check:client-provenance` (`scripts/check-client-provenance.mjs`) fails when the provenance file names a tarball other than the one `package.json` installs, when either hash is not a full commit hash, or when the last commit that touched the tarball names no sdk commit or a different one from the provenance file. It reads the git log, so run it after committing.
+
+A new package version packs under a new file name. Point the `@developmentfinance/client` entry in `package.json` and the provenance file's `package` at it, delete the old tarball, then re-lock. `just relock-client` deletes the client's stale directory under `node_modules/.pnpm` (pnpm keeps an installed `file:` package of the same name and version, so a rebuilt tarball is otherwise ignored), has pnpm re-resolve the client's lockfile entries from the tarball with `pnpm install --lockfile-only --fix-lockfile`, runs `pnpm install --frozen-lockfile`, and imports the client to prove it loads. The re-lock needs the registry. It changes the client's entries and those of any dependency the new tarball adds. pnpm 10.5.2 also fills in deprecation notices and writes `eslint-plugin-import`'s peer suffix in one of two equivalent forms, so a re-lock can touch those few lines too. Commit the tarball and the lockfile together.
 
 The tarball carries the statuses of the codes the proxy raises itself and not their descriptions. `src/lib/proxy/proxy-codes.json` holds the full file, copied from the spec-kit repository's `python/client-contract/src/dfo_client_contract/proxy-codes.json` and formatted with Prettier. Copy it again when the client contract changes it.
 
