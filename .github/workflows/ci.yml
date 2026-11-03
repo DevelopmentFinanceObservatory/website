@@ -20,6 +20,9 @@ on:
         branches: [main, dev, 'fix/**', 'feat/**']
         types: [opened, synchronize, reopened, ready_for_review]
 
+permissions:
+    contents: read
+
 jobs:
     ci:
         if: github.event.pull_request.draft != true
