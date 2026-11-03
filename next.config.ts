@@ -26,6 +26,18 @@ const nextConfig: NextConfig = {
     async headers() {
         return noindexHeaders();
     },
+    // ONE's privacy policy covers this site; /privacy is the address the
+    // MCP directory listings give for it. Temporary, so a later page of our
+    // own can take the path without browsers holding the old target.
+    async redirects() {
+        return [
+            {
+                source: '/privacy',
+                destination: 'https://www.one.org/info/privacy-policy/',
+                permanent: false,
+            },
+        ];
+    },
     // A docs page's raw markdown sits beside it: /docs/<path>.md serves the
     // same file the docs corpus was built from (src/app/docs-md).
     async rewrites() {
