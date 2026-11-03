@@ -36,7 +36,7 @@
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-popover": "^1.1.23",
     "@sentry/nextjs": "^10.75.2",
-    "better-auth": "^1.6.29",
+    "better-auth": "^1.7.7",
     "chart.js": "^4.5.1",
     "classnames": "^2.5.1",
     "disposable-email-domains-js": "^1.26.0",
