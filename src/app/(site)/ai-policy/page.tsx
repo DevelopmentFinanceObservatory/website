@@ -55,8 +55,9 @@ const AiPolicyPage = () => (
                 </li>
                 <li>
                     <strong>How questions are processed.</strong> The text of your question is sent
-                    to Google’s Gemini models, which read it to find the data you asked for and, in
-                    the Studio, to write the answer.
+                    to two AI services. Google’s Gemini models read it to find the data you asked
+                    for and, in the Studio, to write the answer. Jev, a model from TypeSafe, reads
+                    it to match what you asked for to the DFO’s datasets.
                 </li>
                 <li>
                     <strong>What a search records.</strong> When you search on this site, we record
@@ -77,10 +78,13 @@ const AiPolicyPage = () => (
                 </li>
                 <li>
                     <strong>Connected assistants.</strong> When you use the DFO from another
-                    assistant, the DFO receives the question and the data requests that assistant
-                    sends. It needs no account and is not told who you are. Charts and tables the
-                    assistant creates through the DFO are stored so that they can be shown, and
-                    anyone who has a chart’s link can open it.
+                    assistant, the DFO receives the data requests that assistant sends. A request
+                    names the data, places and years the assistant is looking for, and can carry
+                    your question in the assistant’s words. What a request carries goes to Gemini
+                    and Jev, as above. The DFO needs no account and is not told who you are.
+                    Charts and tables the assistant creates through the DFO are stored so that they
+                    can be shown, and anyone who has a chart’s link can open it. Files it exports
+                    are stored behind a public link that does not expire.
                 </li>
                 <li>
                     <strong>Internet addresses.</strong> Our servers’ request logs record the
