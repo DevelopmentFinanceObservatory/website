@@ -14,10 +14,13 @@ import { clamp, GAP, settleAround, type Slots, SPAN_MAX, SPAN_MIN, tooCloseRects
 import { DRAG_SLACK } from './useCardDrag';
 
 /**
- * Literal corner-grip resizing: snapped to cells, clamped to the per-kind
- * range. A card whose height is derived (layout's heightIsDerived) resizes in
- * width only, and its height follows through the card's own fit. Pinned
- * neighbours are hard walls (a step into them is refused);
+ * Literal corner-grip resizing: snapped to cells, the width clamped to the
+ * per-kind range and the height to the range the grip is started with. A
+ * card whose height is derived (layout's heightIsDerived) resizes in width
+ * only, and its height follows through the card's own fit; a chart view with
+ * a free height (heightIsFree) resizes in both, and the card reads its plot
+ * ratio off the height. Pinned neighbours are hard walls (a step into them is
+ * refused);
  * unpinned ones scoot to the nearest fit live, step by step. Like a drag,
  * holding the grip near an edge auto-scrolls the sheet, and the scrolled
  * distance counts toward the resize (its own rAF loop).
@@ -46,6 +49,8 @@ export const useCardResize = ({
     const startRef = useRef<{
         id: string;
         widthOnly: boolean;
+        // The heights the card may take, in cells (layout's heightRange).
+        range: { min: number; max: number };
         w: number;
         h: number;
         x: number;
@@ -93,7 +98,7 @@ export const useCardResize = ({
             const w = clamp(start.w + Math.round(dx / CELL), min.w, max.w);
             const h = start.widthOnly
                 ? slot.h
-                : clamp(start.h + Math.round(dy / CELL), min.h, max.h);
+                : clamp(start.h + Math.round(dy / CELL), start.range.min, start.range.max);
 
             if (w === slot.w && h === slot.h) {
                 return prev;
@@ -137,7 +142,8 @@ export const useCardResize = ({
     };
 
     const startResize =
-        (id: string, widthOnly: boolean) => (event: React.PointerEvent<HTMLElement>) => {
+        (id: string, widthOnly: boolean, range: { min: number; max: number }) =>
+        (event: React.PointerEvent<HTMLElement>) => {
             event.preventDefault();
             event.stopPropagation();
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -152,6 +158,7 @@ export const useCardResize = ({
             startRef.current = {
                 id,
                 widthOnly,
+                range,
                 w: slot.w,
                 h: slot.h,
                 x: event.clientX,

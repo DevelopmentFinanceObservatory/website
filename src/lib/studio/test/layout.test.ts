@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import {
     heightIsDerived,
+    heightIsFree,
     heightRange,
     resolveCardView,
     SPAN_DEFAULT,
@@ -52,6 +53,17 @@ test('every card but a stat card has a derived height, a table that cannot chart
     assert.equal(heightIsDerived(kenya, 'chart-table'), true);
     assert.equal(heightIsDerived(chart, 'chart-table'), true);
     assert.equal(heightIsDerived(stat, null), false);
+});
+
+test('the grip sets the height of a chart view at a ratio and of nothing else', () => {
+    const ranking: ChartWidget = { ...chart, horizontal: true };
+
+    assert.equal(heightIsFree('chart-bar', chart), true);
+    assert.equal(heightIsFree('chart-line', chart), true);
+    assert.equal(heightIsFree('chart-line', ranking), true);
+    assert.equal(heightIsFree('chart-bar', ranking), false);
+    assert.equal(heightIsFree('chart-table', chart), false);
+    assert.equal(heightIsFree(null, null), false);
 });
 
 test('the height range follows the kind the card reads as', () => {

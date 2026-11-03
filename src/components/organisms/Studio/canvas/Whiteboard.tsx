@@ -15,6 +15,8 @@ import {
     FILTER_KIND,
     GAP,
     heightIsDerived,
+    heightIsFree,
+    heightRange,
     resolveCardView,
     widgetTitle,
 } from './layout';
@@ -84,6 +86,10 @@ export type WhiteboardProps = {
     // the filters/tabs see the effective kind and it persists).
     views: Record<string, CardView>;
     onViewChange: (id: string, view: CardView) => void;
+    // Per-card plot ratio set by dragging a chart card's height (owned by
+    // the parent, so it persists and a share holds it).
+    ratios: Record<string, number>;
+    onRatioChange: (id: string, ratio: number) => void;
     // Card menu → Share (link / embed of that one card).
     onShare?: (id: string) => void;
     // Card menu → Download Data (that card's rows).
@@ -129,6 +135,8 @@ const Whiteboard = ({
     theme,
     views,
     onViewChange,
+    ratios,
+    onRatioChange,
     onShare,
     onDownload,
     readOnly = false,
@@ -424,9 +432,13 @@ const Whiteboard = ({
                     chartSource,
                 } = resolveCardView(widget, views[widget.id]);
                 const isText = widget.kind === 'text';
-                // A chart view's height follows its content, so its grip
-                // changes the width alone.
-                const widthOnly = heightIsDerived(widget, cardView);
+                // A card's derived height follows its content, so its grip
+                // changes the width alone — except a chart view at a ratio,
+                // whose height the grip sets (the card turns it into its
+                // ratio) within the view's range.
+                const widthOnly =
+                    heightIsDerived(widget, cardView) && !heightIsFree(cardView, chartSource);
+                const hRange = heightRange(widget, cardView);
                 const dimmed = !!dimKind && effectiveKind(widget, views[widget.id]) !== dimKind;
                 const extras: CardExtras = {
                     pinned: pinnedIds.includes(widget.id),
@@ -558,7 +570,11 @@ const Whiteboard = ({
                                         widthOnly && styles.resizeGripWidth,
                                     )}
                                     data-nowave=""
-                                    onPointerDown={resizing.startResize(widget.id, widthOnly)}
+                                    onPointerDown={resizing.startResize(
+                                        widget.id,
+                                        widthOnly,
+                                        hRange,
+                                    )}
                                     onPointerMove={resizing.moveResize}
                                     onPointerUp={resizing.endResize}
                                     onPointerCancel={resizing.endResize}
@@ -577,6 +593,8 @@ const Whiteboard = ({
                                 widthCells={slot.w}
                                 heightCells={slot.h}
                                 onFit={(rows) => fitRows(widget.id, rows)}
+                                ratio={ratios[widget.id]}
+                                onRatio={(ratio) => onRatioChange(widget.id, ratio)}
                                 extras={extras}
                             />
                         </div>

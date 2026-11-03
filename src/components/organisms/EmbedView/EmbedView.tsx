@@ -76,6 +76,7 @@ const SingleCard = ({
             // here the card grows by CSS and the frame scrolls (.singleText).
             widthCells={saved.layout?.[widget.id]?.w ?? 0}
             onFit={noop}
+            ratio={saved.ratios?.[widget.id]}
             extras={extras}
         />
     );
@@ -144,6 +145,8 @@ const EmbedView = ({ shared }: { shared: SharedView }) => {
                     theme={theme}
                     views={saved.views ?? {}}
                     onViewChange={noop}
+                    ratios={saved.ratios ?? {}}
+                    onRatioChange={noop}
                     onCardInfo={setInfoCardId}
                     focusedId={infoCardId}
                     readOnly

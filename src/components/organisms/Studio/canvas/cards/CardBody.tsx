@@ -21,6 +21,10 @@ type CardBodyProps = {
     // The card's current height in cells. A chart keeps it while it fits.
     heightCells?: number;
     onFit: (rows: number) => void;
+    // A chart's plot ratio when the user has set one, and where a height
+    // the user drags reports the ratio it stands for (see ChartCard).
+    ratio?: number;
+    onRatio?: (ratio: number) => void;
     extras: CardExtras;
 };
 
@@ -39,6 +43,8 @@ const CardBody = ({
     widthCells,
     heightCells,
     onFit,
+    ratio,
+    onRatio,
     extras,
 }: CardBodyProps) => {
     // A live share's data card holds nothing to draw until its refresh
@@ -78,6 +84,8 @@ const CardBody = ({
                 widthCells={widthCells}
                 heightCells={heightCells}
                 onFit={onFit}
+                ratio={ratio}
+                onRatio={onRatio}
                 {...extras}
             />
         );

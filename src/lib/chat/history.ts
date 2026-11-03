@@ -45,6 +45,9 @@ export type SavedConversation = {
     theme?: StudioTheme;
     // Per-card visualisation picked in the kebab (chart↔table↔line).
     views?: Record<string, CardView>;
+    // The plot ratio (width over height) a card's dragged height set, by
+    // widget id; a card without one holds the default (chartFit).
+    ratios?: Record<string, number>;
     // User-authored text cards (Add Text Card).
     textCards?: TextWidget[];
     // Renamed card titles (menu → Edit Title), by widget id.

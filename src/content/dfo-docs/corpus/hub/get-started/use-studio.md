@@ -33,7 +33,7 @@ DFO Studio adds a line chart to the canvas. The chat answer names the source and
 Results vary a little each time. The plan, chart title and wording may differ, but the data is the same.
 
 - Hover over the line to see the value for each year.
-- Drag or resize the card to rearrange the canvas.
+- Drag or resize the card to rearrange the canvas. A bar or line chart takes the proportion you drag it to, and keeps it when you widen the card, reopen the conversation, or share it. A ranking of horizontal bars and a table are as tall as their rows, so their corner changes the width alone.
 - Open the **⋮** menu in the card's corner to download the data, share the chart, ask a follow-up, add a note, or remove the card.
 
 ## Step 4: Pin the card

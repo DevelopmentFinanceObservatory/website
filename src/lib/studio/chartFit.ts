@@ -1,8 +1,10 @@
 /**
  * How tall a chart card is. The height follows the chart's shape: a ranking
  * of horizontal bars gives every category one grid cell, and every other
- * chart holds its plot box at 16:9 against its own width. The card adds its
- * own chrome (title, legend, source line) and takes the sum in whole cells.
+ * chart holds its plot box at a ratio against its own width: 16:9 until the
+ * user drags the card's height, which sets the card's own ratio (plotRatio),
+ * kept with the conversation. The card adds its own chrome (title, legend,
+ * source line) and takes the sum in whole cells.
  *
  * Every length here is either a count of cells or a px figure that scales
  * with the cell, so a card's height in cells is the same at every window
@@ -21,8 +23,13 @@ export const BAR_THICKNESS = 12;
 /** The share of the plot's width a ranking's category names may take. */
 export const GUTTER_SHARE = 0.34;
 
-/** Width over height of the plot box of a line or vertical bar chart. */
+/** Width over height of the plot box of a line or vertical bar chart, until
+ *  the user sets the card's own. */
 export const PLOT_RATIO = 16 / 9;
+
+/** The least plot height, in cells, a dragged height may leave: below it the
+ *  height is not a ratio the plot can hold, and the drag sets none. */
+export const PLOT_ROWS_MIN = 2;
 
 /** The tallest a fitted card may be, in cells. */
 export const FITTED_ROWS_MAX = 60;
@@ -58,11 +65,32 @@ export type PlotShape = { kind: 'rows'; rows: number } | { kind: 'ratio'; ratio:
 type Shaped = Pick<ChartWidget, 'categories' | 'horizontal'>;
 
 /** The plot's shape for a chart and its view. The bar view of a horizontal
- *  chart is rows, and a line or vertical bars take the fixed ratio. */
-export const plotShape = (chart: Shaped, line: boolean): PlotShape =>
+ *  chart is rows, and a line or vertical bars take a ratio: the card's own
+ *  when the user has set one, else the default. */
+export const plotShape = (chart: Shaped, line: boolean, ratio = PLOT_RATIO): PlotShape =>
     chart.horizontal && !line
         ? { kind: 'rows', rows: chart.categories.length }
-        : { kind: 'ratio', ratio: PLOT_RATIO };
+        : { kind: 'ratio', ratio };
+
+/** The plot ratio a card's dragged height stands for: the plot's width over
+ *  what the height leaves it under the chrome, in px that scale with the
+ *  cell, so the ratio is the same at every window width. Null when the
+ *  height leaves the plot under PLOT_ROWS_MIN cells. */
+export const plotRatio = ({
+    heightCells,
+    chrome,
+    plotWidth,
+    cell,
+}: {
+    heightCells: number;
+    chrome: number;
+    plotWidth: number;
+    cell: number;
+}): number | null => {
+    const plot = heightCells * cell - chrome;
+
+    return plot >= PLOT_ROWS_MIN * cell && plotWidth > 0 ? plotWidth / plot : null;
+};
 
 /** The plot box's height in px. `band` is the height Chart.js gives the
  *  value axis under the bars of a ranking. A ratio plot ignores it. */

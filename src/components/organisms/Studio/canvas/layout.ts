@@ -6,7 +6,7 @@ import {
     type TableWidget,
     type Widget,
 } from '../../../../lib/chat/widgets.ts';
-import { estimatedRows, FITTED_ROWS_MAX } from '../../../../lib/studio/chartFit.ts';
+import { estimatedRows, FITTED_ROWS_MAX, plotShape } from '../../../../lib/studio/chartFit.ts';
 import {
     TABLE_WIDTH_DEFAULT,
     tableDisplay,
@@ -351,6 +351,17 @@ type ResolvedView = Pick<ReturnType<typeof resolveCardView>, 'view' | 'chartSour
 // rows through `onFit`; nothing else sets its height.
 export const heightIsDerived = (widget: Widget, view: CardView | null): boolean =>
     widget.kind === 'text' || widget.kind === 'table' || view !== null;
+
+// Whether the user may set the card's height by its grip: a chart view whose
+// plot holds a ratio (a line or vertical bars). The height is derived still,
+// but from the card's own ratio, which the dragged height sets (see
+// chartFit's plotRatio). A ranking's rows and a table's rows are the
+// content's, and a stat card's height is its kind's.
+export const heightIsFree = (view: CardView | null, chartSource: ChartWidget | null): boolean =>
+    view !== null &&
+    view !== 'chart-table' &&
+    chartSource !== null &&
+    plotShape(chartSource, view === 'chart-line').kind === 'ratio';
 
 // The heights in cells a card may take in its current view, by the kind it
 // reads as. A chart shown as a table takes a table's floor, and a table shown

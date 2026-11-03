@@ -714,6 +714,8 @@ const Studio = ({
                         theme={derivedTheme}
                         views={doc.views}
                         onViewChange={doc.setView}
+                        ratios={doc.ratios}
+                        onRatioChange={doc.setRatio}
                         onShare={
                             readOnly
                                 ? undefined
