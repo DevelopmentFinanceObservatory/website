@@ -15,10 +15,12 @@ export type CardExtras = {
     onPin: () => void;
     onRemove: () => void;
     onAsk: () => void;
-    // null when the card offers nothing to download, and the row is hidden.
+    // Opens the Download Data dialog; null when the card has no rows to
+    // give (a text card), and the download menu offers the image alone.
     onDownload: (() => void) | null;
     // Writes the card itself to a PNG. Null on a read-only sheet, where the
-    // menu is gone anyway, and on a card still fading out.
+    // controls are gone anyway, and on a card still fading out. With both
+    // null the download button is hidden.
     onDownloadImage: (() => void) | null;
     // Opens the edit modal — "Edit Card" (title + body) for text cards,
     // "Edit Title" for every other card.

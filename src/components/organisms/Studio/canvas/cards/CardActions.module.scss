@@ -2,7 +2,8 @@
 @use "mixins" as *;
 @use "shared" as *;
 
-// Pin + kebab, 1px apart, top-right of every card, and the kebab's menu.
+// Download + pin + kebab, 1px apart, top-right of every card, and their
+// menus (the download pair and the kebab's).
 .cardActions {
     @include flex(row, center, center);
 
@@ -64,8 +65,8 @@
     }
 }
 
-// The ⋮ trigger: quiet like the pin, flips to a dark chip while its menu is
-// open (per the design).
+// The ⋮ and download triggers: quiet like the pin, flip to a dark chip while
+// their menu is open (per the design).
 .menuBtn {
     @include flex(row, center, center);
 
