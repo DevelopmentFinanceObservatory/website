@@ -16,7 +16,7 @@ import {
     slotRefreshResponse,
     type SlotDeps,
 } from '../slotCards.ts';
-import { APIS, componentRead, DATASET_FRAME, MOVED_FRAME } from './fixtures/live-backend-stub.ts';
+import { APIS, componentRead, DATASET_FRAME, MOVED_FRAME } from './fixtures/component-read.ts';
 
 type Call = { method: string; path: string; headers: Headers; signal?: AbortSignal | null };
 
