@@ -1,0 +1,75 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.body {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(14);
+}
+
+.text {
+    @include font-size(14px, 1.4);
+
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.datasets {
+    @include flex(column, flex-start, stretch);
+    @include font-size(14px, 1.4);
+
+    gap: rem(8);
+    padding-left: rem(20);
+    margin: 0;
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    list-style: disc;
+}
+
+.dataset {
+    padding-left: rem(2);
+}
+
+// The ways on, one under the other: the Sources page, a canvas on the
+// question. A link and a button wear the same row.
+.actions {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(4);
+}
+
+.action {
+    @include flex(row, flex-start, center);
+    @include font-size(14px, 1.3);
+
+    gap: rem(8);
+    padding: rem(8) rem(6);
+    font-family: var(--font-outfit);
+    font-weight: 400;
+    color: var(--color-stone);
+    text-align: left;
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: color 0.25s ease;
+
+    &:hover {
+        color: var(--color-charcoal);
+    }
+}
+
+.actionIcon {
+    width: rem(12);
+    height: rem(12);
+    transition: translate 0.3s $ease-custom;
+
+    .action:hover & {
+        translate: rem(3) 0;
+    }
+}
