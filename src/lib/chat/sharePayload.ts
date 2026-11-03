@@ -167,7 +167,7 @@ export const LIVE_CARD_TITLE = 'Live card';
 
 /** The title of a Studio share: a card share's own title, else the
  *  conversation's. `data` is the pruned copy (`pruneForShare`). */
-export const studioShareTitle = (
+const studioShareTitle = (
     data: SavedConversation,
     {
         kind,

@@ -229,6 +229,16 @@ test('with ellipsis: one trailing ellipsis, however the label ends', async (t) =
     for (const [name, label, expected] of cases) {
         await t.test(name, () => assert.equal(withEllipsis(label), expected));
     }
+
+    // A label of many dots that does not end in one is the worst case for a
+    // backtracking pattern; the scan reads each character once.
+    await t.test('a long run of dots followed by a letter is linear', () => {
+        const label = `${'.'.repeat(200_000)}x`;
+        const start = performance.now();
+
+        assert.equal(withEllipsis(label), `${label}…`);
+        assert.ok(performance.now() - start < 1000);
+    });
 });
 
 test('stall watch: silence flips stalled, a beat clears it, stop ends the watch', (t) => {

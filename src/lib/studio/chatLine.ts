@@ -134,10 +134,19 @@ export const preambleLine = (text: string): string => {
 /**
  * A line's label as the live status shows it: the label with exactly one
  * trailing ellipsis, whether or not the label already ends in an ellipsis
- * or a sentence period.
+ * or a sentence period. A backward scan drops the trailing dots and
+ * ellipses, so a long run of them costs one pass; a regex that strips them
+ * backtracks over the run.
  */
-export const withEllipsis = (label: string): string =>
-    `${label.replace(/(…|\.\.\.|\.)+$/, '')}…`;
+export const withEllipsis = (label: string): string => {
+    let end = label.length;
+
+    while (end > 0 && (label[end - 1] === '.' || label[end - 1] === '…')) {
+        end--;
+    }
+
+    return `${label.slice(0, end)}…`;
+};
 
 /**
  * Watches one open stream for silence. `beat()` marks a sign of life (a
