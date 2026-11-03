@@ -51,6 +51,11 @@ export const useCardResize = ({
         widthOnly: boolean;
         // The heights the card may take, in cells (layout's heightRange).
         range: { min: number; max: number };
+        // Whether the pointer has moved a whole cell in the vertical. Until
+        // it has, a free height is still the card's own (its fit answers
+        // the width as it changes); from then on it is the user's, and the
+        // card turns it into its ratio.
+        moved: boolean;
         w: number;
         h: number;
         x: number;
@@ -96,9 +101,14 @@ export const useCardResize = ({
             // mid-drag, and the height at grab time would undo that on
             // every move.
             const w = clamp(start.w + Math.round(dx / CELL), min.w, max.w);
-            const h = start.widthOnly
-                ? slot.h
-                : clamp(start.h + Math.round(dy / CELL), start.range.min, start.range.max);
+            const steps = Math.round(dy / CELL);
+
+            start.moved ||= steps !== 0;
+
+            const h =
+                start.widthOnly || !start.moved
+                    ? slot.h
+                    : clamp(start.h + steps, start.range.min, start.range.max);
 
             if (w === slot.w && h === slot.h) {
                 return prev;
@@ -159,6 +169,7 @@ export const useCardResize = ({
                 id,
                 widthOnly,
                 range,
+                moved: false,
                 w: slot.w,
                 h: slot.h,
                 x: event.clientX,

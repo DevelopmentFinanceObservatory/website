@@ -97,6 +97,10 @@ export type WhiteboardProps = {
     // A shared or embedded sheet: cards can't be moved, resized, pinned or
     // acted on — panning, tooltips and legends still work.
     readOnly?: boolean;
+    // A read-only sheet whose cards may still be resized (a share page):
+    // the grip shows, and the sizes and ratios it sets are the viewer's
+    // alone — a share has no conversation to save them to.
+    resizable?: boolean;
     // A one-card share: the card sits in the middle of the view (re-centred
     // as the view resizes) instead of at its saved spot, and the sheet is a
     // still — no shockwaves.
@@ -140,6 +144,7 @@ const Whiteboard = ({
     onShare,
     onDownload,
     readOnly = false,
+    resizable = false,
     centerSingle = false,
     live,
 }: WhiteboardProps) => {
@@ -563,7 +568,7 @@ const Whiteboard = ({
                                     onRemove={extras.onRemoveNote}
                                 />
                             )}
-                            {!isLeaving && !readOnly && !isText && (
+                            {!isLeaving && (!readOnly || resizable) && !isText && (
                                 <span
                                     className={classNames(
                                         styles.resizeGrip,
