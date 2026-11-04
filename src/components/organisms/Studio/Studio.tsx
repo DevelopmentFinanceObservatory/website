@@ -38,6 +38,7 @@ import type { SavedConversation } from '@/lib/chat/history';
 import type { ShareKind } from '@/lib/chat/shareStore';
 import { track } from '@/lib/events/client';
 import { sharedCardAddress } from '@/lib/studio/cardDownload';
+import { type DataAvailability, EMPTY_DATA_AVAILABILITY } from '@/lib/studio/dataAvailability';
 import { stashGuestSession, takeGuestSession } from '@/lib/studio/guestStash';
 import {
     type CiteLink,
@@ -94,6 +95,9 @@ export type StudioProps = {
     // The landing's example prompts for this visit (pickExamples, drawn by
     // the page). A share has no landing and passes none.
     examples?: readonly string[];
+    // The landing's "What data is available?" overview (loadDataAvailability,
+    // read by the page). A share has no landing and passes none.
+    dataAvailability?: DataAvailability;
 };
 
 // The guest's prompt count in this browser, which decides when the wall goes
@@ -127,6 +131,7 @@ const Studio = ({
     guest = false,
     continuable = false,
     examples = [],
+    dataAvailability = EMPTY_DATA_AVAILABILITY,
 }: StudioProps) => {
     const sharedSaved = shared?.saved;
 
@@ -854,6 +859,7 @@ const Studio = ({
                     onQueryChange={setQuery}
                     onBegin={begin}
                     examples={examples}
+                    dataAvailability={dataAvailability}
                     inputRef={inputRef}
                     history={account ? landingHistory.history : null}
                     openingId={landingHistory.openingId}

@@ -13,7 +13,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
-import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/dataAvailability';
+import { DATA_AVAILABILITY_PROMPT, type DataAvailability } from '@/lib/studio/dataAvailability';
 
 const LANDING_TABS = [
     { id: 'try', label: 'Try one of these' },
@@ -27,6 +27,9 @@ type StudioLandingProps = {
     onBegin: (text: string) => void;
     // The visit's example prompts (pickExamples), drawn by the page.
     examples: readonly string[];
+    // What the "What data is available?" drawer shows (loadDataAvailability),
+    // read by the page.
+    dataAvailability: DataAvailability;
     inputRef: RefObject<PromptField | null>;
     // The account's recent canvases (the three most recent are shown); null
     // for a guest — no switch, the suggestions alone.
@@ -50,6 +53,7 @@ const StudioLanding = ({
     onQueryChange,
     onBegin,
     examples,
+    dataAvailability,
     inputRef,
     history,
     openingId,
@@ -97,6 +101,7 @@ const StudioLanding = ({
             <DataAvailabilityPanel
                 open={dataOpen}
                 onOpenChange={setDataOpen}
+                availability={dataAvailability}
                 // Past the wall there is nothing to start, so no follow-up.
                 onAsk={
                     wall
