@@ -46,7 +46,11 @@ jobs:
                     --health-retries=10
 
         steps:
+            # Full history: the client provenance check reads the subject of the
+            # last commit that touched the vendored tarball.
             - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
 
             - uses: pnpm/action-setup@v4
 
@@ -57,6 +61,14 @@ jobs:
 
             - name: Install
               run: pnpm install --frozen-lockfile
+
+            # vendor/developmentfinance-client.provenance.json names the sdk
+            # commit and the spec-kit revision the vendored client was built
+            # from; the commit that vendored the tarball must name the same sdk
+            # commit in its subject. See "API client package" in
+            # docs/development.md.
+            - name: Check client provenance
+              run: pnpm check:client-provenance
 
             - name: Lint
               run: pnpm lint
