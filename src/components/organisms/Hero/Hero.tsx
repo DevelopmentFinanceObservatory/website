@@ -7,6 +7,7 @@ import styles from './Hero.module.scss';
 import { startHeroNet } from './hero-net';
 
 import Icon from '@/components/atoms/Icon/Icon';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import LogoSignature from '@/assets/svg/logo-signature.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
@@ -53,6 +54,7 @@ const Hero = ({
     const sectionRef = useReveal<HTMLElement>(0);
     const innerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const reducedMotion = usePrefersReducedMotion();
 
     // One-shot arrow swap (mirrors Button): hover must rest a beat to start
     // it, and once started it always plays out — leaving doesn't cut it off.
@@ -114,8 +116,10 @@ const Hero = ({
             observer.disconnect();
             net.stop();
         };
+        // The net reads the motion preference itself when it starts (a still
+        // frame, or the live field); it restarts whenever the reader flips it.
         // eslint-disable-next-line react-hooks/exhaustive-deps -- sectionRef is stable (useReveal's ref)
-    }, []);
+    }, [reducedMotion]);
 
     // One reveal GROUP for the whole hero: the observer watches the
     // full-viewport section (the telescoping panels start at scale 0 —

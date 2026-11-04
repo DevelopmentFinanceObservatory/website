@@ -242,6 +242,13 @@
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    // A frozen ring reads as a broken circle, so the spinner stays on, slowed.
+    .spin {
+        animation-duration: 2.4s;
+    }
+}
+
 // The notice's live region, mounted empty, spanning the row.
 .live {
     grid-column: 1 / -1;

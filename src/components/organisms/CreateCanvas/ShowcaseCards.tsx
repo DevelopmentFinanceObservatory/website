@@ -240,8 +240,11 @@ const ShowcaseCards = ({ grid }: { grid: Grid }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reducedMotion, phone]);
 
+    // Pure decoration: the cards keep their real buttons (the source line,
+    // the left-out line), so `inert` takes the whole layer out of the tab
+    // order and hit testing; aria-hidden covers readers on older browsers.
     return (
-        <div className={styles.layer} aria-hidden="true">
+        <div className={styles.layer} aria-hidden="true" inert>
             {tiles.map(({ key, col, row, w, h, card, leaving }) => {
                 const widget = widgets[card]!;
                 const title = widget.kind === 'key_number' ? widget.label : widget.title;
