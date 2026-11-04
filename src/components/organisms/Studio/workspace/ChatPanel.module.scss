@@ -561,7 +561,12 @@
 // at the boundary, so nothing ever reads as a hard cut; padding gives the
 // fade room so resting content isn't dimmed. The site hides every
 // scrollbar (main.scss, on *); a long thread needs its cue back, so this
-// opts in to a thin bar: a stone thumb, no track.
+// draws its own: a bar that stays in view (a styled ::-webkit-scrollbar is
+// never an overlay one, which on a Mac would show only while scrolling),
+// which needs scrollbar-width back at auto and scrollbar-color unset,
+// since either set makes Chrome ignore the ::-webkit-scrollbar rules.
+// Firefox has no such pseudo-element and takes its own thin bar in the
+// same colours instead.
 .chatScroll {
     display: flex;
     flex: 1;
@@ -571,8 +576,7 @@
     min-height: 0;
     padding-block: rem(24);
     overflow-y: auto;
-    scrollbar-color: var(--color-stone) transparent;
-    scrollbar-width: thin;
+    scrollbar-width: auto;
     mask-image: linear-gradient(
         to bottom,
         transparent 0,
@@ -585,9 +589,14 @@
         transparent 100%
     );
 
+    @supports not selector(::-webkit-scrollbar) {
+        scrollbar-color: var(--color-stone) transparent;
+        scrollbar-width: thin;
+    }
+
     &::-webkit-scrollbar {
         display: block;
-        width: rem(4);
+        width: rem(6);
     }
 
     &::-webkit-scrollbar-track {
@@ -596,7 +605,7 @@
 
     &::-webkit-scrollbar-thumb {
         background: var(--color-stone);
-        border-radius: rem(2);
+        border-radius: rem(3);
     }
 }
 

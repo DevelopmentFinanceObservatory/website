@@ -596,11 +596,42 @@ span.slotMarked {
     }
 }
 
+// A menu list's own scrollbar. The site hides every scrollbar (main.scss,
+// on *); a long list of places needs its cue back, so this draws one that
+// stays in view (a styled ::-webkit-scrollbar is never an overlay one,
+// which on a Mac would show only while scrolling), which needs
+// scrollbar-width back at auto and scrollbar-color unset, since either set
+// makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
+// pseudo-element and takes its own thin bar in the same colours instead.
+
+@mixin menu-scrollbar {
+    scrollbar-width: auto;
+
+    @supports not selector(::-webkit-scrollbar) {
+        scrollbar-color: var(--color-sage-dark) transparent;
+        scrollbar-width: thin;
+    }
+
+    &::-webkit-scrollbar {
+        display: block;
+        width: rem(6);
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--color-sage-dark);
+        border-radius: rem(3);
+    }
+}
+
 // Content sits rem(10) from the panel edges; height follows the content.
-// Rows are stacked full-width Buttons with a hairline rhythm. The site
-// hides every scrollbar (main.scss, on *); a long list of places needs its
-// cue back, so this opts in to a thin bar: a sage thumb, no track.
+// Rows are stacked full-width Buttons with a hairline rhythm.
 .slotMenuBody {
+    @include menu-scrollbar;
+
     display: flex;
     flex-direction: column;
     gap: rem(4);
@@ -610,21 +641,40 @@ span.slotMarked {
     overflow-y: auto;
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
-    scrollbar-color: var(--color-sage-dark) transparent;
-    scrollbar-width: thin;
+}
 
-    &::-webkit-scrollbar {
-        display: block;
-        width: rem(4);
-    }
+// SlotMenu's body is split in two under the one panel: the scroll region
+// (.slotMenuScroll), which takes the body's padding and scrolls on its own,
+// and the foot (.slotMenuFoot), where a multi-select's Apply lands
+// (MultiSelectApplyButton portals into it) so the button never covers a
+// row. The foot is empty in every other menu, and then not drawn.
+.slotMenuSplit {
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+}
 
-    &::-webkit-scrollbar-track {
-        background: transparent;
-    }
+.slotMenuScroll {
+    @include menu-scrollbar;
 
-    &::-webkit-scrollbar-thumb {
-        background: var(--color-sage-dark);
-        border-radius: rem(2);
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: rem(4);
+    min-height: 0;
+    padding: rem(10);
+
+    // Sideways: the place list is cut to the panel's fixed measure, which
+    // the scrollbar's own width would otherwise push past the edge.
+    overflow: hidden auto;
+}
+
+.slotMenuFoot {
+    flex-shrink: 0;
+    padding: rem(6) rem(10) rem(10);
+
+    &:empty {
+        display: none;
     }
 }
 
@@ -654,15 +704,12 @@ span.slotMarked {
     color: var(--color-stone);
 }
 
-// Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
-// provider/recipient rows) doesn't scroll Apply out of reach; background
-// matches the menu so a scrolling row underneath doesn't show through.
+// The multi-select Apply button, in the body's foot (.slotMenuFoot) under
+// the scroll region rather than pinned inside it, so a long list (hundreds
+// of CRS provider/recipient rows) scrolls on its own and the button covers
+// no row.
 .multiSelectApply {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    padding-top: rem(6);
-    background-color: var(--color-yellow-800);
+    flex-shrink: 0;
 }
 
 .slotOption {
@@ -737,20 +784,11 @@ span.slotMarked {
 // The current pick's accent bar and label weight mark selection at rest,
 // distinct from this row's own hover fill, so a hovered ordinary row is
 // never mistaken for the current pick.
+// A currently-bound option, pulled out ahead of the ranked list: its
+// weight alone sets it apart (a bar at the row's left edge read as a stray
+// mark down a list where every row is bound, e.g. a region's 54 places).
 .slotOptionPinned {
-    position: relative;
     font-weight: 500;
-
-    &::before {
-        content: "";
-        position: absolute;
-        top: rem(6);
-        bottom: rem(6);
-        left: 0;
-        width: 3px;
-        background-color: var(--color-charcoal);
-        border-radius: rem(2);
-    }
 }
 
 // Long labels (country names) trim to an ellipsis instead of widening the

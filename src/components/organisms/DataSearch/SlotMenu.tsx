@@ -2,7 +2,8 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { createContext, useId, useState } from 'react';
+import { createContext, useContext, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import styles from './DataSearch.module.scss';
 
@@ -24,6 +25,14 @@ export { onMenuContentKeyDownCapture };
  *  preventDefault() here cancels Radix's default of focusing the first row
  *  so the filter can take it instead. */
 const ENTRY_FOCUS_EVENT = 'rovingFocusGroup.onEntryFocus';
+
+/** The foot of a menu's body (styles.slotMenuFoot), under the body's own
+ *  scroll region, where MultiSelectApplyButton lands by portal so the list
+ *  scrolls on its own and Apply never covers a row. Null outside a
+ *  SlotMenu, where the button renders in place. The element arrives after
+ *  the shell's first commit (a callback ref), so the button renders in
+ *  place for that one pass. */
+const SlotMenuFoot = createContext<HTMLDivElement | null>(null);
 
 /** Attached as a ref callback (SubContent's prop type omits onEntryFocus)
  *  so it runs ahead of Radix's own roving-focus effect. `handled` limits
@@ -102,6 +111,8 @@ export const SlotMenu = ({
     about?: React.ReactNode;
     children?: React.ReactNode;
 }) => {
+    const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+
     return (
         <DropdownMenu.Root modal={false} open={open} onOpenChange={onOpenChange}>
             <DropdownMenu.Trigger asChild>
@@ -132,9 +143,14 @@ export const SlotMenu = ({
                     onKeyDownCapture={onMenuContentKeyDownCapture({ loop: true })}
                 >
                     <p className={styles.slotMenuTitle}>{title}</p>
-                    <div className={styles.slotMenuBody}>
-                        {about}
-                        {children}
+                    <div className={classNames(styles.slotMenuBody, styles.slotMenuSplit)}>
+                        <SlotMenuFoot.Provider value={foot}>
+                            <div className={styles.slotMenuScroll}>
+                                {about}
+                                {children}
+                            </div>
+                        </SlotMenuFoot.Provider>
+                        <div ref={setFoot} className={styles.slotMenuFoot} />
                     </div>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
@@ -316,26 +332,35 @@ export const OptionSubmenu = ({
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     children: React.ReactNode;
-}) => (
-    <DropdownMenu.Sub open={open} onOpenChange={onOpenChange}>
-        <DropdownMenu.SubTrigger asChild>
-            <OptionRow arrow detail={detail} meta={meta} info={info}>
-                {label}
-            </OptionRow>
-        </DropdownMenu.SubTrigger>
-        <DropdownMenu.Portal>
-            <DropdownMenu.SubContent
-                ref={subMenuRef}
-                className={classNames(styles.slotMenu, styles.fitMenu, styles.subMenu)}
-                sideOffset={0}
-                collisionPadding={16}
-                onKeyDownCapture={onMenuContentKeyDownCapture()}
-            >
-                <div className={styles.slotMenuBody}>{children}</div>
-            </DropdownMenu.SubContent>
-        </DropdownMenu.Portal>
-    </DropdownMenu.Sub>
-);
+}) => {
+    const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+
+    return (
+        <DropdownMenu.Sub open={open} onOpenChange={onOpenChange}>
+            <DropdownMenu.SubTrigger asChild>
+                <OptionRow arrow detail={detail} meta={meta} info={info}>
+                    {label}
+                </OptionRow>
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                    ref={subMenuRef}
+                    className={classNames(styles.slotMenu, styles.fitMenu, styles.subMenu)}
+                    sideOffset={0}
+                    collisionPadding={16}
+                    onKeyDownCapture={onMenuContentKeyDownCapture()}
+                >
+                    <div className={classNames(styles.slotMenuBody, styles.slotMenuSplit)}>
+                        <SlotMenuFoot.Provider value={foot}>
+                            <div className={styles.slotMenuScroll}>{children}</div>
+                        </SlotMenuFoot.Provider>
+                        <div ref={setFoot} className={styles.slotMenuFoot} />
+                    </div>
+                </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Sub>
+    );
+};
 
 /** Shared by every filterable list, gated behind pickerState.ts's length
  *  threshold. data-menu-field="filter" marks it as the keyboard mechanism's
@@ -444,13 +469,15 @@ export const AnySelectionRow = ({
     </DropdownMenu.Item>
 );
 
-/** The sticky "commit the whole toggled set" button shared by every
- *  multi-select popover. Pinned to the bottom of .slotMenuBody's own scroll
- *  area (styles.multiSelectApply) so a long list never scrolls it out of
- *  reach. `onApply` is a callback rather than a typed payload since sites
- *  differ in what they post (place/entity refs with labels vs. bare
- *  dcids). Each call site builds its own payload from `selected` and
- *  calls this with no arguments. */
+/** The "commit the whole toggled set" button shared by every multi-select
+ *  popover. It renders into the body's foot (SlotMenuFoot), under the
+ *  body's own scroll region, so a long list scrolls on its own and Apply
+ *  stays in reach without covering a row; the foot still sits inside the
+ *  menu's content node, so the menu's keyboard mechanism reaches it as the
+ *  last stop. `onApply` is a callback rather than a typed payload since
+ *  sites differ in what they post (place/entity refs with labels vs. bare
+ *  dcids). Each call site builds its own payload from `selected` and calls
+ *  this with no arguments. */
 export const MultiSelectApplyButton = ({
     selected,
     disabled,
@@ -459,16 +486,21 @@ export const MultiSelectApplyButton = ({
     selected: Set<string>;
     disabled: boolean;
     onApply: () => void;
-}) => (
-    <Button
-        variant="dark"
-        full
-        type="button"
-        data-menu-field="field"
-        className={styles.multiSelectApply}
-        disabled={disabled}
-        onClick={onApply}
-    >
-        {multiSelectApplyLabel(selected.size, disabled)}
-    </Button>
-);
+}) => {
+    const foot = useContext(SlotMenuFoot);
+    const button = (
+        <Button
+            variant="dark"
+            full
+            type="button"
+            data-menu-field="field"
+            className={styles.multiSelectApply}
+            disabled={disabled}
+            onClick={onApply}
+        >
+            {multiSelectApplyLabel(selected.size, disabled)}
+        </Button>
+    );
+
+    return foot ? createPortal(button, foot) : button;
+};
