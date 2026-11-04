@@ -37,6 +37,9 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
     // Per-card visualisation from the kebab switcher (chart↔table↔line) —
     // drives the filters/tabs and is saved with the conversation.
     const [views, setViews] = useState<Record<string, CardView>>(initial?.views ?? {});
+    // The plot ratio a card's dragged height set (ChartCard), by widget id —
+    // saved with the conversation, like the view.
+    const [ratios, setRatios] = useState<Record<string, number>>(initial?.ratios ?? {});
     // User-authored text cards (Add Text Card) — local, turn-independent,
     // they stay on the canvas until removed.
     const [textCards, setTextCards] = useState<TextWidget[]>(initial?.textCards ?? []);
@@ -60,6 +63,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setRemovedIds([]);
         setGrace({ ids: [], turn: 0 });
         setViews({});
+        setRatios({});
         setTextCards([]);
         setTitles({});
         setNotes({});
@@ -74,6 +78,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         setRemovedIds(saved.removedIds);
         setGrace({ ids: saved.graceIds ?? [], turn: saved.graceTurn ?? 0 });
         setViews(saved.views ?? {});
+        setRatios(saved.ratios ?? {});
         setTextCards(saved.textCards ?? []);
         setTitles(saved.titles ?? {});
         setNotes(saved.notes ?? {});
@@ -145,6 +150,11 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         [],
     );
 
+    const setRatio = useCallback(
+        (id: string, ratio: number) => setRatios((prev) => ({ ...prev, [id]: ratio })),
+        [],
+    );
+
     const setTitle = useCallback(
         (id: string, title: string) => setTitles((prev) => ({ ...prev, [id]: title })),
         [],
@@ -192,6 +202,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         graceIds: grace.ids,
         graceTurn: grace.turn,
         views,
+        ratios,
         textCards,
         titles,
         notes,
@@ -207,6 +218,7 @@ export const useCanvasDocument = (initial?: SavedConversation) => {
         addWidget,
         upsertTextCard,
         setView,
+        setRatio,
         setTitle,
         setNote,
         removeNote,

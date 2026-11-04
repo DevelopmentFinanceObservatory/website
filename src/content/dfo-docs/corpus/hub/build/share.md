@@ -81,7 +81,7 @@ Open the link in a private or incognito window:
 
 - A search link opens `/data` with the same query sentence and table.
 - A snapshot link shows the same values as when you created it.
-- A Studio link opens the canvas or card in read-only mode, and a live canvas shows a "Live data" line.
+- A Studio link opens the canvas or card in read-only mode, and a live canvas shows a "Live data" line. Anyone viewing it can resize the cards for their own screen; that changes nothing in the link.
 
 ## Troubleshooting
 

@@ -57,6 +57,7 @@ export const useConversationSave = ({
             | 'graceTurn'
             | 'theme'
             | 'views'
+            | 'ratios'
             | 'textCards'
             | 'titles'
             | 'notes'
@@ -91,6 +92,7 @@ export const useConversationSave = ({
             layout: layoutRef.current,
             theme: snap.doc.theme,
             views: snap.doc.views,
+            ratios: snap.doc.ratios,
             textCards: snap.doc.textCards,
             titles: snap.doc.titles,
             notes: snap.doc.notes,
@@ -137,6 +139,7 @@ export const useConversationSave = ({
                 graceTurn: doc.graceTurn,
                 theme: doc.theme,
                 views: doc.views,
+                ratios: doc.ratios,
                 textCards: doc.textCards,
                 titles: doc.titles,
                 notes: doc.notes,
@@ -155,6 +158,7 @@ export const useConversationSave = ({
         doc.graceTurn,
         doc.theme,
         doc.views,
+        doc.ratios,
         doc.textCards,
         doc.titles,
         doc.notes,

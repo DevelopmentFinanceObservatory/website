@@ -13,11 +13,13 @@ import {
     LABEL_LINE_HEIGHT,
     LABEL_LINES,
     PLOT_RATIO,
+    PLOT_ROWS_MIN,
     ROW_PITCH,
     estimatedRows,
     fittedRows,
     labelFontSize,
     plotHeight,
+    plotRatio,
     plotShape,
     wrapLabel,
     type PlotShape,
@@ -50,6 +52,43 @@ test('the view decides the shape: rows for the bars of a horizontal chart only',
     assert.deepEqual(plotShape(ranking, false), { kind: 'rows', rows: 24 });
     assert.deepEqual(plotShape(ranking, true), { kind: 'ratio', ratio: PLOT_RATIO });
     assert.deepEqual(plotShape(chart(24, 1, false), false), { kind: 'ratio', ratio: PLOT_RATIO });
+});
+
+test("a card's own ratio replaces the default in a ratio view and not in rows", () => {
+    assert.deepEqual(plotShape(chart(24, 1, false), false, 1), { kind: 'ratio', ratio: 1 });
+    assert.deepEqual(plotShape(chart(24, 1, true), true, 1), { kind: 'ratio', ratio: 1 });
+    assert.deepEqual(plotShape(chart(24, 1, true), false, 1), { kind: 'rows', rows: 24 });
+});
+
+test('a dragged height stands for the ratio the plot is left with, the same at any cell', () => {
+    const at = (cell: number) =>
+        plotRatio({ heightCells: 20, chrome: 8 * cell, plotWidth: 18 * cell, cell });
+
+    assert.equal(at(20), 1.5);
+    assert.equal(at(CELL), 1.5);
+});
+
+test('the ratio from a height round-trips through the fit', () => {
+    const cell = CELL;
+    const chrome = 195.4375 + CARD_BORDERS * cell;
+    const ratio = plotRatio({ heightCells: 27, chrome, plotWidth: PLOT_WIDTH, cell });
+
+    assert.ok(ratio);
+    assert.equal(fitted({ kind: 'ratio', ratio }, chrome, 0), 27);
+});
+
+test('a height that leaves the plot too little sets no ratio', () => {
+    const chrome = 8 * 20;
+
+    assert.equal(
+        plotRatio({ heightCells: 8 + PLOT_ROWS_MIN, chrome, plotWidth: 400, cell: 20 }),
+        400 / (PLOT_ROWS_MIN * 20),
+    );
+    assert.equal(
+        plotRatio({ heightCells: 8 + PLOT_ROWS_MIN - 1, chrome, plotWidth: 400, cell: 20 }),
+        null,
+    );
+    assert.equal(plotRatio({ heightCells: 20, chrome, plotWidth: 0, cell: 20 }), null);
 });
 
 // Chrome and value-axis band in px at the 23.390625 px cell, the chrome less
