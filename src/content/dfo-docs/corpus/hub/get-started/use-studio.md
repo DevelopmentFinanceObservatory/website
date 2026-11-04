@@ -34,7 +34,8 @@ Results vary a little each time. The plan, chart title and wording may differ, b
 
 - Hover over the line to see the value for each year.
 - Drag or resize the card to rearrange the canvas. A bar or line chart takes the proportion you drag it to, and keeps it when you widen the card, reopen the conversation, or share it. A ranking of horizontal bars and a table are as tall as their rows, so their corner changes the width alone.
-- Open the **⋮** menu in the card's corner to download the data, share the chart, ask a follow-up, add a note, or remove the card.
+- Click the download icon in the card's corner to download the data or an image of the chart.
+- Open the **⋮** menu next to it to share the chart, ask a follow-up, add a note, or remove the card.
 
 ## Step 4: Pin the card
 

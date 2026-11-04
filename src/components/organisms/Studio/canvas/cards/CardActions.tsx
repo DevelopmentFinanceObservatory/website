@@ -29,10 +29,54 @@ const PinButton = ({ pinned, onPin }: Pick<CardExtras, 'pinned' | 'onPin'>) => (
     </button>
 );
 
+// The download control, on the card itself beside the pin. It used to be two
+// rows of the ⋮ menu, and readers reported not finding it there. Its press
+// opens a menu of the two things a card can give: its data (the rows behind
+// it, via the Download Data dialog) and its image (the card as a PNG). A
+// card that offers neither — a text card already gone from the sheet — has
+// no button.
+const DownloadMenu = ({
+    onDownload,
+    onDownloadImage,
+}: Pick<CardExtras, 'onDownload' | 'onDownloadImage'>) =>
+    !onDownload && !onDownloadImage ? null : (
+        <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger asChild>
+                <button type="button" className={styles.menuBtn} aria-label="Download">
+                    <Icon name="download" className={styles.actionIcon} />
+                </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                    className={styles.cardMenu}
+                    side="bottom"
+                    align="end"
+                    sideOffset={4}
+                    collisionPadding={16}
+                    onCloseAutoFocus={(event) => event.preventDefault()}
+                >
+                    <div className={styles.cardMenuSection}>
+                        {onDownload && (
+                            <MenuRow icon="download" onSelect={onDownload}>
+                                Download Data
+                            </MenuRow>
+                        )}
+                        {onDownloadImage && (
+                            <MenuRow icon="download" onSelect={onDownloadImage}>
+                                Download Image
+                            </MenuRow>
+                        )}
+                    </div>
+                </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+    );
+
 // The ⋮ card menu, riding the house Radix popup like the search slot menus.
-// Every row is wired: More Info, pin/unpin, Download Data, share (link/embed
-// of this card), a prefilled chat follow-up, title edit, live view switching
-// and remove. (Reorder from the mock has no API behind it — not shown.)
+// Every row is wired: More Info, pin/unpin, share (link/embed of this card),
+// a prefilled chat follow-up, title edit, live view switching and remove.
+// Downloads are the button beside the pin (DownloadMenu). (Reorder from the
+// mock has no API behind it — not shown.)
 const CardMenu = ({
     pinned,
     view,
@@ -41,8 +85,6 @@ const CardMenu = ({
     onRemove,
     onAsk,
     onInfo,
-    onDownload,
-    onDownloadImage,
     onShare,
     onEdit,
     editLabel,
@@ -78,16 +120,6 @@ const CardMenu = ({
                     <MenuRow icon="pin" onSelect={onPin}>
                         {pinned ? 'Unpin from Canvas' : 'Pin to Canvas'}
                     </MenuRow>
-                    {onDownload && (
-                        <MenuRow icon="download" onSelect={onDownload}>
-                            Download Data
-                        </MenuRow>
-                    )}
-                    {onDownloadImage && (
-                        <MenuRow icon="download" onSelect={onDownloadImage}>
-                            Download Image
-                        </MenuRow>
-                    )}
                     {onShare && (
                         <MenuRow icon="share" onSelect={onShare}>
                             Share
@@ -167,14 +199,17 @@ const MenuRow = ({
     </DropdownMenu.Item>
 );
 
-// Pin + kebab, 1px apart, top-right of every card (none on a read-only
-// sheet), with the note mark ahead of them when there is a note to mark.
+// Download + pin + kebab, 1px apart, top-right of every card (none on a
+// read-only sheet), with the note mark ahead of them when there is a note to
+// mark.
 const CardActions = (extras: CardExtras) =>
     extras.readOnly ? null : (
-        // Out of the card's own picture (lib/studio/cardImage): the pin and
-        // the menu belong to the canvas, not to the card's content.
+        // Out of the card's own picture (lib/studio/cardImage): the download
+        // button, the pin and the menu belong to the canvas, not to the
+        // card's content.
         <div className={styles.cardActions} data-no-export="">
             {extras.note && <NoteMark />}
+            <DownloadMenu onDownload={extras.onDownload} onDownloadImage={extras.onDownloadImage} />
             <PinButton pinned={extras.pinned} onPin={extras.onPin} />
             <CardMenu {...extras} />
         </div>

@@ -5,7 +5,7 @@
  *
  * `replayOf` is a `fetch` that answers only requests the recording holds,
  * so a test that drives the site's real client through it fails when the
- * client sends a method, path, query, header name, or body the service was
+ * client sends a method, path, query, header, or body the service was
  * never recorded answering.
  */
 import { readFileSync } from 'node:fs';
@@ -91,18 +91,12 @@ export type Replayed = {
 /**
  * A `fetch` that answers each request with the recorded response of the
  * pair that holds it. A request matches a pair on method, path, query (in
- * any order), JSON body, and the set of header names. A header the pair
- * records as a credential placeholder must carry `principal`.
+ * any order), JSON body, and its headers, names and values.
  *
  * `unrecorded` lists every request no named pair holds, which a test
- * asserts is empty; such a request is answered 599. `lenient` names the
- * pairs recorded as a refusal of a request without its credential: they
- * match on method, path, query, and body alone.
+ * asserts is empty; such a request is answered 599.
  */
-export const replayOf = (
-    names: string[],
-    { principal, lenient = [] }: { principal: string; lenient?: string[] },
-) => {
+export const replayOf = (names: string[]) => {
     const held = new Map<string, string>();
 
     for (const name of names) {
@@ -131,17 +125,9 @@ export const replayOf = (
             return false;
         }
 
-        if (lenient.includes(name)) {
-            return true;
-        }
-
         return (
             headerNames(headers) === headerNames(Object.fromEntries(call.headers)) &&
-            Object.entries(headers).every(([header, value]) => {
-                const sent = call.headers.get(header);
-
-                return value === '<LIVE_REFRESH_PRINCIPAL>' ? sent === principal : sent === value;
-            })
+            Object.entries(headers).every(([header, value]) => call.headers.get(header) === value)
         );
     };
 

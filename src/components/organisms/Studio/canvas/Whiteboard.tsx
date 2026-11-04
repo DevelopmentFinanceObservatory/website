@@ -92,7 +92,7 @@ export type WhiteboardProps = {
     onRatioChange: (id: string, ratio: number) => void;
     // Card menu → Share (link / embed of that one card).
     onShare?: (id: string) => void;
-    // Card menu → Download Data (that card's rows).
+    // Card download button → Download Data (that card's rows).
     onDownload?: (id: string) => void;
     // A shared or embedded sheet: cards can't be moved, resized, pinned or
     // acted on — panning, tooltips and legends still work.
@@ -214,7 +214,7 @@ const Whiteboard = ({
     );
 
     // Download Image. The card is found in the document rather than held in
-    // a ref: the menu that asks for it is rendered inside the very card
+    // a ref: the button that asks for it is rendered inside the very card
     // being photographed, and the sheet already labels each slot with its
     // widget id.
     const saveCardImage = (id: string, title: string) => {

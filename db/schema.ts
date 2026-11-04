@@ -116,15 +116,14 @@ export const shareRef = pgTable(
 export type ShareRefRow = typeof shareRef.$inferSelect;
 
 /**
- * One row per data card of a live canvas or card share: the last answer of
- * the card's refresh (src/lib/studio/liveShareResults.ts) and the lease that
- * lets one request at a time ask the back end for a new one. `status` is
- * 'current', 'redrawn', 'pending', or 'error', and null while the first
- * refresh is in flight. `card` is the card a 'current' or 'redrawn' answer
- * drew, and `frame` the frame a 'redrawn' card was drawn on, which the
- * card's download exports. Requests answer from the row until
- * `fresh_until`. After it, the request that moves `lease_until` into the
- * future calls the back end and the others keep answering from the row.
+ * One row per data card of a live canvas or card share in `share`: the last
+ * refresh answer stored for the card, and the lease that limits it to one
+ * refresh at a time. `status` is 'current', 'redrawn', 'pending', or 'error',
+ * and null while a first refresh is in flight. `card` is the card a
+ * 'current' or 'redrawn' answer drew, and `frame` the frame a 'redrawn' card
+ * was drawn on. The site does not read or write the table, and the share
+ * export (db/share-export.ts) leaves it out. The schema keeps it so that
+ * db:generate emits no DROP for it.
  */
 export const shareCardResult = pgTable(
     'share_card_result',

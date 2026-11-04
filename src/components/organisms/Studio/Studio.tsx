@@ -169,7 +169,7 @@ const Studio = ({
     // second public share.
     const [citeLinks, setCiteLinks] = useState<Record<string, CitedSnapshot | CiteAsk>>({});
     const citeLinksInFlight = useRef(new Map<string, Promise<CiteLink>>());
-    // The card whose Download Data dialog is open (its menu opens it).
+    // The card whose Download Data dialog is open (its download button opens it).
     const [downloadCardId, setDownloadCardId] = useState<string | null>(null);
     // The canvas hands up its fly-to-card function (Activity → "View on
     // whiteboard", the chat chips).
