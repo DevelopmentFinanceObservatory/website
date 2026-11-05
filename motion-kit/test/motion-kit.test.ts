@@ -23,12 +23,15 @@ import { externalUrls, filmCss, mediaMatches, scopeSelector, toPx } from '../css
 import { readCues } from '../cues.ts';
 import { outfitMeasure, parseFont } from '../fontMetrics.ts';
 import type { Motion } from '../motion.ts';
+import { parseMarkup } from '../html.ts';
 import { readSpec } from '../spec.ts';
+import { missingClasses } from '../stateClasses.ts';
 import { hasBrowser, startBrowser } from './browser.ts';
 import type { ChartWidget } from '../../src/lib/chat/widgets.ts';
 import { plotHeight, plotShape } from '../../src/lib/studio/chartFit.ts';
 
 const KENYA = join(import.meta.dirname, '../demos/kenya-debt-health.json');
+const REPO = join(import.meta.dirname, '../..');
 
 const chart = (unit: string, series: (number | null)[][]): ChartWidget => ({
     kind: 'chart',
@@ -616,4 +619,45 @@ test('the stylesheet keeps its motion, scoped, only when asked', () => {
     assert.match(kept, /@keyframes spin\s*\{\s*from\s*\{/);
     assert.match(kept, /\.dfo-ui \.a\s*\{\s*animation: spin 1s;\s*margin: 16px/);
     assert.doesNotMatch(frozen, /keyframes|animation/);
+});
+
+test('a class read from an SCSS module must be in its class map', async () => {
+    const { styleModules, sources, kitSources } = await loadRenderer();
+
+    // Every class the kit and the app's components in the bundle read exists.
+    assert.deepEqual(missingClasses([...kitSources, ...sources], styleModules, REPO), []);
+
+    const styles = { 'src/a.module.scss': { known: 'a_known' } };
+    const text = [
+        "import styles from '@/a.module.scss';",
+        "import other from './b.module.scss';",
+        "const ok = [styles.known, styles['known'], styles[name]];",
+        "const bad = [styles.gone, styles['lost'], other.any];",
+    ].join('\n');
+
+    assert.deepEqual(missingClasses([{ path: 'src/x.tsx', text }], styles, '/repo'), [
+        'src/x.tsx: ./b.module.scss',
+        'src/x.tsx: styles.gone',
+        'src/x.tsx: styles.lost',
+    ]);
+});
+
+test('a line an activity turn shows without the step class is refused', async () => {
+    const { renderer } = await loadRenderer();
+    const spec = readSpec(JSON.parse(await readFile(KENYA, 'utf8')));
+    const turn = (html: string) => parseMarkup(`<section>${html}</section>`)[0]!;
+
+    assert.ok(renderer.renderStudio(spec, { fontsDir: FONTS }).hooks.includes('activity-0-0'));
+    // A step's tries are list items inside the step's own.
+    assert.equal(
+        renderer.stepLines(
+            turn('<ol><li class="s"><ol><li></li></ol></li><li class="s"></li></ol>'),
+            's',
+        ).length,
+        2,
+    );
+    assert.throws(
+        () => renderer.stepLines(turn('<ol><li class="s"></li><li class="t"></li></ol>'), 's'),
+        /shows 2 lines, 1 with the step class/,
+    );
 });

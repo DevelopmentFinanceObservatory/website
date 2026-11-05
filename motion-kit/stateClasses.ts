@@ -25,8 +25,53 @@ const modulePath = (specifier: string, from: string, repo: string): string =>
         repo,
         specifier.startsWith('@/')
             ? join(repo, 'src', specifier.slice(2))
-            : resolve(dirname(from), specifier),
+            : resolve(repo, dirname(from), specifier),
     );
+
+const parse = ({ path, text }: Source): ts.SourceFile =>
+    ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+// The local names of a source's `classnames` import and of each SCSS module
+// it imports, with the module's class map, and the modules without a map.
+const readImports = (
+    source: Source,
+    styles: StyleModules,
+    repo: string,
+): {
+    file: ts.SourceFile;
+    joiners: Set<string>;
+    modules: Map<string, Record<string, string>>;
+    unmapped: string[];
+} => {
+    const file = parse(source);
+    const joiners = new Set<string>();
+    const modules = new Map<string, Record<string, string>>();
+    const unmapped: string[] = [];
+
+    for (const statement of file.statements) {
+        const name = ts.isImportDeclaration(statement) && statement.importClause?.name?.text;
+
+        if (!name || !ts.isStringLiteral(statement.moduleSpecifier)) {
+            continue;
+        }
+
+        const specifier = statement.moduleSpecifier.text;
+
+        if (specifier === 'classnames') {
+            joiners.add(name);
+        } else if (specifier.endsWith('.module.scss')) {
+            const map = styles[modulePath(specifier, source.path, repo)];
+
+            if (map) {
+                modules.set(name, map);
+            } else {
+                unmapped.push(specifier);
+            }
+        }
+    }
+
+    return { file, joiners, modules, unmapped };
+};
 
 export const stateClasses = (
     sources: Source[],
@@ -36,36 +81,7 @@ export const stateClasses = (
     const found = new Map<string, Set<string>>();
 
     for (const { path, text } of sources) {
-        const file = ts.createSourceFile(
-            path,
-            text,
-            ts.ScriptTarget.Latest,
-            true,
-            ts.ScriptKind.TSX,
-        );
-        // The local names of the `classnames` import and of each SCSS module.
-        const joiners = new Set<string>();
-        const modules = new Map<string, Record<string, string>>();
-
-        for (const statement of file.statements) {
-            const name = ts.isImportDeclaration(statement) && statement.importClause?.name?.text;
-
-            if (!name || !ts.isStringLiteral(statement.moduleSpecifier)) {
-                continue;
-            }
-
-            const specifier = statement.moduleSpecifier.text;
-
-            if (specifier === 'classnames') {
-                joiners.add(name);
-            } else if (specifier.endsWith('.module.scss')) {
-                const map = styles[modulePath(specifier, path, repo)];
-
-                if (map) {
-                    modules.set(name, map);
-                }
-            }
-        }
+        const { file, joiners, modules } = readImports({ path, text }, styles, repo);
 
         if (!joiners.size || !modules.size) {
             continue;
@@ -155,4 +171,44 @@ export const stateClasses = (
     return Object.fromEntries(
         [...found].filter(([, set]) => set.size).map(([base, set]) => [base, [...set].toSorted()]),
     );
+};
+
+/**
+ * Every class a source reads from an SCSS module it imports, as
+ * `styles.name` or `styles['name']`, that the module's class map lacks, listed
+ * as `path: styles.name` and sorted. Such a read is `undefined` at run time,
+ * so the element it names carries no class. An imported module without a
+ * class map is listed as `path: specifier`, since its reads go unchecked.
+ */
+export const missingClasses = (sources: Source[], styles: StyleModules, repo: string): string[] => {
+    const missing = new Set<string>();
+
+    for (const source of sources) {
+        const { file, modules, unmapped } = readImports(source, styles, repo);
+
+        unmapped.forEach((specifier) => missing.add(`${source.path}: ${specifier}`));
+
+        const visit = (node: ts.Node) => {
+            const read = ts.isPropertyAccessExpression(node)
+                ? { object: node.expression, key: node.name.text }
+                : ts.isElementAccessExpression(node) &&
+                    ts.isStringLiteralLike(node.argumentExpression)
+                  ? { object: node.expression, key: node.argumentExpression.text }
+                  : null;
+
+            if (read && ts.isIdentifier(read.object)) {
+                const map = modules.get(read.object.text);
+
+                if (map && !Object.hasOwn(map, read.key)) {
+                    missing.add(`${source.path}: ${read.object.text}.${read.key}`);
+                }
+            }
+
+            ts.forEachChild(node, visit);
+        };
+
+        visit(file);
+    }
+
+    return [...missing].toSorted();
 };
