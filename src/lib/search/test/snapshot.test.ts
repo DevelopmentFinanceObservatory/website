@@ -160,6 +160,92 @@ test('captureSnapshot fails before minting when no principal is configured', asy
     assert.equal(calls.length, 0);
 });
 
+// A Datasets API double whose mint answers 202 for `operationId` and whose
+// every envelope names a hostile poll path: another surface, a `..`
+// segment, then an absolute URL. The operation's own path answers pending
+// twice, then done. Records every URL requested.
+const asyncMint = (operationId: unknown) => {
+    const hostile = [
+        '/api/graph/x',
+        '/api/datasets/operations/../../presentation/shares/x',
+        'https://evil.example/api/datasets/operations/op_1f',
+    ];
+    const urls: string[] = [];
+    let polls = 0;
+    const fetchImpl = (async (url: string) => {
+        urls.push(url);
+        const answer = (status: number, body: unknown) =>
+            ({ ok: status < 300, status, json: async () => body }) as Response;
+        const envelope = (poll: string) => ({
+            operation_id: operationId,
+            status: 'pending',
+            poll,
+            retry_after_ms: 0,
+        });
+
+        if (url === 'https://api/api/datasets') {
+            return answer(202, { operation: envelope(hostile[0]!) });
+        }
+
+        if (url === 'https://api/api/datasets/operations/op_1f') {
+            polls += 1;
+
+            return polls < hostile.length
+                ? answer(200, { operation: envelope(hostile[polls]!) })
+                : answer(200, {
+                      operation: { operation_id: operationId, status: 'done' },
+                      manifest: {
+                          content_version: 'cv_abc',
+                          definition: { spec_id: 'spec_crs' },
+                          artifacts,
+                      },
+                  });
+        }
+
+        return url.endsWith('/pin') ? answer(200, {}) : answer(404, { code: 'not_found' });
+    }) as typeof fetch;
+
+    return { urls, fetchImpl };
+};
+
+// Slow (about 750 ms), because pollOperation floors each retry_after_ms at 250 ms.
+test('captureSnapshot polls the operation by its id and never the poll path a response names', async () => {
+    const { urls, fetchImpl } = asyncMint('op_1f');
+
+    assert.equal(
+        (
+            await captureSnapshot({
+                base: 'https://api',
+                specId: 'spec_crs',
+                definition: { spec_id: 'spec_crs' },
+                principal: 'site',
+                pollDeadlineMs: 5_000,
+                fetchImpl,
+            })
+        ).artifactDigest,
+        'sha256:csv',
+    );
+    assert.deepEqual(urls, [
+        'https://api/api/datasets',
+        ...Array(3).fill('https://api/api/datasets/operations/op_1f'),
+        'https://api/api/datasets/spec_crs/cv_abc/pin',
+    ]);
+});
+
+for (const [name, operationId] of [
+    ['a path in the id', 'op_1f/../../graph'],
+    ['upper-case hex', 'OP_1F'],
+    ['a number', 42],
+    ['no id', undefined],
+] as const) {
+    test(`captureSnapshot refuses an operation with ${name} before any poll`, async () => {
+        const { urls, fetchImpl } = asyncMint(operationId);
+
+        await assert.rejects(capture(fetchImpl, 'site'), { message: 'mint 202' });
+        assert.deepEqual(urls, ['https://api/api/datasets']);
+    });
+}
+
 const part = (specId: string, status = 'definite') => ({
     status,
     ...(status === 'definite' && { spec: { spec_id: specId } }),

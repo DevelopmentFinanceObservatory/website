@@ -22,7 +22,7 @@ import type {
 } from '@developmentfinance/client/wire';
 
 import { datasetsFetch } from './datasetsFetch.ts';
-import { pollOperation } from './operationPoll.ts';
+import { operationPath, pollOperation } from './operationPoll.ts';
 import { SPEC_SHAPE, VERSION_SHAPE } from './versionLink.ts';
 
 /** The fields of a Datasets manifest this module reads. */
@@ -206,19 +206,33 @@ export const captureSnapshot = async ({
     }
 
     // An over-budget mint answers 202 with an operation envelope; a done
-    // poll needs no principal.
-    const manifest = (
-        minted.status === 202
-            ? await pollOperation(minted.body.operation, {
-                  fetchImpl: (url) =>
-                      fetchImpl(`${base}${url}`, {
-                          cache: 'no-store',
-                          signal: AbortSignal.timeout(DOOR_TIMEOUT_MS),
-                      }),
-                  deadlineMs: pollDeadlineMs,
-              })
-            : minted.body
-    ) as (Partial<SnapshotManifest> & Partial<Pick<ProblemDetails, 'code'>>) | null;
+    // poll needs no principal. Every poll reads the operation by its
+    // checked id, and the poll path a response names is ignored.
+    let manifest = minted.body as
+        (Partial<SnapshotManifest> & Partial<Pick<ProblemDetails, 'code'>>) | null;
+
+    if (minted.status === 202) {
+        const operation = minted.body?.operation;
+        const pollPath = operationPath(operation?.operation_id);
+
+        if (!pollPath) {
+            throw new Error(`mint ${minted.status}`, {
+                cause: new Error('the mint named no valid operation id'),
+            });
+        }
+
+        manifest = await pollOperation(
+            { ...operation, poll: pollPath },
+            {
+                fetchImpl: () =>
+                    fetchImpl(`${base}${pollPath}`, {
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(DOOR_TIMEOUT_MS),
+                    }),
+                deadlineMs: pollDeadlineMs,
+            },
+        );
+    }
 
     if (typeof manifest?.content_version !== 'string') {
         throw new Error(manifest?.code ?? `mint ${minted.status}`);

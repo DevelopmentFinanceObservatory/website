@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import styles from './PreparingDownload.module.scss';
 
-import { pollOperation, type OperationProgress } from '@/lib/search/operationPoll';
+import { operationPath, pollOperation, type OperationProgress } from '@/lib/search/operationPoll';
 import { artifactHref, pinDownloadedVersion } from '@/lib/search/searchClient';
 import { renderedFile } from '@/lib/search/shareDownload';
 import type { FileRendering } from '@/lib/search/snapshot';
@@ -36,7 +36,9 @@ const PreparingDownload = ({
     const bundle = preparing?.rendering.bundle;
 
     useEffect(() => {
-        if (!operationId || !format || bundle === undefined) {
+        const pollPath = operationPath(operationId);
+
+        if (!operationId || !pollPath || !format || bundle === undefined) {
             return;
         }
 
@@ -48,7 +50,7 @@ const PreparingDownload = ({
                     {
                         operation_id: operationId,
                         status: 'pending',
-                        poll: `/api/datasets/operations/${operationId}`,
+                        poll: pollPath,
                     },
                     {
                         signal: controller.signal,
