@@ -13,11 +13,13 @@
  *
  * This module has no DOM/Node dependency, so `node --test` can import it
  * directly. It takes no base URL and reads no env: a caller supplies
- * `fetchImpl`, a thin wrapper that resolves the envelope's own relative
- * `poll` path against wherever it needs to go (see searchClient.ts's
- * `mintDataset`, which polls through the site's own same-origin proxy,
- * and snapshot.ts's `captureSnapshot`, which polls the Datasets API directly, since
- * a done poll needs no principal header, unlike the `pin` call next to it).
+ * `fetchImpl`, a thin wrapper that resolves the relative `poll` path
+ * against wherever it needs to go (see searchClient.ts's `mintDataset`,
+ * which polls through the site's own same-origin proxy). A server-side
+ * caller that polls the Datasets API directly (snapshot.ts's
+ * `captureSnapshot`, shareDownload.ts's `awaitOperation`) ignores that path
+ * and fetches `operationPath` of the checked operation id on every poll,
+ * because a path a response names is untrusted.
  */
 
 import type {
@@ -31,6 +33,16 @@ import type {
 import { datasetsFetch } from './datasetsFetch.ts';
 
 export type { OperationEnvelope, OperationProgress };
+
+/** The shape of an operation id dfo-apis mints. */
+export const OPERATION_SHAPE = /^op_[a-f0-9]+$/;
+
+/** The Datasets API path that reads operation `id`, or undefined when `id`
+ *  is not an operation id. */
+export const operationPath = (id: unknown): string | undefined =>
+    typeof id === 'string' && OPERATION_SHAPE.test(id)
+        ? `/api/datasets/operations/${id}`
+        : undefined;
 
 export type PollResponse = { ok: boolean; status: number; json: () => Promise<unknown> };
 export type PollFetch = (url: string, signal?: AbortSignal) => Promise<PollResponse>;

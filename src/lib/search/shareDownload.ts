@@ -34,7 +34,12 @@ import type { OperationResource, ProblemDetails } from '@developmentfinance/clie
 
 import { datasetsFetch } from './datasetsFetch.ts';
 import { DEFAULT_DOWNLOAD_CHOICES } from './downloadOptions.ts';
-import { OPERATION_DEADLINE, pollOperation } from './operationPoll.ts';
+import {
+    OPERATION_DEADLINE,
+    OPERATION_SHAPE,
+    operationPath,
+    pollOperation,
+} from './operationPoll.ts';
 import { artifactHref, DATASET_FORMATS } from './searchClient.ts';
 import type { SearchShare } from './searchShare';
 import { MINT_DEFAULT_RENDERING, renderingArtifact, type FileRendering } from './snapshot.ts';
@@ -60,7 +65,6 @@ type Query = { get(name: string): string | null; has(name: string): boolean };
 
 const FORMAT_IDS: readonly string[] = DATASET_FORMATS.map((format) => format.id);
 const PART_SHAPE = /^\d+$/;
-export const OPERATION_SHAPE = /^op_[a-f0-9]+$/;
 
 const refused = (status: 400 | 404, message: string): ShareDownload => ({
     kind: 'refused',
@@ -421,8 +425,9 @@ export const serveLiveDownload = async ({
 
         if (res.status === 202) {
             const operation = (body as Partial<OperationResource> | null)?.operation;
+            const pollPath = operationPath(operation?.operation_id);
 
-            if (operation && OPERATION_SHAPE.test(operation.operation_id)) {
+            if (operation && pollPath) {
                 return html
                     ? {
                           kind: 'redirect',
@@ -435,6 +440,7 @@ export const serveLiveDownload = async ({
                       }
                     : await awaitOperation({
                           operation,
+                          pollPath,
                           target,
                           base,
                           pin,
@@ -473,6 +479,7 @@ export const serveLiveDownload = async ({
  *  file of the rendering asked for. */
 const awaitOperation = async ({
     operation,
+    pollPath,
     target,
     base,
     pin,
@@ -484,6 +491,8 @@ const awaitOperation = async ({
     log,
 }: {
     operation: OperationResource['operation'];
+    /** `operationPath` of the operation's checked id. */
+    pollPath: string;
     target: Extract<ShareDownload, { kind: 'live' }>;
     base: string;
     pin: PinServed;
@@ -496,7 +505,7 @@ const awaitOperation = async ({
 }): Promise<DownloadAnswer> => {
     // Every poll reads the operation by its checked id. The poll path a
     // response names is ignored.
-    const pollUrl = `${base}/api/datasets/operations/${operation.operation_id}`;
+    const pollUrl = `${base}${pollPath}`;
     let manifest: VersionLinkDocument | null;
 
     try {
