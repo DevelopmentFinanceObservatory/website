@@ -140,7 +140,7 @@
 
     font-family: var(--font-dm-mono);
     font-weight: 500;
-    color: var(--color-sage);
+    color: var(--color-net-light);
     letter-spacing: -0.01em;
 }
 
@@ -161,13 +161,18 @@
 
         font-family: var(--font-dm-mono);
         font-weight: 300;
-        color: var(--color-stone-light);
+
+        // Net-light holds 4.5:1 on the charcoal face (7.7) and on the map
+        // strokes that cross the text (5.5). Stone-light and sage fall below it.
+        color: var(--color-net-light);
         text-decoration: none;
         letter-spacing: -0.01em;
         transition: color 0.2s ease;
 
         &:hover {
             color: var(--color-step-text);
+            text-decoration: underline;
+            text-underline-offset: rem(3);
         }
     }
 }
@@ -210,13 +215,15 @@
 
         font-family: var(--font-dm-mono);
         font-weight: 300;
-        color: var(--color-stone-light);
+        color: var(--color-net-light);
         text-decoration: none;
         letter-spacing: -0.01em;
         transition: color 0.2s ease;
 
         &:hover {
             color: var(--color-step-text);
+            text-decoration: underline;
+            text-underline-offset: rem(3);
         }
     }
 

@@ -64,8 +64,9 @@ export const THEME_PRESETS: ThemePreset[] = [
         tokens: { accent: '#6467de', card: '#ffffff', text: '#484842' },
         series: DEFAULT_SERIES,
         swatches: ['#d2d2c5', '#e8e8d5', '#c6cebc', '#484842', '#f7f7ee'],
-        // The house palette, exactly: net-light lines, stone muted text,
-        // gray-1500 card captions, popup face, and the original glow shades.
+        // The house palette: net-light lines, stone muted text,
+        // gray-1500 card captions (darkened to 4.5:1 on the card face), popup
+        // face, and the original glow shades.
         derived: {
             line: '#ececdb',
             muted: '#5e5e52',
@@ -311,6 +312,59 @@ export const isDark = (hex: string): boolean => {
     return (r * 299 + g * 587 + b * 114) / 1000 < 128;
 };
 
+// WCAG 2 relative luminance and contrast ratio.
+const luminance = (hex: string): number => {
+    const [r, g, b] = hexToRgb(hex)
+        .map((v) => v / 255)
+        .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) as [
+        number,
+        number,
+        number,
+    ];
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const contrast = (a: string, b: string): number => {
+    const [la, lb] = [luminance(a), luminance(b)];
+
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+
+// WCAG AA for body text.
+const TEXT_CONTRAST = 4.5;
+
+// Returns `hex` unchanged when it holds 4.5:1 on `face`, else scaled toward black (or toward white, on faces where white
+// contrasts more) just far enough to reach it. Scaling every channel by
+// the same factor keeps the colour's hue, so a cool grey stays a cool grey.
+// Every face reaches 4.5:1 against black or white, so the search always
+// lands.
+const legible = (hex: string, face: string): string => {
+    const target = contrast('#000000', face) >= contrast('#ffffff', face) ? '#000000' : '#ffffff';
+    const faceLight = target === '#000000';
+    const reads = (colour: string) =>
+        luminance(colour) < luminance(face) === faceLight &&
+        contrast(colour, face) >= TEXT_CONTRAST;
+
+    if (reads(hex)) {
+        return hex;
+    }
+
+    let [lo, hi] = [0, 1];
+
+    for (let i = 0; i < 24; i += 1) {
+        const mid = (lo + hi) / 2;
+
+        if (reads(mix(hex, target, mid))) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+
+    return mix(hex, target, hi);
+};
+
 // The full set of derived colours a theme needs, from the four tokens.
 export type ThemeDerived = ThemeTokens & {
     // Card border / grid lines / hairlines: text tinted into the surface.
@@ -318,7 +372,8 @@ export type ThemeDerived = ThemeTokens & {
     // Muted text (axis, secondary labels).
     muted: string;
     // Card captions — the source tag and "Built with": a step quieter than
-    // muted, so they recede under the data.
+    // muted, so they recede under the data. Muted and caption both hold
+    // 4.5:1 on the card, which can bring the two together.
     caption: string;
     // Popup / menu face: card nudged toward text.
     popup: string;
@@ -330,9 +385,13 @@ export type ThemeDerived = ThemeTokens & {
     series: SeriesPair[];
 };
 
-export const deriveTheme = (theme: StudioTheme): ThemeDerived => {
+// `face` is the card face when the host paints its own (the home page's
+// showcase sits its cards on the site's off-white). The preset's hand-set
+// colours apply, and the text floor is measured against that face.
+export const deriveTheme = (theme: StudioTheme, face?: string): ThemeDerived => {
     const preset = presetOf(theme);
-    const tokens = resolveTokens(theme);
+    const resolved = resolveTokens(theme);
+    const tokens = face ? { ...resolved, card: face } : resolved;
     const dark = isDark(tokens.card);
     // A preset's hand-set derived colours hold as long as its surface
     // tokens do; overriding card/text falls back to the mixed derivation.
@@ -342,8 +401,8 @@ export const deriveTheme = (theme: StudioTheme): ThemeDerived => {
     return {
         ...tokens,
         line: hand.line ?? mix(tokens.card, tokens.text, dark ? 0.16 : 0.09),
-        muted: hand.muted ?? mix(tokens.text, tokens.card, 0.45),
-        caption: hand.caption ?? mix(tokens.text, tokens.card, 0.6),
+        muted: legible(hand.muted ?? mix(tokens.text, tokens.card, 0.45), tokens.card),
+        caption: legible(hand.caption ?? mix(tokens.text, tokens.card, 0.6), tokens.card),
         popup: hand.popup ?? mix(tokens.card, tokens.text, dark ? 0.12 : 0.1),
         glow: hand.glow ?? [
             mix(CANVAS_BG, tokens.text, 0.1),

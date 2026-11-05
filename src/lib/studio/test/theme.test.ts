@@ -1,12 +1,19 @@
 /**
  * `theme.ts`: every palette carries ten distinct series colours, so a chart
  * of up to ten series never draws two the same, and the first eight stay the
- * colours saved charts were drawn in.
+ * colours saved charts were drawn in. Muted text and captions read at
+ * 4.5:1 on every card face.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { paletteFromAccent, THEME_PRESETS, deriveTheme } from '../theme.ts';
+import {
+    DEFAULT_THEME,
+    deriveTheme,
+    paletteFromAccent,
+    type StudioTheme,
+    THEME_PRESETS,
+} from '../theme.ts';
 
 const CHART_LINES = 10;
 
@@ -152,4 +159,54 @@ test('a custom accent keeps its first eight colours, 45° apart', () => {
             .map(([base]) => base),
         ['#101010', '#826f35', '#7aae47', '#2c6d3c', '#3e9898', '#2c3c6d', '#7544a7', '#742f63'],
     );
+});
+
+// WCAG 2 contrast, computed here independently of theme.ts, so the floor has a second check.
+const wcagLuminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+        .map((v) => v / 255)
+        .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) as [
+        number,
+        number,
+        number,
+    ];
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const ratio = (a: string, b: string): number => {
+    const [la, lb] = [wcagLuminance(a), wcagLuminance(b)];
+
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+
+const FLOOR_CASES: [name: string, theme: StudioTheme, face?: string][] = [
+    ...THEME_PRESETS.map(({ id }): [string, StudioTheme] => [id, { preset: id, overrides: {} }]),
+    ['default on the showcase face', DEFAULT_THEME, '#f6f6e8'],
+    ['light custom card', { preset: 'default', overrides: { card: '#f0e6d2', text: '#8a8a80' } }],
+    ['dark custom card', { preset: 'dark', overrides: { card: '#1a1a2e', text: '#7a7a90' } }],
+    ['mid-grey custom card', { preset: 'mono', overrides: { card: '#777777', text: '#888888' } }],
+];
+
+test('muted text and captions hold 4.5:1 on their card', () => {
+    for (const [name, theme, face] of FLOOR_CASES) {
+        const derived = deriveTheme(theme, face);
+
+        if (face) assert.equal(derived.card, face, name);
+
+        for (const role of ['muted', 'caption'] as const) {
+            const got = ratio(derived[role], derived.card);
+
+            assert.ok(got >= 4.5, `${name} ${role} ${derived[role]} is ${got.toFixed(2)}:1`);
+        }
+    }
+});
+
+test('the default caption darkens to the floor and keeps its cool grey', () => {
+    // #abb4b7 scaled toward black, on white and on the showcase face.
+    assert.equal(deriveTheme(DEFAULT_THEME).caption, '#727779');
+    assert.equal(deriveTheme(DEFAULT_THEME, '#f6f6e8').caption, '#6c7173');
+    // Muted already clears the floor and stays the house stone.
+    assert.equal(deriveTheme(DEFAULT_THEME, '#f6f6e8').muted, '#5e5e52');
 });
