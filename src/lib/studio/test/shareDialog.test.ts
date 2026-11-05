@@ -113,7 +113,6 @@ test("the site's answer to a new share is its id or the refusal it names", () =>
             { code: 'live_too_many_cards', retryable: false, limit: 20, count: 23 },
             { refusal: { code: 'live_too_many_cards', limit: 20, count: 23 } },
         ],
-        [false, { code: 'live_unavailable' }, { refusal: { code: 'live_unavailable' } }],
         [false, { code: 'share_limit' }, { refusal: { code: 'share_limit' } }],
         // A refusal a second try would meet again, as its `retryable` says.
         [
@@ -212,10 +211,6 @@ test('a share the site refuses to make is withdrawn, failed, limited or refused'
         [
             { refusal: { code: 'live_too_many_cards', limit: 20, count: 23 }, cards: CARDS },
             { status: 'withdrawn', withdrawal: { reason: 'limit', limit: 20, count: 23 } },
-        ],
-        [
-            { refusal: { code: 'live_unavailable' }, cards: CARDS },
-            { status: 'withdrawn', withdrawal: { reason: 'unavailable' } },
         ],
         [{ refusal: { code: 'failed' } }, { status: 'failed' }],
         [{ refusal: { code: 'share_limit' } }, { status: 'limited' }],

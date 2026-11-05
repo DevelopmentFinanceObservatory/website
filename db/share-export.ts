@@ -11,7 +11,6 @@ import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
  * defines, which the share migration (db/share-migrate.ts) sends to
  * dfo-apis' share import route. `placeShare` decides where each stored
  * share lands, and refuses a row it cannot place with the reason.
- * `share_card_result` rows are a cache of live refreshes and are not read.
  */
 
 /** One data card of a share as dfo-apis holds it, in display order. */

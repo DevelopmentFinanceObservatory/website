@@ -319,11 +319,6 @@ test('every legacy share case lands in the export', async (t) => {
         }
     }
 
-    // A live refresh cache row, which the export never reads.
-    await pool.query(
-        `insert into share_card_result (share_id, card_id, status) values ('canvLiv1', 'c1', 'current')`,
-    );
-
     const lines = (await readShares(pool)).map(placeShare);
 
     // The lines are JSON, where a member left undefined is absent.
