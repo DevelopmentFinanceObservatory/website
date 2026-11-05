@@ -2,7 +2,6 @@ import type { Assumption, EntityGroup, RequestedOperation } from '@developmentfi
 import { sql } from 'drizzle-orm';
 import {
     bigint,
-    boolean,
     check,
     index,
     integer,
@@ -114,41 +113,6 @@ export const shareRef = pgTable(
 );
 
 export type ShareRefRow = typeof shareRef.$inferSelect;
-
-/**
- * One row per data card of a live canvas or card share in `share`: the last
- * refresh answer stored for the card, and the lease that limits it to one
- * refresh at a time. `status` is 'current', 'redrawn', 'pending', or 'error',
- * and null while a first refresh is in flight. `card` is the card a
- * 'current' or 'redrawn' answer drew, and `frame` the frame a 'redrawn' card
- * was drawn on. The site does not read or write the table, and the share
- * export (db/share-export.ts) leaves it out. The schema keeps it so that
- * db:generate emits no DROP for it.
- */
-export const shareCardResult = pgTable(
-    'share_card_result',
-    {
-        shareId: text('share_id')
-            .notNull()
-            .references(() => share.id, { onDelete: 'cascade' }),
-        cardId: text('card_id').notNull(),
-        status: text('status'),
-        card: jsonb('card'),
-        frame: jsonb('frame'),
-        // The machine-readable reason of an 'error' answer.
-        code: text('code'),
-        // Whether the back end said asking again might succeed, for an 'error' answer.
-        retryable: boolean('retryable'),
-        // The wait a 'pending' answer asks of the viewer.
-        retryAfterS: integer('retry_after_s'),
-        checkedAt: timestamp('checked_at', { withTimezone: true }),
-        freshUntil: timestamp('fresh_until', { withTimezone: true }),
-        leaseUntil: timestamp('lease_until', { withTimezone: true }),
-    },
-    (table) => [primaryKey({ columns: [table.shareId, table.cardId] })],
-);
-
-export type ShareCardResultRow = typeof shareCardResult.$inferSelect;
 
 /**
  * The write token dfo-apis issued for a share a signed-in user made, which

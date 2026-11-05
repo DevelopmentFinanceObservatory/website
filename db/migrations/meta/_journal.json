@@ -162,6 +162,13 @@
       "when": 1793258249005,
       "tag": "0023_share_cleanup_and_deleting_at",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793871780545,
+      "tag": "0024_drop_share_card_result",
+      "breakpoints": true
     }
   ]
 }
