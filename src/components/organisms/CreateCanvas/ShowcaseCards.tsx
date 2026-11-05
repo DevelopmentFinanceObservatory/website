@@ -65,7 +65,9 @@ const extras = (title: string, view: CardExtras['view']): CardExtras => ({
     readOnly: true,
 });
 
-const theme = deriveTheme(DEFAULT_THEME);
+// The section's own ground for the cards is the site's off-white, in place of
+// the canvas's white.
+const theme = deriveTheme(DEFAULT_THEME, '#f6f6e8');
 const widgets = cards as Widget[];
 
 type Tile = Rect & { key: number; card: number; leaving: boolean };
@@ -275,9 +277,6 @@ const ShowcaseCards = ({ grid }: { grid: Grid }) => {
                                 height: h * gridCell,
                                 scale: SCALE,
                                 ...(themeVars(theme) as React.CSSProperties),
-                                // The section's own ground for the cards — the
-                                // site's off-white instead of the canvas's white.
-                                ['--th-card' as string]: '#f6f6e8',
                             }}
                         >
                             <CardBody
