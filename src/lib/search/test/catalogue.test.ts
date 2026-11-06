@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    aidLine,
     catalogueChips,
     catalogueTiles,
     declinedExamples,
@@ -173,6 +174,18 @@ test('declinedExamples falls back to the first three of the whole catalogue', ()
         firstThree,
     );
     assert.deepEqual(declinedExamples(null, null), []);
+});
+
+test('aidLine gives the donors, recipients and years, and stops where the counts stop', () => {
+    assert.equal(
+        aidLine(whole.counts.aid),
+        'Its aid data covers 169 donors and 205 recipients, from 1973 to 2024.',
+    );
+    assert.equal(
+        aidLine({ donors: 1200, recipients: 3, years: null }),
+        'Its aid data covers 1,200 donors and 3 recipients.',
+    );
+    assert.equal(aidLine(null), null);
 });
 
 test('catalogueTiles shows indicators and datasets, or nothing without a catalogue', () => {

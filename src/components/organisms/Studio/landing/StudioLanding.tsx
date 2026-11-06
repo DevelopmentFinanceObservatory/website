@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 
 import DataAvailabilityPanel from './DataAvailabilityPanel';
+import { useDataAvailability } from '../hooks/useDataAvailability';
 import styles from './StudioLanding.module.scss';
 import { usePanelsHeight } from './usePanelsHeight';
 import PromptForm, { type PromptField } from '../prompt/PromptForm';
@@ -13,7 +14,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
-import { DATA_AVAILABILITY_PROMPT, type DataAvailability } from '@/lib/studio/dataAvailability';
+import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/dataAvailability';
 
 const LANDING_TABS = [
     { id: 'try', label: 'Try one of these' },
@@ -27,9 +28,6 @@ type StudioLandingProps = {
     onBegin: (text: string) => void;
     // The visit's example prompts (pickExamples), drawn by the page.
     examples: readonly string[];
-    // What the "What data is available?" drawer shows (loadDataAvailability),
-    // read by the page.
-    dataAvailability: DataAvailability;
     inputRef: RefObject<PromptField | null>;
     // The account's recent canvases (the three most recent are shown); null
     // for a guest — no switch, the suggestions alone.
@@ -45,15 +43,14 @@ type StudioLandingProps = {
 
 /**
  * The Studio landing: eyebrow, title, lead, the "What data is available?"
- * link (its drawer), the prompt, and the two panels under a segmented
- * switch — "Try one of these" and "My History".
+ * link and its drawer, the prompt, and the two panels under a segmented
+ * switch, "Try one of these" and "My History".
  */
 const StudioLanding = ({
     query,
     onQueryChange,
     onBegin,
     examples,
-    dataAvailability,
     inputRef,
     history,
     openingId,
@@ -62,8 +59,10 @@ const StudioLanding = ({
     wall,
 }: StudioLandingProps) => {
     const [tab, setTab] = useState<'try' | 'history'>('try');
-    // The "What data is available?" drawer.
+    // The "What data is available?" drawer, and its overview, read from the
+    // site's route the first time it opens.
     const [dataOpen, setDataOpen] = useState(false);
+    const { availability } = useDataAvailability(dataOpen);
     const tryPanelRef = useRef<HTMLDivElement>(null);
     const historyPanelRef = useRef<HTMLDivElement>(null);
     const panelsHeight = usePanelsHeight([tryPanelRef, historyPanelRef]);
@@ -101,7 +100,7 @@ const StudioLanding = ({
             <DataAvailabilityPanel
                 open={dataOpen}
                 onOpenChange={setDataOpen}
-                availability={dataAvailability}
+                availability={availability}
                 // Past the wall there is nothing to start, so no follow-up.
                 onAsk={
                     wall

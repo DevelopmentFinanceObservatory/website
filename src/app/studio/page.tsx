@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
-import { loadDataAvailability } from '@/lib/studio/dataAvailabilityLoader';
 import { pickExamples } from '@/lib/studio/examples';
 
 export const metadata: Metadata = {
@@ -14,11 +13,9 @@ export const metadata: Metadata = {
 // session read makes this a per-request render, so each visit draws its own
 // examples.
 const StudioPage = async () => {
-    const [session, dataAvailability] = await Promise.all([getSession(), loadDataAvailability()]);
+    const session = await getSession();
 
-    return (
-        <Studio guest={!session} examples={pickExamples()} dataAvailability={dataAvailability} />
-    );
+    return <Studio guest={!session} examples={pickExamples()} />;
 };
 
 export default StudioPage;

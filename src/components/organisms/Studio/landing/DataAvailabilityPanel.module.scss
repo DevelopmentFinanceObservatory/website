@@ -49,9 +49,9 @@
     letter-spacing: -0.01em;
 }
 
-// The Sources page's publishers, one per row: the name links to the page
-// filtered to it, the dataset count sits at the end of the row.
-.publishers {
+// The Sources page's rows, one per line. The name links to the page
+// filtered to it, and the dataset count sits at the end of the line.
+.sources {
     @include flex(column, flex-start, stretch);
 
     gap: rem(6);
@@ -60,7 +60,7 @@
     list-style: none;
 }
 
-.publisher {
+.source {
     @include flex(row, space-between, baseline);
     @include font-size(14px, 1.4);
 
@@ -71,7 +71,7 @@
     letter-spacing: -0.01em;
 }
 
-.publisherLink {
+.sourceLink {
     color: inherit;
     text-decoration: underline;
     text-decoration-thickness: 1px;
@@ -83,15 +83,15 @@
     }
 }
 
-.publisherCount {
+.sourceCount {
     @include font-size(12px, 1.3);
 
     flex-shrink: 0;
     color: var(--color-stone);
 }
 
-// The ways on, one under the other: the Sources page, a canvas on the
-// question. A link and a button wear the same row.
+// The ways on, one under the other: the Sources page, then a canvas on
+// the question. The link and the button share one style.
 .actions {
     @include flex(column, flex-start, stretch);
 

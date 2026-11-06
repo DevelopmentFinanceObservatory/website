@@ -1,14 +1,16 @@
 /**
- * The "What data is available?" overview, read on the server for the Studio
- * landing. Two reads, each already cached: the search catalogue (five
- * minutes, catalogueLoader.ts) and the graph's source catalogue (an hour,
- * sources/graph.ts). Neither failure stops the landing: a failed read
- * leaves its half of the overview null and the drawer renders the rest.
+ * The "What data is available?" overview, read on the server for
+ * `GET /api/data-availability`. Two reads, each already cached: the search
+ * catalogue (five minutes, catalogueLoader.ts) and the graph's source
+ * catalogue (an hour, sources/graph.ts). A failed read leaves its half of
+ * the overview null and the route still answers.
  *
- * The graph read waits up to SOURCES_WAIT_MS. A cold graph can take its
- * whole 15 s timeout and a retry, which suits the Sources page but not a
- * landing. Past the wait the landing goes on without the publishers, and
- * the read runs to its end so the hour cache is filled for the next visit.
+ * The graph read keeps its own failure memory here, as catalogueLoader
+ * does, because the hour cache stores only a 200 answer. While the graph is
+ * down, this module answers null for FAILURE_TTL_MS before it reads again,
+ * and callers that arrive during one read share it. Otherwise each drawer
+ * opened during an outage would hold its own read, with the retry, open
+ * against an API that is already struggling.
  *
  * Server-only, without a `server-only` import so `node --test` can load it.
  */
@@ -19,33 +21,46 @@ import { loadSources } from '../sources/graph.ts';
 
 import { type DataAvailability, dataAvailabilityOf } from './dataAvailability.ts';
 
-const SOURCES_WAIT_MS = 3000;
+const FAILURE_TTL_MS = 60_000;
 
-/** The Sources page's cards, or null when the graph fails or is slow. */
-const loadSourcesInTime = async (): Promise<Filterable[] | null> => {
-    const read = loadSources().catch((error: unknown) => {
-        console.warn('data availability: the sources read failed', error);
+// When the last failed graph read happened, or null after a success.
+let failedAt: number | null = null;
 
-        return null;
-    });
+// The graph read in progress, which concurrent callers share.
+let inFlight: Promise<Filterable[] | null> | null = null;
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const waited = new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), SOURCES_WAIT_MS);
-    });
-
-    try {
-        return await Promise.race([read, waited]);
-    } finally {
-        clearTimeout(timer);
+/** The Sources page's cards, or null when the graph read fails or failed
+ *  within the last FAILURE_TTL_MS. */
+const loadSourcesOrNull = (): Promise<Filterable[] | null> => {
+    if (failedAt !== null && Date.now() - failedAt < FAILURE_TTL_MS) {
+        return Promise.resolve(null);
     }
+
+    inFlight ??= loadSources()
+        .then(
+            (cards) => {
+                failedAt = null;
+
+                return cards;
+            },
+            (error: unknown) => {
+                console.warn('data availability: the sources read failed', error);
+                failedAt = Date.now();
+
+                return null;
+            },
+        )
+        .finally(() => {
+            inFlight = null;
+        });
+
+    return inFlight;
 };
 
-/** The overview: counts from the search catalogue and publishers from the
- *  graph, each null when its read gives nothing. Safe to call from a server
- *  component. */
+/** The overview: counts from the search catalogue and sources from the
+ *  graph, each null when its read gives nothing. */
 export const loadDataAvailability = async (): Promise<DataAvailability> => {
-    const [catalogue, sources] = await Promise.all([loadSearchCatalogue(), loadSourcesInTime()]);
+    const [catalogue, cards] = await Promise.all([loadSearchCatalogue(), loadSourcesOrNull()]);
 
-    return dataAvailabilityOf(catalogue?.counts ?? null, sources);
+    return dataAvailabilityOf(catalogue?.counts ?? null, cards);
 };

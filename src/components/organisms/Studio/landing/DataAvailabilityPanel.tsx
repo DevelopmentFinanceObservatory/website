@@ -6,30 +6,30 @@ import styles from './DataAvailabilityPanel.module.scss';
 
 import Icon from '@/components/atoms/Icon/Icon';
 import Modal from '@/components/molecules/Modal/Modal';
-import { scopeLine } from '@/lib/search/catalogue';
+import { aidLine, catalogueTiles, scopeLine } from '@/lib/search/catalogue';
 import {
     type DataAvailability,
-    dataFacts,
-    datasetCount,
-    publisherHref,
+    sourceDatasetCount,
+    sourceHref,
 } from '@/lib/studio/dataAvailability';
 
 type DataAvailabilityPanelProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    /** what the server read (lib/studio/dataAvailabilityLoader.ts) */
-    availability: DataAvailability;
+    /** the overview, or null while it is still being read */
+    availability: DataAvailability | null;
     // Start a canvas on the data-availability question. Null past the guest
     // wall, where there is nothing to start: the action is left out.
     onAsk: (() => void) | null;
 };
 
 /**
- * The landing's "What data is available?" drawer: /data's starting point
- * in a dialog. The scope line and the counts come from the search
- * catalogue, the publishers from the graph's source catalogue, each linking
- * to the Sources page filtered to it. Then the two ways on — the Sources
- * page, or a canvas where the agent answers questions about the data.
+ * The landing's "What data is available?" drawer. It shows what /data's
+ * starting point shows, in a dialog: the scope line and the aid line from
+ * the search catalogue's counts, the indicator and dataset tiles, and the
+ * Sources page's rows, each linking to that page filtered to it. The footer
+ * holds the two ways on: the Sources page, or a canvas where the agent
+ * answers questions about the data.
  */
 const DataAvailabilityPanel = ({
     open,
@@ -37,8 +37,10 @@ const DataAvailabilityPanel = ({
     availability,
     onAsk,
 }: DataAvailabilityPanelProps) => {
-    const facts = dataFacts(availability.counts);
-    const publishers = availability.publishers ?? [];
+    const counts = availability?.counts ?? null;
+    const aid = aidLine(counts?.aid ?? null);
+    const tiles = catalogueTiles(counts && { counts });
+    const sources = availability?.sources ?? [];
 
     return (
         <Modal
@@ -62,36 +64,45 @@ const DataAvailabilityPanel = ({
             }
         >
             <div className={styles.body}>
-                <p className={styles.text}>{scopeLine(availability.counts)}</p>
-                {facts.length > 0 && (
-                    <dl className={styles.facts}>
-                        {facts.map((fact) => (
-                            <div key={fact.label} className={styles.fact}>
-                                <dt className={styles.factLabel}>{fact.label}</dt>
-                                <dd className={styles.factValue}>{fact.value}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                )}
-                {publishers.length > 0 && (
+                {availability ? (
                     <>
-                        <p className={styles.text}>Data comes from:</p>
-                        <ul className={styles.publishers}>
-                            {publishers.map((publisher) => (
-                                <li key={publisher.id} className={styles.publisher}>
-                                    <Link
-                                        href={publisherHref(publisher)}
-                                        className={styles.publisherLink}
-                                    >
-                                        {publisher.label}
-                                    </Link>
-                                    <span className={styles.publisherCount}>
-                                        {datasetCount(publisher.count)}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
+                        <p className={styles.text}>{scopeLine(counts)}</p>
+                        {aid && <p className={styles.text}>{aid}</p>}
+                        {tiles.length > 0 && (
+                            <dl className={styles.facts}>
+                                {tiles.map((tile) => (
+                                    <div key={tile.label} className={styles.fact}>
+                                        <dt className={styles.factLabel}>{tile.label}</dt>
+                                        <dd className={styles.factValue}>{tile.value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        )}
+                        {sources.length > 0 && (
+                            <>
+                                <p className={styles.text}>Sources:</p>
+                                <ul className={styles.sources}>
+                                    {sources.map((source) => (
+                                        <li key={source.id} className={styles.source}>
+                                            <Link
+                                                href={sourceHref(source)}
+                                                className={styles.sourceLink}
+                                            >
+                                                {source.label}
+                                            </Link>
+                                            <span className={styles.sourceCount}>
+                                                {sourceDatasetCount(source.count)}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
                     </>
+                ) : (
+                    <p className={styles.text} aria-live="polite">
+                        Reading the catalogue…
+                    </p>
                 )}
             </div>
         </Modal>

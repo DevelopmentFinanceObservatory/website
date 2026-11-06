@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 
 import Studio from '@/components/organisms/Studio/Studio';
 import { getSession } from '@/lib/auth/session';
-import { loadDataAvailability } from '@/lib/studio/dataAvailabilityLoader';
 import { pickExamples } from '@/lib/studio/examples';
 
 export const metadata: Metadata = {
@@ -14,16 +13,9 @@ export const metadata: Metadata = {
 // link, a fresh fork). A guest has nothing saved, so lands on the landing.
 const StudioConversationPage = async ({ params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
-    const [session, dataAvailability] = await Promise.all([getSession(), loadDataAvailability()]);
+    const session = await getSession();
 
-    return (
-        <Studio
-            openId={id}
-            guest={!session}
-            examples={pickExamples()}
-            dataAvailability={dataAvailability}
-        />
-    );
+    return <Studio openId={id} guest={!session} examples={pickExamples()} />;
 };
 
 export default StudioConversationPage;

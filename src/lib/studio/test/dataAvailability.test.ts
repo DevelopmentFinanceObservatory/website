@@ -4,11 +4,13 @@ import test from 'node:test';
 import type { CatalogueCounts } from '../../search/catalogue.ts';
 import type { Filterable } from '../../sources/filters.ts';
 import {
+    DATA_AVAILABILITY_PATH,
     dataAvailabilityOf,
-    dataFacts,
-    datasetCount,
     EMPTY_DATA_AVAILABILITY,
-    publisherHref,
+    fetchDataAvailability,
+    parseDataAvailability,
+    sourceDatasetCount,
+    sourceHref,
 } from '../dataAvailability.ts';
 
 const COUNTS: CatalogueCounts = {
@@ -29,52 +31,68 @@ const card = (
     dataCommons: Filterable['dataCommons'],
 ): Filterable => ({ title, family, publisher, dataCommons });
 
-const SOURCES = [
+const CARDS = [
     card('CRS', 'dc/s/OECD', 'OECD', DFO),
     card('WDI', 'dc/s/WorldBank', 'World Bank', BASE),
     card('DAC', 'dc/s/OECD', 'OECD', DFO),
 ];
 
-test('the overview groups the sources the way the Sources page chips do', () => {
-    assert.deepEqual(dataAvailabilityOf(COUNTS, SOURCES), {
-        counts: COUNTS,
-        publishers: [
-            { id: 'dc/s/OECD', label: 'OECD', count: 2 },
-            { id: 'base', label: 'Data Commons by Google', count: 1 },
-        ],
-    });
+const SOURCES = [
+    { id: 'dc/s/OECD', label: 'OECD', count: 2 },
+    { id: 'base', label: 'Data Commons by Google', count: 1 },
+];
+
+test('the overview groups the cards the way the Sources page chips do', () => {
+    assert.deepEqual(dataAvailabilityOf(COUNTS, CARDS), { counts: COUNTS, sources: SOURCES });
 });
 
 test('a missing read leaves its half null', () => {
-    assert.deepEqual(dataAvailabilityOf(null, SOURCES).counts, null);
-    assert.deepEqual(dataAvailabilityOf(COUNTS, null).publishers, null);
+    assert.deepEqual(dataAvailabilityOf(null, CARDS).counts, null);
+    assert.deepEqual(dataAvailabilityOf(COUNTS, null).sources, null);
     assert.deepEqual(dataAvailabilityOf(null, null), EMPTY_DATA_AVAILABILITY);
 });
 
-test('the facts are the counts, formatted, with the aid years as a range', () => {
-    assert.deepEqual(dataFacts(COUNTS), [
-        { label: 'Indicators', value: '108,917' },
-        { label: 'Datasets', value: '92' },
-        { label: 'Publishers', value: '42' },
-        { label: 'Countries', value: '246' },
-        { label: 'Aid donors', value: '172' },
-        { label: 'Aid recipients', value: '235' },
-        { label: 'Aid data years', value: '1960–2025' },
-    ]);
+test('a source links to the Sources page filtered to it, with its dataset count', () => {
+    assert.equal(sourceHref(SOURCES[0]!), '/data/sources?filter=dc%2Fs%2FOECD');
+    assert.equal(sourceDatasetCount(1), '1 dataset');
+    assert.equal(sourceDatasetCount(1200), '1,200 datasets');
 });
 
-test('without aid years the facts stop at the recipients; without counts there are none', () => {
-    const facts = dataFacts({ ...COUNTS, aid: { ...COUNTS.aid, years: null } });
-
-    assert.equal(facts.at(-1)?.label, 'Aid recipients');
-    assert.deepEqual(dataFacts(null), []);
-});
-
-test('a publisher links to the Sources page filtered to it', () => {
-    assert.equal(
-        publisherHref({ id: 'dc/s/OECD', label: 'OECD', count: 2 }),
-        '/data/sources?filter=dc%2Fs%2FOECD',
+test('parseDataAvailability accepts the route body and drops a malformed source', () => {
+    assert.deepEqual(parseDataAvailability({ counts: COUNTS, sources: SOURCES }), {
+        counts: COUNTS,
+        sources: SOURCES,
+    });
+    assert.deepEqual(
+        parseDataAvailability({ counts: null, sources: null }),
+        EMPTY_DATA_AVAILABILITY,
     );
-    assert.equal(datasetCount(1), '1 dataset');
-    assert.equal(datasetCount(12), '12 datasets');
+    assert.deepEqual(parseDataAvailability({ counts: null, sources: [SOURCES[0], { id: 'x' }] }), {
+        counts: null,
+        sources: [SOURCES[0]],
+    });
+});
+
+test('parseDataAvailability rejects a body that is not an overview', () => {
+    assert.equal(parseDataAvailability(null), null);
+    assert.equal(parseDataAvailability('no'), null);
+    assert.equal(parseDataAvailability({ counts: 5, sources: null }), null);
+    assert.equal(parseDataAvailability({ counts: null, sources: 'many' }), null);
+});
+
+test('fetchDataAvailability reads the route and gives null on any failure', async (t) => {
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
+        Response.json({ counts: COUNTS, sources: SOURCES }),
+    );
+
+    assert.deepEqual(await fetchDataAvailability(), { counts: COUNTS, sources: SOURCES });
+    assert.equal(String(fetchMock.mock.calls[0]!.arguments[0]), DATA_AVAILABILITY_PATH);
+
+    t.mock.method(globalThis, 'fetch', async () => new Response('down', { status: 503 }));
+    assert.equal(await fetchDataAvailability(), null);
+
+    t.mock.method(globalThis, 'fetch', async () => {
+        throw new TypeError('fetch failed');
+    });
+    assert.equal(await fetchDataAvailability(), null);
 });
