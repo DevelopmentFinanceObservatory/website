@@ -559,7 +559,20 @@
 // The one scroll region: grows to fill, clips its own overflow. Content
 // fades out at both edges — the eased stops reach FULL transparency exactly
 // at the boundary, so nothing ever reads as a hard cut; padding gives the
-// fade room so resting content isn't dimmed.
+// fade room so resting content isn't dimmed. The site hides every
+// scrollbar (main.scss, on *); a long thread needs its cue back, so this
+// draws its own: a bar that stays in view (a styled ::-webkit-scrollbar is
+// never an overlay one, which on a Mac would show only while scrolling),
+// which needs scrollbar-width back at auto and scrollbar-color unset,
+// since either set makes Chrome ignore the ::-webkit-scrollbar rules.
+// Firefox has no such pseudo-element and takes its own thin bar in the
+// same colours instead. The bar takes layout width, so its gutter is
+// always reserved and the right-aligned bubbles keep their edge when a
+// thread first overflows. Nothing scrolls sideways: a code block scrolls
+// on its own (pre, below), and a subpixel remainder would otherwise draw
+// a second bar. The mask is two layers: the fade over the content, and a
+// solid column over the scrollbar's gutter, which Chrome and Safari would
+// otherwise fade with it, taking the thumb at a thread's resting bottom.
 .chatScroll {
     display: flex;
     flex: 1;
@@ -568,18 +581,48 @@
     align-items: flex-end;
     min-height: 0;
     padding-block: rem(24);
-    overflow-y: auto;
-    mask-image: linear-gradient(
-        to bottom,
-        transparent 0,
-        rgb(0 0 0 / 35%) rem(8),
-        rgb(0 0 0 / 80%) rem(16),
-        #000 rem(24),
-        #000 calc(100% - #{rem(24)}),
-        rgb(0 0 0 / 80%) calc(100% - #{rem(16)}),
-        rgb(0 0 0 / 35%) calc(100% - #{rem(8)}),
-        transparent 100%
-    );
+    overflow: hidden auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    mask-image:
+        linear-gradient(
+            to bottom,
+            transparent 0,
+            rgb(0 0 0 / 35%) rem(8),
+            rgb(0 0 0 / 80%) rem(16),
+            #000 rem(24),
+            #000 calc(100% - #{rem(24)}),
+            rgb(0 0 0 / 80%) calc(100% - #{rem(16)}),
+            rgb(0 0 0 / 35%) calc(100% - #{rem(8)}),
+            transparent 100%
+        ),
+        linear-gradient(#000, #000);
+    mask-position:
+        0 0,
+        100% 0;
+    mask-size:
+        calc(100% - #{rem(6)}) 100%,
+        rem(6) 100%;
+    mask-repeat: no-repeat;
+
+    @supports not selector(::-webkit-scrollbar) {
+        scrollbar-color: var(--color-stone) transparent;
+        scrollbar-width: thin;
+    }
+
+    &::-webkit-scrollbar {
+        display: block;
+        width: rem(6);
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--color-stone);
+        border-radius: rem(3);
+    }
 }
 
 // The Activity view starts its scroll at the panel's top edge, so its top
@@ -720,9 +763,21 @@
         }
     }
 
+    // Room for a two-digit marker: at 1.2em the "1" of "10." falls outside
+    // the list and the scroll region clips it.
+    ol {
+        padding-left: 2em;
+    }
+
     a {
         text-decoration: underline;
         text-underline-offset: 0.15em;
+    }
+
+    // A code block scrolls sideways on its own; .chatScroll never does.
+    pre {
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     code {

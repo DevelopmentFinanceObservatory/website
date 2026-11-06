@@ -602,22 +602,92 @@ span.slotMarked {
     }
 }
 
+// A menu list's own scrollbar. The site hides every scrollbar (main.scss,
+// on *); a long list of places needs its cue back, so this draws one that
+// stays in view (a styled ::-webkit-scrollbar is never an overlay one,
+// which on a Mac would show only while scrolling), which needs
+// scrollbar-width back at auto and scrollbar-color unset, since either set
+// makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
+// pseudo-element and takes its own thin bar in the same colours instead.
+// The bar takes layout width, so its gutter is always reserved: a filter
+// that takes the list in and out of overflow leaves the rows' width alone.
+// Nothing scrolls sideways: the full-bleed rows end at the padding edge,
+// and a subpixel remainder of theirs would otherwise draw a second bar.
+
+@mixin menu-scrollbar {
+    overflow: hidden auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+
+    @supports not selector(::-webkit-scrollbar) {
+        scrollbar-color: var(--color-sage-dark) transparent;
+        scrollbar-width: thin;
+    }
+
+    &::-webkit-scrollbar {
+        display: block;
+        width: rem(6);
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--color-sage-dark);
+        border-radius: rem(3);
+    }
+}
+
 // Content sits rem(10) from the panel edges; height follows the content.
 // Rows are stacked full-width Buttons with a hairline rhythm.
 .slotMenuBody {
+    @include menu-scrollbar;
+
     display: flex;
     flex-direction: column;
     gap: rem(4);
     min-height: 0;
     max-height: rem(280);
     padding: rem(10);
-    overflow-y: auto;
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
 }
 
+// SlotMenu's body is split in two under the one panel: the scroll region
+// (.slotMenuScroll), which takes the body's padding and scrolls on its own,
+// and the foot (.slotMenuFoot), where a multi-select's Apply lands
+// (MultiSelectApplyButton portals into it) so the button never covers a
+// row. The foot is empty in every other menu, and then not drawn.
+.slotMenuSplit {
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.slotMenuScroll {
+    @include menu-scrollbar;
+
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: rem(4);
+    min-height: 0;
+    padding: rem(10);
+}
+
+.slotMenuFoot {
+    flex-shrink: 0;
+    padding: rem(6) rem(10) rem(10);
+
+    &:empty {
+        display: none;
+    }
+}
+
 // A list's filter box and its count (OptionFilterBar), pinned to the top of
-// .slotMenuBody's scroll area so the filter stays in reach down a long list.
+// its menu's scroll region (.slotMenuScroll in SlotMenu and OptionSubmenu,
+// .slotMenuBody elsewhere) so the filter stays in reach down a long list.
 // The background matches the menu so scrolling rows don't show through, and
 // the shadow paints the body's top padding, which a browser may leave open
 // above the pinned bar.
@@ -642,15 +712,11 @@ span.slotMarked {
     color: var(--color-stone);
 }
 
-// Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
-// provider/recipient rows) doesn't scroll Apply out of reach; background
-// matches the menu so a scrolling row underneath doesn't show through.
+// The multi-select Apply button, in the body's foot (.slotMenuFoot) under
+// the scroll region, so a long list (hundreds of CRS provider/recipient
+// rows) scrolls on its own and the button covers no row.
 .multiSelectApply {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    padding-top: rem(6);
-    background-color: var(--color-yellow-800);
+    flex-shrink: 0;
 }
 
 .slotOption {
@@ -722,23 +788,11 @@ span.slotMarked {
     opacity: 0.55;
 }
 
-// The current pick's accent bar and label weight mark selection at rest,
-// distinct from this row's own hover fill, so a hovered ordinary row is
-// never mistaken for the current pick.
+// A currently-bound option, pulled out ahead of the ranked list: its label
+// weight marks it at rest, distinct from a row's hover fill, so a hovered
+// ordinary row is never mistaken for a bound one.
 .slotOptionPinned {
-    position: relative;
     font-weight: 500;
-
-    &::before {
-        content: "";
-        position: absolute;
-        top: rem(6);
-        bottom: rem(6);
-        left: 0;
-        width: 3px;
-        background-color: var(--color-charcoal);
-        border-radius: rem(2);
-    }
 }
 
 // Long labels (country names) trim to an ellipsis instead of widening the
@@ -844,8 +898,8 @@ span.slotMarked {
 .slotInput {
     @include font-size(10px, 1);
 
-    // .slotMenuBody scrolls, so a long list would otherwise shrink this
-    // field below its height.
+    // The menu's scroll region (.slotMenuScroll) scrolls, so a long list
+    // would otherwise shrink this field below its height.
     flex-shrink: 0;
     flex-grow: 1;
     min-width: rem(140);
@@ -1732,17 +1786,18 @@ span.slotMarked {
 }
 
 // The country list inside the default-scope place picker (216 rows), under
-// its filter box. It scrolls with .slotMenuBody, so the menu has one
+// its filter box. It scrolls with .slotMenuScroll, so the menu has one
 // scroller.
 .placeList {
     display: flex;
     flex-direction: column;
     gap: rem(2);
 
-    // Bled through the body's side padding at the panel's fixed measure:
-    // rem(300) with, and rem(280) without, the padding — the same width the
-    // loading note reserves, so the menu never jumps.
-    width: rem(300);
+    // Bled through the scroll region's side padding, as each row is on its
+    // own elsewhere (.slotOption), so it ends at the padding edge whatever
+    // width the scrollbar's gutter leaves. The panel's own min-width
+    // (.slotMenu) keeps the measure the loading note reserves.
+    width: calc(100% + #{rem(20)});
     margin-top: rem(6);
     margin-inline: rem(-10);
 
