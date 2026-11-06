@@ -603,8 +603,14 @@ span.slotMarked {
 // scrollbar-width back at auto and scrollbar-color unset, since either set
 // makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
 // pseudo-element and takes its own thin bar in the same colours instead.
+// The bar takes layout width, so its gutter is always reserved: a filter
+// that takes the list in and out of overflow leaves the rows' width alone.
+// Nothing scrolls sideways: the full-bleed rows end at the padding edge,
+// and a subpixel remainder of theirs would otherwise draw a second bar.
 
 @mixin menu-scrollbar {
+    overflow: hidden auto;
+    scrollbar-gutter: stable;
     scrollbar-width: auto;
 
     @supports not selector(::-webkit-scrollbar) {
@@ -638,7 +644,6 @@ span.slotMarked {
     min-height: 0;
     max-height: rem(280);
     padding: rem(10);
-    overflow-y: auto;
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
 }
@@ -663,10 +668,6 @@ span.slotMarked {
     gap: rem(4);
     min-height: 0;
     padding: rem(10);
-
-    // Sideways: the place list is cut to the panel's fixed measure, which
-    // the scrollbar's own width would otherwise push past the edge.
-    overflow: hidden auto;
 }
 
 .slotMenuFoot {
@@ -679,7 +680,8 @@ span.slotMarked {
 }
 
 // A list's filter box and its count (OptionFilterBar), pinned to the top of
-// .slotMenuBody's scroll area so the filter stays in reach down a long list.
+// its menu's scroll region (.slotMenuScroll in SlotMenu and OptionSubmenu,
+// .slotMenuBody elsewhere) so the filter stays in reach down a long list.
 // The background matches the menu so scrolling rows don't show through, and
 // the shadow paints the body's top padding, which a browser may leave open
 // above the pinned bar.
@@ -705,9 +707,8 @@ span.slotMarked {
 }
 
 // The multi-select Apply button, in the body's foot (.slotMenuFoot) under
-// the scroll region rather than pinned inside it, so a long list (hundreds
-// of CRS provider/recipient rows) scrolls on its own and the button covers
-// no row.
+// the scroll region, so a long list (hundreds of CRS provider/recipient
+// rows) scrolls on its own and the button covers no row.
 .multiSelectApply {
     flex-shrink: 0;
 }
@@ -781,12 +782,9 @@ span.slotMarked {
     opacity: 0.55;
 }
 
-// The current pick's accent bar and label weight mark selection at rest,
-// distinct from this row's own hover fill, so a hovered ordinary row is
-// never mistaken for the current pick.
-// A currently-bound option, pulled out ahead of the ranked list: its
-// weight alone sets it apart (a bar at the row's left edge read as a stray
-// mark down a list where every row is bound, e.g. a region's 54 places).
+// A currently-bound option, pulled out ahead of the ranked list: its label
+// weight marks it at rest, distinct from a row's hover fill, so a hovered
+// ordinary row is never mistaken for a bound one.
 .slotOptionPinned {
     font-weight: 500;
 }
@@ -894,8 +892,8 @@ span.slotMarked {
 .slotInput {
     @include font-size(10px, 1);
 
-    // .slotMenuBody scrolls, so a long list would otherwise shrink this
-    // field below its height.
+    // The menu's scroll region (.slotMenuScroll) scrolls, so a long list
+    // would otherwise shrink this field below its height.
     flex-shrink: 0;
     flex-grow: 1;
     min-width: rem(140);
@@ -1782,17 +1780,18 @@ span.slotMarked {
 }
 
 // The country list inside the default-scope place picker (216 rows), under
-// its filter box. It scrolls with .slotMenuBody, so the menu has one
+// its filter box. It scrolls with .slotMenuScroll, so the menu has one
 // scroller.
 .placeList {
     display: flex;
     flex-direction: column;
     gap: rem(2);
 
-    // Bled through the body's side padding at the panel's fixed measure:
-    // rem(300) with, and rem(280) without, the padding — the same width the
-    // loading note reserves, so the menu never jumps.
-    width: rem(300);
+    // Bled through the scroll region's side padding, as each row is on its
+    // own elsewhere (.slotOption), so it ends at the padding edge whatever
+    // width the scrollbar's gutter leaves. The panel's own min-width
+    // (.slotMenu) keeps the measure the loading note reserves.
+    width: calc(100% + #{rem(20)});
     margin-top: rem(6);
     margin-inline: rem(-10);
 

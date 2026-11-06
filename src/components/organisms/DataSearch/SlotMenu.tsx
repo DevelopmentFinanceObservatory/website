@@ -28,11 +28,13 @@ const ENTRY_FOCUS_EVENT = 'rovingFocusGroup.onEntryFocus';
 
 /** The foot of a menu's body (styles.slotMenuFoot), under the body's own
  *  scroll region, where MultiSelectApplyButton lands by portal so the list
- *  scrolls on its own and Apply never covers a row. Null outside a
- *  SlotMenu, where the button renders in place. The element arrives after
- *  the shell's first commit (a callback ref), so the button renders in
- *  place for that one pass. */
-const SlotMenuFoot = createContext<HTMLDivElement | null>(null);
+ *  scrolls on its own and Apply never covers a row. Undefined outside a
+ *  SlotMenu or OptionSubmenu, where the button renders in place; null
+ *  inside one whose foot has not been committed yet (its callback ref sets
+ *  it during the shell's first commit, and the sync re-render follows
+ *  before paint), when the button renders nothing rather than mount in the
+ *  list and move. */
+const SlotMenuFoot = createContext<HTMLDivElement | null | undefined>(undefined);
 
 /** Attached as a ref callback (SubContent's prop type omits onEntryFocus)
  *  so it runs ahead of Radix's own roving-focus effect. `handled` limits
@@ -210,7 +212,7 @@ export const OptionRow = ({
     muted?: boolean;
     pinned?: boolean;
     // A real multi-select toggle row (its list posts the whole checked set
-    // through a sticky Apply): exposes `checked` to assistive tech as
+    // through the Apply in the menu's foot): exposes `checked` to assistive tech as
     // role="menuitemcheckbox"/aria-checked, or `role` outside a menu (the
     // download dialog's "checkbox"). Omitted, a `checked` row is an
     // immediate single pick — the current value whether or not it's also
@@ -387,7 +389,8 @@ export const OptionFilterInput = ({
     />
 );
 
-/** A menu list's filter box, pinned to the top of .slotMenuBody's scroll
+/** A menu list's filter box, pinned to the top of its menu's scroll region
+ *  (.slotMenuScroll in SlotMenu and OptionSubmenu, .slotMenuBody elsewhere)
  *  so it stays in reach down a long list. Under it, once the list has
  *  loaded, how many of the list's `total` options the filter leaves
  *  `shown`. */
@@ -501,6 +504,10 @@ export const MultiSelectApplyButton = ({
             {multiSelectApplyLabel(selected.size, disabled)}
         </Button>
     );
+
+    if (foot === null) {
+        return null;
+    }
 
     return foot ? createPortal(button, foot) : button;
 };

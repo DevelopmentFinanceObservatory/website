@@ -566,7 +566,13 @@
 // which needs scrollbar-width back at auto and scrollbar-color unset,
 // since either set makes Chrome ignore the ::-webkit-scrollbar rules.
 // Firefox has no such pseudo-element and takes its own thin bar in the
-// same colours instead.
+// same colours instead. The bar takes layout width, so its gutter is
+// always reserved and the right-aligned bubbles keep their edge when a
+// thread first overflows. Nothing scrolls sideways: a code block scrolls
+// on its own (pre, below), and a subpixel remainder would otherwise draw
+// a second bar. The mask is two layers: the fade over the content, and a
+// solid column over the scrollbar's gutter, which Chrome and Safari would
+// otherwise fade with it, taking the thumb at a thread's resting bottom.
 .chatScroll {
     display: flex;
     flex: 1;
@@ -575,19 +581,29 @@
     align-items: flex-end;
     min-height: 0;
     padding-block: rem(24);
-    overflow-y: auto;
+    overflow: hidden auto;
+    scrollbar-gutter: stable;
     scrollbar-width: auto;
-    mask-image: linear-gradient(
-        to bottom,
-        transparent 0,
-        rgb(0 0 0 / 35%) rem(8),
-        rgb(0 0 0 / 80%) rem(16),
-        #000 rem(24),
-        #000 calc(100% - #{rem(24)}),
-        rgb(0 0 0 / 80%) calc(100% - #{rem(16)}),
-        rgb(0 0 0 / 35%) calc(100% - #{rem(8)}),
-        transparent 100%
-    );
+    mask-image:
+        linear-gradient(
+            to bottom,
+            transparent 0,
+            rgb(0 0 0 / 35%) rem(8),
+            rgb(0 0 0 / 80%) rem(16),
+            #000 rem(24),
+            #000 calc(100% - #{rem(24)}),
+            rgb(0 0 0 / 80%) calc(100% - #{rem(16)}),
+            rgb(0 0 0 / 35%) calc(100% - #{rem(8)}),
+            transparent 100%
+        ),
+        linear-gradient(#000, #000);
+    mask-position:
+        0 0,
+        100% 0;
+    mask-size:
+        calc(100% - #{rem(6)}) 100%,
+        rem(6) 100%;
+    mask-repeat: no-repeat;
 
     @supports not selector(::-webkit-scrollbar) {
         scrollbar-color: var(--color-stone) transparent;
@@ -756,6 +772,12 @@
     a {
         text-decoration: underline;
         text-underline-offset: 0.15em;
+    }
+
+    // A code block scrolls sideways on its own; .chatScroll never does.
+    pre {
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     code {
