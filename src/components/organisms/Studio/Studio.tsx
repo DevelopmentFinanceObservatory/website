@@ -169,7 +169,7 @@ const Studio = ({
     // second public share.
     const [citeLinks, setCiteLinks] = useState<Record<string, CitedSnapshot | CiteAsk>>({});
     const citeLinksInFlight = useRef(new Map<string, Promise<CiteLink>>());
-    // The card whose Download Data dialog is open (its menu opens it).
+    // The card whose Download Data dialog is open (its download button opens it).
     const [downloadCardId, setDownloadCardId] = useState<string | null>(null);
     // The canvas hands up its fly-to-card function (Activity → "View on
     // whiteboard", the chat chips).
@@ -714,6 +714,8 @@ const Studio = ({
                         theme={derivedTheme}
                         views={doc.views}
                         onViewChange={doc.setView}
+                        ratios={doc.ratios}
+                        onRatioChange={doc.setRatio}
                         onShare={
                             readOnly
                                 ? undefined
@@ -726,6 +728,11 @@ const Studio = ({
                         }
                         onDownload={setDownloadCardId}
                         readOnly={readOnly}
+                        // A viewer may resize a share's cards for
+                        // themselves: the layout and ratios stay in this
+                        // page (a share has no conversation id, so
+                        // useConversationSave saves nothing).
+                        resizable={readOnly}
                         centerSingle={shared?.kind === 'card'}
                         live={liveCanvas}
                     />

@@ -490,6 +490,12 @@ $table-head-cover: rem(48);
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .slotUpdating {
+        animation: none;
+    }
+}
+
 // Sentence slots: yellow, underlined, clickable. The underline and the
 // hover fill are two stacked BACKGROUND layers (not a pseudo-element): a
 // slot can be an inline span that wraps across lines, and with

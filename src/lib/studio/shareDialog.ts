@@ -27,7 +27,6 @@ export type SharedCard = { id: string; title: string };
 export type ShareRefusal =
     | { code: 'live_cards_blocked'; cardIds: string[] }
     | { code: 'live_too_many_cards'; limit: number; count: number }
-    | { code: 'live_unavailable' }
     | { code: 'share_limit' }
     | { code: 'payload_too_large' }
     | { code: 'share_refused' }
@@ -43,12 +42,10 @@ export type ShareAnswer = { id: string; servedAt?: string } | { refusal: ShareRe
 export type ShareMint = (ShareAnswer & { cards: SharedCard[] }) | { refusal: ShareRefusal };
 
 /** Why a live link is not offered. `cards` names the ones that cannot
- *  show live data. `limit` is the cap on a live share's data cards.
- *  `unavailable` is a site that cannot refresh any card. */
+ *  show live data. `limit` is the cap on a live share's data cards. */
 export type Withdrawal =
     | { reason: 'cards'; cards: SharedCard[] }
-    | { reason: 'limit'; limit: number; count: number }
-    | { reason: 'unavailable' };
+    | { reason: 'limit'; limit: number; count: number };
 
 /**
  * One link of the dialog. A key with no entry is being made. `ready`: the
@@ -127,7 +124,7 @@ export const readShareAnswer = (ok: boolean, answer: unknown): ShareAnswer => {
         return { refusal: { code, limit, count } };
     }
 
-    if (code === 'live_unavailable' || code === 'share_limit') {
+    if (code === 'share_limit') {
         return { refusal: { code } };
     }
 
@@ -163,8 +160,6 @@ const withdrawalOf = (refusal: ShareRefusal, cards: SharedCard[]): Withdrawal | 
             };
         case 'live_too_many_cards':
             return { reason: 'limit', limit: refusal.limit, count: refusal.count };
-        case 'live_unavailable':
-            return { reason: 'unavailable' };
         case 'share_limit':
         case 'payload_too_large':
         case 'share_refused':
@@ -245,8 +240,6 @@ export const withdrawalText = (withdrawal: Withdrawal, single: boolean): string 
     switch (withdrawal.reason) {
         case 'limit':
             return `A live link holds up to ${withdrawal.limit} data cards and this canvas has ${withdrawal.count}.`;
-        case 'unavailable':
-            return 'Live data is unavailable right now.';
         case 'cards': {
             const { cards } = withdrawal;
 

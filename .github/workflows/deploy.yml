@@ -16,6 +16,9 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest

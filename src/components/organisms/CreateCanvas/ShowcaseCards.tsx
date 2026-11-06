@@ -65,7 +65,9 @@ const extras = (title: string, view: CardExtras['view']): CardExtras => ({
     readOnly: true,
 });
 
-const theme = deriveTheme(DEFAULT_THEME);
+// The section's own ground for the cards is the site's off-white, in place of
+// the canvas's white.
+const theme = deriveTheme(DEFAULT_THEME, '#f6f6e8');
 const widgets = cards as Widget[];
 
 type Tile = Rect & { key: number; card: number; leaving: boolean };
@@ -240,8 +242,11 @@ const ShowcaseCards = ({ grid }: { grid: Grid }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reducedMotion, phone]);
 
+    // Pure decoration: the cards keep their real buttons (the source line,
+    // the left-out line), so `inert` takes the whole layer out of the tab
+    // order and hit testing; aria-hidden covers readers on older browsers.
     return (
-        <div className={styles.layer} aria-hidden="true">
+        <div className={styles.layer} aria-hidden="true" inert>
             {tiles.map(({ key, col, row, w, h, card, leaving }) => {
                 const widget = widgets[card]!;
                 const title = widget.kind === 'key_number' ? widget.label : widget.title;
@@ -272,9 +277,6 @@ const ShowcaseCards = ({ grid }: { grid: Grid }) => {
                                 height: h * gridCell,
                                 scale: SCALE,
                                 ...(themeVars(theme) as React.CSSProperties),
-                                // The section's own ground for the cards — the
-                                // site's off-white instead of the canvas's white.
-                                ['--th-card' as string]: '#f6f6e8',
                             }}
                         >
                             <CardBody

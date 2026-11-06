@@ -15,6 +15,8 @@ import {
     FILTER_KIND,
     GAP,
     heightIsDerived,
+    heightIsFree,
+    heightRange,
     resolveCardView,
     widgetTitle,
 } from './layout';
@@ -84,13 +86,21 @@ export type WhiteboardProps = {
     // the filters/tabs see the effective kind and it persists).
     views: Record<string, CardView>;
     onViewChange: (id: string, view: CardView) => void;
+    // Per-card plot ratio set by dragging a chart card's height (owned by
+    // the parent, so it persists and a share holds it).
+    ratios: Record<string, number>;
+    onRatioChange: (id: string, ratio: number) => void;
     // Card menu → Share (link / embed of that one card).
     onShare?: (id: string) => void;
-    // Card menu → Download Data (that card's rows).
+    // Card download button → Download Data (that card's rows).
     onDownload?: (id: string) => void;
     // A shared or embedded sheet: cards can't be moved, resized, pinned or
     // acted on — panning, tooltips and legends still work.
     readOnly?: boolean;
+    // A read-only sheet whose cards may still be resized (a share page):
+    // the grip shows, and the sizes and ratios it sets are the viewer's
+    // alone — a share has no conversation to save them to.
+    resizable?: boolean;
     // A one-card share: the card sits in the middle of the view (re-centred
     // as the view resizes) instead of at its saved spot, and the sheet is a
     // still — no shockwaves.
@@ -129,9 +139,12 @@ const Whiteboard = ({
     theme,
     views,
     onViewChange,
+    ratios,
+    onRatioChange,
     onShare,
     onDownload,
     readOnly = false,
+    resizable = false,
     centerSingle = false,
     live,
 }: WhiteboardProps) => {
@@ -201,7 +214,7 @@ const Whiteboard = ({
     );
 
     // Download Image. The card is found in the document rather than held in
-    // a ref: the menu that asks for it is rendered inside the very card
+    // a ref: the button that asks for it is rendered inside the very card
     // being photographed, and the sheet already labels each slot with its
     // widget id.
     const saveCardImage = (id: string, title: string) => {
@@ -424,9 +437,13 @@ const Whiteboard = ({
                     chartSource,
                 } = resolveCardView(widget, views[widget.id]);
                 const isText = widget.kind === 'text';
-                // A chart view's height follows its content, so its grip
-                // changes the width alone.
-                const widthOnly = heightIsDerived(widget, cardView);
+                // A card's derived height follows its content, so its grip
+                // changes the width alone — except a chart view at a ratio,
+                // whose height the grip sets (the card turns it into its
+                // ratio) within the view's range.
+                const widthOnly =
+                    heightIsDerived(widget, cardView) && !heightIsFree(cardView, chartSource);
+                const hRange = heightRange(widget, cardView);
                 const dimmed = !!dimKind && effectiveKind(widget, views[widget.id]) !== dimKind;
                 const extras: CardExtras = {
                     pinned: pinnedIds.includes(widget.id),
@@ -551,14 +568,18 @@ const Whiteboard = ({
                                     onRemove={extras.onRemoveNote}
                                 />
                             )}
-                            {!isLeaving && !readOnly && !isText && (
+                            {!isLeaving && (!readOnly || resizable) && !isText && (
                                 <span
                                     className={classNames(
                                         styles.resizeGrip,
                                         widthOnly && styles.resizeGripWidth,
                                     )}
                                     data-nowave=""
-                                    onPointerDown={resizing.startResize(widget.id, widthOnly)}
+                                    onPointerDown={resizing.startResize(
+                                        widget.id,
+                                        widthOnly,
+                                        hRange,
+                                    )}
                                     onPointerMove={resizing.moveResize}
                                     onPointerUp={resizing.endResize}
                                     onPointerCancel={resizing.endResize}
@@ -577,6 +598,8 @@ const Whiteboard = ({
                                 widthCells={slot.w}
                                 heightCells={slot.h}
                                 onFit={(rows) => fitRows(widget.id, rows)}
+                                ratio={ratios[widget.id]}
+                                onRatio={(ratio) => onRatioChange(widget.id, ratio)}
                                 extras={extras}
                             />
                         </div>

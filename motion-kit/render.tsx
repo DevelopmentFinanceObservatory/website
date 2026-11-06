@@ -216,7 +216,6 @@ const Slot = ({ placed }: { placed: Placed }) => {
             }
         >
             <div className={boardStyles.cardBox} data-draggable="">
-                <span className={boardStyles.handle} data-nowave="" />
                 {!isText && (
                     <span
                         className={classNames(
@@ -454,6 +453,31 @@ const planStates = (spec: DemoSpec, placed: Placed[], markup: string): PlanState
     };
 };
 
+/** The step lines of an activity turn: every list item it shows outside
+ *  another (a step's tries). Each is a step of the spec's activity, so each
+ *  must carry `stepClass`, the class its hook is found by. */
+export const stepLines = (turn: Element, stepClass: string): Element[] => {
+    const outermost = (el: Element) => {
+        for (let up = el.parent; up && up !== turn; up = up.parent) {
+            if (up.name === 'li') {
+                return false;
+            }
+        }
+
+        return true;
+    };
+    const lines = walk(turn.children).filter((el) => el.name === 'li' && outermost(el));
+    const steps = lines.filter((el) => hasClass(el, stepClass));
+
+    if (steps.length !== lines.length) {
+        throw new Error(
+            `render: an activity turn shows ${lines.length} lines, ${steps.length} with the step class`,
+        );
+    }
+
+    return steps;
+};
+
 // The hooks inside the app's own components, found by their classes.
 const chatHooks = (html: string, spec: DemoSpec): string => {
     const all = walk(parseMarkup(html));
@@ -555,9 +579,9 @@ const chatHooks = (html: string, spec: DemoSpec): string => {
         .filter((el) => el.name === 'section' && hasClass(el, activityStyles.turn!))
         .forEach((turn, index) => {
             hook(turn, `activity-${index}`);
-            within(turn)
-                .filter((el) => el.name === 'li' && hasClass(el, activityStyles.step!))
-                .forEach((line, step) => hook(line, `activity-${index}-${step}`));
+            stepLines(turn, activityStyles.step!).forEach((line, step) =>
+                hook(line, `activity-${index}-${step}`),
+            );
         });
 
     // The app's entrance reveals start hidden until an observer marks them;

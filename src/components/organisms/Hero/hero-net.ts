@@ -283,7 +283,15 @@ export function startHeroNet(
         });
     }
 
-    const resizeObserver = new ResizeObserver(resize);
+    const resizeObserver = new ResizeObserver(() => {
+        resize();
+
+        // No loop runs under reduced motion, so the still frame is redrawn
+        // by hand whenever the panel changes size.
+        if (reducedMotion) {
+            draw();
+        }
+    });
     resizeObserver.observe(innerEl);
 
     function update(now: number): void {
@@ -405,7 +413,13 @@ export function startHeroNet(
         frame = requestAnimationFrame(loop);
     }
 
-    frame = requestAnimationFrame(loop);
+    // Under reduced motion the field is one still frame: the squares sit at
+    // their home spots and nothing drifts, swirls or pours in.
+    if (reducedMotion) {
+        draw();
+    } else {
+        frame = requestAnimationFrame(loop);
+    }
 
     return {
         stop: () => {

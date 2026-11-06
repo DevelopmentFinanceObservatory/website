@@ -26,14 +26,21 @@ const nextConfig: NextConfig = {
     async headers() {
         return noindexHeaders();
     },
-    // ONE's privacy policy covers this site; /privacy is the address the
-    // MCP directory listings give for it. Temporary, so a later page of our
-    // own can take the path without browsers holding the old target.
+    // ONE's privacy policy covers this site, and its Terms and Conditions
+    // section sets the terms of use; /privacy and /terms are the addresses
+    // the MCP directory listings give for them. Temporary, so a later page of
+    // our own can take either path without browsers holding the old target.
     async redirects() {
         return [
             {
                 source: '/privacy',
                 destination: 'https://www.one.org/info/privacy-policy/',
+                permanent: false,
+            },
+            {
+                source: '/terms',
+                destination:
+                    'https://www.one.org/info/privacy-policy/#h-terms-and-conditions-nbsp',
                 permanent: false,
             },
         ];

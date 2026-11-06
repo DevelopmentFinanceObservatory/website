@@ -182,8 +182,15 @@ test:
 build:
     pnpm build
 
+# Checks vendor/developmentfinance-client.provenance.json against the commit
+# that vendored the tarball (see "API client package" in docs/development.md).
+#
+# Check the vendored API client's provenance
+check-client-provenance:
+    pnpm check:client-provenance
+
 # Everything ci.yml runs, in CI's order. Green here means green there.
-check: lint typecheck test build
+check: check-client-provenance lint typecheck test build
 
 # ── Container ──────────────────────────────────────────
 

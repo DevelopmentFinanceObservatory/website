@@ -420,7 +420,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         offline: [new TypeError('fetch failed')],
         garbled: [{ body: { status: 'current' } }],
         broken: [{ status: 500, body: null }],
-        pending: [{ body: { status: 'pending', retry_after_s: 6 } }],
+        pending: [{ body: { status: 'pending' } }],
     });
     const { outcomes } = await settle(deps, [
         'current',
@@ -446,7 +446,7 @@ test('each card settles on its own answer, and one failing card leaves the rest 
         // The route gives no pending answer, so one is outside its contract.
         pending: { status: 'error', code: 'refresh_invalid' },
     });
-    // ... and is asked once, not again after its retry_after_s.
+    // ... and is asked once.
     assert.equal(calls.filter(({ cardId }) => cardId === 'pending').length, 1);
 });
 

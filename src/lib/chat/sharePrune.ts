@@ -27,6 +27,7 @@ const SAVED_FIELDS: Record<keyof SavedConversation, true> = {
     layout: true,
     theme: true,
     views: true,
+    ratios: true,
     textCards: true,
     titles: true,
     notes: true,
@@ -80,6 +81,7 @@ export const pruneForShare = (
         titles: cardId ? pick(saved.titles, cardId) : {},
         notes: cardId ? pick(saved.notes, cardId) : {},
         views: cardId ? pick(saved.views, cardId) : {},
+        ratios: cardId ? pick(saved.ratios, cardId) : {},
         turnCount: 1,
     };
 };

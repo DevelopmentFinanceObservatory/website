@@ -1,0 +1,11 @@
+{
+    "package": "developmentfinance-client-0.1.0.tgz",
+    "sdk": {
+        "repository": "https://github.com/DevelopmentFinanceObservatory/sdk",
+        "commit": "82701c8acef26eabd29b6960a7ee58fa419825a1"
+    },
+    "spec_kit": {
+        "repository": "https://github.com/DevelopmentFinanceObservatory/spec-kit",
+        "commit": "4ad77392b3ca9ae61d4c0522981878682d7d2b90"
+    }
+}

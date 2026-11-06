@@ -10,6 +10,7 @@ import Button from '@/components/atoms/Button/Button';
 import DataPrompt from '@/components/molecules/DataPrompt/DataPrompt';
 import SectionHeading from '@/components/molecules/SectionHeading/SectionHeading';
 import StatTiles from '@/components/molecules/StatTiles/StatTiles';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { revealIndex, useReveal } from '@/hooks/useReveal';
 import {
     catalogueChips,
@@ -27,14 +28,17 @@ const DownloadDataset = ({ catalogue }: { catalogue: SearchCatalogue | null }) =
     const sectionRef = useReveal<HTMLElement>();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const tiles = catalogueTiles(catalogue);
+    const reducedMotion = usePrefersReducedMotion();
 
+    // The net reads the motion preference itself when it starts (a still
+    // frame, or the live field); it restarts whenever the reader flips it.
     useEffect(() => {
         if (!sectionRef.current || !canvasRef.current) {
             return;
         }
 
         return startDatasetNet(sectionRef.current, canvasRef.current);
-    }, [sectionRef]);
+    }, [sectionRef, reducedMotion]);
 
     return (
         <section

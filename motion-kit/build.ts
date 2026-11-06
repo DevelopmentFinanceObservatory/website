@@ -15,7 +15,7 @@ import { htmlLeaks } from './html.ts';
 import { type Motion, readMotion } from './motion.ts';
 import { previewHtml } from './preview.ts';
 import { CELL, DEFAULT_VIEWPORT, ROOT_FONT_SIZE, readSpec, type Viewport } from './spec.ts';
-import { type Source, stateClasses, type StyleModules } from './stateClasses.ts';
+import { missingClasses, type Source, stateClasses, type StyleModules } from './stateClasses.ts';
 
 /**
  * The generator: bundles render.tsx with esbuild (SCSS modules, SVGR icons
@@ -156,16 +156,21 @@ const stubPlugin: Plugin = {
 
 // --- the renderer -------------------------------------------------------------
 
-type Renderer = Pick<typeof import('./render.tsx'), 'renderStudio' | 'layoutDefaultChart'>;
+type Renderer = Pick<
+    typeof import('./render.tsx'),
+    'renderStudio' | 'layoutDefaultChart' | 'stepLines'
+>;
 
 /** render.tsx bundled for Node and loaded, with the CSS its imports pulled
  *  in (every module of every component in the bundle), the class map of
- *  each SCSS module and the app's TSX sources in the bundle. */
+ *  each SCSS module, the app's TSX sources in the bundle and the kit's own
+ *  sources in it. */
 export const loadRenderer = async (): Promise<{
     renderer: Renderer;
     moduleCss: string;
     styleModules: StyleModules;
     sources: Source[];
+    kitSources: Source[];
 }> => {
     const out = await mkdtemp(join(tmpdir(), 'motion-kit-'));
 
@@ -204,10 +209,18 @@ export const loadRenderer = async (): Promise<{
 
         const renderer = requireHere(bundlePath) as Renderer;
         const scope = globalThis as { [STYLE_MODULES]?: StyleModules };
-        const sources = await Promise.all(
-            Object.keys(result.metafile.inputs)
-                .filter((path) => path.startsWith('src/') && path.endsWith('.tsx'))
-                .map(async (path) => ({ path, text: await readFile(join(REPO, path), 'utf8') })),
+        const read = (keep: (path: string) => boolean) =>
+            Promise.all(
+                Object.keys(result.metafile.inputs)
+                    .filter(keep)
+                    .map(async (path) => ({
+                        path,
+                        text: await readFile(join(REPO, path), 'utf8'),
+                    })),
+            );
+        const sources = await read((path) => path.startsWith('src/') && path.endsWith('.tsx'));
+        const kitSources = await read(
+            (path) => path.startsWith('motion-kit/') && /\.tsx?$/.test(path),
         );
 
         return {
@@ -215,6 +228,7 @@ export const loadRenderer = async (): Promise<{
             moduleCss: css?.text ?? '',
             styleModules: scope[STYLE_MODULES] ?? {},
             sources,
+            kitSources,
         };
     } finally {
         await rm(out, { recursive: true, force: true });
@@ -456,7 +470,13 @@ export const generate = async ({
     // the markup the same on every machine.
     process.env.TZ = 'UTC';
 
-    const { renderer, moduleCss, styleModules, sources } = await loadRenderer();
+    const { renderer, moduleCss, styleModules, sources, kitSources } = await loadRenderer();
+    const missing = missingClasses([...kitSources, ...sources], styleModules, REPO);
+
+    if (missing.length) {
+        throw new Error(`motion-kit: classes no SCSS module defines: ${missing.join(', ')}`);
+    }
+
     const rendered = renderer.renderStudio(spec, { fontsDir: FONTS });
     const html = inertLinks(rendered.html);
     const leaks = htmlLeaks(html);

@@ -54,11 +54,9 @@ import { widgetFromLiveCard, type SharedView } from './liveCards.ts';
 
 export type SlotDeps = { shares: SharesBackend };
 
-// The public component reads and exports, which carry no credential.
+// The public component reads, which carry no credential.
 const publicReads = ({ shares }: SlotDeps): LiveBackend => ({
     apisBase: shares.base,
-    aiBase: '',
-    principal: '',
     fetch: shares.fetch,
 });
 

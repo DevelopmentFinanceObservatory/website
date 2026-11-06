@@ -84,7 +84,7 @@ The migration refuses a share, with `placement_refused`, whose:
 
 ## Left out
 
-`share_card_result` rows cache live refreshes, and dfo-apis refreshes live slots itself, so the migration leaves them out. It leaves out the `conversation_id` and `card_id` columns too, because no share page reads them.
+The migration leaves out the `conversation_id` and `card_id` columns, because no share page reads them.
 
 ## Round trip on a local stack
 
