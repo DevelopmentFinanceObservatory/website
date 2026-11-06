@@ -5,7 +5,6 @@ import type { NextRequest } from 'next/server';
 import { apisFetch } from '@/lib/apisAuth';
 
 import { limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
-import { relayBody } from './compress';
 import {
     clientResponseHeaders,
     dropEncodedLength,
@@ -28,10 +27,16 @@ import { hit, type Surface } from './rateLimit';
  * method, query, body, content headers, user-agent, x-dfo-client and every
  * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
- * nothing being buffered here. A text, JSON, XML or CSV body of 1,024 bytes
- * or more is gzipped on the way for a client that accepts it
- * (src/lib/proxy/compress); an event stream and every /mcp response go back
- * as the upstream sent them.
+ * nothing being buffered here. Every body goes back unencoded, as fetch
+ * decoded it. Next drops the Content-Encoding and Content-Length of a route
+ * handler's Response and does not compress one, so compression for clients
+ * comes from Cloudflare in front of production.
+ *
+ * The first chunk of a body is read before the response goes out, so a body
+ * that fails before its first byte is answered with a logged 502 problem
+ * document. A body that fails after that reaches the client as the upstream's
+ * status with a body that ends in an error. An event stream and every /mcp
+ * response go out unread, so a failure there always takes the second form.
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*, /api/v1/presentation/components|shares/*
@@ -82,8 +87,9 @@ type ForwardOptions = {
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
     unreachable: string;
-    // False sends every body back unencoded, whatever its type.
-    compress?: boolean;
+    // False relays every body unread, without the first-chunk check that
+    // answers a body failing before its first byte with a 502.
+    peek?: boolean;
     // Runs after the rate limit and before the upstream call; a Response it
     // returns is the answer instead (the Studio's prompt allowance).
     admit?: () => Promise<Response | null>;
@@ -101,6 +107,37 @@ const isApisTarget = (target: string): boolean => {
     return (
         base !== undefined && URL.canParse(base) && new URL(target).origin === new URL(base).origin
     );
+};
+
+const isEventStream = (headers: Headers): boolean =>
+    /^text\/event-stream\s*(?:;|$)/i.test(headers.get('content-type') ?? '');
+
+// Reads the first chunk of `body`, rejecting if the upstream fails first, and
+// returns a stream that yields that chunk and then pulls the rest as the
+// client reads, so nothing more is buffered.
+const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<Uint8Array>> => {
+    const reader = body.getReader();
+    const first = await reader.read();
+
+    return new ReadableStream<Uint8Array>({
+        start(controller) {
+            if (first.done) {
+                controller.close();
+            } else {
+                controller.enqueue(first.value);
+            }
+        },
+        async pull(controller) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+                controller.close();
+            } else {
+                controller.enqueue(value);
+            }
+        },
+        cancel: (reason) => reader.cancel(reason),
+    });
 };
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
@@ -185,13 +222,17 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         options.pass?.response,
     );
 
-    return relayBody({
-        accept: req.headers.get('accept-encoding'),
-        upstream,
-        headers: out,
-        compress: options.compress,
-        onEarlyFailure: (error) => earlyFailure(error, upstream.status),
-    });
+    let body: ReadableStream<Uint8Array> | null = upstream.body;
+
+    if (body && options.peek !== false && !isEventStream(upstream.headers)) {
+        try {
+            body = await peeked(body);
+        } catch (error) {
+            return earlyFailure(error, upstream.status);
+        }
+    }
+
+    return new Response(body, { status: upstream.status, headers: out });
 };
 
 // A static asset's request and response headers: conditional requests out,
