@@ -4,6 +4,8 @@ import classNames from 'classnames';
 import Link from 'next/link';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 
+import DataAvailabilityPanel from './DataAvailabilityPanel';
+import { useDataAvailability } from '../hooks/useDataAvailability';
 import styles from './StudioLanding.module.scss';
 import { usePanelsHeight } from './usePanelsHeight';
 import PromptForm, { type PromptField } from '../prompt/PromptForm';
@@ -12,6 +14,7 @@ import Icon from '@/components/atoms/Icon/Icon';
 import SegmentedTabs from '@/components/molecules/SegmentedTabs/SegmentedTabs';
 import { revealIndex } from '@/hooks/useReveal';
 import type { ConversationMeta } from '@/lib/chat/historyClient';
+import { DATA_AVAILABILITY_PROMPT } from '@/lib/studio/dataAvailability';
 
 const LANDING_TABS = [
     { id: 'try', label: 'Try one of these' },
@@ -39,8 +42,9 @@ type StudioLandingProps = {
 };
 
 /**
- * The Studio landing: eyebrow, title, lead, the prompt, and the two panels
- * under a segmented switch — "Try one of these" and "My History".
+ * The Studio landing: eyebrow, title, lead, the "What data is available?"
+ * link and its drawer, the prompt, and the two panels under a segmented
+ * switch, "Try one of these" and "My History".
  */
 const StudioLanding = ({
     query,
@@ -55,6 +59,10 @@ const StudioLanding = ({
     wall,
 }: StudioLandingProps) => {
     const [tab, setTab] = useState<'try' | 'history'>('try');
+    // The "What data is available?" drawer, and its overview, read from the
+    // site's route the first time it opens.
+    const [dataOpen, setDataOpen] = useState(false);
+    const { availability } = useDataAvailability(dataOpen);
     const tryPanelRef = useRef<HTMLDivElement>(null);
     const historyPanelRef = useRef<HTMLDivElement>(null);
     const panelsHeight = usePanelsHeight([tryPanelRef, historyPanelRef]);
@@ -80,9 +88,32 @@ const StudioLanding = ({
                 analysis across datasets, and building charts on your canvas for you to edit and
                 share.
             </p>
+            <button
+                type="button"
+                className={styles.dataLink}
+                data-reveal="text"
+                style={revealIndex(3)}
+                onClick={() => setDataOpen(true)}
+            >
+                What data is available?
+            </button>
+            <DataAvailabilityPanel
+                open={dataOpen}
+                onOpenChange={setDataOpen}
+                availability={availability}
+                // Past the wall there is nothing to start, so no follow-up.
+                onAsk={
+                    wall
+                        ? null
+                        : () => {
+                              setDataOpen(false);
+                              onBegin(DATA_AVAILABILITY_PROMPT);
+                          }
+                }
+            />
 
             {wall ? (
-                <div data-reveal style={revealIndex(3)}>
+                <div data-reveal style={revealIndex(4)}>
                     {wall}
                 </div>
             ) : (
@@ -96,7 +127,7 @@ const StudioLanding = ({
                     grow
                     inputRef={inputRef}
                     data-reveal
-                    style={revealIndex(3)}
+                    style={revealIndex(4)}
                 />
             )}
 
@@ -104,7 +135,7 @@ const StudioLanding = ({
             {!wall && (
                 <>
                     {history && (
-                        <div className={styles.tabs} data-reveal style={revealIndex(4)}>
+                        <div className={styles.tabs} data-reveal style={revealIndex(5)}>
                             <SegmentedTabs
                                 tabs={LANDING_TABS}
                                 value={tab}

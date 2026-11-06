@@ -12,7 +12,7 @@ import StatusLine from './StatusLine';
 import { iconOf } from './WidgetChips';
 import { widgetTitle, type CardView } from '../canvas/layout';
 import type { useChat } from '../hooks/useChat';
-import PromptForm from '../prompt/PromptForm';
+import PromptForm, { type PromptField } from '../prompt/PromptForm';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
@@ -32,6 +32,8 @@ type ChatPanelProps = {
     // A shared (read-only) transcript: no input, no card actions, and the
     // share marks aren't shown (they're the owner's).
     readOnly: boolean;
+    // Focus the follow-up field when the panel mounts.
+    autoFocus?: boolean;
     // A guest past the free prompts: shown in place of the follow-up input.
     wall?: React.ReactNode;
     // A gallery session: the one thing a reader can do here.
@@ -61,6 +63,7 @@ const ChatPanel = ({
     collapsed,
     gone,
     readOnly,
+    autoFocus = false,
     wall,
     onContinue,
     continuing = false,
@@ -76,6 +79,14 @@ const ChatPanel = ({
 }: ChatPanelProps) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [follow, setFollow] = useState('');
+    // The follow-up field, focused on mount when asked (autoFocus).
+    const followRef = useRef<PromptField>(null);
+
+    useEffect(() => {
+        if (autoFocus) {
+            followRef.current?.focus();
+        }
+    }, [autoFocus]);
 
     // Keep the transcript pinned to the latest turn as it streams — and as
     // the input grows under it (QA-26), which takes the room out of this
@@ -257,6 +268,7 @@ const ChatPanel = ({
                                     <PromptForm
                                         variant="chat"
                                         grow
+                                        inputRef={followRef}
                                         value={follow}
                                         onChange={setFollow}
                                         onSubmit={sendFollow}
