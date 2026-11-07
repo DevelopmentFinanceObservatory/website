@@ -48,7 +48,8 @@ export type InputRef = {
 };
 
 /** A unit by dcid (`ref`), by ISO 4217 code (`currency`), or both, with
- *  its price basis and, for constant prices, the base year. */
+ *  its price basis and, for constant prices, the base year and whose prices
+ *  deflated it (`donor`, `recipient` or `national`) where the record says. */
 export type SimpleUnit = {
     ref?: string;
     currency?: string;
@@ -56,6 +57,7 @@ export type SimpleUnit = {
     at_mint?: true;
     prices?: string;
     base_year?: number;
+    deflation_basis?: string;
 };
 
 /** A composed unit's side that counts a variable, such as the population in
@@ -307,6 +309,7 @@ const asSimpleUnit: Reader<SimpleUnit> = (value) => {
         ...asAtMint(record),
         ...optional(record, 'prices', asText),
         ...optional(record, 'base_year', asCount),
+        ...optional(record, 'deflation_basis', asText),
     };
 };
 
