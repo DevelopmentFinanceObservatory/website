@@ -1137,6 +1137,35 @@ test('a composed unit reads its sides, and one unit over itself reads Ratio', ()
             'US dollars, constant 2021 prices per US dollars',
         ],
         [
+            {
+                currency: 'NGN',
+                label: 'Nigerian naira',
+                prices: 'constant',
+                base_year: 2024,
+                deflation_basis: 'donor',
+            },
+            'Nigerian naira, constant 2024 prices, donor prices',
+        ],
+        [
+            {
+                numerator: {
+                    currency: 'NGN',
+                    label: 'Nigerian naira',
+                    prices: 'constant',
+                    base_year: 2024,
+                    deflation_basis: 'donor',
+                },
+                denominator: {
+                    currency: 'NGN',
+                    label: 'Nigerian naira',
+                    prices: 'constant',
+                    base_year: 2024,
+                    deflation_basis: 'recipient',
+                },
+            },
+            'Nigerian naira, constant 2024 prices, donor prices per Nigerian naira, constant 2024 prices, recipient prices',
+        ],
+        [
             { numerator: usd, denominator: { stat_var: 'Count_Person', label: 'population' } },
             'US dollars per population',
         ],

@@ -69,12 +69,14 @@ export const payloadNoteText = (payload: UnknownRecord | null | undefined): stri
 };
 
 /** A currency amount: its ISO 4217 code, its magnitude, its price basis
- *  and, for constant prices, the base year. */
+ *  and, for constant prices, the base year and, where the conversion names
+ *  it, whose prices deflated it (`donor`, `recipient` or `national`). */
 export type StructuredUnit = {
     currency: string | null;
     magnitude: string | null;
     prices: string | null;
     base_year: number | null;
+    deflation_basis?: string;
 };
 
 /** A measure that declares no unit, standing as one side of a composed
@@ -90,12 +92,14 @@ export type PayloadUnit = string | StructuredUnit | { numerator: UnitPart; denom
 
 const asStructuredUnit = (record: UnknownRecord): StructuredUnit => {
     const baseYear = record['base_year'];
+    const deflationBasis = nonBlank(record['deflation_basis']);
 
     return {
         currency: nonBlank(record['currency']) ?? null,
         magnitude: nonBlank(record['magnitude']) ?? null,
         prices: nonBlank(record['prices']) ?? null,
         base_year: typeof baseYear === 'number' ? baseYear : null,
+        ...(deflationBasis ? { deflation_basis: deflationBasis } : {}),
     };
 };
 
