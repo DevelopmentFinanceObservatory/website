@@ -123,7 +123,7 @@ const Roadmap = () => {
                     Roadmap
                 </h1>
                 <p className={styles.lead} data-reveal="text" style={revealIndex(1)}>
-                    Whats is available in the graph and what is currently on the horizon
+                    What is available in the graph and what is currently on the horizon
                 </p>
                 <div className={styles.tabs} data-reveal style={revealIndex(2)}>
                     {/* From the design: "Data" + rem(120) of air spans exactly the
