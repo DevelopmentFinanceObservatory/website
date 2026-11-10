@@ -23,7 +23,8 @@ export interface OptionLike {
 
 /** About 8 rows fit in a menu's scroll region (.slotMenuScroll) under its
  *  body's rem(280) cap, and about 6 when a multi-select's Apply foot takes
- *  its 48px. Past that the list shows a filter box. */
+ *  its 48px. A list longer than 8 shows a filter box, so a multi-select of
+ *  7 or 8 scrolls a little without one. */
 export const FILTER_VISIBLE_THRESHOLD = 8;
 
 /** Whether a list this long earns a filter box at all. */

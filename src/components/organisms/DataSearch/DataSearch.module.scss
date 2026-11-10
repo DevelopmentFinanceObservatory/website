@@ -822,8 +822,11 @@ span.slotMarked {
         margin-left: calc(var(--sub-gap-right, #{rem(10)}) + 1px);
     }
 
+    // Radix anchors a left-side panel's wrapper by its right edge, and the
+    // wrapper takes the panel's margin box, so a right margin moves the
+    // panel left.
     &[data-side="left"] {
-        margin-left: calc(-1 * var(--sub-gap-left, #{rem(10)}) - 1px);
+        margin-right: calc(var(--sub-gap-left, #{rem(10)}) + 1px);
     }
 }
 
@@ -2510,7 +2513,7 @@ span.slotMarked {
 
         &[data-side="left"] {
             left: calc(100vw - 16px - var(--sub-trigger-left));
-            margin-left: 0;
+            margin-right: 0;
         }
 
         // Long labels wrap in the narrow panel instead of trimming.
