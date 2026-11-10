@@ -14,7 +14,7 @@
  * failed read and does not merge concurrent misses, so `loadSources`, which
  * the drawer, /data/sources and the sitemap all call, shares one read between
  * concurrent callers and remembers a failure for FAILURE_TTL_MS: while the
- * graph is down, the API sees one catalogue read a minute per server instance.
+ * graph is down, the API sees one catalogue read every 15 s per server instance.
  */
 
 import type { ProblemDetails } from '@developmentfinance/client/wire';
@@ -48,7 +48,7 @@ const READ_TIMEOUT_MS = 15_000;
 // upstream. An instant re-read meets the same answer.
 const RETRY_DELAY_MS = 1000;
 
-const FAILURE_TTL_MS = 60_000;
+const FAILURE_TTL_MS = 15_000;
 
 // The last failed catalogue read and when it happened. A read only goes out
 // once FAILURE_TTL_MS has passed since then, so nothing needs to clear it.

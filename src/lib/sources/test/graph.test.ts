@@ -312,7 +312,7 @@ test('callers that arrive during one catalogue read share it', async (t) => {
     assert.equal(fetchMock.mock.callCount(), 1);
 });
 
-test('a failed catalogue read is rethrown without a read for a minute, then read again', async (t) => {
+test('a failed catalogue read is rethrown without a read for 15 s, then read again', async (t) => {
     t.mock.timers.enable({ apis: ['Date'], now });
 
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
@@ -323,8 +323,8 @@ test('a failed catalogue read is rethrown without a read for a minute, then read
 
     assert.match(String(failure), /HTTP 500/);
 
-    // Within the minute every caller gets the same error and the graph is not read.
-    t.mock.timers.tick(59_999);
+    // Within the 15 s every caller gets the same error and the graph is not read.
+    t.mock.timers.tick(14_999);
     await assert.rejects(loadSources(), (error) => error === failure);
     assert.equal(fetchMock.mock.callCount(), 1);
 

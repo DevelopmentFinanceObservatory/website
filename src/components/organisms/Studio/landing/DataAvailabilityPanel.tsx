@@ -74,11 +74,16 @@ const DataAvailabilityPanel = ({
                 </nav>
             }
         >
-            <div className={styles.body}>
+            {/* One live region for both halves: each placeholder is swapped
+                for its content when its read settles, and the region reads
+                the change out once neither half is pending. */}
+            <div
+                className={styles.body}
+                aria-live="polite"
+                aria-busy={isPending(counts) || isPending(sources)}
+            >
                 {isPending(counts) ? (
-                    <p className={styles.text} aria-live="polite">
-                        Reading the catalogue…
-                    </p>
+                    <p className={styles.text}>Reading the catalogue…</p>
                 ) : (
                     <>
                         <p className={styles.text}>{scopeLine(read)}</p>
@@ -96,9 +101,7 @@ const DataAvailabilityPanel = ({
                     </>
                 )}
                 {isPending(sources) ? (
-                    <p className={styles.text} aria-live="polite">
-                        Reading the sources…
-                    </p>
+                    <p className={styles.text}>Reading the sources…</p>
                 ) : (
                     rows.length > 0 && (
                         <>

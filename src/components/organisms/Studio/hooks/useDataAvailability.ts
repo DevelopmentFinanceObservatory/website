@@ -17,7 +17,7 @@ import {
 /**
  * The "What data is available?" drawer's open state and its two halves. Each
  * half is read when the drawer opens, unless it is already read or on its
- * way, and kept for the rest of the visit once read. A failed half is read
+ * way, and kept once read for as long as the landing stays mounted. A failed half is read
  * again on the next open. Reads start from the open itself, so nothing
  * re-reads while the drawer sits open, however the halves change.
  */
