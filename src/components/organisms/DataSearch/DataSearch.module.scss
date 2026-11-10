@@ -596,71 +596,43 @@ span.slotMarked {
     }
 }
 
-// A menu list's own scrollbar. The site hides every scrollbar (main.scss,
-// on *); a long list of places needs its cue back, so this draws one that
-// stays in view (a styled ::-webkit-scrollbar is never an overlay one,
-// which on a Mac would show only while scrolling), which needs
-// scrollbar-width back at auto and scrollbar-color unset, since either set
-// makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
-// pseudo-element and takes its own thin bar in the same colours instead.
-// The bar takes layout width, so its gutter is always reserved: a filter
-// that takes the list in and out of overflow leaves the rows' width alone.
-// Nothing scrolls sideways: the full-bleed rows end at the padding edge,
-// and a subpixel remainder of theirs would otherwise draw a second bar.
+// The list panel under a menu's title: height follows the content up to
+// rem(280). Shared by the scrolling body and the split one.
 
-@mixin menu-scrollbar {
-    overflow: hidden auto;
-    scrollbar-gutter: stable;
-    scrollbar-width: auto;
-
-    @supports not selector(::-webkit-scrollbar) {
-        scrollbar-color: var(--color-sage-dark) transparent;
-        scrollbar-width: thin;
-    }
-
-    &::-webkit-scrollbar {
-        display: block;
-        width: rem(6);
-    }
-
-    &::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: var(--color-sage-dark);
-        border-radius: rem(3);
-    }
-}
-
-// Content sits rem(10) from the panel edges; height follows the content.
-// Rows are stacked full-width Buttons with a hairline rhythm.
-.slotMenuBody {
-    @include menu-scrollbar;
-
+@mixin menu-body-box {
     display: flex;
     flex-direction: column;
-    gap: rem(4);
     min-height: 0;
     max-height: rem(280);
-    padding: rem(10);
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
 }
 
-// SlotMenu's body is split in two under the one panel: the scroll region
+// A body that scrolls itself (Refine, GalleryFilter). Content sits rem(10)
+// from the panel edges; rows are stacked full-width Buttons with a hairline
+// rhythm.
+.slotMenuBody {
+    @include menu-body-box;
+    @include scrollbar-visible(var(--color-sage-dark));
+
+    gap: rem(4);
+    padding: rem(10);
+}
+
+// SplitMenuBody (SlotMenu and OptionSubmenu): the scroll region
 // (.slotMenuScroll), which takes the body's padding and scrolls on its own,
-// and the foot (.slotMenuFoot), where a multi-select's Apply lands
+// over the foot (.slotMenuFoot), where a multi-select's Apply lands
 // (MultiSelectApplyButton portals into it) so the button never covers a
-// row. The foot is empty in every other menu, and then not drawn.
+// row. The foot is empty in every other menu, and then not drawn. The box
+// itself never scrolls, so it reserves no scrollbar gutter.
 .slotMenuSplit {
-    gap: 0;
-    padding: 0;
+    @include menu-body-box;
+
     overflow: hidden;
 }
 
 .slotMenuScroll {
-    @include menu-scrollbar;
+    @include scrollbar-visible(var(--color-sage-dark));
 
     display: flex;
     flex: 1 1 auto;
@@ -704,13 +676,6 @@ span.slotMarked {
     font-family: var(--font-outfit);
     font-weight: 300;
     color: var(--color-stone);
-}
-
-// The multi-select Apply button, in the body's foot (.slotMenuFoot) under
-// the scroll region, so a long list (hundreds of CRS provider/recipient
-// rows) scrolls on its own and the button covers no row.
-.multiSelectApply {
-    flex-shrink: 0;
 }
 
 .slotOption {
@@ -849,10 +814,17 @@ span.slotMarked {
 }
 
 // Submenus are anchored at the trigger's edge (sideOffset 0), then pushed
-// past the parent's rem(10) padding to sit 1px off its edge — the same
-// hairline seam as the panels.
+// past the parent panel's padding and scrollbar gutter, by the gaps
+// SlotMenu's subMenuRef measures, to sit 1px off its edge: the same hairline
+// seam as the panels.
 .subMenu {
-    margin-left: calc(rem(10) + 1px);
+    &[data-side="right"] {
+        margin-left: calc(var(--sub-gap-right, #{rem(10)}) + 1px);
+    }
+
+    &[data-side="left"] {
+        margin-left: calc(-1 * var(--sub-gap-left, #{rem(10)}) - 1px);
+    }
 }
 
 @keyframes pop-in {
@@ -1789,8 +1761,10 @@ span.slotMarked {
 
     // Bled through the scroll region's side padding, as each row is on its
     // own elsewhere (.slotOption), so it ends at the padding edge whatever
-    // width the scrollbar's gutter leaves. The panel's own min-width
-    // (.slotMenu) keeps the measure the loading note reserves.
+    // width the scrollbar's gutter leaves. Its labels never size the panel
+    // (contain), so the panel holds the rem(300) floor (.slotMenu) the
+    // loading note reserves and keeps its width while the filter runs.
+    contain: inline-size;
     width: calc(100% + #{rem(20)});
     margin-top: rem(6);
     margin-inline: rem(-10);
@@ -2526,14 +2500,17 @@ span.slotMarked {
         width: calc(100vw - 32px);
         max-width: none;
         max-height: calc(var(--radix-dropdown-menu-content-available-height) - var(--sub-drop));
-        margin-left: 0;
 
+        // Here, at the desktop rules' specificity, so their gap margin
+        // stays off the phone panel.
         &[data-side="right"] {
             left: calc(16px - var(--sub-trigger-right));
+            margin-left: 0;
         }
 
         &[data-side="left"] {
             left: calc(100vw - 16px - var(--sub-trigger-left));
+            margin-left: 0;
         }
 
         // Long labels wrap in the narrow panel instead of trimming.

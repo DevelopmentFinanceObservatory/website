@@ -21,8 +21,9 @@ export interface OptionLike {
     coverage?: Coverage | null;
 }
 
-/** About 8 rows fit before .slotMenuBody's scroll cap starts. Past that a
- *  filter box earns its keep. */
+/** About 8 rows fit in a menu's scroll region (.slotMenuScroll) under its
+ *  body's rem(280) cap, and about 6 when a multi-select's Apply foot takes
+ *  its 48px. Past that the list shows a filter box. */
 export const FILTER_VISIBLE_THRESHOLD = 8;
 
 /** Whether a list this long earns a filter box at all. */
