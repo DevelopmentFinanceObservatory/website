@@ -61,8 +61,8 @@
     letter-spacing: -0.01em;
 }
 
-// "What data is available?" under the lead: a text link that opens the
-// drawer. It takes the rest of the lead's old gap above the prompt.
+// The "What data is available?" text link under the lead, which opens the
+// drawer. Its bottom margin sets the gap above the prompt.
 .dataLink {
     @include font-size(14px, 1.3);
 

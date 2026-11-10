@@ -22,7 +22,7 @@ type DataAvailabilityPanelProps = {
     /** the Sources page's rows */
     sources: Half<DataSource[]>;
     // Start a canvas on the data-availability question. Null past the guest
-    // wall, where there is nothing to start: the action is left out.
+    // wall, where there is nothing to start, so the action is left out.
     onAsk: (() => void) | null;
 };
 
@@ -35,11 +35,12 @@ const isPending = (half: Half<unknown>): boolean =>
  * indicator and dataset tiles. Below them come the Sources page's rows, each
  * with its dataset count and a link to that page filtered to it. Each half
  * shows its own placeholder until it arrives, and a failed half shows as
- * empty. The footer holds the two ways on: the Sources page, or a canvas
- * where the agent answers questions about the data.
+ * empty. The footer links to the Sources page and offers a canvas where the
+ * agent answers questions about the data.
  *
- * Every link here sets `prefetch={false}`: /data/sources is force-dynamic,
- * and a viewport prefetch renders it in full, one graph read per link.
+ * Every link here sets `prefetch={false}` because /data/sources is
+ * force-dynamic, and a viewport prefetch renders it in full, one graph read
+ * per link.
  */
 const DataAvailabilityPanel = ({
     open,
@@ -74,7 +75,7 @@ const DataAvailabilityPanel = ({
                 </nav>
             }
         >
-            {/* One live region for both halves: each placeholder is swapped
+            {/* One live region covers both halves. Each placeholder is swapped
                 for its content when its read settles, and the region reads
                 the change out once neither half is pending. */}
             <div

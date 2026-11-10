@@ -11,9 +11,9 @@
  *
  * Server-only. Every read is cached for an hour, so a page reaches the graph
  * at most once an hour however many people open it. The cache keeps no
- * failed read and does not merge concurrent misses, so `loadSources`, which
- * the drawer, /data/sources and the sitemap all call, shares one read between
- * concurrent callers and remembers a failure for FAILURE_TTL_MS: while the
+ * failed read and does not merge concurrent misses, so `loadSources` (called
+ * by the drawer, /data/sources and the sitemap) shares one read between
+ * concurrent callers and remembers a failure for FAILURE_TTL_MS. While the
  * graph is down, the API sees one catalogue read every 15 s per server instance.
  */
 

@@ -902,11 +902,11 @@ const Studio = ({
                         collapsed={chatCollapsed}
                         gone={solo}
                         readOnly={readOnly}
-                        // The workspace follows the landing, whose prompt (or drawer
-                        // button) has just unmounted. Focus lands on the follow-up
-                        // field so a keyboard user is not left on the page body. Not
-                        // on a phone, where focus opens the keyboard, nor on a share,
-                        // which opens straight on the workspace.
+                        // The workspace follows the landing, whose prompt or drawer
+                        // button has just unmounted. Focus moves to the follow-up
+                        // field so a keyboard user does not land on the page body.
+                        // Skipped on a phone, where focus opens the keyboard, and on
+                        // a share, which opens straight on the workspace.
                         autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
                         onContinue={continuable ? continueSession : null}

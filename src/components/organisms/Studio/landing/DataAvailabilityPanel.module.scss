@@ -16,7 +16,7 @@
     letter-spacing: -0.01em;
 }
 
-// The catalogue's counts, two to a row: label over value.
+// The catalogue's counts, two to a row, each with its label over its value.
 .facts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

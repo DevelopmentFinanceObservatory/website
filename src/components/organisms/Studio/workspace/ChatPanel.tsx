@@ -85,10 +85,10 @@ const ChatPanel = ({
 
     useEffect(() => {
         if (autoFocus) {
-            // The page is already placed; focusing must not scroll it.
+            // The page is already placed, so focusing must not scroll it.
             followRef.current?.focus({ preventScroll: true });
         }
-        // Mount only: a later flip of `autoFocus` (a resize across the phone
+        // Mount only. A later flip of `autoFocus` (a resize across the phone
         // breakpoint) must not pull focus from wherever the user has moved.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

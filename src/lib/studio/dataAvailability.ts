@@ -10,9 +10,9 @@
  *   as the Sources page's filter rows, each with its dataset count.
  *
  * A route answers 503 when its read fails. The drawer then shows that half
- * as empty: the scope line without counts, or no source rows, with the link
- * to the Sources page kept. The drawer reads a failed half again the next
- * time it opens.
+ * as empty, meaning the scope line without counts or no source rows, and
+ * keeps the link to the Sources page. The drawer reads a failed half again
+ * the next time it opens.
  */
 
 import { type CatalogueCounts, formatCount, parseCatalogue } from '../search/catalogue.ts';
@@ -30,12 +30,12 @@ export type Half<T> = { status: 'unread' | 'reading' | 'failed' } | { status: 'r
 export const UNREAD = { status: 'unread' } as const satisfies Half<never>;
 export const READING = { status: 'reading' } as const satisfies Half<never>;
 
-/** Whether opening the drawer reads this half: it has not been read, or its
- *  last read failed. A half on its way is left to arrive. */
+/** Whether opening the drawer reads this half, which holds when it is unread
+ *  or its last read failed. A half on its way is left to arrive. */
 export const needsRead = (half: Half<unknown>): boolean =>
     half.status === 'unread' || half.status === 'failed';
 
-/** A finished read as a half: null is a failed read. */
+/** A finished read as a half. Null is a failed read. */
 export const settledHalf = <T>(value: T | null): Half<T> =>
     value === null ? { status: 'failed' } : { status: 'read', value };
 
@@ -98,7 +98,6 @@ export const fetchSources = (signal?: AbortSignal): Promise<DataSource[] | null>
     fetchHalf('/api/data-availability/sources', parseSources, signal);
 
 /** The question "Ask a follow-up" opens a fresh canvas with. It is specific
- *  enough that the agent answers it outright instead of asking what is
- *  meant. */
+ *  enough that the agent answers it outright without asking what is meant. */
 export const DATA_AVAILABILITY_PROMPT =
     'What data is available in DFO? Give me an overview of the datasets, publishers, countries and years covered, so I can ask about what interests me.';
