@@ -59,10 +59,9 @@ const StudioLanding = ({
     wall,
 }: StudioLandingProps) => {
     const [tab, setTab] = useState<'try' | 'history'>('try');
-    // The "What data is available?" drawer, and its overview, read from the
-    // site's route the first time it opens.
-    const [dataOpen, setDataOpen] = useState(false);
-    const { availability } = useDataAvailability(dataOpen);
+    // The "What data is available?" drawer, whose two halves are read from
+    // the site's routes when it opens.
+    const data = useDataAvailability();
     const tryPanelRef = useRef<HTMLDivElement>(null);
     const historyPanelRef = useRef<HTMLDivElement>(null);
     const panelsHeight = usePanelsHeight([tryPanelRef, historyPanelRef]);
@@ -93,20 +92,21 @@ const StudioLanding = ({
                 className={styles.dataLink}
                 data-reveal="text"
                 style={revealIndex(3)}
-                onClick={() => setDataOpen(true)}
+                onClick={() => data.onOpenChange(true)}
             >
                 What data is available?
             </button>
             <DataAvailabilityPanel
-                open={dataOpen}
-                onOpenChange={setDataOpen}
-                availability={availability}
+                open={data.open}
+                onOpenChange={data.onOpenChange}
+                counts={data.counts}
+                sources={data.sources}
                 // Past the wall there is nothing to start, so no follow-up.
                 onAsk={
                     wall
                         ? null
                         : () => {
-                              setDataOpen(false);
+                              data.onOpenChange(false);
                               onBegin(DATA_AVAILABILITY_PROMPT);
                           }
                 }

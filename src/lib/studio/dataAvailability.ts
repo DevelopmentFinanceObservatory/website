@@ -1,47 +1,43 @@
 /**
- * The landing's "What data is available?" overview. It is built from the
- * two reads the Data pages make. The search catalogue
- * (`GET /api/search/catalogue`) gives the counts that /data's starting point
- * shows: indicators, datasets, publishers, countries and the reach of the
- * aid data. The graph's source catalogue (`GET /api/graph/sources`) gives
- * what /data/sources lists: each source and the datasets under it.
+ * The landing's "What data is available?" drawer reads two halves, each from
+ * its own route, and shows each when it arrives:
  *
- * The server joins the two reads (dataAvailabilityLoader.ts) and serves
- * them at `GET /api/data-availability`. The drawer fetches that route when
- * it opens (fetchDataAvailability). Either half can be missing. Without
- * counts the drawer keeps the scope line, as /data does. Without sources it
- * keeps the link to the Sources page, which is the full list anyway.
+ * - The counts come from the search catalogue (`GET /api/search/catalogue`,
+ *   served to the drawer at `GET /api/data-availability/counts`). They give
+ *   the scope line, the aid line and the indicator and dataset tiles.
+ * - The sources come from the graph's source catalogue
+ *   (`GET /api/graph/sources`, served at `GET /api/data-availability/sources`)
+ *   as the Sources page's filter rows, each with its dataset count.
+ *
+ * A route answers 503 when its read fails. The drawer then shows that half
+ * as empty: the scope line without counts, or no source rows, with the link
+ * to the Sources page kept. The drawer reads a failed half again the next
+ * time it opens.
  */
 
-import { type CatalogueCounts, formatCount } from '../search/catalogue.ts';
-import { filterGroups, type Filterable, type FilterGroup } from '../sources/filters.ts';
+import { type CatalogueCounts, formatCount, parseCatalogue } from '../search/catalogue.ts';
+import type { FilterGroup } from '../sources/filters.ts';
 
 /** One row of the Sources page's filter chips: a publisher the Observatory
  *  imports itself, or a Data Commons that serves many publishers. `id` is
  *  what its chip filters by (lib/sources/filters.ts). */
 export type DataSource = FilterGroup;
 
-export type DataAvailability = {
-    /** what DFO holds as a whole; null when the catalogue read failed */
-    counts: CatalogueCounts | null;
-    /** the Sources page's rows, in its chip order; null when the graph read
-     *  failed */
-    sources: DataSource[] | null;
-};
+/** One half of the drawer: not read yet, on its way, read, or failed. A
+ *  failed half shows as empty. */
+export type Half<T> = { status: 'unread' | 'reading' | 'failed' } | { status: 'read'; value: T };
 
-/** The overview with nothing read. The drawer still opens with it, showing
- *  the scope line and the ways on. */
-export const EMPTY_DATA_AVAILABILITY: DataAvailability = { counts: null, sources: null };
+export const UNREAD = { status: 'unread' } as const satisfies Half<never>;
+export const READING = { status: 'reading' } as const satisfies Half<never>;
 
-/** The overview from the two reads. `cards` are the Sources page's cards
- *  (lib/sources/graph.ts loadSources), grouped the way its chips are. */
-export const dataAvailabilityOf = (
-    counts: CatalogueCounts | null,
-    cards: readonly Filterable[] | null,
-): DataAvailability => ({
-    counts,
-    sources: cards ? filterGroups(cards) : null,
-});
+/** Whether opening the drawer reads this half: it has not been read, or its
+ *  last read failed. A half on its way is left to arrive. */
+export const needsRead = (half: Half<unknown>): boolean =>
+    half.status === 'unread' || half.status === 'failed';
+
+/** A finished read as a half: null is a failed read. */
+export const settledHalf = <T>(value: T | null): Half<T> =>
+    value === null ? { status: 'failed' } : { status: 'read', value };
 
 /** "12 datasets", for a source's row. */
 export const sourceDatasetCount = (count: number): string =>
@@ -51,9 +47,6 @@ export const sourceDatasetCount = (count: number): string =>
  *  (`?filter=<id>`). */
 export const sourceHref = (source: DataSource): string =>
     `/data/sources?filter=${encodeURIComponent(source.id)}`;
-
-/** The route the drawer reads. */
-export const DATA_AVAILABILITY_PATH = '/api/data-availability';
 
 const isSource = (value: unknown): value is DataSource => {
     const source = value as Partial<DataSource> | null;
@@ -65,39 +58,44 @@ const isSource = (value: unknown): value is DataSource => {
     );
 };
 
-/** The route's body read off the wire, or null when it is not an overview.
- *  The counts are the catalogue's own object, which the server already
- *  parsed (lib/search/catalogue.ts parseCatalogue). */
-export const parseDataAvailability = (body: unknown): DataAvailability | null => {
-    const overview = body as Partial<DataAvailability> | null;
+/** The sources route's body (`{ sources }`) read off the wire, or null when
+ *  it is not one. A malformed row is dropped. */
+export const parseSources = (body: unknown): DataSource[] | null => {
+    const sources = (body as { sources?: unknown } | null)?.sources;
 
-    if (
-        !overview ||
-        typeof overview !== 'object' ||
-        (overview.counts !== null && typeof overview.counts !== 'object') ||
-        (overview.sources !== null && !Array.isArray(overview.sources))
-    ) {
-        return null;
-    }
-
-    return {
-        counts: overview.counts ?? null,
-        sources: overview.sources?.filter(isSource) ?? null,
-    };
+    return Array.isArray(sources) ? sources.filter(isSource) : null;
 };
 
-/** The overview from the site's own route, or null when the read fails. */
-export const fetchDataAvailability = async (
+/** One route's body, parsed, or null when the read fails or the body does
+ *  not parse. */
+const fetchHalf = async <T>(
+    path: string,
+    parse: (body: unknown) => T | null,
     signal?: AbortSignal,
-): Promise<DataAvailability | null> => {
+): Promise<T | null> => {
     try {
-        const res = await fetch(DATA_AVAILABILITY_PATH, { signal });
+        const res = await fetch(path, { signal });
 
-        return res.ok ? parseDataAvailability(await res.json()) : null;
+        return res.ok ? parse(await res.json()) : null;
     } catch {
         return null;
     }
 };
+
+/** The catalogue's counts, or null when the read fails. The route serves
+ *  the catalogue the server parsed, and the same parseCatalogue checks it
+ *  here, so a malformed body reads as no counts. */
+export const fetchCounts = (signal?: AbortSignal): Promise<CatalogueCounts | null> =>
+    fetchHalf(
+        '/api/data-availability/counts',
+        (body) => parseCatalogue(body)?.counts ?? null,
+        signal,
+    );
+
+/** The Sources page's rows, in its chip order, or null when the read
+ *  fails. */
+export const fetchSources = (signal?: AbortSignal): Promise<DataSource[] | null> =>
+    fetchHalf('/api/data-availability/sources', parseSources, signal);
 
 /** The question "Ask a follow-up" opens a fresh canvas with. It is specific
  *  enough that the agent answers it outright instead of asking what is

@@ -1,37 +1,69 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import type { CatalogueCounts } from '@/lib/search/catalogue';
 import {
-    type DataAvailability,
-    EMPTY_DATA_AVAILABILITY,
-    fetchDataAvailability,
+    type DataSource,
+    fetchCounts,
+    fetchSources,
+    type Half,
+    needsRead,
+    READING,
+    settledHalf,
+    UNREAD,
 } from '@/lib/studio/dataAvailability';
 
 /**
- * The "What data is available?" overview, read from the site's route the
- * first time `wanted` is true (the drawer opening) and kept for the rest of
- * the visit. `pending` while the read is on its way. A failed read gives
- * the empty overview, so the drawer shows the scope line and the ways on.
+ * The "What data is available?" drawer's open state and its two halves. Each
+ * half is read when the drawer opens, unless it is already read or on its
+ * way, and kept for the rest of the visit once read. A failed half is read
+ * again on the next open. Reads start from the open itself, so nothing
+ * re-reads while the drawer sits open, however the halves change.
  */
-export const useDataAvailability = (wanted: boolean) => {
-    const [availability, setAvailability] = useState<DataAvailability | null>(null);
+export const useDataAvailability = () => {
+    const [open, setOpen] = useState(false);
+    const [counts, setCounts] = useState<Half<CatalogueCounts>>(UNREAD);
+    const [sources, setSources] = useState<Half<DataSource[]>>(UNREAD);
+    // Aborts the reads in flight when the landing unmounts.
+    const controllerRef = useRef<AbortController | null>(null);
 
-    useEffect(() => {
-        if (!wanted || availability) {
+    useEffect(
+        () => () => {
+            controllerRef.current?.abort();
+            controllerRef.current = null;
+        },
+        [],
+    );
+
+    const read = <T>(
+        half: Half<T>,
+        setHalf: (half: Half<T>) => void,
+        fetchHalf: (signal: AbortSignal) => Promise<T | null>,
+    ) => {
+        if (!needsRead(half)) {
             return;
         }
 
-        const controller = new AbortController();
+        controllerRef.current ??= new AbortController();
+        const { signal } = controllerRef.current;
 
-        void fetchDataAvailability(controller.signal).then((read) => {
-            if (!controller.signal.aborted) {
-                setAvailability(read ?? EMPTY_DATA_AVAILABILITY);
+        setHalf(READING);
+        void fetchHalf(signal).then((value) => {
+            if (!signal.aborted) {
+                setHalf(settledHalf(value));
             }
         });
+    };
 
-        return () => controller.abort();
-    }, [wanted, availability]);
+    const onOpenChange = (next: boolean) => {
+        setOpen(next);
 
-    return { availability, pending: wanted && !availability };
+        if (next) {
+            read(counts, setCounts, fetchCounts);
+            read(sources, setSources, fetchSources);
+        }
+    };
+
+    return { open, onOpenChange, counts, sources };
 };
