@@ -32,7 +32,8 @@ type ChatPanelProps = {
     // A shared (read-only) transcript: no input, no card actions, and the
     // share marks aren't shown (they're the owner's).
     readOnly: boolean;
-    // Focus the follow-up field when the panel mounts.
+    // Focus the follow-up field once, when the panel mounts. Later changes to
+    // the prop do not move focus.
     autoFocus?: boolean;
     // A guest past the free prompts: shown in place of the follow-up input.
     wall?: React.ReactNode;
@@ -84,9 +85,13 @@ const ChatPanel = ({
 
     useEffect(() => {
         if (autoFocus) {
-            followRef.current?.focus();
+            // The page is already placed; focusing must not scroll it.
+            followRef.current?.focus({ preventScroll: true });
         }
-    }, [autoFocus]);
+        // Mount only: a later flip of `autoFocus` (for example when `phone`
+        // resolves) must not pull focus from wherever the user has moved.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Keep the transcript pinned to the latest turn as it streams — and as
     // the input grows under it (QA-26), which takes the room out of this

@@ -454,6 +454,7 @@ const Studio = ({
         window.clearTimeout(leaveTimer.current);
         setQuery('');
         setChatCollapsed(false);
+        setChatTab('chat');
         doc.reset();
         modals.closeAll();
         chat.reset();
