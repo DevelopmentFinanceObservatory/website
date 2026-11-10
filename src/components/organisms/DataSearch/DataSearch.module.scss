@@ -624,7 +624,7 @@ span.slotMarked {
 // over the foot (.slotMenuFoot), where a multi-select's Apply lands
 // (MultiSelectApplyButton portals into it) so the button never covers a
 // row. The foot is empty in every other menu, and then not drawn. The box
-// itself never scrolls, so it reserves no scrollbar gutter.
+// itself does not scroll, so it reserves no scrollbar gutter.
 .slotMenuSplit {
     @include menu-body-box;
 
@@ -815,7 +815,7 @@ span.slotMarked {
 
 // Submenus are anchored at the trigger's edge (sideOffset 0), then pushed
 // past the parent panel's padding and scrollbar gutter, by the gaps
-// SlotMenu's subMenuRef measures, to sit 1px off its edge: the same hairline
+// SlotMenu's subMenuRef measures, to sit 1px off its edge, the same hairline
 // seam as the panels.
 .subMenu {
     &[data-side="right"] {

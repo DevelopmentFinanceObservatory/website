@@ -732,9 +732,9 @@ export const PlaceEditor = ({
                 while requireSelection has nothing checked, for a route that
                 can't express an empty pick. It lands in the menu's foot, under
                 the body's own scroll area, so a long list (hundreds of CRS
-                provider/recipient rows) scrolls on its own and never scrolls
-                it out of reach. Single-pick mode never renders this: every
-                row above posts on its own. */}
+                provider/recipient rows) scrolls on its own and Apply stays in
+                reach. Single-pick mode never renders this: every row above
+                posts on its own. */}
             {hasIdentity && state.phase === 'loaded' && multiSelect && (
                 <MultiSelectApplyButton
                     selected={selected}
@@ -1039,9 +1039,8 @@ export const PlaceScopeEditor = ({
                         own currently-bound set. It lands in the menu's foot,
                         under the body's own scroll area, so a long list
                         (hundreds of CRS provider/recipient rows) scrolls on
-                        its own and never scrolls it out of reach. Single-pick
-                        mode never renders this: every row above posts on its
-                        own. */}
+                        its own and Apply stays in reach. Single-pick mode
+                        never renders this: every row above posts on its own. */}
                     {multiSelect && (
                         <MultiSelectApplyButton
                             selected={selected}

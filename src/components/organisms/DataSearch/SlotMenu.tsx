@@ -27,13 +27,13 @@ export { onMenuContentKeyDownCapture };
 const ENTRY_FOCUS_EVENT = 'rovingFocusGroup.onEntryFocus';
 
 /** The foot of a SplitMenuBody (styles.slotMenuFoot), under its scroll
- *  region (styles.slotMenuScroll), where MultiSelectApplyButton lands by portal so the list
- *  scrolls on its own and Apply never covers a row. Undefined outside a
- *  SlotMenu or OptionSubmenu, where the button renders in place; null
- *  inside one whose foot has not been committed yet (its callback ref sets
- *  it during the shell's first commit, and the sync re-render follows
- *  before paint), when the button renders nothing rather than mount in the
- *  list and move. */
+ *  region (styles.slotMenuScroll). MultiSelectApplyButton portals into it,
+ *  so the list scrolls on its own and Apply never covers a row. Undefined
+ *  outside a SlotMenu or OptionSubmenu, where the button renders in place.
+ *  Null inside one whose foot has not been committed yet (its callback ref
+ *  sets it during the shell's first commit, and the sync re-render follows
+ *  before paint), where the button renders nothing, so it does not mount in
+ *  the list and then move. */
 const SlotMenuFoot = createContext<HTMLDivElement | null | undefined>(undefined);
 
 /** Attached as a ref callback (SubContent's prop type omits onEntryFocus)
@@ -222,8 +222,8 @@ export const OptionRow = ({
     muted?: boolean;
     pinned?: boolean;
     // A real multi-select toggle row (its list posts the whole checked set
-    // through the Apply in the menu's foot): exposes `checked` to assistive tech as
-    // role="menuitemcheckbox"/aria-checked, or `role` outside a menu (the
+    // through the Apply in the menu's foot): exposes `checked` to assistive
+    // tech as role="menuitemcheckbox"/aria-checked, or `role` outside a menu (the
     // download dialog's "checkbox"). Omitted, a `checked` row is an
     // immediate single pick — the current value whether or not it's also
     // `pinned` — which carries aria-current instead. The two never overlap
@@ -488,8 +488,8 @@ export const AnySelectionRow = ({
 
 /** The "commit the whole toggled set" button shared by every multi-select
  *  popover. It renders into SplitMenuBody's foot (SlotMenuFoot), under the
- *  scroll region (styles.slotMenuScroll), so a long list scrolls on its own and Apply
- *  stays in reach without covering a row; the foot still sits inside the
+ *  scroll region (styles.slotMenuScroll), so a long list scrolls on its own
+ *  and Apply stays in reach without covering a row. The foot sits inside the
  *  menu's content node, so the menu's keyboard mechanism reaches it as the
  *  last stop. `onApply` is a callback rather than a typed payload since
  *  sites differ in what they post (place/entity refs with labels vs. bare

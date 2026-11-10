@@ -93,19 +93,18 @@ $scrollbar-width: rem(6);
 
 // A scroll region's own scrollbar, on one axis: `y` for a list or thread,
 // `x` for a code block or table that scrolls sideways. The site hides every
-// scrollbar (main.scss, on *); a scroll region needs its cue back, so this
-// draws one that
-// stays in view (a styled ::-webkit-scrollbar is never an overlay one,
-// which on a Mac would show only while scrolling), which needs
-// scrollbar-width back at auto and scrollbar-color unset, since either set
-// makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
-// pseudo-element and takes its own thin bar in the same colours instead
-// (about 2 px wider than $scrollbar-width on Windows and Linux, an overlay
-// on macOS). On `y` the bar takes layout width, so its gutter is always
-// reserved: content that takes the region in and out of overflow keeps its
-// width. The other axis is clipped, so children of a `y` region must end at
-// the padding edge, since a subpixel remainder would otherwise draw a
-// second bar.
+// scrollbar (main.scss, on *), and a scroll region needs its cue back, so
+// this draws one that stays in view. A styled ::-webkit-scrollbar is a
+// classic bar, where an overlay one on a Mac would show only while
+// scrolling. That needs scrollbar-width back at auto and scrollbar-color
+// unset, since either set makes Chrome ignore the ::-webkit-scrollbar
+// rules. Firefox has no such pseudo-element and takes its own thin bar in
+// the same colours (about 2 px wider than $scrollbar-width on Windows and
+// Linux, an overlay on macOS). On `y` the bar takes layout width, so its
+// gutter is always reserved and content that takes the region in and out
+// of overflow keeps its width. The other axis is clipped, so children of a
+// `y` region must end at the padding edge, since a subpixel remainder
+// would otherwise draw a second bar.
 @mixin scrollbar-visible($thumb, $axis: y) {
     @if $axis == y {
         overflow: hidden auto;

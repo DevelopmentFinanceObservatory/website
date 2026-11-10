@@ -557,8 +557,8 @@
 }
 
 // The one scroll region: grows to fill, clips its own overflow. Content
-// fades out at both edges: the eased stops reach full transparency exactly
-// at the boundary, so nothing ever reads as a hard cut; padding gives the
+// fades out at both edges. The eased stops reach full transparency exactly
+// at the boundary, so nothing reads as a hard cut, and padding gives the
 // fade room so resting content isn't dimmed. The scrollbar is the shared
 // one (scrollbar-visible), so right-aligned bubbles keep their edge when a
 // thread first overflows. A code block or table scrolls on its own, and
