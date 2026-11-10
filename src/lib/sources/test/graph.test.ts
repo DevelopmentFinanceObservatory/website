@@ -18,6 +18,15 @@ process.env.SEARCH_API_BASE = 'https://apis.example.org';
 // Each test starts with an empty read cache.
 beforeEach(nextCache.clear);
 
+// loadSources remembers a failed catalogue read across tests. Every test that
+// calls it mocks Date from this clock, which starts far enough ahead of any
+// earlier test's failure for that memory to have lapsed.
+let now = 1_800_000_000_000;
+
+beforeEach(() => {
+    now += 120_000;
+});
+
 const json = (body: unknown, status = 200): Response =>
     new Response(JSON.stringify(body), {
         status,
@@ -137,6 +146,8 @@ test("toCard credits a UN agency's own Dataset with its origin alone", () => {
 });
 
 test('loadSources reads the catalogue once and makes a card per Dataset in its order', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now });
+
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
         json({ sources: [WFP, WORLD_BANK] }),
     );
@@ -156,7 +167,7 @@ test('loadSources reads the catalogue once and makes a card per Dataset in its o
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('loadSources retries the catalogue once after a 503 or 504, once the delay has passed', async (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
 
     for (const status of [503, 504]) {
         nextCache.clear();
@@ -188,7 +199,7 @@ test('loadSources retries the catalogue once after a 503 or 504, once the delay 
 });
 
 test('loadSources throws after a second 503, having read the catalogue twice', async (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
 
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
         json({ code: 'upstream_unavailable' }, 503),
@@ -202,7 +213,7 @@ test('loadSources throws after a second 503, having read the catalogue twice', a
 });
 
 test('every graph read is no-store with its own timeout signal, so Next does not dedupe the retry', async (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
 
     const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
         fetchMock.mock.callCount() === 0 ? json({}, 503) : json({ sources: [] }),
@@ -262,10 +273,72 @@ test('a 404, a 5xx or a failed request is not cached, so the next call reads aga
 });
 
 test('loadSources does not retry a 500', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now });
+
     const fetchMock = t.mock.method(globalThis, 'fetch', async () => json({ code: 'boom' }, 500));
 
     await assert.rejects(loadSources(), /HTTP 500/);
     assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test('callers that arrive during one catalogue read share it', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now });
+
+    let answer: ((res: Response) => void) | undefined;
+    const fetchMock = t.mock.method(
+        globalThis,
+        'fetch',
+        () =>
+            new Promise<Response>((resolve) => {
+                answer = resolve;
+            }),
+    );
+
+    const first = loadSources();
+    const second = loadSources();
+
+    await flush();
+    assert.equal(fetchMock.mock.callCount(), 1);
+    answer!(json({ sources: [WFP] }));
+
+    assert.deepEqual(
+        (await first).map((card) => card.id),
+        ['un/wfp'],
+    );
+    assert.deepEqual(
+        (await second).map((card) => card.id),
+        ['un/wfp'],
+    );
+    assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test('a failed catalogue read is rethrown without a read for 15 s, then read again', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now });
+
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () =>
+        fetchMock.mock.callCount() === 0 ? json({ code: 'boom' }, 500) : json({ sources: [WFP] }),
+    );
+
+    const failure = await loadSources().catch((error: unknown) => error);
+
+    assert.match(String(failure), /HTTP 500/);
+
+    // Within the 15 s every caller gets the same error and the graph is not read.
+    t.mock.timers.tick(14_999);
+    await assert.rejects(loadSources(), (error) => error === failure);
+    assert.equal(fetchMock.mock.callCount(), 1);
+
+    // After it, the read goes out and its answer is served from then on.
+    t.mock.timers.tick(1);
+    assert.deepEqual(
+        (await loadSources()).map((card) => card.id),
+        ['un/wfp'],
+    );
+    assert.deepEqual(
+        (await loadSources()).map((card) => card.id),
+        ['un/wfp'],
+    );
+    assert.equal(fetchMock.mock.callCount(), 2);
 });
 
 test('loadSourceDoc does not retry a 503', async (t) => {

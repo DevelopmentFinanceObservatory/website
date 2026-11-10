@@ -162,7 +162,8 @@ export function catalogueChips(catalogue: SearchCatalogue | null): string[] {
     return (catalogue?.examples ?? []).map((example) => example.text);
 }
 
-const formatCount = (value: number): string => value.toLocaleString('en-GB');
+/** A count with thousands separators: 112,866. */
+export const formatCount = (value: number): string => value.toLocaleString('en-GB');
 
 // `en` writes millions as `1M`, where `en-GB` writes `1m`.
 const compactFormat = new Intl.NumberFormat('en', { notation: 'compact' });
@@ -222,10 +223,23 @@ export function declinedExamples(
     return (placed.length > 0 ? placed : (catalogue?.examples ?? [])).slice(0, count);
 }
 
-/** The stat tiles on /data and the homepage: indicators and datasets, or
- *  none without a catalogue. */
+/** The reach of DFO's aid data: "Its aid data covers 169 donors and 205
+ *  recipients, from 1973 to 2024." Without years the sentence stops at the
+ *  recipients; without aid counts there is no sentence. */
+export function aidLine(aid: AidCounts | null): string | null {
+    if (!aid) {
+        return null;
+    }
+
+    const parties = `Its aid data covers ${formatCount(aid.donors)} donors and ${formatCount(aid.recipients)} recipients`;
+
+    return aid.years ? `${parties}, from ${aid.years.first} to ${aid.years.last}.` : `${parties}.`;
+}
+
+/** The stat tiles on /data and the homepage, and the Studio landing's data
+ *  drawer: indicators and datasets, or none without a catalogue. */
 export function catalogueTiles(
-    catalogue: SearchCatalogue | null,
+    catalogue: Pick<SearchCatalogue, 'counts'> | null,
 ): { value: string; label: string }[] {
     if (!catalogue) {
         return [];
