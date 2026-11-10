@@ -87,6 +87,47 @@ $browser-context: 16px;
     align-items: $align;
 }
 
+// Width of the WebKit scrollbar `scrollbar-visible` draws; a mask that must
+// keep the thumb solid reads the same value.
+$scrollbar-width: rem(6);
+
+// A scroll region's own scrollbar. The site hides every scrollbar
+// (main.scss, on *); a long list needs its cue back, so this draws one that
+// stays in view (a styled ::-webkit-scrollbar is never an overlay one,
+// which on a Mac would show only while scrolling), which needs
+// scrollbar-width back at auto and scrollbar-color unset, since either set
+// makes Chrome ignore the ::-webkit-scrollbar rules. Firefox has no such
+// pseudo-element and takes its own thin bar in the same colours instead
+// (about 2 px wider than $scrollbar-width on Windows and Linux, an overlay
+// on macOS). The bar takes layout width, so its gutter is always reserved:
+// content that takes the region in and out of overflow keeps its width.
+// Nothing scrolls sideways: children must end at the padding edge, since a
+// subpixel remainder would otherwise draw a second bar.
+@mixin scrollbar-visible($thumb) {
+    overflow: hidden auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+
+    @supports not selector(::-webkit-scrollbar) {
+        scrollbar-color: #{$thumb} transparent;
+        scrollbar-width: thin;
+    }
+
+    &::-webkit-scrollbar {
+        display: block;
+        width: $scrollbar-width;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: $thumb;
+        border-radius: rem(3);
+    }
+}
+
 @mixin letter-spacing($spacing, $font-size: 16) {
     letter-spacing: math.div(strip-units($spacing), strip-units($font-size)) * 1em;
 }

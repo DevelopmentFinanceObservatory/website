@@ -557,23 +557,18 @@
 }
 
 // The one scroll region: grows to fill, clips its own overflow. Content
-// fades out at both edges — the eased stops reach FULL transparency exactly
+// fades out at both edges: the eased stops reach full transparency exactly
 // at the boundary, so nothing ever reads as a hard cut; padding gives the
-// fade room so resting content isn't dimmed. The site hides every
-// scrollbar (main.scss, on *); a long thread needs its cue back, so this
-// draws its own: a bar that stays in view (a styled ::-webkit-scrollbar is
-// never an overlay one, which on a Mac would show only while scrolling),
-// which needs scrollbar-width back at auto and scrollbar-color unset,
-// since either set makes Chrome ignore the ::-webkit-scrollbar rules.
-// Firefox has no such pseudo-element and takes its own thin bar in the
-// same colours instead. The bar takes layout width, so its gutter is
-// always reserved and the right-aligned bubbles keep their edge when a
-// thread first overflows. Nothing scrolls sideways: a code block scrolls
-// on its own (pre, below), and a subpixel remainder would otherwise draw
-// a second bar. The mask is two layers: the fade over the content, and a
-// solid column over the scrollbar's gutter, which Chrome and Safari would
-// otherwise fade with it, taking the thumb at a thread's resting bottom.
+// fade room so resting content isn't dimmed. The scrollbar is the shared
+// one (scrollbar-visible), so right-aligned bubbles keep their edge when a
+// thread first overflows. A code block or table scrolls on its own, and
+// .botText stays within the region. The mask is two layers: the fade over
+// the content, and a solid column over the scrollbar's gutter, which Chrome
+// and Safari would otherwise fade with it, taking the thumb at a thread's
+// resting bottom.
 .chatScroll {
+    @include scrollbar-visible(var(--color-stone));
+
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -581,9 +576,6 @@
     align-items: flex-end;
     min-height: 0;
     padding-block: rem(24);
-    overflow: hidden auto;
-    scrollbar-gutter: stable;
-    scrollbar-width: auto;
     mask-image:
         linear-gradient(
             to bottom,
@@ -601,28 +593,9 @@
         0 0,
         100% 0;
     mask-size:
-        calc(100% - #{rem(6)}) 100%,
-        rem(6) 100%;
+        calc(100% - #{$scrollbar-width}) 100%,
+        $scrollbar-width 100%;
     mask-repeat: no-repeat;
-
-    @supports not selector(::-webkit-scrollbar) {
-        scrollbar-color: var(--color-stone) transparent;
-        scrollbar-width: thin;
-    }
-
-    &::-webkit-scrollbar {
-        display: block;
-        width: rem(6);
-    }
-
-    &::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-        background: var(--color-stone);
-        border-radius: rem(3);
-    }
 }
 
 // The Activity view starts its scroll at the panel's top edge, so its top
@@ -731,8 +704,11 @@
     @include font-size(12px, 1.34);
 
     align-self: flex-start;
+    min-width: 0;
+    max-width: 100%;
     font-family: var(--font-outfit);
     font-weight: 400;
+    overflow-wrap: anywhere;
     letter-spacing: -0.031em;
 
     // One consistent gap between EVERY top-level block (paragraph, list,
@@ -787,6 +763,13 @@
         font-family: var(--font-dm-mono);
         background-color: var(--color-net-light);
         border-radius: rem(3);
+    }
+
+    // A wide table scrolls sideways inside its wrapper (ChatMessage's
+    // `table` component), not the thread.
+    .tableScroll {
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     // GFM pipe tables (remark-gfm) at chat scale.
