@@ -10,7 +10,11 @@
  * and whichever Datasets it admits are the ones the page shows.
  *
  * Server-only. Every read is cached for an hour, so a page reaches the graph
- * at most once an hour however many people open it.
+ * at most once an hour however many people open it. The cache keeps no
+ * failed read and does not merge concurrent misses, so `loadSources`, which
+ * the drawer, /data/sources and the sitemap all call, shares one read between
+ * concurrent callers and remembers a failure for FAILURE_TTL_MS: while the
+ * graph is down, the API sees one catalogue read a minute per server instance.
  */
 
 import type { ProblemDetails } from '@developmentfinance/client/wire';
@@ -43,6 +47,15 @@ const READ_TIMEOUT_MS = 15_000;
 // A 503 or 504 from the API is usually transient: a cold start or a slow
 // upstream. An instant re-read meets the same answer.
 const RETRY_DELAY_MS = 1000;
+
+const FAILURE_TTL_MS = 60_000;
+
+// The last failed catalogue read and when it happened. A read only goes out
+// once FAILURE_TTL_MS has passed since then, so nothing needs to clear it.
+let catalogueFailure: { error: unknown; at: number } | null = null;
+
+// The catalogue read under way, which concurrent callers share.
+let catalogueRead: Promise<SourceCard[]> | null = null;
 
 /** One card's chip. `href` turns it into a link; the list order IS the
  *  display order, so every card reads the same way. */
@@ -223,14 +236,33 @@ export const toCard = (entry: SourceCatalogueEntry, dataset: SourceDataset): Sou
     };
 };
 
-/** Every Dataset the platform publishes, as cards, in the catalogue's order.
- *  Safe to call from a server component. */
-export const loadSources = async (): Promise<SourceCard[]> => {
+const readSources = async (): Promise<SourceCard[]> => {
     const catalogue = await readGraph<SourceCatalogue>('sources', { retries: 1 });
 
     return (catalogue?.sources ?? []).flatMap((entry) =>
         entry.datasets.map((dataset) => toCard(entry, dataset)),
     );
+};
+
+/** Every Dataset the platform publishes, as cards, in the catalogue's order.
+ *  Safe to call from a server component. Throws when the read fails, and
+ *  for FAILURE_TTL_MS after that rethrows the same error without reading. */
+export const loadSources = async (): Promise<SourceCard[]> => {
+    if (catalogueFailure && Date.now() - catalogueFailure.at < FAILURE_TTL_MS) {
+        throw catalogueFailure.error;
+    }
+
+    catalogueRead ??= readSources()
+        .catch((error: unknown) => {
+            catalogueFailure = { error, at: Date.now() };
+
+            throw error;
+        })
+        .finally(() => {
+            catalogueRead = null;
+        });
+
+    return catalogueRead;
 };
 
 // A segment that would change where the request goes once it sits in the URL
