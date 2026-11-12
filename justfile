@@ -102,11 +102,26 @@ optimize-svg:
 # db-migrate and the tests read the same variable. The port is fixed when
 # the container is created, so changing it needs `db-reset`.
 #
-# Start the local Postgres container (create it on first run)
+# A Postgres you already run works instead of the container: point PGHOST,
+# PGPORT, PGUSER and PGPASSWORD at it (docs/development.md, "Use a Postgres
+# you already run"). When something other than this container answers at
+# PGHOST:PGPORT, db-up checks it -- a superuser login, version 18 like CI --
+# and starts no container.
+#
+# Start the local Postgres container, or check the Postgres PG* points at
 db-up:
     #!/usr/bin/env bash
     set -euo pipefail
     port="${PGPORT:-5433}"
+    if [ "$(just _db-existing)" = yes ]; then
+        just _db-check-existing
+        exit 0
+    fi
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "Error: no Postgres answers at ${PGHOST:-localhost}:$port, and Docker isn't installed to start one." >&2
+        echo "  Install Docker, or point PGHOST/PGPORT/PGUSER/PGPASSWORD at a Postgres 18 you run (docs/development.md)." >&2
+        exit 1
+    fi
     if docker inspect dfo-website-db >/dev/null 2>&1; then
         docker start dfo-website-db >/dev/null
         current=$(docker port dfo-website-db 5432/tcp | head -1 | awk -F: '{print $NF}')
@@ -140,13 +155,77 @@ db-migrate:
 # container drops its data with it (no volume is mounted), so this is
 # `db-up` from scratch plus a fresh `db-migrate`, not a targeted fix.
 #
+# On a Postgres you run yourself it drops nothing: that server and its
+# cluster-wide roles aren't this recipe's to wipe, so it prints the command
+# for starting the `website` database over instead.
+#
 # Drop and recreate the local Postgres container, then reapply migrations
 db-reset:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ "$(just _db-existing)" = yes ]; then
+        echo "Error: PG* points at a Postgres other than the dfo-website-db container (${PGHOST:-localhost}:${PGPORT:-5433}); db-reset won't drop anything there." >&2
+        echo "  To start the website database over on it: dropdb website && just db-migrate" >&2
+        exit 1
+    fi
     docker rm -f dfo-website-db >/dev/null 2>&1 || true
     just db-up
     just db-migrate
+
+# Prints "yes" when a Postgres other than a running dfo-website-db container
+# answers at PGHOST:PGPORT, otherwise "no". Needs the client tools'
+# pg_isready; without it, the answer is no and db-up takes the container path
+# as before. Prints rather than exits non-zero so a "no" isn't reported as a
+# failed recipe.
+_db-existing:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host="${PGHOST:-localhost}"
+    port="${PGPORT:-5433}"
+    if ! command -v pg_isready >/dev/null 2>&1 || ! pg_isready -q -h "$host" -p "$port"; then
+        echo no
+        exit 0
+    fi
+    if command -v docker >/dev/null 2>&1 \
+        && [ -n "$(docker ps -q --filter name='^dfo-website-db$' 2>/dev/null)" ] \
+        && docker port dfo-website-db 5432/tcp 2>/dev/null | grep -q ":$port\$"; then
+        echo no
+        exit 0
+    fi
+    echo yes
+
+# db-migrate creates a database and roles, so it needs a superuser; the
+# tests create a database per run. Both connect as PGUSER/PGPASSWORD with
+# the same defaults as db/migrate-local.ts (postgres/postgres), which is why
+# the password default applies only when PGPASSWORD is unset: an empty one
+# is a real choice under trust auth.
+_db-check-existing:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host="${PGHOST:-localhost}"
+    port="${PGPORT:-5433}"
+    user="${PGUSER:-postgres}"
+    export PGPASSWORD="${PGPASSWORD-postgres}"
+    if ! command -v psql >/dev/null 2>&1; then
+        echo "ok Using the Postgres at $host:$port (no psql here to check its version or that $user is a superuser)."
+        exit 0
+    fi
+    query="select current_setting('server_version_num')::int / 10000, rolsuper from pg_roles where rolname = current_user"
+    if ! info=$(psql -X -A -t -h "$host" -p "$port" -U "$user" -d postgres -c "$query" 2>&1); then
+        echo "Error: a Postgres answers at $host:$port, but logging in as $user failed:" >&2
+        echo "  $info" >&2
+        echo "  Set PGUSER and PGPASSWORD to a superuser on it (docs/development.md)." >&2
+        exit 1
+    fi
+    IFS='|' read -r major super <<< "$info"
+    if [ "$super" != "t" ]; then
+        echo "Error: $user on $host:$port isn't a superuser; db-migrate needs one to create the website database and its roles." >&2
+        exit 1
+    fi
+    if [ "$major" -lt 18 ]; then
+        echo "warn The Postgres at $host:$port is version $major; CI runs 18, so a migration can pass here and fail there." >&2
+    fi
+    echo "ok Using the Postgres at $host:$port (version $major, superuser $user), not the dfo-website-db container."
 
 # Run after editing db/schema.ts (see docs/development.md's schema change
 # workflow) -- review the generated SQL before `db-migrate` applies it.
@@ -255,13 +334,18 @@ status:
 doctor:
     #!/usr/bin/env bash
     echo "Tooling:"
-    for tool in node pnpm docker git gcloud; do
+    for tool in node pnpm git gcloud; do
         if command -v "$tool" >/dev/null 2>&1; then
             echo "  ok    $tool"
         else
             echo "  MISS  $tool"
         fi
     done
+    if command -v docker >/dev/null 2>&1; then
+        echo "  ok    docker"
+    else
+        echo "  MISS  docker (needed by docker-build and run-local; the database can use a Postgres you already run, see docs/development.md)"
+    fi
     echo ""
     if [ -d node_modules ]; then
         echo "  ok    node_modules present"

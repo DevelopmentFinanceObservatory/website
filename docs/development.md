@@ -105,6 +105,39 @@ the machine. If 5433 is taken too, set `PGPORT` to another port for
 was created with, so switching ports, including moving an older container
 off 5432, needs `just db-reset`.
 
+### Use a Postgres you already run
+
+Instead of the container, the database can live on a Postgres you already
+run, such as a Homebrew `postgresql@18` on 5432. Docker isn't needed for
+that. It should be version 18, the version CI runs. `db-migrate` and the
+tests read the superuser connection from `PGHOST`, `PGPORT`, `PGUSER` and
+`PGPASSWORD`, which default to the container (`localhost`, `5433`,
+`postgres`, `postgres`). Set them for your server, for example in a
+gitignored `.envrc` if you use [direnv]:
+
+```bash
+export PGHOST=localhost
+export PGPORT=5432
+export PGUSER="$USER"   # Homebrew's superuser is your login name
+export PGPASSWORD=      # empty under Homebrew's default trust auth
+```
+
+Change the port in `.env.local`'s `DATABASE_URL` to match, then run
+`just db-up && just db-migrate` as usual. When something other than the
+container answers at `PGHOST:PGPORT`, `db-up` starts no container. It checks
+that `PGUSER` logs in as a superuser, warns if the server isn't version 18,
+and leaves the rest to `db-migrate`.
+
+On that server, `db-migrate` creates a `website` database and three roles:
+`website_migrator`, `website_runtime` and the `NOLOGIN`
+`website_export_reader`. Roles are cluster-wide, so they stay after the
+database is dropped, and `db-migrate` resets the two passwords each run.
+`pnpm test` creates randomly named databases and roles and drops them when
+it finishes. `just db-reset` refuses to touch a server it didn't create. To start over
+there, run `dropdb website && just db-migrate`.
+
+[direnv]: https://direnv.net
+
 Schema change workflow:
 
 1. Edit `db/schema.ts`.
