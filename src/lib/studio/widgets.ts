@@ -59,14 +59,18 @@ const structuredUnitText = (unit: StructuredUnit): string => {
         unit.currency,
         unit.magnitude && unit.magnitude !== 'units' ? unit.magnitude : null,
     ].filter(Boolean);
-    const basis = [unit.prices, unit.base_year].filter((part) => part != null).join(' ');
+    const prices = [unit.prices, unit.base_year].filter((part) => part != null).join(' ');
+    const basis = [prices, unit.deflation_basis && `${unit.deflation_basis} prices`]
+        .filter(Boolean)
+        .join(', ');
 
     return [amount.join(' '), basis && `(${basis})`].filter(Boolean).join(' ');
 };
 
 // A payload unit as text: a plain label as it stands, a currency amount as
-// "USD millions (constant 2023)", a composed unit as the info panel words it
-// ("US Dollar per Total population").
+// "USD millions (constant 2023)" or "NGN (constant 2024, donor prices)", a
+// composed unit as the info panel words it ("US Dollar per Total
+// population").
 const payloadUnitText = (unit: PayloadUnit | undefined): string | undefined => {
     if (unit === undefined || typeof unit === 'string') {
         return unit;

@@ -389,12 +389,15 @@ test("a table names each row's unit when units mix, and charts with it when the 
     });
     const tableOf = (rows: unknown[]) => envelope({ type: 'table', title, columns, rows });
     const dollars = { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 };
+    const naira = { currency: 'NGN', prices: 'constant', base_year: 2024 };
     const mixed = asTable(
         widgetFromComponent(
             frame(
                 'table',
                 tableOf([
                     row('ODA', dollars),
+                    row('Aid to Nigeria', { ...naira, deflation_basis: 'donor' }),
+                    row('Debt service', { ...naira, deflation_basis: 'recipient' }),
                     row('Share of GNI', 'percent'),
                     row('ODA per person', composedUnit),
                     row('ODA per person, euros', eurosPerPerson),
@@ -405,6 +408,8 @@ test("a table names each row's unit when units mix, and charts with it when the 
     );
     const unitTexts = [
         'USD millions (constant 2023)',
+        'NGN (constant 2024, donor prices)',
+        'NGN (constant 2024, recipient prices)',
         'percent',
         'US Dollar per Total population',
         'Euro (constant 2020 prices) per Total population',
@@ -418,6 +423,8 @@ test("a table names each row's unit when units mix, and charts with it when the 
     assert.equal(mixed.namesColumn, 0);
     assert.deepEqual(mixed.rows, [
         ['ODA', '2023', 'USD millions (constant 2023)', '5'],
+        ['Aid to Nigeria', '2023', 'NGN (constant 2024, donor prices)', '5'],
+        ['Debt service', '2023', 'NGN (constant 2024, recipient prices)', '5'],
         ['Share of GNI', '2023', 'percent', '5'],
         ['ODA per person', '2023', 'US Dollar per Total population', '5'],
         ['ODA per person, euros', '2023', 'Euro (constant 2020 prices) per Total population', '5'],
@@ -625,6 +632,11 @@ const INFO_UNITS: [string, unknown, string | null][] = [
         'a structured unit',
         { currency: 'USD', magnitude: 'millions', prices: 'constant', base_year: 2023 },
         'US Dollar, millions, constant 2023 prices',
+    ],
+    [
+        'a structured unit with its deflation basis',
+        { currency: 'NGN', prices: 'constant', base_year: 2024, deflation_basis: 'donor' },
+        'Nigerian Naira, constant 2024 prices, donor prices',
     ],
     ['a malformed composed unit', { numerator: 'USDollar', denominator: null }, null],
     ['none', null, null],
