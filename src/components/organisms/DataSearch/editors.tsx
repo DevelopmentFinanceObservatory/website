@@ -730,11 +730,11 @@ export const PlaceEditor = ({
                 set (the same "this would just re-run the identical query"
                 gate WindowEditor/PhraseEditor's own Apply already uses), or
                 while requireSelection has nothing checked, for a route that
-                can't express an empty pick. Pinned to the bottom of
-                .slotMenuBody's own scroll area (styles.multiSelectApply) so a
-                long list (hundreds of CRS provider/recipient rows) never
-                scrolls it out of reach. Single-pick mode never renders this:
-                every row above posts on its own. */}
+                can't express an empty pick. It lands in the menu's foot, under
+                the body's own scroll area, so a long list (hundreds of CRS
+                provider/recipient rows) scrolls on its own and Apply stays in
+                reach. Single-pick mode never renders this: every row above
+                posts on its own. */}
             {hasIdentity && state.phase === 'loaded' && multiSelect && (
                 <MultiSelectApplyButton
                     selected={selected}
@@ -1036,12 +1036,11 @@ export const PlaceScopeEditor = ({
                     )}
                     {/* Posts the whole toggled set in one identity edit.
                         Disabled while it reads back the same as the role's
-                        own currently-bound set. Pinned to the bottom of
-                        .slotMenuBody's own scroll area (styles.
-                        multiSelectApply) so a long list (hundreds of CRS
-                        provider/recipient rows) never scrolls it out of
-                        reach. Single-pick mode never renders this: every row
-                        above posts on its own. */}
+                        own currently-bound set. It lands in the menu's foot,
+                        under the body's own scroll area, so a long list
+                        (hundreds of CRS provider/recipient rows) scrolls on
+                        its own and Apply stays in reach. Single-pick mode
+                        never renders this: every row above posts on its own. */}
                     {multiSelect && (
                         <MultiSelectApplyButton
                             selected={selected}

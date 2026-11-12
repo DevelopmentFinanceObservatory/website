@@ -454,6 +454,7 @@ const Studio = ({
         window.clearTimeout(leaveTimer.current);
         setQuery('');
         setChatCollapsed(false);
+        setChatTab('chat');
         doc.reset();
         modals.closeAll();
         chat.reset();
@@ -908,6 +909,12 @@ const Studio = ({
                         collapsed={chatCollapsed}
                         gone={solo}
                         readOnly={readOnly}
+                        // The workspace follows the landing, whose prompt or drawer
+                        // button has just unmounted. Focus moves to the follow-up
+                        // field so a keyboard user does not land on the page body.
+                        // Skipped on a phone, where focus opens the keyboard, and on
+                        // a share, which opens straight on the workspace.
+                        autoFocus={!shared && !phone}
                         wall={walled ? <GuestWall /> : null}
                         onContinue={continuable ? continueSession : null}
                         continuing={forking}

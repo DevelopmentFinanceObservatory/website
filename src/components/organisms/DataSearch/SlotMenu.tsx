@@ -2,7 +2,8 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import classNames from 'classnames';
-import { createContext, useId, useState } from 'react';
+import { createContext, useContext, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import styles from './DataSearch.module.scss';
 
@@ -24,6 +25,16 @@ export { onMenuContentKeyDownCapture };
  *  preventDefault() here cancels Radix's default of focusing the first row
  *  so the filter can take it instead. */
 const ENTRY_FOCUS_EVENT = 'rovingFocusGroup.onEntryFocus';
+
+/** The foot of a SplitMenuBody (styles.slotMenuFoot), under its scroll
+ *  region (styles.slotMenuScroll). MultiSelectApplyButton portals into it,
+ *  so the list scrolls on its own and Apply never covers a row. Undefined
+ *  outside a SlotMenu or OptionSubmenu, where the button renders in place.
+ *  Null inside one whose foot has not been committed yet (its callback ref
+ *  sets it during the shell's first commit, and the sync re-render follows
+ *  before paint), where the button renders nothing, so it does not mount in
+ *  the list and then move. */
+const SlotMenuFoot = createContext<HTMLDivElement | null | undefined>(undefined);
 
 /** Attached as a ref callback (SubContent's prop type omits onEntryFocus)
  *  so it runs ahead of Radix's own roving-focus effect. `handled` limits
@@ -132,13 +143,30 @@ export const SlotMenu = ({
                     onKeyDownCapture={onMenuContentKeyDownCapture({ loop: true })}
                 >
                     <p className={styles.slotMenuTitle}>{title}</p>
-                    <div className={styles.slotMenuBody}>
+                    <SplitMenuBody>
                         {about}
                         {children}
-                    </div>
+                    </SplitMenuBody>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>
+    );
+};
+
+/** The body of SlotMenu and OptionSubmenu: a scroll region
+ *  (styles.slotMenuScroll) over a foot (styles.slotMenuFoot) that a
+ *  multi-select's MultiSelectApplyButton portals into through SlotMenuFoot,
+ *  so a long list scrolls on its own and Apply never covers a row. */
+const SplitMenuBody = ({ children }: { children: React.ReactNode }) => {
+    const [foot, setFoot] = useState<HTMLDivElement | null>(null);
+
+    return (
+        <div className={styles.slotMenuSplit}>
+            <SlotMenuFoot.Provider value={foot}>
+                <div className={styles.slotMenuScroll}>{children}</div>
+            </SlotMenuFoot.Provider>
+            <div ref={setFoot} className={styles.slotMenuFoot} />
+        </div>
     );
 };
 
@@ -194,8 +222,8 @@ export const OptionRow = ({
     muted?: boolean;
     pinned?: boolean;
     // A real multi-select toggle row (its list posts the whole checked set
-    // through a sticky Apply): exposes `checked` to assistive tech as
-    // role="menuitemcheckbox"/aria-checked, or `role` outside a menu (the
+    // through the Apply in the menu's foot): exposes `checked` to assistive
+    // tech as role="menuitemcheckbox"/aria-checked, or `role` outside a menu (the
     // download dialog's "checkbox"). Omitted, a `checked` row is an
     // immediate single pick — the current value whether or not it's also
     // `pinned` — which carries aria-current instead. The two never overlap
@@ -279,19 +307,30 @@ export const LevelHint = ({ children }: { children: React.ReactNode }) => (
     <p className={styles.levelHint}>{children}</p>
 );
 
-/** Records a submenu's trigger edges on the panel as `--sub-trigger-left`
- *  and `--sub-trigger-right`. Radix always opens a submenu beside its
- *  trigger, so on a phone, where neither side has room, the stylesheet
- *  reads these to move the panel to full width under the trigger
- *  (`.subMenu` in DataSearch.module.scss). */
+/** Records a submenu's trigger geometry on the panel (`.subMenu` in
+ *  DataSearch.module.scss reads it). Radix opens a submenu flush against its
+ *  trigger, which sits inside the parent panel's padding and scrollbar
+ *  gutter, so `--sub-gap-right` and `--sub-gap-left` (the distance from each
+ *  trigger edge out to the parent panel's edge) push the panel 1px clear of
+ *  the parent, whatever gutter the browser draws. On a phone, where neither
+ *  side has room, `--sub-trigger-left` and `--sub-trigger-right` move the
+ *  panel to full width under the trigger instead. */
 const subMenuRef = (node: HTMLElement | null): (() => void) | undefined => {
     const trigger = node?.ownerDocument.getElementById(node.getAttribute('aria-labelledby') ?? '');
+    const parent = trigger?.closest('[data-radix-menu-content]');
 
     if (node && trigger) {
         const { left, right } = trigger.getBoundingClientRect();
 
         node.style.setProperty('--sub-trigger-left', `${left}px`);
         node.style.setProperty('--sub-trigger-right', `${right}px`);
+
+        if (parent) {
+            const panel = parent.getBoundingClientRect();
+
+            node.style.setProperty('--sub-gap-right', `${panel.right - right}px`);
+            node.style.setProperty('--sub-gap-left', `${left - panel.left}px`);
+        }
     }
 
     return menuEntryFocusRef(node);
@@ -316,26 +355,28 @@ export const OptionSubmenu = ({
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     children: React.ReactNode;
-}) => (
-    <DropdownMenu.Sub open={open} onOpenChange={onOpenChange}>
-        <DropdownMenu.SubTrigger asChild>
-            <OptionRow arrow detail={detail} meta={meta} info={info}>
-                {label}
-            </OptionRow>
-        </DropdownMenu.SubTrigger>
-        <DropdownMenu.Portal>
-            <DropdownMenu.SubContent
-                ref={subMenuRef}
-                className={classNames(styles.slotMenu, styles.fitMenu, styles.subMenu)}
-                sideOffset={0}
-                collisionPadding={16}
-                onKeyDownCapture={onMenuContentKeyDownCapture()}
-            >
-                <div className={styles.slotMenuBody}>{children}</div>
-            </DropdownMenu.SubContent>
-        </DropdownMenu.Portal>
-    </DropdownMenu.Sub>
-);
+}) => {
+    return (
+        <DropdownMenu.Sub open={open} onOpenChange={onOpenChange}>
+            <DropdownMenu.SubTrigger asChild>
+                <OptionRow arrow detail={detail} meta={meta} info={info}>
+                    {label}
+                </OptionRow>
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                    ref={subMenuRef}
+                    className={classNames(styles.slotMenu, styles.fitMenu, styles.subMenu)}
+                    sideOffset={0}
+                    collisionPadding={16}
+                    onKeyDownCapture={onMenuContentKeyDownCapture()}
+                >
+                    <SplitMenuBody>{children}</SplitMenuBody>
+                </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Sub>
+    );
+};
 
 /** Shared by every filterable list, gated behind pickerState.ts's length
  *  threshold. data-menu-field="filter" marks it as the keyboard mechanism's
@@ -362,7 +403,8 @@ export const OptionFilterInput = ({
     />
 );
 
-/** A menu list's filter box, pinned to the top of .slotMenuBody's scroll
+/** A menu list's filter box, pinned to the top of its menu's scroll region
+ *  (.slotMenuScroll in SlotMenu and OptionSubmenu, .slotMenuBody elsewhere)
  *  so it stays in reach down a long list. Under it, once the list has
  *  loaded, how many of the list's `total` options the filter leaves
  *  `shown`. */
@@ -444,13 +486,15 @@ export const AnySelectionRow = ({
     </DropdownMenu.Item>
 );
 
-/** The sticky "commit the whole toggled set" button shared by every
- *  multi-select popover. Pinned to the bottom of .slotMenuBody's own scroll
- *  area (styles.multiSelectApply) so a long list never scrolls it out of
- *  reach. `onApply` is a callback rather than a typed payload since sites
- *  differ in what they post (place/entity refs with labels vs. bare
- *  dcids). Each call site builds its own payload from `selected` and
- *  calls this with no arguments. */
+/** The "commit the whole toggled set" button shared by every multi-select
+ *  popover. It renders into SplitMenuBody's foot (SlotMenuFoot), under the
+ *  scroll region (styles.slotMenuScroll), so a long list scrolls on its own
+ *  and Apply stays in reach without covering a row. The foot sits inside the
+ *  menu's content node, so the menu's keyboard mechanism reaches it as the
+ *  last stop. `onApply` is a callback rather than a typed payload since
+ *  sites differ in what they post (place/entity refs with labels vs. bare
+ *  dcids). Each call site builds its own payload from `selected` and calls
+ *  this with no arguments. */
 export const MultiSelectApplyButton = ({
     selected,
     disabled,
@@ -459,16 +503,24 @@ export const MultiSelectApplyButton = ({
     selected: Set<string>;
     disabled: boolean;
     onApply: () => void;
-}) => (
-    <Button
-        variant="dark"
-        full
-        type="button"
-        data-menu-field="field"
-        className={styles.multiSelectApply}
-        disabled={disabled}
-        onClick={onApply}
-    >
-        {multiSelectApplyLabel(selected.size, disabled)}
-    </Button>
-);
+}) => {
+    const foot = useContext(SlotMenuFoot);
+    const button = (
+        <Button
+            variant="dark"
+            full
+            type="button"
+            data-menu-field="field"
+            disabled={disabled}
+            onClick={onApply}
+        >
+            {multiSelectApplyLabel(selected.size, disabled)}
+        </Button>
+    );
+
+    if (foot === null) {
+        return null;
+    }
+
+    return foot ? createPortal(button, foot) : button;
+};

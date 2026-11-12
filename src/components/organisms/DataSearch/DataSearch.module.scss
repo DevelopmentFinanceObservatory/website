@@ -602,22 +602,64 @@ span.slotMarked {
     }
 }
 
-// Content sits rem(10) from the panel edges; height follows the content.
-// Rows are stacked full-width Buttons with a hairline rhythm.
-.slotMenuBody {
+// The list panel under a menu's title: height follows the content up to
+// rem(280). Shared by the scrolling body and the split one.
+
+@mixin menu-body-box {
     display: flex;
     flex-direction: column;
-    gap: rem(4);
     min-height: 0;
     max-height: rem(280);
-    padding: rem(10);
-    overflow-y: auto;
     background-color: var(--color-yellow-800);
     border-radius: rem(4);
 }
 
+// A body that scrolls itself (Refine, GalleryFilter). Content sits rem(10)
+// from the panel edges; rows are stacked full-width Buttons with a hairline
+// rhythm.
+.slotMenuBody {
+    @include menu-body-box;
+    @include scrollbar-visible(var(--color-sage-dark));
+
+    gap: rem(4);
+    padding: rem(10);
+}
+
+// SplitMenuBody (SlotMenu and OptionSubmenu): the scroll region
+// (.slotMenuScroll), which takes the body's padding and scrolls on its own,
+// over the foot (.slotMenuFoot), where a multi-select's Apply lands
+// (MultiSelectApplyButton portals into it) so the button never covers a
+// row. The foot is empty in every other menu, and then not drawn. The box
+// itself does not scroll, so it reserves no scrollbar gutter.
+.slotMenuSplit {
+    @include menu-body-box;
+
+    overflow: hidden;
+}
+
+.slotMenuScroll {
+    @include scrollbar-visible(var(--color-sage-dark));
+
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: rem(4);
+    min-height: 0;
+    padding: rem(10);
+}
+
+.slotMenuFoot {
+    flex-shrink: 0;
+    padding: rem(6) rem(10) rem(10);
+
+    &:empty {
+        display: none;
+    }
+}
+
 // A list's filter box and its count (OptionFilterBar), pinned to the top of
-// .slotMenuBody's scroll area so the filter stays in reach down a long list.
+// its menu's scroll region (.slotMenuScroll in SlotMenu and OptionSubmenu,
+// .slotMenuBody elsewhere) so the filter stays in reach down a long list.
 // The background matches the menu so scrolling rows don't show through, and
 // the shadow paints the body's top padding, which a browser may leave open
 // above the pinned bar.
@@ -640,17 +682,6 @@ span.slotMarked {
     font-family: var(--font-outfit);
     font-weight: 300;
     color: var(--color-stone);
-}
-
-// Pinned to .slotMenuBody's own scroll area so a long list (hundreds of CRS
-// provider/recipient rows) doesn't scroll Apply out of reach; background
-// matches the menu so a scrolling row underneath doesn't show through.
-.multiSelectApply {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    padding-top: rem(6);
-    background-color: var(--color-yellow-800);
 }
 
 .slotOption {
@@ -722,23 +753,11 @@ span.slotMarked {
     opacity: 0.55;
 }
 
-// The current pick's accent bar and label weight mark selection at rest,
-// distinct from this row's own hover fill, so a hovered ordinary row is
-// never mistaken for the current pick.
+// A currently-bound option, pulled out ahead of the ranked list: its label
+// weight marks it at rest, distinct from a row's hover fill, so a hovered
+// ordinary row is never mistaken for a bound one.
 .slotOptionPinned {
-    position: relative;
     font-weight: 500;
-
-    &::before {
-        content: "";
-        position: absolute;
-        top: rem(6);
-        bottom: rem(6);
-        left: 0;
-        width: 3px;
-        background-color: var(--color-charcoal);
-        border-radius: rem(2);
-    }
 }
 
 // Long labels (country names) trim to an ellipsis instead of widening the
@@ -801,10 +820,20 @@ span.slotMarked {
 }
 
 // Submenus are anchored at the trigger's edge (sideOffset 0), then pushed
-// past the parent's rem(10) padding to sit 1px off its edge — the same
-// hairline seam as the panels.
+// past the parent panel's padding and scrollbar gutter, by the gaps
+// SlotMenu's subMenuRef measures, to sit 1px off its edge, the same hairline
+// seam as the panels.
 .subMenu {
-    margin-left: calc(rem(10) + 1px);
+    &[data-side="right"] {
+        margin-left: calc(var(--sub-gap-right, #{rem(10)}) + 1px);
+    }
+
+    // Radix anchors a left-side panel's wrapper by its right edge, and the
+    // wrapper takes the panel's margin box, so a right margin moves the
+    // panel left.
+    &[data-side="left"] {
+        margin-right: calc(var(--sub-gap-left, #{rem(10)}) + 1px);
+    }
 }
 
 @keyframes pop-in {
@@ -844,8 +873,8 @@ span.slotMarked {
 .slotInput {
     @include font-size(10px, 1);
 
-    // .slotMenuBody scrolls, so a long list would otherwise shrink this
-    // field below its height.
+    // The menu's scroll region (.slotMenuScroll) scrolls, so a long list
+    // would otherwise shrink this field below its height.
     flex-shrink: 0;
     flex-grow: 1;
     min-width: rem(140);
@@ -1732,17 +1761,20 @@ span.slotMarked {
 }
 
 // The country list inside the default-scope place picker (216 rows), under
-// its filter box. It scrolls with .slotMenuBody, so the menu has one
+// its filter box. It scrolls with .slotMenuScroll, so the menu has one
 // scroller.
 .placeList {
     display: flex;
     flex-direction: column;
     gap: rem(2);
 
-    // Bled through the body's side padding at the panel's fixed measure:
-    // rem(300) with, and rem(280) without, the padding — the same width the
-    // loading note reserves, so the menu never jumps.
-    width: rem(300);
+    // Bled through the scroll region's side padding, as each row is on its
+    // own elsewhere (.slotOption), so it ends at the padding edge whatever
+    // width the scrollbar's gutter leaves. Its labels never size the panel
+    // (contain), so the panel holds the rem(300) floor (.slotMenu) the
+    // loading note reserves and keeps its width while the filter runs.
+    contain: inline-size;
+    width: calc(100% + #{rem(20)});
     margin-top: rem(6);
     margin-inline: rem(-10);
 
@@ -2477,14 +2509,17 @@ span.slotMarked {
         width: calc(100vw - 32px);
         max-width: none;
         max-height: calc(var(--radix-dropdown-menu-content-available-height) - var(--sub-drop));
-        margin-left: 0;
 
+        // Here, at the desktop rules' specificity, so their gap margin
+        // stays off the phone panel.
         &[data-side="right"] {
             left: calc(16px - var(--sub-trigger-right));
+            margin-left: 0;
         }
 
         &[data-side="left"] {
             left: calc(100vw - 16px - var(--sub-trigger-left));
+            margin-right: 0;
         }
 
         // Long labels wrap in the narrow panel instead of trimming.

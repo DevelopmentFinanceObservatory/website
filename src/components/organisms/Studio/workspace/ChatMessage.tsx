@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import ApprovedPlanPill from './ApprovedPlanPill';
@@ -31,6 +31,15 @@ type ChatMessageProps = {
     onApplyChoice: (chip: ApplyChoiceSuggestion) => void;
     // A shared (read-only) transcript: chips without actions, no follow-ups.
     readOnly: boolean;
+};
+
+// A wide GFM table scrolls inside its own wrapper instead of widening the thread.
+const markdownComponents: Components = {
+    table: ({ children }) => (
+        <div className={styles.tableScroll}>
+            <table>{children}</table>
+        </div>
+    ),
 };
 
 /**
@@ -79,7 +88,9 @@ const ChatMessage = ({
         <div className={styles.botTurn}>
             {message.text && (
                 <div className={styles.botText}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {message.text}
+                    </ReactMarkdown>
                 </div>
             )}
             {/* Rate the answer (and copy it): a shared sheet is somebody
