@@ -37,6 +37,9 @@ test('sign-in returns to a requested Graph Explorer path, else to the Graph Expl
         '/studio',
         '/graph-explorer-old',
         '//evil.example',
+        '/graph-explorer/..//evil.example',
+        '/graph-explorer/%2e%2e//evil.example',
+        '/graph-explorer/../studio',
     ]) {
         assert.equal(
             graphExplorerSignIn(requested),

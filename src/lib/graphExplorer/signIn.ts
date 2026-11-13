@@ -18,16 +18,20 @@ export const REQUEST_PATH_HEADER = 'x-dfo-request-path';
 export const isGraphExplorerPath = (pathname: string): boolean =>
     pathname === GRAPH_EXPLORER_PATH || pathname.startsWith(`${GRAPH_EXPLORER_PATH}/`);
 
+const PLACEHOLDER_ORIGIN = 'https://dfo.invalid';
+
 /**
  * The sign-in address for a signed-out visitor to the Graph Explorer, with
- * `next` set to the requested path when it is a Graph Explorer path, and to
- * the Graph Explorer otherwise. /login validates `next` again (safeNext).
+ * `next` set to the requested path when it resolves to a Graph Explorer
+ * path, and to the Graph Explorer otherwise. The requested path is judged
+ * after URL resolution, so dot segments cannot leave the section.
+ * /login validates `next` again (safeNext).
  */
 export const graphExplorerSignIn = (requested: string | null | undefined): string => {
+    const url = requested?.startsWith('/') ? new URL(requested, PLACEHOLDER_ORIGIN) : null;
     const inside =
-        requested != null &&
-        (isGraphExplorerPath(requested) || requested.startsWith(`${GRAPH_EXPLORER_PATH}?`));
-    const next = inside ? requested : GRAPH_EXPLORER_PATH;
+        url != null && url.origin === PLACEHOLDER_ORIGIN && isGraphExplorerPath(url.pathname);
+    const next = inside ? url.pathname + url.search : GRAPH_EXPLORER_PATH;
 
     return `/login?next=${encodeURIComponent(next)}`;
 };

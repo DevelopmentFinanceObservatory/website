@@ -12,6 +12,8 @@ const cases: [label: string, input: string | undefined, expected: string][] = [
     ['backslash host', '/\\evil.example/x', '/studio'],
     ['tab before the host slash', '/\t/evil.example', '/studio'],
     ['newline before the host slash', '/\n/evil.example', '/studio'],
+    ['dot segments to a protocol-relative path', '/graph-explorer/..//evil.example', '/studio'],
+    ['encoded dot segments', '/graph-explorer/%2e%2e//evil.example', '/studio'],
     ['absolute URL', 'https://evil.example', '/studio'],
     ['javascript scheme', 'javascript:alert(1)', '/studio'],
     ['undefined', undefined, '/studio'],
