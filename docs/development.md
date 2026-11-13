@@ -134,7 +134,14 @@ On that server, `db-migrate` creates a `website` database and three roles:
 database is dropped, and `db-migrate` resets the two passwords each run.
 `pnpm test` creates randomly named databases and roles and drops them when
 it finishes. `just db-reset` refuses to touch a server it didn't create. To start over
-there, run `dropdb website && just db-migrate`.
+there, use the same connection defaults as `db-migrate`:
+
+```bash
+PGPASSWORD="${PGPASSWORD-postgres}" dropdb \
+  -h "${PGHOST:-localhost}" -p "${PGPORT:-5433}" \
+  -U "${PGUSER:-postgres}" website &&
+  just db-migrate
+```
 
 [direnv]: https://direnv.net
 

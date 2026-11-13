@@ -165,7 +165,9 @@ db-reset:
     set -euo pipefail
     if [ "$(just _db-existing)" = yes ]; then
         echo "Error: PG* points at a Postgres other than the dfo-website-db container (${PGHOST:-localhost}:${PGPORT:-5433}); db-reset won't drop anything there." >&2
-        echo "  To start the website database over on it: dropdb website && just db-migrate" >&2
+        # Expand defaults when the printed command is run, keeping passwords out of this output.
+        # shellcheck disable=SC2016
+        echo '  To start the website database over on it: PGPASSWORD="${PGPASSWORD-postgres}" dropdb -h "${PGHOST:-localhost}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" website && just db-migrate' >&2
         exit 1
     fi
     docker rm -f dfo-website-db >/dev/null 2>&1 || true
@@ -186,7 +188,8 @@ _db-existing:
         echo no
         exit 0
     fi
-    if command -v docker >/dev/null 2>&1 \
+    if { [ "$host" = localhost ] || [ "$host" = 127.0.0.1 ]; } \
+        && command -v docker >/dev/null 2>&1 \
         && [ -n "$(docker ps -q --filter name='^dfo-website-db$' 2>/dev/null)" ] \
         && docker port dfo-website-db 5432/tcp 2>/dev/null | grep -q ":$port\$"; then
         echo no
