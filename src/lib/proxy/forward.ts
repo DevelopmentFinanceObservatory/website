@@ -35,8 +35,8 @@ import { hit, type Surface } from './rateLimit';
  * The first chunk of a body is read before the response goes out, so a body
  * that fails before its first byte is answered with a logged 502 problem
  * document. A body that fails after that reaches the client as the upstream's
- * status with a body that ends in an error. An event stream and every /mcp
- * response go out unread, so a failure there always takes the second form.
+ * status with a body that ends in an error. An event stream goes out unread,
+ * so a failure there always takes the second form.
  *
  * Upstreams:
  *   /api/v1/search|datasets|graph/*, /api/v1/presentation/components|shares/*
@@ -87,9 +87,6 @@ type ForwardOptions = {
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
     unreachable: string;
-    // False relays every body unread, without the first-chunk check that
-    // answers a body failing before its first byte with a 502.
-    peek?: boolean;
     // Runs after the rate limit and before the upstream call; a Response it
     // returns is the answer instead (the Studio's prompt allowance).
     admit?: () => Promise<Response | null>;
@@ -224,7 +221,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
 
     let body: ReadableStream<Uint8Array> | null = upstream.body;
 
-    if (body && options.peek !== false && !isEventStream(upstream.headers)) {
+    if (body && !isEventStream(upstream.headers)) {
         try {
             body = await peeked(body);
         } catch (error) {

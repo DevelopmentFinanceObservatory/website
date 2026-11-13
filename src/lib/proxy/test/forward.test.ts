@@ -17,7 +17,7 @@ import type { NextRequest } from 'next/server';
 
 const { forward } = await import('../forward.ts');
 
-// Over 1 KiB of JSON, so any size threshold for compression is passed.
+// Over 1 KiB of JSON, so an encoder that skips small bodies would still act on it.
 const JSON_BODY = Buffer.from(
     JSON.stringify({ rows: Array.from({ length: 200 }, (_, id) => ({ id, name: `row-${id}` })) }),
 );
@@ -27,8 +27,8 @@ const held = new Map<string, ServerResponse>();
 
 // The upstream, one behaviour per path. /gzip gzips its body and labels it,
 // as dfo-apis may. /reset sends headers and closes before any body byte.
-// /fails-later sends one chunk and is held. /empty sends no body. /events
-// sends event-stream headers and is held.
+// /fails-later and /stalls send one chunk and are held. /empty sends no body.
+// /events sends event-stream headers and is held.
 const upstream = createServer((req, res) => {
     switch (req.url) {
         case '/gzip': {
@@ -49,6 +49,7 @@ const upstream = createServer((req, res) => {
             res.socket?.end();
             break;
         case '/fails-later':
+        case '/stalls':
             res.writeHead(200, { 'content-type': 'application/json' });
             res.write('{"rows": [');
             held.set(req.url, res);
@@ -121,6 +122,22 @@ test('forward: streams a body that fails after its first chunk, ending it in an 
     held.get('/fails-later')!.socket?.end();
     await assert.rejects(reader.read());
 });
+
+test(
+    'forward: cancels the upstream body when the client leaves mid-body',
+    { timeout: 2000 },
+    async () => {
+        const res = await call('/stalls');
+        const reader = res.body!.getReader();
+
+        await reader.read();
+
+        const closed = once(held.get('/stalls')!, 'close');
+
+        await reader.cancel();
+        await closed;
+    },
+);
 
 test('forward: relays an empty body as a 200 with no bytes', async () => {
     const res = await call('/empty');
