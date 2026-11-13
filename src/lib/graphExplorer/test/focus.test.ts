@@ -6,15 +6,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    centreHeading,
     datasetBoxes,
     declaredDomain,
     definedNotUsed,
     nodeBoxes,
+    outsideKind,
+    pictureLens,
+    sharePercent,
     type FocusBox,
 } from '../focus.ts';
 import { buildModel } from '../model.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readOntology, readProvenances, readTerms } from '../wire.ts';
+import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
 
 const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
 
@@ -102,4 +106,73 @@ test('a declared domain shows only where it differs from the classes in use', ()
     assert.equal(declaredDomain(model, 'amount')?.includes('EconomicActivity'), true);
     assert.equal(declaredDomain(model, 'financialFlowType'), null);
     assert.equal(declaredDomain(model, 'NotANode'), null);
+});
+
+test('broader and range boxes order their entries by use, as every other box does', () => {
+    const body = ontologyBody() as { nodes: Record<string, unknown>[] };
+    const base = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const unused = (kind: 'class' | 'property') =>
+        body.nodes
+            .map((node) => String(node.dcid))
+            .find((id) => base.kind(id) === kind && base.usage(id).total === 0);
+    const unusedClass = unused('class');
+    const unusedProperty = unused('property');
+    assert.ok(unusedClass && unusedProperty);
+
+    const provider = body.nodes.find((node) => node.dcid === 'financingProvider');
+    assert.ok(provider);
+    provider.range_includes = [unusedClass, 'FinancialFlow'];
+    provider.sub_property_of = [unusedProperty, 'amount'];
+    const edited = buildModel(readOntology(body), readProvenances(provenancesBody()));
+
+    const boxes = nodeBoxes(edited, 'financingProvider');
+    assert.deepEqual(boxes.find((entry) => entry.key === 'right')?.ids, [
+        'FinancialFlow',
+        unusedClass,
+    ]);
+    assert.deepEqual(boxes.find((entry) => entry.key === 'up')?.ids, ['amount', unusedProperty]);
+});
+
+test('the centre heading reads a dataset, a model term, a base term and an unknown id', () => {
+    const dataset = centreHeading(model, { kind: 'dataset', id: 'provenance/OECDDAC2B' });
+    assert.deepEqual(
+        [dataset?.name, dataset?.sub],
+        [model.label('provenance/OECDDAC2B'), { kind: 'statVars', count: 14 }],
+    );
+    assert.equal(centreHeading(model, { kind: 'dataset', id: 'provenance/Gone' }), null);
+
+    const term = centreHeading(model, { kind: 'node', id: 'FinancialFlow' });
+    assert.deepEqual(
+        [term?.name, term?.base, term?.term],
+        [model.label('FinancialFlow'), false, undefined],
+    );
+
+    const baseTerms = readTerms(termsBody());
+    const outside = 'ABSState';
+    const base = centreHeading(model, { kind: 'node', id: outside }, baseTerms);
+    assert.deepEqual(
+        [base?.base, base?.term?.dcid, base?.sub],
+        [true, outside, { kind: 'dcid', id: outside }],
+    );
+    assert.notEqual(outsideKind(base?.term), outsideKind(undefined));
+
+    // Without the terms list the same id reads as outside the model, with no term.
+    const unknown = centreHeading(model, { kind: 'node', id: outside });
+    assert.deepEqual([unknown?.base, unknown?.term, unknown?.name], [false, undefined, outside]);
+    assert.notEqual(unknown?.kind, base?.kind);
+});
+
+test('a dataset’s own view under its own filter carries no marks', () => {
+    const dac1 = { kind: 'dataset', id: 'provenance/OECDDAC1' } as const;
+    assert.equal(pictureLens({ kind: 'dataset', id: dac1.id }, dac1), null);
+    assert.equal(pictureLens({ kind: 'dataset', id: 'provenance/OECDDAC2A' }, dac1), dac1.id);
+    assert.equal(pictureLens({ kind: 'node', id: 'FinancialFlow' }, dac1), dac1.id);
+    assert.equal(pictureLens({ kind: 'node', id: 'FinancialFlow' }, { kind: 'all' }), null);
+});
+
+test('a share is a whole percentage, at least 1 when anything is used', () => {
+    assert.equal(sharePercent(1, 653), 1);
+    assert.equal(sharePercent(0, 653), 0);
+    assert.equal(sharePercent(5, 0), 0);
+    assert.equal(sharePercent(14, 25), 56);
 });

@@ -3,8 +3,7 @@
  * placed back on the cell it belongs to.
  */
 import type { Model } from './model.ts';
-import { CHECK_MAX_ROWS } from './wire.ts';
-import type { OntologyCheckRow, OntologyFinding } from './wire.ts';
+import { findingProperty, type OntologyCheckRow, type OntologyFinding } from './wire.ts';
 
 export type PastedRange = {
     readonly header: readonly string[];
@@ -139,8 +138,27 @@ export function switchColumn(mapping: Mapping, index: number, to: 'property' | '
     });
 }
 
+/** A reader's choice for one column, kept while the column's header reads `header`. */
+export type ColumnSwitch = { readonly header: string; readonly to: 'property' | 'ignored' };
+
+/**
+ * The mapping with the reader's switches applied. A switch whose column's
+ * header has changed since it was made is passed over, so editing the rows
+ * keeps every choice and editing a header drops only that column's.
+ */
+export function applySwitches(
+    mapping: Mapping,
+    switches: ReadonlyMap<number, ColumnSwitch>,
+): Mapping {
+    let switched = mapping;
+    for (const [index, { header, to }] of switches) {
+        if (mapping[index]?.header === header) switched = switchColumn(switched, index, to);
+    }
+    return switched;
+}
+
 /** The sheet row a data row sits on as the reader sees it: the header is row 1. */
-const sheetRow = (dataIndex: number): number => dataIndex + 2;
+export const sheetRow = (dataIndex: number): number => dataIndex + 2;
 
 /**
  * Check rows in the wire shape. `ref` is the sheet row number. An empty cell
@@ -188,29 +206,15 @@ export function rowsToCheck(
 /** The cell a finding belongs to; `column` is null when its field maps to no column. */
 export type FindingLocation = { readonly row: number; readonly column: number | null };
 
-const CONSTRAINT_PREFIX = 'constraint_properties.';
-
 /** Places a finding by its `ref` (a sheet row number) and `field`. Null when `ref` is no row number. */
 export function locateFinding(mapping: Mapping, finding: OntologyFinding): FindingLocation | null {
     const row = Number(finding.ref);
     if (finding.ref === null || !Number.isInteger(row) || row < 1) return null;
-    const column = mapping.find(({ target }) => {
-        if (finding.field.startsWith(CONSTRAINT_PREFIX)) {
-            return (
-                target.kind === 'property' &&
-                target.property === finding.field.slice(CONSTRAINT_PREFIX.length)
-            );
-        }
-        return target.kind === 'definition' && target.field === camelCase(finding.field);
-    });
+    const property = findingProperty(finding);
+    const column = mapping.find(({ target }) =>
+        property === null
+            ? target.kind === 'definition' && target.field === camelCase(finding.field)
+            : target.kind === 'property' && target.property === property,
+    );
     return { row, column: column?.index ?? null };
-}
-
-/** The rows in runs of at most `size`, the most one check request takes. */
-export function chunkRows<TRow>(rows: readonly TRow[], size = CHECK_MAX_ROWS): TRow[][] {
-    const chunks: TRow[][] = [];
-    for (let start = 0; start < rows.length; start += size) {
-        chunks.push(rows.slice(start, start + size));
-    }
-    return chunks;
 }

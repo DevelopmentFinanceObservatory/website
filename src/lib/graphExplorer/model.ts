@@ -13,9 +13,23 @@ import type {
     OntologyPattern,
     OntologyProvenance,
     OntologyProvenances,
+    OntologyTerm,
 } from './wire.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
+
+/** The reader's words for each kind of term, and for a dataset, as a label starts. */
+export const KIND_WORDS: Readonly<Record<Kind | 'dataset', string>> = {
+    class: 'Kind of thing',
+    valueList: 'Value list',
+    property: 'Property',
+    value: 'Value',
+    dataset: 'Dataset',
+};
+
+/** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
+export const kindOfTerm = (term: Pick<OntologyTerm, 'types'>): 'class' | 'property' =>
+    term.types.includes('Class') ? 'class' : 'property';
 
 /**
  * What a property does in a StatVar, read from the patterns that use it:
@@ -238,10 +252,43 @@ const groupBy = <TItem extends { readonly roles: readonly Role[] }>(
 export const datasetName = (dataset: Pick<OntologyProvenance, 'dcid' | 'label'>): string =>
     dataset.label ?? dataset.dcid.split('/').at(-1) ?? dataset.dcid;
 
-/** The index over an ontology document and a provenances document. */
+const distinct = (ids: readonly string[]): string[] => [...new Set(ids)];
+
+/** A node with each of its lists holding an id once. */
+const distinctLists = (node: OntologyNode): OntologyNode => ({
+    ...node,
+    types: distinct(node.types),
+    alternate_name: distinct(node.alternate_name),
+    sub_class_of: distinct(node.sub_class_of),
+    sub_property_of: distinct(node.sub_property_of),
+    specialization_of: distinct(node.specialization_of),
+    domain_includes: distinct(node.domain_includes),
+    range_includes: distinct(node.range_includes),
+    classification_code: distinct(node.classification_code),
+    provenances: distinct(node.provenances),
+    enumeration: node.enumeration && {
+        ...node.enumeration,
+        members: distinct(node.enumeration.members),
+    },
+});
+
+/** One entry per dcid: the last in the document, at the place of the first. */
+const lastPerDcid = <TEntry extends { readonly dcid: string }>(
+    entries: readonly TEntry[],
+): TEntry[] => [...new Map(entries.map((entry) => [entry.dcid, entry])).values()];
+
+/**
+ * The index over an ontology document and a provenances document. A dcid
+ * the documents repeat keeps its last node or dataset, and every list on a
+ * node holds an id once, so no list the model answers repeats an id.
+ */
 export function buildModel(ontology: OntologyDocument, provenances: OntologyProvenances): Model {
-    const nodes = Object.freeze(ontology.nodes.toSorted((a, b) => (a.dcid < b.dcid ? -1 : 1)));
-    const datasets = Object.freeze([...provenances.provenances]);
+    const nodes = Object.freeze(
+        lastPerDcid(ontology.nodes)
+            .map(distinctLists)
+            .sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
+    );
+    const datasets = Object.freeze(lastPerDcid(provenances.provenances));
     const byId = new Map(nodes.map((node) => [node.dcid, node]));
     const datasetById = new Map(datasets.map((dataset) => [dataset.dcid, dataset]));
     const kinds = new Map(nodes.map((node) => [node.dcid, kindOf(node)]));
@@ -336,26 +383,41 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         return seen;
     };
 
+    /**
+     * Each member once. A member sits under its first `specialization_of`
+     * parent in the list whose own parents never lead back to the member; a
+     * member with no such parent is a root, so a cycle's members and a member
+     * that specialises itself are roots.
+     */
     const memberTree = (listId: string): readonly MemberTree[] => {
         const members = membersIndex.get(listId) ?? EMPTY;
         const inList = new Set(members);
+        const parentsOf = (id: string): string[] =>
+            (byId.get(id)?.specialization_of ?? []).filter((parent) => inList.has(parent));
+        const leadsTo = (from: string, target: string): boolean => {
+            const seen = new Set<string>();
+            const queue = [from];
+            for (const next of queue) {
+                if (next === target) return true;
+                if (seen.has(next)) continue;
+                seen.add(next);
+                queue.push(...parentsOf(next));
+            }
+            return false;
+        };
         const children = new Map<string, string[]>();
         const roots: string[] = [];
         for (const id of members) {
-            const parents = (byId.get(id)?.specialization_of ?? []).filter((p) => inList.has(p));
-            if (parents.length === 0) roots.push(id);
-            for (const parent of parents) push(children, parent, id);
+            const parent = parentsOf(id).find((candidate) => !leadsTo(candidate, id));
+            if (parent === undefined) roots.push(id);
+            else push(children, parent, id);
         }
-        const build = (id: string, path: Set<string>): MemberTree =>
+        const build = (id: string): MemberTree =>
             Object.freeze({
                 id,
-                children: Object.freeze(
-                    (children.get(id) ?? [])
-                        .filter((child) => !path.has(child))
-                        .map((child) => build(child, new Set(path).add(child))),
-                ),
+                children: Object.freeze((children.get(id) ?? []).map(build)),
             });
-        return Object.freeze(roots.map((id) => build(id, new Set([id]))));
+        return Object.freeze(roots.map(build));
     };
 
     // Usage: StatVar counts per node and dataset.
@@ -659,4 +721,55 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         scopedList,
         lens,
     });
+}
+
+/** The most matches a value-list member search returns. */
+export const MEMBER_HIT_LIMIT = 60;
+
+/**
+ * The members of a value list whose label, dcid, classification code or
+ * other name holds `text`, ignoring case and surrounding space, in list
+ * order: the first `limit`, and how many match in all. Empty for blank text.
+ */
+export function searchMembers(
+    model: Model,
+    listId: string,
+    text: string,
+    limit = MEMBER_HIT_LIMIT,
+): { readonly hits: readonly string[]; readonly total: number } {
+    const needle = text.trim().toLowerCase();
+    if (needle === '') return { hits: [], total: 0 };
+    const matched = model.members(listId).filter((id) => {
+        const node = model.node(id);
+        return [
+            model.label(id),
+            id,
+            ...(node?.classification_code ?? []),
+            ...(node?.alternate_name ?? []),
+        ].some((name) => name.toLowerCase().includes(needle));
+    });
+    return { hits: matched.slice(0, limit), total: matched.length };
+}
+
+/**
+ * A scoped list's groups with only the rows whose label or dcid holds
+ * `text`, ignoring case and surrounding space; blank text keeps every row.
+ * The screen and the list's CSV both read it, so they agree.
+ */
+export function filterScopedList(
+    model: Model,
+    list: ScopedList,
+    text: string,
+): Readonly<Record<Group, readonly ScopedRow[]>> {
+    const needle = text.trim().toLowerCase();
+    if (needle === '') return list.groups;
+    const keep = (row: ScopedRow) =>
+        model.label(row.id).toLowerCase().includes(needle) || row.id.toLowerCase().includes(needle);
+    const { measured, between, split, unused } = list.groups;
+    return {
+        measured: measured.filter(keep),
+        between: between.filter(keep),
+        split: split.filter(keep),
+        unused: unused.filter(keep),
+    };
 }

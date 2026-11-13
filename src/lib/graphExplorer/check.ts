@@ -1,15 +1,27 @@
 /**
  * Checking a pasted sheet against the graph: sending its rows to the check
  * route in chunks, a plain line per finding with the closest value-list
- * members to a wrong value, the result sentence, the findings as CSV rows,
- * and an example sheet built from a dataset pattern.
+ * members to a wrong value, where each finding sits in the pasted table, the
+ * result sentence, the findings as CSV rows, and an example sheet built from
+ * a dataset pattern.
  */
-import { abortable, problemText, retryDelay } from './load.ts';
-import type { Model } from './model.ts';
-import { locateFinding, type Mapping } from './pasted.ts';
+import {
+    abortable,
+    bounded,
+    BUILDING,
+    GraphFailure,
+    problemText,
+    REQUEST_TIMEOUT_MS,
+    retryDelay,
+    type FailureReason,
+} from './load.ts';
+import { KIND_WORDS, type Model } from './model.ts';
+import { locateFinding, sheetRow, type Mapping } from './pasted.ts';
 import type { SentencePart } from './sentence.ts';
 import {
     CHECK_MAX_ROWS,
+    findingProperty,
+    isFindingCode,
     readCheckResponse,
     WireShapeError,
     type FindingCode,
@@ -21,13 +33,24 @@ import {
 export const CHECK_URL = '/api/graph/ontology/check';
 
 /**
- * The rows the first request carries. A chunk the route refuses is halved,
- * and later chunks keep the smaller size.
+ * The rows the first request carries, and the most any request carries. A
+ * chunk the route refuses is halved until the refused row stands alone, and
+ * the smaller size carries on to the chunks that follow; each new chunk the
+ * route answers doubles the size again, up to this one. The halves of a
+ * split chunk leave the size alone when answered, so a paste the route can
+ * take only in small chunks does not climb back to a refused size after
+ * every pair of halves.
  */
 export const CHECK_CHUNK_ROWS = 500;
 
-/** A check that could not finish; `message` says why. */
-export class CheckError extends Error {
+/** How long a whole check may take, waits for a build included. */
+export const CHECK_LIMIT_MS = 5 * 60_000;
+
+/** Why a check stopped: a request failure, or an answer covering other rows than were sent. */
+export type CheckFailureReason = FailureReason | 'row_count';
+
+/** A check that could not finish; `message` says why, `reason` says so for code. */
+export class CheckError extends GraphFailure<CheckFailureReason> {
     override name = 'CheckError';
 }
 
@@ -35,8 +58,8 @@ export class CheckError extends Error {
 export type RefusedRow = { readonly ref: string | null; readonly detail: string };
 
 export type CheckResult = {
-    /** The graph generation of the last answer; null when the route named none. */
-    readonly generation: string | null;
+    /** The graph generations the answers named, each once, in the order first seen. */
+    readonly generations: readonly string[];
     /** The rows the route checked. */
     readonly rowCount: number;
     readonly findings: readonly OntologyFinding[];
@@ -52,6 +75,10 @@ export type CheckOptions = {
     /** Called before each wait while the graph's model is being built. */
     readonly onWait?: (retryInMs: number) => void;
     readonly chunkRows?: number;
+    /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
+    readonly requestTimeoutMs?: number;
+    /** The bound on the whole check; CHECK_LIMIT_MS by default. */
+    readonly limitMs?: number;
     readonly fetch?: typeof fetch;
     readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
     readonly now?: () => number;
@@ -62,11 +89,15 @@ type Answer =
     | { readonly kind: 'refused'; readonly detail: string };
 
 /**
- * Checks `rows` in chunks. A 200 adds its findings. A 400 on a chunk of more
- * than one row splits it in two halves, checked in turn; a 400 on one row
- * refuses that row with the problem's detail. A 503 with `Retry-After` waits
- * and asks again, for up to a minute per chunk. Anything else stops the
- * check with a CheckError. An abort rejects with the signal's reason.
+ * Checks `rows` in chunks. A 200 adds its findings, and on a new chunk
+ * (one that is not the half of a split) doubles the chunk size, up to
+ * `chunkRows`; one whose `row_count` is not the rows sent stops the check. A 400 on a chunk of more than one row splits it in two halves,
+ * checked in turn, and the half's size becomes the chunk size for the rows
+ * after them; a 400 on one row refuses that row with the problem's detail. A 503 with `Retry-After` waits and
+ * asks again, for up to a minute per chunk. A request past
+ * `requestTimeoutMs`, or a check past `limitMs`, stops with reason
+ * `timeout`. Anything else stops the check with a CheckError. An abort
+ * rejects with the signal's reason, and no progress is reported after it.
  */
 export async function checkRows(
     rows: readonly OntologyCheckRow[],
@@ -80,7 +111,23 @@ export async function checkRows(
         sleep = abortable,
         now = Date.now,
     } = options;
-    let size = Math.max(1, Math.min(options.chunkRows ?? CHECK_CHUNK_ROWS, CHECK_MAX_ROWS));
+    const largest = Math.max(1, Math.min(options.chunkRows ?? CHECK_CHUNK_ROWS, CHECK_MAX_ROWS));
+    let size = largest;
+    const bounds = bounded(signal, {
+        limitMs: options.limitMs ?? CHECK_LIMIT_MS,
+        requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+    });
+    /** The error to raise for `error`: the caller's abort untouched, a bound as `timeout`, else `fallback`. */
+    const failed = (error: unknown, fallback: () => unknown): unknown => {
+        if (signal?.aborted) return error;
+        if (bounds.timedOut()) {
+            return new CheckError('The check stopped: the Graph API did not answer in time.', {
+                reason: 'timeout',
+                cause: error,
+            });
+        }
+        return fallback();
+    };
 
     const send = async (chunk: readonly OntologyCheckRow[]): Promise<Answer> => {
         let firstWait: number | null = null;
@@ -89,27 +136,46 @@ export async function checkRows(
             try {
                 response = await post(CHECK_URL, {
                     method: 'POST',
-                    signal,
+                    signal: bounds.request(),
                     headers: { 'content-type': 'application/json', accept: 'application/json' },
                     body: JSON.stringify({ rows: chunk }),
                 });
             } catch (error) {
-                if (signal?.aborted) throw error;
-                throw new CheckError('The check could not be sent: the Graph API did not answer.', {
-                    cause: error,
-                });
+                throw failed(
+                    error,
+                    () =>
+                        new CheckError(
+                            'The check could not be sent: the Graph API did not answer.',
+                            {
+                                reason: 'unreachable',
+                                cause: error,
+                            },
+                        ),
+                );
             }
 
             if (response.ok) {
+                let body: unknown;
                 try {
-                    return { kind: 'checked', body: readCheckResponse(await response.json()) };
+                    body = await response.json();
                 } catch (error) {
-                    if (signal?.aborted) throw error;
-                    const why =
-                        error instanceof WireShapeError
-                            ? `a shape this page does not read: ${error.message}`
-                            : 'a body that is not JSON';
-                    throw new CheckError(`The check answered with ${why}.`, { cause: error });
+                    throw failed(
+                        error,
+                        () =>
+                            new CheckError('The check answered with a body that is not JSON.', {
+                                reason: 'not_json',
+                                cause: error,
+                            }),
+                    );
+                }
+                try {
+                    return { kind: 'checked', body: readCheckResponse(body) };
+                } catch (error) {
+                    if (!(error instanceof WireShapeError)) throw error;
+                    throw new CheckError(
+                        `The check answered with a shape this page does not read: ${error.message}.`,
+                        { reason: 'shape', detail: error.message, cause: error },
+                    );
                 }
             }
 
@@ -128,22 +194,31 @@ export async function checkRows(
             });
             if (delay !== null) {
                 onWait?.(delay);
-                await sleep(delay, signal);
+                try {
+                    await sleep(delay, bounds.run);
+                } catch (error) {
+                    throw failed(error, () => error);
+                }
                 continue;
             }
 
             const problem = await problemText(response);
-            const building = response.status === 503 && response.headers.has('retry-after');
-            const reason = building
-                ? 'the graph was still being read after a minute'
-                : `the Graph API answered ${response.status}${problem ? ` (${problem})` : ''}`;
-            throw new CheckError(`The check stopped: ${reason}.`);
+            if (response.status === 503 && response.headers.has('retry-after')) {
+                throw new CheckError(
+                    `The check stopped: the Graph API was still ${BUILDING} after a minute.`,
+                    { reason: 'build_timeout', status: response.status, detail: problem },
+                );
+            }
+            throw new CheckError(
+                `The check stopped: the Graph API answered ${response.status}${problem ? ` (${problem})` : ''}.`,
+                { reason: 'status', status: response.status, detail: problem },
+            );
         }
     };
 
     const findings: OntologyFinding[] = [];
     const refused: RefusedRow[] = [];
-    let generation: string | null = null;
+    const generations = new Set<string>();
     let rowCount = 0;
     let checked = 0;
     let next = 0;
@@ -151,31 +226,39 @@ export async function checkRows(
 
     onProgress?.({ checked, total: rows.length });
     while (halves.length > 0 || next < rows.length) {
-        const chunk = halves.shift() ?? rows.slice(next, (next += size));
+        const half = halves.shift();
+        const chunk = half ?? rows.slice(next, (next += size));
         const answer = await send(chunk);
+        if (signal?.aborted) throw signal.reason;
         if (answer.kind === 'refused' && chunk.length > 1) {
-            const half = Math.ceil(chunk.length / 2);
-            halves.unshift(chunk.slice(0, half), chunk.slice(half));
-            size = Math.min(size, half);
+            const split = Math.ceil(chunk.length / 2);
+            halves.unshift(chunk.slice(0, split), chunk.slice(split));
+            size = Math.min(size, split);
             continue;
         }
         if (answer.kind === 'refused') {
             refused.push({ ref: chunk[0]?.ref ?? null, detail: answer.detail });
         } else {
-            findings.push(...answer.body.findings);
-            generation = answer.body.generation;
-            rowCount += answer.body.row_count;
+            const { body } = answer;
+            if (body.row_count !== chunk.length) {
+                throw new CheckError(
+                    `The check stopped: the Graph API answered for ${body.row_count} of ${chunk.length} rows sent.`,
+                    { reason: 'row_count', detail: `${body.row_count} of ${chunk.length}` },
+                );
+            }
+            findings.push(...body.findings);
+            if (body.generation !== null) generations.add(body.generation);
+            rowCount += body.row_count;
+            if (half === undefined) size = Math.min(largest, size * 2);
         }
         checked += chunk.length;
         onProgress?.({ checked, total: rows.length });
     }
-    return { generation, rowCount, findings, refused };
+    return { generations: [...generations], rowCount, findings, refused };
 }
 
 /** A message part: text, a term the model holds, or a value shown as typed. */
 export type MessagePart = SentencePart | { readonly kind: 'value'; readonly text: string };
-
-const CONSTRAINT_PREFIX = 'constraint_properties.';
 
 /** How a definition field is named in a message. */
 const FIELD_NAMES: Readonly<Record<string, string>> = {
@@ -188,24 +271,11 @@ const FIELD_NAMES: Readonly<Record<string, string>> = {
     observation_properties: 'observation properties',
 };
 
-/** The constraint property a finding's field names, or null for a definition field. */
-export const findingProperty = (finding: OntologyFinding): string | null =>
-    finding.field.startsWith(CONSTRAINT_PREFIX)
-        ? finding.field.slice(CONSTRAINT_PREFIX.length)
-        : null;
-
 /** The finding's value as typed in the sheet; a list joins with commas. */
 export const valueText = (value: OntologyFinding['value']): string => {
     if (Array.isArray(value)) return value.join(', ');
     return value === null ? '' : String(value);
 };
-
-const KIND_WORDS = {
-    class: 'a kind of thing',
-    valueList: 'a value list',
-    property: 'a property',
-    value: 'a value',
-} as const;
 
 type MessageContext = {
     readonly model: Model;
@@ -220,10 +290,12 @@ type MessageContext = {
     readonly valueList: string | undefined;
 };
 
+const shown = (text: string): MessagePart => ({ kind: 'value', text });
+
 /** "(it is a value list)" when the model knows what the id is. */
 const kindAside = ({ model, value, text }: MessageContext): MessagePart[] => {
     const kind = model.kind(value);
-    return kind === undefined ? [] : [text(` (it is ${KIND_WORDS[kind]})`)];
+    return kind === undefined ? [] : [text(` (it is a ${KIND_WORDS[kind].toLowerCase()})`)];
 };
 
 const chooseFrom = ({ valueList, text, term }: MessageContext, fallback: string): MessagePart[] =>
@@ -238,28 +310,28 @@ const fieldName = ({ finding, property }: MessageContext): string =>
 const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => MessagePart[]>> = {
     node_not_held: (context) => {
         const { finding, property, value, text } = context;
-        const shown = { kind: 'value', text: value } as const;
         if (
             finding.field === 'observation_properties' ||
             (property !== null && value === property)
         ) {
             return [
-                shown,
-                text(
-                    ' is no property on the graph. Check the spelling, or set the column to Ignored.',
-                ),
+                text('The graph has no property '),
+                shown(value),
+                text('. Check the spelling, or set the column to Ignored.'),
             ];
         }
         if (property !== null) {
             return [
-                shown,
-                text(' is no value on the graph. Check the spelling. '),
+                text('The graph has no value '),
+                shown(value),
+                text('. Check the spelling. '),
                 ...chooseFrom(context, ''),
             ];
         }
         return [
-            shown,
-            text(` is no node on the graph. Check the spelling of the ${fieldName(context)}.`),
+            text('The graph has no node '),
+            shown(value),
+            text(`. Check the spelling of the ${fieldName(context)}.`),
         ];
     },
     node_untyped: (context) => [
@@ -278,25 +350,26 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
     ],
     not_a_property: (context) => [
         context.term(context.value),
-        context.text(' is no property'),
+        context.text(' is not a property'),
         ...kindAside(context),
         context.text('. Use a property in this column, or set the column to Ignored.'),
     ],
     not_a_class: (context) => [
         context.term(context.value),
-        context.text(' is no kind of thing'),
+        context.text(' is not a kind of thing'),
         ...kindAside(context),
         context.text('. The population type must be a kind of thing.'),
     ],
     value_outside_range: (context) => {
-        const { property, value, text, term } = context;
-        return [
-            { kind: 'value', text: value },
-            text(' is outside the values '),
-            term(property ?? context.finding.field),
-            text(' takes. '),
-            ...chooseFrom(context, 'Choose a value the property allows.'),
-        ];
+        const { property, value, valueList, text, term } = context;
+        return valueList === undefined
+            ? [
+                  shown(value),
+                  text(' is not a value '),
+                  term(property ?? context.finding.field),
+                  text(' allows.'),
+              ]
+            : [shown(value), text(' is not in the value list '), term(valueList), text('.')];
     },
     property_outside_domain: (context) => [
         context.term(context.property ?? context.value),
@@ -308,10 +381,20 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         context.text(
             `The graph holds a StatVar with this dcid and a different ${fieldName(context)}: `,
         ),
-        { kind: 'value', text: context.value || 'none' },
+        shown(context.value || 'none'),
         context.text('. Match the graph’s definition, or give the row a new dcid.'),
     ],
 };
+
+/** A finding whose code this page has no message for: the value and the code as sent. */
+const unknownMessage = ({ finding, value, text }: MessageContext): MessagePart[] => [
+    ...(value === ''
+        ? [text('The check flagged this cell')]
+        : [text('The check flagged '), shown(value)]),
+    text(' with the code '),
+    shown(finding.code),
+    text(', which this page has no message for.'),
+];
 
 /** What a finding says is wrong and what to do, as parts a screen can link. */
 export function findingMessage(model: Model, finding: OntologyFinding): MessagePart[] {
@@ -327,15 +410,9 @@ export function findingMessage(model: Model, finding: OntologyFinding): MessageP
             held(id) ? { kind: 'term', id, label: model.label(id) } : { kind: 'value', text: id },
         valueList: property === null ? undefined : model.valueListOfProperty(property),
     };
-    return MESSAGES[finding.code](context).filter((part) => part.kind !== 'text' || part.text);
+    const message = isFindingCode(finding.code) ? MESSAGES[finding.code] : unknownMessage;
+    return message(context).filter((part) => part.kind !== 'text' || part.text);
 }
-
-/** A message as one line of text; terms appear as their dcids. */
-export const messageText = (parts: readonly MessagePart[]): string =>
-    parts
-        .map((part) => (part.kind === 'term' ? part.id : part.text))
-        .join('')
-        .trim();
 
 /** Levenshtein distance between two strings. */
 export function editDistance(a: string, b: string): number {
@@ -354,7 +431,10 @@ export function editDistance(a: string, b: string): number {
 }
 
 /** The codes whose value a closer member of the property's value list may replace. */
-const SUGGESTED: ReadonlySet<FindingCode> = new Set(['node_not_held', 'value_outside_range']);
+const SUGGESTED: ReadonlySet<string> = new Set<FindingCode>([
+    'node_not_held',
+    'value_outside_range',
+]);
 
 /**
  * Up to `limit` members of the constraint property's value list closest to
@@ -382,23 +462,163 @@ export function closestMembers(model: Model, finding: OntologyFinding, limit = 3
         .map(({ id }) => id);
 }
 
+/** Where a finding sits in the pasted table. */
+export type FindingPlace = {
+    /** The sheet row, or null when the finding's `ref` is no row number. */
+    readonly row: number | null;
+    /** The column index, or null when the finding's field maps to no column. */
+    readonly column: number | null;
+    /** The column's header, else the finding's field. */
+    readonly columnLabel: string;
+};
+
+/** The row and column a finding belongs to, read through the mapping it was checked with. */
+export function findingPlace(mapping: Mapping, finding: OntologyFinding): FindingPlace {
+    const at = locateFinding(mapping, finding);
+    const column = at?.column ?? null;
+    return {
+        row: at?.row ?? null,
+        column,
+        columnLabel: (column === null ? undefined : mapping[column]?.header) ?? finding.field,
+    };
+}
+
+/** One finding as the result shows it: its place, its message and the closest values. */
+export type FindingLine = FindingPlace & {
+    readonly finding: OntologyFinding;
+    readonly parts: readonly MessagePart[];
+    readonly closest: readonly string[];
+};
+
+/** Each finding's place, message and closest values, worked out once. */
+export const findingLines = (
+    model: Model,
+    mapping: Mapping,
+    findings: readonly OntologyFinding[],
+): FindingLine[] =>
+    findings.map((finding) => ({
+        ...findingPlace(mapping, finding),
+        finding,
+        parts: findingMessage(model, finding),
+        closest: closestMembers(model, finding),
+    }));
+
+/** The key of one cell of the pasted table. */
+export const cellKey = (row: number, column: number): string => `${row}:${column}`;
+
+export type SheetMarks = {
+    /** By cell key: `error` when any finding on the cell is an error, else `warning`. */
+    readonly cells: ReadonlyMap<string, 'error' | 'warning'>;
+    /** The sheet rows with a finding or a refusal. */
+    readonly flaggedRows: ReadonlySet<number>;
+};
+
+/** The marks on the pasted table: each flagged cell and each flagged row. */
+export function sheetMarks(
+    lines: readonly FindingLine[],
+    refused: readonly RefusedRow[],
+): SheetMarks {
+    const cells = new Map<string, 'error' | 'warning'>();
+    const flaggedRows = new Set<number>();
+    for (const { finding, row, column } of lines) {
+        if (row === null) continue;
+        flaggedRows.add(row);
+        if (column === null) continue;
+        const key = cellKey(row, column);
+        if (cells.get(key) !== 'error') cells.set(key, finding.severity);
+    }
+    for (const { ref } of refused) {
+        const row = Number(ref);
+        if (ref !== null && Number.isInteger(row)) flaggedRows.add(row);
+    }
+    return { cells, flaggedRows };
+}
+
+/** How many rows without a finding each "show more" adds to the result table. */
+export const QUIET_ROWS_STEP = 100;
+
+/** How many flagged rows the result table shows at first, and each "show more" adds. */
+export const FLAGGED_ROWS_STEP = 300;
+
+/** One row of the result table: its place in the pasted rows and its sheet row number. */
+export type ShownRow = { readonly dataIndex: number; readonly row: number };
+
+/** How many flagged rows, and how many rows without a finding, the table shows. */
+export type ShownCounts = { readonly flagged: number; readonly quiet: number };
+
+/**
+ * The rows the result table shows, in sheet order: the first `shown.flagged`
+ * flagged rows and the first `shown.quiet` rows without a finding.
+ * `hiddenFlagged` and `hiddenQuiet` count the rows of each kind left out.
+ */
+export function shownRows(
+    dataRows: number,
+    flaggedRows: ReadonlySet<number>,
+    shown: ShownCounts,
+): {
+    readonly rows: readonly ShownRow[];
+    readonly hiddenFlagged: number;
+    readonly hiddenQuiet: number;
+} {
+    const rows: ShownRow[] = [];
+    let flagged = 0;
+    let quiet = 0;
+    for (let dataIndex = 0; dataIndex < dataRows; dataIndex += 1) {
+        const row = sheetRow(dataIndex);
+        const take = flaggedRows.has(row) ? flagged++ < shown.flagged : quiet++ < shown.quiet;
+        if (take) rows.push({ dataIndex, row });
+    }
+    return {
+        rows,
+        hiddenFlagged: Math.max(0, flagged - shown.flagged),
+        hiddenQuiet: Math.max(0, quiet - shown.quiet),
+    };
+}
+
+/**
+ * How many flagged rows the table must show for `row` to be among them: a
+ * whole number of FLAGGED_ROWS_STEP steps, never fewer than `shown`.
+ */
+export function flaggedShownFor(
+    flaggedRows: ReadonlySet<number>,
+    row: number,
+    shown: number,
+): number {
+    let rank = 0;
+    for (const flagged of flaggedRows) if (flagged < row) rank += 1;
+    return Math.max(shown, Math.ceil((rank + 1) / FLAGGED_ROWS_STEP) * FLAGGED_ROWS_STEP);
+}
+
+/** The counts a result sentence reads: a refused row counts as an error. */
+export const resultCounts = (
+    result: Pick<CheckResult, 'findings' | 'refused'>,
+): { readonly errors: number; readonly warnings: number } => ({
+    errors:
+        result.findings.filter((finding) => finding.severity === 'error').length +
+        result.refused.length,
+    warnings: result.findings.filter((finding) => finding.severity === 'warning').length,
+});
+
 const counted = (n: number, one: string): string =>
     `${n.toLocaleString('en-GB')} ${n === 1 ? one : `${one}s`}`;
 
+const listed = (items: readonly string[]): string =>
+    items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
 /**
  * "3 errors and 1 warning in 6 rows, checked against the graph at
- * generation X." or "No problems in 6 rows." when the route names no
- * generation. A refused row counts as an error.
+ * generation X." Without a generation the sentence ends at the rows; with
+ * several it names each and says the graph changed during the check.
  */
 export function resultSentence(result: CheckResult, rows: number): string {
-    const errors =
-        result.findings.filter((finding) => finding.severity === 'error').length +
-        result.refused.length;
-    const warnings = result.findings.filter((finding) => finding.severity === 'warning').length;
+    const { errors, warnings } = resultCounts(result);
+    const { generations } = result;
     const against =
-        result.generation === null
+        generations.length === 0
             ? ''
-            : `, checked against the graph at generation ${result.generation}`;
+            : generations.length === 1
+              ? `, checked against the graph at generation ${generations[0]}`
+              : `, checked against graph generations ${listed(generations)}: the graph changed during the check`;
     const problems = [
         ...(errors > 0 ? [counted(errors, 'error')] : []),
         ...(warnings > 0 ? [counted(warnings, 'warning')] : []),
@@ -407,11 +627,12 @@ export function resultSentence(result: CheckResult, rows: number): string {
     return `${lead} in ${counted(rows, 'row')}${against}.`;
 }
 
-/** The column header a finding belongs to, else its field. */
-const columnOf = (mapping: Mapping, finding: OntologyFinding): string => {
-    const at = locateFinding(mapping, finding)?.column;
-    return (at === null || at === undefined ? undefined : mapping[at]?.header) ?? finding.field;
-};
+/** A message as one line of text; terms appear as their dcids. */
+export const messageText = (parts: readonly MessagePart[]): string =>
+    parts
+        .map((part) => (part.kind === 'term' ? part.id : part.text))
+        .join('')
+        .trim();
 
 /** The findings as CSV rows under a header: row, column, value, code, message. */
 export function findingsCsvRows(
@@ -421,12 +642,12 @@ export function findingsCsvRows(
 ): string[][] {
     return [
         ['row', 'column', 'value', 'code', 'message'],
-        ...result.findings.map((finding) => [
+        ...findingLines(model, mapping, result.findings).map(({ finding, columnLabel, parts }) => [
             finding.ref ?? '',
-            columnOf(mapping, finding),
+            columnLabel,
             valueText(finding.value),
             finding.code,
-            messageText(findingMessage(model, finding)),
+            messageText(parts),
         ]),
         ...result.refused.map((row) => [row.ref ?? '', '', '', 'request_invalid', row.detail]),
     ];

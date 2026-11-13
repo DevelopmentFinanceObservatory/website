@@ -7,18 +7,17 @@
  * - `?measured=<property dcid>`: the measured property
  * - `?split=<dcid>,<dcid>`: the ticked properties, in column order; `split=` ticks none
  * - `?dataset=<provenance dcid>&pattern=<index>`: a dataset pattern to start from
+ * - `show` and `base`, carried through unread (explore.ts)
  *
  * A parameter left out takes its default: the class from the pattern, else the
  * kind of thing the most datasets use; the measured property and the ticked
  * properties from the pattern, else from the class's most-used pattern.
  */
-import { EXPLORE_PATH } from './explore.ts';
+import { queryString, writeCarried, type Carried } from './explore.ts';
 import type { Model } from './model.ts';
+import { NEW_SHEET_PATH } from './paths.ts';
 import type { SheetSpec } from './sheet.ts';
 import type { OntologyPattern } from './wire.ts';
-
-/** The path the page answers on. */
-export const NEW_SHEET_PATH = `${EXPLORE_PATH}/new-sheet`;
 
 /** A pattern named by its dataset and its index in that dataset's patterns. */
 export type PatternRef = { readonly dataset: string; readonly index: number };
@@ -56,8 +55,19 @@ export const readSheetQuery = (params: QueryReader): SheetQuery => ({
     from: readFrom(params),
 });
 
-/** The query string for a page state, `?` included, or '' when nothing is set. */
-export const sheetQuery = (query: SheetQuery): string => {
+/** The page state with nothing chosen: every choice takes its default. */
+export const NO_SHEET_QUERY: SheetQuery = Object.freeze({
+    classId: null,
+    measured: null,
+    split: null,
+    from: null,
+});
+
+/**
+ * The query string for a page state and the carried parameters, `?`
+ * included, or '' when nothing is set.
+ */
+export const sheetQuery = (query: SheetQuery, carried: Carried): string => {
     const params = new URLSearchParams();
     if (query.classId !== null) params.set('class', query.classId);
     if (query.measured !== null) params.set('measured', query.measured);
@@ -66,9 +76,13 @@ export const sheetQuery = (query: SheetQuery): string => {
         params.set('dataset', query.from.dataset);
         params.set('pattern', String(query.from.index));
     }
-    const text = params.toString();
-    return text === '' ? '' : `?${text}`;
+    writeCarried(params, carried);
+    return queryString(params);
 };
+
+/** The Start a sheet address for a page state and the carried parameters. */
+export const sheetHref = (query: Partial<SheetQuery>, carried: Carried): string =>
+    `${NEW_SHEET_PATH}${sheetQuery({ ...NO_SHEET_QUERY, ...query }, carried)}`;
 
 /** A pattern with where it sits. */
 export type PlacedPattern = PatternRef & { readonly pattern: OntologyPattern };

@@ -3,7 +3,7 @@
  * alternate name and classification code. With the terms list it also
  * reaches base classes and properties the model does not hold.
  */
-import type { Kind, Model } from './model.ts';
+import { kindOfTerm, type Kind, type Model } from './model.ts';
 import type { OntologyTerms } from './wire.ts';
 
 /** How a query matched a hit's best field. */
@@ -96,7 +96,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
         if (match === undefined) continue;
         hits.push({
             id: term.dcid,
-            kind: term.types.includes('Class') ? 'class' : 'property',
+            kind: kindOfTerm(term),
             label: term.name ?? term.dcid,
             match,
             base: true,
@@ -114,3 +114,13 @@ export function search(model: Model, query: string, options: SearchOptions = {})
     );
     return { hits: hits.slice(0, limit), total: hits.length };
 }
+
+/**
+ * The hit an arrow key moves to among `count` hits, wrapping at both ends.
+ * With none active (`current` is -1), down moves to the first and up to the last.
+ */
+export const stepActive = (current: number, step: 1 | -1, count: number): number => {
+    if (count === 0) return -1;
+    if (current < 0) return step === 1 ? 0 : count - 1;
+    return (current + step + count) % count;
+};

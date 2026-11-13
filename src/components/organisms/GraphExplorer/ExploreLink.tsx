@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 
-import { useModel, useOptionalExplore } from './ExploreContext';
+import { useCarried, useModel, useOptionalExplore } from './ExploreContext';
 import styles from './ExploreLink.module.scss';
 
-import { exploreHref, NO_FILTER, type ExploreView } from '@/lib/graphExplorer/explore';
+import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
 
 type ExploreLinkProps = {
     view: ExploreView;
@@ -20,16 +20,17 @@ type ExploreLinkProps = {
  * the page through history and a modified click (new tab, new window)
  * follows the href; a plain anchor keeps Next from prefetching the dynamic
  * page for every link. Outside it (the sheet pages) the link navigates to
- * the Explore page.
+ * the Explore page. Either way it keeps the carried parameters.
  */
 export const ExploreLink = ({ view, children, className, current }: ExploreLinkProps) => {
     const navigation = useOptionalExplore();
+    const carried = useCarried();
     const ariaCurrent = current ? 'page' : undefined;
 
     if (!navigation) {
         return (
             <Link
-                href={exploreHref({ view, show: NO_FILTER })}
+                href={exploreHref({ view, ...carried })}
                 prefetch={false}
                 className={className}
                 aria-current={ariaCurrent}

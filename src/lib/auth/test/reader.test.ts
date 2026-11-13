@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { decideReader, parseEmailDomains } from '../reader.ts';
+import { decideReader, emptyAllowlistWarning, parseEmailDomains } from '../reader.ts';
 
 const ALLOWED = parseEmailDomains('partner.example, example.org');
 
@@ -60,4 +60,10 @@ test('the allowlist is trimmed, lowercased, without empty entries', () => {
         ['partner.example', 'example.org'],
     );
     assert.deepEqual([...parseEmailDomains(undefined)], []);
+});
+
+test('an unset or empty allowlist warns that nobody is admitted; one domain does not', () => {
+    assert.equal(typeof emptyAllowlistWarning(parseEmailDomains(undefined)), 'string');
+    assert.equal(typeof emptyAllowlistWarning(parseEmailDomains(' , ')), 'string');
+    assert.equal(emptyAllowlistWarning(parseEmailDomains('one.org')), null);
 });

@@ -3,9 +3,10 @@
  * and a guard per response that refuses a changed shape.
  *
  * Members keep the server's snake case and Data Commons nouns: `types` is
- * `typeOf`, `sub_class_of` is `subClassOf`, and so on. The guards check the
- * top level and the first element of every list; a document whose shape has
- * moved fails at the point it enters, before any screen reads it.
+ * `typeOf`, `sub_class_of` is `subClassOf`, and so on. Each guard checks
+ * every member of every node, pattern, term and finding, so a response
+ * whose shape has moved fails at the point it enters, before any screen
+ * reads it.
  */
 import { asRecord } from '../asRecord.ts';
 
@@ -137,15 +138,6 @@ export type OntologyCheckRow = {
 /** The most rows one check request carries. */
 export const CHECK_MAX_ROWS = 2000;
 
-/** The most constraint properties, and the most observation properties, one check row carries. */
-export const CHECK_MAX_ROW_PROPERTIES = 32;
-
-/**
- * The most distinct ids one check request may need to read from the graph:
- * ids the ontology document does not settle. A request over it answers 400.
- */
-export const CHECK_MAX_READ_IDS = 20;
-
 /** POST /api/graph/ontology/check: 1 to CHECK_MAX_ROWS rows. */
 export type OntologyCheckRequest = {
     rows: OntologyCheckRow[];
@@ -165,6 +157,10 @@ export const FINDING_CODES = [
 
 export type FindingCode = (typeof FINDING_CODES)[number];
 
+/** True for a code this page has a message for; the server may send others. */
+export const isFindingCode = (code: string): code is FindingCode =>
+    (FINDING_CODES as readonly string[]).includes(code);
+
 /** One fault in one checked row. */
 export type OntologyFinding = {
     ref: string | null;
@@ -172,9 +168,19 @@ export type OntologyFinding = {
     field: string;
     /** The value at fault; for `definition_differs`, the value the server holds. */
     value: CheckConstraintValue | string[];
-    code: FindingCode;
+    /** One of FINDING_CODES, or a code added on the server since. */
+    code: string;
     severity: 'error' | 'warning';
 };
+
+/** How a finding's `field` names a constraint property. */
+export const CONSTRAINT_PREFIX = 'constraint_properties.';
+
+/** The constraint property a finding's field names, or null for a definition field. */
+export const findingProperty = (finding: Pick<OntologyFinding, 'field'>): string | null =>
+    finding.field.startsWith(CONSTRAINT_PREFIX)
+        ? finding.field.slice(CONSTRAINT_PREFIX.length)
+        : null;
 
 /** The answer to a check request. */
 export type OntologyCheckResponse = {
@@ -220,12 +226,12 @@ const oneOf =
         }
     };
 
-/** A list whose first element, when there is one, passes `item`. */
+/** A list whose every element passes `item`. */
 const list =
     (item: Check): Check =>
     (value, path) => {
         if (!Array.isArray(value)) return fail(path, 'a list');
-        if (value.length > 0) item(value[0], `${path}[0]`);
+        for (let at = 0; at < value.length; at += 1) item(value[at], `${path}[${at}]`);
     };
 
 const obj =
@@ -329,7 +335,7 @@ const ontologyCheckResponse = obj({
             ref: nullable(str),
             field: str,
             value: findingValue,
-            code: oneOf(FINDING_CODES),
+            code: str,
             severity: oneOf(['error', 'warning']),
         }),
     ),

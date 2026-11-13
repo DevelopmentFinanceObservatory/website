@@ -4,31 +4,38 @@ import { useSearchParams } from 'next/navigation';
 import { useId, useMemo } from 'react';
 
 import styles from './NewSheet.module.scss';
-import { SHEET_EXPORTS, type SheetDraft } from './SheetExports';
+import { CreateGoogleSheet, DownloadCsv } from './SheetExports';
 
-import { ModelProvider, useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
+import {
+    ModelProvider,
+    useCarried,
+    useModel,
+} from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import { count, plural } from '@/components/organisms/GraphExplorer/format';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
+import type { Carried } from '@/lib/graphExplorer/explore';
 import {
-    NEW_SHEET_PATH,
     queryOf,
     readSheetQuery,
     resolveSheet,
-    sheetQuery,
+    sheetHref,
     type SheetQuery,
     type SheetSelection,
     type SplitOption,
 } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
-import { closestPattern, csvFileName, exampleRows, sheetColumns } from '@/lib/graphExplorer/sheet';
+import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
-/** Replaces the page's query in place: the URL holds the sheet, and the back button skips edits. */
-const writeQuery = (query: SheetQuery) =>
-    window.history.replaceState(null, '', `${NEW_SHEET_PATH}${sheetQuery(query)}`);
+/**
+ * Replaces the page's query in place, keeping the carried parameters: the
+ * URL holds the sheet, and the back button skips edits.
+ */
+const writeQuery = (query: SheetQuery, carried: Carried) =>
+    window.history.replaceState(null, '', sheetHref(query, carried));
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
     const id = useId();
@@ -176,19 +183,13 @@ const ValueLists = ({ sheet }: { sheet: SheetDraft }) => {
 const SheetSteps = () => {
     const model = useModel();
     const params = useSearchParams();
+    const carried = useCarried();
     const selection = useMemo(() => resolveSheet(model, readSheetQuery(params)), [model, params]);
-    const sheet = useMemo((): SheetDraft | null => {
-        if (!selection) return null;
-        const columns = sheetColumns(model, selection.spec);
-        const title = model.label(selection.classId);
-        return {
-            title,
-            generation: model.generation,
-            fileName: csvFileName(`${title} mapping sheet`),
-            columns,
-            rows: exampleRows(columns),
-        };
-    }, [model, selection]);
+    const sheet = useMemo(
+        (): SheetDraft | null =>
+            selection && sheetDraft(model, { ...selection.spec, classId: selection.classId }),
+        [model, selection],
+    );
 
     if (!selection || !sheet) {
         return (
@@ -201,12 +202,15 @@ const SheetSteps = () => {
     const current = queryOf(selection);
     const ticked = new Set(selection.properties);
     const toggle = (id: string) =>
-        writeQuery({
-            ...current,
-            split: ticked.has(id)
-                ? selection.properties.filter((property) => property !== id)
-                : [...selection.properties, id],
-        });
+        writeQuery(
+            {
+                ...current,
+                split: ticked.has(id)
+                    ? selection.properties.filter((property) => property !== id)
+                    : [...selection.properties, id],
+            },
+            carried,
+        );
     const inUse = selection.splitOptions.filter((option) => option.inUse);
     const unused = selection.splitOptions.filter((option) => !option.inUse);
     const box = (option: SplitOption) => (
@@ -230,12 +234,15 @@ const SheetSteps = () => {
                             className={styles.choice}
                             aria-pressed={use.classId === selection.classId}
                             onClick={() =>
-                                writeQuery({
-                                    classId: use.classId,
-                                    measured: null,
-                                    split: null,
-                                    from: null,
-                                })
+                                writeQuery(
+                                    {
+                                        classId: use.classId,
+                                        measured: null,
+                                        split: null,
+                                        from: null,
+                                    },
+                                    carried,
+                                )
                             }
                         >
                             <span className={styles.choiceName}>{model.label(use.classId)}</span>
@@ -260,7 +267,9 @@ const SheetSteps = () => {
                             type="button"
                             className={styles.pill}
                             aria-pressed={id === selection.measured}
-                            onClick={() => writeQuery({ ...current, measured: id, from: null })}
+                            onClick={() =>
+                                writeQuery({ ...current, measured: id, from: null }, carried)
+                            }
                         >
                             {model.label(id)}
                         </button>
@@ -298,10 +307,8 @@ const SheetSteps = () => {
                     labels. Each property column takes a value from its value list.
                 </p>
                 <div className={styles.exports}>
-                    {SHEET_EXPORTS.map((Export, at) => (
-                        // The export list is a fixed constant.
-                        <Export key={at} sheet={sheet} />
-                    ))}
+                    <CreateGoogleSheet sheet={sheet} />
+                    <DownloadCsv sheet={sheet} />
                 </div>
                 <ValueLists sheet={sheet} />
             </Section>
@@ -312,13 +319,12 @@ const SheetSteps = () => {
 /**
  * Start a sheet: the columns a new dataset's mapping sheet needs and what goes
  * in them. The choices live in the URL query, so a sheet can be shared and
- * reloaded; the model loads as on the Explore screen.
+ * reloaded; the model is the one the section's layout loaded.
  */
 const NewSheet = () => {
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const baseTerms =
-        data.includeBase && data.terms?.status === 'ready' ? data.terms.value : undefined;
+    const { baseTerms } = data;
 
     return (
         <ModelProvider value={model}>

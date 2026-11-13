@@ -7,13 +7,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
+import { readSheetRequest } from '../googleSheet.ts';
 import {
     closestPattern,
     csvFileName,
+    draftCsvRows,
     exampleRows,
     sheetColumns,
-    sheetFromPattern,
-    sheetTable,
+    sheetDraft,
+    sheetRequest,
     toCsv,
 } from '../sheet.ts';
 import { readOntology, readProvenances } from '../wire.ts';
@@ -65,33 +67,6 @@ test('sheet columns run reference, definition, then one per chosen property with
     assert.equal(columns[8]?.lookup, null);
 });
 
-test('a pattern prefills the definition fields and takes its constraints as columns', () => {
-    const pattern = model.dataset('provenance/OECDDAC2B')?.patterns[0];
-    assert.ok(pattern);
-    const columns = sheetFromPattern(model, pattern);
-    assert.deepEqual(
-        columns.map((column) => column.name),
-        [
-            'source_code',
-            'source_label',
-            'populationType',
-            'measuredProperty',
-            'statType',
-            'measurementQualifier',
-            'dac2bAidType',
-            'dacTypeOfFinance',
-            'financialFlowType',
-            'nettingBasis',
-        ],
-    );
-    assert.deepEqual(
-        columns.slice(2, 6).map((column) => column.fill),
-        ['FinancialFlow', 'amount', 'measuredValue', 'Nominal'],
-    );
-    assert.equal(columns[8]?.lookup?.valueList, 'FinancialFlowTypeEnum');
-    assert.equal(columns[8]?.lookup?.members.length, 14);
-});
-
 test('the closest pattern shares the most properties; a tie goes to the larger StatVar count', () => {
     // Four patterns share both properties; the largest holds 209 StatVars.
     const tied = closestPattern(model, 'FinancialFlow', ['financialFlowType', 'nettingBasis']);
@@ -124,6 +99,14 @@ test('CSV quotes fields with commas, quotes and line breaks and ends lines with 
     );
 });
 
+test('CSV writes a cell a spreadsheet would read as a formula as text, with a leading quote', () => {
+    assert.equal(
+        toCsv([['=HYPERLINK("x")', '+1', '-2', '@SUM(A1)', '\tx', 'a=b', '']]),
+        `"'=HYPERLINK(""x"")",'+1,'-2,'@SUM(A1),'\tx,a=b,`,
+    );
+    assert.equal(toCsv([['\rx']]), `"'\rx"`);
+});
+
 test('example rows fill definition fields and spread property values across each value list', () => {
     const columns = sheetColumns(model, spec);
     const rows = exampleRows(columns);
@@ -148,10 +131,6 @@ test('example rows fill definition fields and spread property values across each
             ['Net', 'DAC1AidType1100', ''],
         ],
     );
-    assert.deepEqual(
-        sheetTable(columns)[0],
-        columns.map((column) => column.name),
-    );
 });
 
 test('an empty definition field stays empty in the example rows', () => {
@@ -163,4 +142,27 @@ test('a CSV file name is the label in lower case with hyphens', () => {
     assert.equal(csvFileName('Financial flow'), 'financial-flow.csv');
     assert.equal(csvFileName('  DAC 1 aid type (list)  '), 'dac-1-aid-type-list.csv');
     assert.equal(csvFileName('—'), 'sheet.csv');
+});
+
+test('the sheet draft names the class, and both exports carry its columns and rows', () => {
+    const draft = sheetDraft(model, spec);
+    assert.equal(draft.title, model.label('FinancialFlow'));
+    assert.equal(draft.fileName, csvFileName(`${draft.title} mapping sheet`));
+    assert.equal(draft.generation, model.generation);
+    assert.equal(draft.rows.length, 3);
+
+    const csv = draftCsvRows(draft);
+    assert.deepEqual(
+        csv[0],
+        draft.columns.map((column) => column.name),
+    );
+    assert.deepEqual(csv.slice(1), draft.rows);
+
+    const request = readSheetRequest(sheetRequest(draft));
+    assert.ok(request);
+    assert.deepEqual(
+        request.columns.map((column) => [column.name, column.lookup?.valueList ?? null]),
+        draft.columns.map((column) => [column.name, column.lookup?.valueList ?? null]),
+    );
+    assert.deepEqual(request.rows, draft.rows);
 });

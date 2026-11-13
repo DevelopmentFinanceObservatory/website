@@ -6,8 +6,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildModel, datasetName, GROUPS } from '../model.ts';
-import { readOntology, readProvenances } from '../wire.ts';
+import {
+    buildModel,
+    datasetName,
+    filterScopedList,
+    GROUPS,
+    kindOfTerm,
+    searchMembers,
+    type MemberTree,
+} from '../model.ts';
+import { readOntology, readProvenances, type OntologyNode } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
 const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
@@ -101,6 +109,66 @@ test('a value list has its members and a member tree, roots first', () => {
         oda?.children[0]?.children.map((child) => child.id),
         ['DAC1AidType1100', 'DAC1AidType11016', 'DAC1AidType11017', 'DAC1AidType11018'],
     );
+});
+
+/** A value of NettingBasisEnum that specialises `parents`. */
+const nettingValue = (dcid: string, parents: string[]): OntologyNode => ({
+    dcid,
+    name: null,
+    description: null,
+    types: ['NettingBasisEnum'],
+    alternate_name: [],
+    sub_class_of: [],
+    sub_property_of: [],
+    specialization_of: parents,
+    domain_includes: [],
+    range_includes: [],
+    classification_code: [],
+    provenances: ['provenance/DFOOntology'],
+    declared_by: 'instance',
+    enumeration: null,
+});
+
+const treeIds = (trees: readonly MemberTree[]): string[] =>
+    trees.flatMap((tree) => [tree.id, ...treeIds(tree.children)]);
+
+test('a member tree holds every member once, with a cycle and a self-loop as roots', () => {
+    const ontology = readOntology(ontologyBody());
+    ontology.nodes.push(
+        nettingValue('CycleA', ['CycleB']),
+        nettingValue('CycleB', ['CycleA']),
+        nettingValue('UnderA', ['CycleA']),
+        nettingValue('Itself', ['Itself']),
+    );
+    const cyclic = buildModel(ontology, readProvenances(provenancesBody()));
+    const tree = cyclic.memberTree('NettingBasisEnum');
+
+    assert.deepEqual(treeIds(tree).toSorted(), [...cyclic.members('NettingBasisEnum')].toSorted());
+    assert.equal(treeIds(tree).length, 6);
+    const roots = tree.map((root) => root.id);
+    for (const id of ['CycleA', 'CycleB', 'Itself']) assert.ok(roots.includes(id), id);
+    assert.deepEqual(
+        tree.find((root) => root.id === 'CycleA')?.children.map((child) => child.id),
+        ['UnderA'],
+    );
+});
+
+test('a repeated dcid keeps its last node, and no list repeats an id', () => {
+    const ontology = readOntology(ontologyBody());
+    const netting = ontology.nodes.find((node) => node.dcid === 'nettingBasis');
+    assert.ok(netting);
+    ontology.nodes.push({
+        ...netting,
+        name: 'netting basis, again',
+        range_includes: ['NettingBasisEnum', 'NettingBasisEnum'],
+    });
+    const repeated = buildModel(ontology, readProvenances(provenancesBody()));
+
+    assert.equal(repeated.nodes.filter((node) => node.dcid === 'nettingBasis').length, 1);
+    assert.equal(repeated.label('nettingBasis'), 'netting basis, again');
+    assert.deepEqual(repeated.node('nettingBasis')?.range_includes, ['NettingBasisEnum']);
+    const withRange = repeated.propertiesWithRange('NettingBasisEnum');
+    assert.equal(new Set(withRange).size, withRange.length);
 });
 
 test('usage counts StatVars per dataset from patterns and constraint values', () => {
@@ -290,4 +358,31 @@ test('the model is frozen', () => {
     assert.ok(Object.isFrozen(model));
     assert.ok(Object.isFrozen(model.usage('financialFlowType').byDataset));
     assert.ok(Object.isFrozen(model.propertiesOf('FinancialFlow').groups.split));
+});
+
+test('a member search matches label, dcid, code or other name, ignoring case and space', () => {
+    assert.deepEqual(searchMembers(model, 'FinancialFlowTypeEnum', ' DEBT BUY '), {
+        hits: ['Buyback'],
+        total: 1,
+    });
+    const capped = searchMembers(model, 'DAC1AidTypeEnum', '10', 2);
+    assert.deepEqual(capped.hits.length, 2);
+    assert.ok(capped.total > 2);
+    assert.deepEqual(searchMembers(model, 'DAC1AidTypeEnum', '   '), { hits: [], total: 0 });
+});
+
+test('a scoped list filter keeps rows by label or dcid, and blank text keeps every row', () => {
+    const list = model.scopedList({ kind: 'instance' }, { kind: 'none' });
+    assert.equal(filterScopedList(model, list, ' '), list.groups);
+    const kept = filterScopedList(model, list, 'NETTING');
+    assert.deepEqual(
+        kept.split.map((row) => row.id),
+        ['nettingBasis'],
+    );
+    assert.deepEqual([...kept.measured, ...kept.between, ...kept.unused], []);
+});
+
+test('a term outside the model is a class when it is a Class, else a property', () => {
+    assert.equal(kindOfTerm({ types: ['Class'] }), 'class');
+    assert.equal(kindOfTerm({ types: ['Property'] }), 'property');
 });

@@ -35,9 +35,9 @@ test('with every dataset on, each dataset has a count column headed by its label
     assert.deepEqual(table[1], ['amount', 'amount', 'measured', '', '468', '24', '14', '9']);
 });
 
-test('only the rows the filter keeps are written', () => {
+test('only the rows the filter text keeps are written, matched on label or dcid', () => {
     const list = model.scopedList(scope, { kind: 'none' });
-    const table = scopedListTable(model, list, (row) => row.id.startsWith('dac'));
+    const table = scopedListTable(model, list, '  DAC ');
     assert.deepEqual(
         table.slice(1).map((row) => [row[0], row[2], row[3]]),
         [

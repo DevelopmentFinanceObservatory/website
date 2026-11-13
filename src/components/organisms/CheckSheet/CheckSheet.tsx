@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import styles from './CheckSheet.module.scss';
 
@@ -15,27 +15,34 @@ import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import {
+    cellKey,
     CheckError,
     checkRows,
-    closestMembers,
     exampleSheet,
-    findingMessage,
+    FLAGGED_ROWS_STEP,
+    findingLines,
     findingsCsvRows,
+    flaggedShownFor,
+    QUIET_ROWS_STEP,
     resultSentence,
+    sheetMarks,
+    shownRows,
     type CheckResult,
     type MessagePart,
+    type SheetMarks,
+    type ShownRow,
 } from '@/lib/graphExplorer/check';
+import { waitText } from '@/lib/graphExplorer/load';
 import {
-    locateFinding,
+    applySwitches,
     mapHeaders,
     parsePasted,
     rowsToCheck,
-    switchColumn,
+    type ColumnSwitch,
     type ColumnTarget,
     type Mapping,
     type PastedRange,
 } from '@/lib/graphExplorer/pasted';
-import type { OntologyFinding } from '@/lib/graphExplorer/wire';
 
 type Switch = 'property' | 'ignored';
 
@@ -120,8 +127,8 @@ const ColumnRow = ({ header, read, target, onSwitch }: ColumnRowProps) => {
                         <TermLink id={target.property} />
                     ) : (
                         <>
-                            <code>{target.property}</code> is no property in the model; the check
-                            asks the graph
+                            <code>{target.property}</code> is not in the DFO model; the check looks
+                            it up on the graph
                         </>
                     )}
                 </span>
@@ -147,9 +154,7 @@ const Message = ({ parts }: { parts: readonly MessagePart[] }) => (
     </>
 );
 
-const Suggestions = ({ finding }: { finding: OntologyFinding }) => {
-    const model = useModel();
-    const closest = closestMembers(model, finding);
+const Suggestions = ({ closest }: { closest: readonly string[] }) => {
     if (closest.length === 0) return null;
     return (
         <span className={styles.note}>
@@ -164,105 +169,165 @@ const Suggestions = ({ finding }: { finding: OntologyFinding }) => {
     );
 };
 
-const cellKey = (row: number, column: number) => `${row}:${column}`;
+type SheetTableProps = {
+    pasted: PastedRange;
+    rows: readonly ShownRow[];
+    marks: SheetMarks;
+    cellId: (key: string) => string;
+};
+
+/** The shown rows of the pasted table, flagged cells marked. */
+const SheetTable = ({ pasted, rows, marks, cellId }: SheetTableProps) => {
+    const captionId = useId();
+    return (
+        <div
+            className={styles.scroll}
+            role="region"
+            aria-labelledby={captionId}
+            // The box scrolls sideways; a tab stop lets a keyboard scroll it.
+            tabIndex={0}
+        >
+            <table className={styles.sheet}>
+                <caption id={captionId} className={styles.hidden}>
+                    The pasted sheet with each flagged cell marked
+                </caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Row</th>
+                        {pasted.header.map((header, index) => (
+                            // Pasted headers may repeat; the position is the identity.
+                            <th key={index} scope="col">
+                                {header}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map(({ dataIndex, row }) => {
+                        const cells = pasted.rows[dataIndex] ?? [];
+                        return (
+                            <tr
+                                key={row}
+                                className={marks.flaggedRows.has(row) ? undefined : styles.quiet}
+                            >
+                                <th scope="row">{row}</th>
+                                {pasted.header.map((_, index) => {
+                                    const key = cellKey(row, index);
+                                    const mark = marks.cells.get(key);
+                                    return (
+                                        <td
+                                            key={index}
+                                            id={cellId(key)}
+                                            className={mark && styles[mark]}
+                                            // A finding's place control moves focus here.
+                                            tabIndex={mark ? -1 : undefined}
+                                        >
+                                            {cells[index] ?? ''}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+};
 
 /** The pasted table with flagged cells marked, then one line per finding. */
 const Results = ({ checked }: { checked: Checked }) => {
     const model = useModel();
     const prefix = useId();
-    const captionId = useId();
-    const [lit, setLit] = useState<string | null>(null);
+    const [quietShown, setQuietShown] = useState(0);
+    const [flaggedShown, setFlaggedShown] = useState(FLAGGED_ROWS_STEP);
+    const lit = useRef<HTMLElement | null>(null);
+    // The cell to light and focus once the row holding it is rendered.
+    const pending = useRef<string | null>(null);
     const { result, mapping, pasted } = checked;
 
-    const located = result.findings.map((finding) => ({
-        finding,
-        at: locateFinding(mapping, finding),
-    }));
-    const marks = new Map<string, 'error' | 'warning'>();
-    const flaggedRows = new Set<number>();
-    for (const { finding, at } of located) {
-        if (at === null) continue;
-        flaggedRows.add(at.row);
-        if (at.column === null) continue;
-        const key = cellKey(at.row, at.column);
-        if (marks.get(key) !== 'error') marks.set(key, finding.severity);
-    }
-    for (const row of result.refused) flaggedRows.add(Number(row.ref));
-    const cellId = (key: string) => `${prefix}-${key.replace(':', '-')}`;
+    const lines = useMemo(
+        () => findingLines(model, mapping, result.findings),
+        [model, mapping, result.findings],
+    );
+    const marks = useMemo(() => sheetMarks(lines, result.refused), [lines, result.refused]);
+    const shown = useMemo(
+        () =>
+            shownRows(pasted.rows.length, marks.flaggedRows, {
+                flagged: flaggedShown,
+                quiet: quietShown,
+            }),
+        [pasted.rows.length, marks.flaggedRows, flaggedShown, quietShown],
+    );
+    const cellId = useCallback((key: string) => `${prefix}-${key.replace(':', '-')}`, [prefix]);
 
-    const show = (key: string) => {
-        setLit(key);
-        document.getElementById(cellId(key))?.scrollIntoView({
-            block: 'nearest',
-            inline: 'center',
-        });
+    // The highlight moves on the cells directly, so a click leaves the table unrendered.
+    const light = useCallback(
+        (key: string) => {
+            const cell = document.getElementById(cellId(key));
+            if (!cell) return false;
+            lit.current?.classList.remove(styles.lit);
+            cell.classList.add(styles.lit);
+            lit.current = cell;
+            cell.scrollIntoView({ block: 'nearest', inline: 'center' });
+            cell.focus({ preventScroll: true });
+            return true;
+        },
+        [cellId],
+    );
+
+    useEffect(() => {
+        if (pending.current !== null && light(pending.current)) pending.current = null;
+    }, [shown, light]);
+
+    // A finding on a flagged row not yet shown reveals the steps up to it first.
+    const show = (key: string, row: number) => {
+        if (light(key)) return;
+        pending.current = key;
+        setFlaggedShown((count) => flaggedShownFor(marks.flaggedRows, row, count));
     };
 
     return (
         <>
-            <div
-                className={styles.scroll}
-                role="region"
-                aria-labelledby={captionId}
-                // The box scrolls sideways; a tab stop lets a keyboard scroll it.
-                tabIndex={0}
-            >
-                <table className={styles.sheet}>
-                    <caption id={captionId} className={styles.hidden}>
-                        The pasted sheet with each flagged cell marked
-                    </caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Row</th>
-                            {pasted.header.map((header, index) => (
-                                // Pasted headers may repeat; the position is the identity.
-                                <th key={index} scope="col">
-                                    {header}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pasted.rows.map((cells, dataIndex) => {
-                            const row = dataIndex + 2;
-                            return (
-                                <tr
-                                    key={row}
-                                    className={flaggedRows.has(row) ? undefined : styles.quiet}
-                                >
-                                    <th scope="row">{row}</th>
-                                    {pasted.header.map((_, index) => {
-                                        const key = cellKey(row, index);
-                                        const mark = marks.get(key);
-                                        return (
-                                            <td
-                                                key={index}
-                                                id={cellId(key)}
-                                                className={classNames(
-                                                    mark && styles[mark],
-                                                    lit === key && styles.lit,
-                                                )}
-                                            >
-                                                {cells[index] ?? ''}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+            <SheetTable pasted={pasted} rows={shown.rows} marks={marks} cellId={cellId} />
+            {shown.hiddenFlagged > 0 && (
+                <div className={styles.actions}>
+                    <p className={styles.note}>
+                        {plural(shown.hiddenFlagged, 'more flagged row')} not shown.
+                    </p>
+                    <Button
+                        variant="bordered"
+                        small
+                        onClick={() => setFlaggedShown((count) => count + FLAGGED_ROWS_STEP)}
+                    >
+                        Show{' '}
+                        {Math.min(shown.hiddenFlagged, FLAGGED_ROWS_STEP).toLocaleString('en-GB')}{' '}
+                        More
+                    </Button>
+                </div>
+            )}
+            {shown.hiddenQuiet > 0 && (
+                <div className={styles.actions}>
+                    <p className={styles.note}>
+                        {plural(shown.hiddenQuiet, 'more row')} without findings not shown.
+                    </p>
+                    <Button
+                        variant="bordered"
+                        small
+                        onClick={() => setQuietShown((count) => count + QUIET_ROWS_STEP)}
+                    >
+                        Show {Math.min(shown.hiddenQuiet, QUIET_ROWS_STEP).toLocaleString('en-GB')}{' '}
+                        More
+                    </Button>
+                </div>
+            )}
 
-            {(located.length > 0 || result.refused.length > 0) && (
+            {(lines.length > 0 || result.refused.length > 0) && (
                 <ul className={styles.findings}>
-                    {located.map(({ finding, at }, index) => {
-                        const column =
-                            at?.column === null || at?.column === undefined
-                                ? finding.field
-                                : (mapping[at.column]?.header ?? finding.field);
-                        const key = at && at.column !== null ? cellKey(at.row, at.column) : null;
-                        const place = `Row ${finding.ref ?? '?'}, ${column}`;
+                    {lines.map((line, index) => {
+                        const { finding, row, column, columnLabel } = line;
+                        const key = row !== null && column !== null ? cellKey(row, column) : null;
+                        const place = `Row ${finding.ref ?? '?'}, ${columnLabel}`;
                         return (
                             // Findings carry no id; their order is fixed for a result.
                             <li key={index} className={styles.finding}>
@@ -278,20 +343,20 @@ const Results = ({ checked }: { checked: Checked }) => {
                                 </span>
                                 <span className={styles.findingText}>
                                     <span>
-                                        {key ? (
+                                        {key !== null && row !== null ? (
                                             <button
                                                 type="button"
                                                 className={styles.place}
-                                                onClick={() => show(key)}
+                                                onClick={() => show(key, row)}
                                             >
                                                 {place}
                                             </button>
                                         ) : (
                                             <b className={styles.placeText}>{place}</b>
                                         )}
-                                        . <Message parts={findingMessage(model, finding)} />
+                                        . <Message parts={line.parts} />
                                     </span>
-                                    <Suggestions finding={finding} />
+                                    <Suggestions closest={line.closest} />
                                 </span>
                             </li>
                         );
@@ -325,9 +390,7 @@ const Results = ({ checked }: { checked: Checked }) => {
 
 const statusText = (run: Run): string => {
     if (run.status === 'running') {
-        if (run.retryInMs !== null) {
-            return `The graph is still being read. Trying again in ${Math.ceil(run.retryInMs / 1000)} s.`;
-        }
+        if (run.retryInMs !== null) return waitText(run.retryInMs);
         return `Checked ${run.checked.toLocaleString('en-GB')} of ${plural(run.total, 'row')}.`;
     }
     if (run.status === 'done') return resultSentence(run.checked.result, run.checked.rows);
@@ -335,26 +398,33 @@ const statusText = (run: Run): string => {
     return '';
 };
 
+/** How long typing in the paste box pauses before the pasted text is read again. */
+const READ_PAUSE_MS = 300;
+
 /** The three steps over a pasted range: paste, review the columns, check. */
 const CheckSteps = () => {
     const model = useModel();
     const textId = useId();
     const [text, setText] = useState('');
-    const [switches, setSwitches] = useState<ReadonlyMap<number, Switch>>(new Map());
+    // The text the columns and rows are read from: `text` once typing pauses.
+    const [settled, setSettled] = useState('');
+    const [switches, setSwitches] = useState<ReadonlyMap<number, ColumnSwitch>>(new Map());
     const [run, setRun] = useState<Run>({ status: 'idle' });
     const controller = useRef<AbortController | null>(null);
 
     useEffect(() => () => controller.current?.abort(), []);
+    useEffect(() => {
+        if (text === settled) return;
+        const timer = setTimeout(() => setSettled(text), READ_PAUSE_MS);
+        return () => clearTimeout(timer);
+    }, [text, settled]);
 
-    const pasted = useMemo(() => parsePasted(text), [text]);
+    const pasted = useMemo(() => parsePasted(settled), [settled]);
     const read = useMemo(() => mapHeaders(model, pasted.header), [model, pasted.header]);
-    const mapping = useMemo(
-        () =>
-            [...switches].reduce((current, [index, to]) => switchColumn(current, index, to), read),
-        [read, switches],
-    );
+    const mapping = useMemo(() => applySwitches(read, switches), [read, switches]);
     const rows = useMemo(() => rowsToCheck(mapping, pasted.rows), [mapping, pasted.rows]);
     const example = useMemo(() => exampleSheet(model), [model]);
+    const reading = text !== settled;
 
     const reset = () => {
         controller.current?.abort();
@@ -362,13 +432,17 @@ const CheckSteps = () => {
     };
     const paste = (value: string) => {
         setText(value);
-        setSwitches(new Map());
         reset();
+    };
+    const pasteNow = (value: string) => {
+        paste(value);
+        setSettled(value);
     };
     const switchTo = (index: number, to: Switch | null) => {
         const next = new Map(switches);
-        if (to === null) next.delete(index);
-        else next.set(index, to);
+        const header = read[index]?.header;
+        if (to === null || header === undefined) next.delete(index);
+        else next.set(index, { header, to });
         setSwitches(next);
         reset();
     };
@@ -378,25 +452,32 @@ const CheckSteps = () => {
         const abort = new AbortController();
         controller.current = abort;
         const snapshot = { mapping, pasted, rows: rows.length };
-        setRun({ status: 'running', checked: 0, total: rows.length, retryInMs: null });
+        // A late answer from a check the reader has moved on from changes nothing.
+        const update = (next: Run | ((current: Run) => Run)) => {
+            if (!abort.signal.aborted) setRun(next);
+        };
+        update({ status: 'running', checked: 0, total: rows.length, retryInMs: null });
         try {
             const result = await checkRows(rows, {
                 signal: abort.signal,
                 onProgress: ({ checked, total }) =>
-                    setRun({ status: 'running', checked, total, retryInMs: null }),
+                    update({ status: 'running', checked, total, retryInMs: null }),
                 onWait: (retryInMs) =>
-                    setRun((current) =>
+                    update((current) =>
                         current.status === 'running' ? { ...current, retryInMs } : current,
                     ),
             });
-            setRun({ status: 'done', checked: { ...snapshot, result } });
+            update({ status: 'done', checked: { ...snapshot, result } });
         } catch (error) {
             if (abort.signal.aborted) return;
+            if (!(error instanceof CheckError)) {
+                console.error('Graph Explorer: the check failed', error);
+            }
             const message =
                 error instanceof CheckError
                     ? error.message
                     : 'The check stopped on an unexpected error.';
-            setRun({ status: 'failed', message });
+            update({ status: 'failed', message });
         }
     };
 
@@ -420,7 +501,7 @@ const CheckSteps = () => {
                 />
                 <div className={styles.actions}>
                     {example && (
-                        <Button variant="bordered" small onClick={() => paste(example.text)}>
+                        <Button variant="bordered" small onClick={() => pasteNow(example.text)}>
                             Try an Example
                         </Button>
                     )}
@@ -463,7 +544,7 @@ const CheckSteps = () => {
                     <div>
                         <Button
                             variant="dark"
-                            disabled={!hasRows || run.status === 'running'}
+                            disabled={!hasRows || reading || run.status === 'running'}
                             onClick={check}
                         >
                             Check Against the Graph
@@ -487,14 +568,13 @@ const CheckSteps = () => {
 
 /**
  * Check a sheet: a range pasted from a filled mapping sheet, read into
- * candidate StatVar rows and checked against the graph. The model loads as
- * on the Explore screen.
+ * candidate StatVar rows and checked against the graph. The model is the
+ * one the section's layout loaded.
  */
 const CheckSheet = () => {
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const baseTerms =
-        data.includeBase && data.terms?.status === 'ready' ? data.terms.value : undefined;
+    const { baseTerms } = data;
 
     return (
         <ModelProvider value={model}>

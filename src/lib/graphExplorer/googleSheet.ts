@@ -70,10 +70,10 @@ export type SheetsAnswer =
     | {
           ok: false;
           code: 'google_access_needed';
-          reason: 'no_google_account' | 'scope_missing' | 'token_unavailable';
+          reason: 'no_google_account' | 'scope_missing' | 'token_expired';
           message: string;
       }
-    | { ok: false; code: 'google_failed'; message: string };
+    | { ok: false; code: 'google_failed' | 'auth_failed'; message: string };
 
 const KINDS: readonly ColumnKind[] = ['reference', 'definition', 'property'];
 

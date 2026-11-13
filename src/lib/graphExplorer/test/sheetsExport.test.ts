@@ -11,7 +11,9 @@ import { DRIVE_FILE_SCOPE, SHEETS_API, type SheetsAnswer } from '../googleSheet.
 import {
     chooseGoogleAccount,
     createGoogleSheet,
+    GOOGLE_ACCESS_MESSAGES,
     isUsableToken,
+    readGoogleAccessWith,
     type GoogleAccess,
     type ReadBody,
     type SheetsExportDeps,
@@ -137,7 +139,7 @@ test('a body that breaks its bounds answers 400 before Google access is read', a
     }
 });
 
-for (const reason of ['no_google_account', 'scope_missing', 'token_unavailable'] as const) {
+for (const reason of ['no_google_account', 'scope_missing', 'token_expired'] as const) {
     test(`${reason} answers 409 google_access_needed without calling Google`, async () => {
         const outcome = await run({ access: { kind: 'missing', reason } });
         assert.equal(outcome.result.status, 409);
@@ -148,9 +150,93 @@ for (const reason of ['no_google_account', 'scope_missing', 'token_unavailable']
             ],
             ['google_access_needed', reason],
         );
+        assert.equal(
+            !outcome.result.body.ok && outcome.result.body.message,
+            GOOGLE_ACCESS_MESSAGES[reason],
+        );
         assert.equal(outcome.calls.length, 0);
     });
 }
+
+test('a failed auth call answers 502 auth_failed, logged with its cause, without calling Google', async () => {
+    const outcome = await run({
+        access: { kind: 'failed', step: 'list_accounts', cause: 'DrizzleQueryError' },
+    });
+    assert.equal(outcome.result.status, 502);
+    assert.equal(code(outcome.result.body), 'auth_failed');
+    assert.equal(outcome.calls.length, 0);
+    assert.deepEqual(outcome.logs, [
+        'sheets export: reading Google access failed at list_accounts {"status":null,"cause":"DrizzleQueryError"}',
+    ]);
+});
+
+/** A Better Auth APIError as the installed version throws it: a status and a body with a code. */
+const authError = (code: string) =>
+    Object.assign(new Error(`failed ${TOKEN}`), {
+        name: 'APIError',
+        statusCode: 400,
+        body: { code, message: 'x' },
+    });
+
+const google = { id: 'acc-1', providerId: 'google', scopes: [DRIVE_FILE_SCOPE] };
+const NOW = new Date('2026-11-13T12:00:00Z');
+
+test('reading Google access tells a reason to ask for access from a failed auth call', async () => {
+    const read = (deps: Partial<Parameters<typeof readGoogleAccessWith>[0]>) =>
+        readGoogleAccessWith({
+            listAccounts: async () => [google],
+            accessToken: async () => ({ accessToken: TOKEN }),
+            now: NOW,
+            ...deps,
+        });
+
+    assert.deepEqual(await read({}), { kind: 'ready', accessToken: TOKEN });
+    assert.deepEqual(await read({ listAccounts: async () => [] }), {
+        kind: 'missing',
+        reason: 'no_google_account',
+    });
+    assert.deepEqual(
+        await read({
+            accessToken: async () => ({
+                accessToken: TOKEN,
+                accessTokenExpiresAt: new Date('2026-11-13T11:00:00Z'),
+            }),
+        }),
+        { kind: 'missing', reason: 'token_expired' },
+    );
+
+    const renewal = await read({
+        accessToken: async () => {
+            throw authError('FAILED_TO_GET_ACCESS_TOKEN');
+        },
+    });
+    assert.deepEqual(renewal, {
+        kind: 'missing',
+        reason: 'token_expired',
+        cause: 'APIError FAILED_TO_GET_ACCESS_TOKEN 400',
+    });
+
+    const outage = await read({
+        listAccounts: async () => {
+            throw new TypeError(`connect ECONNREFUSED ${TOKEN}`);
+        },
+    });
+    assert.deepEqual(outage, { kind: 'failed', step: 'list_accounts', cause: 'TypeError' });
+
+    const unauthorised = await read({
+        accessToken: async () => {
+            throw authError('UNAUTHORIZED');
+        },
+    });
+    assert.deepEqual(unauthorised, {
+        kind: 'failed',
+        step: 'access_token',
+        cause: 'APIError UNAUTHORIZED 400',
+    });
+    for (const outcome of [renewal, outage, unauthorised]) {
+        assert.ok(!JSON.stringify(outcome).includes(TOKEN), 'the token leaked');
+    }
+});
 
 for (const status of [403, 500]) {
     test(`Google answering ${status} on create answers 502 and logs only the status`, async () => {

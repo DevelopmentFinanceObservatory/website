@@ -10,12 +10,15 @@ import type { Loadable } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import Spinner from '@/components/atoms/Spinner/Spinner';
+import { waitText } from '@/lib/graphExplorer/load';
 import type { OntologyTerms } from '@/lib/graphExplorer/wire';
 
 type StartScreenProps = {
-    includeBase: boolean;
+    /** Whether the base switch is on: the URL's `base` parameter. */
+    base: boolean;
     terms: Loadable<OntologyTerms> | null;
-    onIncludeBase: (on: boolean) => void;
+    onBase: (on: boolean) => void;
+    onRetryTerms: () => void;
 };
 
 /** What the base switch's terms list is doing, in one line. */
@@ -26,7 +29,7 @@ const TermsNote = ({ terms, onRetry }: { terms: Loadable<OntologyTerms>; onRetry
                 <Spinner size={14} label="Loading" />
                 {terms.retryInMs === null
                     ? 'Loading base Data Commons terms.'
-                    : `The Graph API is still building the terms list. Trying again in ${Math.ceil(terms.retryInMs / 1000)} s.`}
+                    : waitText(terms.retryInMs)}
             </p>
         );
     }
@@ -51,7 +54,7 @@ const TermsNote = ({ terms, onRetry }: { terms: Loadable<OntologyTerms>; onRetry
  * thing their figures are about with how many datasets use each, one way to
  * list every property the instance declares, and the base search switch.
  */
-const StartScreen = ({ includeBase, terms, onIncludeBase }: StartScreenProps) => {
+const StartScreen = ({ base, terms, onBase, onRetryTerms }: StartScreenProps) => {
     const model = useModel();
     const propertyCount = useMemo(
         () => model.scopedList({ kind: 'instance' }, { kind: 'none' }).total,
@@ -126,14 +129,12 @@ const StartScreen = ({ includeBase, terms, onIncludeBase }: StartScreenProps) =>
                 <label className={styles.switch}>
                     <input
                         type="checkbox"
-                        checked={includeBase}
-                        onChange={(event) => onIncludeBase(event.target.checked)}
+                        checked={base}
+                        onChange={(event) => onBase(event.target.checked)}
                     />
                     Include base Data Commons in search
                 </label>
-                {includeBase && terms && (
-                    <TermsNote terms={terms} onRetry={() => onIncludeBase(true)} />
-                )}
+                {base && terms && <TermsNote terms={terms} onRetry={onRetryTerms} />}
             </div>
         </div>
     );

@@ -16,7 +16,7 @@ const SignOutButton = () => {
 
     return (
         <Button variant="dark" icon="arrow" onClick={leave}>
-            Sign out
+            Sign Out
         </Button>
     );
 };

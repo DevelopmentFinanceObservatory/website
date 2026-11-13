@@ -95,9 +95,7 @@ test('a build still running after a minute fails and says so', async () => {
     await assert.rejects(
         loadDocument('The ontology', '/api/graph/ontology', readOntology, options),
         (error: unknown) =>
-            error instanceof LoadError &&
-            error.message ===
-                'The ontology could not be loaded: it was still being built after a minute.',
+            error instanceof LoadError && error.reason === 'build_timeout' && error.status === 503,
     );
     assert.equal(
         waits.reduce((sum, ms) => sum + ms, 0),
@@ -111,11 +109,7 @@ test('another failing status names the status and the problem detail', async () 
     ]);
     await assert.rejects(
         loadDocument('The datasets', '/api/graph/ontology/provenances', readOntology, options),
-        {
-            name: 'LoadError',
-            message:
-                'The datasets could not be loaded: the Graph API answered 502 (The graph did not answer).',
-        },
+        { name: 'LoadError', reason: 'status', status: 502, detail: 'The graph did not answer' },
     );
     assert.deepEqual(waits, []);
 });
@@ -126,19 +120,18 @@ test('a changed wire shape fails with the guard error', async () => {
     const { options } = rig([() => json(body)]);
     await assert.rejects(
         loadDocument('The ontology', '/api/graph/ontology', readOntology, options),
-        {
-            name: 'LoadError',
-            message:
-                'The ontology has a shape this page does not read: ontology.nodes[0].declared_by: expected a member.',
-        },
+        (error: unknown) =>
+            error instanceof LoadError &&
+            error.reason === 'shape' &&
+            error.detail?.startsWith('ontology.nodes[0].declared_by') === true,
     );
 });
 
-test('a body that is not JSON and a request that fails each name the document', async () => {
+test('a body that is not JSON and a request that fails each give their reason', async () => {
     const notJson = rig([() => new Response('<html>', { status: 200 })]);
     await assert.rejects(
         loadDocument('The ontology', '/api/graph/ontology', readOntology, notJson.options),
-        { name: 'LoadError', message: 'The ontology arrived, but not as JSON.' },
+        { name: 'LoadError', reason: 'not_json' },
     );
 
     const offline = rig([
@@ -148,10 +141,7 @@ test('a body that is not JSON and a request that fails each name the document', 
     ]);
     await assert.rejects(
         loadDocument('The ontology', '/api/graph/ontology', readOntology, offline.options),
-        {
-            name: 'LoadError',
-            message: 'The ontology could not be requested: the Graph API did not answer.',
-        },
+        { name: 'LoadError', reason: 'unreachable' },
     );
 });
 
@@ -170,4 +160,43 @@ test('an abort rejects with the signal reason, not a LoadError', async () => {
     });
     controller.abort(reason);
     await assert.rejects(waiting, (error: unknown) => error === reason);
+});
+
+/** A fetch that answers only when its signal aborts, rejecting with the signal's reason. */
+const stalled = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
+    new Promise((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal?.aborted) return reject(signal.reason);
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+
+test('a request with no answer fails as a timeout after the request bound', async () => {
+    await assert.rejects(
+        loadDocument('The ontology', '/api/graph/ontology', readOntology, {
+            fetch: stalled,
+            requestTimeoutMs: 10,
+        }),
+        { name: 'LoadError', reason: 'timeout' },
+    );
+});
+
+test('a load that outlasts its overall bound fails as a timeout', async () => {
+    let calls = 0;
+    await assert.rejects(
+        loadDocument('The ontology', '/api/graph/ontology', readOntology, {
+            fetch: async () => {
+                calls += 1;
+                return building();
+            },
+            sleep: (ms, signal) =>
+                new Promise((resolve, reject) => {
+                    if (signal?.aborted) return reject(signal.reason);
+                    signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+                    setTimeout(resolve, ms / 1000);
+                }),
+            limitMs: 20,
+        }),
+        { name: 'LoadError', reason: 'timeout' },
+    );
+    assert.ok(calls >= 1);
 });

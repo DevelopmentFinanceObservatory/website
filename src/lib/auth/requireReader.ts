@@ -4,12 +4,22 @@ import { redirect } from 'next/navigation';
 
 import { getUser } from '@/lib/auth/session';
 
-import { decideReader, parseEmailDomains, type ReaderDecision } from './reader';
+import {
+    decideReader,
+    emptyAllowlistWarning,
+    parseEmailDomains,
+    type ReaderDecision,
+} from './reader';
 
 type SessionUser = NonNullable<Awaited<ReturnType<typeof getUser>>>;
 
-/** The allowlisted email domains, read once from `GRAPH_EXPLORER_EMAIL_DOMAINS`. */
+/**
+ * The allowlisted email domains, read once from `GRAPH_EXPLORER_EMAIL_DOMAINS`
+ * when the module first loads; an empty list is logged then, once.
+ */
 const READER_DOMAINS = parseEmailDomains(process.env.GRAPH_EXPLORER_EMAIL_DOMAINS);
+const allowlistWarning = emptyAllowlistWarning(READER_DOMAINS);
+if (allowlistWarning !== null) console.warn(allowlistWarning);
 
 /**
  * The gate's decision for the current request, without redirecting. A

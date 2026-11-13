@@ -4,13 +4,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { exploreHref, exploreQuery, readExplore, sameView, type ExploreState } from '../explore.ts';
+import {
+    carriedHref,
+    checkFilter,
+    exploreHref,
+    exploreQuery,
+    NO_CARRIED,
+    readCarried,
+    readExplore,
+    moveHref,
+    sameView,
+    type ExploreState,
+} from '../explore.ts';
+import { buildModel } from '../model.ts';
+import { readOntology, readProvenances } from '../wire.ts';
+import { ontologyBody, provenancesBody } from './fixtures.ts';
 
 const read = (query: string) => readExplore(new URLSearchParams(query));
 
 test('nothing set is the start screen with no dataset filter', () => {
-    assert.deepEqual(read(''), { view: { kind: 'start' }, show: { kind: 'none' } });
-    assert.deepEqual(read('?list=&show='), { view: { kind: 'start' }, show: { kind: 'none' } });
+    const start = { view: { kind: 'start' }, show: { kind: 'none' }, base: false };
+    assert.deepEqual(read(''), start);
+    assert.deepEqual(read('?list=&show=&base='), start);
 });
 
 test('each view parameter reads as its view', () => {
@@ -41,15 +56,25 @@ test('show reads as one dataset or every dataset', () => {
 
 test('every state writes a query that reads back as the same state', () => {
     const states: ExploreState[] = [
-        { view: { kind: 'start' }, show: { kind: 'none' } },
-        { view: { kind: 'start' }, show: { kind: 'all' } },
-        { view: { kind: 'list', scope: { kind: 'instance' } }, show: { kind: 'none' } },
+        { view: { kind: 'start' }, show: { kind: 'none' }, base: false },
+        { view: { kind: 'start' }, show: { kind: 'all' }, base: false },
+        {
+            view: { kind: 'list', scope: { kind: 'instance' } },
+            show: { kind: 'none' },
+            base: false,
+        },
         {
             view: { kind: 'list', scope: { kind: 'class', id: 'FinancialFlow' } },
             show: { kind: 'dataset', id: 'provenance/OECDDAC1' },
+            base: true,
         },
-        { view: { kind: 'node', id: 'dc/base/odd id&x=1' }, show: { kind: 'none' } },
-        { view: { kind: 'dataset', id: 'provenance/OECDDAC2A' }, show: { kind: 'all' } },
+        { view: { kind: 'node', id: 'dc/base/odd id&x=1' }, show: { kind: 'none' }, base: true },
+        { view: { kind: 'node', id: 'dc/base/odd id&x=1' }, show: { kind: 'none' }, base: false },
+        {
+            view: { kind: 'dataset', id: 'provenance/OECDDAC2A' },
+            show: { kind: 'all' },
+            base: false,
+        },
     ];
     for (const state of states) {
         assert.deepEqual(readExplore(new URLSearchParams(exploreQuery(state))), state);
@@ -58,12 +83,34 @@ test('every state writes a query that reads back as the same state', () => {
 
 test('the start screen with no filter has a bare path', () => {
     assert.equal(
-        exploreHref({ view: { kind: 'start' }, show: { kind: 'none' } }),
+        exploreHref({ view: { kind: 'start' }, show: { kind: 'none' }, base: false }),
         '/graph-explorer',
     );
     assert.equal(
-        exploreHref({ view: { kind: 'list', scope: { kind: 'instance' } }, show: { kind: 'all' } }),
+        exploreHref({
+            view: { kind: 'list', scope: { kind: 'instance' } },
+            show: { kind: 'all' },
+            base: false,
+        }),
         '/graph-explorer?list=all&show=all',
+    );
+});
+
+test('base reads as on only for 1', () => {
+    assert.equal(read('base=1').base, true);
+    for (const query of ['', 'base=', 'base=0', 'base=true']) {
+        assert.equal(read(query).base, false, query);
+    }
+});
+
+test('every carried parameter rides on a sheet screen link and reads back', () => {
+    const carried = { show: { kind: 'dataset', id: 'provenance/OECDDAC1' }, base: true } as const;
+    const href = carriedHref('/graph-explorer/new-sheet', carried);
+    assert.equal(href, '/graph-explorer/new-sheet?show=provenance%2FOECDDAC1&base=1');
+    assert.deepEqual(readCarried(new URL(href, 'https://x.invalid').searchParams), carried);
+    assert.equal(
+        carriedHref('/graph-explorer/check-sheet', NO_CARRIED),
+        '/graph-explorer/check-sheet',
     );
 });
 
@@ -77,4 +124,31 @@ test('two views are the same when they show the same thing', () => {
         ),
         false,
     );
+});
+
+test('a move to the view on show adds no history entry; any other keeps the carried parameters', () => {
+    const state: ExploreState = {
+        view: { kind: 'node', id: 'crsPurpose' },
+        show: { kind: 'dataset', id: 'provenance/OECDDAC1' },
+        base: true,
+    };
+    assert.equal(moveHref(state, { kind: 'node', id: 'crsPurpose' }), null);
+    assert.equal(
+        moveHref(state, { kind: 'start' }),
+        '/graph-explorer?show=provenance%2FOECDDAC1&base=1',
+    );
+});
+
+test('a filter naming a dataset the model lacks applies no filter and names the dataset', () => {
+    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const known = { kind: 'dataset', id: 'provenance/OECDDAC1' } as const;
+    assert.deepEqual(checkFilter(model, known), { show: known, unknown: null });
+    assert.deepEqual(checkFilter(model, { kind: 'dataset', id: 'provenance/Gone' }), {
+        show: { kind: 'none' },
+        unknown: 'provenance/Gone',
+    });
+    assert.deepEqual(checkFilter(model, { kind: 'all' }), {
+        show: { kind: 'all' },
+        unknown: null,
+    });
 });

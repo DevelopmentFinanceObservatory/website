@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { search } from '../search.ts';
+import { search, stepActive } from '../search.ts';
 import { readOntology, readProvenances, readTerms } from '../wire.ts';
 import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
 
@@ -110,4 +110,13 @@ test('a base term the model holds is found once, as part of the model', () => {
             ['AdministrativeArea2', 'prefix', false],
         ],
     );
+});
+
+test('the arrow keys wrap over the hits; with none active, up lands on the last', () => {
+    assert.equal(stepActive(-1, -1, 5), 4);
+    assert.equal(stepActive(-1, 1, 5), 0);
+    assert.equal(stepActive(0, -1, 5), 4);
+    assert.equal(stepActive(4, 1, 5), 0);
+    assert.equal(stepActive(2, 1, 5), 3);
+    assert.equal(stepActive(-1, -1, 0), -1);
 });

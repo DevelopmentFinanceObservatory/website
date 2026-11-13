@@ -7,7 +7,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { queryOf, readSheetQuery, resolveSheet, sheetQuery, splitOptions } from '../newSheet.ts';
+import { NO_CARRIED, readCarried } from '../explore.ts';
+import {
+    queryOf,
+    readSheetQuery,
+    resolveSheet,
+    sheetHref,
+    sheetQuery,
+    splitOptions,
+} from '../newSheet.ts';
 import { readOntology, readProvenances } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
@@ -54,11 +62,27 @@ test('a written query reads back as the same state', () => {
         },
         { classId: 'FinancialFlow', measured: null, split: [], from: null },
     ];
-    for (const state of states) assert.deepEqual(read(sheetQuery(state)), state);
-    assert.equal(sheetQuery(states[0]!), '');
+    for (const state of states) assert.deepEqual(read(sheetQuery(state, NO_CARRIED)), state);
+    assert.equal(sheetQuery(states[0]!, NO_CARRIED), '');
     assert.equal(
-        sheetQuery({ classId: 'FinancialFlow', measured: null, split: ['a', 'b'], from: null }),
+        sheetQuery(
+            { classId: 'FinancialFlow', measured: null, split: ['a', 'b'], from: null },
+            NO_CARRIED,
+        ),
         '?class=FinancialFlow&split=a%2Cb',
+    );
+});
+
+test('a sheet link keeps the carried dataset filter and base switch', () => {
+    const carried = { show: { kind: 'all' }, base: true } as const;
+    const href = sheetHref({ from: { dataset: 'provenance/OECDDAC1', index: 2 } }, carried);
+    const params = new URL(href, 'https://x.invalid').searchParams;
+    assert.equal(new URL(href, 'https://x.invalid').pathname, '/graph-explorer/new-sheet');
+    assert.deepEqual(readCarried(params), carried);
+    assert.deepEqual(readSheetQuery(params).from, { dataset: 'provenance/OECDDAC1', index: 2 });
+    assert.equal(
+        sheetHref({ classId: 'FinancialFlow' }, NO_CARRIED),
+        '/graph-explorer/new-sheet?class=FinancialFlow',
     );
 });
 
@@ -91,7 +115,7 @@ test('a dataset pattern sets the class, measured property and ticks in its own o
     assert.equal(selection.measured, 'grantEquivalent');
     assert.deepEqual(selection.properties, ['dac1AidType', 'financialFlowType']);
     assert.equal(selection.templateNamed, true);
-    assert.deepEqual(read(sheetQuery(queryOf(selection))).from, {
+    assert.deepEqual(read(sheetQuery(queryOf(selection), NO_CARRIED)).from, {
         dataset: 'provenance/OECDDAC1',
         index: 3,
     });

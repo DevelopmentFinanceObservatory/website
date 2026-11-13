@@ -1,30 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useExplore, useModel } from './ExploreContext';
 import { BaseTag } from './ExploreLink';
-import {
-    DatasetPanel,
-    FullList,
-    KIND_WORDS,
-    NodePanel,
-    OutsidePanel,
-    type PanelLens,
-} from './FocusPanel';
+import { DatasetPanel, FullList, NodePanel, OutsidePanel, type PanelLens } from './FocusPanel';
 import FocusPicture from './FocusPicture';
 import styles from './FocusView.module.scss';
 import { plural } from './format';
 
 import Button from '@/components/atoms/Button/Button';
 import { NO_FILTER, START_VIEW } from '@/lib/graphExplorer/explore';
-import { datasetBoxes, definedNotUsed, nodeBoxes, type FocusBox } from '@/lib/graphExplorer/focus';
+import {
+    centreHeading,
+    datasetBoxes,
+    definedNotUsed,
+    nodeBoxes,
+    pictureLens,
+    type Centre,
+    type CentreSub,
+    type FocusBox,
+} from '@/lib/graphExplorer/focus';
 import type { DatasetFilter } from '@/lib/graphExplorer/model';
 import type { OntologyTerms } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
-    /** What is centred: a term (`?node=`) or a dataset (`?dataset=`). */
-    centre: { readonly kind: 'node' | 'dataset'; readonly id: string };
+    centre: Centre;
     /** The dataset filter, already checked against the model's datasets. */
     show: DatasetFilter;
     /** The base Data Commons terms list, when the search switch has loaded it. */
@@ -40,6 +41,13 @@ const useDocumentTitle = (name: string) => {
             document.title = previous;
         };
     }, [name]);
+};
+
+const subText = (sub: CentreSub | null): string | null => {
+    if (sub === null) return null;
+    if (sub.kind === 'statVars') return plural(sub.count, 'StatVar');
+    if (sub.kind === 'codes') return `Code ${sub.codes.join(', ')}`;
+    return sub.id;
 };
 
 const WithTag = ({ name, base }: { name: string; base: boolean }) => (
@@ -95,26 +103,23 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
     const model = useModel();
     const { go } = useExplore();
     const [open, setOpen] = useState<string | null>(null);
+    // The "All N" control that opened the full list, which takes focus back on close.
+    const opener = useRef<HTMLElement | null>(null);
 
     const lens: PanelLens =
         show.kind === 'dataset'
             ? { dataset: show.id, label: model.label(show.id) }
             : { dataset: null, label: null };
+    const marked = pictureLens(centre, show);
+    const markLens: PanelLens = marked === null ? { dataset: null, label: null } : lens;
 
-    const datasetView = centre.kind === 'dataset' ? model.datasetView(centre.id) : undefined;
-    const kind = centre.kind === 'node' ? model.kind(centre.id) : undefined;
-    const term = useMemo(
-        () =>
-            centre.kind === 'node' && kind === undefined
-                ? baseTerms?.terms.find((entry) => entry.dcid === centre.id)
-                : undefined,
-        [centre, kind, baseTerms],
+    const heading = useMemo(
+        () => centreHeading(model, centre, baseTerms),
+        [model, centre, baseTerms],
     );
+    useDocumentTitle(heading?.name ?? centre.id);
 
-    const name = datasetView?.label ?? term?.name ?? model.label(centre.id);
-    useDocumentTitle(name);
-
-    if (centre.kind === 'dataset' && !datasetView) {
+    if (heading === null) {
         return (
             <div className={styles.missing} role="status">
                 <p>
@@ -127,61 +132,55 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
         );
     }
 
+    const datasetView = centre.kind === 'dataset' ? model.datasetView(centre.id) : undefined;
+    const kind = centre.kind === 'node' ? model.kind(centre.id) : undefined;
     const boxes: readonly FocusBox[] = datasetView
         ? datasetBoxes(datasetView)
         : nodeBoxes(model, centre.id);
     const openBox = boxes.find((box) => box.key === open);
 
-    let picture: { kind: string; sub: string | null; base: boolean };
-    let definition: React.ReactNode;
-    if (datasetView) {
-        picture = {
-            kind: 'Dataset',
-            sub: plural(datasetView.statVarCount, 'StatVar'),
-            base: false,
-        };
-        definition = <DatasetPanel view={datasetView} />;
-    } else if (kind) {
-        const codes = model.node(centre.id)?.classification_code ?? [];
-        picture = {
-            kind: KIND_WORDS[kind],
-            sub: codes.length > 0 ? `Code ${codes.join(', ')}` : null,
-            base: model.isBase(centre.id),
-        };
-        definition = <NodePanel id={centre.id} lens={lens} />;
-    } else {
-        picture = {
-            kind: term ? 'Base Data Commons' : 'Not in the DFO model',
-            sub: centre.id,
-            base: term?.declared_by === 'base',
-        };
-        definition = <OutsidePanel id={centre.id} term={term} />;
-    }
+    const definition = datasetView ? (
+        <DatasetPanel view={datasetView} />
+    ) : kind ? (
+        <NodePanel id={centre.id} lens={lens} />
+    ) : (
+        <OutsidePanel id={centre.id} term={heading.term} />
+    );
+
+    const openList = (key: string) => {
+        opener.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setOpen(key);
+    };
+    const closeList = () => {
+        setOpen(null);
+        opener.current?.focus();
+    };
 
     return (
         <div className={styles.work}>
             <div className={styles.stage}>
                 <FilterLine lens={lens} dataset={datasetView ? datasetView.id : null} />
                 <FocusPicture
-                    kind={picture.kind}
-                    name={<WithTag name={name} base={picture.base} />}
-                    sub={picture.sub}
+                    kind={heading.kind}
+                    name={<WithTag name={heading.name} base={heading.base} />}
+                    sub={subText(heading.sub)}
                     boxes={boxes}
                     listClass={kind === 'class' ? centre.id : null}
                     unused={definedNotUsed(model, centre.id)}
-                    lensDataset={lens.dataset}
-                    lensLabel={lens.label}
-                    onOpen={setOpen}
+                    lensDataset={markLens.dataset}
+                    lensLabel={markLens.label}
+                    onOpen={openList}
                 />
                 <p className={styles.note}>
                     Select any name to put it at the centre. The back button retraces your steps.
-                    {lens.dataset !== null &&
-                        ` Names ${lens.label} uses carry its StatVar count; the rest are dimmed.`}
+                    {markLens.dataset !== null &&
+                        ` Names ${markLens.label} uses carry its StatVar count; the rest are dimmed.`}
                 </p>
             </div>
             <aside className={styles.panel} aria-label={openBox ? openBox.title : 'Definition'}>
                 {openBox ? (
-                    <FullList box={openBox} lens={lens} onClose={() => setOpen(null)} />
+                    <FullList box={openBox} lens={markLens} onClose={closeList} />
                 ) : (
                     definition
                 )}

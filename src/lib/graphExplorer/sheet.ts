@@ -1,7 +1,9 @@
 /**
- * The columns of a mapping sheet for a new dataset, the closest existing
- * dataset pattern to copy, and CSV output.
+ * The columns of a mapping sheet for a new dataset, the sheet draft the
+ * Start a sheet page shows and exports, the closest existing dataset
+ * pattern to copy, and CSV output.
  */
+import type { SheetRequest } from './googleSheet.ts';
 import type { Model } from './model.ts';
 import type { OntologyPattern } from './wire.ts';
 
@@ -75,17 +77,6 @@ export function sheetColumns(model: Model, spec: SheetSpec): readonly SheetColum
     ]);
 }
 
-/** The sheet a dataset's pattern describes: its definition fields filled, its constraints as columns. */
-export function sheetFromPattern(model: Model, pattern: OntologyPattern): readonly SheetColumn[] {
-    return sheetColumns(model, {
-        classId: pattern.population_type,
-        measuredProperty: pattern.measured_property,
-        statType: pattern.stat_type,
-        qualifier: pattern.measurement_qualifier,
-        properties: pattern.constraint_properties,
-    });
-}
-
 export type ClosestPattern = {
     readonly dataset: string;
     readonly pattern: OntologyPattern;
@@ -120,10 +111,20 @@ export function closestPattern(
     return best;
 }
 
-const csvField = (value: string): string =>
-    /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+/**
+ * A field as CSV. A value starting with `=`, `+`, `-`, `@`, a tab or a
+ * carriage return gains a leading `'`, so a spreadsheet opening the file
+ * shows it as text instead of running it as a formula.
+ */
+const csvField = (raw: string): string => {
+    const value = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+};
 
-/** RFC 4180: fields with a comma, quote or line break are quoted, quotes doubled, lines end CRLF. */
+/**
+ * RFC 4180: fields with a comma, quote or line break are quoted, quotes
+ * doubled, lines end CRLF; a field that could run as a formula starts with `'`.
+ */
 export const toCsv = (rows: readonly (readonly string[])[]): string =>
     rows.map((row) => row.map(csvField).join(',')).join('\r\n');
 
@@ -148,12 +149,6 @@ export function exampleRows(
     );
 }
 
-/** The header row and the example rows. */
-export const sheetTable = (columns: readonly SheetColumn[]): readonly (readonly string[])[] => [
-    columns.map((column) => column.name),
-    ...exampleRows(columns),
-];
-
 /** A file name from a label: lower case, runs of other characters as one hyphen. */
 export const csvFileName = (label: string): string => {
     const stem = label
@@ -162,3 +157,51 @@ export const csvFileName = (label: string): string => {
         .replace(/^-|-$/g, '');
     return `${stem || 'sheet'}.csv`;
 };
+
+/** The sheet the Start a sheet page shows, as each export receives it. */
+export type SheetDraft = {
+    /** The label of the kind of thing the figures are about. */
+    readonly title: string;
+    /** The graph generation the model was read from, or null when it has none. */
+    readonly generation: string | null;
+    /** The CSV file name built from the title. */
+    readonly fileName: string;
+    /** The columns in order, each property column with its value list's members as `lookup`. */
+    readonly columns: readonly SheetColumn[];
+    /** The example rows under the header, one value per column. */
+    readonly rows: readonly (readonly string[])[];
+};
+
+/** The draft for a sheet spec: its columns, example rows, title and file name. */
+export function sheetDraft(model: Model, spec: SheetSpec & { classId: string }): SheetDraft {
+    const columns = sheetColumns(model, spec);
+    const title = model.label(spec.classId);
+    return Object.freeze({
+        title,
+        generation: model.generation,
+        fileName: csvFileName(`${title} mapping sheet`),
+        columns,
+        rows: exampleRows(columns),
+    });
+}
+
+/** The draft as CSV rows: the header row, then the example rows. */
+export const draftCsvRows = (draft: SheetDraft): (readonly string[])[] => [
+    draft.columns.map((column) => column.name),
+    ...draft.rows,
+];
+
+/** The draft as the Google sheet handler takes it. */
+export const sheetRequest = (draft: SheetDraft): SheetRequest => ({
+    title: draft.title,
+    generation: draft.generation,
+    columns: draft.columns.map((column) => ({
+        name: column.name,
+        kind: column.kind,
+        lookup: column.lookup && {
+            valueList: column.lookup.valueList,
+            members: column.lookup.members.map(({ id, label, code }) => ({ id, label, code })),
+        },
+    })),
+    rows: draft.rows.map((row) => [...row]),
+});

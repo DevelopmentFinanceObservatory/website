@@ -7,14 +7,14 @@ import test from 'node:test';
 
 import { buildModel } from '../model.ts';
 import {
-    chunkRows,
+    applySwitches,
     locateFinding,
     mapHeaders,
     parsePasted,
     rowsToCheck,
     switchColumn,
 } from '../pasted.ts';
-import { CHECK_MAX_ROWS, readOntology, readProvenances } from '../wire.ts';
+import { readOntology, readProvenances } from '../wire.ts';
 import type { OntologyFinding } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
@@ -142,14 +142,21 @@ test('a finding whose field has no column locates to its row alone', () => {
     assert.equal(locateFinding(mapping, finding('measured_property', 'row 2')), null);
 });
 
-test('rows split into chunks of at most the request limit', () => {
-    const rows = Array.from({ length: CHECK_MAX_ROWS + 1 }, (_, index) => index);
-    const chunks = chunkRows(rows);
+test('a column switch holds while its header reads the same and drops when it changes', () => {
+    const switches = new Map([
+        [0, { header: 'nettingBasis', to: 'ignored' as const }],
+        [1, { header: 'crsPurpos', to: 'property' as const }],
+    ]);
+    const before = mapHeaders(model, ['nettingBasis', 'crsPurpos']);
     assert.deepEqual(
-        chunks.map((chunk) => chunk.length),
-        [CHECK_MAX_ROWS, 1],
+        applySwitches(before, switches).map((column) => column.target.kind),
+        ['ignored', 'property'],
     );
-    assert.equal(chunkRows(rows.slice(0, CHECK_MAX_ROWS)).length, 1);
-    assert.deepEqual(chunkRows([1, 2, 3], 2), [[1, 2], [3]]);
-    assert.deepEqual(chunkRows([]), []);
+
+    const renamed = mapHeaders(model, ['nettingBasis', 'crsPurpose_typo']);
+    assert.deepEqual(
+        applySwitches(renamed, switches).map((column) => column.target.kind),
+        ['ignored', 'ignored'],
+    );
+    assert.equal(applySwitches(renamed, switches)[1], renamed[1]);
 });

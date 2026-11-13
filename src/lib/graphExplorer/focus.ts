@@ -10,7 +10,16 @@
  * Each box lists every entry, most used first; a screen shows the first
  * BOX_LIMIT and opens the rest where `more` says.
  */
-import type { DatasetView, Kind, Model, ValuesUsed } from './model.ts';
+import {
+    KIND_WORDS,
+    kindOfTerm,
+    type DatasetFilter,
+    type DatasetView,
+    type Kind,
+    type Model,
+    type ValuesUsed,
+} from './model.ts';
+import type { OntologyTerm, OntologyTerms } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -75,7 +84,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
             const { groups } = model.propertiesOf(id);
             const ids = (group: keyof typeof groups) => groups[group].map((entry) => entry.id);
             boxes.push(
-                box('up', 'up', 'A kind of', 'includes', ofKind(model.broader(id))),
+                box('up', 'up', 'A kind of', 'includes', byUse(ofKind(model.broader(id)))),
                 box(
                     'left',
                     'left',
@@ -99,7 +108,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
         }
         case 'property':
             boxes.push(
-                box('up', 'up', 'Narrows', 'narrows', model.broader(id)),
+                box('up', 'up', 'Narrows', 'narrows', byUse(model.broader(id))),
                 box(
                     'left',
                     'left',
@@ -112,14 +121,14 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     'right',
                     'Takes its value from',
                     'takes a value from',
-                    model.node(id)?.range_includes ?? [],
+                    byUse(model.node(id)?.range_includes ?? []),
                 ),
                 box('down', 'down', 'Narrowed by', 'is narrowed by', narrower),
             );
             break;
         case 'valueList':
             boxes.push(
-                box('up', 'up', 'Part of', 'includes', ofKind(model.broader(id))),
+                box('up', 'up', 'Part of', 'includes', byUse(ofKind(model.broader(id)))),
                 box(
                     'left',
                     'left',
@@ -134,7 +143,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
             const list = model.valueListOf(id);
             boxes.push(
                 box('list', 'up', 'Value list', 'holds', list === undefined ? [] : [list]),
-                box('up', 'up', 'Broader value', 'includes', ofKind(model.broader(id))),
+                box('up', 'up', 'Broader value', 'includes', byUse(ofKind(model.broader(id)))),
                 box(
                     'left',
                     'left',
@@ -193,3 +202,85 @@ export function declaredDomain(model: Model, id: string): readonly string[] | nu
     const same = domain.length === used.size && domain.every((classId) => used.has(classId));
     return same ? null : domain;
 }
+
+/** What is centred: a term (`?node=`) or a dataset (`?dataset=`). */
+export type Centre = { readonly kind: 'node' | 'dataset'; readonly id: string };
+
+/** The line under the centre's name. */
+export type CentreSub =
+    | { readonly kind: 'statVars'; readonly count: number }
+    | { readonly kind: 'codes'; readonly codes: readonly string[] }
+    | { readonly kind: 'dcid'; readonly id: string };
+
+/** The centre of the picture as its heading shows it. */
+export type CentreHeading = {
+    /** The words over the name: what the centre is. */
+    readonly kind: string;
+    readonly name: string;
+    readonly sub: CentreSub | null;
+    /** Whether the base tag follows the name. */
+    readonly base: boolean;
+    /** The term on the graph outside the model, when the terms list holds it. */
+    readonly term: OntologyTerm | undefined;
+};
+
+/**
+ * The heading for a centred dataset, model term, or term outside the model
+ * (found in `baseTerms` when given); null for a dataset the model lacks.
+ */
+export function centreHeading(
+    model: Model,
+    centre: Centre,
+    baseTerms?: OntologyTerms,
+): CentreHeading | null {
+    if (centre.kind === 'dataset') {
+        const view = model.datasetView(centre.id);
+        if (!view) return null;
+        return {
+            kind: KIND_WORDS.dataset,
+            name: view.label,
+            sub: { kind: 'statVars', count: view.statVarCount },
+            base: false,
+            term: undefined,
+        };
+    }
+    const kind = model.kind(centre.id);
+    if (kind !== undefined) {
+        const codes = model.node(centre.id)?.classification_code ?? [];
+        return {
+            kind: KIND_WORDS[kind],
+            name: model.label(centre.id),
+            sub: codes.length > 0 ? { kind: 'codes', codes } : null,
+            base: model.isBase(centre.id),
+            term: undefined,
+        };
+    }
+    const term = baseTerms?.terms.find((entry) => entry.dcid === centre.id);
+    return {
+        kind: term ? 'Base Data Commons' : 'Not in the DFO model',
+        name: term?.name ?? centre.id,
+        sub: { kind: 'dcid', id: centre.id },
+        base: term?.declared_by === 'base',
+        term,
+    };
+}
+
+/** What a term outside the model is, for its panel's label. */
+export const outsideKind = (term: OntologyTerm | undefined): string =>
+    term ? `${KIND_WORDS[kindOfTerm(term)]} on the graph` : 'Not in the DFO model';
+
+/**
+ * The dataset whose use the picture marks: the filtered dataset, except on
+ * that dataset's own view, where every entry would carry the same mark.
+ */
+export const pictureLens = (centre: Centre, show: DatasetFilter): string | null => {
+    if (show.kind !== 'dataset') return null;
+    return centre.kind === 'dataset' && centre.id === show.id ? null : show.id;
+};
+
+/**
+ * `part` as a whole percentage of `whole`: 0 when either is 0, else at
+ * least 1, so a small share never reads as none.
+ */
+export const sharePercent = (part: number, whole: number): number =>
+    part <= 0 || whole <= 0 ? 0 : Math.max(1, Math.round((100 * part) / whole));

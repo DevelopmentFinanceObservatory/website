@@ -2,31 +2,30 @@
  * Explore's lists as rows for a CSV file: a scoped list as shown, and a
  * value list's members.
  */
-import type { Model, ScopedList, ScopedRow } from './model.ts';
-import { GROUPS } from './model.ts';
+import type { Model, ScopedList } from './model.ts';
+import { filterScopedList, GROUPS } from './model.ts';
 
 /**
- * The rows of a scoped list that `keep` passes, group by group, under a
- * header. The counts are the StatVar total, or one column per dataset the
+ * The rows of a scoped list that the filter text keeps (filterScopedList),
+ * group by group, under a header. The counts are the StatVar total, or one column per dataset the
  * list counts, headed by the dataset's label.
  */
 export function scopedListTable(
     model: Model,
     list: ScopedList,
-    keep: (row: ScopedRow) => boolean = () => true,
+    filter = '',
 ): readonly (readonly string[])[] {
+    const groups = filterScopedList(model, list, filter);
     const countHeads =
         list.columns.length === 0 ? ['stat_vars'] : list.columns.map((id) => model.label(id));
     const rows = GROUPS.flatMap((group) =>
-        list.groups[group]
-            .filter(keep)
-            .map((row) => [
-                row.id,
-                model.label(row.id),
-                group,
-                row.valueList ?? '',
-                ...(list.columns.length === 0 ? [row.usage.total] : row.counts).map(String),
-            ]),
+        groups[group].map((row) => [
+            row.id,
+            model.label(row.id),
+            group,
+            row.valueList ?? '',
+            ...(list.columns.length === 0 ? [row.usage.total] : row.counts).map(String),
+        ]),
     );
     return [['dcid', 'label', 'group', 'value_list', ...countHeads], ...rows];
 }

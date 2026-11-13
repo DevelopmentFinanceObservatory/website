@@ -10,12 +10,27 @@ import TopBar from './TopBar';
 import { useExplorerData } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
-import { exploreQuery, NO_FILTER, START_VIEW, type ExploreView } from '@/lib/graphExplorer/explore';
+import {
+    checkFilter,
+    exploreQuery,
+    NO_CARRIED,
+    NO_FILTER,
+    START_VIEW,
+    type ExploreView,
+} from '@/lib/graphExplorer/explore';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 
-/** The filter the URL names, or none when it names a dataset the model lacks. */
-const knownFilter = (model: Model, show: DatasetFilter): DatasetFilter =>
-    show.kind === 'dataset' && !model.dataset(show.id) ? NO_FILTER : show;
+/** The line naming a filtered dataset the model lacks, with a way to clear the filter. */
+const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => (
+    <p className={styles.filterNote} role="status">
+        <span>
+            The model has no dataset <code>{id}</code>, so nothing is filtered.
+        </span>
+        <Button variant="bordered" small onClick={onClear}>
+            Clear
+        </Button>
+    </p>
+);
 
 const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
     <div className={styles.missing} role="status">
@@ -36,18 +51,20 @@ const GraphExplorer = () => {
     const navigation = useExploreState();
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const baseTerms =
-        data.includeBase && data.terms?.status === 'ready' ? data.terms.value : undefined;
+    const { baseTerms } = data;
+    const filter = model
+        ? checkFilter(model, navigation.state.show)
+        : { show: NO_FILTER, unknown: null };
 
-    const screen = (ready: Model, view: ExploreView) => {
-        const show = knownFilter(ready, navigation.state.show);
+    const screen = (ready: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
             case 'start':
                 return (
                     <StartScreen
-                        includeBase={data.includeBase}
+                        base={data.base}
                         terms={data.terms}
-                        onIncludeBase={data.setIncludeBase}
+                        onBase={navigation.setBase}
+                        onRetryTerms={data.retryTerms}
                     />
                 );
             case 'list': {
@@ -73,10 +90,18 @@ const GraphExplorer = () => {
                     <TopBar screen="explore" model={model} baseTerms={baseTerms} />
                     <main
                         className={styles.main}
-                        key={exploreQuery({ view: navigation.state.view, show: NO_FILTER })}
+                        key={exploreQuery({ view: navigation.state.view, ...NO_CARRIED })}
                     >
                         {data.model.status === 'ready' ? (
-                            screen(data.model.value, navigation.state.view)
+                            <>
+                                {filter.unknown !== null && (
+                                    <UnknownFilter
+                                        id={filter.unknown}
+                                        onClear={() => navigation.setShow(NO_FILTER)}
+                                    />
+                                )}
+                                {screen(data.model.value, navigation.state.view, filter.show)}
+                            </>
                         ) : (
                             <LoadStatus state={data.model} onRetry={data.retryModel} />
                         )}

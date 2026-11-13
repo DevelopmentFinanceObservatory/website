@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import { downloadCsv } from './downloadCsv';
-import { useModel } from './ExploreContext';
+import { useCarried, useModel } from './ExploreContext';
 import { BaseTag, TermLink } from './ExploreLink';
 import FocusEntry, { ofMembers, useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
@@ -13,20 +13,18 @@ import { count, plural } from './format';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
-import { declaredDomain, type FocusBox } from '@/lib/graphExplorer/focus';
-import type { DatasetView, Kind } from '@/lib/graphExplorer/model';
-import { NEW_SHEET_PATH } from '@/lib/graphExplorer/newSheet';
+import {
+    declaredDomain,
+    outsideKind,
+    sharePercent,
+    type FocusBox,
+} from '@/lib/graphExplorer/focus';
+import { KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
+import { sheetHref } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { csvFileName } from '@/lib/graphExplorer/sheet';
 import { valueListTable } from '@/lib/graphExplorer/tables';
 import type { OntologyFacets, OntologyTerm } from '@/lib/graphExplorer/wire';
-
-export const KIND_WORDS: Record<Kind, string> = {
-    class: 'Kind of thing',
-    valueList: 'Value list',
-    property: 'Property',
-    value: 'Value',
-};
 
 const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
 
@@ -90,8 +88,10 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
             ) : (
                 <ul className={styles.uses}>
                     {byDataset.map(({ dataset, count: n }) => {
-                        const total = model.dataset(dataset)?.stat_var_count ?? n;
-                        const share = total === 0 ? 0 : n / total;
+                        const percent = sharePercent(
+                            n,
+                            model.dataset(dataset)?.stat_var_count ?? n,
+                        );
                         return (
                             <li
                                 key={dataset}
@@ -105,13 +105,9 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                                 <span
                                     className={styles.bar}
                                     role="img"
-                                    aria-label={`${Math.round(share * 100)}% of its StatVars`}
+                                    aria-label={`${percent}% of its StatVars`}
                                 >
-                                    <i
-                                        style={{
-                                            width: `${Math.max(1, Math.round(share * 100))}%`,
-                                        }}
-                                    />
+                                    <i style={{ width: `${Math.max(1, percent)}%` }} />
                                 </span>
                             </li>
                         );
@@ -125,6 +121,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
 /** A term the model holds: what it is, its names, its definition, its source and its use. */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
+    const carried = useCarried();
     const node = model.node(id);
     const kind = model.kind(id);
     if (!node || !kind) return null;
@@ -206,7 +203,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
             <UsageBars id={id} lens={lens} />
             {kind === 'class' && (
                 <div>
-                    <SheetLink href={`${NEW_SHEET_PATH}?${new URLSearchParams({ class: id })}`}>
+                    <SheetLink href={sheetHref({ classId: id }, carried)}>
                         Start a Sheet for This Class
                     </SheetLink>
                 </div>
@@ -226,6 +223,7 @@ const FACETS: { key: keyof OntologyFacets; label: string }[] = [
 /** A dataset: its description, its StatVar count, its patterns as sentences and its facet facts. */
 export const DatasetPanel = ({ view }: { view: DatasetView }) => {
     const model = useModel();
+    const carried = useCarried();
     const facets = model.dataset(view.id)?.facets;
 
     return (
@@ -257,7 +255,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                             <p className={styles.meta}>
                                 {plural(pattern.stat_var_count, 'StatVar')}
                                 {view.statVarCount > 0 &&
-                                    `, ${Math.max(1, Math.round((100 * pattern.stat_var_count) / view.statVarCount))}%`}
+                                    `, ${sharePercent(pattern.stat_var_count, view.statVarCount)}%`}
                             </p>
                             {pattern.examples[0] !== undefined && (
                                 <p className={styles.meta}>
@@ -267,10 +265,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                             )}
                             <div>
                                 <SheetLink
-                                    href={`${NEW_SHEET_PATH}?${new URLSearchParams({
-                                        dataset: view.id,
-                                        pattern: String(index),
-                                    })}`}
+                                    href={sheetHref({ from: { dataset: view.id, index } }, carried)}
                                 >
                                     Start a Sheet Like This
                                 </SheetLink>
@@ -300,11 +295,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 export const OutsidePanel = ({ id, term }: { id: string; term: OntologyTerm | undefined }) => (
     <>
         <div className={styles.section}>
-            <Label>
-                {term
-                    ? `${term.types.includes('Class') ? 'Kind of thing' : 'Property'} on the graph`
-                    : 'Not in the DFO model'}
-            </Label>
+            <Label>{outsideKind(term)}</Label>
             <h2 className={styles.name}>
                 {term?.name ?? id}
                 {term?.declared_by === 'base' && (

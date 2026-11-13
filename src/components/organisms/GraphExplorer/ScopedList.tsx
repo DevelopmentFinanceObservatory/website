@@ -15,11 +15,11 @@ import { START_VIEW } from '@/lib/graphExplorer/explore';
 import { csvFileName } from '@/lib/graphExplorer/sheet';
 import { scopedListTable } from '@/lib/graphExplorer/tables';
 import {
+    filterScopedList,
     GROUPS,
     type DatasetFilter,
     type Group,
     type ListScope,
-    type Model,
     type ScopedRow,
 } from '@/lib/graphExplorer/model';
 
@@ -29,12 +29,6 @@ const GROUP_TITLES: Record<Group, string> = {
     split: 'How it is split',
     unused: 'Defined, not yet used by a dataset',
 };
-
-/** Whether a row's label or dcid holds the filter text, lower-cased. */
-const matches = (model: Model, row: ScopedRow, needle: string): boolean =>
-    needle === '' ||
-    model.label(row.id).toLowerCase().includes(needle) ||
-    row.id.toLowerCase().includes(needle);
 
 /** A dot for nothing, read aloud as "none". */
 const None = () => (
@@ -86,7 +80,7 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
     const titleId = useId();
 
     const list = useMemo(() => model.scopedList(scope, show), [model, scope, show]);
-    const needle = filter.trim().toLowerCase();
+    const kept = useMemo(() => filterScopedList(model, list, filter), [model, list, filter]);
 
     const isClass = scope.kind === 'class';
     const title = isClass
@@ -101,7 +95,7 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
 
     const groups = GROUPS.map((group) => ({
         group,
-        rows: list.groups[group].filter((row) => matches(model, row, needle)),
+        rows: kept[group],
     })).filter(({ rows }) => rows.length > 0);
 
     return (
@@ -128,10 +122,7 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
                     small
                     disabled={groups.length === 0}
                     onClick={() =>
-                        downloadCsv(
-                            scopedListTable(model, list, (row) => matches(model, row, needle)),
-                            csvFileName(title),
-                        )
+                        downloadCsv(scopedListTable(model, list, filter), csvFileName(title))
                     }
                 >
                     Download CSV

@@ -13,6 +13,25 @@ export type ReaderDecision<TUser extends ReaderUser = ReaderUser> =
     | { kind: 'email_not_verified'; user: TUser }
     | { kind: 'domain_not_allowed'; user: TUser };
 
+/** Why the gate refuses a visitor, in the words every refusal shows. */
+export const REFUSAL_MESSAGES: Readonly<
+    Record<Exclude<ReaderDecision['kind'], 'admitted'>, string>
+> = {
+    signed_out: 'Sign in to use the Graph Explorer.',
+    email_not_verified:
+        'The Graph Explorer needs a verified email address, and this account’s is not verified.',
+    domain_not_allowed: 'The Graph Explorer is limited to team accounts.',
+};
+
+/**
+ * The line the server logs once when the allowlist admits nobody, or null
+ * when it names a domain.
+ */
+export const emptyAllowlistWarning = (domains: ReadonlySet<string>): string | null =>
+    domains.size === 0
+        ? 'GRAPH_EXPLORER_EMAIL_DOMAINS is unset or empty, so the Graph Explorer admits nobody.'
+        : null;
+
 /**
  * The allowlist from its environment variable: comma-separated email
  * domains, each trimmed and lowercased, empty entries dropped. Unset or

@@ -7,10 +7,14 @@
  * - `?node=<dcid>`: one term at the centre
  * - `?dataset=<provenance dcid>`: one dataset at the centre
  * - `?show=<provenance dcid>` or `?show=all`: the dataset filter, kept while the reader moves
+ * - `?base=1`: search reaches base Data Commons terms, kept while the reader moves
  *
  * When several view parameters are set, `node` wins, then `dataset`, then `list`.
+ * `show` and `base` are the carried parameters: every link in the section,
+ * the sheet screens' included, keeps them.
  */
-import type { DatasetFilter, ListScope } from './model.ts';
+import type { DatasetFilter, ListScope, Model } from './model.ts';
+import { EXPLORE_PATH } from './paths.ts';
 
 export type ExploreView =
     | { readonly kind: 'start' }
@@ -18,16 +22,22 @@ export type ExploreView =
     | { readonly kind: 'node'; readonly id: string }
     | { readonly kind: 'dataset'; readonly id: string };
 
-export type ExploreState = { readonly view: ExploreView; readonly show: DatasetFilter };
+/** The parameters every Graph Explorer link keeps: the dataset filter and the base switch. */
+export type Carried = {
+    readonly show: DatasetFilter;
+    /** Whether search reaches base Data Commons terms outside the model. */
+    readonly base: boolean;
+};
 
-/** The path the Explore screen answers on. */
-export const EXPLORE_PATH = '/graph-explorer';
+export type ExploreState = Carried & { readonly view: ExploreView };
 
 /** The `list` and `show` value that means every instance property or every dataset. */
 export const ALL = 'all';
 
 export const START_VIEW: ExploreView = Object.freeze({ kind: 'start' });
 export const NO_FILTER: DatasetFilter = Object.freeze({ kind: 'none' });
+
+export const NO_CARRIED: Carried = Object.freeze({ show: NO_FILTER, base: false });
 
 /** The query parameters Explore reads; an empty value counts as unset. */
 type QueryReader = { get(name: string): string | null };
@@ -58,25 +68,49 @@ const readShow = (params: QueryReader): DatasetFilter => {
     return show === ALL ? { kind: 'all' } : { kind: 'dataset', id: show };
 };
 
+/** The carried parameters a query string holds. */
+export const readCarried = (params: QueryReader): Carried => ({
+    show: readShow(params),
+    base: value(params, 'base') === '1',
+});
+
+/** Adds the carried parameters to `params`, leaving out each one at its default. */
+export const writeCarried = (params: URLSearchParams, { show, base }: Carried): void => {
+    if (show.kind === 'all') params.set('show', ALL);
+    else if (show.kind === 'dataset') params.set('show', show.id);
+    if (base) params.set('base', '1');
+};
+
+/** `?` and the query, or '' when `params` is empty. */
+export const queryString = (params: URLSearchParams): string => {
+    const query = params.toString();
+    return query === '' ? '' : `?${query}`;
+};
+
+/** A screen's path with the carried parameters as its query. */
+export const carriedHref = (path: string, carried: Carried): string => {
+    const params = new URLSearchParams();
+    writeCarried(params, carried);
+    return `${path}${queryString(params)}`;
+};
+
 /** The Explore state a query string describes. */
 export const readExplore = (params: QueryReader): ExploreState => ({
     view: readView(params),
-    show: readShow(params),
+    ...readCarried(params),
 });
 
-/** The query string for a state, `?` included, or '' for the start screen with no filter. */
+/** The query string for a state, `?` included, or '' for the start screen with nothing carried. */
 export const exploreQuery = (state: ExploreState): string => {
     const params = new URLSearchParams();
-    const { view, show } = state;
+    const { view } = state;
     if (view.kind === 'node') params.set('node', view.id);
     else if (view.kind === 'dataset') params.set('dataset', view.id);
     else if (view.kind === 'list') {
         params.set('list', view.scope.kind === 'instance' ? ALL : view.scope.id);
     }
-    if (show.kind === 'all') params.set('show', ALL);
-    else if (show.kind === 'dataset') params.set('show', show.id);
-    const query = params.toString();
-    return query === '' ? '' : `?${query}`;
+    writeCarried(params, state);
+    return queryString(params);
 };
 
 /** The path and query for a state. */
@@ -84,4 +118,24 @@ export const exploreHref = (state: ExploreState): string => `${EXPLORE_PATH}${ex
 
 /** Whether two views show the same thing. */
 export const sameView = (a: ExploreView, b: ExploreView): boolean =>
-    exploreQuery({ view: a, show: NO_FILTER }) === exploreQuery({ view: b, show: NO_FILTER });
+    exploreQuery({ view: a, ...NO_CARRIED }) === exploreQuery({ view: b, ...NO_CARRIED });
+
+/**
+ * The address to push for a move from `state` to `view`, keeping the
+ * carried parameters, or null when `view` is already on show.
+ */
+export const moveHref = (state: ExploreState, view: ExploreView): string | null =>
+    sameView(view, state.view) ? null : exploreHref({ ...state, view });
+
+/**
+ * The dataset filter the screens apply, and the dataset id the URL named
+ * that the model lacks, or null. An unknown dataset applies no filter; the
+ * screen names it so the change is never silent.
+ */
+export const checkFilter = (
+    model: Pick<Model, 'dataset'>,
+    show: DatasetFilter,
+): { readonly show: DatasetFilter; readonly unknown: string | null } =>
+    show.kind === 'dataset' && !model.dataset(show.id)
+        ? { show: NO_FILTER, unknown: show.id }
+        : { show, unknown: null };

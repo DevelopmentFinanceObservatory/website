@@ -8,84 +8,41 @@ import styles from './NewSheet.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
 import { authClient } from '@/lib/auth/client';
-import {
-    DRIVE_FILE_SCOPE,
-    type SheetRequest,
-    type SheetsAnswer,
-} from '@/lib/graphExplorer/googleSheet';
-import type { SheetColumn } from '@/lib/graphExplorer/sheet';
-
-/** The sheet the page shows, as each export receives it. */
-export type SheetDraft = {
-    /** The label of the kind of thing the figures are about. */
-    readonly title: string;
-    /** The graph generation the model was read from, or null when it has none. */
-    readonly generation: string | null;
-    /** The CSV file name built from the title. */
-    readonly fileName: string;
-    /** The columns in order, each property column with its value list's members as `lookup`. */
-    readonly columns: readonly SheetColumn[];
-    /** The example rows under the header, one value per column. */
-    readonly rows: readonly (readonly string[])[];
-};
-
-export type SheetExportProps = { sheet: SheetDraft };
+import { DRIVE_FILE_SCOPE, type SheetsAnswer } from '@/lib/graphExplorer/googleSheet';
+import { SHEETS_ROUTE } from '@/lib/graphExplorer/paths';
+import { draftCsvRows, sheetRequest, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
 /** Downloads the header row and the example rows as a CSV file. */
-const DownloadCsv = ({ sheet }: SheetExportProps) => (
-    <Button
-        onClick={() =>
-            downloadCsv([sheet.columns.map((column) => column.name), ...sheet.rows], sheet.fileName)
-        }
-    >
-        Download CSV
-    </Button>
+export const DownloadCsv = ({ sheet }: { sheet: SheetDraft }) => (
+    <Button onClick={() => downloadCsv(draftCsvRows(sheet), sheet.fileName)}>Download CSV</Button>
 );
-
-/** Where the Google sheet handler answers. */
-const SHEETS_ROUTE = '/graph-explorer/api/sheets';
 
 /** The parameter Better Auth adds to the return address when Google access was not granted. */
 const LINK_ERROR_PARAM = 'error';
 
-const sheetRequest = (sheet: SheetDraft): SheetRequest => ({
-    title: sheet.title,
-    generation: sheet.generation,
-    columns: sheet.columns.map((column) => ({
-        name: column.name,
-        kind: column.kind,
-        lookup: column.lookup && {
-            valueList: column.lookup.valueList,
-            members: column.lookup.members.map(({ id, label, code }) => ({ id, label, code })),
-        },
-    })),
-    rows: sheet.rows.map((row) => [...row]),
-});
+/** The parameter on the return address after a trip through Google's consent screen. */
+const RETURNED_PARAM = 'google';
 
 type CreateState =
     | { kind: 'idle' }
     | { kind: 'working' }
     | { kind: 'created'; url: string; dropdownsFailed: boolean }
-    | { kind: 'needs_google' }
+    | { kind: 'needs_google'; message: string }
     | { kind: 'failed'; message: string };
 
-/** What the reader is told for each refusal the handler can answer. */
-const failureMessage = (status: number, answer: SheetsAnswer | null): string => {
-    if (status === 401) return 'You are signed out. Sign in again, then create the sheet.';
-    if (status === 403) return 'Your account does not have access to the Graph Explorer.';
-    if (status === 400)
-        return 'This sheet is too large to create in Google Sheets. Download the CSV instead.';
-    if (status === 502) return 'Google could not create the sheet. Try again in a minute.';
-    return answer && !answer.ok ? answer.message : 'The sheet could not be created. Try again.';
-};
+/** What the reader is told when access was just granted and the handler still asks for it. */
+const STILL_REFUSED =
+    'Google access was granted, but the tool still cannot use it, so no sheet was created. Sign out, sign in again and try once more; if it fails again, download the CSV.';
 
 /**
  * Sends Google's consent screen for the `drive.file` scope, then returns to
- * this page with its query, so the sheet the reader built is still there.
+ * this page with its query and RETURNED_PARAM, so the sheet the reader built
+ * is still there and the page knows the trip was made.
  */
 const continueWithGoogle = async () => {
     const back = new URL(window.location.href);
     back.searchParams.delete(LINK_ERROR_PARAM);
+    back.searchParams.set(RETURNED_PARAM, '1');
     const here = `${back.pathname}${back.search}`;
     await authClient.linkSocial({
         provider: 'google',
@@ -101,10 +58,14 @@ const continueWithGoogle = async () => {
 /**
  * Creates the sheet as a Google spreadsheet in the reader's own Drive, then
  * links to it. When the tool has no access to the reader's Drive yet, it
- * explains why and offers Google's consent screen on a click.
+ * shows the handler's reason and offers Google's consent screen on a click;
+ * after one trip through it that still ends in a refusal, it says so and
+ * offers the button no more. Every other refusal shows the handler's message.
  */
-const CreateGoogleSheet = ({ sheet }: SheetExportProps) => {
-    const linkFailed = useSearchParams().has(LINK_ERROR_PARAM);
+export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
+    const params = useSearchParams();
+    const linkFailed = params.has(LINK_ERROR_PARAM);
+    const returned = params.has(RETURNED_PARAM);
     const [state, setState] = useState<CreateState>({ kind: 'idle' });
 
     const create = async () => {
@@ -122,10 +83,17 @@ const CreateGoogleSheet = ({ sheet }: SheetExportProps) => {
                     url: answer.url,
                     dropdownsFailed: answer.dropdowns === 'failed',
                 });
-            } else if (response.status === 409) {
-                setState({ kind: 'needs_google' });
+            } else if (answer?.code === 'google_access_needed') {
+                setState(
+                    returned
+                        ? { kind: 'failed', message: STILL_REFUSED }
+                        : { kind: 'needs_google', message: answer.message },
+                );
             } else {
-                setState({ kind: 'failed', message: failureMessage(response.status, answer) });
+                setState({
+                    kind: 'failed',
+                    message: answer?.message ?? 'The sheet could not be created. Try again.',
+                });
             }
         } catch {
             setState({
@@ -157,10 +125,7 @@ const CreateGoogleSheet = ({ sheet }: SheetExportProps) => {
             </p>
             {state.kind === 'needs_google' && (
                 <>
-                    <p className={styles.exportStatus}>
-                        To create the sheet, the tool needs permission to add files to your Google
-                        Drive. It can see only the files it creates.
-                    </p>
+                    <p className={styles.exportStatus}>{state.message}</p>
                     <Button
                         variant="bordered"
                         className={styles.exportAction}
@@ -173,12 +138,3 @@ const CreateGoogleSheet = ({ sheet }: SheetExportProps) => {
         </>
     );
 };
-
-/**
- * The export buttons on the sheet's export row, in order. Each is a component
- * that receives the sheet; an export joins the row by joining this list.
- */
-export const SHEET_EXPORTS: readonly React.ComponentType<SheetExportProps>[] = [
-    CreateGoogleSheet,
-    DownloadCsv,
-];

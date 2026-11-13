@@ -1,6 +1,8 @@
 import styles from './ReaderRefused.module.scss';
 import SignOutButton from './SignOutButton';
 
+import { REFUSAL_MESSAGES } from '@/lib/auth/reader';
+
 type ReaderRefusedProps = {
     email: string;
     reason: 'email_not_verified' | 'domain_not_allowed';
@@ -16,12 +18,9 @@ const ReaderRefused = ({ email, reason }: ReaderRefusedProps) => (
         <div className={styles.box}>
             <h1 className={styles.title}>Team accounts only</h1>
             <p className={styles.lead}>
-                The Graph Explorer is limited to team accounts. You are signed in as{' '}
+                {REFUSAL_MESSAGES[reason]} You are signed in as{' '}
                 <span className={styles.email}>{email}</span>.
             </p>
-            {reason === 'email_not_verified' && (
-                <p className={styles.lead}>This account’s email address is not verified.</p>
-            )}
             <div className={styles.actions}>
                 <SignOutButton />
             </div>

@@ -66,7 +66,7 @@ test('the terms guard refuses a term with a member removed', () => {
     refuses(readTerms, body, 'terms.terms[0].types');
 });
 
-test('the provenances guard checks the first pattern, constraint value and facets', () => {
+test('the provenances guard checks patterns, constraint values and facets', () => {
     const pattern = provenancesBody();
     delete at(pattern, ['provenances', 0, 'patterns', 0]).observation_properties;
     refuses(
@@ -88,7 +88,25 @@ test('the provenances guard checks the first pattern, constraint value and facet
     refuses(readProvenances, facets, 'provenances.provenances[0].facets.currencies');
 });
 
-test('the check guard accepts a served answer and refuses an unknown finding code', () => {
+test('each guard checks every element of every list, not only the first', () => {
+    const ontology = ontologyBody();
+    at(ontology, ['nodes', 200]).alternate_name = null;
+    refuses(readOntology, ontology, 'ontology.nodes[200].alternate_name');
+
+    const name = ontologyBody();
+    at(name, ['nodes', 100]).sub_class_of = ['Thing', 7];
+    refuses(readOntology, name, 'ontology.nodes[100].sub_class_of[1]');
+
+    const terms = termsBody();
+    delete at(terms, ['terms', 281]).declared_by;
+    refuses(readTerms, terms, 'terms.terms[281].declared_by');
+
+    const pattern = provenancesBody();
+    at(pattern, ['provenances', 3, 'patterns', 0]).examples = null;
+    refuses(readProvenances, pattern, 'provenances.provenances[3].patterns[0].examples');
+});
+
+test('the check guard reads every finding: an unknown code passes, a later finding out of shape fails', () => {
     const finding = {
         ref: 'row 2',
         field: 'constraint_properties.crsPurpose',
@@ -99,10 +117,25 @@ test('the check guard accepts a served answer and refuses an unknown finding cod
     const answer = { generation: 'g1', row_count: 2, findings: [finding] };
     assert.equal(readCheckResponse(answer).findings[0]?.code, 'node_not_held');
 
+    const added = { ...answer, findings: [finding, { ...finding, code: 'some_new_code' }] };
+    assert.equal(readCheckResponse(added).findings[1]?.code, 'some_new_code');
+
+    const noField: Record<string, unknown> = { ...finding };
+    delete noField.field;
     refuses(
         readCheckResponse,
-        { ...answer, findings: [{ ...finding, code: 'not_held' }] },
-        'check.findings[0].code',
+        { ...answer, findings: [finding, noField] },
+        'check.findings[1].field',
+    );
+    refuses(
+        readCheckResponse,
+        { ...answer, findings: [finding, { ...finding, severity: 'fatal' }] },
+        'check.findings[1].severity',
+    );
+    refuses(
+        readCheckResponse,
+        { ...answer, findings: [finding, { ...finding, value: ['a', 7] }] },
+        'check.findings[1].value[1]',
     );
     refuses(readCheckResponse, { generation: 'g1', findings: [] }, 'check.row_count');
 });

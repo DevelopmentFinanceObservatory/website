@@ -5,25 +5,39 @@ import { createContext, useCallback, useContext, useMemo } from 'react';
 
 import {
     exploreHref,
+    readCarried,
     readExplore,
+    moveHref,
+    type Carried,
     type ExploreState,
     type ExploreView,
 } from '@/lib/graphExplorer/explore';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 
 export type ExploreNavigation = {
-    /** The view and dataset filter the URL holds. */
+    /** The view, the dataset filter and the base switch the URL holds. */
     readonly state: ExploreState;
-    /** The address of a view under the current dataset filter. */
+    /** The address of a view, keeping the carried parameters. */
     readonly hrefFor: (view: ExploreView) => string;
-    /** Opens a view as a new history entry, keeping the dataset filter. */
+    /**
+     * Opens a view as a new history entry, keeping the carried parameters;
+     * the view already on show adds no entry.
+     */
     readonly go: (view: ExploreView) => void;
     /** Changes the dataset filter in place: the back button skips it. */
     readonly setShow: (show: DatasetFilter) => void;
+    /** Turns the base switch on or off in place: the back button skips it. */
+    readonly setBase: (base: boolean) => void;
 };
 
 const NavigationContext = createContext<ExploreNavigation | null>(null);
 const ModelContext = createContext<Model | null>(null);
+
+/** The parameters every Graph Explorer link keeps, read from the URL query. */
+export const useCarried = (): Carried => {
+    const params = useSearchParams();
+    return useMemo(() => readCarried(params), [params]);
+};
 
 /**
  * Explore's state from the URL query. Views move with history.pushState,
@@ -34,27 +48,36 @@ export const useExploreState = (): ExploreNavigation => {
     const params = useSearchParams();
     const state = useMemo(() => readExplore(params), [params]);
 
-    const hrefFor = useCallback(
-        (view: ExploreView) => exploreHref({ view, show: state.show }),
-        [state.show],
-    );
+    const hrefFor = useCallback((view: ExploreView) => exploreHref({ ...state, view }), [state]);
 
     const go = useCallback(
         (view: ExploreView) => {
-            window.history.pushState(null, '', hrefFor(view));
+            const href = moveHref(state, view);
+            if (href === null) return;
+            window.history.pushState(null, '', href);
             window.scrollTo({ top: 0, behavior: 'instant' });
         },
-        [hrefFor],
+        [state],
     );
 
     const setShow = useCallback(
         (show: DatasetFilter) => {
-            window.history.replaceState(null, '', exploreHref({ view: state.view, show }));
+            window.history.replaceState(null, '', exploreHref({ ...state, show }));
         },
-        [state.view],
+        [state],
     );
 
-    return useMemo(() => ({ state, hrefFor, go, setShow }), [state, hrefFor, go, setShow]);
+    const setBase = useCallback(
+        (base: boolean) => {
+            window.history.replaceState(null, '', exploreHref({ ...state, base }));
+        },
+        [state],
+    );
+
+    return useMemo(
+        () => ({ state, hrefFor, go, setShow, setBase }),
+        [state, hrefFor, go, setShow, setBase],
+    );
 };
 
 export const NavigationProvider = NavigationContext.Provider;

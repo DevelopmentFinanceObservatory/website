@@ -4,22 +4,14 @@ import classNames from 'classnames';
 import { useRouter } from 'next/navigation';
 import { useId, useMemo, useState } from 'react';
 
-import { useOptionalExplore } from './ExploreContext';
+import { useCarried, useOptionalExplore } from './ExploreContext';
 import { BaseTag } from './ExploreLink';
 import styles from './SearchBox.module.scss';
 
-import { exploreHref, NO_FILTER, type ExploreView } from '@/lib/graphExplorer/explore';
-import type { Model } from '@/lib/graphExplorer/model';
-import { search, type SearchHit } from '@/lib/graphExplorer/search';
+import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
+import { KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
+import { search, stepActive, type SearchHit } from '@/lib/graphExplorer/search';
 import type { OntologyTerms } from '@/lib/graphExplorer/wire';
-
-const KIND_WORDS: Record<SearchHit['kind'], string> = {
-    class: 'Kind of thing',
-    valueList: 'Value list',
-    property: 'Property',
-    value: 'Value',
-    dataset: 'Dataset',
-};
 
 /** What a hit is, in a few words: its kind, the list a value sits in, or that it is outside the model. */
 const describe = (model: Model, hit: SearchHit): string => {
@@ -45,6 +37,7 @@ type SearchBoxProps = {
  */
 const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
     const navigation = useOptionalExplore();
+    const carried = useCarried();
     const router = useRouter();
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
@@ -65,7 +58,7 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
         const view: ExploreView =
             hit.kind === 'dataset' ? { kind: 'dataset', id: hit.id } : { kind: 'node', id: hit.id };
         if (navigation) navigation.go(view);
-        else router.push(exploreHref({ view, show: NO_FILTER }));
+        else router.push(exploreHref({ view, ...carried }));
     };
 
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -75,7 +68,7 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
             setOpen(true);
             if (count === 0) return;
             const step = event.key === 'ArrowDown' ? 1 : -1;
-            setActive((current) => (current + step + count) % count);
+            setActive((current) => stepActive(current, step, count));
             return;
         }
         if (event.key === 'Enter') {

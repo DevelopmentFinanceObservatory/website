@@ -8,10 +8,7 @@ import { TermLink } from './ExploreLink';
 import { count } from './format';
 import styles from './ValueTree.module.scss';
 
-import type { MemberTree } from '@/lib/graphExplorer/model';
-
-/** The most matches the filter lists. */
-const HIT_LIMIT = 60;
+import { searchMembers, type MemberTree } from '@/lib/graphExplorer/model';
 
 /** A value's code and its link, dimmed when the filter's dataset does not use it. */
 const Head = ({ id, lensDataset }: { id: string; lensDataset: string | null }) => {
@@ -64,20 +61,8 @@ type ValueTreeProps = {
 const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
     const model = useModel();
     const [filter, setFilter] = useState('');
-    const needle = filter.trim().toLowerCase();
-
-    const hits =
-        needle === ''
-            ? []
-            : model.members(listId).filter((id) => {
-                  const node = model.node(id);
-                  return [
-                      model.label(id),
-                      id,
-                      ...(node?.classification_code ?? []),
-                      ...(node?.alternate_name ?? []),
-                  ].some((text) => text.toLowerCase().includes(needle));
-              });
+    const blank = filter.trim() === '';
+    const { hits, total } = searchMembers(model, listId, filter);
 
     return (
         <div className={styles.tree}>
@@ -89,28 +74,28 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
             />
-            {needle === '' ? (
+            {blank ? (
                 <ul className={styles.list}>
                     {model.memberTree(listId).map((node) => (
                         <Branch key={node.id} node={node} lensDataset={lensDataset} />
                     ))}
                 </ul>
-            ) : hits.length === 0 ? (
+            ) : total === 0 ? (
                 <p className={styles.note} role="status">
                     No value matches “{filter.trim()}”.
                 </p>
             ) : (
                 <>
                     <ul className={styles.list}>
-                        {hits.slice(0, HIT_LIMIT).map((id) => (
+                        {hits.map((id) => (
                             <li key={id} className={styles.leaf}>
                                 <Head id={id} lensDataset={lensDataset} />
                             </li>
                         ))}
                     </ul>
-                    {hits.length > HIT_LIMIT && (
+                    {total > hits.length && (
                         <p className={styles.note} role="status">
-                            The first {HIT_LIMIT} of {count(hits.length)}. Type more to narrow.
+                            The first {count(hits.length)} of {count(total)}. Type more to narrow.
                         </p>
                     )}
                 </>
