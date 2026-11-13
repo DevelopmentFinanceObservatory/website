@@ -25,11 +25,11 @@ Last Update: Nov 13, 2026
 
 ## Summary
 
-This feature is to add per-user access to the Development Finance Observatory backend. Needs:
+This feature is to add per-user access to the Development Finance Observatory backend. This will enable:
 
 - Metered and ACL'ed access
-- Prevent cost overruns or operations problems that could come from
-- Enable potential other business arrangements, e.g. charge to serve or syndicate high-volume, high-cost, or licensed data.
+- Protection against cost overruns or operational problems stemming from heavy legitimate use or high-volume access by an adversary. Having the ability to grant API-specific access lets us lower default limits for safety, and make runtime maneuvers like turning off free access altogether if we are being abused or attacked.
+- Potential future cost models, e.g. serving high-volume, high-cost, or licensed data
 
 We intend to still have a free / open tier. We want minimal friction for the majority of users to use DFO, since it's a valuable onramp. Search and AI crawlers are also an important source of traffic for us, and will continue to be. But more expensive and frequent access will go through an API key.
 
@@ -48,7 +48,7 @@ We'll take a phased approach. Initially we'll prove the concept with hand-provis
 Every public API and MCP call passes through one function in the website, `forward()` in `src/lib/proxy/forward.ts`. That is the single place a key needs to be checked.
 
 - **Rate limit.** `forward()` counts each call against the client's address in a fixed window: 120 calls a minute on `/api/*`, 300 on `/mcp`. The counters live in the website's Postgres (`limit_counter` table) and are shared by all instances. If the count fails or is slow, the call goes through uncounted.
-- **No Redis.** The task description mentions turning a Redis limiter back on. There is no Redis code in the website now, so per-key limits need no Memorystore instance.
+- **No Redis.** The original task description mentions turning a Redis limiter back on. There is no Redis code in the website now, so per-key limits need no Memorystore instance.
 - **Edge limits.** Cloudflare WAF rules also rate-limit by address, in front of the site.
 - **Caller identity.** The proxy names the caller to the backends as `x-dfo-caller: ip:<digest>`, a keyed hash of the address. dfo-apis counts its own allowances (shares, cards, pins) against that name. It trusts the header only beside a secret it shares with the website.
 - **Backends are ahead of us in one place.** dfo-ai's caller module already documents `key:` and `user:` callers "from the website's edge". dfo-apis accepts only the `ip:` form.
@@ -75,7 +75,7 @@ How the key is sent is a design choice. We propose sending the key as a bearer t
 
 **Comparables: How Other Services Do It**
 
-Since this is an interesting choice, I asked Claude to do a quick survey to see how other services convey tokens.
+Since this is an interesting choice, we did an informal survey of how other services convey tokens.
 
 | Style                         | Who uses it                                                                                                                               | Notes                                                                                                                                                                        |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -243,7 +243,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Provisioning:** Self-service, plus operator tools to raise or cut a key's limit
 
-**Limits:** Anonymous limits lowered in steps, key tiers settled
+**Limits:** Anonymous limits lowered in steps
 
 **Anonymous access:** Open but lower
 
