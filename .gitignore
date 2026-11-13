@@ -20,10 +20,6 @@ dist/
 .env*
 !.env.example
 
-# agent guidance files that `next dev` (re)generates locally
-AGENTS.md
-CLAUDE.md
-
 # misc
 .DS_Store
 *.pem
