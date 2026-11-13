@@ -9,8 +9,7 @@ Last Update: Nov 13, 2026
 - [Summary][]
 - [How It Works Today][]
 - [Design][]
-    - [The Key][]
-    - [Which Header Carries the Key][]
+    - [Key Format and Communication][]
     - [Storage][]
     - [Limits][]
     - [The Proxy Check][]
@@ -32,17 +31,17 @@ This feature is to add per-user access to the Development Finance Observatory ba
 - Prevent cost overruns or operations problems that could come from
 - Enable potential other business arrangements, e.g. charge to serve or syndicate high-volume, high-cost, or licensed data.
 
-We intend to still have a free / open tier. We want minimal friction for the majority of users to use DFO, it's a valuable onramp; also search and AI crawlers are an important source of traffic for us, and will continue to be. But more expensive and frequent access will go through the API key.
+We intend to still have a free / open tier. We want minimal friction for the majority of users to use DFO, since it's a valuable onramp. Search and AI crawlers are also an important source of traffic for us, and will continue to be. But more expensive and frequent access will go through an API key.
 
 The proxy fronts the public Search, Datasets and Graph APIs (`/api/v1/*`) and the MCP servers (`/mcp`). Today it knows callers only by address.
 
 Requirements:
 
-- Anonymous access will stays open up to a limit. Our goal is to manage usage and enable rate limits, not wholesale API gating.
+- Anonymous access will stay open up to a limit. Our goal is to manage usage and enable rate limits, not wholesale API gating.
 - Each key carries its own rate limit.
 - Some MCP features may later require sign-in. That is separate from keys and out of scope here.
 
-We'll take a phased approach. Initially we'll prove the concept with hand-provisioned keys and limited features. Once proven this works in production, follow-on work will enable more features, self-service provisioning, and admin interfaces to adjust access and limits.
+We'll take a phased approach. Initially we'll prove the concept with hand-provisioned keys and limited features. Once this is proven in production, follow-on work will enable more features, self-service provisioning, and admin interfaces to adjust access and limits.
 
 ## How It Works Today
 
@@ -61,12 +60,12 @@ Every public API and MCP call passes through one function in the website, `forwa
 
 A key is optional on every call. A call with a valid key is counted against the key at the key's limit, a call with no key is counted against the address as today, and a call with a bad key is refused. This is a proposal to react to, not a settled design.
 
-### The Key
+### Key Format and Communication
 
-- Format: a recognisable prefix, an environment marker and random characters, for example `dfo_live_<32+ random chars>`. The prefix lets secret scanners and our own logs spot a leaked key.
+- Format: a recognizable prefix, an environment marker and random characters, for example `dfo_live_<32+ random chars>`. The prefix lets secret scanners and our own logs spot a leaked key.
 - Shown once, when it is created. We store only a SHA-256 hash, so a database leak exposes no usable key.
 
-How the key is sent is a design choice. We propose send the key as a bearer token in a standard header, `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. And we don't plan to accept the same bearer in a query string as that's an outmoded style, although some people like it for ease of use and debug-ability.
+How the key is sent is a design choice. We propose sending the key as a bearer token in a standard header, `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. We don't plan to accept the key in a query string, as that's an outmoded style, although some people like it for ease of use and debuggability.
 
 - Bearer is what a programmatic partner reaches for first, and what MCP developer clients set most easily.
 - The `dfo_` prefix lets the proxy tell our key from any other bearer token.
@@ -86,7 +85,7 @@ Since this is an interesting choice, I asked Claude to do a quick survey to see 
 
 Some services accept more than one: Stripe takes Bearer or HTTP Basic, and api.data.gov takes `X-Api-Key` or the query parameter. The split between the first two styles is mostly whether `Authorization` is already in use. A service with only keys uses Bearer. A service with keys and user tokens moves the key to a custom header.
 
-**Compatibility with MCP clients**
+**Compatibility with MCP Clients**
 
 The MCP specification defines authorization as OAuth, with the token sent as `Authorization: Bearer`. It has no API-key concept, so support for a key depends on the client.
 
@@ -97,7 +96,7 @@ The MCP specification defines authorization as OAuth, with the token sent as `Au
 
 So a key on `/mcp` serves programmatic and developer use. Chat-app users stay anonymous until `/mcp` has OAuth sign-in, which is the separate "MCP features that require logging in" work.
 
-**Compatibility with the proxy as built**
+**Compatibility with the Proxy as Built**
 
 | Path                                               | What happens to `Authorization` today                           | Effect of a key there                                                                                 |
 | -------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -113,7 +112,7 @@ A new `api_key` table in the website's Postgres, beside the accounts and the lim
 | ------------------------------------ | --------------------------------------------------------------------------- |
 | id                                   | Short public identifier, used in logs and as the caller name                |
 | key_hash                             | SHA-256 of the key, unique                                                  |
-| prefix                               | First characters of the key, so its owner can recognise it in a list        |
+| prefix                               | First characters of the key, so its owner can recognize it in a list        |
 | label                                | What the key is for                                                         |
 | user_id                              | Owning account. Empty for a manually provisioned key in Phase 1             |
 | api_limit, mcp_limit                 | Calls per window on each surface. Empty means the default for keyed callers |
@@ -160,7 +159,7 @@ A keyed call is named to the backends as `x-dfo-caller: key:<id>` instead of `ip
 
 Cloudflare sits in front of the site and rate-limits by address. The proxy stays the per-key limiter, and Cloudflare is a coarse backstop against floods, set above the highest limit any key will have. Cloudflare cannot tell a real key from a made-up one, since it sees only a header value, so it cannot enforce per-key limits itself.
 
-**What Cloudflare recommends**
+**What Cloudflare Recommends**
 
 Its [rate limiting best practices][cf-best-practices] for REST APIs count requests per API key, not per address:
 
@@ -171,7 +170,7 @@ Its [rate limiting best practices][cf-best-practices] for REST APIs count reques
 
 It shows no paired "anonymous rule plus keyed rule" example, but that is what the pieces add up to.
 
-**What each plan allows**
+**What Each Plan Allows**
 
 Counting by a header needs Advanced Rate Limiting, an Enterprise add-on ([availability by plan][cf-availability]).
 
@@ -185,13 +184,13 @@ Counting by a header needs Advanced Rate Limiting, an Enterprise add-on ([availa
 
 Below Enterprise, a rate limiting rule's own match expression cannot reference request headers, so "apply this rule only to requests without a key" cannot be written in the rule.
 
-**Options for keyed traffic**
+**Options for Keyed Traffic**
 
 - With Advanced Rate Limiting: follow Cloudflare's pattern. One rule counts by IP for requests with no key header. Another counts by the key header at a high ceiling. A fake key then earns only a separate bucket that is still limited.
 - Without it: raise the per-address threshold, or add a custom rule that skips rate limiting for requests that carry a key header. Whether custom rules can match headers and skip rate limiting rules on every plan is unconfirmed. The skip can be abused with a fake header, and the proxy's limit is then the only one left for that traffic.
 - If today's thresholds are already well above 120 and 300 calls a minute, Phase 1 may need no edge change.
 
-Which option applies depends on the zone's plan and its current rules. See Open Questions.
+Which option applies depends on the zone's plan and its current rules. See [Open Questions][].
 
 ### Logs and Docs
 
@@ -271,7 +270,7 @@ Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
 - **Multiple keys per account.** An account holds several keys at once, for example one per application or to rotate a key without downtime.
-- **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future
+- **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future:
     - Soft vs. hard limits (warnings)
     - Hourly vs. weekly limits, like how modern chat interfaces work. This protects against spiky workloads while mitigating the impact of hitting a limit ("try again in a few hours").
 
@@ -289,7 +288,7 @@ The Cloudflare question needs an answer before Phase 1 code is written.
 [Summary]: #summary
 [How It Works Today]: #how-it-works-today
 [Design]: #design
-[The Key]: #the-key
+[Key Format and Communication]: #key-format-and-communication
 [Storage]: #storage
 [Limits]: #limits
 [The Proxy Check]: #the-proxy-check
