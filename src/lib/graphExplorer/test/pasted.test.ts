@@ -35,6 +35,41 @@ test('a pasted range keeps quoted tabs, line breaks and quotes and drops trailin
     ]);
 });
 
+test('comma-separated text is read with the same quote rules', () => {
+    const text =
+        'dcid,measuredProperty,note\r\nsv1,amount,"a comma, and a\nline break"\r\nsv2,amount,\r\n';
+    const { header, rows } = parsePasted(text);
+    assert.deepEqual(header, ['dcid', 'measuredProperty', 'note']);
+    assert.deepEqual(rows, [
+        ['sv1', 'amount', 'a comma, and a\nline break'],
+        ['sv2', 'amount', ''],
+    ]);
+});
+
+test('a header line holding a tab reads commas as text', () => {
+    const { header, rows } = parsePasted('code\tlabel\nA1\tOne, two\n');
+    assert.deepEqual(header, ['code', 'label']);
+    assert.deepEqual(rows, [['A1', 'One, two']]);
+});
+
+test('a byte-order mark before a quoted first header is dropped', () => {
+    assert.deepEqual(parsePasted('\uFEFF"dcid"\tmeasuredProperty\n').header, [
+        'dcid',
+        'measuredProperty',
+    ]);
+});
+
+test('a quote that opens a cell and never closes is read as text', () => {
+    const { rows } = parsePasted(
+        'dcid\tmeasuredProperty\n"sv1\tamount\nsv2\tamount\nsv3\tamount\n',
+    );
+    assert.deepEqual(rows, [
+        ['"sv1', 'amount'],
+        ['sv2', 'amount'],
+        ['sv3', 'amount'],
+    ]);
+});
+
 test('an empty paste has no header and no rows', () => {
     assert.deepEqual(parsePasted(''), { header: [], rows: [] });
 });
@@ -58,7 +93,9 @@ test('headers map to definition fields in either case, to properties, or to noth
     assert.deepEqual(target(mapping, 2), { kind: 'definition', field: 'populationType' });
     assert.deepEqual(target(mapping, 3), { kind: 'definition', field: 'observationProperties' });
     assert.deepEqual(target(mapping, 4), { kind: 'property', property: 'nettingBasis' });
-    assert.deepEqual(target(mapping, 5), { kind: 'property', property: 'nettingBasis' });
+    // A second column naming nettingBasis repeats column 4 and is ignored.
+    assert.deepEqual(target(mapping, 5), { kind: 'ignored' });
+    assert.equal(mapping[5]?.duplicateOf, 4);
     assert.deepEqual(target(mapping, 6), { kind: 'ignored' });
     assert.deepEqual(target(mapping, 7), { kind: 'property', property: 'financialFlowType' });
     assert.deepEqual(target(mapping, 8), { kind: 'definition', field: 'dcid' });
@@ -112,6 +149,58 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
     assert.deepEqual(rows[1]?.observation_properties, []);
     assert.equal(rows[2]?.ref, '5');
     assert.equal(rows[2]?.population_type, null);
+});
+
+test('a repeated property keeps its first column, and the check reads and marks that one', () => {
+    const { header, rows } = parsePasted('measuredProperty,sex,sex\namount,Male,Femal\n');
+    // The test model has no sex property, so the reader switches both columns to Property.
+    const mapping = applySwitches(
+        mapHeaders(model, header),
+        new Map([
+            [1, { header: 'sex', to: 'property' as const }],
+            [2, { header: 'sex', to: 'property' as const }],
+        ]),
+    );
+    assert.deepEqual(
+        mapping.map((column) => [column.target.kind, column.duplicateOf]),
+        [
+            ['definition', null],
+            ['property', null],
+            ['ignored', 1],
+        ],
+    );
+    const [row] = rowsToCheck(mapping, rows);
+    assert.deepEqual(row?.constraint_properties, { sex: 'Male' });
+    const flagged: OntologyFinding = {
+        ref: row?.ref ?? null,
+        field: 'constraint_properties.sex',
+        value: 'Male',
+        code: 'node_not_held',
+        severity: 'error',
+    };
+    assert.deepEqual(locateFinding(mapping, flagged), { row: 2, column: 1 });
+
+    // Ignoring the first column hands the property to the second; switching
+    // it back makes the second a repeat again.
+    const handed = switchColumn(mapping, 1, 'ignored');
+    assert.deepEqual(
+        handed.map((column) => [column.target.kind, column.duplicateOf]),
+        [
+            ['definition', null],
+            ['ignored', null],
+            ['property', null],
+        ],
+    );
+    assert.deepEqual(rowsToCheck(handed, rows)[0]?.constraint_properties, { sex: 'Femal' });
+    assert.equal(locateFinding(handed, flagged)?.column, 2);
+    assert.equal(switchColumn(handed, 1, 'property')[2]?.duplicateOf, 1);
+});
+
+test('a repeated definition field keeps its first column', () => {
+    const mapping = mapHeaders(model, ['measured_property', 'measuredProperty']);
+    assert.equal(mapping[1]?.duplicateOf, 0);
+    const [row] = rowsToCheck(mapping, [['', 'amount']]);
+    assert.equal(row?.measured_property, '');
 });
 
 const finding = (field: string, ref: string | null = '3'): OntologyFinding => ({

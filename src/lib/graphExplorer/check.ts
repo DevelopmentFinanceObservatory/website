@@ -6,14 +6,13 @@
  * a dataset pattern.
  */
 import {
-    abortable,
     bounded,
-    BUILDING,
     GraphFailure,
-    problemText,
     REQUEST_TIMEOUT_MS,
-    retryDelay,
+    requestGraph,
     type FailureReason,
+    type RequestOptions,
+    type WaitCause,
 } from './load.ts';
 import { KIND_WORDS, type Model } from './model.ts';
 import { locateFinding, sheetRow, type Mapping } from './pasted.ts';
@@ -23,7 +22,6 @@ import {
     findingProperty,
     isFindingCode,
     readCheckResponse,
-    WireShapeError,
     type FindingCode,
     type OntologyCheckRow,
     type OntologyFinding,
@@ -72,8 +70,8 @@ export type CheckOptions = {
     readonly signal?: AbortSignal;
     /** Called after each answered chunk and once before the first request. */
     readonly onProgress?: (progress: CheckProgress) => void;
-    /** Called before each wait while the graph's model is being built. */
-    readonly onWait?: (retryInMs: number) => void;
+    /** Called before each wait, with what the wait is for. */
+    readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
     readonly chunkRows?: number;
     /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
     readonly requestTimeoutMs?: number;
@@ -89,13 +87,15 @@ type Answer =
     | { readonly kind: 'refused'; readonly detail: string };
 
 /**
- * Checks `rows` in chunks. A 200 adds its findings, and on a new chunk
- * (one that is not the half of a split) doubles the chunk size, up to
- * `chunkRows`; one whose `row_count` is not the rows sent stops the check. A 400 on a chunk of more than one row splits it in two halves,
- * checked in turn, and the half's size becomes the chunk size for the rows
- * after them; a 400 on one row refuses that row with the problem's detail. A 503 with `Retry-After` waits and
- * asks again, for up to a minute per chunk. A request past
- * `requestTimeoutMs`, or a check past `limitMs`, stops with reason
+ * Checks `rows` in chunks, each sent through `requestGraph`. A 200 adds its
+ * findings, and on a new chunk (one that is not the half of a split)
+ * doubles the chunk size, up to `chunkRows`; one whose `row_count` is not
+ * the rows sent stops the check. A 400 on a chunk of more than one row
+ * splits it in two halves, checked in turn, and the half's size becomes the
+ * chunk size for the rows after them; a 400 on one row refuses that row
+ * with the problem's detail. A 503 or 429 with `Retry-After` waits and asks
+ * again, for up to a minute per chunk. A request past `requestTimeoutMs`,
+ * its 400 body included, or a check past `limitMs`, stops with reason
  * `timeout`. Anything else stops the check with a CheckError. An abort
  * rejects with the signal's reason, and no progress is reported after it.
  */
@@ -103,118 +103,41 @@ export async function checkRows(
     rows: readonly OntologyCheckRow[],
     options: CheckOptions = {},
 ): Promise<CheckResult> {
-    const {
-        signal,
-        onProgress,
-        onWait,
-        fetch: post = fetch,
-        sleep = abortable,
-        now = Date.now,
-    } = options;
+    const { signal, onProgress } = options;
     const largest = Math.max(1, Math.min(options.chunkRows ?? CHECK_CHUNK_ROWS, CHECK_MAX_ROWS));
     let size = largest;
     const bounds = bounded(signal, {
         limitMs: options.limitMs ?? CHECK_LIMIT_MS,
         requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
     });
-    /** The error to raise for `error`: the caller's abort untouched, a bound as `timeout`, else `fallback`. */
-    const failed = (error: unknown, fallback: () => unknown): unknown => {
-        if (signal?.aborted) return error;
-        if (bounds.timedOut()) {
-            return new CheckError('The check stopped: the Graph API did not answer in time.', {
-                reason: 'timeout',
-                cause: error,
-            });
-        }
-        return fallback();
+    const requestOptions: RequestOptions = {
+        ...options,
+        bounds,
+        words: {
+            stopped: 'The check stopped',
+            unsent: 'The check could not be sent',
+            answered: 'The check answered',
+        },
+        fail: (message, details) => new CheckError(message, details),
     };
 
-    const send = async (chunk: readonly OntologyCheckRow[]): Promise<Answer> => {
-        let firstWait: number | null = null;
-        for (;;) {
-            let response: Response;
-            try {
-                response = await post(CHECK_URL, {
+    const send = (chunk: readonly OntologyCheckRow[]): Promise<Answer> =>
+        requestGraph<Answer>(
+            {
+                url: CHECK_URL,
+                init: {
                     method: 'POST',
-                    signal: bounds.request(),
                     headers: { 'content-type': 'application/json', accept: 'application/json' },
                     body: JSON.stringify({ rows: chunk }),
-                });
-            } catch (error) {
-                throw failed(
-                    error,
-                    () =>
-                        new CheckError(
-                            'The check could not be sent: the Graph API did not answer.',
-                            {
-                                reason: 'unreachable',
-                                cause: error,
-                            },
-                        ),
-                );
-            }
-
-            if (response.ok) {
-                let body: unknown;
-                try {
-                    body = await response.json();
-                } catch (error) {
-                    throw failed(
-                        error,
-                        () =>
-                            new CheckError('The check answered with a body that is not JSON.', {
-                                reason: 'not_json',
-                                cause: error,
-                            }),
-                    );
-                }
-                try {
-                    return { kind: 'checked', body: readCheckResponse(body) };
-                } catch (error) {
-                    if (!(error instanceof WireShapeError)) throw error;
-                    throw new CheckError(
-                        `The check answered with a shape this page does not read: ${error.message}.`,
-                        { reason: 'shape', detail: error.message, cause: error },
-                    );
-                }
-            }
-
-            if (response.status === 400) {
-                const detail = await problemText(response);
-                return { kind: 'refused', detail: detail ?? 'The Graph API refused the row.' };
-            }
-
-            const at = now();
-            firstWait ??= at;
-            const delay = retryDelay({
-                status: response.status,
-                retryAfter: response.headers.get('retry-after'),
-                waitedMs: at - firstWait,
-                nowMs: at,
-            });
-            if (delay !== null) {
-                onWait?.(delay);
-                try {
-                    await sleep(delay, bounds.run);
-                } catch (error) {
-                    throw failed(error, () => error);
-                }
-                continue;
-            }
-
-            const problem = await problemText(response);
-            if (response.status === 503 && response.headers.has('retry-after')) {
-                throw new CheckError(
-                    `The check stopped: the Graph API was still ${BUILDING} after a minute.`,
-                    { reason: 'build_timeout', status: response.status, detail: problem },
-                );
-            }
-            throw new CheckError(
-                `The check stopped: the Graph API answered ${response.status}${problem ? ` (${problem})` : ''}.`,
-                { reason: 'status', status: response.status, detail: problem },
-            );
-        }
-    };
+                },
+                read: (body) => ({ kind: 'checked', body: readCheckResponse(body) }),
+                refusal: (status, problem) =>
+                    status === 400
+                        ? { kind: 'refused', detail: problem ?? 'The Graph API refused the row.' }
+                        : null,
+            },
+            requestOptions,
+        );
 
     const findings: OntologyFinding[] = [];
     const refused: RefusedRow[] = [];
@@ -490,18 +413,34 @@ export type FindingLine = FindingPlace & {
     readonly closest: readonly string[];
 };
 
-/** Each finding's place, message and closest values, worked out once. */
-export const findingLines = (
+/**
+ * Each finding's place, message and closest values, worked out once. The
+ * closest values are worked out once per field and value, which a sheet of
+ * repeated source codes shares across many findings.
+ */
+export function findingLines(
     model: Model,
     mapping: Mapping,
     findings: readonly OntologyFinding[],
-): FindingLine[] =>
-    findings.map((finding) => ({
+): FindingLine[] {
+    const closest = new Map<string, string[]>();
+    const closestTo = (finding: OntologyFinding): string[] => {
+        if (!SUGGESTED.has(finding.code)) return [];
+        const key = JSON.stringify([finding.field, finding.value]);
+        let members = closest.get(key);
+        if (members === undefined) {
+            members = closestMembers(model, finding);
+            closest.set(key, members);
+        }
+        return members;
+    };
+    return findings.map((finding) => ({
         ...findingPlace(mapping, finding),
         finding,
         parts: findingMessage(model, finding),
-        closest: closestMembers(model, finding),
+        closest: closestTo(finding),
     }));
+}
 
 /** The key of one cell of the pasted table. */
 export const cellKey = (row: number, column: number): string => `${row}:${column}`;
@@ -537,7 +476,10 @@ export function sheetMarks(
 /** How many rows without a finding each "show more" adds to the result table. */
 export const QUIET_ROWS_STEP = 100;
 
-/** How many flagged rows the result table shows at first, and each "show more" adds. */
+/**
+ * How many flagged rows the result table shows at first, and each "show
+ * more" adds; the findings list steps by the same count.
+ */
 export const FLAGGED_ROWS_STEP = 300;
 
 /** One row of the result table: its place in the pasted rows and its sheet row number. */
@@ -636,20 +578,19 @@ export const messageText = (parts: readonly MessagePart[]): string =>
 
 /** The findings as CSV rows under a header: row, column, value, code, message. */
 export function findingsCsvRows(
-    model: Model,
-    mapping: Mapping,
-    result: Pick<CheckResult, 'findings' | 'refused'>,
+    lines: readonly FindingLine[],
+    refused: readonly RefusedRow[],
 ): string[][] {
     return [
         ['row', 'column', 'value', 'code', 'message'],
-        ...findingLines(model, mapping, result.findings).map(({ finding, columnLabel, parts }) => [
+        ...lines.map(({ finding, columnLabel, parts }) => [
             finding.ref ?? '',
             columnLabel,
             valueText(finding.value),
             finding.code,
             messageText(parts),
         ]),
-        ...result.refused.map((row) => [row.ref ?? '', '', '', 'request_invalid', row.detail]),
+        ...refused.map((row) => [row.ref ?? '', '', '', 'request_invalid', row.detail]),
     ];
 }
 

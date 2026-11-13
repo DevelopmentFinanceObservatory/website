@@ -168,6 +168,18 @@ test('a 503 with Retry-After waits, then the 200 is read', async () => {
     assert.equal(result.findings.length, 2);
 });
 
+test('a 429 from the site’s proxy with Retry-After waits, then the 200 is read', async () => {
+    const { options, sizes, waits } = rig((rows, call) =>
+        call === 1
+            ? json(429, { title: 'Too Many Requests' }, { 'retry-after': '12' })
+            : answer(rows),
+    );
+    const result = await checkRows(rowsOf(2), options);
+    assert.deepEqual(waits, [12_000]);
+    assert.deepEqual(sizes, [2, 2]);
+    assert.equal(result.findings.length, 2);
+});
+
 test('a 502 stops the check with a CheckError carrying the status and the problem', async () => {
     const { options, sizes } = rig(() => json(502, { detail: 'the graph did not answer' }));
     await assert.rejects(checkRows(rowsOf(3), options), {
@@ -236,6 +248,24 @@ test('a request with no answer stops the check as a timeout', async () => {
     });
 });
 
+test('a 400 whose body outlasts the request bound stops as a timeout, not a refused row', async () => {
+    // The body never arrives; it errors when the request's signal fires.
+    const slowRefusal = async (_url: string | URL | Request, init?: RequestInit) => {
+        const body = new ReadableStream({
+            start(controller) {
+                init?.signal?.addEventListener('abort', () =>
+                    controller.error(init.signal?.reason),
+                );
+            },
+        });
+        return new Response(body, { status: 400 });
+    };
+    await assert.rejects(checkRows(rowsOf(1), { fetch: slowRefusal, requestTimeoutMs: 10 }), {
+        name: 'CheckError',
+        reason: 'timeout',
+    });
+});
+
 test('a check that outlasts its overall bound stops as a timeout', async () => {
     await assert.rejects(
         checkRows(rowsOf(2), { fetch: stalled, requestTimeoutMs: 60_000, limitMs: 10 }),
@@ -295,6 +325,26 @@ test('a value outside the range links its value list, and the closest members co
     const terms = line?.parts.flatMap((part) => (part.kind === 'term' ? [part.id] : []));
     assert.deepEqual(terms, ['DAC1AidTypeEnum']);
     assert.equal(line?.closest[0], 'DAC1AidType1020');
+});
+
+test('the closest values are worked out once per field and value', () => {
+    let lookups = 0;
+    const counting = {
+        ...model,
+        members: (list: string) => {
+            lookups += 1;
+            return model.members(list);
+        },
+    };
+    const lines = findingLines(counting, mapHeaders(model, ['dac1AidType']), [
+        finding({}),
+        finding({ ref: '5' }),
+        finding({ ref: '6', code: 'value_outside_range' }),
+        finding({ ref: '7', value: 'DAC1AidTpye1010' }),
+    ]);
+    assert.equal(lookups, 2);
+    assert.deepEqual(lines[1]?.closest, lines[0]?.closest);
+    assert.equal(lines[0]?.closest[0], 'DAC1AidType1020');
 });
 
 test('a constraint key the graph lacks is named as typed, with no term link', () => {
@@ -395,13 +445,11 @@ test('the result counts a refused row as an error, and the sentence names the ge
 
 test('the findings CSV has a row per finding and per refused row, under the column header', () => {
     const mapping = mapHeaders(model, ['source_code', 'populationType', 'dac1AidType']);
-    const rows = findingsCsvRows(model, mapping, {
-        findings: [
-            finding({}),
-            finding({ field: 'dcid', value: 'X', code: 'definition_differs', severity: 'warning' }),
-        ],
-        refused: [{ ref: '9', detail: 'too many ids' }],
-    });
+    const lines = findingLines(model, mapping, [
+        finding({}),
+        finding({ field: 'dcid', value: 'X', code: 'definition_differs', severity: 'warning' }),
+    ]);
+    const rows = findingsCsvRows(lines, [{ ref: '9', detail: 'too many ids' }]);
     assert.deepEqual(rows[0], ['row', 'column', 'value', 'code', 'message']);
     assert.deepEqual(rows[1]?.slice(0, 4), [
         '4',

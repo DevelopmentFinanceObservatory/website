@@ -1,15 +1,17 @@
 /**
- * Fetching one ontology document through its guard. The Graph API builds the
+ * Requests to the Graph API through the site's proxy, with one rule for
+ * waiting and one mapping of failures. The Graph API builds the ontology
  * documents once per graph generation and answers 503 with `Retry-After`
- * while a build runs; the loader waits and asks again for up to a minute.
- * Every other failure becomes a LoadError naming the document and what went
- * wrong, including a response whose shape the guard refuses.
+ * while a build runs; the proxy answers 429 with `Retry-After` once a
+ * reader's allowance of calls is spent. Either is waited out for up to a
+ * minute. Every other failure becomes an error naming the request and what
+ * went wrong, including a response whose shape the guard refuses.
  */
 import { asRecord } from '../asRecord.ts';
 import { WireShapeError } from './wire.ts';
 
-/** How long the loader keeps asking while a document is being built. */
-export const BUILD_WAIT_MS = 60_000;
+/** How long one request keeps asking while the Graph API is building or the proxy refuses. */
+export const RETRY_WAIT_MS = 60_000;
 
 /** The wait when `Retry-After` is present but unreadable. */
 const FALLBACK_RETRY_MS = 5_000;
@@ -20,15 +22,33 @@ const MIN_RETRY_MS = 1_000;
 /** How long one request may take, its body included. */
 export const REQUEST_TIMEOUT_MS = 30_000;
 
-/** How long loading one document may take, waits for a build included. */
+/** How long loading one document may take, waits included. */
 export const LOAD_LIMIT_MS = 2 * 60_000;
 
 /** What the Graph API is doing while it answers 503 with `Retry-After`. */
 export const BUILDING = 'building the model for this graph';
 
-/** The line shown while a build is waited out. */
-export const waitText = (retryInMs: number): string =>
-    `The Graph API is still ${BUILDING}. Trying again in ${Math.ceil(retryInMs / 1000)} s.`;
+/**
+ * Why a request is waiting: the Graph API is building its model (503), or
+ * the site's proxy has had too many calls from this address (429).
+ */
+export type WaitCause = 'building' | 'busy';
+
+/** The statuses that are waited out when they carry `Retry-After`, and why. */
+const WAITED: ReadonlyMap<number, WaitCause> = new Map([
+    [503, 'building'],
+    [429, 'busy'],
+]);
+
+/** The line shown while a request waits. */
+export const waitText = (retryInMs: number, cause: WaitCause = 'building'): string => {
+    const seconds = Math.ceil(retryInMs / 1000);
+    const lead =
+        cause === 'building'
+            ? `The Graph API is still ${BUILDING}.`
+            : 'This site has had many requests from your address in the last minute.';
+    return `${lead} Trying again in ${seconds} s.`;
+};
 
 /**
  * Why a request to the Graph API failed: it could not be sent, it took too
@@ -79,6 +99,7 @@ export const bounded = (
     const run = signal ? AbortSignal.any([signal, limit]) : limit;
     let current = run;
     return {
+        signal,
         run,
         request: (): AbortSignal => {
             current = AbortSignal.any([run, AbortSignal.timeout(requestMs)]);
@@ -87,6 +108,8 @@ export const bounded = (
         timedOut: (): boolean => !signal?.aborted && (run.aborted || current.aborted),
     };
 };
+
+export type Bounds = ReturnType<typeof bounded>;
 
 /** Milliseconds a `Retry-After` value asks for: delta seconds or an HTTP date. */
 const retryAfterMs = (header: string, nowMs: number): number => {
@@ -97,9 +120,9 @@ const retryAfterMs = (header: string, nowMs: number): number => {
 };
 
 /**
- * How long to wait before asking again, or null to stop: only a 503 that
- * carries `Retry-After` is retried, and never past BUILD_WAIT_MS after the
- * first request.
+ * How long to wait before asking again, or null to stop: only a 503 or a
+ * 429 that carries `Retry-After` is retried, and never past RETRY_WAIT_MS
+ * after the first wait.
  */
 export const retryDelay = ({
     status,
@@ -112,8 +135,8 @@ export const retryDelay = ({
     waitedMs: number;
     nowMs: number;
 }): number | null => {
-    if (status !== 503 || retryAfter === null) return null;
-    const remaining = BUILD_WAIT_MS - waitedMs;
+    if (!WAITED.has(status) || retryAfter === null) return null;
+    const remaining = RETRY_WAIT_MS - waitedMs;
     if (remaining <= 0) return null;
     return Math.min(Math.max(retryAfterMs(retryAfter, nowMs), MIN_RETRY_MS), remaining);
 };
@@ -133,19 +156,6 @@ export const abortable = (ms: number, signal?: AbortSignal): Promise<void> =>
         );
     });
 
-export type LoadOptions = {
-    readonly signal?: AbortSignal;
-    /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
-    readonly requestTimeoutMs?: number;
-    /** The bound on the whole load; LOAD_LIMIT_MS by default. */
-    readonly limitMs?: number;
-    /** Called before each wait for a document still being built. */
-    readonly onWait?: (retryInMs: number) => void;
-    readonly fetch?: typeof fetch;
-    readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
-    readonly now?: () => number;
-};
-
 /** The problem title or detail of an error body, when it has one. */
 export const problemText = async (response: Response): Promise<string | null> => {
     try {
@@ -155,6 +165,157 @@ export const problemText = async (response: Response): Promise<string | null> =>
     } catch {
         return null;
     }
+};
+
+/** How a request's failures name it. */
+export type RequestWords = {
+    /** Heads a failure after the request went out: "The check stopped". */
+    readonly stopped: string;
+    /** Heads a request that could not go out: "The check could not be sent". */
+    readonly unsent: string;
+    /** Heads an answer the page cannot read: "The check answered". */
+    readonly answered: string;
+};
+
+/** One request: where it goes, and how its answers are read. */
+export type GraphRequest<TAnswer> = {
+    readonly url: string;
+    readonly init?: Omit<RequestInit, 'signal'>;
+    /** The answer a 200's body gives; a WireShapeError is a `shape` failure. */
+    readonly read: (body: unknown) => TAnswer;
+    /** The answer a failing status gives, or null to fail with it. */
+    readonly refusal?: (status: number, problem: string | null) => TAnswer | null;
+};
+
+export type RequestOptions = {
+    readonly bounds: Bounds;
+    readonly words: RequestWords;
+    /** The error to raise for a failure. */
+    readonly fail: (message: string, details: FailureDetails<FailureReason>) => Error;
+    /** Called before each wait, with what the wait is for. */
+    readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
+    readonly fetch?: typeof fetch;
+    readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    readonly now?: () => number;
+};
+
+/**
+ * Sends `request` until it is answered. A 200 is read through `read`. A
+ * 503 or 429 with `Retry-After` waits and asks again, for up to
+ * RETRY_WAIT_MS after the first wait. Another failing status is read
+ * through `refusal`, and fails when that gives null. A request past the
+ * bounds, its failing body included, fails with reason `timeout`. An abort
+ * rejects with the caller's signal's reason, untouched.
+ */
+export async function requestGraph<TAnswer>(
+    request: GraphRequest<TAnswer>,
+    options: RequestOptions,
+): Promise<TAnswer> {
+    const { bounds, words, fail, onWait, fetch: send = fetch, sleep = abortable } = options;
+    const now = options.now ?? Date.now;
+    const timeout = (cause?: unknown) =>
+        fail(`${words.stopped}: the Graph API did not answer in time.`, {
+            reason: 'timeout',
+            cause,
+        });
+    /** The error to raise for `error`: the caller's abort untouched, a bound as `timeout`, else `fallback`. */
+    const failed = (error: unknown, fallback: () => unknown): unknown => {
+        if (bounds.signal?.aborted) return error;
+        return bounds.timedOut() ? timeout(error) : fallback();
+    };
+
+    let firstWait: number | null = null;
+    for (;;) {
+        let response: Response;
+        try {
+            response = await send(request.url, { ...request.init, signal: bounds.request() });
+        } catch (error) {
+            throw failed(error, () =>
+                fail(`${words.unsent}: the Graph API did not answer.`, {
+                    reason: 'unreachable',
+                    cause: error,
+                }),
+            );
+        }
+
+        if (response.ok) {
+            let body: unknown;
+            try {
+                body = await response.json();
+            } catch (error) {
+                throw failed(error, () =>
+                    fail(`${words.answered} with a body that is not JSON.`, {
+                        reason: 'not_json',
+                        cause: error,
+                    }),
+                );
+            }
+            try {
+                return request.read(body);
+            } catch (error) {
+                if (!(error instanceof WireShapeError)) throw error;
+                throw fail(
+                    `${words.answered} with a shape this page does not read: ${error.message}.`,
+                    { reason: 'shape', detail: error.message, cause: error },
+                );
+            }
+        }
+
+        const at = now();
+        firstWait ??= at;
+        const { status } = response;
+        const delay = retryDelay({
+            status,
+            retryAfter: response.headers.get('retry-after'),
+            waitedMs: at - firstWait,
+            nowMs: at,
+        });
+        if (delay !== null) {
+            onWait?.(delay, WAITED.get(status) ?? 'building');
+            try {
+                await sleep(delay, bounds.run);
+            } catch (error) {
+                throw failed(error, () => error);
+            }
+            continue;
+        }
+
+        const problem = await problemText(response);
+        if (problem === null && bounds.timedOut()) throw timeout();
+        const answer = request.refusal?.(status, problem) ?? null;
+        if (answer !== null) return answer;
+        const waited = response.headers.has('retry-after') ? WAITED.get(status) : undefined;
+        if (waited === 'building') {
+            throw fail(`${words.stopped}: the Graph API was still ${BUILDING} after a minute.`, {
+                reason: 'build_timeout',
+                status,
+                detail: problem,
+            });
+        }
+        if (waited === 'busy') {
+            throw fail(
+                `${words.stopped}: this site was still refusing requests from your address after a minute.`,
+                { reason: 'status', status, detail: problem },
+            );
+        }
+        throw fail(
+            `${words.stopped}: the Graph API answered ${status}${problem ? ` (${problem})` : ''}.`,
+            { reason: 'status', status, detail: problem },
+        );
+    }
+}
+
+export type LoadOptions = {
+    readonly signal?: AbortSignal;
+    /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
+    readonly requestTimeoutMs?: number;
+    /** The bound on the whole load; LOAD_LIMIT_MS by default. */
+    readonly limitMs?: number;
+    /** Called before each wait, with what the wait is for. */
+    readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
+    readonly fetch?: typeof fetch;
+    readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    readonly now?: () => number;
 };
 
 /**
@@ -169,98 +330,21 @@ export async function loadDocument<TDocument>(
     read: (body: unknown) => TDocument,
     options: LoadOptions = {},
 ): Promise<TDocument> {
-    const { signal, onWait, fetch: get = fetch, sleep = abortable, now = Date.now } = options;
-    const bounds = bounded(signal, {
+    const bounds = bounded(options.signal, {
         limitMs: options.limitMs ?? LOAD_LIMIT_MS,
         requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
     });
-    const started = now();
-    /** The error to raise for `error`: the caller's abort untouched, a bound as `timeout`, else `fallback`. */
-    const failed = (error: unknown, fallback: () => unknown): unknown => {
-        if (signal?.aborted) return error;
-        if (bounds.timedOut()) {
-            return new LoadError(
-                `${what} could not be loaded: the Graph API did not answer in time.`,
-                {
-                    reason: 'timeout',
-                    cause: error,
-                },
-            );
-        }
-        return fallback();
-    };
-
-    for (;;) {
-        let response: Response;
-        try {
-            response = await get(url, {
-                signal: bounds.request(),
-                headers: { accept: 'application/json' },
-            });
-        } catch (error) {
-            throw failed(
-                error,
-                () =>
-                    new LoadError(`${what} could not be requested: the Graph API did not answer.`, {
-                        reason: 'unreachable',
-                        cause: error,
-                    }),
-            );
-        }
-
-        if (response.ok) {
-            let body: unknown;
-            try {
-                body = await response.json();
-            } catch (error) {
-                throw failed(
-                    error,
-                    () =>
-                        new LoadError(`${what} arrived, but not as JSON.`, {
-                            reason: 'not_json',
-                            cause: error,
-                        }),
-                );
-            }
-            try {
-                return read(body);
-            } catch (error) {
-                if (error instanceof WireShapeError) {
-                    throw new LoadError(
-                        `${what} has a shape this page does not read: ${error.message}.`,
-                        { reason: 'shape', detail: error.message, cause: error },
-                    );
-                }
-                throw error;
-            }
-        }
-
-        const delay = retryDelay({
-            status: response.status,
-            retryAfter: response.headers.get('retry-after'),
-            waitedMs: now() - started,
-            nowMs: now(),
-        });
-        if (delay !== null) {
-            onWait?.(delay);
-            try {
-                await sleep(delay, bounds.run);
-            } catch (error) {
-                throw failed(error, () => error);
-            }
-            continue;
-        }
-
-        const problem = await problemText(response);
-        if (response.status === 503 && response.headers.has('retry-after')) {
-            throw new LoadError(
-                `${what} could not be loaded: the Graph API was still ${BUILDING} after a minute.`,
-                { reason: 'build_timeout', status: response.status, detail: problem },
-            );
-        }
-        throw new LoadError(
-            `${what} could not be loaded: the Graph API answered ${response.status}${problem ? ` (${problem})` : ''}.`,
-            { reason: 'status', status: response.status, detail: problem },
-        );
-    }
+    return requestGraph(
+        { url, init: { headers: { accept: 'application/json' } }, read },
+        {
+            ...options,
+            bounds,
+            words: {
+                stopped: `${what} could not be loaded`,
+                unsent: `${what} could not be requested`,
+                answered: `${what} arrived`,
+            },
+            fail: (message, details) => new LoadError(message, details),
+        },
+    );
 }

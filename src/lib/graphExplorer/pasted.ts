@@ -10,17 +10,30 @@ export type PastedRange = {
     readonly rows: readonly (readonly string[])[];
 };
 
+/** The cell delimiter of a paste: a tab when its header line holds one, else a comma. */
+const delimiterOf = (text: string): '\t' | ',' => {
+    const lineEnd = text.search(/[\r\n]/);
+    return (lineEnd === -1 ? text : text.slice(0, lineEnd)).includes('\t') ? '\t' : ',';
+};
+
 /**
- * Tab-separated text as spreadsheets copy it: a cell wrapped in quotes may
- * hold tabs, line breaks and doubled quotes. The first row is the header;
- * trailing blank rows are dropped.
+ * Tab-separated text as spreadsheets copy it, or comma-separated text as
+ * they save it: a cell wrapped in quotes may hold delimiters, line breaks
+ * and doubled quotes. One leading byte-order mark is dropped. A quote that
+ * opens a cell and never closes is read as an ordinary character, so the
+ * rows after it stay rows. The first row is the header; trailing blank rows
+ * are dropped.
  */
-export function parsePasted(text: string): PastedRange {
+export function parsePasted(pasted: string): PastedRange {
+    const text = pasted.startsWith('\uFEFF') ? pasted.slice(1) : pasted;
+    const delimiter = delimiterOf(text);
     const records: string[][] = [];
     let record: string[] = [];
     let cell = '';
     let quoted = false;
     let cellStart = true;
+    // Where the open quoted cell began, and the records finished before it.
+    let opened = { at: 0, records: 0, record: [] as string[] };
 
     const endCell = () => {
         record.push(cell);
@@ -33,7 +46,18 @@ export function parsePasted(text: string): PastedRange {
         record = [];
     };
 
-    for (let i = 0; i < text.length; i += 1) {
+    for (let i = 0; i <= text.length; i += 1) {
+        if (i === text.length) {
+            if (!quoted) break;
+            // The quote never closed: read its cell again from the quote, unquoted.
+            records.length = opened.records;
+            record = [...opened.record];
+            cell = '"';
+            quoted = false;
+            cellStart = false;
+            i = opened.at;
+            continue;
+        }
         const char = text.charAt(i);
         if (quoted) {
             if (char !== '"') cell += char;
@@ -42,9 +66,10 @@ export function parsePasted(text: string): PastedRange {
                 i += 1;
             } else quoted = false;
         } else if (char === '"' && cellStart) {
+            opened = { at: i, records: records.length, record: [...record] };
             quoted = true;
             cellStart = false;
-        } else if (char === '\t') endCell();
+        } else if (char === delimiter) endCell();
         else if (char === '\n') endRecord();
         else if (char === '\r') {
             if (text.charAt(i + 1) === '\n') i += 1;
@@ -85,11 +110,44 @@ export type ColumnTarget =
 export type MappedColumn = {
     readonly index: number;
     readonly header: string;
+    /** What the header reads as, or what the reader switched the column to. */
+    readonly wanted: ColumnTarget;
+    /** What the check reads the column as: `wanted`, or ignored when it repeats an earlier column. */
     readonly target: ColumnTarget;
+    /** The earlier column that holds the same property or field, when this one is ignored for it. */
+    readonly duplicateOf: number | null;
 };
 
-/** One entry per header, in order. */
+/** One entry per header, in order. No two columns share a property or a definition field. */
 export type Mapping = readonly MappedColumn[];
+
+/** The property or definition field a target fills, or null for ignored. */
+const targetKey = (target: ColumnTarget): string | null => {
+    if (target.kind === 'definition') return `definition:${target.field}`;
+    return target.kind === 'property' ? `property:${target.property}` : null;
+};
+
+/**
+ * Each column with its wanted target, except that the first column wanting
+ * a property or field keeps it and each later one is ignored, naming the
+ * first in `duplicateOf`. A column already settled is kept as it is.
+ */
+const settle = (columns: readonly MappedColumn[]): Mapping => {
+    const first = new Map<string, number>();
+    return columns.map((column) => {
+        const key = targetKey(column.wanted);
+        const holder = key === null ? undefined : first.get(key);
+        if (key !== null && holder === undefined) first.set(key, column.index);
+        const duplicateOf = holder ?? null;
+        const target: ColumnTarget = duplicateOf === null ? column.wanted : { kind: 'ignored' };
+        const unchanged =
+            column.duplicateOf === duplicateOf &&
+            (duplicateOf === null
+                ? column.target === column.wanted
+                : column.target.kind === 'ignored');
+        return unchanged ? column : { ...column, target, duplicateOf };
+    });
+};
 
 const snakeCase = (name: string): string =>
     name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
@@ -107,35 +165,47 @@ const propertyOf = (model: Model, header: string, properties: readonly string[])
     return named.length === 1 ? named[0] : undefined;
 };
 
-/** Reads each header as a definition field, a property of the model, or neither. */
+/**
+ * Reads each header as a definition field, a property of the model, or
+ * neither. A column naming the same property or field as an earlier one is
+ * ignored, with `duplicateOf` naming the earlier column.
+ */
 export function mapHeaders(model: Model, headers: readonly string[]): Mapping {
     const properties = model.nodes
         .filter((node) => model.kind(node.dcid) === 'property')
         .map((node) => node.dcid);
-    return headers.map((raw, index): MappedColumn => {
-        const header = raw.trim();
+    const read = (header: string): ColumnTarget => {
         const field = fieldOf(header);
-        if (field !== undefined) {
-            return { index, header, target: { kind: 'definition', field } };
-        }
+        if (field !== undefined) return { kind: 'definition', field };
         const property = propertyOf(model, header, properties);
-        if (property !== undefined)
-            return { index, header, target: { kind: 'property', property } };
-        return { index, header, target: { kind: 'ignored' } };
-    });
+        return property === undefined ? { kind: 'ignored' } : { kind: 'property', property };
+    };
+    return settle(
+        headers.map((raw, index): MappedColumn => {
+            const header = raw.trim();
+            const wanted = read(header);
+            return { index, header, wanted, target: wanted, duplicateOf: null };
+        }),
+    );
 }
 
 /**
  * Switches one column between a property and ignored. A property column
  * names the header as typed, which the check reports when the graph lacks it.
+ * Duplicates are settled again, so ignoring the first of two columns hands
+ * its property or field to the second.
  */
 export function switchColumn(mapping: Mapping, index: number, to: 'property' | 'ignored'): Mapping {
-    return mapping.map((column) => {
-        if (column.index !== index) return column;
-        const target: ColumnTarget =
-            to === 'ignored' ? { kind: 'ignored' } : { kind: 'property', property: column.header };
-        return { ...column, target };
-    });
+    return settle(
+        mapping.map((column) => {
+            if (column.index !== index) return column;
+            const wanted: ColumnTarget =
+                to === 'ignored'
+                    ? { kind: 'ignored' }
+                    : { kind: 'property', property: column.header };
+            return { ...column, wanted, target: wanted, duplicateOf: null };
+        }),
+    );
 }
 
 /** A reader's choice for one column, kept while the column's header reads `header`. */
@@ -161,9 +231,11 @@ export function applySwitches(
 export const sheetRow = (dataIndex: number): number => dataIndex + 2;
 
 /**
- * Check rows in the wire shape. `ref` is the sheet row number. An empty cell
- * in a property column leaves the property out; an empty measured property
- * is sent as an empty string so the check reports it. Blank rows are skipped.
+ * Check rows in the wire shape. `ref` is the sheet row number. Each property
+ * or field is read from the one column the mapping gives it, the column
+ * `locateFinding` places its findings on. An empty cell in a property
+ * column leaves the property out; an empty measured property is sent as an
+ * empty string so the check reports it. Blank rows are skipped.
  */
 export function rowsToCheck(
     mapping: Mapping,
@@ -172,16 +244,17 @@ export function rowsToCheck(
     return rows.flatMap((cells, dataIndex): OntologyCheckRow[] => {
         if (isBlank(cells)) return [];
         const cell = (index: number): string => (cells[index] ?? '').trim();
-        const definition = (field: DefinitionField): string =>
-            mapping
-                .filter((c) => c.target.kind === 'definition' && c.target.field === field)
-                .map((c) => cell(c.index))
-                .find((value) => value !== '') ?? '';
+        const definition = (field: DefinitionField): string => {
+            const column = mapping.find(
+                ({ target }) => target.kind === 'definition' && target.field === field,
+            );
+            return column === undefined ? '' : cell(column.index);
+        };
         const constraints: Record<string, string> = {};
-        for (const column of mapping) {
-            if (column.target.kind !== 'property') continue;
-            const value = cell(column.index);
-            if (value !== '') constraints[column.target.property] = value;
+        for (const { target, index } of mapping) {
+            if (target.kind !== 'property') continue;
+            const value = cell(index);
+            if (value !== '') constraints[target.property] = value;
         }
         const optional = (field: DefinitionField): string | null => definition(field) || null;
         return [

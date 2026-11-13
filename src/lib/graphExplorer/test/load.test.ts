@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BUILD_WAIT_MS, LoadError, loadDocument, retryDelay } from '../load.ts';
+import { LoadError, loadDocument, RETRY_WAIT_MS, retryDelay, type WaitCause } from '../load.ts';
 import { readOntology } from '../wire.ts';
 import { ontologyBody } from './fixtures.ts';
 
@@ -29,11 +29,11 @@ test('a 503 with Retry-After as a date waits until then', () => {
 test('the wait is at least a second and never runs past the minute', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: '0', waitedMs: 0, nowMs: 0 }), 1000);
     assert.equal(
-        retryDelay({ status: 503, retryAfter: '30', waitedMs: BUILD_WAIT_MS - 2000, nowMs: 0 }),
+        retryDelay({ status: 503, retryAfter: '30', waitedMs: RETRY_WAIT_MS - 2000, nowMs: 0 }),
         2000,
     );
     assert.equal(
-        retryDelay({ status: 503, retryAfter: '5', waitedMs: BUILD_WAIT_MS, nowMs: 0 }),
+        retryDelay({ status: 503, retryAfter: '5', waitedMs: RETRY_WAIT_MS, nowMs: 0 }),
         null,
     );
 });
@@ -42,7 +42,9 @@ test('an unreadable Retry-After still waits', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: 'soon', waitedMs: 0, nowMs: 0 }), 5000);
 });
 
-test('only a 503 that carries Retry-After is retried', () => {
+test('only a 503 or a 429 that carries Retry-After is retried', () => {
+    assert.equal(retryDelay({ status: 429, retryAfter: '12', waitedMs: 0, nowMs: 0 }), 12_000);
+    assert.equal(retryDelay({ status: 429, retryAfter: null, waitedMs: 0, nowMs: 0 }), null);
     assert.equal(retryDelay({ status: 503, retryAfter: null, waitedMs: 0, nowMs: 0 }), null);
     assert.equal(retryDelay({ status: 504, retryAfter: '5', waitedMs: 0, nowMs: 0 }), null);
     assert.equal(retryDelay({ status: 500, retryAfter: null, waitedMs: 0, nowMs: 0 }), null);
@@ -52,6 +54,7 @@ test('only a 503 that carries Retry-After is retried', () => {
 const rig = (answers: (() => Response)[]) => {
     let clock = 0;
     const waits: number[] = [];
+    const causes: WaitCause[] = [];
     const urls: string[] = [];
     const options = {
         fetch: async (url: string | URL | Request) => {
@@ -64,9 +67,12 @@ const rig = (answers: (() => Response)[]) => {
             clock += ms;
         },
         now: () => clock,
-        onWait: (ms: number) => waits.push(ms),
+        onWait: (ms: number, cause: WaitCause) => {
+            waits.push(ms);
+            causes.push(cause);
+        },
     };
-    return { options, waits, urls };
+    return { options, waits, causes, urls };
 };
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -77,8 +83,10 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 const building = () => json({ title: 'Service unavailable' }, 503, { 'retry-after': '5' });
 
-test('the loader waits out a build, then reads the document', async () => {
-    const { options, waits, urls } = rig([building, building, () => json(ontologyBody())]);
+const busy = () => json({ title: 'Too Many Requests' }, 429, { 'retry-after': '12' });
+
+test('the loader waits out a build and a spent allowance, then reads the document', async () => {
+    const { options, waits, causes, urls } = rig([building, busy, () => json(ontologyBody())]);
     const document = await loadDocument(
         'The ontology',
         '/api/graph/ontology',
@@ -86,7 +94,8 @@ test('the loader waits out a build, then reads the document', async () => {
         options,
     );
     assert.ok(document.nodes.length > 0);
-    assert.deepEqual(waits, [5000, 5000]);
+    assert.deepEqual(waits, [5000, 12_000]);
+    assert.deepEqual(causes, ['building', 'busy']);
     assert.equal(urls.length, 3);
 });
 
@@ -99,7 +108,7 @@ test('a build still running after a minute fails and says so', async () => {
     );
     assert.equal(
         waits.reduce((sum, ms) => sum + ms, 0),
-        BUILD_WAIT_MS,
+        RETRY_WAIT_MS,
     );
 });
 

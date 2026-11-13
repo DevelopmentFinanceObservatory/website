@@ -32,7 +32,7 @@ import {
     type SheetMarks,
     type ShownRow,
 } from '@/lib/graphExplorer/check';
-import { waitText } from '@/lib/graphExplorer/load';
+import { waitText, type WaitCause } from '@/lib/graphExplorer/load';
 import {
     applySwitches,
     mapHeaders,
@@ -60,7 +60,8 @@ type Run =
           readonly status: 'running';
           readonly checked: number;
           readonly total: number;
-          readonly retryInMs: number | null;
+          /** The wait under way, when the Graph API or the proxy asked for one. */
+          readonly waiting: { readonly retryInMs: number; readonly cause: WaitCause } | null;
       }
     | { readonly status: 'done'; readonly checked: Checked }
     | { readonly status: 'failed'; readonly message: string };
@@ -174,10 +175,11 @@ type SheetTableProps = {
     rows: readonly ShownRow[];
     marks: SheetMarks;
     cellId: (key: string) => string;
+    rowId: (row: number) => string;
 };
 
 /** The shown rows of the pasted table, flagged cells marked. */
-const SheetTable = ({ pasted, rows, marks, cellId }: SheetTableProps) => {
+const SheetTable = ({ pasted, rows, marks, cellId, rowId }: SheetTableProps) => {
     const captionId = useId();
     return (
         <div
@@ -208,7 +210,10 @@ const SheetTable = ({ pasted, rows, marks, cellId }: SheetTableProps) => {
                         return (
                             <tr
                                 key={row}
+                                id={rowId(row)}
                                 className={marks.flaggedRows.has(row) ? undefined : styles.quiet}
+                                // "Show N More" moves focus here when its last step unmounts it.
+                                tabIndex={-1}
                             >
                                 <th scope="row">{row}</th>
                                 {pasted.header.map((_, index) => {
@@ -235,13 +240,40 @@ const SheetTable = ({ pasted, rows, marks, cellId }: SheetTableProps) => {
     );
 };
 
+type ShowMoreProps = {
+    /** The line saying what is not shown. */
+    note: string;
+    hidden: number;
+    step: number;
+    /** Shows one more step; `last` is true when it shows everything left. */
+    onShow: (last: boolean) => void;
+};
+
+/** "N more ... not shown" and a "Show N More" button, while anything is hidden. */
+const ShowMore = ({ note, hidden, step, onShow }: ShowMoreProps) => {
+    if (hidden <= 0) return null;
+    return (
+        <div className={styles.actions}>
+            <p className={styles.note}>{note}</p>
+            <Button variant="bordered" small onClick={() => onShow(hidden <= step)}>
+                Show {Math.min(hidden, step).toLocaleString('en-GB')} More
+            </Button>
+        </div>
+    );
+};
+
+/** Where focus goes once a "Show N More" that showed its last step unmounts. */
+type FocusAfter = { readonly list: 'flagged' | 'quiet' | 'findings'; readonly from: number };
+
 /** The pasted table with flagged cells marked, then one line per finding. */
 const Results = ({ checked }: { checked: Checked }) => {
     const model = useModel();
     const prefix = useId();
     const [quietShown, setQuietShown] = useState(0);
     const [flaggedShown, setFlaggedShown] = useState(FLAGGED_ROWS_STEP);
+    const [findingsShown, setFindingsShown] = useState(FLAGGED_ROWS_STEP);
     const lit = useRef<HTMLElement | null>(null);
+    const focusAfter = useRef<FocusAfter | null>(null);
     // The cell to light and focus once the row holding it is rendered.
     const pending = useRef<string | null>(null);
     const { result, mapping, pasted } = checked;
@@ -260,6 +292,10 @@ const Results = ({ checked }: { checked: Checked }) => {
         [pasted.rows.length, marks.flaggedRows, flaggedShown, quietShown],
     );
     const cellId = useCallback((key: string) => `${prefix}-${key.replace(':', '-')}`, [prefix]);
+    const rowId = useCallback((row: number) => `${prefix}-row-${row}`, [prefix]);
+    const lineId = useCallback((at: number) => `${prefix}-line-${at}`, [prefix]);
+    const lineCount = lines.length + result.refused.length;
+    const shownRefused = result.refused.slice(0, Math.max(0, findingsShown - lines.length));
 
     // The highlight moves on the cells directly, so a click leaves the table unrendered.
     const light = useCallback(
@@ -280,6 +316,26 @@ const Results = ({ checked }: { checked: Checked }) => {
         if (pending.current !== null && light(pending.current)) pending.current = null;
     }, [shown, light]);
 
+    useEffect(() => {
+        const next = focusAfter.current;
+        if (next === null) return;
+        focusAfter.current = null;
+        if (next.list === 'findings') {
+            document.getElementById(lineId(next.from))?.focus();
+            return;
+        }
+        const flagged = next.list === 'flagged';
+        const row = shown.rows.filter(({ row }) => marks.flaggedRows.has(row) === flagged)[
+            next.from
+        ]?.row;
+        if (row !== undefined) document.getElementById(rowId(row))?.focus();
+    }, [shown, findingsShown, marks.flaggedRows, lineId, rowId]);
+
+    /** Records where focus goes when this step is the last, from the count shown before it. */
+    const showStep = (list: FocusAfter['list'], from: number, last: boolean) => {
+        if (last) focusAfter.current = { list, from };
+    };
+
     // A finding on a flagged row not yet shown reveals the steps up to it first.
     const show = (key: string, row: number) => {
         if (light(key)) return;
@@ -289,48 +345,46 @@ const Results = ({ checked }: { checked: Checked }) => {
 
     return (
         <>
-            <SheetTable pasted={pasted} rows={shown.rows} marks={marks} cellId={cellId} />
-            {shown.hiddenFlagged > 0 && (
-                <div className={styles.actions}>
-                    <p className={styles.note}>
-                        {plural(shown.hiddenFlagged, 'more flagged row')} not shown.
-                    </p>
-                    <Button
-                        variant="bordered"
-                        small
-                        onClick={() => setFlaggedShown((count) => count + FLAGGED_ROWS_STEP)}
-                    >
-                        Show{' '}
-                        {Math.min(shown.hiddenFlagged, FLAGGED_ROWS_STEP).toLocaleString('en-GB')}{' '}
-                        More
-                    </Button>
-                </div>
-            )}
-            {shown.hiddenQuiet > 0 && (
-                <div className={styles.actions}>
-                    <p className={styles.note}>
-                        {plural(shown.hiddenQuiet, 'more row')} without findings not shown.
-                    </p>
-                    <Button
-                        variant="bordered"
-                        small
-                        onClick={() => setQuietShown((count) => count + QUIET_ROWS_STEP)}
-                    >
-                        Show {Math.min(shown.hiddenQuiet, QUIET_ROWS_STEP).toLocaleString('en-GB')}{' '}
-                        More
-                    </Button>
-                </div>
-            )}
+            <SheetTable
+                pasted={pasted}
+                rows={shown.rows}
+                marks={marks}
+                cellId={cellId}
+                rowId={rowId}
+            />
+            <ShowMore
+                note={`${plural(shown.hiddenFlagged, 'more flagged row')} not shown.`}
+                hidden={shown.hiddenFlagged}
+                step={FLAGGED_ROWS_STEP}
+                onShow={(last) => {
+                    showStep('flagged', flaggedShown, last);
+                    setFlaggedShown((count) => count + FLAGGED_ROWS_STEP);
+                }}
+            />
+            <ShowMore
+                note={`${plural(shown.hiddenQuiet, 'more row')} without findings not shown.`}
+                hidden={shown.hiddenQuiet}
+                step={QUIET_ROWS_STEP}
+                onShow={(last) => {
+                    showStep('quiet', quietShown, last);
+                    setQuietShown((count) => count + QUIET_ROWS_STEP);
+                }}
+            />
 
-            {(lines.length > 0 || result.refused.length > 0) && (
+            {lineCount > 0 && (
                 <ul className={styles.findings}>
-                    {lines.map((line, index) => {
+                    {lines.slice(0, findingsShown).map((line, index) => {
                         const { finding, row, column, columnLabel } = line;
                         const key = row !== null && column !== null ? cellKey(row, column) : null;
                         const place = `Row ${finding.ref ?? '?'}, ${columnLabel}`;
                         return (
                             // Findings carry no id; their order is fixed for a result.
-                            <li key={index} className={styles.finding}>
+                            <li
+                                key={index}
+                                id={lineId(index)}
+                                className={styles.finding}
+                                tabIndex={-1}
+                            >
                                 <span
                                     className={classNames(
                                         styles.tag,
@@ -361,8 +415,13 @@ const Results = ({ checked }: { checked: Checked }) => {
                             </li>
                         );
                     })}
-                    {result.refused.map((row, index) => (
-                        <li key={`refused-${index}`} className={styles.finding}>
+                    {shownRefused.map((row, index) => (
+                        <li
+                            key={`refused-${index}`}
+                            id={lineId(lines.length + index)}
+                            className={styles.finding}
+                            tabIndex={-1}
+                        >
                             <span className={classNames(styles.tag, styles.tagError)}>Error</span>
                             <span className={styles.findingText}>
                                 <span>
@@ -374,11 +433,20 @@ const Results = ({ checked }: { checked: Checked }) => {
                     ))}
                 </ul>
             )}
+            <ShowMore
+                note={`${plural(lineCount - findingsShown, 'more finding')} not shown.`}
+                hidden={lineCount - findingsShown}
+                step={FLAGGED_ROWS_STEP}
+                onShow={(last) => {
+                    showStep('findings', findingsShown, last);
+                    setFindingsShown((count) => count + FLAGGED_ROWS_STEP);
+                }}
+            />
 
             <div>
                 <Button
                     onClick={() =>
-                        downloadCsv(findingsCsvRows(model, mapping, result), 'sheet-findings.csv')
+                        downloadCsv(findingsCsvRows(lines, result.refused), 'sheet-findings.csv')
                     }
                 >
                     Download CSV
@@ -390,7 +458,7 @@ const Results = ({ checked }: { checked: Checked }) => {
 
 const statusText = (run: Run): string => {
     if (run.status === 'running') {
-        if (run.retryInMs !== null) return waitText(run.retryInMs);
+        if (run.waiting !== null) return waitText(run.waiting.retryInMs, run.waiting.cause);
         return `Checked ${run.checked.toLocaleString('en-GB')} of ${plural(run.total, 'row')}.`;
     }
     if (run.status === 'done') return resultSentence(run.checked.result, run.checked.rows);
@@ -456,15 +524,17 @@ const CheckSteps = () => {
         const update = (next: Run | ((current: Run) => Run)) => {
             if (!abort.signal.aborted) setRun(next);
         };
-        update({ status: 'running', checked: 0, total: rows.length, retryInMs: null });
+        update({ status: 'running', checked: 0, total: rows.length, waiting: null });
         try {
             const result = await checkRows(rows, {
                 signal: abort.signal,
                 onProgress: ({ checked, total }) =>
-                    update({ status: 'running', checked, total, retryInMs: null }),
-                onWait: (retryInMs) =>
+                    update({ status: 'running', checked, total, waiting: null }),
+                onWait: (retryInMs, cause) =>
                     update((current) =>
-                        current.status === 'running' ? { ...current, retryInMs } : current,
+                        current.status === 'running'
+                            ? { ...current, waiting: { retryInMs, cause } }
+                            : current,
                     ),
             });
             update({ status: 'done', checked: { ...snapshot, result } });
@@ -482,6 +552,12 @@ const CheckSteps = () => {
     };
 
     const hasRows = rows.length > 0;
+    const repeated = mapping
+        .filter((column) => column.duplicateOf !== null)
+        .map(
+            (column) =>
+                `${column.header || '(no header)'} (column ${column.index + 1}, repeating column ${(column.duplicateOf ?? 0) + 1})`,
+        );
 
     return (
         <>
@@ -525,12 +601,18 @@ const CheckSteps = () => {
                         field, a property or ignored; switch any column between property and
                         ignored.
                     </p>
+                    {repeated.length > 0 && (
+                        <p className={styles.note}>
+                            Set to Ignored because an earlier column has the same property or field:{' '}
+                            {repeated.join(', ')}.
+                        </p>
+                    )}
                     <ul className={styles.columns}>
                         {mapping.map((column) => (
                             <ColumnRow
                                 key={column.index}
                                 header={column.header}
-                                read={read[column.index]?.target ?? column.target}
+                                read={read[column.index]?.wanted ?? column.wanted}
                                 target={column.target}
                                 onSwitch={(to) => switchTo(column.index, to)}
                             />
