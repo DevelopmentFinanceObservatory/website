@@ -64,12 +64,9 @@ A key is optional on every call. A call with a valid key is counted against the 
 ### The Key
 
 - Format: a recognisable prefix, an environment marker and random characters, for example `dfo_live_<32+ random chars>`. The prefix lets secret scanners and our own logs spot a leaked key.
-- Sent as `Authorization: Bearer <key>`, with `X-API-Key` accepted as an alias. See the next section.
 - Shown once, when it is created. We store only a SHA-256 hash, so a database leak exposes no usable key.
 
-### Which Header Carries the Key
-
-The key is sent as `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. A key is never accepted in the query string.
+How the key is sent is a design choice. We propose send the key as a bearer token in a standard header, `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. And we don't plan to accept the same bearer in a query string as that's an outmoded style, although some people like it for ease of use and debug-ability.
 
 - Bearer is what a programmatic partner reaches for first, and what MCP developer clients set most easily.
 - The `dfo_` prefix lets the proxy tell our key from any other bearer token.
@@ -78,6 +75,8 @@ The key is sent as `Authorization: Bearer dfo_…`. The proxy also accepts `X-AP
 - The proxy strips the key before forwarding, so it never reaches a backend or its logs.
 
 **Comparables: How Other Services Do It**
+
+Since this is an interesting choice, I asked Claude to do a quick survey to see how other services convey tokens.
 
 | Style                         | Who uses it                                                                                                                               | Notes                                                                                                                                                                        |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -291,7 +290,6 @@ The Cloudflare question needs an answer before Phase 1 code is written.
 [How It Works Today]: #how-it-works-today
 [Design]: #design
 [The Key]: #the-key
-[Which Header Carries the Key]: #which-header-carries-the-key
 [Storage]: #storage
 [Limits]: #limits
 [The Proxy Check]: #the-proxy-check
