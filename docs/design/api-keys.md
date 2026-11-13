@@ -1,24 +1,22 @@
 # API Keys for the Platform Proxy
 
-Initial draft by Claude Code. Revised by Sef Kloninger, <sef@ode.partners>
-
-[Issue #142][issue]
-
+Sef Kloninger <<sef@ode.partners>> with Claude Code \
+[Issue #142][issue] \
 Last Update: Nov 13, 2026
 
 ## Summary
 
-This feature is to add per-user access to the Development Finance Observatory backends. This will enable
+This feature is to add per-user access to the Development Finance Observatory backend. Needs:
 
 - Metered and ACL'ed access
-- Cost and operational controls
-- Enable potential to recoup costs from for-profits that wants programmatic access to our data.
+- Prevent cost overruns or operations problems that could come from
+- Enable potential other business arrangements, e.g. charge to serve or syndicate high-volume, high-cost, or licensed data.
 
-We intend to still have a free / open tier for ease of use and for crawlers. But more expensive and frequent access will need to come via an API key.
+We intend to still have a free / open tier. We want minimal friction for the majority of users to use DFO, it's a valuable onramp; also search and AI crawlers are an important source of traffic for us, and will continue to be. But more expensive and frequent access will go through the API key.
 
 The proxy fronts the public Search, Datasets and Graph APIs (`/api/v1/*`) and the MCP servers (`/mcp`). Today it knows callers only by address.
 
-Initial requirements:
+Requirements:
 
 - Anonymous access will stays open up to a limit. Our goal is to manage usage and enable rate limits, not wholesale API gating.
 - Each key carries its own rate limit.
@@ -59,7 +57,7 @@ The key is sent as `Authorization: Bearer dfo_…`. The proxy also accepts `X-AP
 - A call that sends both headers with different keys is refused with a 400.
 - The proxy strips the key before forwarding, so it never reaches a backend or its logs.
 
-**How other services do it**
+**Comparables: How Other Services Do It**
 
 | Style                         | Who uses it                                                                                                                               | Notes                                                                                                                                                                        |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -139,6 +137,43 @@ A revoked key can keep working until the cache entry expires, so revocation take
 
 A keyed call is named to the backends as `x-dfo-caller: key:<id>` instead of `ip:<digest>`. dfo-ai already expects that form. dfo-apis needs a small change to accept it, so its own allowances count per key and not per address.
 
+### Cloudflare Integration
+
+Cloudflare sits in front of the site and rate-limits by address. The proxy stays the per-key limiter, and Cloudflare is a coarse backstop against floods, set above the highest limit any key will have. Cloudflare cannot tell a real key from a made-up one, since it sees only a header value, so it cannot enforce per-key limits itself.
+
+**What Cloudflare recommends**
+
+Its [rate limiting best practices][cf-best-practices] for REST APIs count requests per API key, not per address:
+
+- To protect an endpoint: match the path and method, count by the `x-api-key` header, and block above the rate.
+- To protect resources: count by path plus `x-api-key`, so each key gets a rate per resource.
+- For clients with no key: count by IP.
+- For the rate itself: take it from API Discovery or from past traffic. The page gives no default number.
+
+It shows no paired "anonymous rule plus keyed rule" example, but that is what the pieces add up to.
+
+**What each plan allows**
+
+Counting by a header needs Advanced Rate Limiting, an Enterprise add-on ([availability by plan][cf-availability]).
+
+| Plan                                | Can count by                                | Rules | Longest window |
+| ----------------------------------- | ------------------------------------------- | ----- | -------------- |
+| Free                                | IP                                          | 1     | 10 s           |
+| Pro                                 | IP                                          | 2     | 1 min          |
+| Business                            | IP, IP with NAT support                     | 5     | 10 min         |
+| Enterprise                          | IP, IP with NAT support                     | 100   | about 18 h     |
+| Enterprise + Advanced Rate Limiting | Headers, cookies, query, ASN, path and more | 100   | about 18 h     |
+
+Below Enterprise, a rate limiting rule's own match expression cannot reference request headers, so "apply this rule only to requests without a key" cannot be written in the rule.
+
+**Options for keyed traffic**
+
+- With Advanced Rate Limiting: follow Cloudflare's pattern. One rule counts by IP for requests with no key header. Another counts by the key header at a high ceiling. A fake key then earns only a separate bucket that is still limited.
+- Without it: raise the per-address threshold, or add a custom rule that skips rate limiting for requests that carry a key header. Whether custom rules can match headers and skip rate limiting rules on every plan is unconfirmed. The skip can be abused with a fake header, and the proxy's limit is then the only one left for that traffic.
+- If today's thresholds are already well above 120 and 300 calls a minute, Phase 1 may need no edge change.
+
+Which option applies depends on the zone's plan and its current rules. See Open Questions.
+
 ### Logs and Docs
 
 - The request log line carries the key caller, so usage per key can be counted in Cloud Logging. This is what Phase 3 needs to find high-volume callers.
@@ -213,7 +248,7 @@ Order matters between the website and dfo-apis. dfo-apis refuses a caller form i
 
 The first three need an answer before Phase 1 code is written.
 
-- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none.
+- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See Cloudflare Integration.
 - [ ] **Does a key work on `/mcp` in Phase 1,** or only on `/api/v1/*`? The first partner's need is the API.
 - [ ] **What is the default self-service limit in Phase 2,** relative to the anonymous limit? It has to be worth signing up for.
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
@@ -221,3 +256,5 @@ The first three need an answer before Phase 1 code is written.
 - [ ] **Does a key identify an account to the backends as well,** so a signed-in user's key and their site session share allowances? dfo-ai already names a `user:` caller form.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
+[cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
+[cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
