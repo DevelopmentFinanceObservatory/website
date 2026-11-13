@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     // Self-contained server bundle for the Cloud Run image (deploy/Dockerfile).
     output: 'standalone',
     devIndicators: false,
+    // AGENTS.md is committed and written by hand, so `next dev` leaves it alone.
+    agentRules: false,
     // The Cloud SQL connector (db/connection.ts, instrumentation.ts) is
     // Node-only, so this opts it out of Server Components bundling to a
     // native `require`, which as a side effect makes the standalone
