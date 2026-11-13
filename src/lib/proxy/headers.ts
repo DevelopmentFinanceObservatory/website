@@ -1,6 +1,5 @@
 /**
- * Which headers cross the platform proxy (src/lib/proxy/forward). Kept apart
- * from forward.ts, which imports server-only, so `node --test` can load it.
+ * Which headers cross the platform proxy (src/lib/proxy/forward).
  *
  * A request carries its content headers, the caller's user-agent (the API
  * logs it to tell client families apart), the SDK clients' x-dfo-client label
