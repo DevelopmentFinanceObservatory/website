@@ -20,6 +20,7 @@ Last Update: Nov 13, 2026
     - [Phase 2: Provision][]
     - [Phase 3: Enforce][]
 - [Work by Repository][]
+- [Alternatives Considered][]
 - [Future Features][]
 - [Open Questions][]
 
@@ -264,6 +265,20 @@ Most of the work is in the website. The Phase 1 pieces:
 
 Order matters between the website and dfo-apis. dfo-apis refuses a caller form it does not recognize when it arrives with the shared secret, so the dfo-apis change has to be live before the website starts sending `key:` callers.
 
+## Alternatives Considered
+
+We looked at buying or reusing this instead of building it. The plan stays to build, because the hard parts are already in the proxy: one function every call passes through, a shared limiter in Postgres, and caller naming to the backends. What is left to build is a table, a lookup and an admin command. One option, Better Auth's plugin, is worth a closer look before Phase 2.
+
+| Option                                            | What it is                                                                            | What it would give us                                                                                                                                               | Why not, or not yet                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Better Auth API key plugin][better-auth-api-key] | An add-on package (`@better-auth/api-key`) for the auth library the site already uses | Key creation and verification, per-key rate limits, expiry, usage quotas with refill, metadata, and client methods for create, list and revoke, in our own Postgres | The closest fit, and more a reuse than a buy. Open points: whether keys can exist without an owning account (Phase 1 keys have none), whether its rate limiter can share our `limit_counter` window and headers, and how it stores keys. Worth evaluating as the base for Phase 2 self-service |
+| Hosted key service, for example [Unkey][unkey]    | A service that issues and verifies keys; the proxy calls it on each request           | Key management, per-key limits and usage analytics with no tables of our own. A free tier of 150,000 verifications a month                                          | A network call to a third party on every keyed request, and a new vendor holding our callers' keys. Cost grows with traffic, which is the thing we are trying to control                                                                                                                       |
+| Hosted API gateway, for example [Zuplo][zuplo]    | A managed gateway in front of the APIs, with keys, rate limits and a developer portal | The whole feature, including self-service sign-up and docs                                                                                                          | It replaces the proxy we already have. Streaming (SSE and MCP), caller naming and the harness token would all need to be rebuilt in its terms                                                                                                                                                  |
+| Google Cloud API Gateway or Apigee                | Google's gateways, in the cloud the backends already run in                           | API Gateway: keys and quotas. Apigee: a full product with developer portal and monetization                                                                         | API Gateway keys are Google Cloud API keys, which suits internal consumers more than outside sign-ups. Apigee is priced and sized for a larger API program than ours                                                                                                                           |
+| Cloudflare                                        | Already in front of the site                                                          | Edge rate limiting per key header on the Enterprise Advanced Rate Limiting plan                                                                                     | It does not issue or validate keys, so it cannot replace the proxy check. See [Cloudflare Integration][]                                                                                                                                                                                       |
+
+If monetization becomes real, the calculation changes: metering, billing and a developer portal are where the gateway products earn their cost. Nothing in this design blocks moving to one later, since keys are checked in one place.
+
 ## Future Features
 
 Not planned for any phase yet. The design should not rule them out.
@@ -285,6 +300,9 @@ The Cloudflare question needs an answer before Phase 1 code is written.
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
+[better-auth-api-key]: https://www.better-auth.com/docs/plugins/api-key
+[unkey]: https://www.unkey.com/docs/platform/workspaces/billing
+[zuplo]: https://zuplo.com/pricing
 [Summary]: #summary
 [How It Works Today]: #how-it-works-today
 [Design]: #design
@@ -299,5 +317,6 @@ The Cloudflare question needs an answer before Phase 1 code is written.
 [Phase 2: Provision]: #phase-2-provision
 [Phase 3: Enforce]: #phase-3-enforce
 [Work by Repository]: #work-by-repository
+[Alternatives Considered]: #alternatives-considered
 [Future Features]: #future-features
 [Open Questions]: #open-questions
