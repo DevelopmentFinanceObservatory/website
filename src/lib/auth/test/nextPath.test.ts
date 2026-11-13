@@ -9,6 +9,7 @@ import { safeNext } from '../nextPath.ts';
 
 const cases: [label: string, input: string | undefined, expected: string][] = [
     ['protocol-relative', '//evil.example', '/studio'],
+    ['an empty host, which does not parse', '//', '/studio'],
     ['backslash host', '/\\evil.example/x', '/studio'],
     ['tab before the host slash', '/\t/evil.example', '/studio'],
     ['newline before the host slash', '/\n/evil.example', '/studio'],

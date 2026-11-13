@@ -8,6 +8,15 @@ import styles from './NewSheet.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
 import { authClient } from '@/lib/auth/client';
+import {
+    answerState,
+    CONSENT_FAILED_STATE,
+    consentReturns,
+    consentTrip,
+    initialCreateState,
+    UNREACHED_STATE,
+    type CreateState,
+} from '@/lib/graphExplorer/googleConsent';
 import { DRIVE_FILE_SCOPE, type SheetsAnswer } from '@/lib/graphExplorer/googleSheet';
 import { SHEETS_ROUTE } from '@/lib/graphExplorer/paths';
 import { draftCsvRows, sheetRequest, type SheetDraft } from '@/lib/graphExplorer/sheet';
@@ -17,56 +26,48 @@ export const DownloadCsv = ({ sheet }: { sheet: SheetDraft }) => (
     <Button onClick={() => downloadCsv(draftCsvRows(sheet), sheet.fileName)}>Download CSV</Button>
 );
 
-/** The parameter Better Auth adds to the return address when Google access was not granted. */
-const LINK_ERROR_PARAM = 'error';
-
-/** The parameter on the return address after a trip through Google's consent screen. */
-const RETURNED_PARAM = 'google';
-
-type CreateState =
-    | { kind: 'idle' }
-    | { kind: 'working' }
-    | { kind: 'created'; url: string; dropdownsFailed: boolean }
-    | { kind: 'needs_google'; message: string }
-    | { kind: 'failed'; message: string };
-
-/** What the reader is told when access was just granted and the handler still asks for it. */
-const STILL_REFUSED =
-    'Google access was granted, but the tool still cannot use it, so no sheet was created. Sign out, sign in again and try once more; if it fails again, download the CSV.';
-
 /**
  * Sends Google's consent screen for the `drive.file` scope, then returns to
- * this page with its query and RETURNED_PARAM, so the sheet the reader built
- * is still there and the page knows the trip was made.
+ * this page with its query, so the sheet the reader built is still there:
+ * with RETURNED_PARAM when access was granted, with Better Auth's error
+ * otherwise (consentReturns). Returns false, after logging the error's code,
+ * when the consent screen could not be opened.
  */
-const continueWithGoogle = async () => {
-    const back = new URL(window.location.href);
-    back.searchParams.delete(LINK_ERROR_PARAM);
-    back.searchParams.set(RETURNED_PARAM, '1');
-    const here = `${back.pathname}${back.search}`;
-    await authClient.linkSocial({
-        provider: 'google',
-        scopes: [DRIVE_FILE_SCOPE],
-        callbackURL: here,
-        errorCallbackURL: here,
-        // A refresh token comes only with a consent screen, and without one the
-        // access lapses after an hour.
-        additionalParams: { access_type: 'offline', prompt: 'consent' },
-    });
+const continueWithGoogle = async (): Promise<boolean> => {
+    try {
+        const { error } = await authClient.linkSocial({
+            provider: 'google',
+            scopes: [DRIVE_FILE_SCOPE],
+            ...consentReturns(window.location.href),
+            // A refresh token comes only with a consent screen, and without one the
+            // access lapses after an hour.
+            additionalParams: { access_type: 'offline', prompt: 'consent' },
+        });
+        if (error === null) return true;
+        console.error('graph explorer: linking Google failed', {
+            code: error.code ?? null,
+            status: error.status,
+        });
+    } catch (error) {
+        console.error('graph explorer: linking Google failed', {
+            code: error instanceof Error ? error.name : typeof error,
+        });
+    }
+    return false;
 };
 
 /**
  * Creates the sheet as a Google spreadsheet in the reader's own Drive, then
- * links to it. When the tool has no access to the reader's Drive yet, it
- * shows the handler's reason and offers Google's consent screen on a click;
- * after one trip through it that still ends in a refusal, it says so and
- * offers the button no more. Every other refusal shows the handler's message.
+ * links to it. The handler's answer sets what is shown (answerState): the
+ * consent screen when the tool has no access to the reader's Drive yet, Try
+ * Again beside it when Better Auth failed to renew the access, and the
+ * handler's message for every other refusal. After a trip through the
+ * consent screen that the reader declined or that could not link, the
+ * consent screen is offered again.
  */
 export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
-    const params = useSearchParams();
-    const linkFailed = params.has(LINK_ERROR_PARAM);
-    const returned = params.has(RETURNED_PARAM);
-    const [state, setState] = useState<CreateState>({ kind: 'idle' });
+    const trip = consentTrip(useSearchParams());
+    const [state, setState] = useState<CreateState>(() => initialCreateState(trip));
 
     const create = async () => {
         setState({ kind: 'working' });
@@ -77,31 +78,17 @@ export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
                 body: JSON.stringify(sheetRequest(sheet)),
             });
             const answer = (await response.json().catch(() => null)) as SheetsAnswer | null;
-            if (answer?.ok) {
-                setState({
-                    kind: 'created',
-                    url: answer.url,
-                    dropdownsFailed: answer.dropdowns === 'failed',
-                });
-            } else if (answer?.code === 'google_access_needed') {
-                setState(
-                    returned
-                        ? { kind: 'failed', message: STILL_REFUSED }
-                        : { kind: 'needs_google', message: answer.message },
-                );
-            } else {
-                setState({
-                    kind: 'failed',
-                    message: answer?.message ?? 'The sheet could not be created. Try again.',
-                });
-            }
+            setState(answerState(answer, trip));
         } catch {
-            setState({
-                kind: 'failed',
-                message: 'The sheet could not be created. Check your connection and try again.',
-            });
+            setState(UNREACHED_STATE);
         }
     };
+
+    const consent = async () => {
+        if (!(await continueWithGoogle())) setState(CONSENT_FAILED_STATE);
+    };
+
+    const offersConsent = state.kind === 'needs_google' || state.kind === 'renewal_failed';
 
     return (
         <>
@@ -118,19 +105,16 @@ export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
                             '. Google did not add the dropdowns, so the property columns take any value; the value lists are on the second tab.'}
                     </>
                 )}
-                {state.kind === 'failed' && state.message}
-                {state.kind === 'idle' &&
-                    linkFailed &&
-                    'Google access was not granted, so no sheet was created.'}
+                {(state.kind === 'failed' || offersConsent) && state.message}
             </p>
-            {state.kind === 'needs_google' && (
+            {offersConsent && (
                 <>
-                    <p className={styles.exportStatus}>{state.message}</p>
-                    <Button
-                        variant="bordered"
-                        className={styles.exportAction}
-                        onClick={continueWithGoogle}
-                    >
+                    {state.kind === 'renewal_failed' && (
+                        <Button variant="bordered" className={styles.exportAction} onClick={create}>
+                            Try Again
+                        </Button>
+                    )}
+                    <Button variant="bordered" className={styles.exportAction} onClick={consent}>
                         Continue with Google
                     </Button>
                 </>

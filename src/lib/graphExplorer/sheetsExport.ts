@@ -7,7 +7,7 @@
  * never logged or answered.
  */
 import { asRecord } from '../asRecord.ts';
-import { REFUSAL_MESSAGES } from '../auth/reader.ts';
+import { REFUSAL_MESSAGES, type ReaderDecision } from '../auth/reader.ts';
 import {
     createSpreadsheetBody,
     DRIVE_FILE_SCOPE,
@@ -23,7 +23,10 @@ export type LinkedAccount = { id: string; providerId: string; scopes: readonly s
 /**
  * Why the reader must grant Google access before a sheet can be created:
  * no Google account is linked, the linked one lacks the `drive.file`
- * scope, or its token has expired with no way to renew it.
+ * scope, or its token has expired and Better Auth holds no refresh token to
+ * renew it with (or Google refused the token). A renewal that Better Auth
+ * attempted and failed is `renewal_failed` in GoogleAccess, since its cause
+ * is unknown.
  */
 export type GoogleAccessReason = 'no_google_account' | 'scope_missing' | 'token_expired';
 
@@ -32,12 +35,14 @@ export type GoogleAccessStep = 'list_accounts' | 'access_token';
 
 export type GoogleAccess =
     | { kind: 'ready'; accessToken: string }
-    | {
-          kind: 'missing';
-          reason: GoogleAccessReason;
-          /** The error behind a refused renewal, named for the log; never a token. */
-          cause?: string;
-      }
+    | { kind: 'missing'; reason: GoogleAccessReason }
+    /**
+     * Better Auth failed to read or renew the token: a refused refresh, a
+     * Google outage, a failed write of the renewed token or a failed
+     * decryption, which its error does not tell apart. `cause` names the
+     * error for the log; never a token.
+     */
+    | { kind: 'renewal_failed'; cause: string }
     | { kind: 'failed'; step: GoogleAccessStep; cause: string };
 
 /** What the reader is told for each reason, with what Continue with Google will do. */
@@ -76,25 +81,50 @@ export const isUsableToken = (
     return new Date(token.accessTokenExpiresAt).getTime() > now.getTime();
 };
 
-/** Better Auth's error code on a refused token renewal. */
+/**
+ * Better Auth's error code for any failure inside its token read: a refused
+ * refresh, a failed write of the renewed token, or a failed decryption.
+ */
 const RENEWAL_FAILED = 'FAILED_TO_GET_ACCESS_TOKEN';
 
 /**
- * An error named for the log: its name, and the Better Auth code or HTTP
- * status it carries. Never its message, which can quote a failed query.
+ * An error named for the log: its name, the Better Auth code or HTTP status
+ * it carries, and the code of its `cause` (a failed `fetch` carries the
+ * network error's, such as `ENOTFOUND`). Never a message, which can quote a
+ * failed query.
  */
 export const errorCause = (error: unknown): string => {
     const record = asRecord(error);
     const name = error instanceof Error ? error.name : typeof error;
     const code = asRecord(record?.body)?.code;
     const status = record?.statusCode ?? record?.status;
+    const causeCode = asRecord(record?.cause)?.code;
     return [
         name,
         typeof code === 'string' ? code : null,
         typeof status === 'number' || typeof status === 'string' ? String(status) : null,
+        typeof causeCode === 'string' ? causeCode : null,
     ]
         .filter((part) => part !== null)
         .join(' ');
+};
+
+/** An enum value in Google's error body, such as `PERMISSION_DENIED`. */
+const GOOGLE_ENUM = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+/**
+ * A Google refusal named for the log: the body's `error.status` and each
+ * `error.details[].reason`, such as `PERMISSION_DENIED SERVICE_DISABLED`,
+ * or undefined when the body carries neither. Only values shaped as Google's
+ * enums are kept, so nothing else from the body reaches the log.
+ */
+const googleRefusalCause = async (response: Response): Promise<string | undefined> => {
+    const error = asRecord(asRecord(await response.json().catch(() => null))?.error);
+    const details: unknown[] = Array.isArray(error?.details) ? error.details : [];
+    const parts = [error?.status, ...details.map((detail) => asRecord(detail)?.reason)].filter(
+        (part): part is string => typeof part === 'string' && GOOGLE_ENUM.test(part),
+    );
+    return parts.length > 0 ? parts.join(' ') : undefined;
 };
 
 export type GoogleAccessDeps = {
@@ -108,10 +138,12 @@ export type GoogleAccessDeps = {
 };
 
 /**
- * The reader's Google access token, or why there is none. A refused renewal
- * reads as `token_expired`, a reason to ask for access again; any other
- * throw from either call is a failure of the auth call itself, which the
- * handler logs and answers as an error.
+ * The reader's Google access token, or why there is none. Better Auth's
+ * `FAILED_TO_GET_ACCESS_TOKEN` reads as `renewal_failed`: it raises that
+ * one code for a refused refresh, a Google outage, a storage failure and a
+ * decryption failure alike, and discards the cause. Any other throw from
+ * either call is a failure of the auth call itself. The handler logs both
+ * and answers each as an error.
  */
 export const readGoogleAccessWith = async (deps: GoogleAccessDeps): Promise<GoogleAccess> => {
     let accounts: readonly LinkedAccount[];
@@ -128,7 +160,7 @@ export const readGoogleAccessWith = async (deps: GoogleAccessDeps): Promise<Goog
         token = await deps.accessToken(account.id);
     } catch (error) {
         if (asRecord(asRecord(error)?.body)?.code === RENEWAL_FAILED) {
-            return { kind: 'missing', reason: 'token_expired', cause: errorCause(error) };
+            return { kind: 'renewal_failed', cause: errorCause(error) };
         }
         return { kind: 'failed', step: 'access_token', cause: errorCause(error) };
     }
@@ -142,17 +174,17 @@ export type ReadBody = { ok: true; value: unknown } | { ok: false };
 
 export type SheetsExportDeps = {
     /** The gate's decision for the request. */
-    decide: () => Promise<{
-        kind: 'admitted' | 'signed_out' | 'email_not_verified' | 'domain_not_allowed';
-    }>;
+    decide: () => Promise<{ kind: ReaderDecision['kind'] }>;
     readBody: () => Promise<ReadBody>;
     googleAccess: () => Promise<GoogleAccess>;
     fetch: typeof fetch;
     /** The date for the sheet's note, `YYYY-MM-DD`. */
     today: string;
     /**
-     * Receives a message, the HTTP status Google answered and, for a failed
-     * auth call, the error's name and code; never a token or a body.
+     * Receives a message, the HTTP status Google answered and the cause: for
+     * a thrown call the error's name and codes (errorCause), for a Google
+     * refusal the enums in its error body (googleRefusalCause). Never a token
+     * or a body.
      */
     log: (message: string, fields: { status: number | null; cause?: string }) => void;
 };
@@ -185,6 +217,13 @@ const authFailed = refused(502, {
     message: 'The sign-in service could not read your Google access. Try again in a minute.',
 });
 
+const renewalFailed = refused(502, {
+    ok: false,
+    code: 'google_renewal_failed',
+    message:
+        'The sign-in service could not renew the tool’s access to your Google Drive. Try again in a minute, or Continue with Google to grant it again.',
+});
+
 /** The new spreadsheet's id and a docs.google.com address for it, from the create response. */
 const readCreated = async (response: Response): Promise<{ id: string; url: string } | null> => {
     const body: unknown = await response.json().catch(() => null);
@@ -199,12 +238,13 @@ const readCreated = async (response: Response): Promise<{ id: string; url: strin
 };
 
 /**
- * The handler's answer. Google answering 401 on create means the token no
- * longer works, so the reader is asked to grant access again (409); any
- * other Google failure is a 502, and so is a failed auth call while reading
- * the reader's Google access, logged with its cause. When the sheet exists but its dropdowns
- * could not be added, the answer is still the sheet, with `dropdowns:
- * 'failed'`.
+ * The handler's answer. A reason to grant Google access answers 409
+ * `google_access_needed`, and so does Google answering 401 on create, since
+ * the token does not work. A failed token read in Better Auth answers 502
+ * `google_renewal_failed`, a failed auth call 502 `auth_failed`, and any
+ * other Google failure 502 `google_failed`, each logged with its cause. When
+ * the sheet exists but its dropdowns could not be added, the answer is still
+ * the sheet, with `dropdowns: 'failed'`.
  */
 export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsExportResult> => {
     const decision = await deps.decide();
@@ -239,15 +279,14 @@ export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsE
         });
         return authFailed;
     }
-    if (access.kind === 'missing') {
-        if (access.cause !== undefined) {
-            deps.log('sheets export: Google token renewal refused', {
-                status: null,
-                cause: access.cause,
-            });
-        }
-        return accessNeeded(access.reason);
+    if (access.kind === 'renewal_failed') {
+        deps.log(
+            'sheets export: Google token read failed in Better Auth (refresh, storage or decryption)',
+            { status: null, cause: access.cause },
+        );
+        return renewalFailed;
     }
+    if (access.kind === 'missing') return accessNeeded(access.reason);
 
     const call = (url: string, body: unknown) =>
         deps.fetch(url, {
@@ -266,12 +305,18 @@ export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsE
             `${SHEETS_API}?fields=spreadsheetId,spreadsheetUrl`,
             createSpreadsheetBody(request, deps.today),
         );
-    } catch {
-        deps.log('sheets export: create request failed', { status: null });
+    } catch (error) {
+        deps.log('sheets export: create request failed', {
+            status: null,
+            cause: errorCause(error),
+        });
         return googleFailed;
     }
     if (!created.ok) {
-        deps.log('sheets export: Google refused create', { status: created.status });
+        deps.log('sheets export: Google refused create', {
+            status: created.status,
+            cause: await googleRefusalCause(created),
+        });
         return created.status === 401 ? accessNeeded('token_expired') : googleFailed;
     }
     const sheet = await readCreated(created);
@@ -290,11 +335,17 @@ export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsE
             dropdowns,
         );
         if (!updated.ok) {
-            deps.log('sheets export: Google refused dropdowns', { status: updated.status });
+            deps.log('sheets export: Google refused dropdowns', {
+                status: updated.status,
+                cause: await googleRefusalCause(updated),
+            });
             return { status: 200, body: { ok: true, url: sheet.url, dropdowns: 'failed' } };
         }
-    } catch {
-        deps.log('sheets export: dropdown request failed', { status: null });
+    } catch (error) {
+        deps.log('sheets export: dropdown request failed', {
+            status: null,
+            cause: errorCause(error),
+        });
         return { status: 200, body: { ok: true, url: sheet.url, dropdowns: 'failed' } };
     }
     return { status: 200, body: { ok: true, url: sheet.url, dropdowns: 'added' } };

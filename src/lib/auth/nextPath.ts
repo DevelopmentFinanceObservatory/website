@@ -6,21 +6,32 @@ const PLACEHOLDER_ORIGIN = 'https://dfo.invalid';
 const UNSAFE = /[\\\u0000-\u001f\u007f]/;
 
 /**
- * The on-site path a visitor goes to after sign-in. `next` must start with
- * `/`, hold no backslash and no control character, and still resolve against
- * a placeholder origin to that same origin with a path that does not begin
- * with `//`. Dot segments can resolve `/a/..//host` to `//host`, which a
- * redirect reads as another host. Anything else, including a missing or
- * empty value, gives `/studio`.
+ * A path that starts with `/`, resolved against a placeholder origin, or
+ * null when it does not start with `/`, does not parse, or resolves to
+ * another origin. Dot segments are resolved, so the caller judges the path a
+ * browser would request.
  */
-export const safeNext = (next?: string): string => {
-    if (!next?.startsWith('/') || UNSAFE.test(next)) {
-        return FALLBACK;
+export const resolveOnSite = (path: string | null | undefined): URL | null => {
+    if (!path?.startsWith('/')) {
+        return null;
     }
 
-    const url = new URL(next, PLACEHOLDER_ORIGIN);
+    const url = URL.parse(path, PLACEHOLDER_ORIGIN);
 
-    if (url.origin !== PLACEHOLDER_ORIGIN || url.pathname.startsWith('//')) {
+    return url?.origin === PLACEHOLDER_ORIGIN ? url : null;
+};
+
+/**
+ * The on-site path a visitor goes to after sign-in. `next` must hold no
+ * backslash and no control character, and resolve on this site
+ * (resolveOnSite) to a path that does not begin with `//`. Dot segments can
+ * resolve `/a/..//host` to `//host`, which a redirect reads as another host.
+ * Anything else, including a missing or empty value, gives `/studio`.
+ */
+export const safeNext = (next?: string): string => {
+    const url = next === undefined || UNSAFE.test(next) ? null : resolveOnSite(next);
+
+    if (url === null || url.pathname.startsWith('//')) {
         return FALLBACK;
     }
 

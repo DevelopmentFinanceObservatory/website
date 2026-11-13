@@ -1,9 +1,11 @@
 /**
  * The Graph Explorer's way back after sign-in. src/proxy.ts writes the
  * requested path and query into REQUEST_PATH_HEADER, and the section's
- * layout builds the sign-in address from it. No imports, so `node --test`
- * and the proxy can load it.
+ * layout builds the sign-in address from it. It imports only nextPath.ts,
+ * so `node --test` and the proxy can load it.
  */
+
+import { resolveOnSite } from '../auth/nextPath.ts';
 
 export const GRAPH_EXPLORER_PATH = '/graph-explorer';
 
@@ -14,11 +16,23 @@ export const GRAPH_EXPLORER_PATH = '/graph-explorer';
  */
 export const REQUEST_PATH_HEADER = 'x-dfo-request-path';
 
+/**
+ * The headers a Graph Explorer request goes on with: the client's, with
+ * REQUEST_PATH_HEADER set to the requested path and query, which overwrites
+ * any value the client sent.
+ */
+export const withRequestPath = (
+    headers: Headers,
+    { pathname, search }: { pathname: string; search: string },
+): Headers => {
+    const next = new Headers(headers);
+    next.set(REQUEST_PATH_HEADER, pathname + search);
+    return next;
+};
+
 /** Whether a path is the Graph Explorer or under it, by whole segments. */
 export const isGraphExplorerPath = (pathname: string): boolean =>
     pathname === GRAPH_EXPLORER_PATH || pathname.startsWith(`${GRAPH_EXPLORER_PATH}/`);
-
-const PLACEHOLDER_ORIGIN = 'https://dfo.invalid';
 
 /**
  * The sign-in address for a signed-out visitor to the Graph Explorer, with
@@ -28,10 +42,11 @@ const PLACEHOLDER_ORIGIN = 'https://dfo.invalid';
  * /login validates `next` again (safeNext).
  */
 export const graphExplorerSignIn = (requested: string | null | undefined): string => {
-    const url = requested?.startsWith('/') ? new URL(requested, PLACEHOLDER_ORIGIN) : null;
-    const inside =
-        url != null && url.origin === PLACEHOLDER_ORIGIN && isGraphExplorerPath(url.pathname);
-    const next = inside ? url.pathname + url.search : GRAPH_EXPLORER_PATH;
+    const url = resolveOnSite(requested);
+    const next =
+        url !== null && isGraphExplorerPath(url.pathname)
+            ? url.pathname + url.search
+            : GRAPH_EXPLORER_PATH;
 
     return `/login?next=${encodeURIComponent(next)}`;
 };

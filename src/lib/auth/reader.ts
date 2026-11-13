@@ -45,11 +45,19 @@ export const parseEmailDomains = (value: string | undefined): ReadonlySet<string
             .filter(Boolean),
     );
 
-/** The domain after an address's last `@`, lowercased; null without one. */
+const ASCII_DOMAIN = /^[A-Za-z0-9.-]+$/;
+
+/**
+ * The domain after an address's last `@`, lowercased; null without one, or
+ * when the domain holds anything but ASCII letters, digits, dots and
+ * hyphens. The check runs before lowercasing, since `toLowerCase` maps some
+ * non-ASCII letters to ASCII ones (the Kelvin sign to `k`).
+ */
 const emailDomain = (email: string): string | null => {
     const at = email.lastIndexOf('@');
+    const domain = at === -1 ? '' : email.slice(at + 1);
 
-    return at === -1 ? null : email.slice(at + 1).toLowerCase();
+    return ASCII_DOMAIN.test(domain) ? domain.toLowerCase() : null;
 };
 
 /**

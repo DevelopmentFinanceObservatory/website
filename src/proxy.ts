@@ -2,20 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { GALLERY_ITEMS } from '@/components/organisms/Gallery/galleryData';
 import { dataPageNoindex, NOINDEX_HEADER } from '@/lib/crawl';
-import { isGraphExplorerPath, REQUEST_PATH_HEADER } from '@/lib/graphExplorer/signIn';
+import { isGraphExplorerPath, withRequestPath } from '@/lib/graphExplorer/signIn';
 
-/**
- * A Graph Explorer request carries its path and query in
- * REQUEST_PATH_HEADER, which overwrites any value the client sent.
- */
-const graphExplorer = (request: NextRequest) => {
-    const { pathname, search } = request.nextUrl;
-    const headers = new Headers(request.headers);
-
-    headers.set(REQUEST_PATH_HEADER, pathname + search);
-
-    return NextResponse.next({ request: { headers } });
-};
+/** A Graph Explorer request carries its path and query (withRequestPath). */
+const graphExplorer = (request: NextRequest) =>
+    NextResponse.next({ request: { headers: withRequestPath(request.headers, request.nextUrl) } });
 
 /**
  * `X-Robots-Tag` on a /data response the page's metadata keeps out of

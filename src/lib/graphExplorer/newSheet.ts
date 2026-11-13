@@ -11,7 +11,9 @@
  *
  * A parameter left out takes its default: the class from the pattern, else the
  * kind of thing the most datasets use; the measured property and the ticked
- * properties from the pattern, else from the class's most-used pattern.
+ * properties from the pattern, else from the class's most-used pattern. A
+ * `class`, `measured` or `split` id the model does not offer takes the same
+ * default, and the selection names it (SheetSelection.unknown).
  */
 import { queryString, writeCarried, type Carried } from './explore.ts';
 import type { Model } from './model.ts';
@@ -99,6 +101,9 @@ export type SplitOption = {
     readonly inUse: boolean;
 };
 
+/** An id from the URL the model does not offer, with the parameter that named it. */
+export type UnknownChoice = { readonly param: 'class' | 'measured' | 'split'; readonly id: string };
+
 export type SheetSelection = {
     readonly classId: string;
     readonly measured: string;
@@ -113,6 +118,8 @@ export type SheetSelection = {
     /** The properties to tick: those in use first, each part most used first. */
     readonly splitOptions: readonly SplitOption[];
     readonly spec: SheetSpec;
+    /** The URL's ids the model does not offer, which their defaults replace, in URL order. */
+    readonly unknown: readonly UnknownChoice[];
 };
 
 const place = (ref: PatternRef, pattern: OntologyPattern): PlacedPattern =>
@@ -208,6 +215,17 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     const wanted = query.split ?? template?.pattern.constraint_properties ?? [];
     const properties = Object.freeze([...new Set(wanted)].filter((id) => offered.has(id)));
 
+    const unknown: UnknownChoice[] = [];
+    if (query.classId !== null && query.classId !== classId) {
+        unknown.push({ param: 'class', id: query.classId });
+    }
+    if (query.measured !== null && query.measured !== measured) {
+        unknown.push({ param: 'measured', id: query.measured });
+    }
+    for (const id of query.split ?? []) {
+        if (!offered.has(id)) unknown.push({ param: 'split', id });
+    }
+
     return Object.freeze({
         classId,
         measured,
@@ -223,6 +241,7 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
             qualifier: template?.pattern.measurement_qualifier ?? null,
             properties,
         }),
+        unknown: Object.freeze(unknown.map((choice) => Object.freeze(choice))),
     });
 };
 

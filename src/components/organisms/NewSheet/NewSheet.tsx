@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 import styles from './NewSheet.module.scss';
 import { CreateGoogleSheet, DownloadCsv } from './SheetExports';
@@ -17,25 +17,33 @@ import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scs
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
-import type { Carried } from '@/lib/graphExplorer/explore';
+import { NO_CARRIED, type Carried } from '@/lib/graphExplorer/explore';
+import { keepReturned } from '@/lib/graphExplorer/googleConsent';
 import {
     queryOf,
     readSheetQuery,
     resolveSheet,
     sheetHref,
+    sheetQuery,
     type SheetQuery,
     type SheetSelection,
     type SplitOption,
+    type UnknownChoice,
 } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
 /**
- * Replaces the page's query in place, keeping the carried parameters: the
- * URL holds the sheet, and the back button skips edits.
+ * Replaces the page's query in place, keeping the carried parameters and the
+ * mark of a granted Google consent trip: the URL holds the sheet, and the
+ * back button skips edits.
  */
 const writeQuery = (query: SheetQuery, carried: Carried) =>
-    window.history.replaceState(null, '', sheetHref(query, carried));
+    window.history.replaceState(
+        null,
+        '',
+        keepReturned(sheetHref(query, carried), new URLSearchParams(window.location.search)),
+    );
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
     const id = useId();
@@ -72,6 +80,58 @@ const SplitBox = ({ option, checked, onToggle }: SplitBoxProps) => {
                 </span>
             )}
         </label>
+    );
+};
+
+const PARAM_NOUNS: Readonly<Record<UnknownChoice['param'], string>> = {
+    class: 'kind of thing',
+    measured: 'measured property',
+    split: 'property',
+};
+
+/** The line naming the URL's ids the model does not offer, which their defaults replace. */
+const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => (
+    <p className={styles.note} role="status">
+        The model does not offer{' '}
+        {unknown.map((choice, at) => (
+            <span key={`${choice.param}:${choice.id}`}>
+                {at > 0 && (at === unknown.length - 1 ? ' or ' : ', ')}
+                the {PARAM_NOUNS[choice.param]} <code>{choice.id}</code>
+            </span>
+        ))}{' '}
+        here, so the sheet uses its defaults instead.
+    </p>
+);
+
+/**
+ * The properties no dataset splits by yet, folded away. The reader opens and
+ * closes the list; a tick never closes it, so a focused checkbox stays in
+ * view. It opens on first render when one of them is ticked.
+ */
+const MoreProperties = ({
+    unused,
+    ticked,
+    classLabel,
+    box,
+}: {
+    unused: readonly SplitOption[];
+    ticked: ReadonlySet<string>;
+    classLabel: string;
+    box: (option: SplitOption) => React.ReactNode;
+}) => {
+    const [open, setOpen] = useState(() => unused.some((option) => ticked.has(option.id)));
+    return (
+        <details
+            className={styles.more}
+            open={open}
+            onToggle={(event) => setOpen(event.currentTarget.open)}
+        >
+            <summary>
+                {plural(unused.length, 'more property', 'more properties')} declared for{' '}
+                {classLabel} that no dataset splits by yet
+            </summary>
+            <div className={styles.checks}>{unused.map(box)}</div>
+        </details>
     );
 };
 
@@ -225,6 +285,7 @@ const SheetSteps = () => {
 
     return (
         <>
+            {selection.unknown.length > 0 && <UnknownChoices unknown={selection.unknown} />}
             <Section title="1. What are the figures about?">
                 <div className={styles.pick} role="group" aria-label="Kind of thing">
                     {model.populationTypes().map((use) => (
@@ -289,13 +350,13 @@ const SheetSteps = () => {
                 </p>
                 {inUse.length > 0 && <div className={styles.checks}>{inUse.map(box)}</div>}
                 {unused.length > 0 && (
-                    <details className={styles.more} open={unused.some((o) => ticked.has(o.id))}>
-                        <summary>
-                            {plural(unused.length, 'more property', 'more properties')} declared for{' '}
-                            {classLabel} that no dataset splits by yet
-                        </summary>
-                        <div className={styles.checks}>{unused.map(box)}</div>
-                    </details>
+                    <MoreProperties
+                        key={selection.classId}
+                        unused={unused}
+                        ticked={ticked}
+                        classLabel={classLabel}
+                        box={box}
+                    />
                 )}
             </Section>
 
@@ -307,7 +368,7 @@ const SheetSteps = () => {
                     labels. Each property column takes a value from its value list.
                 </p>
                 <div className={styles.exports}>
-                    <CreateGoogleSheet sheet={sheet} />
+                    <CreateGoogleSheet key={sheetQuery(current, NO_CARRIED)} sheet={sheet} />
                     <DownloadCsv sheet={sheet} />
                 </div>
                 <ValueLists sheet={sheet} />

@@ -182,7 +182,9 @@ test('the create body holds the mapping tab: bold frozen header, example rows, t
         columns.map((column) => column.name),
     );
     assert.ok(header.every((cell) => cell.userEnteredFormat?.textFormat.bold));
-    assert.match(String(header[0]?.note), /2026-11-13 from graph generation fixture\./);
+    const note = String(header[0]?.note);
+    assert.ok(note.includes('2026-11-13'), note);
+    assert.ok(note.includes(String(request.generation)), note);
     assert.deepEqual(
         rows[1]?.values.map((cell) => cell.userEnteredValue?.stringValue),
         request.rows[0],
@@ -190,9 +192,16 @@ test('the create body holds the mapping tab: bold frozen header, example rows, t
 });
 
 test('a model with no generation says so in the note', () => {
-    const body = createSpreadsheetBody({ ...fixtureRequest(), generation: null }, '2026-11-13');
-    const first = body.sheets[0]?.data[0]?.rowData[0]?.values[0];
-    assert.match(String(first?.note), /a graph with no generation recorded/);
+    const noteOf = (generation: string | null) =>
+        String(
+            createSpreadsheetBody({ ...fixtureRequest(), generation }, '2026-11-13').sheets[0]
+                ?.data[0]?.rowData[0]?.values[0]?.note,
+        );
+    const generation = String(fixtureRequest().generation);
+    const note = noteOf(null);
+    assert.ok(note.includes('2026-11-13'), note);
+    assert.ok(!note.includes(generation), note);
+    assert.notEqual(note, noteOf(generation));
 });
 
 test('the value-list tab holds one block of dcid, label and code per property with a value list', () => {

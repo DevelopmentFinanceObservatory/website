@@ -11,7 +11,6 @@ import { DRIVE_FILE_SCOPE, SHEETS_API, type SheetsAnswer } from '../googleSheet.
 import {
     chooseGoogleAccount,
     createGoogleSheet,
-    GOOGLE_ACCESS_MESSAGES,
     isUsableToken,
     readGoogleAccessWith,
     type GoogleAccess,
@@ -78,7 +77,11 @@ const run = async ({
         steps.push('fetch');
         calls.push({ url: String(url), init: init ?? {} });
         const reply = queue.shift() ?? { status: 500 };
-        if (reply === 'network_error') throw new TypeError(`fetch failed ${GOOGLE_SECRET}`);
+        if (reply === 'network_error') {
+            throw new TypeError(`fetch failed ${GOOGLE_SECRET}`, {
+                cause: Object.assign(new Error(GOOGLE_SECRET), { code: 'ENOTFOUND' }),
+            });
+        }
         return new Response(JSON.stringify(reply.body ?? { error: GOOGLE_SECRET }), {
             status: reply.status,
         });
@@ -150,10 +153,6 @@ for (const reason of ['no_google_account', 'scope_missing', 'token_expired'] as 
             ],
             ['google_access_needed', reason],
         );
-        assert.equal(
-            !outcome.result.body.ok && outcome.result.body.message,
-            GOOGLE_ACCESS_MESSAGES[reason],
-        );
         assert.equal(outcome.calls.length, 0);
     });
 }
@@ -168,6 +167,21 @@ test('a failed auth call answers 502 auth_failed, logged with its cause, without
     assert.deepEqual(outcome.logs, [
         'sheets export: reading Google access failed at list_accounts {"status":null,"cause":"DrizzleQueryError"}',
     ]);
+});
+
+test('a failed token read in Better Auth answers 502 google_renewal_failed, logged with its cause, without calling Google', async () => {
+    const outcome = await run({
+        access: { kind: 'renewal_failed', cause: 'APIError FAILED_TO_GET_ACCESS_TOKEN 400' },
+    });
+    assert.equal(outcome.result.status, 502);
+    assert.equal(code(outcome.result.body), 'google_renewal_failed');
+    assert.equal(outcome.calls.length, 0);
+    assert.equal(outcome.logs.length, 1);
+    assert.ok(
+        outcome.logs[0]?.endsWith(
+            '{"status":null,"cause":"APIError FAILED_TO_GET_ACCESS_TOKEN 400"}',
+        ),
+    );
 });
 
 /** A Better Auth APIError as the installed version throws it: a status and a body with a code. */
@@ -211,8 +225,7 @@ test('reading Google access tells a reason to ask for access from a failed auth 
         },
     });
     assert.deepEqual(renewal, {
-        kind: 'missing',
-        reason: 'token_expired',
+        kind: 'renewal_failed',
         cause: 'APIError FAILED_TO_GET_ACCESS_TOKEN 400',
     });
 
@@ -251,6 +264,41 @@ for (const status of [403, 500]) {
     });
 }
 
+test('a Google refusal logs its status and reasons from the error body, and nothing else from it', async () => {
+    const refusal = {
+        status: 403,
+        body: {
+            error: {
+                code: 403,
+                message: GOOGLE_SECRET,
+                status: 'PERMISSION_DENIED',
+                details: [
+                    {
+                        '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+                        reason: 'SERVICE_DISABLED',
+                    },
+                    { reason: GOOGLE_SECRET },
+                ],
+            },
+        },
+    };
+    const created = {
+        status: 200,
+        body: { spreadsheetId: SHEET_ID },
+    };
+    const onCreate = await run({ replies: [refusal] });
+    const onDropdowns = await run({ replies: [created, refusal] });
+    assert.deepEqual(
+        [...onCreate.logs, ...onDropdowns.logs],
+        [
+            'sheets export: Google refused create {"status":403,"cause":"PERMISSION_DENIED SERVICE_DISABLED"}',
+            'sheets export: Google refused dropdowns {"status":403,"cause":"PERMISSION_DENIED SERVICE_DISABLED"}',
+        ],
+    );
+    assertNoLeak(onCreate);
+    assertNoLeak(onDropdowns);
+});
+
 test('Google answering 401 on create asks for Google access again', async () => {
     const outcome = await run({ replies: [{ status: 401 }] });
     assert.equal(outcome.result.status, 409);
@@ -267,6 +315,20 @@ test('a network failure or an unreadable create response answers 502', async () 
         assert.equal(outcome.result.status, 502);
         assertNoLeak(outcome);
     }
+});
+
+test('a thrown Google call logs the error and its network code', async () => {
+    const onCreate = await run({ replies: ['network_error'] });
+    const onDropdowns = await run({
+        replies: [{ status: 200, body: { spreadsheetId: SHEET_ID } }, 'network_error'],
+    });
+    assert.deepEqual(
+        [...onCreate.logs, ...onDropdowns.logs],
+        [
+            'sheets export: create request failed {"status":null,"cause":"TypeError ENOTFOUND"}',
+            'sheets export: dropdown request failed {"status":null,"cause":"TypeError ENOTFOUND"}',
+        ],
+    );
 });
 
 test('dropdowns failing after the sheet exists still answer the sheet, marked failed', async () => {

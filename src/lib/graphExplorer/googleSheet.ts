@@ -13,6 +13,7 @@
  * Reference: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create
  * and https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/request#setdatavalidationrequest
  */
+import { asRecord } from '../asRecord.ts';
 import type { ColumnKind } from './sheet.ts';
 
 /** The Google OAuth scope that lets the tool create files and see only those it created. */
@@ -73,19 +74,21 @@ export type SheetsAnswer =
           reason: 'no_google_account' | 'scope_missing' | 'token_expired';
           message: string;
       }
-    | { ok: false; code: 'google_failed' | 'auth_failed'; message: string };
+    | {
+          ok: false;
+          code: 'google_failed' | 'auth_failed' | 'google_renewal_failed';
+          message: string;
+      };
 
 const KINDS: readonly ColumnKind[] = ['reference', 'definition', 'property'];
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isText = (value: unknown, max: number, min = 0): value is string =>
     typeof value === 'string' && value.length >= min && value.length <= max;
 
 const readMember = (value: unknown): SheetMember | null => {
-    if (!isRecord(value)) return null;
-    const { id, label, code } = value;
+    const member = asRecord(value);
+    if (member === undefined) return null;
+    const { id, label, code } = member;
     if (!isText(id, LIMITS.term, 1) || !isText(label, LIMITS.term)) return null;
     if (code !== null && !isText(code, LIMITS.term)) return null;
     return { id, label, code };
@@ -93,8 +96,9 @@ const readMember = (value: unknown): SheetMember | null => {
 
 const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined => {
     if (value === null) return null;
-    if (!isRecord(value)) return undefined;
-    const { valueList, members } = value;
+    const lookup = asRecord(value);
+    if (lookup === undefined) return undefined;
+    const { valueList, members } = lookup;
     if (!isText(valueList, LIMITS.term, 1)) return undefined;
     if (!Array.isArray(members) || members.length > LIMITS.members) return undefined;
     const read = members.map(readMember);
@@ -103,8 +107,9 @@ const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined =>
 };
 
 const readColumn = (value: unknown): SheetRequestColumn | null => {
-    if (!isRecord(value)) return null;
-    const { name, kind, lookup } = value;
+    const column = asRecord(value);
+    if (column === undefined) return null;
+    const { name, kind, lookup } = column;
     if (!isText(name, LIMITS.columnName, 1)) return null;
     const known = KINDS.find((each) => each === kind);
     if (known === undefined) return null;
@@ -115,8 +120,9 @@ const readColumn = (value: unknown): SheetRequestColumn | null => {
 
 /** The request body checked against its bounds, or null when it breaks one. */
 export const readSheetRequest = (value: unknown): SheetRequest | null => {
-    if (!isRecord(value)) return null;
-    const { title, generation, columns, rows } = value;
+    const body = asRecord(value);
+    if (body === undefined) return null;
+    const { title, generation, columns, rows } = body;
     if (!isText(title, LIMITS.title, 1)) return null;
     if (generation !== null && !isText(generation, LIMITS.generation, 1)) return null;
     if (!Array.isArray(columns) || columns.length === 0 || columns.length > LIMITS.columns) {

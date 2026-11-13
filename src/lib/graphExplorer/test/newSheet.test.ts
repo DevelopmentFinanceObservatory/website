@@ -137,6 +137,19 @@ test('ticks keep their order and drop what the class does not offer', () => {
     assert.deepEqual(resolve('class=FinancialFlow&split=').properties, []);
 });
 
+test('the URL ids the model does not offer are named, in URL order; known ones are not', () => {
+    assert.deepEqual(
+        resolve('class=NotAClass&measured=notMeasured&split=nettingBasis,notAProperty').unknown,
+        [
+            { param: 'class', id: 'NotAClass' },
+            { param: 'measured', id: 'notMeasured' },
+            { param: 'split', id: 'notAProperty' },
+        ],
+    );
+    assert.deepEqual(resolve('class=FinancialFlow&measured=amount&split=nettingBasis').unknown, []);
+    assert.deepEqual(resolve('').unknown, []);
+});
+
 test('split options: in use first, then unused ones declared for the class with a value list', () => {
     const options = splitOptions(model, 'FinancialFlow');
     const used = options.filter((option) => option.inUse).map((option) => option.id);

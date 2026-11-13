@@ -38,6 +38,13 @@ test('the domain must match exactly', () => {
     assert.equal(kind('partner.example'), 'domain_not_allowed');
 });
 
+test('a domain with a non-ASCII letter is refused, even one that lowercases to an allowed domain', () => {
+    const kone = parseEmailDomains('kone.example');
+
+    assert.equal(kind('a@kone.example', kone), 'admitted');
+    assert.equal(kind('a@\u212Aone.example', kone), 'domain_not_allowed');
+});
+
 test('the domain after the last @ decides', () => {
     assert.equal(kind('a@partner.example@elsewhere.example'), 'domain_not_allowed');
     assert.equal(kind('a@elsewhere.example@partner.example'), 'admitted');
@@ -65,5 +72,5 @@ test('the allowlist is trimmed, lowercased, without empty entries', () => {
 test('an unset or empty allowlist warns that nobody is admitted; one domain does not', () => {
     assert.equal(typeof emptyAllowlistWarning(parseEmailDomains(undefined)), 'string');
     assert.equal(typeof emptyAllowlistWarning(parseEmailDomains(' , ')), 'string');
-    assert.equal(emptyAllowlistWarning(parseEmailDomains('one.org')), null);
+    assert.equal(emptyAllowlistWarning(parseEmailDomains('one.example')), null);
 });

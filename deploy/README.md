@@ -226,7 +226,14 @@ reader's own Drive with the Google sign-in client's token. It needs two
 settings on that OAuth client's Google Cloud project: the consent screen
 lists the `https://www.googleapis.com/auth/drive.file` scope, and the Google
 Sheets API is enabled. Without the Sheets API, creating a sheet answers
-502.
+502 and logs `sheets export: Google refused create` with the cause
+`PERMISSION_DENIED SERVICE_DISABLED`. A token read that fails inside Better
+Auth (a refused refresh, a Google outage, or a failed storage write or
+decryption, which Better Auth does not tell apart) answers 502
+`google_renewal_failed` and logs `Google token read failed in Better Auth`.
+Better Auth's `/get-access-token`, `/refresh-token` and `/account-info`
+answer 404 (`src/lib/auth/closedPaths.ts`), so the browser cannot read the
+Google token.
 
 ## Runtime env contract (provisional)
 

@@ -6,7 +6,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { safeNext } from '../../auth/nextPath.ts';
-import { graphExplorerSignIn, isGraphExplorerPath } from '../signIn.ts';
+import {
+    graphExplorerSignIn,
+    isGraphExplorerPath,
+    REQUEST_PATH_HEADER,
+    withRequestPath,
+} from '../signIn.ts';
+
+test('the requested path overwrites a client-sent one and keeps the other headers', () => {
+    const sent = new Headers({ [REQUEST_PATH_HEADER]: '/elsewhere', accept: 'text/html' });
+    const headers = withRequestPath(sent, {
+        pathname: '/graph-explorer/new-sheet',
+        search: '?a=1',
+    });
+
+    assert.deepEqual(headers.get(REQUEST_PATH_HEADER), '/graph-explorer/new-sheet?a=1');
+    assert.equal(headers.get('accept'), 'text/html');
+});
 
 test('the Graph Explorer and every path under it carry the requested path', () => {
     for (const path of ['/graph-explorer', '/graph-explorer/', '/graph-explorer/check-sheet']) {
@@ -37,6 +53,7 @@ test('sign-in returns to a requested Graph Explorer path, else to the Graph Expl
         '/studio',
         '/graph-explorer-old',
         '//evil.example',
+        '//',
         '/graph-explorer/..//evil.example',
         '/graph-explorer/%2e%2e//evil.example',
         '/graph-explorer/../studio',
