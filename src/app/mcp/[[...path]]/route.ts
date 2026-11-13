@@ -45,8 +45,6 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path?: st
         bearer: MCP_TOKEN,
         caller: requestCaller(req.headers),
         unreachable: 'The MCP servers are unreachable.',
-        // MCP responses pass through as the harness sent them.
-        compress: false,
     });
 };
 
