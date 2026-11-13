@@ -6,7 +6,7 @@ Participation is governed by the [Code of Conduct](https://github.com/Developmen
 
 ## Set up
 
-You need Node 22.18 or newer, pnpm, [just](https://github.com/casey/just), and Docker for the database tests.
+You need Node 22.18 or newer, pnpm, [just](https://github.com/casey/just), and, for the database tests, Docker or a Postgres 18 you already run (`docs/development.md` describes both).
 
 ```bash
 just setup    # pnpm install and .env.local from .env.example
@@ -19,7 +19,7 @@ The README says which parts of the site need a reachable `apis` or `ai` service.
 ## Before you open a pull request
 
 ```bash
-just db-up    # local Postgres 18 on port 5433, needed by the tests
+just db-up    # local Postgres 18 on port 5433, or checks the one PG* points at
 just check    # lint, typecheck, test, build
 ```
 
