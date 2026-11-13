@@ -4,6 +4,26 @@ Sef Kloninger <<sef@ode.partners>> with Claude Code \
 [Issue #142][issue] \
 Last Update: Nov 13, 2026
 
+## Contents
+
+- [Summary][]
+- [How It Works Today][]
+- [Design][]
+    - [The Key][]
+    - [Which Header Carries the Key][]
+    - [Storage][]
+    - [Limits][]
+    - [The Proxy Check][]
+    - [Cloudflare Integration][]
+    - [Logs and Docs][]
+- [Phases][]
+    - [Phase 1: Validate][]
+    - [Phase 2: Provision][]
+    - [Phase 3: Enforce][]
+- [Work by Repository][]
+- [Future Features][]
+- [Open Questions][]
+
 ## Summary
 
 This feature is to add per-user access to the Development Finance Observatory backend. Needs:
@@ -252,16 +272,35 @@ Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
 - **Multiple keys per account.** An account holds several keys at once, for example one per application or to rotate a key without downtime.
+- **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future
+    - Soft vs. hard limits (warnings)
+    - Hourly vs. weekly limits, like how modern chat interfaces work. This protects against spiky workloads while mitigating the impact of hitting a limit ("try again in a few hours").
 
 ## Open Questions
 
 The Cloudflare question needs an answer before Phase 1 code is written.
 
-- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See [Cloudflare Integration][cloudflare-integration].
+- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See [Cloudflare Integration][].
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
 - [ ] **Does a key identify an account to the backends as well,** so a signed-in user's key and their site session share allowances? dfo-ai already names a `user:` caller form.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
-[cloudflare-integration]: #cloudflare-integration
+[Summary]: #summary
+[How It Works Today]: #how-it-works-today
+[Design]: #design
+[The Key]: #the-key
+[Which Header Carries the Key]: #which-header-carries-the-key
+[Storage]: #storage
+[Limits]: #limits
+[The Proxy Check]: #the-proxy-check
+[Cloudflare Integration]: #cloudflare-integration
+[Logs and Docs]: #logs-and-docs
+[Phases]: #phases
+[Phase 1: Validate]: #phase-1-validate
+[Phase 2: Provision]: #phase-2-provision
+[Phase 3: Enforce]: #phase-3-enforce
+[Work by Repository]: #work-by-repository
+[Future Features]: #future-features
+[Open Questions]: #open-questions
