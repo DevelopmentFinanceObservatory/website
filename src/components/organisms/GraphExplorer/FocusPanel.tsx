@@ -1,0 +1,367 @@
+'use client';
+
+import classNames from 'classnames';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+
+import { downloadCsv } from './downloadCsv';
+import { useModel } from './ExploreContext';
+import { BaseTag, TermLink } from './ExploreLink';
+import FocusEntry, { ofMembers, useLens } from './FocusEntry';
+import styles from './FocusPanel.module.scss';
+import { count, plural } from './format';
+import ValueTree from './ValueTree';
+
+import Button from '@/components/atoms/Button/Button';
+import { declaredDomain, type FocusBox } from '@/lib/graphExplorer/focus';
+import type { DatasetView, Kind } from '@/lib/graphExplorer/model';
+import { NEW_SHEET_PATH } from '@/lib/graphExplorer/newSheet';
+import { patternSentence } from '@/lib/graphExplorer/sentence';
+import { csvFileName } from '@/lib/graphExplorer/sheet';
+import { valueListTable } from '@/lib/graphExplorer/tables';
+import type { OntologyFacets, OntologyTerm } from '@/lib/graphExplorer/wire';
+
+export const KIND_WORDS: Record<Kind, string> = {
+    class: 'Kind of thing',
+    valueList: 'Value list',
+    property: 'Property',
+    value: 'Value',
+};
+
+const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
+
+/** The dataset filter as the panel reads it: one chosen dataset, or none. */
+export type PanelLens = { readonly dataset: string | null; readonly label: string | null };
+
+const Label = ({ children }: { children: React.ReactNode }) => (
+    <p className={styles.label}>{children}</p>
+);
+
+/** The dcid in mono with a Copy control, and the code where the term has one. */
+const IdLine = ({ id, codes = [] }: { id: string; codes?: readonly string[] }) => {
+    const [copied, setCopied] = useState<'done' | 'blocked' | null>(null);
+
+    const copy = () => {
+        navigator.clipboard.writeText(id).then(
+            () => setCopied('done'),
+            () => setCopied('blocked'),
+        );
+    };
+
+    return (
+        <div className={styles.idLine}>
+            <span className={styles.mono}>{id}</span>
+            {codes.length > 0 && (
+                <span className={styles.code}>
+                    {codes.length === 1 ? 'Code' : 'Codes'} {codes.join(', ')}
+                </span>
+            )}
+            <Button small onClick={copy}>
+                Copy
+            </Button>
+            <span className={styles.status} role="status">
+                {copied === 'done'
+                    ? 'Copied.'
+                    : copied === 'blocked'
+                      ? 'Copying is blocked here.'
+                      : ''}
+            </span>
+        </div>
+    );
+};
+
+/** A link to the sheet page, styled as an action; prefetch is off for the dynamic page. */
+const SheetLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <Link href={href} prefetch={false} className={styles.action}>
+        {children}
+    </Link>
+);
+
+/** One bar per dataset: how many of its StatVars use the term, against its total. */
+const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
+    const model = useModel();
+    const { byDataset } = model.usage(id);
+
+    return (
+        <section className={styles.section}>
+            <Label>StatVars that use it</Label>
+            {byDataset.length === 0 ? (
+                <p className={styles.note}>No StatVar in the datasets uses it.</p>
+            ) : (
+                <ul className={styles.uses}>
+                    {byDataset.map(({ dataset, count: n }) => {
+                        const total = model.dataset(dataset)?.stat_var_count ?? n;
+                        const share = total === 0 ? 0 : n / total;
+                        return (
+                            <li
+                                key={dataset}
+                                className={classNames(
+                                    styles.use,
+                                    lens.dataset !== null && lens.dataset !== dataset && styles.dim,
+                                )}
+                            >
+                                <TermLink id={dataset} />
+                                <span className={styles.mono}>{count(n)}</span>
+                                <span
+                                    className={styles.bar}
+                                    role="img"
+                                    aria-label={`${Math.round(share * 100)}% of its StatVars`}
+                                >
+                                    <i
+                                        style={{
+                                            width: `${Math.max(1, Math.round(share * 100))}%`,
+                                        }}
+                                    />
+                                </span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </section>
+    );
+};
+
+/** A term the model holds: what it is, its names, its definition, its source and its use. */
+export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
+    const model = useModel();
+    const node = model.node(id);
+    const kind = model.kind(id);
+    if (!node || !kind) return null;
+
+    const list = kind === 'value' ? model.valueListOf(id) : undefined;
+    const domain = kind === 'property' ? declaredDomain(model, id) : null;
+    const members = kind === 'valueList' ? model.members(id).length : 0;
+    const used =
+        kind === 'valueList' && lens.dataset !== null
+            ? model.lens(lens.dataset, [id])[0]
+            : undefined;
+
+    return (
+        <>
+            <div className={styles.section}>
+                <Label>
+                    {KIND_WORDS[kind]}
+                    {list !== undefined && (
+                        <>
+                            {' in '}
+                            <TermLink id={list} />
+                        </>
+                    )}
+                </Label>
+                <h2 className={styles.name}>{model.label(id)}</h2>
+                <IdLine id={id} codes={node.classification_code} />
+            </div>
+            <p className={classNames(!node.description && styles.note)}>
+                {node.description ?? 'No definition on the graph.'}
+            </p>
+            {node.alternate_name.length > 0 && (
+                <p className={styles.note}>Also called {node.alternate_name.join(', ')}.</p>
+            )}
+            {node.declared_by !== null && (
+                <p className={styles.line}>
+                    Declared by{' '}
+                    <span className={styles.mono}>
+                        {node.provenances.join(', ') || 'no source'}
+                    </span>
+                    {model.isBase(id) && (
+                        <>
+                            {' '}
+                            <BaseTag />
+                        </>
+                    )}
+                </p>
+            )}
+            {domain && (
+                <p className={styles.line}>
+                    Declared for{' '}
+                    {domain.map((classId, index) => (
+                        <span key={classId}>
+                            {index > 0 && ', '}
+                            <TermLink id={classId} />
+                        </span>
+                    ))}
+                    .
+                </p>
+            )}
+            {kind === 'valueList' && members > 0 && (
+                <section className={styles.section}>
+                    <Label>
+                        {plural(members, 'value')}
+                        {used?.members && `, ${lens.label} uses ${ofMembers(used.members)}`}
+                    </Label>
+                    <ValueTree listId={id} lensDataset={lens.dataset} />
+                    <div>
+                        <Button
+                            small
+                            onClick={() =>
+                                downloadCsv(valueListTable(model, id), csvFileName(model.label(id)))
+                            }
+                        >
+                            Download CSV
+                        </Button>
+                    </div>
+                </section>
+            )}
+            <UsageBars id={id} lens={lens} />
+            {kind === 'class' && (
+                <div>
+                    <SheetLink href={`${NEW_SHEET_PATH}?${new URLSearchParams({ class: id })}`}>
+                        Start a Sheet for This Class
+                    </SheetLink>
+                </div>
+            )}
+        </>
+    );
+};
+
+const FACETS: { key: keyof OntologyFacets; label: string }[] = [
+    { key: 'units', label: 'Units' },
+    { key: 'observation_periods', label: 'Periods' },
+    { key: 'measurement_methods', label: 'Methods' },
+    { key: 'currencies', label: 'Currencies' },
+    { key: 'scaling_factors', label: 'Scaling factors' },
+];
+
+/** A dataset: its description, its StatVar count, its patterns as sentences and its facet facts. */
+export const DatasetPanel = ({ view }: { view: DatasetView }) => {
+    const model = useModel();
+    const facets = model.dataset(view.id)?.facets;
+
+    return (
+        <>
+            <div className={styles.section}>
+                <Label>Dataset</Label>
+                <h2 className={styles.name}>{view.label}</h2>
+                <IdLine id={view.id} />
+            </div>
+            <p className={classNames(!view.description && styles.note)}>
+                {view.description ?? 'No description on the graph.'}
+            </p>
+            <p className={styles.line}>{plural(view.statVarCount, 'StatVar')}</p>
+            <section className={styles.section}>
+                <Label>How its StatVars are formed</Label>
+                <ol className={styles.patterns}>
+                    {view.patterns.map((pattern, index) => (
+                        // Patterns have no id; their order is the document's and does not change.
+                        <li key={index} className={styles.pattern}>
+                            <p className={styles.sentence}>
+                                {patternSentence(model, pattern).map((part, at) =>
+                                    part.kind === 'term' ? (
+                                        <TermLink key={at} id={part.id} />
+                                    ) : (
+                                        <span key={at}>{part.text}</span>
+                                    ),
+                                )}
+                            </p>
+                            <p className={styles.meta}>
+                                {plural(pattern.stat_var_count, 'StatVar')}
+                                {view.statVarCount > 0 &&
+                                    `, ${Math.max(1, Math.round((100 * pattern.stat_var_count) / view.statVarCount))}%`}
+                            </p>
+                            {pattern.examples[0] !== undefined && (
+                                <p className={styles.meta}>
+                                    For example{' '}
+                                    <span className={styles.mono}>{pattern.examples[0]}</span>
+                                </p>
+                            )}
+                            <div>
+                                <SheetLink
+                                    href={`${NEW_SHEET_PATH}?${new URLSearchParams({
+                                        dataset: view.id,
+                                        pattern: String(index),
+                                    })}`}
+                                >
+                                    Start a Sheet Like This
+                                </SheetLink>
+                            </div>
+                        </li>
+                    ))}
+                </ol>
+            </section>
+            {facets && (
+                <section className={styles.section}>
+                    <Label>Its series</Label>
+                    {FACETS.filter(({ key }) => facets[key].length > 0).map(({ key, label }) => (
+                        <p key={key} className={styles.line}>
+                            {label}: <span className={styles.mono}>{facets[key].join(', ')}</span>
+                        </p>
+                    ))}
+                </section>
+            )}
+        </>
+    );
+};
+
+/**
+ * A term the DFO model does not hold, such as a base Data Commons term
+ * reached from search: its name, the base tag and a link to the graph's browser.
+ */
+export const OutsidePanel = ({ id, term }: { id: string; term: OntologyTerm | undefined }) => (
+    <>
+        <div className={styles.section}>
+            <Label>
+                {term
+                    ? `${term.types.includes('Class') ? 'Kind of thing' : 'Property'} on the graph`
+                    : 'Not in the DFO model'}
+            </Label>
+            <h2 className={styles.name}>
+                {term?.name ?? id}
+                {term?.declared_by === 'base' && (
+                    <>
+                        {' '}
+                        <BaseTag />
+                    </>
+                )}
+            </h2>
+            <IdLine id={id} />
+        </div>
+        <p>The DFO model does not use it, so no dataset here draws on it.</p>
+        <p className={styles.line}>
+            <a
+                className={styles.external}
+                href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                Open in the Data Commons browser
+            </a>
+        </p>
+    </>
+);
+
+type FullListProps = {
+    box: FocusBox;
+    lens: PanelLens;
+    onClose: () => void;
+};
+
+/** Every entry of one box of the picture, with a way back to the definition. */
+export const FullList = ({ box, lens, onClose }: FullListProps) => {
+    const entries = useLens(lens.dataset, box.ids);
+    const heading = useRef<HTMLHeadingElement>(null);
+
+    useEffect(() => heading.current?.focus({ preventScroll: true }), []);
+
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.name} tabIndex={-1} ref={heading}>
+                {box.title} <span className={styles.total}>({count(box.ids.length)})</span>
+            </h2>
+            <ul className={styles.full}>
+                {box.ids.map((id) => (
+                    <FocusEntry
+                        key={id}
+                        id={id}
+                        lens={entries?.get(id) ?? null}
+                        datasetLabel={lens.label}
+                        values={box.values?.get(id) ?? null}
+                    />
+                ))}
+            </ul>
+            <div>
+                <Button onClick={onClose}>Back to Definition</Button>
+            </div>
+        </section>
+    );
+};

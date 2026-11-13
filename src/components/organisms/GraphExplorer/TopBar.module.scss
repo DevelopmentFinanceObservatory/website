@@ -1,0 +1,66 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.bar {
+    position: sticky;
+    z-index: 30;
+    top: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: rem(10) rem(24);
+    padding-block: calc(#{rem(12)} + env(safe-area-inset-top, 0px)) rem(12);
+    background-color: var(--color-bg);
+    border-bottom: 1px solid var(--color-net-mid);
+}
+
+.wordmark {
+    @include font-size(22px, 1);
+
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: rem(2);
+    margin-left: auto;
+}
+
+.link {
+    @include font-size(12px, 1);
+
+    padding: rem(8) rem(12);
+    font-family: var(--font-dm-mono);
+    letter-spacing: -0.02em;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: rem(24);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-net-light);
+        }
+    }
+
+    &[aria-current="page"] {
+        color: var(--color-bg);
+        background-color: var(--color-charcoal);
+    }
+}
+
+// On a phone the bar wraps to three lines, too tall to keep on screen.
+@include breakpoint(phone) {
+    .bar {
+        position: static;
+    }
+
+    .links {
+        margin-left: 0;
+    }
+}

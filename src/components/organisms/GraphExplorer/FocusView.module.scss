@@ -1,0 +1,74 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The picture and the panel side by side; below desktop width the panel follows the picture.
+.work {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) rem(380);
+    align-items: start;
+    gap: rem(28);
+    min-width: 0;
+}
+
+.stage {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(12);
+    min-width: 0;
+}
+
+.filter {
+    @include font-size(13px, 1.4);
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: rem(6) rem(12);
+    min-width: 0;
+    color: var(--color-stone);
+    overflow-wrap: anywhere;
+}
+
+.note {
+    @include font-size(13px, 1.4);
+
+    color: var(--color-stone);
+}
+
+.panel {
+    @include flex(column, flex-start, stretch);
+    @include font-size(15px, 1.45);
+
+    gap: rem(16);
+    min-width: 0;
+    padding: rem(18);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-sage-light);
+    border-radius: rem(6);
+}
+
+.missing {
+    @include flex(column, flex-start, flex-start);
+    @include font-size(15px, 1.4);
+
+    gap: rem(14);
+    padding-block: rem(20);
+
+    code {
+        font-family: var(--font-dm-mono);
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: #{$size-desktop - 1px}) {
+    .work {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@include breakpoint(phone) {
+    .panel {
+        padding: rem(14);
+    }
+}

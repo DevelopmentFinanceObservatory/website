@@ -1,0 +1,174 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.list {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(12);
+    min-width: 0;
+}
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: rem(10) rem(14);
+}
+
+.title {
+    @include font-size(20px, 1.1);
+
+    min-width: 0;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+}
+
+.total {
+    font-weight: 300;
+    color: var(--color-stone);
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: rem(10);
+}
+
+.filter {
+    @include font-size(13px, 1);
+
+    width: rem(240);
+    max-width: 100%;
+    height: rem(34);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    letter-spacing: -0.02em;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-stone);
+    }
+}
+
+.empty {
+    @include font-size(15px, 1.3);
+
+    padding-block: rem(16);
+    color: var(--color-stone);
+}
+
+// The table scrolls inside its own box so the page never scrolls sideways.
+.scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.table {
+    @include font-size(15px, 1.3);
+
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+        padding: rem(8) rem(16) rem(8) 0;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--color-net-mid);
+    }
+
+    th {
+        @include font-size(11px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        color: var(--color-stone);
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    thead th {
+        border-bottom-color: var(--color-charcoal);
+    }
+
+    td:first-child {
+        min-width: rem(180);
+    }
+
+    .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .num:last-child {
+        padding-right: 0;
+    }
+
+    // A dataset column head may wrap: nine labels side by side would otherwise run wide.
+    .datasetHead {
+        min-width: rem(80);
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .group th {
+        padding-top: rem(22);
+        border-bottom-color: var(--color-sage);
+    }
+}
+
+.dim td {
+    opacity: 0.38;
+}
+
+.name {
+    font-weight: 500;
+    text-decoration: none;
+
+    @media (hover: hover) {
+        &:hover {
+            text-decoration: underline;
+            text-underline-offset: rem(3);
+        }
+    }
+}
+
+.dcid {
+    @include font-size(12px, 1.3);
+
+    display: block;
+    margin-top: rem(2);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+}
+
+.mono {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+.none {
+    color: var(--color-stone);
+}
+
+.hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

@@ -1,0 +1,56 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+.explorer {
+    min-height: 100dvh;
+    padding-inline: max(#{rem(32)}, env(safe-area-inset-left, 0px))
+        max(#{rem(32)}, env(safe-area-inset-right, 0px));
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+    background-color: var(--color-bg);
+
+    :focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+    }
+}
+
+.main {
+    max-width: rem(1320);
+    margin-inline: auto;
+    padding-block: rem(20) rem(56);
+    min-width: 0;
+}
+
+.missing {
+    @include flex(column, flex-start, flex-start);
+    @include font-size(15px, 1.4);
+
+    gap: rem(14);
+    padding-block: rem(20);
+
+    code {
+        font-family: var(--font-dm-mono);
+        overflow-wrap: anywhere;
+    }
+}
+
+@include breakpoint(phone) {
+    .explorer {
+        padding-inline: max(#{rem(16)}, env(safe-area-inset-left, 0px))
+            max(#{rem(16)}, env(safe-area-inset-right, 0px));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .explorer *,
+    .explorer *::before,
+    .explorer *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
