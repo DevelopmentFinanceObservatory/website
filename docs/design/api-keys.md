@@ -187,6 +187,8 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Goal:** Optional keys work end to end, for testing and the first partner
 
+**Scope:** Keys work on both `/api/v1/*` and `/mcp`. MCP is in scope from the start because it can be a significant cost driver.
+
 **Who gets a key:** A few callers we choose
 
 **Provisioning:** Manual: an admin command creates and revokes keys
@@ -207,7 +209,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Provisioning:** Self-service from the account menu: create, label, revoke, see last use
 
-**Limits:** Default tier for self-service keys; higher tiers granted by an operator
+**Limits:** A default for self-service keys, with higher limits granted by an operator. We will examine current usage and tune the default and the anonymous thresholds at that time, as part of the transition plan.
 
 **Anonymous access:** Unchanged; docs start recommending a key
 
@@ -244,15 +246,19 @@ Most of the work is in the website. The Phase 1 pieces:
 
 Order matters between the website and dfo-apis. dfo-apis refuses a caller form it does not recognize when it arrives with the shared secret, so the dfo-apis change has to be live before the website starts sending `key:` callers.
 
+## Future Features
+
+Not planned for any phase yet. The design should not rule them out.
+
+- **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
+- **Multiple keys per account.** An account holds several keys at once, for example one per application or to rotate a key without downtime.
+
 ## Open Questions
 
-The first three need an answer before Phase 1 code is written.
+The Cloudflare question needs an answer before Phase 1 code is written.
 
 - [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See [Cloudflare Integration][cloudflare-integration].
-- [ ] **Does a key work on `/mcp` in Phase 1,** or only on `/api/v1/*`? The first partner's need is the API.
-- [ ] **What is the default self-service limit in Phase 2,** relative to the anonymous limit? It has to be worth signing up for.
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
-- [ ] **Do keys expire,** and can an account hold more than one?
 - [ ] **Does a key identify an account to the backends as well,** so a signed-in user's key and their site session share allowances? dfo-ai already names a `user:` caller form.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
