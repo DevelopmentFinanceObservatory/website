@@ -248,7 +248,7 @@ Order matters between the website and dfo-apis. dfo-apis refuses a caller form i
 
 The first three need an answer before Phase 1 code is written.
 
-- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See Cloudflare Integration.
+- [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See [Cloudflare Integration][cloudflare-integration].
 - [ ] **Does a key work on `/mcp` in Phase 1,** or only on `/api/v1/*`? The first partner's need is the API.
 - [ ] **What is the default self-service limit in Phase 2,** relative to the anonymous limit? It has to be worth signing up for.
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
@@ -258,3 +258,4 @@ The first three need an answer before Phase 1 code is written.
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
+[cloudflare-integration]: #cloudflare-integration
