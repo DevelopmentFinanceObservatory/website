@@ -46,8 +46,9 @@ import { schemaBody, usageBody } from './fixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
+/** `n` rows, each told apart by its dcid. */
 const rowsOf = (n: number): SchemaCheckRow[] =>
-    Array.from({ length: n }, (_, at) => ({ ref: `r${at}`, measured_property: 'amount' }));
+    Array.from({ length: n }, (_, at) => ({ dcid: `r${at}`, measured_property: 'amount' }));
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), {
@@ -55,16 +56,15 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
         headers: { 'content-type': 'application/json', ...headers },
     });
 
-/** A wire finding about request row `row`, echoing the row's ref. */
-const wireFinding = (row: number, ref: string | null | undefined): SchemaFinding => ({
+/** A wire finding about request row `row`, whose value is the row's dcid. */
+const wireFinding = (row: number, dcid: string | null | undefined): SchemaFinding => ({
     row,
-    ref: ref ?? null,
-    field: 'measured_property',
+    field: 'dcid',
     property: null,
     subject: 'value',
-    value: 'amount',
+    value: dcid ?? null,
     served: null,
-    code: 'not_a_property',
+    code: 'definition_differs',
     severity: 'error',
 });
 
@@ -72,9 +72,8 @@ const wireFinding = (row: number, ref: string | null | undefined): SchemaFinding
 const answer = (rows: readonly SchemaCheckRow[], count = rows.length) =>
     json(200, {
         generation: 'g1',
-        row_count: count,
-        next_row: count === rows.length ? null : count,
-        findings: rows.slice(0, count).map((row, at) => wireFinding(at, row.ref)),
+        rows_checked: count,
+        findings: rows.slice(0, count).map((row, at) => wireFinding(at, row.dcid)),
     });
 
 /** A fetch answering `respond` for each request body, recording the rows sent and the waits. */
@@ -88,7 +87,8 @@ const rig = (respond: (rows: SchemaCheckRow[], call: number) => Response) => {
             assert.equal(String(url), CHECK_URL);
             assert.equal(init?.method, 'POST');
             const { rows } = JSON.parse(String(init?.body)) as { rows: SchemaCheckRow[] };
-            sent.push(rows.map((row) => row.ref));
+            assert.ok(rows.every((row) => !('ref' in row)));
+            sent.push(rows.map((row) => row.dcid));
             return respond(rows, sent.length);
         },
         sleep: async (ms: number) => {
@@ -101,9 +101,9 @@ const rig = (respond: (rows: SchemaCheckRow[], call: number) => Response) => {
     return { options, sent, waits, progress };
 };
 
-/** Each finding's index and the ref it echoes, which must be the ref of the row at that index. */
+/** Each finding's index and the dcid it names, which must be the dcid of the row at that index. */
 const placed = (findings: readonly RowFinding[]) =>
-    findings.map(({ index, finding }) => [index, finding.ref]);
+    findings.map(({ index, finding }) => [index, finding.value]);
 
 test('a paste past the request cap goes in requests of CHECK_MAX_ROWS rows, findings by row', async () => {
     const { options, sent, progress } = rig((rows) => answer(rows));
@@ -116,7 +116,7 @@ test('a paste past the request cap goes in requests of CHECK_MAX_ROWS rows, find
     assert.equal(result.rowCount, CHECK_MAX_ROWS + 5);
     assert.deepEqual(
         placed(result.findings),
-        rows.map((row, at) => [at, row.ref]),
+        rows.map((row, at) => [at, row.dcid]),
     );
     assert.deepEqual(result.generations, ['g1']);
     assert.deepEqual(result.refused, []);
@@ -126,7 +126,7 @@ test('a paste past the request cap goes in requests of CHECK_MAX_ROWS rows, find
     );
 });
 
-test('an answer checking a prefix resumes at next_row and maps findings by start + row', async () => {
+test('an answer checking a prefix resumes at rows_checked and maps findings by start + row', async () => {
     // The route checks three rows of each request, as it does when its read budget runs out.
     const { options, sent } = rig((rows) => answer(rows, Math.min(3, rows.length)));
     const rows = rowsOf(8);
@@ -139,13 +139,13 @@ test('an answer checking a prefix resumes at next_row and maps findings by start
     assert.equal(result.rowCount, 8);
     assert.deepEqual(
         placed(result.findings),
-        rows.map((row, at) => [at, row.ref]),
+        rows.map((row, at) => [at, row.dcid]),
     );
 });
 
-/** A route refusing any request that holds a row with ref `bad`, naming it by its pointer. */
+/** A route refusing any request that holds a row with dcid `bad`, naming it by its pointer. */
 const refusing = (bad: string) => (rows: SchemaCheckRow[]) => {
-    const at = rows.findIndex((row) => row.ref === bad);
+    const at = rows.findIndex((row) => row.dcid === bad);
     return at === -1
         ? answer(rows)
         : json(400, {
@@ -167,7 +167,7 @@ test('a 400 naming a row refuses that row and checks the rest without it', async
     assert.equal(result.rowCount, 6);
     assert.deepEqual(
         placed(result.findings),
-        rows.flatMap((row, at) => (at === 4 ? [] : [[at, row.ref]])),
+        rows.flatMap((row, at) => (at === 4 ? [] : [[at, row.dcid]])),
     );
     assert.equal(progress.at(-1)?.checked, 7);
 });
@@ -214,30 +214,81 @@ test('a 400 naming a row that was not sent stops the check', async () => {
     await assert.rejects(checkRows(rowsOf(3), options), { name: 'CheckError', reason: 'pointer' });
 });
 
-test('a 503 with Retry-After waits as busy or building, then the 200 is read', async () => {
-    const causes: WaitCause[] = [];
-    const { options, sent, waits } = rig((rows, call) =>
-        call === 1 ? json(503, {}, { 'retry-after': '3' }) : answer(rows),
+/** A 503 problem with `Retry-After`, naming `code` as its cause when given. */
+const unavailable = (code?: string, retryAfter = '3') =>
+    json(
+        503,
+        { code: 'service_unavailable', retryable: true, ...(code ? { cause: { code } } : {}) },
+        { 'retry-after': retryAfter },
     );
-    const result = await checkRows(rowsOf(2), {
-        ...options,
-        onWait: (_ms, cause) => causes.push(cause),
-    });
-    assert.deepEqual(waits, [3000]);
-    assert.deepEqual(causes, ['busy_or_building']);
-    assert.equal(sent.length, 2);
-    assert.equal(result.findings.length, 2);
-});
 
-test('a 503 still answering after a minute stops the check as busy or building', async () => {
-    const { options } = rig(() => json(503, {}, { 'retry-after': '20' }));
-    await assert.rejects(checkRows(rowsOf(1), options), (error: unknown) => {
-        assert.ok(error instanceof CheckError);
-        assert.equal(error.reason, 'build_timeout');
-        assert.match(error.message, /busy, or still building/);
-        return true;
+for (const [code, cause] of [
+    ['check_busy', 'check_busy'],
+    ['schema_building', 'schema_building'],
+    ['some_new_cause', 'unavailable'],
+    [undefined, 'unavailable'],
+] as const) {
+    test(`a 503 with Retry-After and cause ${code ?? 'none'} waits as ${cause}, then the 200 is read`, async () => {
+        const causes: WaitCause[] = [];
+        const { options, sent, waits } = rig((rows, call) =>
+            call === 1 ? unavailable(code) : answer(rows),
+        );
+        const result = await checkRows(rowsOf(2), {
+            ...options,
+            onWait: (_ms, waitCause) => causes.push(waitCause),
+        });
+        assert.deepEqual(waits, [3000]);
+        assert.deepEqual(causes, [cause]);
+        assert.equal(sent.length, 2);
+        assert.equal(result.findings.length, 2);
     });
-});
+}
+
+for (const [code, reason, words] of [
+    ['check_busy', 'unavailable', /still busy with other checks/],
+    ['schema_building', 'build_timeout', /still building the schema/],
+    [undefined, 'unavailable', /not ready to answer/],
+] as const) {
+    test(`a 503 with cause ${code ?? 'none'} still answering after a minute stops the check as ${reason}`, async () => {
+        const { options } = rig(() => unavailable(code, '20'));
+        await assert.rejects(checkRows(rowsOf(1), options), (error: unknown) => {
+            assert.ok(error instanceof CheckError);
+            assert.equal(error.reason, reason);
+            assert.match(error.message, words);
+            return true;
+        });
+    });
+}
+
+for (const [name, response] of [
+    [
+        'a 503 saying retryable: false',
+        json(
+            503,
+            { code: 'service_unavailable', detail: 'no schema to check against', retryable: false },
+            { 'retry-after': '3' },
+        ),
+    ],
+    [
+        'a 500',
+        json(500, {
+            code: 'internal_error',
+            detail: 'no schema to check against',
+            retryable: false,
+        }),
+    ],
+] as const) {
+    test(`${name} stops the check at once with its detail`, async () => {
+        const { options, sent, waits } = rig(() => response.clone());
+        await assert.rejects(checkRows(rowsOf(2), options), {
+            name: 'CheckError',
+            reason: 'status',
+            detail: 'no schema to check against',
+        });
+        assert.deepEqual(waits, []);
+        assert.equal(sent.length, 1);
+    });
+}
 
 test('a 429 from the site’s proxy with Retry-After waits, then the 200 is read', async () => {
     const { options, sent, waits } = rig((rows, call) =>
@@ -267,26 +318,22 @@ test('a 200 out of shape stops the check with a CheckError', async () => {
     await assert.rejects(checkRows(rowsOf(1), options), { name: 'CheckError', reason: 'shape' });
 });
 
-for (const [name, count, next, row] of [
-    ['no rows checked', 0, 0, 0],
-    ['more rows checked than sent', 4, null, 0],
-    ['every row checked and a next row named', 3, 3, 0],
-    ['a prefix checked and no next row', 2, null, 0],
-    ['a next row other than the count', 2, 1, 0],
-    ['a finding past the rows checked', 2, 2, 2],
+for (const [name, count, row] of [
+    ['no rows checked', 0, 0],
+    ['more rows checked than sent', 4, 0],
+    ['a finding past the rows checked', 2, 2],
 ] as const) {
     test(`an answer with ${name} stops the check`, async () => {
         const { options } = rig(() =>
             json(200, {
                 generation: 'g1',
-                row_count: count,
-                next_row: next,
+                rows_checked: count,
                 findings: [wireFinding(row, null)],
             }),
         );
         await assert.rejects(checkRows(rowsOf(3), options), {
             name: 'CheckError',
-            reason: 'row_count',
+            reason: 'rows_checked',
         });
     });
 }
@@ -295,8 +342,7 @@ test('requests answered at different generations name every generation', async (
     const { options } = rig((rows, call) =>
         json(200, {
             generation: `g${Math.min(call, 2)}`,
-            row_count: Math.min(2, rows.length),
-            next_row: rows.length > 2 ? 2 : null,
+            rows_checked: Math.min(2, rows.length),
             findings: [],
         }),
     );
@@ -365,7 +411,6 @@ test('a check that outlasts its overall bound stops as a timeout', async () => {
 
 const finding = (overrides: Partial<SchemaFinding>): SchemaFinding => ({
     row: 0,
-    ref: null,
     field: 'constraint_properties',
     property: 'dac1AidType',
     subject: 'value',
@@ -475,6 +520,48 @@ test('a constraint key the graph lacks is named as typed, with no term link', ()
     );
     assert.ok(parts.some((part) => part.kind === 'value' && part.text === 'crsPurpos'));
     assert.ok(!parts.some((part) => part.kind === 'term'));
+});
+
+test('a literal where a node belongs says it is not an id, apart from a dcid the graph lacks', () => {
+    const notANode = messageText(
+        findingMessage(model, finding({ code: 'not_a_node', value: 1020 })),
+    );
+    const notHeld = messageText(findingMessage(model, finding({ code: 'node_not_held' })));
+    assert.match(notANode, /^1020 is not an id, and the dac1AidType takes a node/);
+    assert.match(notHeld, /^The graph has no value DAC1AidTpye1020\./);
+});
+
+test('a field, subject or severity this page does not know reads in plain words', () => {
+    const odd = finding({
+        field: 'some_new_field',
+        property: null,
+        subject: 'cell',
+        severity: 'info',
+        code: 'value_missing',
+        value: null,
+    });
+    assert.match(
+        messageText(findingMessage(model, odd)),
+        /^This row has no some_new_field, and every row needs one\./,
+    );
+    assert.deepEqual(resultCounts({ findings: at([odd]), refused: [] }), {
+        errors: 0,
+        warnings: 1,
+    });
+    const lines = findingLines(model, mapHeaders(model, ['dac1AidType']), SHEET_ROWS, at([odd]));
+    assert.deepEqual(
+        lines.map(({ row, column }) => [row, column]),
+        [[4, null]],
+    );
+    assert.deepEqual([...sheetMarks(lines, [], SHEET_ROWS).flaggedRows], [4]);
+    const marked = findingLines(
+        model,
+        mapHeaders(model, ['dac1AidType']),
+        SHEET_ROWS,
+        at([finding({ severity: 'info', subject: 'cell' })]),
+    );
+    assert.deepEqual([...sheetMarks(marked, [], SHEET_ROWS).cells], [[cellKey(4, 0), 'warning']]);
+    assert.deepEqual(closestLookup(model)(marked[0]!.finding), []);
 });
 
 test('edit distance counts single-character edits', () => {

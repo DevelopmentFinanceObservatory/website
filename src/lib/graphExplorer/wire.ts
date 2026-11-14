@@ -6,12 +6,23 @@
  * `typeOf`, `sub_class_of` is `subClassOf`, and so on. Each guard checks
  * every member of every node, pattern, term and finding, so a response
  * with a different shape fails at the point it enters, before any screen
- * reads it.
+ * reads it. A member drawn from a fixed list that may grow (`declared_by`,
+ * a finding's `field`, `subject`, `severity` and `code`) passes as any
+ * string, and the screens read a value they do not know with plain words.
  */
 import { asRecord } from '../asRecord.ts';
 
-/** Who declares a node: base when every declaring provenance is a base Data Commons one. */
-export type DeclaredBy = 'instance' | 'base';
+/**
+ * The origins that declare a node, by the origin ids the Graph API uses
+ * elsewhere: DFO, base Data Commons, or the UN System Data Commons.
+ */
+export const DECLARERS = ['dfo', 'base', 'un_system'] as const;
+
+export type Declarer = (typeof DECLARERS)[number];
+
+/** True for an origin this page has words for. The server may send others. */
+export const isDeclarer = (value: string): value is Declarer =>
+    (DECLARERS as readonly string[]).includes(value);
 
 /** The members of an enumeration Class. */
 export type SchemaEnumeration = {
@@ -51,8 +62,12 @@ export type SchemaNode = {
     classification_code: string[];
     /** The provenances declaring the node's `typeOf` arc. */
     provenances: string[];
-    /** Null when the graph names no declaring provenance for the node. */
-    declared_by: DeclaredBy | null;
+    /**
+     * The origin declaring the node: one of DECLARERS, or an origin the
+     * server names that DECLARERS lacks. Null when the graph names no
+     * declaring provenance for the node.
+     */
+    declared_by: string | null;
     /** Set on an enumeration Class, null on every other node. */
     enumeration: SchemaEnumeration | null;
     other_properties: OtherProperties;
@@ -71,8 +86,8 @@ export type SchemaTerm = {
     name: string | null;
     types: ('Class' | 'Property')[];
     provenances: string[];
-    /** Null when the graph names no declaring provenance for the term. */
-    declared_by: DeclaredBy | null;
+    /** As on a schema node: one of DECLARERS, another origin, or null. */
+    declared_by: string | null;
 };
 
 /** GET /api/graph/schema/terms: every Class and Property on the graph. */
@@ -138,8 +153,6 @@ export type CheckConstraintValue = string | number | boolean | null;
 
 /** One candidate StatisticalVariable definition. An empty string counts as absent. */
 export type SchemaCheckRow = {
-    /** The caller's label, echoed on its findings. */
-    ref?: string | null;
     dcid?: string | null;
     population_type?: string | null;
     measured_property?: string | null;
@@ -184,6 +197,7 @@ export const FINDING_CODES = [
     'property_outside_domain',
     'definition_differs',
     'origin_not_served',
+    'not_a_node',
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -206,6 +220,10 @@ export const CHECK_FIELDS = [
 
 export type CheckField = (typeof CHECK_FIELDS)[number];
 
+/** True for a row member this page has words for. The server may name others. */
+export const isCheckField = (field: string): field is CheckField =>
+    (CHECK_FIELDS as readonly string[]).includes(field);
+
 /** A finding's value as sent, or as served on `definition_differs`. */
 export type FindingValue = CheckConstraintValue | string[];
 
@@ -213,31 +231,33 @@ export type FindingValue = CheckConstraintValue | string[];
 export type SchemaFinding = {
     /** The row's index in the request's `rows`. */
     row: number;
-    /** The row's `ref`, or null. */
-    ref: string | null;
-    field: CheckField;
+    /** One of CHECK_FIELDS, or a row member the server names that CHECK_FIELDS lacks. */
+    field: string;
     /** The constraint or observation property the finding is about, else null. */
     property: string | null;
-    /** `property` when the finding judges the property itself, else `value`. */
-    subject: 'property' | 'value';
+    /**
+     * `property` when the finding judges the property itself, else `value`.
+     * Any other value reads as `value`.
+     */
+    subject: string;
     /** What was sent for the judged cell: the property dcid when `subject` is `property`. */
     value: FindingValue;
     /** The served value on `definition_differs`, null otherwise. */
     served: FindingValue;
     /** One of FINDING_CODES, or a code the server sends that FINDING_CODES lacks. */
     code: string;
-    severity: 'error' | 'warning';
+    /** `error` or `warning`. Any other value reads as a warning. */
+    severity: string;
 };
 
 /**
  * The answer to a check request. The rows checked are the first
- * `row_count` sent, and `next_row` is the first row left unchecked, or null
- * when every row was checked.
+ * `rows_checked` sent; the caller resumes at `rows_checked` when it is less
+ * than the rows sent.
  */
 export type SchemaCheckResponse = {
     generation: string | null;
-    row_count: number;
-    next_row: number | null;
+    rows_checked: number;
     findings: SchemaFinding[];
 };
 
@@ -320,8 +340,6 @@ const openMap: Check = (value, path) => {
         openValues(values, `${path}.${property}`);
 };
 
-const declaredBy = oneOf(['instance', 'base']);
-
 const schemaDocument = obj({
     generation: nullable(str),
     nodes: list(
@@ -338,7 +356,7 @@ const schemaDocument = obj({
             range_includes: strList,
             classification_code: strList,
             provenances: strList,
-            declared_by: nullable(declaredBy),
+            declared_by: nullable(str),
             enumeration: nullable(obj({ members: strList, complete: bool })),
             other_properties: openMap,
         }),
@@ -353,7 +371,7 @@ const schemaTerms = obj({
             name: nullable(str),
             types: list(oneOf(['Class', 'Property'])),
             provenances: strList,
-            declared_by: nullable(declaredBy),
+            declared_by: nullable(str),
         }),
     ),
 });
@@ -408,19 +426,17 @@ const index: Check = (value, path) => {
 
 const schemaCheckResponse = obj({
     generation: nullable(str),
-    row_count: index,
-    next_row: nullable(index),
+    rows_checked: index,
     findings: list(
         obj({
             row: index,
-            ref: nullable(str),
-            field: oneOf(CHECK_FIELDS),
+            field: str,
             property: nullable(str),
-            subject: oneOf(['property', 'value']),
+            subject: str,
             value: findingValue,
             served: findingValue,
             code: str,
-            severity: oneOf(['error', 'warning']),
+            severity: str,
         }),
     ),
 });

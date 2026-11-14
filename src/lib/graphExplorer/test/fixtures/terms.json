@@ -276,14 +276,14 @@
         },
         {
             "dcid": "AgentSkill",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "agent skill",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "AgentSkillReference",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "agent skill reference",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
@@ -1067,910 +1067,910 @@
         },
         {
             "dcid": "CRSCooperationModalityEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS Modality",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CRSPurposeCodeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS Purpose",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CRSTypeOfFinanceEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS Finance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CRSTypeOfFlowEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS Flow",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "ClimateChangePolicyObjectiveEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "climate change policy objective",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "ConversionRecipeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "conversion recipe",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CurrencyConversionBasisEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "currency conversion basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CurrencyDenomination",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "Currency denomination",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CurrencyStatusEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "Currency status",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CurrencyUnit",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "Currency",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "CyclicalAdjustmentEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "cyclical adjustment",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DAC1AidTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 1 aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DAC2aAidTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 2a aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DAC2bAidTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 2b aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DACGroup",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC group",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DACPartEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC list part",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DACRecipientUnallocatedByCountry",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC recipient unallocated by country",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DACTypeOfFinanceEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC type of finance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "DACUnspecifiedParty",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC unspecified party",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "EconomicProduction",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "economic production",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "EconomicUnit",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "economic unit",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinalExpenditure",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "final expenditure",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinalExpenditureTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "final expenditure type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialFlow",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial flow",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialFlowTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial flow type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialObligation",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial obligation",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialObligationTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial obligation type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialPosition",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial position",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancialPositionTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial position type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancingEvent",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing event",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancingFormEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing form",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancingPurposeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing purpose",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FinancingResourceEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing resource",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "FixedCapitalConsumptionBasisEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "fixed capital consumption basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "GeoGrouping",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "geographic grouping",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "Grouping",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "grouping",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "GuaranteeStatusEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "guarantee status",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IDSConcessionalityEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS concessionality",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IDSCreditorTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS creditor type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IDSDebtorTypeEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS debtor type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IDSUnidentifiedCreditor",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS unidentified creditor",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IMFEconomyGroup",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IMF economy group",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IMFRegion",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IMF region",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "IncludesIMFCreditEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "includes IMF credit",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "InterestRateVariabilityEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "interest rate variability",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "M49IntermediateRegion",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "UN M49 intermediate region",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "M49Region",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "UN M49 region",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "M49SubRegion",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "UN M49 sub-region",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "MaturityBandEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "maturity band",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "MeasurementEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "measurement method",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "NettingBasisEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "netting basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "NonSpecificCurrency",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "Non-specific currency",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "PolicyObjectiveEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "policy objective",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "PositionValuationEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "position valuation",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "ProductTaxBasisEnum",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "product tax basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "PurchasingPowerUnit",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "purchasing power unit",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "UNCountryDevelopmentGroup",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "UN country development group",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "WorldBankIncomeGroup",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank income group",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "WorldBankLendingGroup",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank lending group",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "WorldBankRegion",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank region",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Class"]
         },
         {
             "dcid": "agentSkillReferences",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "agent skill references",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "amountMobilised",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "amount mobilised",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "attributedAmount",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "attributed amount",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "classificationCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "classification code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "climatePolicyObjective",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "climate change policy objective",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "combinesMethods",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "combines methods",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "conversionRecipe",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "conversion recipe",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "crsCooperationModality",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS cooperation modality",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "crsPurpose",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS purpose",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "crsTypeOfFinance",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS type of finance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "crsTypeOfFlow",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "CRS type of flow",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "currencyConversionBasis",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "currency conversion basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "currencyOfDenomination",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "currency of denomination",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "currencyStatus",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "currency status",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "cyclicalAdjustment",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "cyclical adjustment",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dac1AidType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 1 aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dac2aAidType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 2a aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dac2bAidType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC 2b aid type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dacCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dacPart",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC list part",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dacTypeOfFinance",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "DAC type of finance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dataTransformationChangelog",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "data transformation changelog",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "dataTransformationDescription",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "data transformation description",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "deflator",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": null,
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "deflatorBaseYear",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "deflator base year",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "economicBalance",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "economic balance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "finalExpenditureType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "final expenditure type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financialFlowType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial flow type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financialObligationType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial obligation type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financialPositionType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financial position type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingForm",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing form",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingParticipant",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing participant",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingProvider",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing provider",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingPurpose",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing purpose",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingRecipient",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing recipient",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "financingResource",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "financing resource",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "fixedCapitalConsumptionBasis",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "fixed capital consumption basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "gracePeriod",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "grace period",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "grantElement",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "grant element",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "grantEquivalent",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "grant equivalent",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "guaranteeStatus",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "guarantee status",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "hasMember",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "has member",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "idsConcessionality",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS concessionality",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "idsCreditorType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS creditor type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "idsDebtorType",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IDS debtor type",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "imfEconomyCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "IMF economy code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "includesIMFCredit",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "includes IMF credit",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "incomeBalance",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "income balance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "interestRateVariability",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "interest rate variability",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "iso4217AlphaCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "ISO 4217 currency code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "iso4217NumericCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "ISO 4217 currency number",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "m49Code",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "M49 code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "maturityBand",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "maturity band",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "nationalCurrencyOf",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "national currency of",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "netOf",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "net of",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "nettingBasis",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "netting basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "outputGap",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "output gap",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "partialObservationDate",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "partial observation date",
             "provenances": ["provenance/DFOShared"],
             "types": ["Property"]
         },
         {
             "dcid": "policyObjective",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "policy objective",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "positionValuation",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "position valuation",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "primaryIncome",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "primary income",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "productTaxBasis",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "product tax basis",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "saving",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": null,
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "skillAppliesTo",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "skill applies to",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "skillAppliesToProvenance",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "skill applies to provenance",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "sourceIndicatorCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "source indicator code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "valueAdded",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "value added",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "wbCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "wbCounterpartCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank counterpart code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]
         },
         {
             "dcid": "wbEconomyCode",
-            "declared_by": "instance",
+            "declared_by": "dfo",
             "name": "World Bank economy code",
             "provenances": ["provenance/DFOOntology"],
             "types": ["Property"]

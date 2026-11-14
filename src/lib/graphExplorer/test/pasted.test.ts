@@ -170,7 +170,6 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
     assert.equal(rows.length, 3);
     assert.deepEqual(sheetRows, [2, 3, 5]);
     assert.deepEqual(rows[0], {
-        ref: '2',
         dcid: null,
         population_type: 'FinancialFlow',
         measured_property: 'amount',
@@ -180,12 +179,10 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
         constraint_properties: { nettingBasis: 'Gross' },
         observation_properties: ['financingProvider', 'financingRecipient'],
     });
-    assert.equal(rows[1]?.ref, '3');
     // An empty measured property goes to the route, which reports it.
     assert.equal(rows[1]?.measured_property, null);
     assert.deepEqual(rows[1]?.constraint_properties, { financialFlowType: 'Buyback' });
     assert.deepEqual(rows[1]?.observation_properties, []);
-    assert.equal(rows[2]?.ref, '5');
     assert.equal(rows[2]?.population_type, null);
 });
 
@@ -207,7 +204,6 @@ test('a leading dcid: is dropped from definition, observation and constraint cel
         ],
     ]);
     assert.deepEqual(rows[0], {
-        ref: '2',
         dcid: 'sv1',
         population_type: 'FinancialFlow',
         measured_property: 'amount',
@@ -363,7 +359,6 @@ test('a repeated definition field keeps its first column', () => {
 
 const finding = (field: CheckField, property: string | null = null): SchemaFinding => ({
     row: 0,
-    ref: null,
     field,
     property,
     subject: 'value',

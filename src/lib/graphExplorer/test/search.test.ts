@@ -119,6 +119,21 @@ test('a term with no declaring provenance outside the model is found', () => {
     );
 });
 
+test('a term outside the model carries the base tag only when base Data Commons declares it', () => {
+    const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.dcid === 'AdministrativeArea1');
+    assert.ok(term);
+    const exact = () =>
+        search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) })
+            .hits.filter((hit) => hit.match === 'exact')
+            .map((hit) => [hit.id, hit.inModel, hit.base]);
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, true]]);
+    term.declared_by = 'un_system';
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, false]]);
+    term.declared_by = 'dfo';
+    assert.deepEqual(exact(), []);
+});
+
 test('a base term the model holds is found once, as part of the model', () => {
     const hits = search(model, 'AdministrativeArea', { baseTerms }).hits;
     assert.deepEqual(

@@ -274,8 +274,8 @@ const nodeRef = (cell: string): string =>
     cell.startsWith('dcid:') ? cell.slice('dcid:'.length).trim() : cell;
 
 /**
- * Check rows in the wire shape. `ref` is the sheet row number, which the
- * route echoes. Each property or field is read from the one column the
+ * Check rows in the wire shape, with `sheetRows` naming the sheet row of
+ * each. Each property or field is read from the one column the
  * mapping gives it, the column `findingColumn` places its findings on, and
  * a leading `dcid:` is dropped from each value. An empty cell leaves its
  * property or field out (null), and the route reports a missing measured
@@ -301,7 +301,6 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
         }
         const optional = (field: DefinitionField): string | null => definition(field) || null;
         checked.push({
-            ref: String(sheetRow(dataIndex)),
             dcid: optional('dcid'),
             population_type: optional('populationType'),
             measured_property: optional('measuredProperty'),

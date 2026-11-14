@@ -11,6 +11,7 @@
  * BOX_LIMIT and opens the rest where `more` says.
  */
 import {
+    declarerWords,
     KIND_WORDS,
     kindOfTerm,
     type DatasetFilter,
@@ -260,6 +261,12 @@ export type CentreHeading = {
     readonly term: SchemaTerm | undefined;
 };
 
+/** The origin declaring a term outside the model, for its heading: "Base Data Commons". */
+const termOrigin = (term: SchemaTerm): string => {
+    const words = declarerWords(term.declared_by);
+    return words === null ? 'On the graph' : words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 /**
  * The heading for a centred dataset, model term, or term outside the model
  * (found in `baseTerms` when given). Null for a dataset the model lacks.
@@ -293,7 +300,7 @@ export function centreHeading(
     }
     const term = baseTerms?.terms.find((entry) => entry.dcid === centre.id);
     return {
-        kind: term ? 'Base Data Commons' : 'Not in the DFO model',
+        kind: term ? termOrigin(term) : 'Not in the DFO model',
         name: term?.name ?? centre.id,
         sub: { kind: 'dcid', id: centre.id },
         base: term?.declared_by === 'base',

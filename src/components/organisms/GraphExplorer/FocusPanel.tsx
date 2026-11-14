@@ -21,7 +21,7 @@ import {
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
+import { declarerWords, KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
 import { sheetHref } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
@@ -224,16 +224,10 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
             )}
             {node.declared_by !== null && (
                 <p className={styles.line}>
-                    Declared by{' '}
+                    Declared by {declarerWords(node.declared_by)} in{' '}
                     <span className={styles.mono}>
                         {node.provenances.join(', ') || 'no source'}
                     </span>
-                    {model.isBase(id) && (
-                        <>
-                            {' '}
-                            <BaseTag />
-                        </>
-                    )}
                 </p>
             )}
             {domain && (

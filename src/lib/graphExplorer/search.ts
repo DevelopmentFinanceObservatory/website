@@ -2,7 +2,7 @@
  * Search over the model: terms, values and datasets by label, dcid,
  * alternate name, classification code, and the names and values of each
  * node's open properties. With the terms list it also
- * reaches base classes and properties the model does not hold.
+ * reaches classes and properties the model does not hold.
  */
 import { kindOfTerm, openNames, type Kind, type Model } from './model.ts';
 import type { SchemaTerms } from './wire.ts';
@@ -17,7 +17,7 @@ export type SearchHit = {
     readonly match: MatchRank;
     /** Declared by base Data Commons. */
     readonly base: boolean;
-    /** False for a base term found only in the terms list. */
+    /** False for a term found only in the terms list. */
     readonly inModel: boolean;
 };
 
@@ -29,7 +29,7 @@ export type SearchResult = {
 };
 
 export type SearchOptions = {
-    /** The terms list. When given, base terms outside the model are searched too. */
+    /** The terms list. When given, terms outside the model are searched too. */
     readonly baseTerms?: SchemaTerms;
     readonly limit?: number;
 };
@@ -49,12 +49,12 @@ const bestMatch = (query: string, fields: readonly (string | null)[]): MatchRank
     return best === undefined ? undefined : RANKS[best];
 };
 
-/** Instance terms and datasets, then base terms in the model, then terms outside it. */
+/** DFO terms and datasets, then base terms in the model, then terms outside it. */
 const tier = (hit: SearchHit): number => (!hit.inModel ? 2 : hit.base ? 1 : 0);
 
 /**
  * Hits for `query`, case-insensitive, ranked exact, then prefix, then
- * substring. Within a rank, instance terms come before base terms, then by label.
+ * substring. Within a rank, DFO terms come before base terms, then by label.
  */
 export function search(model: Model, query: string, options: SearchOptions = {}): SearchResult {
     const { baseTerms, limit = 12 } = options;
@@ -93,7 +93,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
         });
     }
     for (const term of baseTerms?.terms ?? []) {
-        if (term.declared_by === 'instance' || model.node(term.dcid)) continue;
+        if (term.declared_by === 'dfo' || model.node(term.dcid)) continue;
         const match = bestMatch(needle, [term.name, term.dcid]);
         if (match === undefined) continue;
         hits.push({
@@ -101,7 +101,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             kind: kindOfTerm(term),
             label: term.name ?? term.dcid,
             match,
-            base: true,
+            base: term.declared_by === 'base',
             inModel: false,
         });
     }

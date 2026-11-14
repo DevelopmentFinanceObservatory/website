@@ -7,14 +7,16 @@
  * `valueList`, a Property is a `property`, any other node is a `value`, and a
  * provenance of the usage document is a `dataset`.
  */
-import type {
-    OpenValue,
-    SchemaDocument,
-    SchemaNode,
-    SchemaPattern,
-    ProvenanceUsage,
-    SchemaUsage,
-    SchemaTerm,
+import {
+    isDeclarer,
+    type Declarer,
+    type OpenValue,
+    type SchemaDocument,
+    type SchemaNode,
+    type SchemaPattern,
+    type ProvenanceUsage,
+    type SchemaUsage,
+    type SchemaTerm,
 } from './wire.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
@@ -26,6 +28,22 @@ export const KIND_WORDS: Readonly<Record<Kind | 'dataset', string>> = {
     property: 'Property',
     value: 'Value',
     dataset: 'Dataset',
+};
+
+/** The reader's words for each origin that declares a node. */
+const DECLARER_WORDS: Readonly<Record<Declarer, string>> = {
+    dfo: 'DFO',
+    base: 'base Data Commons',
+    un_system: 'UN System Data Commons',
+};
+
+/**
+ * The words for the origin a node's `declared_by` names, or null when it
+ * names none. An origin this page has no words for reads as "another origin".
+ */
+export const declarerWords = (declaredBy: string | null): string | null => {
+    if (declaredBy === null) return null;
+    return isDeclarer(declaredBy) ? DECLARER_WORDS[declaredBy] : 'another origin';
 };
 
 /** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
@@ -111,7 +129,7 @@ export type DatasetView = {
     readonly splits: readonly DatasetSplit[];
 };
 
-/** The properties a scoped list covers: one class's, or every instance-declared property. */
+/** The properties a scoped list covers: one class's, or every DFO-declared property. */
 export type ListScope =
     { readonly kind: 'class'; readonly id: string } | { readonly kind: 'instance' };
 
@@ -199,7 +217,7 @@ export type Model = {
     propertiesOf(classId: string): ClassProperties;
     /** The ids, each once, most used first, then by label. */
     byUse(ids: Iterable<string>): readonly string[];
-    /** The properties the instance declares, most used first, then by label. */
+    /** The properties DFO declares, most used first, then by label. */
     instanceProperties(): readonly string[];
     datasetView(id: string): DatasetView | undefined;
     valuesUsed(datasetId: string, propertyId: string): ValuesUsed | null;
@@ -554,10 +572,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     const instanceProperties = (): readonly string[] =>
         (instanceList ??= Object.freeze(
             nodes
-                .filter(
-                    (node) =>
-                        kinds.get(node.dcid) === 'property' && node.declared_by === 'instance',
-                )
+                .filter((node) => kinds.get(node.dcid) === 'property' && node.declared_by === 'dfo')
                 .map((node) => node.dcid)
                 .sort(moreUsed),
         ));

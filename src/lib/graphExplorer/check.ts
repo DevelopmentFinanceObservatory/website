@@ -20,6 +20,7 @@ import type { SentencePart } from './sentence.ts';
 import {
     CHECK_DEADLINE_MS,
     CHECK_MAX_ROWS,
+    isCheckField,
     isFindingCode,
     readCheckResponse,
     type CheckField,
@@ -45,10 +46,10 @@ export const CHECK_REQUEST_TIMEOUT_MS = CHECK_DEADLINE_MS + 10_000;
 export const CHECK_LIMIT_MS = 5 * 60_000;
 
 /**
- * Why a check stopped: a request failure, an answer whose row counts do not
- * fit the rows sent, or a refusal naming no row that was sent.
+ * Why a check stopped: a request failure, an answer whose rows checked or
+ * findings do not fit the rows sent, or a refusal naming no row that was sent.
  */
-export type CheckFailureReason = FailureReason | 'row_count' | 'pointer';
+export type CheckFailureReason = FailureReason | 'rows_checked' | 'pointer';
 
 /** A check that could not finish. `message` says why, and `reason` says so for code. */
 export class CheckError extends GraphFailure<CheckFailureReason> {
@@ -94,26 +95,29 @@ type Answer =
 /** The row a refusal's pointer names: `/rows/<i>` or a member under it. */
 const ROW_POINTER = /^\/rows\/(\d+)(?:\/|$)/;
 
-/** Why `body` does not fit a request of `sent` rows, or null when it does. */
+/**
+ * Why `body` does not fit a request of `sent` rows, or null when it does.
+ * An answer checking no row would never finish the check, and one checking
+ * more rows than sent, or with a finding past the rows checked, names rows
+ * that cannot be placed.
+ */
 const misfit = (body: SchemaCheckResponse, sent: number): string | null => {
-    const { row_count: count, next_row: next } = body;
+    const count = body.rows_checked;
     if (count < 1 || count > sent) return `it checked ${count} of ${sent} rows sent`;
-    if ((next === null) !== (count === sent) || (next !== null && next !== count)) {
-        return `it checked ${count} of ${sent} rows sent and named row ${next} as the next`;
-    }
     const stray = body.findings.find((finding) => finding.row >= count);
     return stray === undefined ? null : `a finding names row ${stray.row} of ${count} checked`;
 };
 
 /**
  * Checks `rows` in order, each request carrying up to CHECK_MAX_ROWS of
- * them through `requestGraph`. A 200 checks a prefix of the rows sent: its
- * findings are kept against the rows they name, and the next request starts
- * at the first row it left. A 200 whose counts do not fit the rows sent
- * stops the check. A 400 whose pointer names one row refuses that row with
- * the problem's detail, and the check carries on without it. Any other 400
- * stops the check. A 503 or 429 with `Retry-After` waits and asks again,
- * for up to a minute per request. A request past `requestTimeoutMs`, its
+ * them through `requestGraph`. A 200 checks the first `rows_checked` rows
+ * sent: its findings are kept against the rows they name, and the next
+ * request starts at the first row it left. A 200 that checks no row, more
+ * rows than sent, or names a finding past the rows checked stops the check.
+ * A 400 whose pointer names one row refuses that row with the problem's
+ * detail, and the check carries on without it. Any other 400 stops the
+ * check. A 503 or 429 with `Retry-After` waits and asks again, for up to a
+ * minute per request, unless the problem says `retryable: false`. A request past `requestTimeoutMs`, its
  * 400 body included, or a check past `limitMs`, stops with reason
  * `timeout`. Anything else stops the check with a CheckError. An abort
  * rejects with the signal's reason, and no progress is reported after it.
@@ -157,7 +161,6 @@ export async function checkRows(
                         detail: text ?? 'The Graph API refused the row.',
                     };
                 },
-                unavailable: 'busy_or_building',
             },
             requestOptions,
         );
@@ -196,7 +199,7 @@ export async function checkRows(
             const why = misfit(body, sent.length);
             if (why !== null) {
                 throw new CheckError(`The check stopped: the Graph API answered, but ${why}.`, {
-                    reason: 'row_count',
+                    reason: 'rows_checked',
                     detail: why,
                 });
             }
@@ -204,8 +207,8 @@ export async function checkRows(
                 findings.push({ index: sent[finding.row]!, finding });
             }
             if (body.generation !== null) generations.add(body.generation);
-            rowCount += body.row_count;
-            start = sent[body.row_count - 1]! + 1;
+            rowCount += body.rows_checked;
+            start = sent[body.rows_checked - 1]! + 1;
         }
         while (skipped.has(start)) start += 1;
         onProgress?.({ checked: rowCount + refused.length, total: rows.length });
@@ -216,7 +219,7 @@ export async function checkRows(
 /** A message part: text, a term the model holds, or a value shown as typed. */
 export type MessagePart = SentencePart | { readonly kind: 'value'; readonly text: string };
 
-/** How a finding's field is named in a message. */
+/** How each row field is named in a message. */
 const FIELD_NAMES: Readonly<Record<CheckField, string>> = {
     dcid: 'dcid',
     population_type: 'population type',
@@ -227,6 +230,13 @@ const FIELD_NAMES: Readonly<Record<CheckField, string>> = {
     constraint_properties: 'constraint properties',
     observation_properties: 'observation properties',
 };
+
+/** How a finding's field is named in a message: a field this page does not know reads as sent. */
+const fieldWords = (field: string): string => (isCheckField(field) ? FIELD_NAMES[field] : field);
+
+/** A finding's severity as the page shows it. A severity this page does not know reads as a warning. */
+export const severityOf = (finding: SchemaFinding): 'error' | 'warning' =>
+    finding.severity === 'error' ? 'error' : 'warning';
 
 /** A finding's value as typed in the sheet. A list joins with commas. */
 export const valueText = (value: FindingValue): string => {
@@ -259,7 +269,7 @@ const chooseFrom = ({ valueList, text, term }: MessageContext, fallback: string)
         : [text('Choose a value from '), term(valueList), text('.')];
 
 const fieldName = ({ finding }: MessageContext): string =>
-    finding.property ?? FIELD_NAMES[finding.field] ?? finding.field;
+    finding.property ?? fieldWords(finding.field);
 
 /** One line per code, saying what is wrong and then what to do. */
 const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => MessagePart[]>> = {
@@ -300,7 +310,7 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         finding.property === null
             ? [
                   text(
-                      `This row has no ${FIELD_NAMES[finding.field] ?? finding.field}, and every row needs one. Fill the cell, or add a ${camelCase(finding.field)} column if the sheet has none.`,
+                      `This row has no ${fieldWords(finding.field)}, and every row needs one. Fill the cell, or add a ${camelCase(finding.field)} column if the sheet has none.`,
                   ),
               ]
             : [
@@ -340,6 +350,12 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         ),
         shown(valueText(context.finding.served) || 'none'),
         context.text('. Match the graph’s definition, or give the row a new dcid.'),
+    ],
+    not_a_node: (context) => [
+        shown(context.value),
+        context.text(
+            ` is not an id, and the ${fieldName(context)} takes a node on the graph by its dcid. Write the dcid in place of the text or number.`,
+        ),
     ],
     origin_not_served: (context) => [
         shown(context.value),
@@ -586,7 +602,7 @@ export function sheetMarks(
         flaggedRows.add(row);
         if (column === null) continue;
         const key = cellKey(row, column);
-        if (cells.get(key) !== 'error') cells.set(key, finding.severity);
+        if (cells.get(key) !== 'error') cells.set(key, severityOf(finding));
     }
     for (const { index } of refused) {
         const row = sheetRows[index];
@@ -659,9 +675,9 @@ export const resultCounts = (
     result: Pick<CheckResult, 'findings' | 'refused'>,
 ): { readonly errors: number; readonly warnings: number } => ({
     errors:
-        result.findings.filter(({ finding }) => finding.severity === 'error').length +
+        result.findings.filter(({ finding }) => severityOf(finding) === 'error').length +
         result.refused.length,
-    warnings: result.findings.filter(({ finding }) => finding.severity === 'warning').length,
+    warnings: result.findings.filter(({ finding }) => severityOf(finding) === 'warning').length,
 });
 
 const listed = (items: readonly string[]): string =>

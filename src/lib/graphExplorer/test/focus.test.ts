@@ -164,6 +164,21 @@ test('the centre heading reads a dataset, a model term, a base term and an unkno
     assert.notEqual(unknown?.kind, base?.kind);
 });
 
+test('a term outside the model is headed by the origin declaring it', () => {
+    const headingFor = (declaredBy: string | null) => {
+        const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
+        const term = body.terms.find((entry) => entry.dcid === 'ABSState');
+        assert.ok(term);
+        term.declared_by = declaredBy;
+        const heading = centreHeading(model, { kind: 'node', id: 'ABSState' }, readTerms(body));
+        return [heading?.kind, heading?.base];
+    };
+    assert.deepEqual(headingFor('base'), ['Base Data Commons', true]);
+    assert.deepEqual(headingFor('un_system'), ['UN System Data Commons', false]);
+    assert.deepEqual(headingFor('some_new_origin'), ['Another origin', false]);
+    assert.deepEqual(headingFor(null), ['On the graph', false]);
+});
+
 test('a dataset’s own view under its own filter carries no marks', () => {
     const dac1 = { kind: 'dataset', id: 'provenance/OECDDAC1' } as const;
     assert.equal(pictureLens({ kind: 'dataset', id: dac1.id }, dac1), null);

@@ -9,6 +9,7 @@ import test from 'node:test';
 import {
     buildModel,
     datasetName,
+    declarerWords,
     filterScopedList,
     GROUPS,
     kindOfTerm,
@@ -55,6 +56,25 @@ test('a node the graph declares no type for is not base', () => {
     amount.declared_by = null;
     const undeclared = buildModel(schema, readUsage(usageBody()));
     assert.equal(undeclared.isBase('amount'), false);
+});
+
+test('only a DFO-declared property is in the DFO scope, and each origin has its words', () => {
+    const schema = readSchema(schemaBody());
+    const flowType = schema.nodes.find((node) => node.dcid === 'financialFlowType');
+    assert.ok(flowType);
+    assert.ok(model.instanceProperties().includes('financialFlowType'));
+    flowType.declared_by = 'un_system';
+    const elsewhere = buildModel(schema, readUsage(usageBody()));
+    assert.ok(!elsewhere.instanceProperties().includes('financialFlowType'));
+    assert.equal(elsewhere.isBase('financialFlowType'), false);
+
+    assert.deepEqual(['dfo', 'base', 'un_system', 'some_new_origin', null].map(declarerWords), [
+        'DFO',
+        'base Data Commons',
+        'UN System Data Commons',
+        'another origin',
+        null,
+    ]);
 });
 
 test('a dataset with no label is named by the last path segment of its dcid', () => {
@@ -131,7 +151,7 @@ const nettingValue = (dcid: string, parents: string[]): SchemaNode => ({
     range_includes: [],
     classification_code: [],
     provenances: ['provenance/DFOOntology'],
-    declared_by: 'instance',
+    declared_by: 'dfo',
     enumeration: null,
     other_properties: {},
 });

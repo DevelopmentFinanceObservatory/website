@@ -41,9 +41,15 @@ test('the schema guard refuses a node with a member removed or retyped', () => {
     at(retyped, ['nodes', 0]).sub_class_of = 'Thing';
     refuses(readSchema, retyped, 'schema.nodes[0].sub_class_of');
 
-    const unknownDeclarer = schemaBody();
-    at(unknownDeclarer, ['nodes', 0]).declared_by = 'shared';
-    refuses(readSchema, unknownDeclarer, 'schema.nodes[0].declared_by');
+    // Every origin id reads, and one this page does not know passes for the screens to word.
+    for (const origin of ['dfo', 'base', 'un_system', 'some_new_origin']) {
+        const declared = schemaBody();
+        at(declared, ['nodes', 0]).declared_by = origin;
+        assert.equal(readSchema(declared).nodes[0]?.declared_by, origin);
+    }
+    const numberDeclarer = schemaBody();
+    at(numberDeclarer, ['nodes', 0]).declared_by = 7;
+    refuses(readSchema, numberDeclarer, 'schema.nodes[0].declared_by');
 
     const listIndex = readSchema(schemaBody()).nodes.findIndex((node) => node.enumeration !== null);
     const unmarked = schemaBody();
@@ -160,10 +166,9 @@ for (const [document, read, body, list] of [
     });
 }
 
-test('the check guard reads every finding: an unknown code passes, a later finding out of shape fails', () => {
+test('the check guard reads every finding: unknown enum values pass, a later finding out of shape fails', () => {
     const finding = {
         row: 1,
-        ref: 'row 2',
         field: 'constraint_properties',
         property: 'crsPurpose',
         subject: 'value',
@@ -172,13 +177,27 @@ test('the check guard reads every finding: an unknown code passes, a later findi
         code: 'node_not_held',
         severity: 'error',
     };
-    const answer = { generation: 'g1', row_count: 2, next_row: null, findings: [finding] };
+    const answer = { generation: 'g1', rows_checked: 2, findings: [finding] };
     assert.equal(readCheckResponse(answer).findings[0]?.property, 'crsPurpose');
 
     const added = { ...answer, findings: [finding, { ...finding, code: 'origin_not_served' }] };
     assert.equal(readCheckResponse(added).findings[1]?.code, 'origin_not_served');
-    const unknown = { ...answer, findings: [finding, { ...finding, code: 'some_new_code' }] };
-    assert.equal(readCheckResponse(unknown).findings[1]?.code, 'some_new_code');
+    const notANode = { ...answer, findings: [finding, { ...finding, code: 'not_a_node' }] };
+    assert.equal(readCheckResponse(notANode).findings[1]?.code, 'not_a_node');
+    const unknown = {
+        ...answer,
+        findings: [
+            finding,
+            {
+                ...finding,
+                code: 'some_new_code',
+                field: 'some_new_field',
+                subject: 'cell',
+                severity: 'info',
+            },
+        ],
+    };
+    assert.deepEqual(readCheckResponse(unknown).findings[1], unknown.findings[1]);
 
     const later = (change: Record<string, unknown>) => ({
         ...answer,
@@ -193,22 +212,18 @@ test('the check guard reads every finding: an unknown code passes, a later findi
             `check.findings[1].${member}`,
         );
     }
-    refuses(readCheckResponse, later({ severity: 'fatal' }), 'check.findings[1].severity');
+    refuses(readCheckResponse, later({ severity: 2 }), 'check.findings[1].severity');
     refuses(readCheckResponse, later({ value: ['a', 7] }), 'check.findings[1].value[1]');
-    refuses(
-        readCheckResponse,
-        later({ field: 'constraint_properties.crsPurpose' }),
-        'check.findings[1].field',
-    );
-    refuses(readCheckResponse, later({ subject: 'cell' }), 'check.findings[1].subject');
+    refuses(readCheckResponse, later({ field: null }), 'check.findings[1].field');
+    refuses(readCheckResponse, later({ subject: null }), 'check.findings[1].subject');
+    refuses(readCheckResponse, later({ code: 7 }), 'check.findings[1].code');
     refuses(readCheckResponse, later({ row: 1.5 }), 'check.findings[1].row');
     refuses(readCheckResponse, later({ row: -1 }), 'check.findings[1].row');
-    refuses(readCheckResponse, { generation: 'g1', findings: [] }, 'check.row_count');
-    refuses(readCheckResponse, { generation: 'g1', row_count: 1, findings: [] }, 'check.next_row');
+    refuses(readCheckResponse, { generation: 'g1', findings: [] }, 'check.rows_checked');
     refuses(
         readCheckResponse,
-        { generation: 'g1', row_count: 1, next_row: '2', findings: [] },
-        'check.next_row',
+        { generation: 'g1', rows_checked: '2', findings: [] },
+        'check.rows_checked',
     );
 });
 
@@ -222,8 +237,7 @@ test('a null generation is accepted on every document and a non-string one is re
     assert.equal(readTerms(terms).generation, null);
 
     assert.equal(
-        readCheckResponse({ generation: null, row_count: 1, next_row: null, findings: [] })
-            .generation,
+        readCheckResponse({ generation: null, rows_checked: 1, findings: [] }).generation,
         null,
     );
 
@@ -233,7 +247,7 @@ test('a null generation is accepted on every document and a non-string one is re
     refuses(readTerms, { generation: 7, terms: [] }, 'terms.generation');
     refuses(
         readCheckResponse,
-        { generation: 7, row_count: 1, next_row: null, findings: [] },
+        { generation: 7, rows_checked: 1, findings: [] },
         'check.generation',
     );
 });

@@ -11,6 +11,7 @@ import {
     RETRY_WAIT_MS,
     retryDelay,
     sharedLoad,
+    waitText,
     type Loadable,
     type WaitCause,
 } from '../load.ts';
@@ -89,7 +90,17 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
         headers: { 'content-type': 'application/json', ...headers },
     });
 
-const building = () => json({ title: 'Service unavailable' }, 503, { 'retry-after': '5' });
+const building = () =>
+    json(
+        {
+            code: 'service_unavailable',
+            title: 'Service unavailable',
+            retryable: true,
+            cause: { code: 'schema_building' },
+        },
+        503,
+        { 'retry-after': '5' },
+    );
 
 const busy = () => json({ title: 'Too Many Requests' }, 429, { 'retry-after': '12' });
 
@@ -98,8 +109,23 @@ test('the loader waits out a build and a spent allowance, then reads the documen
     const document = await loadDocument('The model', '/api/graph/schema', readSchema, options);
     assert.ok(document.nodes.length > 0);
     assert.deepEqual(waits, [5000, 12_000]);
-    assert.deepEqual(causes, ['building', 'busy']);
+    assert.deepEqual(causes, ['schema_building', 'busy']);
     assert.equal(urls.length, 3);
+});
+
+test('each wait cause reads as its own line, and an unknown cause as a neutral wait', () => {
+    assert.equal(
+        waitText(4200, 'schema_building'),
+        'The Graph API is still building the schema for this graph. Trying again in 5 s.',
+    );
+    assert.equal(
+        waitText(3000, 'check_busy'),
+        'The Graph API is busy with other checks. Trying again in 3 s.',
+    );
+    assert.equal(
+        waitText(3000, 'unavailable'),
+        'The Graph API is not ready to answer. Trying again in 3 s.',
+    );
 });
 
 test('a build still running after a minute fails and says so', async () => {
@@ -107,7 +133,10 @@ test('a build still running after a minute fails and says so', async () => {
     await assert.rejects(
         loadDocument('The model', '/api/graph/schema', readSchema, options),
         (error: unknown) =>
-            error instanceof LoadError && error.reason === 'build_timeout' && error.status === 503,
+            error instanceof LoadError &&
+            error.reason === 'build_timeout' &&
+            error.status === 503 &&
+            error.message.includes('still building the schema for this graph'),
     );
     assert.equal(
         waits.reduce((sum, ms) => sum + ms, 0),
