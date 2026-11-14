@@ -1,0 +1,1979 @@
+{
+    "generation": "fixture",
+    "terms": [
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSGreaterCapitalCityStatisticalArea",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSState",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel1",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel2",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel3",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel4",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ACLGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ACSEDChild",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ACSEDParent",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "APIReference",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Abortion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AboutPage",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AbsenteeismStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AcademicAssessmentEvent",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AcademicAssessmentTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AcceptAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AccidentCauseEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AccidentTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Accommodation",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AccountingService",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AchieveAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Action",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ActionStatusType",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ActivateAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ActiveIngredientAmount",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AddAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdjustmentTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrationRouteEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea1",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea2",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea3",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea4",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea5",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdultEntertainment",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AdultSkillsDeprivation",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AffectedByEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AgeGroupClassificationEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AgeStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "agent skill",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "AgentSkill",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "agent skill reference",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "AgentSkillReference",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AggregateOffer",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AggregateRating",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AggregateTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AggregationSlice",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AgreeAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AgriculturalFacility",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AgricultureTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AirPollutantEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AirQualitySite",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Airline",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Airport",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholConsumptionRecordTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholUsageEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholicBeverageTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AlignmentObject",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AllegationEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Allele",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AlleleTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AllocateAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AmenityFeatureEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Amount",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AmrGlassCategoryEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AmusementPark",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AnatomicalTherapeuticChemicalCode",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AnimalShelter",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Answer",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AntenatalStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Antibody",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AntibodyTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Apartment",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ApartmentComplex",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AppendAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ApplicationTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ApplyAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Aquarium",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AreaUnitOfMeasure",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ArriveAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "ArtGallery",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Article",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AshImpoundmentStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AskAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssessAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentLevelEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentScoreLevelEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssetsOwnedEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssignAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssistiveTechnologyProductEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssistiveTechnologySubquestionEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Association",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssociationSourceEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AssociationTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AstronomicalLowTideEvent",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Atmosphere",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Attorney",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Audience",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AudioObject",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AuthorizeAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoBodyShop",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoDealer",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoPartsStore",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoRental",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoRepair",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutoWash",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutomatedTeller",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutomaticRefreshTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutomotiveBusiness",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AutonomousRegion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AvailabilityToObtainEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AvalancheEvent",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "AwareAntibioticsGroupEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BLSEstablishment",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BLSWorker",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Bakery",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Bank",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BankAccount",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BankAccountTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BankOrCreditUnion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BarOrPub",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Barcode",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BarriersToAccessingAssistiveProductEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BarriersToHousingAndServices",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Beach",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BeautySalon",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "Bed",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BedAndBreakfast",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BedDetails",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BedLine",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BefriendAction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BenefitProgramEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BenefitTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BenefitsStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiasMotivationEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BikeStore",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BinaryOperatorEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BioChemEntity",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalClass",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalEntity",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalFamily",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalGenus",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalHostEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalInfraSpecies",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalKingdom",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalOrder",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalPhylum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSpecies",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSpecimen",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSubGenus",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSuperFamily",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalTaxonomicDivisionEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "base",
+            "label": null,
+            "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalTaxonomicRankEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS Modality",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSCooperationModalityEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS Purpose",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSPurposeCodeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS Finance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSTypeOfFinanceEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS Flow",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSTypeOfFlowEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "climate change policy objective",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "ClimateChangePolicyObjectiveEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "conversion recipe",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "ConversionRecipeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "currency conversion basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyConversionBasisEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "Currency denomination",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyDenomination",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "Currency status",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "Currency",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyUnit",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "cyclical adjustment",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "CyclicalAdjustmentEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 1 aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC1AidTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 2a aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC2aAidTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 2b aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC2bAidTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC group",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DACGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC list part",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DACPartEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC recipient unallocated by country",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DACRecipientUnallocatedByCountry",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC type of finance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DACTypeOfFinanceEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC unspecified party",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "DACUnspecifiedParty",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "economic production",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "EconomicProduction",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "economic unit",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "EconomicUnit",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "final expenditure",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinalExpenditure",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "final expenditure type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinalExpenditureTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial flow",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialFlow",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial flow type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialFlowTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial obligation",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialObligation",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial obligation type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialObligationTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial position",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialPosition",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial position type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialPositionTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing event",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingEvent",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing form",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingFormEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing purpose",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingPurposeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing resource",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingResourceEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "fixed capital consumption basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "FixedCapitalConsumptionBasisEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "geographic grouping",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "GeoGrouping",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "grouping",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "Grouping",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "guarantee status",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "GuaranteeStatusEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS concessionality",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSConcessionalityEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS creditor type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSCreditorTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS debtor type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSDebtorTypeEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS unidentified creditor",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSUnidentifiedCreditor",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IMF economy group",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IMFEconomyGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IMF region",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IMFRegion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "includes IMF credit",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "IncludesIMFCreditEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "interest rate variability",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "InterestRateVariabilityEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "UN M49 intermediate region",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "M49IntermediateRegion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "UN M49 region",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "M49Region",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "UN M49 sub-region",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "M49SubRegion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "maturity band",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "MaturityBandEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "measurement method",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "MeasurementEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "netting basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "NettingBasisEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "Non-specific currency",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "NonSpecificCurrency",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "policy objective",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "PolicyObjectiveEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "position valuation",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "PositionValuationEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "product tax basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "ProductTaxBasisEnum",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "purchasing power unit",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "PurchasingPowerUnit",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "UN country development group",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "UNCountryDevelopmentGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank income group",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankIncomeGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank lending group",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankLendingGroup",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank region",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankRegion",
+            "types": ["Class"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "agent skill references",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "agentSkillReferences",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "amount mobilised",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "amountMobilised",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "attributed amount",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "attributedAmount",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "classification code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "classificationCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "climate change policy objective",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "climatePolicyObjective",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "combines methods",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "combinesMethods",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "conversion recipe",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "conversionRecipe",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS cooperation modality",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "crsCooperationModality",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS purpose",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "crsPurpose",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS type of finance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "crsTypeOfFinance",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "CRS type of flow",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "crsTypeOfFlow",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "currency conversion basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyConversionBasis",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "currency of denomination",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyOfDenomination",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "currency status",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyStatus",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "cyclical adjustment",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "cyclicalAdjustment",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 1 aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dac1AidType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 2a aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dac2aAidType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC 2b aid type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dac2bAidType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dacCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC list part",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dacPart",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "DAC type of finance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dacTypeOfFinance",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "data transformation changelog",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dataTransformationChangelog",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "data transformation description",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "dataTransformationDescription",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": null,
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "deflator",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "deflator base year",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "deflatorBaseYear",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "economic balance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "economicBalance",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "final expenditure type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "finalExpenditureType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial flow type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financialFlowType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial obligation type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financialObligationType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financial position type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financialPositionType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing form",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingForm",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing participant",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingParticipant",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing provider",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingProvider",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing purpose",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingPurpose",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing recipient",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingRecipient",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "financing resource",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "financingResource",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "fixed capital consumption basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "fixedCapitalConsumptionBasis",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "grace period",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "gracePeriod",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "grant element",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "grantElement",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "grant equivalent",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "grantEquivalent",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "guarantee status",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "guaranteeStatus",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "has member",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "hasMember",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS concessionality",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "idsConcessionality",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS creditor type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "idsCreditorType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IDS debtor type",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "idsDebtorType",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "IMF economy code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "imfEconomyCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "includes IMF credit",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "includesIMFCredit",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "income balance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "incomeBalance",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "interest rate variability",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "interestRateVariability",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "ISO 4217 currency code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "iso4217AlphaCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "ISO 4217 currency number",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "iso4217NumericCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "M49 code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "m49Code",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "maturity band",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "maturityBand",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "national currency of",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "nationalCurrencyOf",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "net of",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "netOf",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "netting basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "nettingBasis",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "output gap",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "outputGap",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "partial observation date",
+            "provenances": ["provenance/DFOShared"],
+            "ref": "partialObservationDate",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "policy objective",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "policyObjective",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "position valuation",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "positionValuation",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "primary income",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "primaryIncome",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "product tax basis",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "productTaxBasis",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": null,
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "saving",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "skill applies to",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "skillAppliesTo",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "skill applies to provenance",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "skillAppliesToProvenance",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "source indicator code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "sourceIndicatorCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "value added",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "valueAdded",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "wbCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank counterpart code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "wbCounterpartCode",
+            "types": ["Property"]
+        },
+        {
+            "declared_by": "dfo",
+            "label": "World Bank economy code",
+            "provenances": ["provenance/DFOOntology"],
+            "ref": "wbEconomyCode",
+            "types": ["Property"]
+        }
+    ]
+}

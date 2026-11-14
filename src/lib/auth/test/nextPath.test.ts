@@ -7,11 +7,17 @@ import test from 'node:test';
 
 import { safeNext } from '../nextPath.ts';
 
-const cases: [label: string, input: string | undefined, expected: string][] = [
+const cases: [label: string, input: string | readonly string[] | undefined, expected: string][] = [
+    ['a repeated next reads the first', ['/history', '//evil.example'], '/history'],
+    ['a repeated next whose first is unsafe', ['//evil.example', '/history'], '/studio'],
+    ['an empty list', [], '/studio'],
     ['protocol-relative', '//evil.example', '/studio'],
+    ['an empty host, which does not parse', '//', '/studio'],
     ['backslash host', '/\\evil.example/x', '/studio'],
     ['tab before the host slash', '/\t/evil.example', '/studio'],
     ['newline before the host slash', '/\n/evil.example', '/studio'],
+    ['dot segments to a protocol-relative path', '/graph-explorer/..//evil.example', '/studio'],
+    ['encoded dot segments', '/graph-explorer/%2e%2e//evil.example', '/studio'],
     ['absolute URL', 'https://evil.example', '/studio'],
     ['javascript scheme', 'javascript:alert(1)', '/studio'],
     ['undefined', undefined, '/studio'],

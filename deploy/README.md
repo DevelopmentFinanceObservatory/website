@@ -220,6 +220,21 @@ Production needs the same set in its own project: a deployer service
 account with the same roles, its own Artifact Registry repo, Cloud Run
 service, and migration Job with its migrator identity.
 
+The Graph Explorer's "Create Google Sheet" export
+(`src/app/graph-explorer/api/sheets/route.ts`) creates the sheet in the
+reader's own Drive with the Google sign-in client's token. It needs two
+settings on that OAuth client's Google Cloud project: the consent screen
+lists the `https://www.googleapis.com/auth/drive.file` scope, and the Google
+Sheets API is enabled. Without the Sheets API, creating a sheet answers
+502 and logs `sheets export: Google refused create` with the cause
+`PERMISSION_DENIED SERVICE_DISABLED`. A token read that fails inside Better
+Auth (a refused refresh, a Google outage, or a failed storage write or
+decryption, which Better Auth does not tell apart) answers 502
+`google_renewal_failed` and logs `Google token read failed in Better Auth`.
+Better Auth's `/get-access-token`, `/refresh-token` and `/account-info`
+answer 404 (`src/lib/auth/closedPaths.ts`), so the browser cannot read the
+Google token.
+
 ## Runtime env contract (provisional)
 
 The app defines the definitive contract once it exists. Known so far:
@@ -245,6 +260,7 @@ The app defines the definitive contract once it exists. Known so far:
 | `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                |
 | `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
 | `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
+| `GRAPH_EXPLORER_EMAIL_DOMAINS`        | Comma-separated email domains the Graph Explorer admits (`src/lib/auth/reader.ts`), matched exactly against a signed-in user's verified email; unset or empty admits nobody; plain env var              |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the
