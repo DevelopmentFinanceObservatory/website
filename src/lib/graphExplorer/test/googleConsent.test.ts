@@ -24,6 +24,7 @@ for (const [query, trip, rest] of [
     ['?google=1', 'granted', ''],
     ['?class=X&error=access_denied', 'refused', '?class=X'],
     ['?class=X&google=1&error=access_denied', 'refused', '?class=X'],
+    ['?class=X&error=access_denied&error_description=Denied', 'refused', '?class=X'],
 ] as const) {
     test(`a return to "${query}" records trip ${trip} and leaves "${rest}"`, () => {
         assert.deepEqual(takeConsentTrip(query), { trip, query: rest });
@@ -37,7 +38,7 @@ test('the cleaned query records no trip', () => {
 
 test('only the success address carries the mark, and both drop the last trip', () => {
     const { callbackURL, errorCallbackURL } = consentReturns(
-        'https://site.example/graph-explorer/new-sheet?class=X&google=1&error=access_denied',
+        'https://site.example/graph-explorer/new-sheet?class=X&google=1&error=access_denied&error_description=Denied',
     );
     assert.equal(callbackURL, '/graph-explorer/new-sheet?class=X&google=1');
     assert.equal(errorCallbackURL, '/graph-explorer/new-sheet?class=X');

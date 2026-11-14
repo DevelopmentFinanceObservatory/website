@@ -9,11 +9,17 @@
 import { queryString } from './explore.ts';
 import type { SheetsAnswer } from './googleSheet.ts';
 
+/** The parameter on the return address after a trip that granted Google access. */
+export const RETURNED_PARAM = 'google';
+
 /** The parameter Better Auth adds to the return address when the link failed. */
 export const LINK_ERROR_PARAM = 'error';
 
-/** The parameter on the return address after a trip that granted Google access. */
-export const RETURNED_PARAM = 'google';
+/** The parameter that can come beside LINK_ERROR_PARAM with the provider's wording. */
+const LINK_ERROR_DETAIL_PARAM = 'error_description';
+
+/** Every parameter a trip can leave on the return address. */
+const TRIP_PARAMS = [LINK_ERROR_PARAM, LINK_ERROR_DETAIL_PARAM, RETURNED_PARAM] as const;
 
 /** What the return address says about the last trip through Google's consent screen. */
 export type ConsentTrip = 'none' | 'granted' | 'refused';
@@ -32,8 +38,7 @@ export const takeConsentTrip = (query: string): { trip: ConsentTrip; query: stri
         : params.has(RETURNED_PARAM)
           ? 'granted'
           : 'none';
-    params.delete(LINK_ERROR_PARAM);
-    params.delete(RETURNED_PARAM);
+    for (const name of TRIP_PARAMS) params.delete(name);
     return { trip, query: queryString(params) };
 };
 
@@ -44,8 +49,7 @@ export const takeConsentTrip = (query: string): { trip: ConsentTrip; query: stri
  */
 export const consentReturns = (href: string): { callbackURL: string; errorCallbackURL: string } => {
     const back = new URL(href);
-    back.searchParams.delete(LINK_ERROR_PARAM);
-    back.searchParams.delete(RETURNED_PARAM);
+    for (const name of TRIP_PARAMS) back.searchParams.delete(name);
     const errorCallbackURL = `${back.pathname}${back.search}`;
     back.searchParams.set(RETURNED_PARAM, '1');
     return { callbackURL: `${back.pathname}${back.search}`, errorCallbackURL };
