@@ -24,7 +24,7 @@ export function scopedListTable(
             row.id,
             model.label(row.id),
             group,
-            row.valueList ?? '',
+            row.valueList?.lists.join(';') ?? '',
             ...(list.columns.length === 0 ? [row.usage.total] : row.counts).map(String),
         ]),
     );
@@ -40,8 +40,8 @@ export function scopedListTable(
 export function valueListTable(model: Model, listId: string): readonly (readonly string[])[] {
     const members = model.members(listId);
     const inList = new Set(members);
-    const fields = memberFields(model, listId);
-    const codes = membersHaveCodes(model, listId);
+    const fields = memberFields(model, model.members(listId));
+    const codes = membersHaveCodes(model, model.members(listId));
     const rows = members.map((id) => [
         id,
         model.label(id),

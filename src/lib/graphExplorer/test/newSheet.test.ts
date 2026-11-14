@@ -180,7 +180,7 @@ test('split options: in use first, then unused ones declared for the class with 
         assert.ok(!ids.includes(id), id);
     }
     const netting = options.find((option) => option.id === 'nettingBasis');
-    assert.equal(netting?.valueList, 'NettingBasisEnum');
+    assert.deepEqual(netting?.valueLists, ['NettingBasisEnum']);
     assert.equal(netting?.members, 2);
     assert.equal(netting?.datasets[0], 'provenance/OECDDAC1');
 });
@@ -189,7 +189,7 @@ test('a property ranging over a class with instances is offered with its value l
     const currency = splitOptions(model, 'FinancialPosition').find(
         (option) => option.id === 'currencyOfDenomination',
     );
-    assert.equal(currency?.valueList, 'CurrencyDenomination');
+    assert.deepEqual(currency?.valueLists, ['CurrencyDenomination']);
     assert.equal(currency?.members, 2);
     assert.equal(currency?.membersComplete, true);
 });

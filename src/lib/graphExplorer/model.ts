@@ -3,9 +3,12 @@
  * schema (terms and how they relate) and the usage document (how each
  * dataset's StatVars use those terms). Every answer is derived from the documents.
  *
- * Words for readers: a Class is a `class`, a Class that lists its instances is
- * a `valueList`, a Property is a `property`, any other node is a `value`, and a
- * provenance of the usage document is a `dataset`.
+ * Words for readers: a Class is a `class`, a Class that descends from
+ * `Enumeration` and lists its instances is a `valueList`, a Property is a
+ * `property`, any other node is a `value`, and a provenance of the usage
+ * document is a `dataset`. Whether a node offers a value list is a separate
+ * fact: every Class that lists its instances does, so a `class` such as
+ * `Grouping` or `CurrencyUnit` keeps its class picture and offers its list too.
  */
 import {
     isDeclarer,
@@ -86,6 +89,23 @@ export type ValuesUsed = {
     readonly complete: boolean;
 };
 
+/**
+ * The values a property takes: the members of every class in its
+ * `range_includes` that lists its instances.
+ */
+export type PropertyValues = {
+    /** The range classes that list their instances, in `range_includes` order. */
+    readonly lists: readonly string[];
+    /** Their members, each once, by classification code then label. */
+    readonly members: readonly string[];
+    /**
+     * False when one of the lists is partial, or a range entry lists no
+     * instances (a class such as `Country`), so the graph holds values the
+     * members leave out.
+     */
+    readonly complete: boolean;
+};
+
 /** A dataset with how many members of one value list it uses. */
 export type DatasetMembers = { readonly dataset: string; readonly values: ValuesUsed };
 
@@ -145,7 +165,7 @@ export type ScopedRow = {
     readonly inheritedFrom: string | null;
     readonly usedWith: readonly ClassCount[];
     readonly domain: readonly string[];
-    readonly valueList: string | null;
+    readonly valueList: PropertyValues | null;
     readonly usage: Usage;
     /** One count per entry of the list's `columns`, in that order. */
     readonly counts: readonly number[];
@@ -181,6 +201,8 @@ export type Model = {
     node(id: string): SchemaNode | undefined;
     dataset(id: string): ProvenanceUsage | undefined;
     kind(id: string): Kind | undefined;
+    /** True for a Class that lists its instances: a `valueList`, or a `class` that also offers one. */
+    hasValueList(id: string): boolean;
     /** The name, else a dataset's `datasetName`, else the dcid. */
     label(id: string): string;
     isBase(id: string): boolean;
@@ -192,8 +214,8 @@ export type Model = {
     ancestors(id: string): readonly string[];
     /** The value list a value is a member of, or undefined. */
     valueListOf(id: string): string | undefined;
-    /** The first value list in a property's `range_includes`, or undefined. */
-    valueListOfProperty(id: string): string | undefined;
+    /** The values a property takes from its range classes' lists, or undefined when none lists any. */
+    valueListOfProperty(id: string): PropertyValues | undefined;
     /** A value list's members, by classification code then label. */
     members(listId: string): readonly string[];
     /** False when the graph holds members of the value list that `members` leaves out. */
@@ -233,11 +255,9 @@ export type Model = {
 const EMPTY: readonly string[] = Object.freeze([]);
 const NO_USAGE: Usage = Object.freeze({ byDataset: Object.freeze([]), total: 0 });
 
-const kindOf = (node: SchemaNode): Kind => {
-    if (node.types.includes('Class')) return node.instances ? 'valueList' : 'class';
-    if (node.types.includes('Property')) return 'property';
-    return 'value';
-};
+/** True for a Class that lists its instances. */
+const listsInstances = (node: SchemaNode): boolean =>
+    node.types.includes('Class') && node.instances !== null;
 
 /** The node ids a pattern names, each once. */
 const patternIds = (pattern: SchemaPattern): Set<string> => {
@@ -316,7 +336,26 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     const datasets = Object.freeze([...usageDocument.provenances]);
     const byId = new Map(nodes.map((node) => [node.ref, node]));
     const datasetById = new Map(datasets.map((dataset) => [dataset.ref, dataset]));
+    const isEnumeration = (node: SchemaNode): boolean => {
+        const seen = new Set<string>();
+        const queue = [...node.sub_class_of];
+        for (const next of queue) {
+            if (next === 'Enumeration') return true;
+            if (seen.has(next)) continue;
+            seen.add(next);
+            queue.push(...(byId.get(next)?.sub_class_of ?? []));
+        }
+        return false;
+    };
+    const kindOf = (node: SchemaNode): Kind => {
+        if (node.types.includes('Class')) {
+            return listsInstances(node) && isEnumeration(node) ? 'valueList' : 'class';
+        }
+        if (node.types.includes('Property')) return 'property';
+        return 'value';
+    };
     const kinds = new Map(nodes.map((node) => [node.ref, kindOf(node)]));
+    const lists = new Set(nodes.filter(listsInstances).map((node) => node.ref));
 
     const label = (id: string): string => {
         const name = byId.get(id)?.label;
@@ -352,7 +391,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     for (const node of nodes) {
         if (kinds.get(node.ref) !== 'value') continue;
         for (const type of node.types) {
-            if (kinds.get(type) === 'valueList') {
+            if (lists.has(type)) {
                 membersOf.set(type, (membersOf.get(type) ?? new Set()).add(node.ref));
             }
         }
@@ -378,9 +417,29 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     const rangeIndex = sortedIndex(rangeOf);
 
     const valueListOf = (id: string): string | undefined =>
-        byId.get(id)?.types.find((type) => kinds.get(type) === 'valueList');
-    const valueListOfProperty = (id: string): string | undefined =>
-        byId.get(id)?.range_includes.find((range) => kinds.get(range) === 'valueList');
+        byId.get(id)?.types.find((type) => lists.has(type));
+    const propertyValues = new Map<string, PropertyValues | undefined>();
+    const valueListOfProperty = (id: string): PropertyValues | undefined => {
+        if (propertyValues.has(id)) return propertyValues.get(id);
+        const ranges = byId.get(id)?.range_includes ?? [];
+        const listed = ranges.filter((range) => lists.has(range));
+        const values =
+            listed.length === 0
+                ? undefined
+                : Object.freeze({
+                      lists: Object.freeze(listed),
+                      members: Object.freeze(
+                          [
+                              ...new Set(listed.flatMap((list) => membersIndex.get(list) ?? EMPTY)),
+                          ].sort(byCode),
+                      ),
+                      complete:
+                          listed.length === ranges.length &&
+                          listed.every((list) => byId.get(list)?.instances?.complete ?? true),
+                  });
+        propertyValues.set(id, values);
+        return values;
+    };
 
     // Both walks append to the array they iterate, and for...of reaches the appended entries.
     const ancestors = (id: string): readonly string[] => {
@@ -614,12 +673,11 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         const list = valueListOfProperty(propertyId);
         const values = constraintValues.get(datasetId)?.get(propertyId);
         if (list === undefined || values === undefined) return null;
-        const members = membersIndex.get(list) ?? EMPTY;
-        const inList = new Set(members);
+        const inList = new Set(list.members);
         return Object.freeze({
             used: values.filter((value) => inList.has(value)).length,
-            of: members.length,
-            complete: membersComplete(list),
+            of: list.members.length,
+            complete: list.complete,
         });
     };
 
@@ -725,7 +783,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         Object.freeze(
             [...ids].map((id) => {
                 const count = usageIn(id, datasetId);
-                const members = kinds.get(id) === 'valueList' ? membersUsed(id, datasetId) : null;
+                const members = lists.has(id) ? membersUsed(id, datasetId) : null;
                 return Object.freeze({
                     id,
                     count,
@@ -742,6 +800,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         node: (id: string) => byId.get(id),
         dataset: (id: string) => datasetById.get(id),
         kind: (id: string) => kinds.get(id),
+        hasValueList: (id: string) => lists.has(id),
         label,
         isBase: (id: string) => byId.get(id)?.declared_by === 'base',
         broader: (id: string) => broaderOf.get(id) ?? EMPTY,
@@ -787,19 +846,15 @@ export const openNames = (node: SchemaNode): string[] =>
         ...values.map(openValueText),
     ]);
 
-/** The open properties any member of a value list carries, sorted by dcid. */
-export const memberFields = (model: Model, listId: string): readonly string[] =>
+/** The open properties any of the members carries, sorted by dcid. */
+export const memberFields = (model: Model, members: readonly string[]): readonly string[] =>
     [
-        ...new Set(
-            model
-                .members(listId)
-                .flatMap((id) => Object.keys(model.node(id)?.other_properties ?? {})),
-        ),
+        ...new Set(members.flatMap((id) => Object.keys(model.node(id)?.other_properties ?? {}))),
     ].sort();
 
-/** True when some member of a value list carries a classification code. */
-export const membersHaveCodes = (model: Model, listId: string): boolean =>
-    model.members(listId).some((id) => (model.node(id)?.classification_code.length ?? 0) > 0);
+/** True when some of the members carries a classification code. */
+export const membersHaveCodes = (model: Model, members: readonly string[]): boolean =>
+    members.some((id) => (model.node(id)?.classification_code.length ?? 0) > 0);
 
 /**
  * One member's values of an open property as one cell: each node's dcid or

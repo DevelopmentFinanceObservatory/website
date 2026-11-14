@@ -20,6 +20,7 @@ import {
 } from '../model.ts';
 import { readSchema, readUsage, type SchemaNode } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
+import { withListedParties } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -49,22 +50,61 @@ test('a node reads as a class, value list, property or value, with its label and
     assert.equal(model.isBase('financialFlowType'), false);
 });
 
-test('a class that lists its instances is a value list, and a property ranging over it draws from it', () => {
-    assert.equal(model.kind('CurrencyDenomination'), 'valueList');
-    assert.equal(model.kind('CurrencyUnit'), 'valueList');
-    assert.equal(model.kind('NonSpecificCurrency'), 'class');
-    assert.equal(model.valueListOfProperty('currencyOfDenomination'), 'CurrencyDenomination');
+test('a class outside Enumeration that lists its instances stays a class and offers its list', () => {
+    assert.equal(model.kind('CurrencyDenomination'), 'class');
+    assert.equal(model.kind('CurrencyUnit'), 'class');
+    assert.equal(model.hasValueList('CurrencyDenomination'), true);
+    assert.equal(model.hasValueList('CurrencyUnit'), true);
+    assert.equal(model.hasValueList('NonSpecificCurrency'), false);
+    assert.deepEqual(model.valueListOfProperty('currencyOfDenomination'), {
+        lists: ['CurrencyDenomination'],
+        members: ['CurrencyEUR', 'CurrencyCHF'],
+        complete: true,
+    });
     // Members sort by label when none has a code: Euro, then Swiss franc.
     assert.deepEqual(model.members('CurrencyDenomination'), ['CurrencyEUR', 'CurrencyCHF']);
     assert.equal(model.membersComplete('CurrencyDenomination'), true);
     assert.equal(model.valueListOf('CurrencyCHF'), 'CurrencyUnit');
-    assert.deepEqual(memberFields(model, 'CurrencyDenomination'), [
+    assert.deepEqual(memberFields(model, model.members('CurrencyDenomination')), [
         'currencyStatus',
         'dacCode',
         'iso4217AlphaCode',
         'iso4217NumericCode',
         'nationalCurrencyOf',
     ]);
+});
+
+test("a property's value list joins its range classes' lists, partial while a range class lists none", () => {
+    const listed = withListedParties();
+    // G20 sits in both lists and comes once; coded members sort first, then by label.
+    const union = {
+        lists: ['DACUnspecifiedParty', 'Grouping'],
+        members: ['DACMembers', 'G20', 'UnspecifiedDonor'],
+    };
+    // Country, IDSUnidentifiedCreditor and Organization list no instances.
+    assert.deepEqual(listed.valueListOfProperty('financingProvider'), {
+        ...union,
+        complete: false,
+    });
+    const scoped = listed.scopedList({ kind: 'dfo' }, { kind: 'none' });
+    const row = GROUPS.flatMap((group) => scoped.groups[group]).find(
+        (each) => each.id === 'financingProvider',
+    );
+    assert.deepEqual(row?.valueList, { ...union, complete: false });
+});
+
+test('a property whose range classes all list their instances is complete only when every list is', () => {
+    for (const complete of [true, false]) {
+        const body = schemaBody() as { nodes: Record<string, unknown>[] };
+        const provider = body.nodes.find((node) => node.ref === 'financingProvider');
+        assert.ok(provider);
+        provider.range_includes = ['CurrencyDenomination', 'NettingBasisEnum'];
+        const netting = body.nodes.find((node) => node.ref === 'NettingBasisEnum');
+        assert.ok(netting);
+        netting.instances = { ...(netting.instances as object), complete };
+        const ranged = buildModel(readSchema(body), readUsage(usageBody()));
+        assert.equal(ranged.valueListOfProperty('financingProvider')?.complete, complete);
+    }
 });
 
 test('a node the graph declares no type for is not base', () => {
@@ -131,7 +171,7 @@ test('a value list has its members and a member tree, roots first', () => {
     assert.equal(model.membersComplete('DAC1AidTypeEnum'), false);
     assert.equal(model.membersComplete('EconomicMetricEnum'), false);
     assert.equal(model.valueListOf('Buyback'), 'FinancialFlowTypeEnum');
-    assert.equal(model.valueListOfProperty('dac1AidType'), 'DAC1AidTypeEnum');
+    assert.deepEqual(model.valueListOfProperty('dac1AidType')?.lists, ['DAC1AidTypeEnum']);
 
     const tree = model.memberTree('DAC1AidTypeEnum');
     assert.deepEqual(
@@ -364,7 +404,7 @@ test('the scoped list of DFO properties groups rows and counts the chosen datase
     assert.deepEqual(flowType?.counts, [14]);
     assert.equal(flowType?.dimmed, false);
     assert.deepEqual(flowType?.values, { used: 1, of: 14, complete: true });
-    assert.equal(flowType?.valueList, 'FinancialFlowTypeEnum');
+    assert.deepEqual(flowType?.valueList?.lists, ['FinancialFlowTypeEnum']);
 
     const dac1 = list.groups.split.find((row) => row.id === 'dac1AidType');
     assert.deepEqual(dac1?.counts, [0]);
@@ -442,8 +482,8 @@ test('a member search matches an open property literal', () => {
 });
 
 test('the open properties of a list are those its members carry, each member a cell', () => {
-    assert.deepEqual(memberFields(model, 'FinancialPositionTypeEnum'), ['wbCode']);
-    assert.deepEqual(memberFields(model, 'NettingBasisEnum'), []);
+    assert.deepEqual(memberFields(model, model.members('FinancialPositionTypeEnum')), ['wbCode']);
+    assert.deepEqual(memberFields(model, model.members('NettingBasisEnum')), []);
     assert.equal(openCell(model, 'CurrencyCHF', 'dacCode'), '11;70');
     assert.equal(
         openCell(model, 'CurrencyCHF', 'nationalCurrencyOf', ', '),

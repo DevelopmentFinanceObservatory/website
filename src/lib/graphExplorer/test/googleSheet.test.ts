@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
     columnLetters,
+    createBodyBytes,
     createSpreadsheetBody,
     dropdownRequestBody,
     LIMITS,
@@ -41,7 +42,6 @@ const fixtureRequest = (): SheetRequest =>
                 name,
                 kind,
                 lookup: lookup && {
-                    valueList: lookup.valueList,
                     fields: lookup.fields,
                     members: lookup.members,
                     complete: lookup.complete,
@@ -142,6 +142,11 @@ const bounds: [string, Edit, Edit][] = [
     ],
     [
         'member id',
+        (r) => (r.columns[8].lookup.members[0].id = text(LIMITS.dcid)),
+        (r) => (r.columns[8].lookup.members[0].id = text(LIMITS.dcid + 1)),
+    ],
+    [
+        'empty member id',
         (r) => (r.columns[8].lookup.members[0].id = 'x'),
         (r) => (r.columns[8].lookup.members[0].id = ''),
     ],
@@ -152,7 +157,7 @@ const bounds: [string, Edit, Edit][] = [
     ],
     [
         'open property field name',
-        (r) => withFields(r, [text(LIMITS.term)], ''),
+        (r) => withFields(r, [text(LIMITS.dcid)], ''),
         (r) => withFields(r, [''], ''),
     ],
     [
@@ -164,11 +169,6 @@ const bounds: [string, Edit, Edit][] = [
         'cells per member',
         (r) => (r.columns[8].lookup.members[0].values = []),
         (r) => (r.columns[8].lookup.members[0].values = ['DOD']),
-    ],
-    [
-        'value list',
-        (r) => (r.columns[8].lookup.valueList = text(LIMITS.term)),
-        (r) => (r.columns[8].lookup.valueList = text(LIMITS.term + 1)),
     ],
     [
         'list completeness',
@@ -187,6 +187,20 @@ for (const [name, atBound, pastBound] of bounds) {
         assert.equal(readSheetRequest(past), null);
     });
 }
+
+test('a request within the request bounds whose create body passes LIMITS.createBytes is refused', () => {
+    const request = fixtureRequest();
+    withFields(request, names(LIMITS.fields), '');
+    const lookup = request.columns[8]?.lookup;
+    assert.ok(lookup);
+    lookup.members = Array.from({ length: LIMITS.members }, (_, at) => ({
+        ...member(at),
+        values: names(LIMITS.fields).map(() => ''),
+    }));
+    assert.ok(new TextEncoder().encode(JSON.stringify(request)).length <= LIMITS.bodyBytes);
+    assert.ok(createBodyBytes(request) > LIMITS.createBytes);
+    assert.equal(readSheetRequest(request), null);
+});
 
 test('a request holds between one and LIMITS.columns columns', () => {
     assert.notEqual(readSheetRequest(withColumns(LIMITS.columns)), null);

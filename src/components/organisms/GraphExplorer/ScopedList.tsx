@@ -42,18 +42,23 @@ const None = () => (
 
 const Count = ({ n }: { n: number }) => (n === 0 ? <None /> : <>{count(n)}</>);
 
-/** The value list a property draws from, its size, and how many members one dataset uses. */
+/** The value lists a property draws from, their size, and how many members one dataset uses. */
 const ValueListCell = ({ row }: { row: ScopedRow }) => {
-    const model = useModel();
     if (row.valueList === null) return <None />;
-    const size = model.members(row.valueList).length;
-    const complete = model.membersComplete(row.valueList);
+    const { lists, members, complete } = row.valueList;
 
     return (
         <>
-            <TermLink id={row.valueList} />{' '}
+            {lists.map((id, at) => (
+                <span key={id}>
+                    {at > 0 && ', '}
+                    <TermLink id={id} />
+                </span>
+            ))}{' '}
             <span className={styles.mono}>
-                {row.values ? `uses ${ofMembers(row.values)}` : memberTotal(size, complete)}
+                {row.values
+                    ? `uses ${ofMembers(row.values)}`
+                    : memberTotal(members.length, complete)}
             </span>
         </>
     );

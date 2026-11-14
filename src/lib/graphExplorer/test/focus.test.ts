@@ -21,6 +21,7 @@ import {
 import { buildModel } from '../model.ts';
 import { readSchema, readUsage, readTerms } from '../wire.ts';
 import { schemaBody, usageBody, termsBody } from './fixtures.ts';
+import { withListedParties } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -79,6 +80,28 @@ test('a value: its value list and broader value above, narrower values below', (
         'down down: Buyback',
     ]);
     assert.ok(nodeBoxes(model, 'WriteDown').every((entry) => entry.more === 'panel'));
+});
+
+test('a class that lists its instances keeps its class picture and offers its value list', () => {
+    const listed = withListedParties();
+
+    assert.equal(listed.kind('Grouping'), 'class');
+    assert.deepEqual(
+        nodeBoxes(listed, 'Grouping').map((entry) => `${entry.key}:${entry.ids.length}`),
+        ['up:1', 'left:3', 'down:6'],
+    );
+    assert.equal(definedNotUsed(listed, 'Grouping'), 7);
+
+    assert.equal(listed.hasValueList('Grouping'), true);
+    assert.deepEqual(listed.members('Grouping'), ['DACMembers', 'G20']);
+    assert.equal(listed.valueListOf('DACMembers'), 'Grouping');
+});
+
+test('an enumeration with instances is a value list, and a class without them offers none', () => {
+    assert.equal(model.kind('FinancialFlowTypeEnum'), 'valueList');
+    assert.equal(model.hasValueList('FinancialFlowTypeEnum'), true);
+    assert.equal(model.kind('Grouping'), 'class');
+    assert.equal(model.hasValueList('Grouping'), false);
 });
 
 test('an id the model does not hold has no boxes', () => {

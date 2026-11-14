@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { LIMITS, readSheetRequest } from '../googleSheet.ts';
+import { createBodyBytes, LIMITS, readSheetRequest } from '../googleSheet.ts';
 import { readSheetQuery, resolveSheet } from '../newSheet.ts';
 import {
     closestPattern,
@@ -21,7 +21,7 @@ import {
 } from '../sheet.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
-import { withPatternClass } from './sheetFixtures.ts';
+import { withListedParties, withPatternClass } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -55,14 +55,14 @@ test('sheet columns run reference, definition, then one per chosen property with
     );
 
     const netting = columns[8]?.lookup;
-    assert.equal(netting?.valueList, 'NettingBasisEnum');
+    assert.deepEqual(netting?.lists, ['NettingBasisEnum']);
     assert.deepEqual(netting?.members, [
         { id: 'Gross', label: 'gross', code: null, values: [] },
         { id: 'Net', label: 'net', code: null, values: [] },
     ]);
 
     const dac1 = columns[9]?.lookup;
-    assert.equal(dac1?.valueList, 'DAC1AidTypeEnum');
+    assert.deepEqual(dac1?.lists, ['DAC1AidTypeEnum']);
     assert.equal(dac1?.members.length, 17);
     assert.deepEqual(dac1?.members[0], {
         id: 'DAC1AidType5',
@@ -90,7 +90,7 @@ test('a property ranging over a class with instances gets a lookup of those inst
         -1,
     );
     const lookup = column?.lookup;
-    assert.equal(lookup?.valueList, 'CurrencyDenomination');
+    assert.deepEqual(lookup?.lists, ['CurrencyDenomination']);
     const alpha = lookup?.fields.indexOf('iso4217AlphaCode') ?? -1;
     assert.deepEqual(
         lookup?.members.map((member) => [member.id, member.values[alpha]]),
@@ -99,6 +99,23 @@ test('a property ranging over a class with instances gets a lookup of those inst
             ['CurrencyCHF', 'CHF'],
         ],
     );
+});
+
+test('a property ranging over several listed classes offers every member once, marked partial', () => {
+    const [column] = sheetColumns(withListedParties(), {
+        ...spec,
+        properties: ['financingProvider'],
+    }).slice(-1);
+    assert.deepEqual(column?.lookup?.lists, ['DACUnspecifiedParty', 'Grouping']);
+    assert.deepEqual(
+        column?.lookup?.members.map((member) => [member.id, member.code]),
+        [
+            ['DACMembers', 'G2'],
+            ['G20', null],
+            ['UnspecifiedDonor', null],
+        ],
+    );
+    assert.equal(column?.lookup?.complete, false);
 });
 
 test('the sheet request keeps the open property columns that fit the handler bounds', () => {
@@ -248,12 +265,12 @@ test('the sheet draft names the class, and both exports carry its columns and ro
     assert.deepEqual(
         request.columns.map((column) => [
             column.name,
-            column.lookup?.valueList ?? null,
+            column.lookup?.members.map((member) => member.id) ?? null,
             column.lookup?.complete ?? null,
         ]),
         draft.columns.map((column) => [
             column.name,
-            column.lookup?.valueList ?? null,
+            column.lookup?.members.map((member) => member.id) ?? null,
             column.lookup?.complete ?? null,
         ]),
     );
@@ -329,13 +346,56 @@ test('a value list over the member cap is cut to it and marked partial, so the h
     assert.ok(readSheetRequest(JSON.parse(JSON.stringify(request))));
 });
 
-test('a body over the byte cap halves its longest list until it fits', () => {
+test('a body over the byte caps halves its longest list until both fit', () => {
     const request = sheetRequest(draftWithList(LIMITS.members, LIMITS.term));
     const bytes = new TextEncoder().encode(JSON.stringify(request)).length;
     assert.ok(bytes <= LIMITS.bodyBytes, String(bytes));
+    assert.ok(createBodyBytes(request) <= LIMITS.createBytes, String(createBodyBytes(request)));
+    // 2,500 members of 500-character labels and codes still make a create body past 2 MB.
     const lookup = request.columns.find((column) => column.lookup !== null)?.lookup;
-    assert.equal(lookup?.members.length, LIMITS.members / 2);
+    assert.equal(lookup?.members.length, LIMITS.members / 4);
     assert.equal(lookup?.complete, false);
+    assert.ok(readSheetRequest(JSON.parse(JSON.stringify(request))));
+});
+
+test('a label, code and column name past the bounds are cut with an ellipsis, and the sheet is made', () => {
+    const draft = draftWithList(2, 600);
+    const long = 'p'.repeat(LIMITS.columnName + 1);
+    const request = sheetRequest({
+        ...draft,
+        columns: draft.columns.map((column) =>
+            column.lookup === null ? column : { ...column, name: long },
+        ),
+    });
+    const read = readSheetRequest(JSON.parse(JSON.stringify(request)));
+    assert.ok(read);
+    const column = read.columns.find((each) => each.lookup !== null);
+    assert.equal(column?.name, `${'p'.repeat(LIMITS.columnName - 1)}…`);
+    assert.equal(column?.lookup?.members.length, 2);
+    assert.equal(column?.lookup?.members[0]?.label, `${'x'.repeat(LIMITS.term - 1)}…`);
+    assert.equal(column?.lookup?.members[0]?.code, `${'x'.repeat(LIMITS.term - 1)}…`);
+    assert.equal(column?.lookup?.complete, true);
+});
+
+test('a member id as long as the longest dcid the graph serves is sent whole', () => {
+    const draft = draftWithList(1, 1);
+    const id = 'd'.repeat(LIMITS.dcid);
+    const request = sheetRequest({
+        ...draft,
+        columns: draft.columns.map((column) =>
+            column.lookup === null
+                ? column
+                : {
+                      ...column,
+                      lookup: {
+                          ...column.lookup,
+                          members: column.lookup.members.map((member) => ({ ...member, id })),
+                      },
+                  },
+        ),
+    });
+    const read = readSheetRequest(JSON.parse(JSON.stringify(request)));
+    assert.equal(read?.columns.find((each) => each.lookup !== null)?.lookup?.members[0]?.id, id);
 });
 
 test('a list within both caps is sent whole', () => {

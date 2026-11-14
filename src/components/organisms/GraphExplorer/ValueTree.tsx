@@ -145,8 +145,8 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
     const [filter, setFilter] = useState('');
     const blank = filter.trim() === '';
     const { hits, total } = searchMembers(model, listId, filter);
-    const fields = memberFields(model, listId);
-    const codes = membersHaveCodes(model, listId);
+    const fields = memberFields(model, model.members(listId));
+    const codes = membersHaveCodes(model, model.members(listId));
 
     return (
         <div className={styles.tree}>

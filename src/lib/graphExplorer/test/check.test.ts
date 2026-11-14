@@ -43,6 +43,7 @@ import {
     type SchemaFinding,
 } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
+import { withListedParties } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -481,17 +482,26 @@ test('a value outside the range links its value list, and its closest members ar
     assert.equal(closestLookup(model)(line.finding)[0], 'DAC1AidType1020');
 });
 
+test('a value outside a range of several lists links each list, and the closest member comes from any', () => {
+    const listed = withListedParties();
+    const outside = finding({
+        property: 'financingProvider',
+        value: 'Unspecified donr',
+        code: 'value_outside_range',
+    });
+    const parts = findingMessage(listed, outside);
+    assert.deepEqual(
+        parts.flatMap((part) => (part.kind === 'term' ? [part.id] : [])),
+        ['DACUnspecifiedParty', 'Grouping'],
+    );
+    assert.deepEqual(closestMembers(listed, outside, 1), ['UnspecifiedDonor']);
+});
+
 test('the closest values are worked out only when asked, once per field and value', () => {
-    // Each closestMembers call asks for the property's value list once, and the first for a
-    // list reads its members.
+    // Each closestMembers call asks for the property's value list once.
     let lookups = 0;
-    let memberReads = 0;
     const counting = {
         ...model,
-        members: (list: string) => {
-            memberReads += 1;
-            return model.members(list);
-        },
         valueListOfProperty: (id: string) => {
             lookups += 1;
             return model.valueListOfProperty(id);
@@ -504,7 +514,6 @@ test('the closest values are worked out only when asked, once per field and valu
         finding({ row: 3, value: 'DAC1AidTpye1010' }),
     ];
     findingLines(counting, mapHeaders(model, ['dac1AidType']), SHEET_ROWS, at(findings));
-    assert.equal(memberReads, 0);
     const closest = closestLookup(counting);
     const before = lookups;
     const offered = findings.map(closest);
@@ -615,8 +624,7 @@ test('the closest members match a full ranking of every member, ties in list ord
     assert.ok(properties.length > 5);
     let checked = 0;
     for (const property of properties) {
-        const list = model.valueListOfProperty(property) ?? '';
-        const members = model.members(list);
+        const members = model.valueListOfProperty(property)?.members ?? [];
         for (const typed of ['x', 'Gros', 'DAC1AidTpye1020', 'ODA', members[0] ?? 'none']) {
             const found = finding({ property, value: typed });
             const lower = typed.toLowerCase();

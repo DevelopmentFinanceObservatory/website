@@ -96,11 +96,11 @@ export type PlacedPattern = PatternRef & { readonly pattern: SchemaPattern };
 /** A property the page offers to split the figures by. */
 export type SplitOption = {
     readonly id: string;
-    /** The value list the property draws from, or null. */
-    readonly valueList: string | null;
-    /** How many members the value list lists. 0 without a value list. */
+    /** The range classes whose lists the property draws from. Empty without a value list. */
+    readonly valueLists: readonly string[];
+    /** How many members those lists hold. 0 without a value list. */
     readonly members: number;
-    /** False when the graph holds members of the value list that `members` leaves out. */
+    /** False when the graph holds values of the property that `members` leaves out. */
     readonly membersComplete: boolean;
     /** The datasets whose StatVars use the property, most StatVars first. */
     readonly datasets: readonly string[];
@@ -191,12 +191,12 @@ export const mostUsedPattern = (
  */
 export const splitOptions = (model: Model, classId: string): readonly SplitOption[] => {
     const option = (id: string, inUse: boolean): SplitOption => {
-        const valueList = model.valueListOfProperty(id) ?? null;
+        const values = model.valueListOfProperty(id);
         return Object.freeze({
             id,
-            valueList,
-            members: valueList === null ? 0 : model.members(valueList).length,
-            membersComplete: valueList === null || model.membersComplete(valueList),
+            valueLists: values?.lists ?? [],
+            members: values?.members.length ?? 0,
+            membersComplete: values?.complete ?? true,
             datasets: Object.freeze(model.usage(id).byDataset.map((entry) => entry.dataset)),
             inUse,
         });

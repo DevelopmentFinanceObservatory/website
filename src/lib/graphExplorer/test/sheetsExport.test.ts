@@ -31,7 +31,6 @@ const request = {
             name: 'nettingBasis',
             kind: 'property',
             lookup: {
-                valueList: 'NettingBasisEnum',
                 fields: [],
                 members: [{ id: 'Gross', label: 'gross', code: null, values: [] }],
                 complete: true,

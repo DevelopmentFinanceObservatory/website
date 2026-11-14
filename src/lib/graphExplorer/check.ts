@@ -251,8 +251,8 @@ type MessageContext = {
     readonly text: (text: string) => MessagePart;
     /** A term link when the model holds the id, else the id as typed. */
     readonly term: (id: string) => MessagePart;
-    /** The value list behind the finding's property, when it has one. */
-    readonly valueList: string | undefined;
+    /** The range classes whose lists the finding's property takes values from. Empty when none. */
+    readonly valueLists: readonly string[];
 };
 
 const shown = (text: string): MessagePart => ({ kind: 'value', text });
@@ -263,10 +263,25 @@ const kindAside = ({ model, value, text }: MessageContext): MessagePart[] => {
     return kind === undefined ? [] : [text(` (it is a ${KIND_WORDS[kind].toLowerCase()})`)];
 };
 
-const chooseFrom = ({ valueList, text, term }: MessageContext, fallback: string): MessagePart[] =>
-    valueList === undefined
-        ? [text(fallback)]
-        : [text('Choose a value from '), term(valueList), text('.')];
+/** Term links to `ids` joined as "A, B or C", with `last` before the final one. */
+const termList = (
+    { text, term }: MessageContext,
+    ids: readonly string[],
+    last: string,
+): MessagePart[] =>
+    ids.flatMap((id, at) => [
+        ...(at === 0 ? [] : [text(at === ids.length - 1 ? ` ${last} ` : ', ')]),
+        term(id),
+    ]);
+
+const chooseFrom = (context: MessageContext, fallback: string): MessagePart[] =>
+    context.valueLists.length === 0
+        ? [context.text(fallback)]
+        : [
+              context.text('Choose a value from '),
+              ...termList(context, context.valueLists, 'or'),
+              context.text('.'),
+          ];
 
 const fieldName = ({ finding }: MessageContext): string =>
     finding.property ?? fieldWords(finding.field);
@@ -330,9 +345,18 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         context.text('. The population type must be a kind of thing.'),
     ],
     value_outside_range: (context) => {
-        const { finding, value, valueList, text, term } = context;
-        if (valueList !== undefined) {
-            return [shown(value), text(' is not in the value list '), term(valueList), text('.')];
+        const { finding, value, valueLists, text, term } = context;
+        if (valueLists.length > 0) {
+            return [
+                shown(value),
+                text(
+                    valueLists.length === 1
+                        ? ' is not in the value list '
+                        : ' is not in the value lists ',
+                ),
+                ...termList(context, valueLists, 'and'),
+                text('.'),
+            ];
         }
         return finding.property === null
             ? [shown(value), text(` is not a value the ${fieldName(context)} allows.`)]
@@ -385,8 +409,9 @@ export function findingMessage(model: Model, finding: SchemaFinding): MessagePar
         text: (text) => ({ kind: 'text', text }),
         term: (id) =>
             held(id) ? { kind: 'term', id, label: model.label(id) } : { kind: 'value', text: id },
-        valueList:
-            finding.property === null ? undefined : model.valueListOfProperty(finding.property),
+        valueLists:
+            (finding.property === null ? undefined : model.valueListOfProperty(finding.property))
+                ?.lists ?? [],
     };
     const message = isFindingCode(finding.code) ? MESSAGES[finding.code] : unknownMessage;
     return message(context).filter((part) => part.kind !== 'text' || part.text);
@@ -441,21 +466,25 @@ const SUGGESTED: ReadonlySet<string> = new Set<FindingCode>([
     'value_outside_range',
 ]);
 
-/** Each value list's members with their names in lower case, worked out once per model. */
+/** Each property's value-list members with their names in lower case, worked out once per model. */
 const memberNames = new WeakMap<
     Model,
     Map<string, readonly (readonly [string, readonly string[]])[]>
 >();
 
-const namesOf = (model: Model, list: string): readonly (readonly [string, readonly string[]])[] => {
-    let lists = memberNames.get(model);
-    if (lists === undefined) {
-        lists = new Map();
-        memberNames.set(model, lists);
+const namesOf = (
+    model: Model,
+    property: string,
+    members: readonly string[],
+): readonly (readonly [string, readonly string[]])[] => {
+    let properties = memberNames.get(model);
+    if (properties === undefined) {
+        properties = new Map();
+        memberNames.set(model, properties);
     }
-    let named = lists.get(list);
+    let named = properties.get(property);
     if (named === undefined) {
-        named = model.members(list).map((id) => {
+        named = members.map((id) => {
             const node = model.node(id);
             const names = [
                 id,
@@ -465,7 +494,7 @@ const namesOf = (model: Model, list: string): readonly (readonly [string, readon
             ];
             return [id, names.map((name) => name.toLowerCase())] as const;
         });
-        lists.set(list, named);
+        properties.set(property, named);
     }
     return named;
 };
@@ -480,14 +509,14 @@ export function closestMembers(model: Model, finding: SchemaFinding, limit = 3):
     const { property } = finding;
     if (!SUGGESTED.has(finding.code) || property === null || finding.subject !== 'value') return [];
     if (typeof finding.value !== 'string') return [];
-    const list = model.valueListOfProperty(property);
-    if (list === undefined) return [];
+    const values = model.valueListOfProperty(property);
+    if (values === undefined) return [];
 
     // The closest `limit` so far, in list order among ties. A member is measured only as far as
     // it could still beat the farthest of them, so most members stop after a few cells.
     const typed = finding.value.toLowerCase();
     const best: { id: string; score: number }[] = [];
-    for (const [id, names] of namesOf(model, list)) {
+    for (const [id, names] of namesOf(model, property, values.members)) {
         if (id === finding.value) continue;
         const full = best.length >= limit;
         let bound = full ? (best.at(-1)?.score ?? 0) - 1 : Infinity;

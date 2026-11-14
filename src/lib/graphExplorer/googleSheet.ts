@@ -32,6 +32,12 @@ export const DROPDOWN_ROWS = 1000;
 export const LIMITS = {
     /** The request body in bytes, read before parsing. */
     bodyBytes: 5_000_000,
+    /**
+     * The `spreadsheets.create` body in bytes: the 2 MB payload the Sheets
+     * API recommends as a maximum. Each cell there carries its own JSON, so
+     * the create body can run to several times the request.
+     */
+    createBytes: 2_000_000,
     title: 200,
     generation: 200,
     columns: 64,
@@ -41,7 +47,12 @@ export const LIMITS = {
     members: 5000,
     /** Open property columns in one value list's block. */
     fields: 16,
-    /** A value list's dcid, an open property's dcid, a member's dcid, label, code or open property cell. */
+    /**
+     * A value list's dcid, an open property's dcid or a member's dcid: the
+     * graph API's DCID_MAX_LENGTH, so no dcid the graph serves breaks it.
+     */
+    dcid: 512,
+    /** A member's label, code or open property cell. */
     term: 500,
 } as const;
 
@@ -56,7 +67,6 @@ export type SheetRequestColumn = {
      * false when the graph holds members of the value list that `members` leaves out.
      */
     lookup: {
-        valueList: string;
         fields: string[];
         members: SheetMember[];
         complete: boolean;
@@ -117,7 +127,7 @@ const readMember = (value: unknown, fields: number): SheetMember | null => {
     const member = asRecord(value);
     if (member === undefined) return null;
     const { id, label, code, values } = member;
-    if (!isText(id, LIMITS.term, 1) || !isText(label, LIMITS.term)) return null;
+    if (!isText(id, LIMITS.dcid, 1) || !isText(label, LIMITS.term)) return null;
     if (code !== null && !isText(code, LIMITS.term)) return null;
     if (!isTextList(values, LIMITS.term) || values.length !== fields) return null;
     return { id, label, code, values };
@@ -127,14 +137,13 @@ const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined =>
     if (value === null) return null;
     const lookup = asRecord(value);
     if (lookup === undefined) return undefined;
-    const { valueList, fields, members, complete } = lookup;
-    if (!isText(valueList, LIMITS.term, 1)) return undefined;
-    if (!isTextList(fields, LIMITS.term, 1) || fields.length > LIMITS.fields) return undefined;
+    const { fields, members, complete } = lookup;
+    if (!isTextList(fields, LIMITS.dcid, 1) || fields.length > LIMITS.fields) return undefined;
     if (typeof complete !== 'boolean') return undefined;
     if (!Array.isArray(members) || members.length > LIMITS.members) return undefined;
     const read = members.map((member) => readMember(member, fields.length));
     if (read.some((member) => member === null)) return undefined;
-    return { valueList, fields, members: read.filter((member) => member !== null), complete };
+    return { fields, members: read.filter((member) => member !== null), complete };
 };
 
 const readColumn = (value: unknown): SheetRequestColumn | null => {
@@ -149,7 +158,21 @@ const readColumn = (value: unknown): SheetRequestColumn | null => {
     return { name, kind: known, lookup: read };
 };
 
-/** The request body checked against its bounds, or null when it breaks one. */
+/** The byte length of a value as JSON, the measure every byte bound uses. */
+export const jsonBytes = (value: unknown): number =>
+    new TextEncoder().encode(JSON.stringify(value)).length;
+
+/**
+ * The bytes of the request's `spreadsheets.create` body. The date in the
+ * body's note is always ten characters, so a fixed one measures any day.
+ */
+export const createBodyBytes = (request: SheetRequest): number =>
+    jsonBytes(createSpreadsheetBody(request, '0000-00-00'));
+
+/**
+ * The request body checked against its bounds, or null when it breaks one,
+ * including a request whose create body would pass LIMITS.createBytes.
+ */
 export const readSheetRequest = (value: unknown): SheetRequest | null => {
     const body = asRecord(value);
     if (body === undefined) return null;
@@ -167,12 +190,13 @@ export const readSheetRequest = (value: unknown): SheetRequest | null => {
         row.length === columns.length &&
         row.every((cell) => isText(cell, LIMITS.cell));
     if (!rows.every(fits)) return null;
-    return {
+    const request = {
         title,
         generation,
         columns: read.filter((column) => column !== null),
         rows,
     };
+    return createBodyBytes(request) <= LIMITS.createBytes ? request : null;
 };
 
 /** A column's letters in A1 notation from its zero-based index: 0 is A, 26 is AA. */

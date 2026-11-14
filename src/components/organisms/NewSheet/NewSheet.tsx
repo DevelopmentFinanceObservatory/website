@@ -57,9 +57,9 @@ const SplitBox = ({ option, checked, onToggle }: SplitBoxProps) => {
             <span className={styles.grow}>
                 <span className={styles.term}>{model.label(option.id)}</span>{' '}
                 <span className={styles.dcid}>{option.id}</span>
-                {option.valueList !== null && (
+                {option.valueLists.length > 0 && (
                     <span className={styles.from}>
-                        from {model.label(option.valueList)},{' '}
+                        from {option.valueLists.map((id) => model.label(id)).join(', ')},{' '}
                         {valueCount(option.members, option.membersComplete)}
                     </span>
                 )}
@@ -228,7 +228,12 @@ const ValueLists = ({ sheet }: { sheet: SheetDraft }) => {
             {listed.map((column) => (
                 <li key={column.name}>
                     <span className={styles.dcid}>{column.name}</span> takes a value from{' '}
-                    <TermLink id={column.lookup?.valueList ?? ''} />{' '}
+                    {column.lookup?.lists.map((id, at) => (
+                        <span key={id}>
+                            {at > 0 && ', '}
+                            <TermLink id={id} />
+                        </span>
+                    ))}{' '}
                     <span className={styles.size}>
                         (
                         {valueCount(

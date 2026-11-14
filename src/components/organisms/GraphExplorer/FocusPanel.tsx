@@ -194,12 +194,10 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
 
     const list = kind === 'value' ? model.valueListOf(id) : undefined;
     const domain = kind === 'property' ? declaredDomain(model, id) : null;
-    const members = kind === 'valueList' ? model.members(id).length : 0;
-    const complete = kind === 'valueList' && model.membersComplete(id);
-    const used =
-        kind === 'valueList' && lens.dataset !== null
-            ? model.lens(lens.dataset, [id])[0]
-            : undefined;
+    const hasList = model.hasValueList(id);
+    const members = hasList ? model.members(id).length : 0;
+    const complete = hasList && model.membersComplete(id);
+    const used = hasList && lens.dataset !== null ? model.lens(lens.dataset, [id])[0] : undefined;
 
     return (
         <>
@@ -243,7 +241,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 </p>
             )}
             <OpenLines id={id} />
-            {kind === 'valueList' && (members > 0 || !complete) && (
+            {hasList && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>
                         {valueListLabel(
@@ -267,11 +265,8 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     </div>
                 </section>
             )}
-            {kind === 'valueList' ? (
-                <MemberBars id={id} lens={lens} />
-            ) : (
-                <UsageBars id={id} lens={lens} />
-            )}
+            {kind !== 'valueList' && <UsageBars id={id} lens={lens} />}
+            {hasList && <MemberBars id={id} lens={lens} />}
             {kind === 'class' && (
                 <div>
                     <SheetLink href={sheetHref({ classId: id }, carried)}>
