@@ -12,9 +12,11 @@ import {
     declarerWords,
     filterScopedList,
     GROUPS,
+    cellWidth,
     kindOfTerm,
     memberFields,
-    openCell,
+    openColumns,
+    plainName,
     searchMembers,
     type MemberTree,
 } from '../model.ts';
@@ -484,12 +486,87 @@ test('a member search matches an open property literal', () => {
 test('the open properties of a list are those its members carry, each member a cell', () => {
     assert.deepEqual(memberFields(model, model.members('FinancialPositionTypeEnum')), ['wbCode']);
     assert.deepEqual(memberFields(model, model.members('NettingBasisEnum')), []);
-    assert.equal(openCell(model, 'CurrencyCHF', 'dacCode'), '11;70');
-    assert.equal(
-        openCell(model, 'CurrencyCHF', 'nationalCurrencyOf', ', '),
-        'country/CHE, country/LIE',
-    );
-    assert.equal(openCell(model, 'CurrencyCHF', 'wbCode'), '');
+    const { fields, cell } = openColumns(model, model.members('CurrencyDenomination'));
+    assert.deepEqual(fields, memberFields(model, model.members('CurrencyDenomination')));
+    assert.equal(cell('CurrencyCHF', 'dacCode'), '11;70');
+    assert.equal(cell('CurrencyCHF', 'nationalCurrencyOf', ', '), 'country/CHE, country/LIE');
+    assert.equal(cell('CurrencyCHF', 'wbCode'), '');
+});
+
+/**
+ * The fixture with the currency status labelled as the graph labels it,
+ * "current (currency status)". With `collide`, the euro's status is a second
+ * node whose plain name is also "current".
+ */
+const withStatusLabels = (collide: boolean) => {
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const node = (ref: string) => {
+        const found = body.nodes.find((each) => each.ref === ref);
+        if (found === undefined) throw new Error(`no ${ref}`);
+        return found;
+    };
+    const current = node('CurrencyStatusCurrent');
+    current.label = 'current (currency status)';
+    if (collide) {
+        body.nodes.push({
+            ...current,
+            ref: 'GroupingCurrent',
+            label: 'current (grouping)',
+            types: ['Grouping'],
+        });
+        const euro = node('CurrencyEUR') as { other_properties: Record<string, unknown> };
+        euro.other_properties = {
+            ...euro.other_properties,
+            currencyStatus: [{ ref: 'GroupingCurrent' }],
+        };
+    }
+    return buildModel(readSchema(body), readUsage(usageBody()));
+};
+
+test("a plain name leaves out a closing parenthesis that names one of the node's types", () => {
+    const labelled = withStatusLabels(false);
+    assert.equal(plainName(labelled, 'CurrencyStatusCurrent'), 'current');
+    assert.equal(plainName(labelled, 'DAC1AidType1010'), 'official development assistance');
+    assert.equal(plainName(labelled, 'CurrencyEUR'), 'Euro');
+    assert.equal(plainName(labelled, 'NotANode'), 'NotANode');
+});
+
+test('an open property cell names a held reference by its plain name, a reference the model lacks by its dcid', () => {
+    const { cell } = openColumns(withStatusLabels(false), model.members('CurrencyDenomination'));
+    assert.equal(cell('CurrencyCHF', 'currencyStatus'), 'current');
+    assert.equal(cell('CurrencyEUR', 'currencyStatus'), 'current');
+    assert.equal(cell('CurrencyCHF', 'nationalCurrencyOf'), 'country/CHE;country/LIE');
+});
+
+test('references that share a plain name in one column keep their full labels', () => {
+    const { cell } = openColumns(withStatusLabels(true), model.members('CurrencyDenomination'));
+    assert.equal(cell('CurrencyCHF', 'currencyStatus'), 'current (currency status)');
+    assert.equal(cell('CurrencyEUR', 'currencyStatus'), 'current (grouping)');
+});
+
+for (const [cells, head, width] of [
+    // The longest cell, when no cap or head word asks for more.
+    [['AFN', 'CHF'], 'code', 4],
+    [['country/AFG'], 'nationalCurrencyOf', 18],
+    // Past the cap a cell wraps at its spaces; a piece ends at a "/".
+    [['country/CHE, country/LIE'], 'of', 16],
+    [['provenance/ExtraordinarilyLongDatasetName'], 'source', 30],
+    // The head's longest word sets the floor.
+    [['11'], 'ISO 4217 currency number', 8],
+    [[], 'dac code', 4],
+] as const) {
+    test(`a code column of ${JSON.stringify(cells)} under "${head}" is ${width} characters wide`, () => {
+        assert.equal(cellWidth(cells, head), width);
+    });
+}
+
+test('a member search matches the label of a held node a member refers to', () => {
+    assert.deepEqual(searchMembers(model, 'CurrencyDenomination', 'current'), {
+        hits: ['CurrencyEUR', 'CurrencyCHF'],
+        total: 2,
+    });
+    // A reference the model lacks matches by no text of its own.
+    assert.equal(searchMembers(model, 'CurrencyDenomination', 'country/che').total, 0);
 });
 
 test('a scoped list filter keeps rows by label or dcid, and blank text keeps every row', () => {

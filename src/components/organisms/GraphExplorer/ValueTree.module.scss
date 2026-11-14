@@ -1,6 +1,10 @@
 @use "variables" as *;
 @use "mixins" as *;
 
+$name-min: 160px;
+$column-gap: 10px;
+$indent: 20px;
+
 .tree {
     @include flex(column, flex-start, stretch);
 
@@ -26,16 +30,25 @@
     }
 }
 
-.list,
-.children {
-    margin: 0;
-    padding: 0;
-    list-style: none;
+// The heads and rows of a list. The rows are never narrower than a name
+// column of $name-min beside every code column, so a list with many columns
+// scrolls sideways here, inside the panel, and its names never squeeze to
+// nothing.
+.table {
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.rows {
+    min-width: min-content;
 }
 
 .list {
     @include font-size(14px, 1.3);
 
+    margin: 0;
+    padding: 0;
+    list-style: none;
     border-top: 1px solid var(--color-net-mid);
 
     > li {
@@ -43,13 +56,13 @@
     }
 }
 
-.summary,
-.leaf {
+// A row's padding sits on its name and cells, so the name column's
+// background and hairline run the row's full height.
+.row {
     display: flex;
     align-items: baseline;
-    gap: rem(10);
+    gap: rem($column-gap);
     min-width: 0;
-    padding-block: rem(7);
 }
 
 .summary {
@@ -59,26 +72,52 @@
     &::-webkit-details-marker {
         display: none;
     }
-
-    &::before {
-        content: "+";
-        flex: none;
-        width: rem(10);
-        font-family: var(--font-dm-mono);
-    }
 }
 
-details[open] > .summary::before {
+// The branch marker, code, link and count of narrower values, indented by
+// the row's depth. With code columns beside it, it is the name column: every
+// row's has the same edges, nested rows included, and it holds the panel's
+// left edge while the columns scroll under it, with a hairline at its side.
+.name {
+    display: flex;
+    flex: 1 1 auto;
+    gap: rem($column-gap);
+    align-items: baseline;
+    min-width: 0;
+    padding-block: rem(7);
+    padding-left: calc(var(--depth, 0) * #{rem($indent)});
+}
+
+.columned .name,
+.nameHead {
+    position: sticky;
+    z-index: 1;
+    left: 0;
+    flex: 1 0 calc(#{rem($name-min)} + var(--depth, 0) * #{rem($indent)});
+    align-self: stretch;
+    padding-right: rem(8);
+    background-color: var(--color-white);
+    box-shadow: 1px 0 0 var(--color-net-mid);
+}
+
+.marker {
+    flex: none;
+    width: rem($indent - $column-gap);
+    font-family: var(--font-dm-mono);
+}
+
+.branch::before {
+    content: "+";
+}
+
+details[open] > .summary .branch::before {
     content: "\2212";
 }
 
-.leaf {
-    padding-left: rem(20);
-}
-
 .children {
-    margin-left: rem(20);
-    padding-bottom: rem(6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
 .code,
@@ -97,34 +136,51 @@ details[open] > .summary::before {
 
 .term {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .heads {
     @include font-size(11px, 1.3);
 
     display: flex;
+    gap: rem($column-gap);
     color: var(--color-stone);
     text-transform: uppercase;
+
+    .cells,
+    .nameHead {
+        padding-block: 0 rem(6);
+    }
+}
+
+.nameHead {
+    display: flex;
+    gap: rem($column-gap);
+    font-family: var(--font-dm-mono);
+    letter-spacing: -0.02em;
 }
 
 .cells {
     display: flex;
     flex: none;
-    gap: rem(10);
+    padding-block: rem(7);
+    gap: rem($column-gap);
     margin-left: auto;
 }
 
+// A code column's width is set in `ch` of this font, the same in the heads
+// and the rows, so it fits the column's longest token: an id wraps only at
+// the break the tree puts after each "/", and short codes stay on one line.
 .cell {
-    width: rem(72);
+    @include font-size(12px, 1.3);
+
+    flex: none;
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
 }
 
-.leaf .cell,
-.summary .cell {
-    @include font-size(12px, 1.3);
+.headText {
+    @include font-size(11px, 1.3);
 }
 
 .dim {

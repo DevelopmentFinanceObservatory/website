@@ -839,6 +839,16 @@ export const openLiterals = (node: SchemaNode | undefined): string[] =>
         values.flatMap((value) => ('value' in value ? [value.value] : [])),
     );
 
+/** The labels of the nodes and datasets the model holds that a node's open properties refer to. */
+const heldReferenceLabels = (model: Model, node: SchemaNode | undefined): string[] =>
+    Object.values(node?.other_properties ?? {}).flatMap((values) =>
+        values.flatMap((value) =>
+            'ref' in value && (model.node(value.ref) || model.dataset(value.ref))
+                ? [model.label(value.ref)]
+                : [],
+        ),
+    );
+
 /** A node's open property names and the text of each of their values. */
 export const openNames = (node: SchemaNode): string[] =>
     Object.entries(node.other_properties).flatMap(([property, values]) => [
@@ -857,20 +867,102 @@ export const membersHaveCodes = (model: Model, members: readonly string[]): bool
     members.some((id) => (model.node(id)?.classification_code.length ?? 0) > 0);
 
 /**
- * One member's values of an open property as one cell: each node's dcid or
- * literal, in the node's order, joined by `separator`. Empty when it has none.
+ * A node's label without a closing parenthesis that names one of its types,
+ * so "current (currency status)" of a CurrencyStatusEnum value reads
+ * "current". Any other label, a dataset's name, or an id the model lacks
+ * comes back whole.
  */
-export const openCell = (model: Model, id: string, property: string, separator = ';'): string =>
-    (model.node(id)?.other_properties[property] ?? []).map(openValueText).join(separator);
+export function plainName(model: Model, id: string): string {
+    const label = model.label(id);
+    for (const type of model.node(id)?.types ?? []) {
+        const suffix = ` (${model.label(type)})`.toLowerCase();
+        if (label.length > suffix.length && label.toLowerCase().endsWith(suffix)) {
+            return label.slice(0, -suffix.length);
+        }
+    }
+    return label;
+}
+
+/** A value list's open property columns and each member's cell in them. */
+export type OpenColumns = {
+    /** The open properties any member carries (memberFields), one column each. */
+    readonly fields: readonly string[];
+    /**
+     * One member's values of an open property as one cell, in the node's
+     * order, joined by `separator`: a literal as it is, a node reference by
+     * its plain name (plainName), or by its full label where two references
+     * in the column share a plain name. A reference the model lacks keeps its
+     * dcid. Empty when the member has no value.
+     */
+    readonly cell: (id: string, property: string, separator?: string) => string;
+};
+
+/**
+ * The open property columns of `members`. The tree, the value-list CSV and
+ * the Google Sheet's value-list tab all read their cells from it, so the
+ * three name a reference the same way.
+ */
+export function openColumns(model: Model, members: readonly string[]): OpenColumns {
+    const fields = memberFields(model, members);
+    const names = new Map<string, ReadonlyMap<string, string>>();
+    for (const property of fields) {
+        const refs = new Set(
+            members.flatMap((id) =>
+                (model.node(id)?.other_properties[property] ?? []).flatMap((value) =>
+                    'ref' in value ? [value.ref] : [],
+                ),
+            ),
+        );
+        const sharing = new Map<string, number>();
+        for (const ref of refs) {
+            const name = plainName(model, ref);
+            sharing.set(name, (sharing.get(name) ?? 0) + 1);
+        }
+        const text = new Map<string, string>();
+        for (const ref of refs) {
+            const name = plainName(model, ref);
+            text.set(ref, (sharing.get(name) ?? 0) > 1 ? model.label(ref) : name);
+        }
+        names.set(property, text);
+    }
+
+    const cell = (id: string, property: string, separator = ';'): string =>
+        (model.node(id)?.other_properties[property] ?? [])
+            .map((value) =>
+                'ref' in value ? (names.get(property)?.get(value.ref) ?? value.ref) : value.value,
+            )
+            .join(separator);
+
+    return Object.freeze({ fields, cell });
+}
+
+/** The widest a code column grows, in characters, before its cells wrap at spaces. */
+export const CELL_WIDTH_CAP = 16;
+
+/**
+ * A code column's width in characters: its longest cell up to
+ * CELL_WIDTH_CAP, and never narrower than its longest unbreakable piece or
+ * the longest word of its head. A piece runs between spaces, and a "/" ends
+ * one, so ids break only after a "/" and never inside a token.
+ */
+export function cellWidth(cells: readonly string[], head: string): number {
+    const longestPiece = (texts: readonly string[], split: RegExp) =>
+        Math.max(0, ...texts.flatMap((text) => text.split(split).map((piece) => piece.length)));
+    return Math.max(
+        Math.min(Math.max(0, ...cells.map((cell) => cell.length)), CELL_WIDTH_CAP),
+        longestPiece(cells, /\s+|(?<=\/)/),
+        longestPiece([head], /\s+/),
+    );
+}
 
 /** The most matches a value-list member search returns. */
 export const MEMBER_HIT_LIMIT = 60;
 
 /**
  * The members of a value list whose label, dcid, classification code, other
- * name or open property literal holds `text`, ignoring case and surrounding
- * space, in list order. Returns the first `limit` and how many match in all.
- * Empty for blank text.
+ * name, open property literal or label of a held node it refers to holds
+ * `text`, ignoring case and surrounding space, in list order. Returns the
+ * first `limit` and how many match in all. Empty for blank text.
  */
 export function searchMembers(
     model: Model,
@@ -888,6 +980,7 @@ export function searchMembers(
             ...(node?.classification_code ?? []),
             ...(node?.alternate_name ?? []),
             ...openLiterals(node),
+            ...heldReferenceLabels(model, node),
         ].some((name) => name.toLowerCase().includes(needle));
     });
     return { hits: matched.slice(0, limit), total: matched.length };

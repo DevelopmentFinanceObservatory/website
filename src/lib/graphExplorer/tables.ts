@@ -3,7 +3,7 @@
  * value list's members.
  */
 import type { Model, ScopedList } from './model.ts';
-import { filterScopedList, GROUPS, memberFields, membersHaveCodes, openCell } from './model.ts';
+import { filterScopedList, GROUPS, membersHaveCodes, openColumns } from './model.ts';
 import { csvFileName } from './sheet.ts';
 
 /**
@@ -34,13 +34,13 @@ export function scopedListTable(
 /**
  * A value list's members in list order: dcid, label, classification code
  * when some member has one, the broader members of the same list, then one
- * column per open property any member carries (memberFields), headed by the
+ * column per open property any member carries (openColumns), headed by the
  * property's dcid. Several values in a cell are separated by semicolons.
  */
 export function valueListTable(model: Model, listId: string): readonly (readonly string[])[] {
     const members = model.members(listId);
     const inList = new Set(members);
-    const fields = memberFields(model, model.members(listId));
+    const { fields, cell } = openColumns(model, members);
     const codes = membersHaveCodes(model, model.members(listId));
     const rows = members.map((id) => [
         id,
@@ -50,7 +50,7 @@ export function valueListTable(model: Model, listId: string): readonly (readonly
             .broader(id)
             .filter((broader) => inList.has(broader))
             .join(';'),
-        ...fields.map((property) => openCell(model, id, property)),
+        ...fields.map((property) => cell(id, property)),
     ]);
     return [['dcid', 'label', ...(codes ? ['code'] : []), 'broader', ...fields], ...rows];
 }

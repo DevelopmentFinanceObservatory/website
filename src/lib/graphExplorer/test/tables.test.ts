@@ -74,6 +74,13 @@ test('a value list whose members have no code has no code column, and a column p
     assert.deepEqual(table[1], ['AmountOutstanding', 'amount outstanding', '', 'DOD']);
 });
 
+test("a value list's open property column writes a held node reference as its label", () => {
+    const table = valueListTable(model, 'CurrencyDenomination');
+    const status = table[0]?.indexOf('currencyStatus') ?? -1;
+    const chf = table.find((row) => row[0] === 'CurrencyCHF');
+    assert.equal(chf?.[status], 'current');
+});
+
 for (const [listId, fileName] of [
     ['NettingBasisEnum', 'netting-basis.csv'],
     ['DAC1AidTypeEnum', 'dac-1-aid-type-partial.csv'],

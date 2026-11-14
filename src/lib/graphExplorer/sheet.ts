@@ -10,7 +10,7 @@ import {
     type SheetRequest,
     type SheetRequestColumn,
 } from './googleSheet.ts';
-import { memberFields, openCell, type Model } from './model.ts';
+import { openColumns, type Model } from './model.ts';
 import { classAndNarrower } from './newSheet.ts';
 import type { SchemaPattern } from './wire.ts';
 
@@ -23,7 +23,7 @@ export type LookupMember = {
     readonly label: string;
     /** The member's classification code, when it has one. */
     readonly code: string | null;
-    /** The member's cell for each of the lookup's `fields`, in that order (openCell). */
+    /** The member's cell for each of the lookup's `fields`, in that order (OpenColumns.cell). */
     readonly values: readonly string[];
 };
 
@@ -31,7 +31,7 @@ export type LookupMember = {
 export type Lookup = {
     /** The range classes whose lists the members come from. */
     readonly lists: readonly string[];
-    /** The open properties any member carries (memberFields), each a column after the code. */
+    /** The open properties any member carries (OpenColumns.fields), each a column after the code. */
     readonly fields: readonly string[];
     readonly members: readonly LookupMember[];
     /** False when the graph holds members of the value list that `members` leaves out. */
@@ -64,13 +64,13 @@ const REFERENCE_COLUMNS = ['source_code', 'source_label'] as const;
 const lookupOf = (model: Model, property: string): Lookup | null => {
     const values = model.valueListOfProperty(property);
     if (values === undefined) return null;
-    const fields = memberFields(model, values.members);
+    const { fields, cell } = openColumns(model, values.members);
     const members = values.members.map((id): LookupMember =>
         Object.freeze({
             id,
             label: model.label(id),
             code: model.node(id)?.classification_code[0] ?? null,
-            values: Object.freeze(fields.map((property) => openCell(model, id, property))),
+            values: Object.freeze(fields.map((property) => cell(id, property))),
         }),
     );
     return Object.freeze({

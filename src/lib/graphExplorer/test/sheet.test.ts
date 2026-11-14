@@ -99,6 +99,9 @@ test('a property ranging over a class with instances gets a lookup of those inst
             ['CurrencyCHF', 'CHF'],
         ],
     );
+    const status = lookup?.fields.indexOf('currencyStatus') ?? -1;
+    const chf = lookup?.members.find((member) => member.id === 'CurrencyCHF');
+    assert.equal(chf?.values[status], 'current');
 });
 
 test('a property ranging over several listed classes offers every member once, marked partial', () => {
