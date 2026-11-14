@@ -1,6 +1,6 @@
 # API Keys for the Platform Proxy
 
-Sef Kloninger <<sef@ode.partners>> with Claude Code \
+Sef Kloninger <<sef@ode.partners>> with Claude Code and Codex \
 [Issue #142][issue] \
 Last Update: Nov 13, 2026
 
@@ -52,7 +52,8 @@ Requirements:
 - Each key carries its own rate limit.
 - Some MCP features may later require sign-in. That is separate from keys and out of scope here.
 
-**Recommendation.** Build Phase 1 on a small key table of our own, behind a verifier that hides where keys are stored. Decide whether to move key management to Better Auth's API key plugin when Phase 2 is planned, with a spike at that point. The plugin's saving is the self-service endpoints Phase 2 needs. Everything on the request path (the proxy check, the limiter, caching and logging) is ours in either option, so Phase 1 gains little from it. This is where a design review with Codex ended up, after two rounds. The earlier lean was toward the plugin from the start. See [Build][], [Use: Better Auth API Key Plugin][] and [Alternatives Considered][].
+**Recommendation.** Build Phase 1 on a small key table of our own, behind a verifier that hides where keys are stored. Decide whether to move key management to Better Auth's API key plugin when Phase 2 is planned, with a spike at that point. The plugin's saving is the self-service endpoints Phase 2 needs. Everything on the request path (the proxy check, the limiter, caching and logging) is ours in either option, so Phase 1 gains little from it.
+See [Build][], [Use: Better Auth API Key Plugin][] and [Alternatives Considered][].
 
 We'll take a phased approach. Initially we'll prove the concept with hand-provisioned keys and limited features. Once this is proven in production, follow-on work will enable more features, self-service provisioning, and admin interfaces to adjust access and limits.
 
@@ -199,7 +200,7 @@ On every surface, a `dfo_` bearer is consumed by the proxy and never copied upst
 - **Invalid keys.** An unknown or revoked key gets a 401 and does not fall back to anonymous. Attempts are held to a budget per address that is checked before the key store is touched, so random keys cannot force unlimited lookups. Keys over a maximum length are refused unread, and unknown keys are cached briefly as unknown.
 - **Revocation.** A revoked key stops being admitted within the cache lifetime, about a minute per instance. The lifetime is absolute and is not extended when the store is unreachable. Revoking stops new calls. It does not cut a stream that is already open. Lowering a key's limit takes effect on the same delay.
 - **Emergency switch.** An operator can turn off one key, or all keyed access, without a deploy. How quickly that reaches every instance has to be stated when it is built.
-- **Key store unavailable.** A key already in the cache keeps working until its entry expires. For a key not in the cache there are two positions, and this needs a decision (see [Open Questions][]). The original proposal was to treat the call as anonymous, in line with the limiter failing open. Codex argued for a 503: a revoked or made-up key would otherwise be served as an anonymous caller, and a partner would see rate-limit errors at the anonymous limit with no sign of why. A caller who wants anonymous access can leave the key out. The lookup gets its own bounded pool and timeout, as the counter has.
+- **Key store unavailable.** The check fails open. A key already in the cache keeps working until its entry expires. A key that is not in the cache is treated as anonymous while the store cannot be reached: the call goes through at the anonymous limit for its address. Rate limiting is not a mission-critical part of the system, so staying available matters more than enforcing a key's own limit during an outage. The lookup gets its own bounded pool and timeout, as the counter has, so a slow store does not slow the proxy.
 
 ### Logs and Docs
 
@@ -237,7 +238,7 @@ Before the rate limit, on the surfaces in [Where Keys Apply][]:
 3. Unknown or revoked key: answer 401 with a problem document.
 4. Valid key: count the call against `key:<id>` at the key's limit, using the existing counter, which already counts each surface separately. The counter's entry point takes an address and a fixed limit today and needs to accept a caller and a limit.
 
-[Identity, Failure and Abuse][] covers revocation delay and what happens when the store is unavailable.
+[Identity, Failure and Abuse][] covers revocation delay and failing open when the store is unavailable.
 
 A keyed call is named to the backends as `x-dfo-caller: key:<id>` instead of `ip:<digest>`. dfo-apis accepts only the `ip:` form today. dfo-ai accepts a `key:` caller on arrival, but its MCP servers drop any caller that is not `ip:<digest>` before they call dfo-apis. Both need a change, so allowances count per key and not per address. See [Work by Repository][].
 
@@ -411,10 +412,9 @@ Not planned for any phase yet. The design should not rule them out.
 
 ## Open Questions
 
-The Cloudflare question and the store-unavailable question need answers before Phase 1 code is written.
+The Cloudflare question needs an answer before Phase 1 code is written.
 
 - [ ] **Cloudflare.** Who owns the WAF rate rules, and can they exempt or raise the threshold for requests that carry a key header? An exemption on header presence alone could be abused with a fake key, so the rule may need a higher ceiling instead of none. Which plan is the zone on, and what are the current thresholds? See [Cloudflare Integration][].
-- [ ] **Key store unavailable: anonymous or 503?** For a key that is not in the cache when the store cannot be reached. See [Identity, Failure and Abuse][] for both positions.
 - [ ] **Per key or per account?** In Phase 2, is the allowance a property of each key or of the account that owns them? A cap on the number of keys only limits how far an allowance can be multiplied.
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
 - [ ] **Does a key identify an account to the backends as well,** so a signed-in user's key and their site session share allowances? dfo-ai already names a `user:` caller form.
