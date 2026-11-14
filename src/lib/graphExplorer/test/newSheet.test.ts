@@ -185,6 +185,15 @@ test('split options: in use first, then unused ones declared for the class with 
     assert.equal(netting?.datasets[0], 'provenance/OECDDAC1');
 });
 
+test('a property ranging over a class with instances is offered with its value list', () => {
+    const currency = splitOptions(model, 'FinancialPosition').find(
+        (option) => option.id === 'currencyOfDenomination',
+    );
+    assert.equal(currency?.valueList, 'CurrencyDenomination');
+    assert.equal(currency?.members, 2);
+    assert.equal(currency?.membersComplete, true);
+});
+
 test('a named pattern about no kind of thing is named as unknown and the default class used', () => {
     const classless = withPatternClass('provenance/OECDDAC2A', 3, null);
     const selection = resolveSheet(classless, read('dataset=provenance/OECDDAC2A&pattern=3'));

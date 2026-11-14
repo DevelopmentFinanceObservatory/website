@@ -85,6 +85,22 @@ test('a lookup carries a column per open property its members hold, each member 
     );
 });
 
+test('a property ranging over a class with instances gets a lookup of those instances', () => {
+    const [column] = sheetColumns(model, { ...spec, properties: ['currencyOfDenomination'] }).slice(
+        -1,
+    );
+    const lookup = column?.lookup;
+    assert.equal(lookup?.valueList, 'CurrencyDenomination');
+    const alpha = lookup?.fields.indexOf('iso4217AlphaCode') ?? -1;
+    assert.deepEqual(
+        lookup?.members.map((member) => [member.id, member.values[alpha]]),
+        [
+            ['CurrencyEUR', 'EUR'],
+            ['CurrencyCHF', 'CHF'],
+        ],
+    );
+});
+
 test('the sheet request keeps the open property columns that fit the handler bounds', () => {
     const draft = sheetDraft(model, { ...spec, properties: ['financialPositionType'] });
     const fields = Array.from({ length: LIMITS.fields + 2 }, (_, at) => `f${at}`);

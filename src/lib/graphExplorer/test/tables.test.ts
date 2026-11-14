@@ -68,10 +68,10 @@ test('a value list has each member with its code and broader members of the list
     ]);
 });
 
-test('a value list has a column per open property its members carry', () => {
+test('a value list whose members have no code has no code column, and a column per open property', () => {
     const table = valueListTable(model, 'FinancialPositionTypeEnum');
-    assert.deepEqual(table[0], ['dcid', 'label', 'code', 'broader', 'wbCode']);
-    assert.deepEqual(table[1], ['AmountOutstanding', 'amount outstanding', '', '', 'DOD']);
+    assert.deepEqual(table[0], ['dcid', 'label', 'broader', 'wbCode']);
+    assert.deepEqual(table[1], ['AmountOutstanding', 'amount outstanding', '', 'DOD']);
 });
 
 for (const [listId, fileName] of [

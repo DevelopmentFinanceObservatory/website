@@ -272,23 +272,23 @@ const completeRequest = (): SheetRequest => {
     };
 };
 
-test('the value-list tab holds one block of dcid, label and code per property with a value list', () => {
+test('the value-list tab holds one block per property with a value list, with a code column only where a member has a code', () => {
     const { properties, cells } = valueListCells(completeRequest());
     assert.deepEqual(properties, {
         sheetId: 1,
         title: 'Value lists',
         index: 1,
-        gridProperties: { rowCount: 19, columnCount: 7, frozenRowCount: 2 },
+        gridProperties: { rowCount: 19, columnCount: 6, frozenRowCount: 2 },
     });
-    assert.deepEqual(cells[0], ['nettingBasis', '', '', '', 'dac1AidType', '', '']);
-    assert.deepEqual(cells[1], ['dcid', 'label', 'code', '', 'dcid', 'label', 'code']);
-    assert.deepEqual(cells[2]?.slice(0, 3), ['Gross', 'gross', '']);
-    assert.deepEqual(cells[2]?.slice(4), [
+    assert.deepEqual(cells[0], ['nettingBasis', '', '', 'dac1AidType', '', '']);
+    assert.deepEqual(cells[1], ['dcid', 'label', '', 'dcid', 'label', 'code']);
+    assert.deepEqual(cells[2]?.slice(0, 2), ['Gross', 'gross']);
+    assert.deepEqual(cells[2]?.slice(3), [
         'DAC1AidType5',
         'official and private flow (DAC 1 aid type)',
         '5',
     ]);
-    assert.deepEqual(cells[4]?.slice(0, 3), ['', '', '']);
+    assert.deepEqual(cells[4]?.slice(0, 2), ['', '']);
     assert.equal(cells.length, 2 + 17);
 });
 
@@ -296,13 +296,13 @@ test('a partial value list carries the partial line under its name, and every bl
     const { properties, cells } = valueListCells(fixtureRequest());
     assert.deepEqual(properties?.gridProperties, {
         rowCount: 20,
-        columnCount: 7,
+        columnCount: 6,
         frozenRowCount: 3,
     });
-    assert.deepEqual(cells[0], ['nettingBasis', '', '', '', 'dac1AidType', '', '']);
-    assert.deepEqual(cells[1], ['', '', '', '', PARTIAL_LIST_LINE, '', '']);
-    assert.deepEqual(cells[2], ['dcid', 'label', 'code', '', 'dcid', 'label', 'code']);
-    assert.deepEqual(cells[3]?.slice(0, 3), ['Gross', 'gross', '']);
+    assert.deepEqual(cells[0], ['nettingBasis', '', '', 'dac1AidType', '', '']);
+    assert.deepEqual(cells[1], ['', '', '', PARTIAL_LIST_LINE, '', '']);
+    assert.deepEqual(cells[2], ['dcid', 'label', '', 'dcid', 'label', 'code']);
+    assert.deepEqual(cells[3]?.slice(0, 2), ['Gross', 'gross']);
     assert.equal(cells.length, 3 + 17);
 });
 
@@ -316,7 +316,7 @@ test('one dropdown per property column with a value list, none on reference or d
         ]),
         [
             [8, 9, "='Value lists'!$A$4:$A$5"],
-            [9, 10, "='Value lists'!$E$4:$E$20"],
+            [9, 10, "='Value lists'!$D$4:$D$20"],
         ],
     );
     for (const { setDataValidation } of body?.requests ?? []) {
@@ -342,23 +342,13 @@ test('a block holds a column per open property its members carry, and the next b
     );
     assert.deepEqual(readSheetRequest(JSON.parse(JSON.stringify(request))), request);
     const { properties, cells } = valueListCells(request);
-    assert.equal(properties?.gridProperties.columnCount, 8);
-    assert.deepEqual(cells[0], ['financialPositionType', '', '', '', '', 'nettingBasis', '', '']);
+    assert.equal(properties?.gridProperties.columnCount, 6);
+    assert.deepEqual(cells[0], ['financialPositionType', '', '', '', 'nettingBasis', '']);
     const header = cells.findIndex((row) => row[0] === 'dcid');
-    assert.deepEqual(cells[header], [
-        'dcid',
-        'label',
-        'code',
-        'wbCode',
-        '',
-        'dcid',
-        'label',
-        'code',
-    ]);
-    assert.deepEqual(cells[header + 1]?.slice(0, 4), [
+    assert.deepEqual(cells[header], ['dcid', 'label', 'wbCode', '', 'dcid', 'label']);
+    assert.deepEqual(cells[header + 1]?.slice(0, 3), [
         'AmountOutstanding',
         'amount outstanding',
-        '',
         'DOD',
     ]);
     assert.deepEqual(
@@ -366,7 +356,7 @@ test('a block holds a column per open property its members carry, and the next b
             ({ setDataValidation }) =>
                 setDataValidation.rule.condition.values[0]?.userEnteredValue.split('!')[1],
         ),
-        [`$A$${header + 2}:$A$${header + 2}`, `$F$${header + 2}:$F$${header + 3}`],
+        [`$A$${header + 2}:$A$${header + 2}`, `$E$${header + 2}:$E$${header + 3}`],
     );
 });
 

@@ -27,7 +27,7 @@ const refuses = (read: (body: unknown) => unknown, body: unknown, member: string
     );
 
 test('each guard accepts the served document', () => {
-    assert.equal(readSchema(schemaBody()).nodes.length, 234);
+    assert.equal(readSchema(schemaBody()).nodes.length, 235);
     assert.equal(readTerms(termsBody()).terms.length, 282);
     assert.equal(readUsage(usageBody()).provenances.length, 4);
 });
@@ -51,10 +51,10 @@ test('the schema guard refuses a node with a member removed or retyped', () => {
     at(numberDeclarer, ['nodes', 0]).declared_by = 7;
     refuses(readSchema, numberDeclarer, 'schema.nodes[0].declared_by');
 
-    const listIndex = readSchema(schemaBody()).nodes.findIndex((node) => node.enumeration !== null);
+    const listIndex = readSchema(schemaBody()).nodes.findIndex((node) => node.instances !== null);
     const unmarked = schemaBody();
-    delete at(unmarked, ['nodes', listIndex, 'enumeration']).complete;
-    refuses(readSchema, unmarked, `schema.nodes[${listIndex}].enumeration.complete`);
+    delete at(unmarked, ['nodes', listIndex, 'instances']).complete;
+    refuses(readSchema, unmarked, `schema.nodes[${listIndex}].instances.complete`);
 
     const undeclared = schemaBody();
     at(undeclared, ['nodes', 0]).declared_by = null;

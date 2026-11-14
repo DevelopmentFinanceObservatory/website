@@ -49,6 +49,24 @@ test('a node reads as a class, value list, property or value, with its label and
     assert.equal(model.isBase('financialFlowType'), false);
 });
 
+test('a class that lists its instances is a value list, and a property ranging over it draws from it', () => {
+    assert.equal(model.kind('CurrencyDenomination'), 'valueList');
+    assert.equal(model.kind('CurrencyUnit'), 'valueList');
+    assert.equal(model.kind('NonSpecificCurrency'), 'class');
+    assert.equal(model.valueListOfProperty('currencyOfDenomination'), 'CurrencyDenomination');
+    // Members sort by label when none has a code: Euro, then Swiss franc.
+    assert.deepEqual(model.members('CurrencyDenomination'), ['CurrencyEUR', 'CurrencyCHF']);
+    assert.equal(model.membersComplete('CurrencyDenomination'), true);
+    assert.equal(model.valueListOf('CurrencyCHF'), 'CurrencyUnit');
+    assert.deepEqual(memberFields(model, 'CurrencyDenomination'), [
+        'currencyStatus',
+        'dacCode',
+        'iso4217AlphaCode',
+        'iso4217NumericCode',
+        'nationalCurrencyOf',
+    ]);
+});
+
 test('a node the graph declares no type for is not base', () => {
     const schema = readSchema(schemaBody());
     const amount = schema.nodes.find((node) => node.ref === 'amount');
@@ -152,7 +170,7 @@ const nettingValue = (dcid: string, parents: string[]): SchemaNode => ({
     classification_code: [],
     provenances: ['provenance/DFOOntology'],
     declared_by: 'dfo',
-    enumeration: null,
+    instances: null,
     other_properties: {},
 });
 

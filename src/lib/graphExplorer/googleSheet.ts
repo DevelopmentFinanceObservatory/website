@@ -6,8 +6,9 @@
  * and frozen, then the example rows. Its first cell carries a note naming the
  * graph generation and the date. The value-list tab holds one block per
  * property column with a value list: the property's name, then a row of
- * `dcid`, `label`, `code` and the dcid of each open property the members
- * carry, then one row per member, each block followed by an empty column.
+ * `dcid`, `label`, `code` (when some member has a code) and the dcid of each
+ * open property the members carry, then one row per member, each block
+ * followed by an empty column.
  * Each such property column gets a dropdown fed from its block's dcid range.
  *
  * Reference: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create
@@ -191,16 +192,22 @@ type Block = {
     fields: string[];
     members: SheetMember[];
     complete: boolean;
+    /** True when some member has a code, so the block holds a code column. */
+    codes: boolean;
     /** The block's first column on the value-list tab. */
     start: number;
 };
 
-/** The columns every block holds before its open property columns: dcid, label and code. */
-const BASE_FIELDS = ['dcid', 'label', 'code'] as const;
+/** A block's column heads: dcid, label, code when some member has one, then its open properties. */
+const blockHeads = (block: Pick<Block, 'fields' | 'codes'>): string[] => [
+    'dcid',
+    'label',
+    ...(block.codes ? ['code'] : []),
+    ...block.fields,
+];
 
 /** A block's columns, without the empty column after it. */
-const blockWidth = (block: Pick<Block, 'fields'>): number =>
-    BASE_FIELDS.length + block.fields.length;
+const blockWidth = (block: Pick<Block, 'fields' | 'codes'>): number => blockHeads(block).length;
 
 const blocksOf = (request: SheetRequest): Block[] => {
     let start = 0;
@@ -214,6 +221,9 @@ const blocksOf = (request: SheetRequest): Block[] => {
             fields: column.lookup.fields,
             members: column.lookup.members,
             complete: column.lookup.complete,
+            codes: column.lookup.members.some(
+                (member) => member.code !== null && member.code !== '',
+            ),
             start,
         };
         start += blockWidth(block) + 1;
@@ -266,7 +276,7 @@ const valueListRows = (blocks: Block[]) => {
                 Array.from({ length: blockWidth(block) - from }, () => EMPTY);
             if (row === 0) return [bold(block.name), ...blank(1), ...gap];
             if (row === header - 1) {
-                return [...BASE_FIELDS, ...block.fields].map(bold).concat(gap);
+                return blockHeads(block).map(bold).concat(gap);
             }
             if (row < header) {
                 return [block.complete ? EMPTY : text(PARTIAL_LIST_LINE), ...blank(1), ...gap];
@@ -276,7 +286,7 @@ const valueListRows = (blocks: Block[]) => {
             return [
                 text(member.id),
                 text(member.label),
-                text(member.code ?? ''),
+                ...(block.codes ? [text(member.code ?? '')] : []),
                 ...member.values.map(text),
                 ...gap,
             ];

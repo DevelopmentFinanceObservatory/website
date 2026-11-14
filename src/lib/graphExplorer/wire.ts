@@ -26,14 +26,14 @@ export type Declarer = (typeof DECLARERS)[number];
 export const isDeclarer = (value: string): value is Declarer =>
     (DECLARERS as readonly string[]).includes(value);
 
-/** The members of an enumeration Class. */
-export type SchemaEnumeration = {
-    /** The dcids of the members read, sorted. */
-    members: string[];
+/** The nodes a Class lists as its instances: those typed by it or by any subclass. */
+export type SchemaInstances = {
+    /** The dcids of the instances read, sorted. */
+    refs: string[];
     /**
-     * True when `members` is every member the graph holds. False for a base
-     * Data Commons enumeration, whose list holds only the members the DFO
-     * code index names, and for a list whose read stopped at its cap.
+     * True when `refs` is every instance the graph holds. False for a base
+     * Data Commons class, whose list holds only the instances StatVars use,
+     * and for a list whose read stopped at its cap.
      */
     complete: boolean;
 };
@@ -70,8 +70,8 @@ export type SchemaNode = {
      * declaring provenance for the node.
      */
     declared_by: string | null;
-    /** Set on an enumeration Class, null on every other node. */
-    enumeration: SchemaEnumeration | null;
+    /** Set on a Class that lists its instances, null on every other node. */
+    instances: SchemaInstances | null;
     other_properties: OtherProperties;
 };
 
@@ -359,7 +359,7 @@ const schemaDocument = obj({
             classification_code: strList,
             provenances: strList,
             declared_by: nullable(str),
-            enumeration: nullable(obj({ members: strList, complete: bool })),
+            instances: nullable(obj({ refs: strList, complete: bool })),
             other_properties: openMap,
         }),
     ),

@@ -3,8 +3,8 @@
  * schema (terms and how they relate) and the usage document (how each
  * dataset's StatVars use those terms). Every answer is derived from the documents.
  *
- * Words for readers: a Class is a `class`, a Class with an enumeration is a
- * `valueList`, a Property is a `property`, any other node is a `value`, and a
+ * Words for readers: a Class is a `class`, a Class that lists its instances is
+ * a `valueList`, a Property is a `property`, any other node is a `value`, and a
  * provenance of the usage document is a `dataset`.
  */
 import {
@@ -234,7 +234,7 @@ const EMPTY: readonly string[] = Object.freeze([]);
 const NO_USAGE: Usage = Object.freeze({ byDataset: Object.freeze([]), total: 0 });
 
 const kindOf = (node: SchemaNode): Kind => {
-    if (node.types.includes('Class')) return node.enumeration ? 'valueList' : 'class';
+    if (node.types.includes('Class')) return node.instances ? 'valueList' : 'class';
     if (node.types.includes('Property')) return 'property';
     return 'value';
 };
@@ -298,9 +298,9 @@ const distinctLists = (node: SchemaNode): SchemaNode => ({
     range_includes: distinct(node.range_includes),
     classification_code: distinct(node.classification_code),
     provenances: distinct(node.provenances),
-    enumeration: node.enumeration && {
-        ...node.enumeration,
-        members: distinct(node.enumeration.members),
+    instances: node.instances && {
+        ...node.instances,
+        refs: distinct(node.instances.refs),
     },
 });
 
@@ -344,11 +344,11 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
             for (const id of node.domain_includes) push(domainOf, id, node.ref);
             for (const id of node.range_includes) push(rangeOf, id, node.ref);
         }
-        for (const id of node.enumeration?.members ?? []) {
+        for (const id of node.instances?.refs ?? []) {
             membersOf.set(node.ref, (membersOf.get(node.ref) ?? new Set()).add(id));
         }
     }
-    // A value typed by a value list belongs to it whether or not the list's member read reached it.
+    // A value typed by a value list belongs to it whether or not the list's instance read reached it.
     for (const node of nodes) {
         if (kinds.get(node.ref) !== 'value') continue;
         for (const type of node.types) {
@@ -577,7 +577,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         ));
 
     const membersComplete = (listId: string): boolean =>
-        byId.get(listId)?.enumeration?.complete ?? true;
+        byId.get(listId)?.instances?.complete ?? true;
 
     const propertiesOf = (classId: string): ClassProperties => {
         const own = new Set(domainIndex.get(classId) ?? EMPTY);
@@ -796,6 +796,10 @@ export const memberFields = (model: Model, listId: string): readonly string[] =>
                 .flatMap((id) => Object.keys(model.node(id)?.other_properties ?? {})),
         ),
     ].sort();
+
+/** True when some member of a value list carries a classification code. */
+export const membersHaveCodes = (model: Model, listId: string): boolean =>
+    model.members(listId).some((id) => (model.node(id)?.classification_code.length ?? 0) > 0);
 
 /**
  * One member's values of an open property as one cell: each node's dcid or

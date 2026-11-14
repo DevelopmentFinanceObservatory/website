@@ -8,7 +8,13 @@ import { TermLink } from './ExploreLink';
 import { count } from '@/lib/graphExplorer/counts';
 import styles from './ValueTree.module.scss';
 
-import { memberFields, openCell, searchMembers, type MemberTree } from '@/lib/graphExplorer/model';
+import {
+    memberFields,
+    membersHaveCodes,
+    openCell,
+    searchMembers,
+    type MemberTree,
+} from '@/lib/graphExplorer/model';
 
 /** The open properties the list's members carry, shown as columns at each row's end. */
 type Fields = readonly string[];
@@ -29,16 +35,22 @@ const Cells = ({ id, fields }: { id: string; fields: Fields }) => {
     );
 };
 
-/** A value's code, its link and its open property cells, dimmed when the filter's dataset does not use it. */
+/**
+ * A value's code, its link and its open property cells, dimmed when the
+ * filter's dataset does not use it. The code is left out when no member of
+ * the list has one.
+ */
 const Head = ({
     id,
     lensDataset,
     fields,
+    codes,
     narrower = 0,
 }: {
     id: string;
     lensDataset: string | null;
     fields: Fields;
+    codes: boolean;
     narrower?: number;
 }) => {
     const model = useModel();
@@ -46,7 +58,9 @@ const Head = ({
 
     return (
         <>
-            <span className={styles.code}>{model.node(id)?.classification_code[0] ?? ''}</span>
+            {codes && (
+                <span className={styles.code}>{model.node(id)?.classification_code[0] ?? ''}</span>
+            )}
             <span className={classNames(styles.term, unused && styles.dim)}>
                 <TermLink id={id} />
             </span>
@@ -56,13 +70,18 @@ const Head = ({
     );
 };
 
-type BranchProps = { node: MemberTree; lensDataset: string | null; fields: Fields };
+type BranchProps = {
+    node: MemberTree;
+    lensDataset: string | null;
+    fields: Fields;
+    codes: boolean;
+};
 
-const Branch = ({ node, lensDataset, fields }: BranchProps) => (
+const Branch = ({ node, lensDataset, fields, codes }: BranchProps) => (
     <li>
         {node.children.length === 0 ? (
             <div className={styles.leaf}>
-                <Head id={node.id} lensDataset={lensDataset} fields={fields} />
+                <Head id={node.id} lensDataset={lensDataset} fields={fields} codes={codes} />
             </div>
         ) : (
             <details>
@@ -71,6 +90,7 @@ const Branch = ({ node, lensDataset, fields }: BranchProps) => (
                         id={node.id}
                         lensDataset={lensDataset}
                         fields={fields}
+                        codes={codes}
                         narrower={node.children.length}
                     />
                 </summary>
@@ -81,6 +101,7 @@ const Branch = ({ node, lensDataset, fields }: BranchProps) => (
                             node={child}
                             lensDataset={lensDataset}
                             fields={fields}
+                            codes={codes}
                         />
                     ))}
                 </ul>
@@ -125,6 +146,7 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
     const blank = filter.trim() === '';
     const { hits, total } = searchMembers(model, listId, filter);
     const fields = memberFields(model, listId);
+    const codes = membersHaveCodes(model, listId);
 
     return (
         <div className={styles.tree}>
@@ -145,6 +167,7 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                             node={node}
                             lensDataset={lensDataset}
                             fields={fields}
+                            codes={codes}
                         />
                     ))}
                 </ul>
@@ -157,7 +180,12 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                     <ul className={styles.list}>
                         {hits.map((id) => (
                             <li key={id} className={styles.leaf}>
-                                <Head id={id} lensDataset={lensDataset} fields={fields} />
+                                <Head
+                                    id={id}
+                                    lensDataset={lensDataset}
+                                    fields={fields}
+                                    codes={codes}
+                                />
                             </li>
                         ))}
                     </ul>

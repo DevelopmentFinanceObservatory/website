@@ -672,6 +672,21 @@ test('a literal open property value finds the member that carries it, as a code 
     assert.notEqual(closestMembers(model, finding({ value: 'q7' }))[0], 'DAC1AidType1020');
 });
 
+test('an ISO code in a currency cell points to the member that carries it', () => {
+    for (const [value, expected] of [
+        ['CHF', 'CurrencyCHF'],
+        ['756', 'CurrencyCHF'],
+        ['EUR', 'CurrencyEUR'],
+    ]) {
+        const found = finding({
+            property: 'currencyOfDenomination',
+            code: 'value_outside_range',
+            value,
+        });
+        assert.equal(closestMembers(model, found)[0], expected, value);
+    }
+});
+
 test('a label or code close to the value finds its member', () => {
     const byLabel = finding({
         code: 'value_outside_range',
