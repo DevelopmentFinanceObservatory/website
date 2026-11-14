@@ -24,7 +24,7 @@ import { KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
 import { sheetHref } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
-import type { OntologyFacets, OntologyTerm } from '@/lib/graphExplorer/wire';
+import type { SchemaFacets, SchemaTerm } from '@/lib/graphExplorer/wire';
 
 const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
 
@@ -266,7 +266,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     );
 };
 
-const FACETS: { key: keyof OntologyFacets; label: string; text?: (code: string) => string }[] = [
+const FACETS: { key: keyof SchemaFacets; label: string; text?: (code: string) => string }[] = [
     { key: 'units', label: 'Units' },
     { key: 'observation_periods', label: 'Periods', text: periodText },
     { key: 'measurement_methods', label: 'Methods' },
@@ -351,7 +351,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
  * A term the DFO model does not hold, such as a base Data Commons term
  * reached from search: its name, the base tag and a link to the graph's browser.
  */
-export const OutsidePanel = ({ id, term }: { id: string; term: OntologyTerm | undefined }) => (
+export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | undefined }) => (
     <>
         <div className={styles.section}>
             <Label>{outsideKind(term)}</Label>

@@ -8,7 +8,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    CHECK_CHUNK_ROWS,
     CHECK_URL,
     cellKey,
     checkRows,
@@ -28,23 +27,27 @@ import {
     resultSentence,
     sheetMarks,
     shownRows,
+    CheckError,
     type CheckProgress,
+    type RowFinding,
 } from '../check.ts';
+import type { WaitCause } from '../load.ts';
 import { buildModel } from '../model.ts';
 import { mapHeaders, parsePasted, rowsToCheck } from '../pasted.ts';
 import {
+    CHECK_MAX_ROWS,
     FINDING_CODES,
-    readOntology,
-    readProvenances,
-    type OntologyCheckRow,
-    type OntologyFinding,
+    readSchema,
+    readUsage,
+    type SchemaCheckRow,
+    type SchemaFinding,
 } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
-const rowsOf = (n: number): OntologyCheckRow[] =>
-    Array.from({ length: n }, (_, at) => ({ ref: String(at + 2), measured_property: 'amount' }));
+const rowsOf = (n: number): SchemaCheckRow[] =>
+    Array.from({ length: n }, (_, at) => ({ ref: `r${at}`, measured_property: 'amount' }));
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), {
@@ -52,23 +55,31 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
         headers: { 'content-type': 'application/json', ...headers },
     });
 
-/** One finding per row, so a test can count which rows came back. */
-const answer = (rows: readonly OntologyCheckRow[]) =>
+/** A wire finding about request row `row`, echoing the row's ref. */
+const wireFinding = (row: number, ref: string | null | undefined): SchemaFinding => ({
+    row,
+    ref: ref ?? null,
+    field: 'measured_property',
+    property: null,
+    subject: 'value',
+    value: 'amount',
+    served: null,
+    code: 'not_a_property',
+    severity: 'error',
+});
+
+/** An answer checking the first `count` of `rows` (all by default), one finding per checked row. */
+const answer = (rows: readonly SchemaCheckRow[], count = rows.length) =>
     json(200, {
         generation: 'g1',
-        row_count: rows.length,
-        findings: rows.map((row) => ({
-            ref: row.ref,
-            field: 'measured_property',
-            value: 'amount',
-            code: 'not_a_property',
-            severity: 'error',
-        })),
+        row_count: count,
+        next_row: count === rows.length ? null : count,
+        findings: rows.slice(0, count).map((row, at) => wireFinding(at, row.ref)),
     });
 
-/** A fetch answering `respond` for each request body, recording the chunk sizes and waits. */
-const rig = (respond: (rows: OntologyCheckRow[], call: number) => Response) => {
-    const sizes: number[] = [];
+/** A fetch answering `respond` for each request body, recording the rows sent and the waits. */
+const rig = (respond: (rows: SchemaCheckRow[], call: number) => Response) => {
+    const sent: (string | null | undefined)[][] = [];
     const waits: number[] = [];
     const progress: CheckProgress[] = [];
     let clock = 0;
@@ -76,9 +87,9 @@ const rig = (respond: (rows: OntologyCheckRow[], call: number) => Response) => {
         fetch: async (url: string | URL | Request, init?: RequestInit) => {
             assert.equal(String(url), CHECK_URL);
             assert.equal(init?.method, 'POST');
-            const { rows } = JSON.parse(String(init?.body)) as { rows: OntologyCheckRow[] };
-            sizes.push(rows.length);
-            return respond(rows, sizes.length);
+            const { rows } = JSON.parse(String(init?.body)) as { rows: SchemaCheckRow[] };
+            sent.push(rows.map((row) => row.ref));
+            return respond(rows, sent.length);
         },
         sleep: async (ms: number) => {
             waits.push(ms);
@@ -87,110 +98,168 @@ const rig = (respond: (rows: OntologyCheckRow[], call: number) => Response) => {
         now: () => clock,
         onProgress: (step: CheckProgress) => progress.push(step),
     };
-    return { options, sizes, waits, progress };
+    return { options, sent, waits, progress };
 };
 
-test('every chunk answering 200 gathers the findings and reports progress per chunk', async () => {
-    const { options, sizes, progress } = rig((rows) => answer(rows));
-    const result = await checkRows(rowsOf(5), { ...options, chunkRows: 2 });
-    assert.deepEqual(sizes, [2, 2, 1]);
+/** Each finding's index and the ref it echoes, which must be the ref of the row at that index. */
+const placed = (findings: readonly RowFinding[]) =>
+    findings.map(({ index, finding }) => [index, finding.ref]);
+
+test('a paste past the request cap goes in requests of CHECK_MAX_ROWS rows, findings by row', async () => {
+    const { options, sent, progress } = rig((rows) => answer(rows));
+    const rows = rowsOf(CHECK_MAX_ROWS + 5);
+    const result = await checkRows(rows, options);
     assert.deepEqual(
-        result.findings.map((finding) => finding.ref),
-        ['2', '3', '4', '5', '6'],
+        sent.map((refs) => refs.length),
+        [CHECK_MAX_ROWS, 5],
     );
-    assert.equal(result.rowCount, 5);
+    assert.equal(result.rowCount, CHECK_MAX_ROWS + 5);
+    assert.deepEqual(
+        placed(result.findings),
+        rows.map((row, at) => [at, row.ref]),
+    );
     assert.deepEqual(result.generations, ['g1']);
     assert.deepEqual(result.refused, []);
     assert.deepEqual(
         progress.map((step) => step.checked),
-        [0, 2, 4, 5],
+        [0, CHECK_MAX_ROWS, CHECK_MAX_ROWS + 5],
     );
-    assert.ok(progress.every((step) => step.total === 5));
 });
 
-/** A route refusing any chunk that holds row `bad`, as it does a row with too many ids to read. */
-const refusing = (bad: string) => (rows: OntologyCheckRow[]) =>
-    rows.some((row) => row.ref === bad)
-        ? json(400, { code: 'request_invalid', detail: 'too many ids to read' })
-        : answer(rows);
-
-test('a 400 on a chunk of 8 halves down to the one bad row; each answered new chunk doubles the size back', async () => {
-    const bad = '7';
-    const { options, sizes, progress } = rig(refusing(bad));
-    const result = await checkRows(rowsOf(20), { ...options, chunkRows: 8 });
-    assert.deepEqual(sizes, [8, 4, 4, 2, 1, 1, 2, 1, 2, 4, 5]);
-    assert.deepEqual(result.refused, [{ ref: bad, detail: 'too many ids to read' }]);
-    assert.equal(result.findings.length, 19);
-    assert.ok(!result.findings.some((finding) => finding.ref === bad));
-    assert.equal(progress.at(-1)?.checked, 20);
+test('an answer checking a prefix resumes at next_row and maps findings by start + row', async () => {
+    // The route checks three rows of each request, as it does when its read budget runs out.
+    const { options, sent } = rig((rows) => answer(rows, Math.min(3, rows.length)));
+    const rows = rowsOf(8);
+    const result = await checkRows(rows, options);
+    assert.deepEqual(sent, [
+        ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'],
+        ['r3', 'r4', 'r5', 'r6', 'r7'],
+        ['r6', 'r7'],
+    ]);
+    assert.equal(result.rowCount, 8);
+    assert.deepEqual(
+        placed(result.findings),
+        rows.map((row, at) => [at, row.ref]),
+    );
 });
 
-test('one bad row in a long paste costs its own split and a short climb back to full size', async () => {
-    const { options, sizes } = rig(refusing('5'));
-    const result = await checkRows(rowsOf(5000), options);
-    assert.equal(result.refused.length, 1);
-    assert.equal(result.findings.length, 4999);
-    assert.ok(sizes.length <= 40, `${sizes.length} requests`);
-    assert.equal(sizes.at(-2), CHECK_CHUNK_ROWS);
-});
-
-/**
- * A route refusing any chunk that names more than `limit` distinct values it
- * does not know, as it refuses a request with too many ids to read.
- */
-const refusingUnknown = (limit: number) => (rows: OntologyCheckRow[]) => {
-    const unknown = new Set(rows.map((row) => row.constraint_properties?.crsPurpose));
-    return unknown.size > limit
-        ? json(400, { code: 'request_invalid', detail: 'too many ids to read' })
-        : answer(rows);
+/** A route refusing any request that holds a row with ref `bad`, naming it by its pointer. */
+const refusing = (bad: string) => (rows: SchemaCheckRow[]) => {
+    const at = rows.findIndex((row) => row.ref === bad);
+    return at === -1
+        ? answer(rows)
+        : json(400, {
+              code: 'request_invalid',
+              detail: 'too many constraint properties',
+              pointer: `/rows/${at}/constraint_properties`,
+          });
 };
 
-test('a paste where every row names an unknown value keeps a small chunk size', async () => {
-    const limit = 20;
-    const rows = rowsOf(3000).map((row, at) => ({
-        ...row,
-        constraint_properties: { crsPurpose: `Unknown${at}` },
-    }));
-    const { options, sizes } = rig(refusingUnknown(limit));
+test('a 400 naming a row refuses that row and checks the rest without it', async () => {
+    const { options, sent, progress } = rig(refusing('r4'));
+    const rows = rowsOf(7);
     const result = await checkRows(rows, options);
-    assert.equal(result.findings.length, 3000);
-    assert.deepEqual(result.refused, []);
-    // 150 requests at best; starting each chunk at the full size again takes
-    // 378, and doubling after every answered half takes 337.
-    assert.ok(sizes.length <= 300, `${sizes.length} requests`);
+    assert.deepEqual(sent, [
+        ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6'],
+        ['r0', 'r1', 'r2', 'r3', 'r5', 'r6'],
+    ]);
+    assert.deepEqual(result.refused, [{ index: 4, detail: 'too many constraint properties' }]);
+    assert.equal(result.rowCount, 6);
+    assert.deepEqual(
+        placed(result.findings),
+        rows.flatMap((row, at) => (at === 4 ? [] : [[at, row.ref]])),
+    );
+    assert.equal(progress.at(-1)?.checked, 7);
 });
 
-test('a 503 with Retry-After waits, then the 200 is read', async () => {
-    const { options, sizes, waits } = rig((rows, call) =>
+test('a 400 naming a row after a partial answer refuses the right row of the whole paste', async () => {
+    const { options, sent } = rig((rows, call) =>
+        call === 1 ? answer(rows, 2) : refusing('r3')(rows),
+    );
+    const result = await checkRows(rowsOf(5), options);
+    assert.deepEqual(sent.slice(1), [
+        ['r2', 'r3', 'r4'],
+        ['r2', 'r4'],
+    ]);
+    assert.deepEqual(
+        result.refused.map(({ index }) => index),
+        [3],
+    );
+    assert.deepEqual(
+        placed(result.findings).map(([index]) => index),
+        [0, 1, 2, 4],
+    );
+});
+
+for (const [name, body] of [
+    ['a 400 with no pointer', { code: 'request_invalid', detail: 'rows is empty' }],
+    ['a 400 naming the request', { code: 'request_invalid', detail: 'x', pointer: '/rows' }],
+] as const) {
+    test(`${name} stops the check with its detail`, async () => {
+        const { options, sent } = rig(() => json(400, body));
+        await assert.rejects(checkRows(rowsOf(3), options), {
+            name: 'CheckError',
+            reason: 'status',
+            status: 400,
+            detail: body.detail,
+        });
+        assert.equal(sent.length, 1);
+    });
+}
+
+test('a 400 naming a row that was not sent stops the check', async () => {
+    const { options } = rig(() =>
+        json(400, { code: 'request_invalid', detail: 'x', pointer: '/rows/9/dcid' }),
+    );
+    await assert.rejects(checkRows(rowsOf(3), options), { name: 'CheckError', reason: 'pointer' });
+});
+
+test('a 503 with Retry-After waits as busy or building, then the 200 is read', async () => {
+    const causes: WaitCause[] = [];
+    const { options, sent, waits } = rig((rows, call) =>
         call === 1 ? json(503, {}, { 'retry-after': '3' }) : answer(rows),
     );
-    const result = await checkRows(rowsOf(2), options);
+    const result = await checkRows(rowsOf(2), {
+        ...options,
+        onWait: (_ms, cause) => causes.push(cause),
+    });
     assert.deepEqual(waits, [3000]);
-    assert.deepEqual(sizes, [2, 2]);
+    assert.deepEqual(causes, ['busy_or_building']);
+    assert.equal(sent.length, 2);
     assert.equal(result.findings.length, 2);
 });
 
+test('a 503 still answering after a minute stops the check as busy or building', async () => {
+    const { options } = rig(() => json(503, {}, { 'retry-after': '20' }));
+    await assert.rejects(checkRows(rowsOf(1), options), (error: unknown) => {
+        assert.ok(error instanceof CheckError);
+        assert.equal(error.reason, 'build_timeout');
+        assert.match(error.message, /busy, or still building/);
+        return true;
+    });
+});
+
 test('a 429 from the site’s proxy with Retry-After waits, then the 200 is read', async () => {
-    const { options, sizes, waits } = rig((rows, call) =>
+    const { options, sent, waits } = rig((rows, call) =>
         call === 1
             ? json(429, { title: 'Too Many Requests' }, { 'retry-after': '12' })
             : answer(rows),
     );
     const result = await checkRows(rowsOf(2), options);
     assert.deepEqual(waits, [12_000]);
-    assert.deepEqual(sizes, [2, 2]);
+    assert.equal(sent.length, 2);
     assert.equal(result.findings.length, 2);
 });
 
 test('a 502 stops the check with a CheckError carrying the status and the problem', async () => {
-    const { options, sizes } = rig(() => json(502, { detail: 'the graph did not answer' }));
+    const { options, sent } = rig(() => json(502, { detail: 'the graph did not answer' }));
     await assert.rejects(checkRows(rowsOf(3), options), {
         name: 'CheckError',
         reason: 'status',
         status: 502,
         detail: 'the graph did not answer',
     });
-    assert.deepEqual(sizes, [3]);
+    assert.equal(sent.length, 1);
 });
 
 test('a 200 out of shape stops the check with a CheckError', async () => {
@@ -198,21 +267,40 @@ test('a 200 out of shape stops the check with a CheckError', async () => {
     await assert.rejects(checkRows(rowsOf(1), options), { name: 'CheckError', reason: 'shape' });
 });
 
-test('an answer counting other rows than were sent stops the check', async () => {
-    const { options } = rig((rows) =>
-        json(200, { generation: 'g1', row_count: rows.length - 1, findings: [] }),
-    );
-    await assert.rejects(checkRows(rowsOf(3), options), {
-        name: 'CheckError',
-        reason: 'row_count',
+for (const [name, count, next, row] of [
+    ['no rows checked', 0, 0, 0],
+    ['more rows checked than sent', 4, null, 0],
+    ['every row checked and a next row named', 3, 3, 0],
+    ['a prefix checked and no next row', 2, null, 0],
+    ['a next row other than the count', 2, 1, 0],
+    ['a finding past the rows checked', 2, 2, 2],
+] as const) {
+    test(`an answer with ${name} stops the check`, async () => {
+        const { options } = rig(() =>
+            json(200, {
+                generation: 'g1',
+                row_count: count,
+                next_row: next,
+                findings: [wireFinding(row, null)],
+            }),
+        );
+        await assert.rejects(checkRows(rowsOf(3), options), {
+            name: 'CheckError',
+            reason: 'row_count',
+        });
     });
-});
+}
 
-test('chunks answered at different generations name every generation', async () => {
+test('requests answered at different generations name every generation', async () => {
     const { options } = rig((rows, call) =>
-        json(200, { generation: `g${Math.min(call, 2)}`, row_count: rows.length, findings: [] }),
+        json(200, {
+            generation: `g${Math.min(call, 2)}`,
+            row_count: Math.min(2, rows.length),
+            next_row: rows.length > 2 ? 2 : null,
+            findings: [],
+        }),
     );
-    const result = await checkRows(rowsOf(6), { ...options, chunkRows: 2 });
+    const result = await checkRows(rowsOf(6), options);
     assert.deepEqual(result.generations, ['g1', 'g2']);
     const sentence = resultSentence(result, 6);
     assert.ok(sentence.includes('g1') && sentence.includes('g2'));
@@ -226,7 +314,7 @@ test('an answer arriving after an abort reports no progress and rejects with the
         return answer(rows);
     });
     await assert.rejects(
-        checkRows(rowsOf(4), { ...options, chunkRows: 2, signal: controller.signal }),
+        checkRows(rowsOf(4), { ...options, signal: controller.signal }),
         (error: unknown) => error === reason,
     );
     assert.deepEqual(
@@ -275,14 +363,25 @@ test('a check that outlasts its overall bound stops as a timeout', async () => {
     );
 });
 
-const finding = (overrides: Partial<OntologyFinding>): OntologyFinding => ({
-    ref: '4',
-    field: 'constraint_properties.dac1AidType',
+const finding = (overrides: Partial<SchemaFinding>): SchemaFinding => ({
+    row: 0,
+    ref: null,
+    field: 'constraint_properties',
+    property: 'dac1AidType',
+    subject: 'value',
     value: 'DAC1AidTpye1020',
+    served: null,
     code: 'node_not_held',
     severity: 'error',
     ...overrides,
 });
+
+/** The sheet row of each checked row: the paste's rows 2 to 9. */
+const SHEET_ROWS = [2, 3, 4, 5, 6, 7, 8, 9];
+
+/** Findings about the checked row at `index`, sheet row 4 by default. */
+const at = (findings: readonly SchemaFinding[], index = 2): RowFinding[] =>
+    findings.map((found) => ({ index, finding: found }));
 
 test('every finding code, and a code this page does not know, reads as a line about its row, column and value', () => {
     const mapping = mapHeaders(model, ['source_code', 'populationType', 'dac1AidType']);
@@ -291,14 +390,16 @@ test('every finding code, and a code this page does not know, reads as a line ab
             code === 'value_missing'
                 ? { code, value: null }
                 : code === 'property_outside_domain'
-                  ? { code, value: 'dac1AidType' }
-                  : { code },
+                  ? { code, subject: 'property', value: 'dac1AidType' }
+                  : code === 'definition_differs'
+                    ? { code, served: 'DAC1AidType1020' }
+                    : { code },
         ),
     );
-    const lines = findingLines(model, mapping, findings);
+    const lines = findingLines(model, mapping, SHEET_ROWS, at(findings));
     const messages = new Set<string>();
     for (const line of lines) {
-        const { code, value } = line.finding;
+        const { code, value, served } = line.finding;
         assert.equal(line.row, 4, code);
         assert.equal(line.column, 2, code);
         assert.equal(line.columnLabel, 'dac1AidType', code);
@@ -306,8 +407,10 @@ test('every finding code, and a code this page does not know, reads as a line ab
         const named = line.parts.flatMap((part) =>
             part.kind === 'term' ? [part.id] : part.kind === 'value' ? [part.text] : [],
         );
-        // A message names the value at fault, or the property when the cell is empty.
-        assert.ok(named.includes(value === null ? 'dac1AidType' : String(value)), code);
+        // A message names the value at fault, the property when the cell is empty, or the
+        // served value when the definition differs.
+        const expected = served ?? value ?? 'dac1AidType';
+        assert.ok(named.includes(String(expected)), code);
         // No term or value is named twice, so a property and its value list sharing a label read once.
         const labels = line.parts.flatMap((part) =>
             part.kind === 'term' ? [part.label] : part.kind === 'value' ? [part.text] : [],
@@ -321,9 +424,12 @@ test('every finding code, and a code this page does not know, reads as a line ab
 });
 
 test('a value outside the range links its value list, and its closest members are offered', () => {
-    const [line] = findingLines(model, mapHeaders(model, ['dac1AidType']), [
-        finding({ code: 'value_outside_range' }),
-    ]);
+    const [line] = findingLines(
+        model,
+        mapHeaders(model, ['dac1AidType']),
+        SHEET_ROWS,
+        at([finding({ code: 'value_outside_range' })]),
+    );
     assert.ok(line);
     const terms = line.parts.flatMap((part) => (part.kind === 'term' ? [part.id] : []));
     assert.deepEqual(terms, ['DAC1AidTypeEnum']);
@@ -348,11 +454,11 @@ test('the closest values are worked out only when asked, once per field and valu
     };
     const findings = [
         finding({}),
-        finding({ ref: '5' }),
-        finding({ ref: '6', code: 'value_outside_range' }),
-        finding({ ref: '7', value: 'DAC1AidTpye1010' }),
+        finding({ row: 1 }),
+        finding({ row: 2, code: 'value_outside_range' }),
+        finding({ row: 3, value: 'DAC1AidTpye1010' }),
     ];
-    findingLines(counting, mapHeaders(model, ['dac1AidType']), findings);
+    findingLines(counting, mapHeaders(model, ['dac1AidType']), SHEET_ROWS, at(findings));
     assert.equal(memberReads, 0);
     const closest = closestLookup(counting);
     const before = lookups;
@@ -365,7 +471,7 @@ test('the closest values are worked out only when asked, once per field and valu
 test('a constraint key the graph lacks is named as typed, with no term link', () => {
     const parts = findingMessage(
         model,
-        finding({ field: 'constraint_properties.crsPurpos', value: 'crsPurpos' }),
+        finding({ property: 'crsPurpos', subject: 'property', value: 'crsPurpos' }),
     );
     assert.ok(parts.some((part) => part.kind === 'value' && part.text === 'crsPurpos'));
     assert.ok(!parts.some((part) => part.kind === 'term'));
@@ -425,7 +531,7 @@ test('the closest members match a full ranking of every member, ties in list ord
         const list = model.valueListOfProperty(property) ?? '';
         const members = model.members(list);
         for (const typed of ['x', 'Gros', 'DAC1AidTpye1020', 'ODA', members[0] ?? 'none']) {
-            const found = finding({ field: `constraint_properties.${property}`, value: typed });
+            const found = finding({ property, value: typed });
             const lower = typed.toLowerCase();
             const expected = members
                 .filter((id) => id !== typed)
@@ -455,13 +561,10 @@ test('the closest members to a misspelt value come from the property’s value l
         closestMembers(model, finding({ value: 'DAC1AidTpye1020' }))[0],
         'DAC1AidType1020',
     );
-    assert.deepEqual(
-        closestMembers(
-            model,
-            finding({ value: 'gros', field: 'constraint_properties.nettingBasis' }),
-        ),
-        ['Gross', 'Net'],
-    );
+    assert.deepEqual(closestMembers(model, finding({ value: 'gros', property: 'nettingBasis' })), [
+        'Gross',
+        'Net',
+    ]);
 });
 
 test('a label or code close to the value finds its member', () => {
@@ -475,13 +578,16 @@ test('a label or code close to the value finds its member', () => {
 test('no members are offered for other codes, definition fields or an unknown property', () => {
     assert.deepEqual(closestMembers(model, finding({ code: 'node_untyped' })), []);
     assert.deepEqual(
-        closestMembers(model, finding({ field: 'population_type', value: 'FinancialFlo' })),
+        closestMembers(
+            model,
+            finding({ field: 'population_type', property: null, value: 'FinancialFlo' }),
+        ),
         [],
     );
     assert.deepEqual(
         closestMembers(
             model,
-            finding({ field: 'constraint_properties.crsPurpos', value: 'crsPurpos' }),
+            finding({ property: 'crsPurpos', subject: 'property', value: 'crsPurpos' }),
         ),
         [],
     );
@@ -506,7 +612,7 @@ test('the example sheet follows a dataset pattern with one misspelt value', () =
             'property',
         ],
     );
-    const checkRows = rowsToCheck(mapping, rows);
+    const checkRows = rowsToCheck(mapping, rows).rows;
     assert.equal(checkRows.length, 5);
     const values = checkRows.flatMap((row) => Object.values(row.constraint_properties ?? {}));
     const unheld = values.filter((value) => typeof value === 'string' && !model.node(value));
@@ -519,12 +625,12 @@ test('the result counts a refused row as an error, and the sentence names the ge
     const result = {
         generations: ['g7'],
         rowCount: 6,
-        findings: [
+        findings: at([
             finding({}),
             finding({ code: 'value_outside_range' }),
             finding({ code: 'property_outside_domain', severity: 'warning' }),
-        ],
-        refused: [{ ref: '9', detail: 'too many' }],
+        ]),
+        refused: [{ index: 7, detail: 'too many' }],
     };
     assert.deepEqual(resultCounts(result), { errors: 3, warnings: 1 });
     assert.ok(resultSentence(result, 6).includes('g7'));
@@ -533,11 +639,23 @@ test('the result counts a refused row as an error, and the sentence names the ge
 
 test('the findings CSV has a row per finding and per refused row, under the column header', () => {
     const mapping = mapHeaders(model, ['source_code', 'populationType', 'dac1AidType']);
-    const lines = findingLines(model, mapping, [
-        finding({}),
-        finding({ field: 'dcid', value: 'X', code: 'definition_differs', severity: 'warning' }),
-    ]);
-    const rows = findingsCsvRows(lines, [{ ref: '9', detail: 'too many ids' }]);
+    const lines = findingLines(
+        model,
+        mapping,
+        SHEET_ROWS,
+        at([
+            finding({}),
+            finding({
+                field: 'dcid',
+                property: null,
+                value: 'X',
+                served: 'Y',
+                code: 'definition_differs',
+                severity: 'warning',
+            }),
+        ]),
+    );
+    const rows = findingsCsvRows(lines, [{ index: 7, detail: 'too many ids' }], SHEET_ROWS);
     assert.deepEqual(rows[0], ['row', 'column', 'value', 'code', 'message']);
     assert.deepEqual(rows[1]?.slice(0, 4), [
         '4',
@@ -552,17 +670,21 @@ test('the findings CSV has a row per finding and per refused row, under the colu
 
 test('a cell with an error and a warning is marked as an error; refused rows are flagged', () => {
     const mapping = mapHeaders(model, ['source_code', 'populationType', 'dac1AidType']);
-    const lines = findingLines(model, mapping, [
-        finding({}),
-        finding({ severity: 'warning', code: 'property_outside_domain' }),
-        finding({ ref: '6', severity: 'warning', code: 'property_outside_domain' }),
-        finding({ ref: '7', field: 'stat_type' }),
-        finding({ ref: null }),
+    const lines = findingLines(model, mapping, SHEET_ROWS, [
+        ...at([finding({}), finding({ severity: 'warning', code: 'property_outside_domain' })]),
+        ...at([finding({ severity: 'warning', code: 'property_outside_domain' })], 4),
+        ...at([finding({ field: 'stat_type', property: null })], 5),
+        // An index past the checked rows places on no row.
+        ...at([finding({})], 99),
     ]);
-    const marks = sheetMarks(lines, [
-        { ref: '9', detail: 'too many' },
-        { ref: null, detail: 'too many' },
-    ]);
+    const marks = sheetMarks(
+        lines,
+        [
+            { index: 7, detail: 'too many' },
+            { index: 99, detail: 'too many' },
+        ],
+        SHEET_ROWS,
+    );
     assert.deepEqual(
         [...marks.cells],
         [

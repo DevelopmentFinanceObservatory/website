@@ -55,7 +55,8 @@ type Checked = {
     readonly result: CheckResult;
     readonly mapping: Mapping;
     readonly pasted: PastedRange;
-    readonly rows: number;
+    /** The sheet row of each checked row. */
+    readonly sheetRows: readonly number[];
 };
 
 type Run =
@@ -279,15 +280,18 @@ const Results = ({ checked }: { checked: Checked }) => {
     const focusAfter = useRef<FocusAfter | null>(null);
     // The cell to light and focus once the row holding it is rendered.
     const pending = useRef<string | null>(null);
-    const { result, mapping, pasted } = checked;
+    const { result, mapping, pasted, sheetRows } = checked;
 
     const lines = useMemo(
-        () => findingLines(model, mapping, result.findings),
-        [model, mapping, result.findings],
+        () => findingLines(model, mapping, sheetRows, result.findings),
+        [model, mapping, sheetRows, result.findings],
     );
-    const marks = useMemo(() => sheetMarks(lines, result.refused), [lines, result.refused]);
+    const marks = useMemo(
+        () => sheetMarks(lines, result.refused, sheetRows),
+        [lines, result.refused, sheetRows],
+    );
     const shownLines = useMemo(() => lines.slice(0, findingsShown), [lines, findingsShown]);
-    // The closest values for the lines on screen only, each field and value pair once per model.
+    // The closest values for the lines on screen only, each property and value pair once per model.
     const closest = useMemo(() => closestLookup(model), [model]);
     const suggestions = useMemo(
         () => shownLines.map((line) => closest(line.finding)),
@@ -386,7 +390,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                     {shownLines.map((line, index) => {
                         const { finding, row, column, columnLabel } = line;
                         const key = row !== null && column !== null ? cellKey(row, column) : null;
-                        const place = `Row ${finding.ref ?? '?'}, ${columnLabel}`;
+                        const place = `Row ${row ?? '?'}, ${columnLabel}`;
                         return (
                             // Findings carry no id, and their order is fixed for a result.
                             <li
@@ -425,7 +429,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                             </li>
                         );
                     })}
-                    {shownRefused.map((row, index) => (
+                    {shownRefused.map((refusal, index) => (
                         <li
                             key={`refused-${index}`}
                             id={lineId(lines.length + index)}
@@ -435,8 +439,10 @@ const Results = ({ checked }: { checked: Checked }) => {
                             <span className={classNames(styles.tag, styles.tagError)}>Error</span>
                             <span className={styles.findingText}>
                                 <span>
-                                    <b className={styles.placeText}>Row {row.ref ?? '?'}</b>. The
-                                    Graph API refused this row: {row.detail}
+                                    <b className={styles.placeText}>
+                                        Row {sheetRows[refusal.index] ?? '?'}
+                                    </b>
+                                    . The Graph API refused this row: {refusal.detail}
                                 </span>
                             </span>
                         </li>
@@ -456,7 +462,10 @@ const Results = ({ checked }: { checked: Checked }) => {
             <div>
                 <Button
                     onClick={() =>
-                        downloadCsv(findingsCsvRows(lines, result.refused), 'sheet-findings.csv')
+                        downloadCsv(
+                            findingsCsvRows(lines, result.refused, sheetRows),
+                            'sheet-findings.csv',
+                        )
                     }
                 >
                     Download CSV
@@ -471,7 +480,9 @@ const statusText = (run: Run): string => {
         if (run.waiting !== null) return waitText(run.waiting.retryInMs, run.waiting.cause);
         return `Checked ${run.checked.toLocaleString('en-GB')} of ${plural(run.total, 'row')}.`;
     }
-    if (run.status === 'done') return resultSentence(run.checked.result, run.checked.rows);
+    if (run.status === 'done') {
+        return resultSentence(run.checked.result, run.checked.sheetRows.length);
+    }
     if (run.status === 'failed') return run.message;
     return '';
 };
@@ -500,8 +511,8 @@ const CheckSteps = () => {
     const pasted = useMemo(() => parsePasted(settled), [settled]);
     const read = useMemo(() => mapHeaders(model, pasted.header), [model, pasted.header]);
     const mapping = useMemo(() => applySwitches(read, switches), [read, switches]);
-    const rows = useMemo(() => rowsToCheck(mapping, pasted.rows), [mapping, pasted.rows]);
-    const problems = useMemo(() => sheetProblems(mapping, rows), [mapping, rows]);
+    const sheet = useMemo(() => rowsToCheck(mapping, pasted.rows), [mapping, pasted.rows]);
+    const problems = useMemo(() => sheetProblems(mapping, sheet), [mapping, sheet]);
     const example = useMemo(() => exampleSheet(model), [model]);
     const reading = text !== settled;
 
@@ -530,7 +541,8 @@ const CheckSteps = () => {
         controller.current?.abort();
         const abort = new AbortController();
         controller.current = abort;
-        const snapshot = { mapping, pasted, rows: rows.length };
+        const { rows, sheetRows } = sheet;
+        const snapshot = { mapping, pasted, sheetRows };
         // A late answer from a check the reader has moved on from changes nothing.
         const update = (next: Run | ((current: Run) => Run)) => {
             if (!abort.signal.aborted) setRun(next);
@@ -562,7 +574,7 @@ const CheckSteps = () => {
         }
     };
 
-    const canCheck = rows.length > 0 && problems.length === 0;
+    const canCheck = sheet.rows.length > 0 && problems.length === 0;
     const repeated = mapping
         .filter((column) => column.duplicateOf !== null)
         .map(
@@ -608,9 +620,9 @@ const CheckSteps = () => {
             {pasted.header.length > 0 && (
                 <SheetSection title="2. The columns">
                     <p className={styles.note}>
-                        {plural(rows.length, 'row')} to check. Each column is read as a definition
-                        field, a property or ignored. Switch any column between property and
-                        ignored.
+                        {plural(sheet.rows.length, 'row')} to check. Each column is read as a
+                        definition field, a property or ignored. Switch any column between property
+                        and ignored.
                     </p>
                     {repeated.length > 0 && (
                         <p className={styles.note}>

@@ -7,10 +7,10 @@ import test from 'node:test';
 
 import { buildModel } from '../model.ts';
 import { scopedListTable, valueListFileName, valueListTable } from '../tables.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 const scope = { kind: 'class', id: 'FinancialObligation' } as const;
 
 test('a scoped list without a dataset filter has the StatVar total', () => {

@@ -20,8 +20,8 @@ import {
     type ExploreState,
 } from '../explore.ts';
 import { buildModel, type ListScope } from '../model.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
 const read = (query: string) => readExplore(new URLSearchParams(query));
 
@@ -143,7 +143,7 @@ test('a move to the view on show adds no history entry; any other keeps the carr
 });
 
 test('a filter naming a dataset the model lacks applies no filter and names the dataset', () => {
-    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const known = { kind: 'dataset', id: 'provenance/OECDDAC1' } as const;
     assert.deepEqual(checkFilter(model, known), { show: known, unknown: null });
     assert.deepEqual(checkFilter(model, { kind: 'dataset', id: 'provenance/Gone' }), {
@@ -157,7 +157,7 @@ test('a filter naming a dataset the model lacks applies no filter and names the 
 });
 
 test('a list scope exists for every instance property, a class or a value list', () => {
-    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const scopes: ListScope[] = [
         { kind: 'instance' },
         { kind: 'class', id: 'FinancialFlow' },
@@ -173,7 +173,7 @@ test('a list scope exists for every instance property, a class or a value list',
 });
 
 test('a term the model lacks waits on the terms list only while base is on and it is not in', () => {
-    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const outside = { kind: 'node', id: 'Count_Thing' } as const;
     assert.equal(awaitsTerms(model, outside, true, false), true);
     assert.equal(awaitsTerms(model, outside, true, true), false);

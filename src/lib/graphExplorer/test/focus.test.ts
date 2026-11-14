@@ -18,10 +18,10 @@ import {
     type FocusBox,
 } from '../focus.ts';
 import { buildModel } from '../model.ts';
-import { readOntology, readProvenances, readTerms } from '../wire.ts';
-import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
+import { readSchema, readUsage, readTerms } from '../wire.ts';
+import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 /** Each box as `key side: ids`, in picture order. */
 const layout = (boxes: readonly FocusBox[]): string[] =>
@@ -110,8 +110,8 @@ test('a declared domain shows only where it differs from the classes in use', ()
 });
 
 test('broader and range boxes order their entries by use, as every other box does', () => {
-    const body = ontologyBody() as { nodes: Record<string, unknown>[] };
-    const base = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const base = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const unused = (kind: 'class' | 'property') =>
         body.nodes
             .map((node) => String(node.dcid))
@@ -124,7 +124,7 @@ test('broader and range boxes order their entries by use, as every other box doe
     assert.ok(provider);
     provider.range_includes = [unusedClass, 'FinancialFlow'];
     provider.sub_property_of = [unusedProperty, 'amount'];
-    const edited = buildModel(readOntology(body), readProvenances(provenancesBody()));
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
 
     const boxes = nodeBoxes(edited, 'financingProvider');
     assert.deepEqual(boxes.find((entry) => entry.key === 'right')?.ids, [

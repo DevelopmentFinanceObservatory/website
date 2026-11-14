@@ -1,10 +1,10 @@
 /**
  * Requests to the Graph API through the site's proxy, with one rule for
- * waiting and one mapping of failures. The Graph API builds the ontology
+ * waiting and one mapping of failures. The Graph API builds the schema
  * documents once per graph generation and answers 503 with `Retry-After`
- * while a build runs, and the proxy answers 429 with `Retry-After` once a
- * reader's allowance of calls is spent. Either is waited out for up to a
- * minute. Every other failure becomes an error naming the request and what
+ * while a build runs or, on the check, while its workers are busy, and the
+ * proxy answers 429 with `Retry-After` once a reader's allowance of calls is
+ * spent. Either is waited out for up to a minute. Every other failure becomes an error naming the request and what
  * went wrong, including a response whose shape the guard refuses.
  */
 import { asRecord } from '../asRecord.ts';
@@ -29,24 +29,31 @@ export const LOAD_LIMIT_MS = 2 * 60_000;
 export const BUILDING = 'building the model for this graph';
 
 /**
- * Why a request is waiting: the Graph API is building its model (503), or
- * the site's proxy has had too many calls from this address (429).
+ * Why a request is waiting: the Graph API is building its model (503 on a
+ * document), is busy checking or building (503 on the check), or the
+ * site's proxy has had too many calls from this address (429).
  */
-export type WaitCause = 'building' | 'busy';
+export type WaitCause = 'building' | 'busy_or_building' | 'busy';
 
-/** The statuses that are waited out when they carry `Retry-After`, and why. */
-const WAITED: ReadonlyMap<number, WaitCause> = new Map([
-    [503, 'building'],
-    [429, 'busy'],
-]);
+/** What a 503 with `Retry-After` means for a request. */
+export type UnavailableCause = Exclude<WaitCause, 'busy'>;
+
+/** The statuses that are waited out when they carry `Retry-After`. */
+const WAITED: ReadonlySet<number> = new Set([503, 429]);
+
+/** What the Graph API is doing, by the cause of its 503. */
+const UNAVAILABLE: Readonly<Record<UnavailableCause, string>> = {
+    building: `still ${BUILDING}`,
+    busy_or_building: `busy, or still ${BUILDING}`,
+};
 
 /** The line shown while a request waits. */
 export const waitText = (retryInMs: number, cause: WaitCause): string => {
     const seconds = Math.ceil(retryInMs / 1000);
     const lead =
-        cause === 'building'
-            ? `The Graph API is still ${BUILDING}.`
-            : 'This site has had many requests from your address in the last minute.';
+        cause === 'busy'
+            ? 'This site has had many requests from your address in the last minute.'
+            : `The Graph API is ${UNAVAILABLE[cause]}.`;
     return `${lead} Trying again in ${seconds} s.`;
 };
 
@@ -156,14 +163,22 @@ export const abortable = (ms: number, signal?: AbortSignal): Promise<void> =>
         );
     });
 
-/** The problem title or detail of an error body, when it has one. */
-export const problemText = async (response: Response): Promise<string | null> => {
+/** What an error body says: its detail or title, and the pointer into the request it names. */
+export type Problem = { readonly text: string | null; readonly pointer: string | null };
+
+const nonEmpty = (value: unknown): string | null =>
+    typeof value === 'string' && value !== '' ? value : null;
+
+/** The problem of an error body. Both members are null when the body is not a problem. */
+export const readProblem = async (response: Response): Promise<Problem> => {
     try {
         const body = asRecord(await response.json());
-        const text = body?.detail ?? body?.title;
-        return typeof text === 'string' && text !== '' ? text : null;
+        return {
+            text: nonEmpty(body?.detail) ?? nonEmpty(body?.title),
+            pointer: nonEmpty(body?.pointer),
+        };
     } catch {
-        return null;
+        return { text: null, pointer: null };
     }
 };
 
@@ -184,7 +199,9 @@ export type GraphRequest<TAnswer> = {
     /** The answer a 200's body gives. A WireShapeError is a `shape` failure. */
     readonly read: (body: unknown) => TAnswer;
     /** The answer a failing status gives, or null to fail with it. */
-    readonly refusal?: (status: number, problem: string | null) => TAnswer | null;
+    readonly refusal?: (status: number, problem: Problem) => TAnswer | null;
+    /** What a 503 with `Retry-After` means here. `building` by default. */
+    readonly unavailable?: UnavailableCause;
 };
 
 export type RequestOptions = {
@@ -270,8 +287,9 @@ export async function requestGraph<TAnswer>(
             waitedMs: at - firstWait,
             nowMs: at,
         });
+        const unavailable = request.unavailable ?? 'building';
         if (delay !== null) {
-            onWait?.(delay, WAITED.get(status) ?? 'building');
+            onWait?.(delay, status === 429 ? 'busy' : unavailable);
             try {
                 await sleep(delay, bounds.run);
             } catch (error) {
@@ -280,19 +298,19 @@ export async function requestGraph<TAnswer>(
             continue;
         }
 
-        const problem = await problemText(response);
+        const read = await readProblem(response);
+        const problem = read.text;
         if (problem === null && bounds.timedOut()) throw timeout();
-        const answer = request.refusal?.(status, problem) ?? null;
+        const answer = request.refusal?.(status, read) ?? null;
         if (answer !== null) return answer;
-        const waited = response.headers.has('retry-after') ? WAITED.get(status) : undefined;
-        if (waited === 'building') {
-            throw fail(`${words.stopped}: the Graph API was still ${BUILDING} after a minute.`, {
-                reason: 'build_timeout',
-                status,
-                detail: problem,
-            });
+        const waited = response.headers.has('retry-after') && WAITED.has(status);
+        if (waited && status === 503) {
+            throw fail(
+                `${words.stopped}: the Graph API was ${UNAVAILABLE[unavailable]} after a minute.`,
+                { reason: 'build_timeout', status, detail: problem },
+            );
         }
-        if (waited === 'busy') {
+        if (waited) {
             throw fail(
                 `${words.stopped}: this site was still refusing requests from your address after a minute.`,
                 { reason: 'status', status, detail: problem },
@@ -320,7 +338,7 @@ export type LoadOptions = {
 
 /**
  * The document at `url`, read through `read`. `what` names it in errors
- * ("The ontology"). A request past `requestTimeoutMs`, or a load past
+ * ("The model"). A request past `requestTimeoutMs`, or a load past
  * `limitMs`, fails with reason `timeout`. An abort rejects with the
  * signal's reason, untouched.
  */

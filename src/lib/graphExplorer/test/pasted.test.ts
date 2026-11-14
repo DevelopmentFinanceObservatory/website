@@ -8,7 +8,7 @@ import test from 'node:test';
 import { buildModel } from '../model.ts';
 import {
     applySwitches,
-    locateFinding,
+    findingColumn,
     mapHeaders,
     parsePasted,
     rowsToCheck,
@@ -17,14 +17,14 @@ import {
 } from '../pasted.ts';
 import {
     CHECK_MAX_CONSTRAINT_PROPERTIES,
-    DCID_MAX_LENGTH,
-    readOntology,
-    readProvenances,
+    CHECK_MAX_STRING_LENGTH,
+    readSchema,
+    readUsage,
 } from '../wire.ts';
-import type { OntologyFinding } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import type { CheckField, SchemaFinding } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 test('a pasted range keeps quoted tabs, line breaks and quotes and drops trailing blank rows', () => {
     const text =
@@ -161,13 +161,14 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
         'nettingBasis',
         'financialFlowType',
     ]);
-    const rows = rowsToCheck(mapping, [
+    const { rows, sheetRows } = rowsToCheck(mapping, [
         ['X1', 'FinancialFlow', 'amount', 'financingProvider, financingRecipient', 'Gross', ''],
         ['X2', 'FinancialFlow', '', '', '', 'Buyback'],
         ['', '', '', '', '', ''],
         ['X4', '', 'amount', '', 'Net', 'Buyback'],
     ]);
     assert.equal(rows.length, 3);
+    assert.deepEqual(sheetRows, [2, 3, 5]);
     assert.deepEqual(rows[0], {
         ref: '2',
         dcid: null,
@@ -180,11 +181,42 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
         observation_properties: ['financingProvider', 'financingRecipient'],
     });
     assert.equal(rows[1]?.ref, '3');
-    assert.equal(rows[1]?.measured_property, '');
+    // An empty measured property goes to the route, which reports it.
+    assert.equal(rows[1]?.measured_property, null);
     assert.deepEqual(rows[1]?.constraint_properties, { financialFlowType: 'Buyback' });
     assert.deepEqual(rows[1]?.observation_properties, []);
     assert.equal(rows[2]?.ref, '5');
     assert.equal(rows[2]?.population_type, null);
+});
+
+test('a leading dcid: is dropped from definition, observation and constraint cells', () => {
+    const mapping = mapHeaders(model, [
+        'dcid',
+        'populationType',
+        'measuredProperty',
+        'observationProperties',
+        'nettingBasis',
+    ]);
+    const { rows } = rowsToCheck(mapping, [
+        [
+            'dcid:sv1',
+            'dcid:FinancialFlow',
+            'dcid: amount',
+            'dcid:financingProvider, b',
+            'dcid:Gross',
+        ],
+    ]);
+    assert.deepEqual(rows[0], {
+        ref: '2',
+        dcid: 'sv1',
+        population_type: 'FinancialFlow',
+        measured_property: 'amount',
+        stat_type: null,
+        measurement_qualifier: null,
+        measurement_denominator: null,
+        constraint_properties: { nettingBasis: 'Gross' },
+        observation_properties: ['financingProvider', 'b'],
+    });
 });
 
 /** The problems of a sheet with `header` and `cells`, as code, column and rows. */
@@ -198,53 +230,42 @@ const problemsOf = (header: string[], cells: string[][], switches: [number, 'pro
     }));
 };
 
-test('a sheet the check would refuse is caught before any request, one problem per cause and column', () => {
+test('only what the route answers 400 for is caught before any request', () => {
     const tooMany = Array.from(
         { length: CHECK_MAX_CONSTRAINT_PROPERTIES + 1 },
         (_, at) => `p${at}`,
     );
+    const long = 'x'.repeat(CHECK_MAX_STRING_LENGTH + 1);
     const cases: [string, string[], string[][], [number, 'property'][], unknown[]][] = [
         ['a clean sheet', ['measuredProperty', 'nettingBasis'], [['amount', 'Gross']], [], []],
-        [
-            'no measuredProperty column',
-            ['nettingBasis'],
-            [['Gross'], ['Net']],
-            [],
-            [{ code: 'measured_property_missing', column: null, rows: [] }],
-        ],
+        // The route reports these as findings on their cells.
+        ['no measuredProperty column', ['nettingBasis'], [['Gross'], ['Net']], [], []],
         [
             'an empty measured property',
             ['source_code', 'measuredProperty'],
             [
                 ['A', 'amount'],
                 ['B', ''],
-                ['C', ''],
             ],
             [],
-            [{ code: 'measured_property_missing', column: 1, rows: [3, 4] }],
-        ],
-        [
-            'a definition value that is not a dcid',
-            ['measuredProperty', 'populationType'],
-            [
-                ['amount', 'Financial Flow'],
-                ['amount', 'FinancialFlow'],
-            ],
             [],
-            [{ code: 'value_not_dcid', column: 1, rows: [2] }],
         ],
         [
-            'too many observation properties, one not a dcid',
+            'a definition value or header that is not a dcid',
+            ['measuredProperty', 'populationType', 'Aid type'],
+            [['amount', 'Financial Flow', 'X']],
+            [[2, 'property']],
+            [],
+        ],
+        [
+            'too many observation properties',
             ['measuredProperty', 'observationProperties'],
             [
                 ['amount', 'a, b, c, d, e'],
                 ['amount', 'a b'],
             ],
             [],
-            [
-                { code: 'value_not_dcid', column: 1, rows: [3] },
-                { code: 'too_many_observation_properties', column: 1, rows: [2] },
-            ],
+            [{ code: 'too_many_observation_properties', column: 1, rows: [2] }],
         ],
         [
             'too many filled property columns',
@@ -257,21 +278,36 @@ test('a sheet the check would refuse is caught before any request, one problem p
             [{ code: 'too_many_constraint_properties', column: null, rows: [2] }],
         ],
         [
-            'a property header that is not a dcid, filled on one row',
-            ['measuredProperty', 'Aid type'],
+            'values past the length ceiling, the second row skipped as blank',
+            ['measuredProperty', 'observationProperties', 'nettingBasis'],
+            [
+                [long, 'a', ''],
+                ['', '', ''],
+                ['amount', `a, ${long}`, long],
+            ],
+            [],
+            [
+                { code: 'value_too_long', column: 0, rows: [2] },
+                { code: 'value_too_long', column: 1, rows: [4] },
+                { code: 'value_too_long', column: 2, rows: [4] },
+            ],
+        ],
+        [
+            'a property header past the length ceiling, filled on one row',
+            ['measuredProperty', long],
             [
                 ['amount', 'X'],
                 ['amount', ''],
             ],
             [[1, 'property']],
-            [{ code: 'property_not_dcid', column: 1, rows: [2] }],
+            [{ code: 'header_too_long', column: 1, rows: [2] }],
         ],
         [
-            'a property value past the length ceiling',
-            ['measuredProperty', 'nettingBasis'],
-            [['amount', 'x'.repeat(DCID_MAX_LENGTH + 1)]],
+            'a value at the ceiling in characters, longer in UTF-16 units',
+            ['measuredProperty'],
+            [['\u{1F600}'.repeat(CHECK_MAX_STRING_LENGTH)]],
             [],
-            [{ code: 'value_too_long', column: 1, rows: [2] }],
+            [],
         ],
     ];
     for (const [name, header, cells, switches, expected] of cases) {
@@ -297,16 +333,10 @@ test('a repeated property keeps its first column, and the check reads and marks 
             ['ignored', 1],
         ],
     );
-    const [row] = rowsToCheck(mapping, rows);
+    const [row] = rowsToCheck(mapping, rows).rows;
     assert.deepEqual(row?.constraint_properties, { sex: 'Male' });
-    const flagged: OntologyFinding = {
-        ref: row?.ref ?? null,
-        field: 'constraint_properties.sex',
-        value: 'Male',
-        code: 'node_not_held',
-        severity: 'error',
-    };
-    assert.deepEqual(locateFinding(mapping, flagged), { row: 2, column: 1 });
+    const flagged = finding('constraint_properties', 'sex');
+    assert.equal(findingColumn(mapping, flagged), 1);
 
     // Ignoring the first column hands the property to the second; switching
     // it back makes the second a repeat again.
@@ -319,44 +349,46 @@ test('a repeated property keeps its first column, and the check reads and marks 
             ['property', null],
         ],
     );
-    assert.deepEqual(rowsToCheck(handed, rows)[0]?.constraint_properties, { sex: 'Femal' });
-    assert.equal(locateFinding(handed, flagged)?.column, 2);
+    assert.deepEqual(rowsToCheck(handed, rows).rows[0]?.constraint_properties, { sex: 'Femal' });
+    assert.equal(findingColumn(handed, flagged), 2);
     assert.equal(switchColumn(handed, 1, 'property')[2]?.duplicateOf, 1);
 });
 
 test('a repeated definition field keeps its first column', () => {
     const mapping = mapHeaders(model, ['measured_property', 'measuredProperty']);
     assert.equal(mapping[1]?.duplicateOf, 0);
-    const [row] = rowsToCheck(mapping, [['', 'amount']]);
-    assert.equal(row?.measured_property, '');
+    const [row] = rowsToCheck(mapping, [['', 'amount']]).rows;
+    assert.equal(row?.measured_property, null);
 });
 
-const finding = (field: string, ref: string | null = '3'): OntologyFinding => ({
-    ref,
+const finding = (field: CheckField, property: string | null = null): SchemaFinding => ({
+    row: 0,
+    ref: null,
     field,
+    property,
+    subject: 'value',
     value: 'x',
+    served: null,
     code: 'node_not_held',
     severity: 'error',
 });
 
-test('a finding locates to the column of its constraint property or definition field', () => {
-    const mapping = mapHeaders(model, ['source_code', 'measured_property', 'nettingBasis']);
-    assert.deepEqual(locateFinding(mapping, finding('constraint_properties.nettingBasis')), {
-        row: 3,
-        column: 2,
-    });
-    assert.deepEqual(locateFinding(mapping, finding('measured_property')), { row: 3, column: 1 });
+test('a finding goes to the column of its constraint property or its field', () => {
+    const mapping = mapHeaders(model, [
+        'source_code',
+        'measured_property',
+        'nettingBasis',
+        'observationProperties',
+    ]);
+    assert.equal(findingColumn(mapping, finding('constraint_properties', 'nettingBasis')), 2);
+    assert.equal(findingColumn(mapping, finding('measured_property')), 1);
+    assert.equal(findingColumn(mapping, finding('observation_properties', 'financingProvider')), 3);
 });
 
-test('a finding whose field has no column locates to its row alone', () => {
+test('a finding whose field has no column goes to no column', () => {
     const mapping = mapHeaders(model, ['measured_property']);
-    assert.deepEqual(locateFinding(mapping, finding('constraint_properties.nettingBasis')), {
-        row: 3,
-        column: null,
-    });
-    assert.deepEqual(locateFinding(mapping, finding('stat_type')), { row: 3, column: null });
-    assert.equal(locateFinding(mapping, finding('measured_property', null)), null);
-    assert.equal(locateFinding(mapping, finding('measured_property', 'row 2')), null);
+    assert.equal(findingColumn(mapping, finding('constraint_properties', 'nettingBasis')), null);
+    assert.equal(findingColumn(mapping, finding('stat_type')), null);
 });
 
 test('a column switch holds while its header reads the same and drops when it changes', () => {

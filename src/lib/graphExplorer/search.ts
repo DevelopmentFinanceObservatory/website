@@ -4,7 +4,7 @@
  * reaches base classes and properties the model does not hold.
  */
 import { kindOfTerm, type Kind, type Model } from './model.ts';
-import type { OntologyTerms } from './wire.ts';
+import type { SchemaTerms } from './wire.ts';
 
 /** How a query matched a hit's best field. */
 export type MatchRank = 'exact' | 'prefix' | 'substring';
@@ -29,7 +29,7 @@ export type SearchResult = {
 
 export type SearchOptions = {
     /** The terms list. When given, base terms outside the model are searched too. */
-    readonly baseTerms?: OntologyTerms;
+    readonly baseTerms?: SchemaTerms;
     readonly limit?: number;
 };
 

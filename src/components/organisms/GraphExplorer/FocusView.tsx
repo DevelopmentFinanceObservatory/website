@@ -22,14 +22,14 @@ import {
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
 import type { DatasetFilter } from '@/lib/graphExplorer/model';
-import type { OntologyTerms } from '@/lib/graphExplorer/wire';
+import type { SchemaTerms } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
     centre: Centre;
     /** The dataset filter, already checked against the model's datasets. */
     show: DatasetFilter;
     /** The base Data Commons terms list, when the search switch has loaded it. */
-    baseTerms?: OntologyTerms;
+    baseTerms?: SchemaTerms;
 };
 
 /** Names the centred term in the document title while it is centred. */

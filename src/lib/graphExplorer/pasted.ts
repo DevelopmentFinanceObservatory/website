@@ -7,11 +7,9 @@ import type { Model } from './model.ts';
 import {
     CHECK_MAX_CONSTRAINT_PROPERTIES,
     CHECK_MAX_OBSERVATION_PROPERTIES,
-    DCID_MAX_LENGTH,
-    DCID_SYNTAX,
-    findingProperty,
-    type OntologyCheckRow,
-    type OntologyFinding,
+    CHECK_MAX_STRING_LENGTH,
+    type SchemaCheckRow,
+    type SchemaFinding,
 } from './wire.ts';
 
 export type PastedRange = {
@@ -186,7 +184,7 @@ const settle = (columns: readonly MappedColumn[]): Mapping => {
 const snakeCase = (name: string): string =>
     name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 
-const camelCase = (name: string): string =>
+export const camelCase = (name: string): string =>
     name.replace(/_+([a-z0-9])/gi, (_, char: string) => char.toUpperCase());
 
 const fieldOf = (header: string): DefinitionField | undefined =>
@@ -264,21 +262,31 @@ export function applySwitches(
 /** The sheet row a data row sits on as the reader sees it, with the header as row 1. */
 export const sheetRow = (dataIndex: number): number => dataIndex + 2;
 
+/** Check rows in the wire shape, and the sheet row each was read from. */
+export type SheetCheck = {
+    readonly rows: readonly SchemaCheckRow[];
+    /** The sheet row of `rows[i]`, at `i`. */
+    readonly sheetRows: readonly number[];
+};
+
+/** A node reference as the check reads it: a leading `dcid:`, as dcp-tools sheets write it, dropped. */
+const nodeRef = (cell: string): string =>
+    cell.startsWith('dcid:') ? cell.slice('dcid:'.length).trim() : cell;
+
 /**
- * Check rows in the wire shape. `ref` is the sheet row number. Each property
- * or field is read from the one column the mapping gives it, the column
- * `locateFinding` places its findings on. An empty cell in a property
- * column leaves the property out. An empty measured property is an empty
- * string, which `sheetProblems` reports before any request. Blank rows are
- * skipped.
+ * Check rows in the wire shape. `ref` is the sheet row number, which the
+ * route echoes. Each property or field is read from the one column the
+ * mapping gives it, the column `findingColumn` places its findings on, and
+ * a leading `dcid:` is dropped from each value. An empty cell leaves its
+ * property or field out (null), and the route reports a missing measured
+ * property as a finding. Blank rows are skipped.
  */
-export function rowsToCheck(
-    mapping: Mapping,
-    rows: readonly (readonly string[])[],
-): OntologyCheckRow[] {
-    return rows.flatMap((cells, dataIndex): OntologyCheckRow[] => {
-        if (isBlank(cells)) return [];
-        const cell = (index: number): string => (cells[index] ?? '').trim();
+export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])[]): SheetCheck {
+    const checked: SchemaCheckRow[] = [];
+    const sheetRows: number[] = [];
+    rows.forEach((cells, dataIndex) => {
+        if (isBlank(cells)) return;
+        const cell = (index: number): string => nodeRef((cells[index] ?? '').trim());
         const definition = (field: DefinitionField): string => {
             const column = mapping.find(
                 ({ target }) => target.kind === 'definition' && target.field === field,
@@ -292,152 +300,122 @@ export function rowsToCheck(
             if (value !== '') constraints[target.property] = value;
         }
         const optional = (field: DefinitionField): string | null => definition(field) || null;
-        return [
-            {
-                ref: String(sheetRow(dataIndex)),
-                dcid: optional('dcid'),
-                population_type: optional('populationType'),
-                measured_property: definition('measuredProperty'),
-                stat_type: optional('statType'),
-                measurement_qualifier: optional('measurementQualifier'),
-                measurement_denominator: optional('measurementDenominator'),
-                constraint_properties: constraints,
-                observation_properties: definition('observationProperties')
-                    .split(',')
-                    .map((id) => id.trim())
-                    .filter((id) => id !== ''),
-            },
-        ];
+        checked.push({
+            ref: String(sheetRow(dataIndex)),
+            dcid: optional('dcid'),
+            population_type: optional('populationType'),
+            measured_property: optional('measuredProperty'),
+            stat_type: optional('statType'),
+            measurement_qualifier: optional('measurementQualifier'),
+            measurement_denominator: optional('measurementDenominator'),
+            constraint_properties: constraints,
+            observation_properties: definition('observationProperties')
+                .split(',')
+                .map((id) => nodeRef(id.trim()))
+                .filter((id) => id !== ''),
+        });
+        sheetRows.push(sheetRow(dataIndex));
     });
+    return { rows: checked, sheetRows };
 }
 
 /**
- * Why the check route would refuse rows before checking them:
- * - `measured_property_missing`: no column is read as measuredProperty, or
- *   the rows in `rows` leave it empty.
+ * What in a sheet the check route would refuse outright, as it answers 400
+ * for a request that breaks its size bounds. Everything else about a row's
+ * content comes back from the route as findings.
  * - `too_many_constraint_properties`: the rows fill more than
  *   CHECK_MAX_CONSTRAINT_PROPERTIES property columns.
  * - `too_many_observation_properties`: the rows name more than
  *   CHECK_MAX_OBSERVATION_PROPERTIES observation properties.
- * - `property_not_dcid`: a property column's header is not a dcid, and the
- *   rows fill it.
- * - `value_not_dcid`: the rows hold a definition field or an observation
- *   property that is not a dcid.
- * - `value_too_long`: the rows hold a property value over DCID_MAX_LENGTH
- *   characters.
+ * - `header_too_long`: a property column's header is longer than
+ *   CHECK_MAX_STRING_LENGTH characters, and the rows fill it.
+ * - `value_too_long`: the rows hold a value longer than
+ *   CHECK_MAX_STRING_LENGTH characters.
  */
 export type SheetProblemCode =
-    | 'measured_property_missing'
     | 'too_many_constraint_properties'
     | 'too_many_observation_properties'
-    | 'property_not_dcid'
-    | 'value_not_dcid'
+    | 'header_too_long'
     | 'value_too_long';
 
 export type SheetProblem = {
     readonly code: SheetProblemCode;
-    /** The column at fault, or null when the fault is the sheet's or a row's. */
+    /** The column at fault, or null when the fault is a row's. */
     readonly column: number | null;
     /** The column's header, or null with no column. */
     readonly header: string | null;
-    /** The sheet rows at fault, in order; empty when every row is. */
+    /** The sheet rows at fault, in order. */
     readonly rows: readonly number[];
 };
 
-/** Whether the route reads `id` as a dcid: its syntax and its length ceiling. */
-export const isDcid = (id: string): boolean => id.length <= DCID_MAX_LENGTH && DCID_SYNTAX.test(id);
+/** Whether `text` is past the route's string bound, counted in code points as the route counts. */
+const tooLong = (text: string): boolean =>
+    text.length > CHECK_MAX_STRING_LENGTH && [...text].length > CHECK_MAX_STRING_LENGTH;
 
 /** The definition fields of a check row, by the sheet field that fills each. */
-const DCID_FIELDS = [
+const STRING_FIELDS = [
     ['dcid', 'dcid'],
     ['populationType', 'population_type'],
     ['measuredProperty', 'measured_property'],
     ['statType', 'stat_type'],
     ['measurementQualifier', 'measurement_qualifier'],
     ['measurementDenominator', 'measurement_denominator'],
-] as const satisfies readonly (readonly [DefinitionField, keyof OntologyCheckRow])[];
+] as const satisfies readonly (readonly [DefinitionField, keyof SchemaCheckRow])[];
 
 /**
- * What in `rows` the check route would refuse, one problem per cause and
- * column, so the reader can fix the sheet before any request. `rows` are the
- * rows `rowsToCheck` built from `mapping`.
+ * What in `sheet` the check route would refuse, one problem per cause and
+ * column, so the reader can fix the sheet before any request. `sheet` is
+ * what `rowsToCheck` built from `mapping`.
  */
-export function sheetProblems(mapping: Mapping, rows: readonly OntologyCheckRow[]): SheetProblem[] {
+export function sheetProblems(mapping: Mapping, { rows, sheetRows }: SheetCheck): SheetProblem[] {
     const problems: SheetProblem[] = [];
-    const rowOf = (row: OntologyCheckRow): number => Number(row.ref);
     const columnOf = (field: DefinitionField) =>
         mapping.find(({ target }) => target.kind === 'definition' && target.field === field);
     const add = (
         code: SheetProblemCode,
         column: MappedColumn | undefined,
-        at: readonly OntologyCheckRow[],
+        at: (row: SchemaCheckRow) => boolean,
     ) => {
-        if (at.length === 0) return;
+        const faulty = sheetRows.filter((_, index) => at(rows[index]!));
+        if (faulty.length === 0) return;
         problems.push({
             code,
             column: column?.index ?? null,
             header: column?.header ?? null,
-            rows: at.map(rowOf),
+            rows: faulty,
         });
     };
 
-    const measured = columnOf('measuredProperty');
-    if (measured === undefined && rows.length > 0) {
-        problems.push({ code: 'measured_property_missing', column: null, header: null, rows: [] });
-    } else {
-        add(
-            'measured_property_missing',
-            measured,
-            rows.filter((row) => row.measured_property === ''),
-        );
-    }
-    for (const [field, key] of DCID_FIELDS) {
-        add(
-            'value_not_dcid',
-            columnOf(field),
-            rows.filter((row) => {
-                const value = row[key];
-                return typeof value === 'string' && value !== '' && !isDcid(value);
-            }),
-        );
+    for (const [field, key] of STRING_FIELDS) {
+        add('value_too_long', columnOf(field), (row) => {
+            const value = row[key];
+            return typeof value === 'string' && tooLong(value);
+        });
     }
     const observations = columnOf('observationProperties');
-    add(
-        'value_not_dcid',
-        observations,
-        rows.filter((row) => (row.observation_properties ?? []).some((id) => !isDcid(id))),
-    );
+    add('value_too_long', observations, (row) => (row.observation_properties ?? []).some(tooLong));
     add(
         'too_many_observation_properties',
         observations,
-        rows.filter(
-            (row) => (row.observation_properties ?? []).length > CHECK_MAX_OBSERVATION_PROPERTIES,
-        ),
+        (row) => (row.observation_properties ?? []).length > CHECK_MAX_OBSERVATION_PROPERTIES,
     );
     add(
         'too_many_constraint_properties',
         undefined,
-        rows.filter(
-            (row) =>
-                Object.keys(row.constraint_properties ?? {}).length >
-                CHECK_MAX_CONSTRAINT_PROPERTIES,
-        ),
+        (row) =>
+            Object.keys(row.constraint_properties ?? {}).length > CHECK_MAX_CONSTRAINT_PROPERTIES,
     );
     for (const column of mapping) {
         const { target } = column;
         if (target.kind !== 'property') continue;
-        const filled = rows.filter(
-            (row) => row.constraint_properties?.[target.property] !== undefined,
-        );
-        if (!isDcid(target.property)) add('property_not_dcid', column, filled);
-        add(
-            'value_too_long',
-            column,
-            filled.filter((row) => {
-                const value = row.constraint_properties?.[target.property];
-                return typeof value === 'string' && value.length > DCID_MAX_LENGTH;
-            }),
-        );
+        const value = (row: SchemaCheckRow) => row.constraint_properties?.[target.property];
+        if (tooLong(target.property)) {
+            add('header_too_long', column, (row) => value(row) !== undefined);
+        }
+        add('value_too_long', column, (row) => {
+            const cell = value(row);
+            return typeof cell === 'string' && tooLong(cell);
+        });
     }
     return problems;
 }
@@ -462,35 +440,27 @@ export function sheetProblemText(problem: SheetProblem): string {
     const column = `Column ${problem.header || '(no header)'}`;
     const on = rowsText(problem.rows);
     switch (problem.code) {
-        case 'measured_property_missing':
-            return problem.column === null
-                ? 'No column is read as measuredProperty, and every row needs a measured property. Add a measuredProperty column.'
-                : `${column} has no measured property on ${on}. Fill those cells.`;
         case 'too_many_constraint_properties':
             return `${on.charAt(0).toUpperCase()}${on.slice(1)} ${problem.rows.length === 1 ? 'fills' : 'fill'} more than ${plural(CHECK_MAX_CONSTRAINT_PROPERTIES, 'property column')}, the most one row can have. Set some columns to Ignored.`;
         case 'too_many_observation_properties':
             return `${column} names more than ${plural(CHECK_MAX_OBSERVATION_PROPERTIES, 'observation property', 'observation properties')} on ${on}, the most one row can have.`;
-        case 'property_not_dcid':
-            return `${column} is read as a property, but its header is not a dcid: letters, digits, _, . and -, in parts joined by /. Rename the header, or set the column to Ignored.`;
-        case 'value_not_dcid':
-            return `${column} holds a value that is not a dcid on ${on}. A dcid has only letters, digits, _, . and -, in parts joined by /.`;
+        case 'header_too_long':
+            return `${column} is read as a property, but its header is longer than ${CHECK_MAX_STRING_LENGTH} characters. Rename the header, or set the column to Ignored.`;
         case 'value_too_long':
-            return `${column} holds a value longer than ${DCID_MAX_LENGTH} characters on ${on}. Shorten it, or set the column to Ignored.`;
+            return `${column} holds a value longer than ${CHECK_MAX_STRING_LENGTH} characters on ${on}. Shorten it, or set the column to Ignored.`;
     }
 }
 
-/** The cell a finding belongs to. `column` is null when its field maps to no column. */
-export type FindingLocation = { readonly row: number; readonly column: number | null };
-
-/** Places a finding by its `ref` (a sheet row number) and `field`. Null when `ref` is no row number. */
-export function locateFinding(mapping: Mapping, finding: OntologyFinding): FindingLocation | null {
-    const row = Number(finding.ref);
-    if (finding.ref === null || !Number.isInteger(row) || row < 1) return null;
-    const property = findingProperty(finding);
+/**
+ * The column a finding belongs to: the property column of its constraint
+ * property, else the column of its definition field. Null when the mapping
+ * has no such column.
+ */
+export function findingColumn(mapping: Mapping, finding: SchemaFinding): number | null {
     const column = mapping.find(({ target }) =>
-        property === null
-            ? target.kind === 'definition' && target.field === camelCase(finding.field)
-            : target.kind === 'property' && target.property === property,
+        finding.field === 'constraint_properties'
+            ? target.kind === 'property' && target.property === finding.property
+            : target.kind === 'definition' && target.field === camelCase(finding.field),
     );
-    return { row, column: column?.index ?? null };
+    return column?.index ?? null;
 }

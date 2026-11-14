@@ -17,7 +17,7 @@ import {
     stepActive,
     type SearchHit,
 } from '@/lib/graphExplorer/search';
-import type { OntologyTerms } from '@/lib/graphExplorer/wire';
+import type { SchemaTerms } from '@/lib/graphExplorer/wire';
 
 /** What a hit is, in a few words: its kind, the list a value sits in, or that it is outside the model. */
 const describe = (model: Model, hit: SearchHit): string => {
@@ -33,7 +33,7 @@ type SearchBoxProps = {
     /** Null while the model loads, when the box is disabled. */
     model: Model | null;
     /** The terms list when the base Data Commons switch is on and it has loaded. */
-    baseTerms?: OntologyTerms;
+    baseTerms?: SchemaTerms;
 };
 
 /**

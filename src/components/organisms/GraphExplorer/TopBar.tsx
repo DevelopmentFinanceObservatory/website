@@ -19,7 +19,7 @@ import {
     screenOf,
     type GraphExplorerScreen,
 } from '@/lib/graphExplorer/paths';
-import type { OntologyTerms } from '@/lib/graphExplorer/wire';
+import type { SchemaTerms } from '@/lib/graphExplorer/wire';
 
 const SHEET_LINKS: { screen: GraphExplorerScreen; path: string; label: string }[] = [
     { screen: 'new-sheet', path: NEW_SHEET_PATH, label: 'Start a sheet' },
@@ -39,7 +39,7 @@ const TermsLine = ({
     terms,
     onRetry,
 }: {
-    terms: Exclude<Loadable<OntologyTerms>, { status: 'ready' }>;
+    terms: Exclude<Loadable<SchemaTerms>, { status: 'ready' }>;
     onRetry: () => void;
 }) =>
     terms.status === 'loading' ? (

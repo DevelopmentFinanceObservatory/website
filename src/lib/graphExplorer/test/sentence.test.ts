@@ -8,10 +8,10 @@ import test from 'node:test';
 import { buildModel } from '../model.ts';
 import { patternSentence } from '../sentence.ts';
 import type { SentencePart } from '../sentence.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 const patternOf = (dataset: string, index: number) => {
     const pattern = model.dataset(dataset)?.patterns[index];

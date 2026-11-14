@@ -6,7 +6,7 @@
 import { LIMITS, type SheetRequest, type SheetRequestColumn } from './googleSheet.ts';
 import type { Model } from './model.ts';
 import { classAndNarrower } from './newSheet.ts';
-import type { OntologyPattern } from './wire.ts';
+import type { SchemaPattern } from './wire.ts';
 
 /** A reference column carries the source's own identifiers. A definition field is part of the StatVar definition. A property column holds one constraint property. */
 export type ColumnKind = 'reference' | 'definition' | 'property';
@@ -95,7 +95,7 @@ export function sheetColumns(model: Model, spec: SheetSpec): readonly SheetColum
 
 export type ClosestPattern = {
     readonly dataset: string;
-    readonly pattern: OntologyPattern;
+    readonly pattern: SchemaPattern;
     /** How many of the chosen properties the pattern splits by. */
     readonly shared: number;
 };

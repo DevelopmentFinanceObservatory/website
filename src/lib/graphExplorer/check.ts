@@ -15,33 +15,24 @@ import {
     type WaitCause,
 } from './load.ts';
 import { KIND_WORDS, type Model } from './model.ts';
-import { locateFinding, sheetRow, type Mapping } from './pasted.ts';
+import { camelCase, findingColumn, sheetRow, type Mapping } from './pasted.ts';
 import type { SentencePart } from './sentence.ts';
 import {
     CHECK_DEADLINE_MS,
     CHECK_MAX_ROWS,
-    findingProperty,
     isFindingCode,
     readCheckResponse,
+    type CheckField,
     type FindingCode,
-    type OntologyCheckRequest,
-    type OntologyCheckRow,
-    type OntologyFinding,
+    type FindingValue,
+    type SchemaCheckRequest,
+    type SchemaCheckResponse,
+    type SchemaCheckRow,
+    type SchemaFinding,
 } from './wire.ts';
 
 /** The route the check posts to. */
-export const CHECK_URL = '/api/graph/ontology/check';
-
-/**
- * The rows the first request carries, and the most any request carries. A
- * chunk the route refuses is halved until the refused row stands alone, and
- * the smaller size carries on to the chunks that follow. Each new chunk the
- * route answers doubles the size again, up to this one. The halves of a
- * split chunk leave the size alone when answered, so a paste the route can
- * take only in small chunks does not climb back to a refused size after
- * every pair of halves.
- */
-export const CHECK_CHUNK_ROWS = 500;
+export const CHECK_URL = '/api/graph/schema/check';
 
 /**
  * How long one check request may take: the Graph API's deadline, then time
@@ -53,23 +44,29 @@ export const CHECK_REQUEST_TIMEOUT_MS = CHECK_DEADLINE_MS + 10_000;
 /** How long a whole check may take, waits for a build included. */
 export const CHECK_LIMIT_MS = 5 * 60_000;
 
-/** Why a check stopped: a request failure, or an answer covering other rows than were sent. */
-export type CheckFailureReason = FailureReason | 'row_count';
+/**
+ * Why a check stopped: a request failure, an answer whose row counts do not
+ * fit the rows sent, or a refusal naming no row that was sent.
+ */
+export type CheckFailureReason = FailureReason | 'row_count' | 'pointer';
 
 /** A check that could not finish. `message` says why, and `reason` says so for code. */
 export class CheckError extends GraphFailure<CheckFailureReason> {
     override name = 'CheckError';
 }
 
-/** A single row the route refused, with the problem's detail. */
-export type RefusedRow = { readonly ref: string | null; readonly detail: string };
+/** A finding and the index, in the rows given to `checkRows`, of the row it is about. */
+export type RowFinding = { readonly index: number; readonly finding: SchemaFinding };
+
+/** A row the route refused, by its index in the rows given to `checkRows`, with the problem's detail. */
+export type RefusedRow = { readonly index: number; readonly detail: string };
 
 export type CheckResult = {
     /** The graph generations the answers named, each once, in the order first seen. */
     readonly generations: readonly string[];
     /** The rows the route checked. */
     readonly rowCount: number;
-    readonly findings: readonly OntologyFinding[];
+    readonly findings: readonly RowFinding[];
     readonly refused: readonly RefusedRow[];
 };
 
@@ -77,11 +74,10 @@ export type CheckProgress = { readonly checked: number; readonly total: number }
 
 export type CheckOptions = {
     readonly signal?: AbortSignal;
-    /** Called after each answered chunk and once before the first request. */
+    /** Called after each answer and once before the first request. */
     readonly onProgress?: (progress: CheckProgress) => void;
     /** Called before each wait, with what the wait is for. */
     readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
-    readonly chunkRows?: number;
     /** The bound on one request. CHECK_REQUEST_TIMEOUT_MS by default. */
     readonly requestTimeoutMs?: number;
     /** The bound on the whole check. CHECK_LIMIT_MS by default. */
@@ -92,29 +88,41 @@ export type CheckOptions = {
 };
 
 type Answer =
-    | { readonly kind: 'checked'; readonly body: ReturnType<typeof readCheckResponse> }
-    | { readonly kind: 'refused'; readonly detail: string };
+    | { readonly kind: 'checked'; readonly body: SchemaCheckResponse }
+    | { readonly kind: 'refused'; readonly row: number; readonly detail: string };
+
+/** The row a refusal's pointer names: `/rows/<i>` or a member under it. */
+const ROW_POINTER = /^\/rows\/(\d+)(?:\/|$)/;
+
+/** Why `body` does not fit a request of `sent` rows, or null when it does. */
+const misfit = (body: SchemaCheckResponse, sent: number): string | null => {
+    const { row_count: count, next_row: next } = body;
+    if (count < 1 || count > sent) return `it checked ${count} of ${sent} rows sent`;
+    if ((next === null) !== (count === sent) || (next !== null && next !== count)) {
+        return `it checked ${count} of ${sent} rows sent and named row ${next} as the next`;
+    }
+    const stray = body.findings.find((finding) => finding.row >= count);
+    return stray === undefined ? null : `a finding names row ${stray.row} of ${count} checked`;
+};
 
 /**
- * Checks `rows` in chunks, each sent through `requestGraph`. A 200 adds its
- * findings, and on a new chunk (one that is not the half of a split)
- * doubles the chunk size, up to `chunkRows`. A 200 whose `row_count` is not
- * the rows sent stops the check. A 400 on a chunk of more than one row
- * splits it in two halves, checked in turn, and the half's size becomes the
- * chunk size for the rows after them. A 400 on one row refuses that row
- * with the problem's detail. A 503 or 429 with `Retry-After` waits and asks
- * again, for up to a minute per chunk. A request past `requestTimeoutMs`,
- * its 400 body included, or a check past `limitMs`, stops with reason
+ * Checks `rows` in order, each request carrying up to CHECK_MAX_ROWS of
+ * them through `requestGraph`. A 200 checks a prefix of the rows sent: its
+ * findings are kept against the rows they name, and the next request starts
+ * at the first row it left. A 200 whose counts do not fit the rows sent
+ * stops the check. A 400 whose pointer names one row refuses that row with
+ * the problem's detail, and the check carries on without it. Any other 400
+ * stops the check. A 503 or 429 with `Retry-After` waits and asks again,
+ * for up to a minute per request. A request past `requestTimeoutMs`, its
+ * 400 body included, or a check past `limitMs`, stops with reason
  * `timeout`. Anything else stops the check with a CheckError. An abort
  * rejects with the signal's reason, and no progress is reported after it.
  */
 export async function checkRows(
-    rows: readonly OntologyCheckRow[],
+    rows: readonly SchemaCheckRow[],
     options: CheckOptions = {},
 ): Promise<CheckResult> {
     const { signal, onProgress } = options;
-    const largest = Math.max(1, Math.min(options.chunkRows ?? CHECK_CHUNK_ROWS, CHECK_MAX_ROWS));
-    let size = largest;
     const bounds = bounded(signal, {
         limitMs: options.limitMs ?? CHECK_LIMIT_MS,
         requestMs: options.requestTimeoutMs ?? CHECK_REQUEST_TIMEOUT_MS,
@@ -130,61 +138,77 @@ export async function checkRows(
         fail: (message, details) => new CheckError(message, details),
     };
 
-    const send = (chunk: readonly OntologyCheckRow[]): Promise<Answer> =>
+    const send = (chunk: readonly SchemaCheckRow[]): Promise<Answer> =>
         requestGraph<Answer>(
             {
                 url: CHECK_URL,
                 init: {
                     method: 'POST',
                     headers: { 'content-type': 'application/json', accept: 'application/json' },
-                    body: JSON.stringify({ rows: chunk } satisfies OntologyCheckRequest),
+                    body: JSON.stringify({ rows: chunk } satisfies SchemaCheckRequest),
                 },
                 read: (body) => ({ kind: 'checked', body: readCheckResponse(body) }),
-                refusal: (status, problem) =>
-                    status === 400
-                        ? { kind: 'refused', detail: problem ?? 'The Graph API refused the row.' }
-                        : null,
+                refusal: (status, { text, pointer }) => {
+                    const named = status === 400 ? ROW_POINTER.exec(pointer ?? '') : null;
+                    if (named === null) return null;
+                    return {
+                        kind: 'refused',
+                        row: Number(named[1]),
+                        detail: text ?? 'The Graph API refused the row.',
+                    };
+                },
+                unavailable: 'busy_or_building',
             },
             requestOptions,
         );
 
-    const findings: OntologyFinding[] = [];
+    const findings: RowFinding[] = [];
     const refused: RefusedRow[] = [];
+    const skipped = new Set<number>();
     const generations = new Set<string>();
     let rowCount = 0;
-    let checked = 0;
-    let next = 0;
-    const halves: (readonly OntologyCheckRow[])[] = [];
+    // Every row before `start` is checked or refused.
+    let start = 0;
 
-    onProgress?.({ checked, total: rows.length });
-    while (halves.length > 0 || next < rows.length) {
-        const half = halves.shift();
-        const chunk = half ?? rows.slice(next, (next += size));
-        const answer = await send(chunk);
-        if (signal?.aborted) throw signal.reason;
-        if (answer.kind === 'refused' && chunk.length > 1) {
-            const split = Math.ceil(chunk.length / 2);
-            halves.unshift(chunk.slice(0, split), chunk.slice(split));
-            size = Math.min(size, split);
-            continue;
+    onProgress?.({ checked: 0, total: rows.length });
+    while (start < rows.length) {
+        // The indices of the rows this request sends: the next unrefused ones.
+        const sent: number[] = [];
+        for (let at = start; at < rows.length && sent.length < CHECK_MAX_ROWS; at += 1) {
+            if (!skipped.has(at)) sent.push(at);
         }
+        if (sent.length === 0) break;
+        const answer = await send(sent.map((at) => rows[at]!));
+        if (signal?.aborted) throw signal.reason;
+
         if (answer.kind === 'refused') {
-            refused.push({ ref: chunk[0]?.ref ?? null, detail: answer.detail });
-        } else {
-            const { body } = answer;
-            if (body.row_count !== chunk.length) {
+            const index = sent[answer.row];
+            if (index === undefined) {
                 throw new CheckError(
-                    `The check stopped: the Graph API answered for ${body.row_count} of ${chunk.length} rows sent.`,
-                    { reason: 'row_count', detail: `${body.row_count} of ${chunk.length}` },
+                    `The check stopped: the Graph API refused row ${answer.row} of ${sent.length} sent.`,
+                    { reason: 'pointer', status: 400, detail: answer.detail },
                 );
             }
-            findings.push(...body.findings);
+            refused.push({ index, detail: answer.detail });
+            skipped.add(index);
+        } else {
+            const { body } = answer;
+            const why = misfit(body, sent.length);
+            if (why !== null) {
+                throw new CheckError(`The check stopped: the Graph API answered, but ${why}.`, {
+                    reason: 'row_count',
+                    detail: why,
+                });
+            }
+            for (const finding of body.findings) {
+                findings.push({ index: sent[finding.row]!, finding });
+            }
             if (body.generation !== null) generations.add(body.generation);
             rowCount += body.row_count;
-            if (half === undefined) size = Math.min(largest, size * 2);
+            start = sent[body.row_count - 1]! + 1;
         }
-        checked += chunk.length;
-        onProgress?.({ checked, total: rows.length });
+        while (skipped.has(start)) start += 1;
+        onProgress?.({ checked: rowCount + refused.length, total: rows.length });
     }
     return { generations: [...generations], rowCount, findings, refused };
 }
@@ -192,33 +216,32 @@ export async function checkRows(
 /** A message part: text, a term the model holds, or a value shown as typed. */
 export type MessagePart = SentencePart | { readonly kind: 'value'; readonly text: string };
 
-/** How a definition field is named in a message. */
-const FIELD_NAMES: Readonly<Record<string, string>> = {
+/** How a finding's field is named in a message. */
+const FIELD_NAMES: Readonly<Record<CheckField, string>> = {
     dcid: 'dcid',
     population_type: 'population type',
     measured_property: 'measured property',
     stat_type: 'stat type',
     measurement_qualifier: 'measurement qualifier',
     measurement_denominator: 'measurement denominator',
+    constraint_properties: 'constraint properties',
     observation_properties: 'observation properties',
 };
 
-/** The finding's value as typed in the sheet. A list joins with commas. */
-export const valueText = (value: OntologyFinding['value']): string => {
+/** A finding's value as typed in the sheet. A list joins with commas. */
+export const valueText = (value: FindingValue): string => {
     if (Array.isArray(value)) return value.join(', ');
     return value === null ? '' : String(value);
 };
 
 type MessageContext = {
     readonly model: Model;
-    readonly finding: OntologyFinding;
-    /** The constraint property, or null on a definition field. */
-    readonly property: string | null;
+    readonly finding: SchemaFinding;
     readonly value: string;
     readonly text: (text: string) => MessagePart;
     /** A term link when the model holds the id, else the id as typed. */
     readonly term: (id: string) => MessagePart;
-    /** The value list behind the constraint property, when it has one. */
+    /** The value list behind the finding's property, when it has one. */
     readonly valueList: string | undefined;
 };
 
@@ -235,24 +258,21 @@ const chooseFrom = ({ valueList, text, term }: MessageContext, fallback: string)
         ? [text(fallback)]
         : [text('Choose a value from '), term(valueList), text('.')];
 
-const fieldName = ({ finding, property }: MessageContext): string =>
-    property ?? FIELD_NAMES[finding.field] ?? finding.field;
+const fieldName = ({ finding }: MessageContext): string =>
+    finding.property ?? FIELD_NAMES[finding.field] ?? finding.field;
 
 /** One line per code, saying what is wrong and then what to do. */
 const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => MessagePart[]>> = {
     node_not_held: (context) => {
-        const { finding, property, value, text } = context;
-        if (
-            finding.field === 'observation_properties' ||
-            (property !== null && value === property)
-        ) {
+        const { finding, value, text } = context;
+        if (finding.subject === 'property') {
             return [
                 text('The graph has no property '),
                 shown(value),
                 text('. Check the spelling, or set the column to Ignored.'),
             ];
         }
-        if (property !== null) {
+        if (finding.property !== null) {
             return [
                 text('The graph has no value '),
                 shown(value),
@@ -276,10 +296,17 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         context.text(' is only a provisional node on the graph. '),
         ...chooseFrom(context, 'Choose a value the model declares.'),
     ],
-    value_missing: (context) => [
-        context.term(context.property ?? context.finding.field),
-        context.text(' has no value. Fill the cell, or set the column to Ignored.'),
-    ],
+    value_missing: ({ finding, term, text }) =>
+        finding.property === null
+            ? [
+                  text(
+                      `This row has no ${FIELD_NAMES[finding.field] ?? finding.field}, and every row needs one. Fill the cell, or add a ${camelCase(finding.field)} column if the sheet has none.`,
+                  ),
+              ]
+            : [
+                  term(finding.property),
+                  text(' has no value. Fill the cell, or set the column to Ignored.'),
+              ],
     not_a_property: (context) => [
         context.term(context.value),
         context.text(' is not a property'),
@@ -293,18 +320,16 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         context.text('. The population type must be a kind of thing.'),
     ],
     value_outside_range: (context) => {
-        const { property, value, valueList, text, term } = context;
-        return valueList === undefined
-            ? [
-                  shown(value),
-                  text(' is not a value '),
-                  term(property ?? context.finding.field),
-                  text(' allows.'),
-              ]
-            : [shown(value), text(' is not in the value list '), term(valueList), text('.')];
+        const { finding, value, valueList, text, term } = context;
+        if (valueList !== undefined) {
+            return [shown(value), text(' is not in the value list '), term(valueList), text('.')];
+        }
+        return finding.property === null
+            ? [shown(value), text(` is not a value the ${fieldName(context)} allows.`)]
+            : [shown(value), text(' is not a value '), term(finding.property), text(' allows.')];
     },
     property_outside_domain: (context) => [
-        context.term(context.property ?? context.value),
+        context.term(context.finding.property ?? context.value),
         context.text(
             ' is declared for other kinds of thing than the row’s population type. Check the population type, or use a property declared for it.',
         ),
@@ -313,8 +338,14 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         context.text(
             `The graph holds a StatVar with this dcid and a different ${fieldName(context)}: `,
         ),
-        shown(context.value || 'none'),
+        shown(valueText(context.finding.served) || 'none'),
         context.text('. Match the graph’s definition, or give the row a new dcid.'),
+    ],
+    origin_not_served: (context) => [
+        shown(context.value),
+        context.text(
+            ' comes from a source this deployment of the graph does not serve. Use a term from a source it serves.',
+        ),
     ],
 };
 
@@ -329,18 +360,17 @@ const unknownMessage = ({ finding, value, text }: MessageContext): MessagePart[]
 ];
 
 /** What a finding says is wrong and what to do, as parts a screen can link. */
-export function findingMessage(model: Model, finding: OntologyFinding): MessagePart[] {
-    const property = findingProperty(finding);
+export function findingMessage(model: Model, finding: SchemaFinding): MessagePart[] {
     const held = (id: string) => model.node(id) !== undefined || model.dataset(id) !== undefined;
     const context: MessageContext = {
         model,
         finding,
-        property,
         value: valueText(finding.value),
         text: (text) => ({ kind: 'text', text }),
         term: (id) =>
             held(id) ? { kind: 'term', id, label: model.label(id) } : { kind: 'value', text: id },
-        valueList: property === null ? undefined : model.valueListOfProperty(property),
+        valueList:
+            finding.property === null ? undefined : model.valueListOfProperty(finding.property),
     };
     const message = isFindingCode(finding.code) ? MESSAGES[finding.code] : unknownMessage;
     return message(context).filter((part) => part.kind !== 'text' || part.text);
@@ -423,10 +453,10 @@ const namesOf = (model: Model, list: string): readonly (readonly [string, readon
     return named;
 };
 
-export function closestMembers(model: Model, finding: OntologyFinding, limit = 3): string[] {
-    const property = findingProperty(finding);
-    if (!SUGGESTED.has(finding.code) || property === null) return [];
-    if (typeof finding.value !== 'string' || finding.value === property) return [];
+export function closestMembers(model: Model, finding: SchemaFinding, limit = 3): string[] {
+    const { property } = finding;
+    if (!SUGGESTED.has(finding.code) || property === null || finding.subject !== 'value') return [];
+    if (typeof finding.value !== 'string') return [];
     const list = model.valueListOfProperty(property);
     if (list === undefined) return [];
 
@@ -458,28 +488,37 @@ export function closestMembers(model: Model, finding: OntologyFinding, limit = 3
 
 /** Where a finding sits in the pasted table. */
 export type FindingPlace = {
-    /** The sheet row, or null when the finding's `ref` is no row number. */
+    /** The sheet row, or null when the finding's row is not among `sheetRows`. */
     readonly row: number | null;
     /** The column index, or null when the finding's field maps to no column. */
     readonly column: number | null;
-    /** The column's header, else the finding's field. */
+    /** The column's header, else the finding's property or field. */
     readonly columnLabel: string;
 };
 
-/** The row and column a finding belongs to, read through the mapping it was checked with. */
-export function findingPlace(mapping: Mapping, finding: OntologyFinding): FindingPlace {
-    const at = locateFinding(mapping, finding);
-    const column = at?.column ?? null;
+/**
+ * The row and column a finding belongs to, read through the mapping it was
+ * checked with. `sheetRows` holds the sheet row of each checked row.
+ */
+export function findingPlace(
+    mapping: Mapping,
+    sheetRows: readonly number[],
+    { index, finding }: RowFinding,
+): FindingPlace {
+    const column = findingColumn(mapping, finding);
     return {
-        row: at?.row ?? null,
+        row: sheetRows[index] ?? null,
         column,
-        columnLabel: (column === null ? undefined : mapping[column]?.header) ?? finding.field,
+        columnLabel:
+            (column === null ? undefined : mapping[column]?.header) ??
+            finding.property ??
+            finding.field,
     };
 }
 
 /** One finding as the result shows it: its place and its message. */
 export type FindingLine = FindingPlace & {
-    readonly finding: OntologyFinding;
+    readonly finding: SchemaFinding;
     readonly parts: readonly MessagePart[];
 };
 
@@ -487,26 +526,27 @@ export type FindingLine = FindingPlace & {
 export function findingLines(
     model: Model,
     mapping: Mapping,
-    findings: readonly OntologyFinding[],
+    sheetRows: readonly number[],
+    findings: readonly RowFinding[],
 ): FindingLine[] {
-    return findings.map((finding) => ({
-        ...findingPlace(mapping, finding),
-        finding,
-        parts: findingMessage(model, finding),
+    return findings.map((found) => ({
+        ...findingPlace(mapping, sheetRows, found),
+        finding: found.finding,
+        parts: findingMessage(model, found.finding),
     }));
 }
 
 /**
- * closestMembers with a memory: each field and value pair is worked out
+ * closestMembers with a memory: each property and value pair is worked out
  * once, and a sheet of repeated source codes shares it across findings.
  * The result asks only for the lines on screen, so a step's cost follows the
  * step and the value list, whatever the sheet's size.
  */
-export function closestLookup(model: Model): (finding: OntologyFinding) => readonly string[] {
+export function closestLookup(model: Model): (finding: SchemaFinding) => readonly string[] {
     const closest = new Map<string, readonly string[]>();
     return (finding) => {
         if (!SUGGESTED.has(finding.code)) return [];
-        const key = JSON.stringify([finding.field, finding.value]);
+        const key = JSON.stringify([finding.property, finding.subject, finding.value]);
         let members = closest.get(key);
         if (members === undefined) {
             members = closestMembers(model, finding);
@@ -530,6 +570,7 @@ export type SheetMarks = {
 export function sheetMarks(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
+    sheetRows: readonly number[],
 ): SheetMarks {
     const cells = new Map<string, 'error' | 'warning'>();
     const flaggedRows = new Set<number>();
@@ -540,9 +581,9 @@ export function sheetMarks(
         const key = cellKey(row, column);
         if (cells.get(key) !== 'error') cells.set(key, finding.severity);
     }
-    for (const { ref } of refused) {
-        const row = Number(ref);
-        if (ref !== null && Number.isInteger(row)) flaggedRows.add(row);
+    for (const { index } of refused) {
+        const row = sheetRows[index];
+        if (row !== undefined) flaggedRows.add(row);
     }
     return { cells, flaggedRows };
 }
@@ -611,9 +652,9 @@ export const resultCounts = (
     result: Pick<CheckResult, 'findings' | 'refused'>,
 ): { readonly errors: number; readonly warnings: number } => ({
     errors:
-        result.findings.filter((finding) => finding.severity === 'error').length +
+        result.findings.filter(({ finding }) => finding.severity === 'error').length +
         result.refused.length,
-    warnings: result.findings.filter((finding) => finding.severity === 'warning').length,
+    warnings: result.findings.filter(({ finding }) => finding.severity === 'warning').length,
 });
 
 const listed = (items: readonly string[]): string =>
@@ -652,17 +693,24 @@ export const messageText = (parts: readonly MessagePart[]): string =>
 export function findingsCsvRows(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
+    sheetRows: readonly number[],
 ): string[][] {
     return [
         ['row', 'column', 'value', 'code', 'message'],
-        ...lines.map(({ finding, columnLabel, parts }) => [
-            finding.ref ?? '',
+        ...lines.map(({ finding, row, columnLabel, parts }) => [
+            String(row ?? ''),
             columnLabel,
             valueText(finding.value),
             finding.code,
             messageText(parts),
         ]),
-        ...refused.map((row) => [row.ref ?? '', '', '', 'request_invalid', row.detail]),
+        ...refused.map(({ index, detail }) => [
+            String(sheetRows[index] ?? ''),
+            '',
+            '',
+            'request_invalid',
+            detail,
+        ]),
     ];
 }
 

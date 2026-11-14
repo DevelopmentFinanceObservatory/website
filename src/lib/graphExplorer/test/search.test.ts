@@ -7,10 +7,10 @@ import test from 'node:test';
 
 import { buildModel } from '../model.ts';
 import { enterChoice, escapeAction, search, stepActive } from '../search.ts';
-import { readOntology, readProvenances, readTerms } from '../wire.ts';
-import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
+import { readSchema, readUsage, readTerms } from '../wire.ts';
+import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 const baseTerms = readTerms(termsBody());
 
 const ids = (query: string, limit = 50) =>

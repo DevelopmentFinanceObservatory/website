@@ -14,8 +14,8 @@ import {
     type Loadable,
     type WaitCause,
 } from '../load.ts';
-import { readOntology } from '../wire.ts';
-import { ontologyBody } from './fixtures.ts';
+import { readSchema } from '../wire.ts';
+import { schemaBody } from './fixtures.ts';
 
 test('a 503 with Retry-After in seconds waits that long', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: '5', waitedMs: 0, nowMs: 0 }), 5000);
@@ -94,13 +94,8 @@ const building = () => json({ title: 'Service unavailable' }, 503, { 'retry-afte
 const busy = () => json({ title: 'Too Many Requests' }, 429, { 'retry-after': '12' });
 
 test('the loader waits out a build and a spent allowance, then reads the document', async () => {
-    const { options, waits, causes, urls } = rig([building, busy, () => json(ontologyBody())]);
-    const document = await loadDocument(
-        'The ontology',
-        '/api/graph/ontology',
-        readOntology,
-        options,
-    );
+    const { options, waits, causes, urls } = rig([building, busy, () => json(schemaBody())]);
+    const document = await loadDocument('The model', '/api/graph/schema', readSchema, options);
     assert.ok(document.nodes.length > 0);
     assert.deepEqual(waits, [5000, 12_000]);
     assert.deepEqual(causes, ['building', 'busy']);
@@ -110,7 +105,7 @@ test('the loader waits out a build and a spent allowance, then reads the documen
 test('a build still running after a minute fails and says so', async () => {
     const { options, waits } = rig(Array.from({ length: 20 }, () => building));
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, options),
+        loadDocument('The model', '/api/graph/schema', readSchema, options),
         (error: unknown) =>
             error instanceof LoadError && error.reason === 'build_timeout' && error.status === 503,
     );
@@ -125,29 +120,29 @@ test('another failing status names the status and the problem detail', async () 
         () => json({ title: 'Bad gateway', detail: 'The graph did not answer' }, 502),
     ]);
     await assert.rejects(
-        loadDocument('The datasets', '/api/graph/ontology/provenances', readOntology, options),
+        loadDocument('The datasets', '/api/graph/schema/usage', readSchema, options),
         { name: 'LoadError', reason: 'status', status: 502, detail: 'The graph did not answer' },
     );
     assert.deepEqual(waits, []);
 });
 
 test('a changed wire shape fails with the guard error', async () => {
-    const body = ontologyBody() as { nodes: Record<string, unknown>[] };
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
     delete body.nodes[0]!.declared_by;
     const { options } = rig([() => json(body)]);
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, options),
+        loadDocument('The model', '/api/graph/schema', readSchema, options),
         (error: unknown) =>
             error instanceof LoadError &&
             error.reason === 'shape' &&
-            error.detail?.startsWith('ontology.nodes[0].declared_by') === true,
+            error.detail?.startsWith('schema.nodes[0].declared_by') === true,
     );
 });
 
 test('a body that is not JSON and a request that fails each give their reason', async () => {
     const notJson = rig([() => new Response('<html>', { status: 200 })]);
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, notJson.options),
+        loadDocument('The model', '/api/graph/schema', readSchema, notJson.options),
         { name: 'LoadError', reason: 'not_json' },
     );
 
@@ -157,7 +152,7 @@ test('a body that is not JSON and a request that fails each give their reason', 
         },
     ]);
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, offline.options),
+        loadDocument('The model', '/api/graph/schema', readSchema, offline.options),
         { name: 'LoadError', reason: 'unreachable' },
     );
 });
@@ -166,7 +161,7 @@ test('an abort rejects with the signal reason, not a LoadError', async () => {
     const controller = new AbortController();
     const reason = new DOMException('stopped', 'AbortError');
     const { options } = rig([building, building]);
-    const waiting = loadDocument('The ontology', '/api/graph/ontology', readOntology, {
+    const waiting = loadDocument('The model', '/api/graph/schema', readSchema, {
         ...options,
         signal: controller.signal,
         sleep: (_ms, signal) =>
@@ -189,7 +184,7 @@ const stalled = async (_url: string | URL | Request, init?: RequestInit): Promis
 
 test('a request with no answer fails as a timeout after the request bound', async () => {
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, {
+        loadDocument('The model', '/api/graph/schema', readSchema, {
             fetch: stalled,
             requestTimeoutMs: 10,
         }),
@@ -200,7 +195,7 @@ test('a request with no answer fails as a timeout after the request bound', asyn
 test('a load that outlasts its overall bound fails as a timeout', async () => {
     let calls = 0;
     await assert.rejects(
-        loadDocument('The ontology', '/api/graph/ontology', readOntology, {
+        loadDocument('The model', '/api/graph/schema', readSchema, {
             fetch: async () => {
                 calls += 1;
                 return building();

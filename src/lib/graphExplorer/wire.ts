@@ -1,6 +1,6 @@
 /**
- * The Graph API's ontology documents, as served under /api/graph/ontology,
- * and a guard per response that refuses an unexpected shape.
+ * The Graph API's schema documents, as served under /api/graph/schema, and
+ * a guard per response that refuses an unexpected shape.
  *
  * Members keep the server's snake case and Data Commons nouns: `types` is
  * `typeOf`, `sub_class_of` is `subClassOf`, and so on. Each guard checks
@@ -14,7 +14,7 @@ import { asRecord } from '../asRecord.ts';
 export type DeclaredBy = 'instance' | 'base';
 
 /** The members of an enumeration Class. */
-export type OntologyEnumeration = {
+export type SchemaEnumeration = {
     /** The dcids of the members read, sorted. */
     members: string[];
     /**
@@ -25,8 +25,8 @@ export type OntologyEnumeration = {
     complete: boolean;
 };
 
-/** One node of the ontology document. Every list is sorted. */
-export type OntologyNode = {
+/** One node of the schema document. Every list is sorted. */
+export type SchemaNode = {
     dcid: string;
     /** Null when the graph names the node only by its dcid. */
     name: string | null;
@@ -45,18 +45,18 @@ export type OntologyNode = {
     /** Null when the graph names no declaring provenance for the node. */
     declared_by: DeclaredBy | null;
     /** Set on an enumeration Class, null on every other node. */
-    enumeration: OntologyEnumeration | null;
+    enumeration: SchemaEnumeration | null;
 };
 
-/** GET /api/graph/ontology: the instance's model. */
-export type OntologyDocument = {
+/** GET /api/graph/schema: the instance's model. */
+export type SchemaDocument = {
     /** Null when the server has no generation to name. */
     generation: string | null;
-    nodes: OntologyNode[];
+    nodes: SchemaNode[];
 };
 
 /** One Class or Property on the graph. */
-export type OntologyTerm = {
+export type SchemaTerm = {
     dcid: string;
     name: string | null;
     types: ('Class' | 'Property')[];
@@ -65,14 +65,14 @@ export type OntologyTerm = {
     declared_by: DeclaredBy | null;
 };
 
-/** GET /api/graph/ontology/terms: every Class and Property on the graph. */
-export type OntologyTerms = {
+/** GET /api/graph/schema/terms: every Class and Property on the graph. */
+export type SchemaTerms = {
     generation: string | null;
-    terms: OntologyTerm[];
+    terms: SchemaTerm[];
 };
 
 /** One distinct way a provenance's StatVars use the model. */
-export type OntologyPattern = {
+export type SchemaPattern = {
     population_type: string | null;
     measured_property: string;
     stat_type: string | null;
@@ -86,19 +86,19 @@ export type OntologyPattern = {
 };
 
 /** One value a constraint property takes, and how many StatVars take it. */
-export type OntologyValueCount = {
+export type SchemaValueCount = {
     value: string;
     stat_var_count: number;
 };
 
 /** The values one constraint property takes over a provenance's StatVars. */
-export type OntologyConstraintValues = {
+export type SchemaConstraintValues = {
     property: string;
-    values: OntologyValueCount[];
+    values: SchemaValueCount[];
 };
 
 /** The facet facts of a provenance's coverage series. */
-export type OntologyFacets = {
+export type SchemaFacets = {
     units: string[];
     scaling_factors: string[];
     measurement_methods: string[];
@@ -107,32 +107,32 @@ export type OntologyFacets = {
 };
 
 /** How one provenance's StatVars use the model. */
-export type OntologyProvenance = {
+export type ProvenanceUsage = {
     dcid: string;
     label: string | null;
     description: string | null;
     stat_var_count: number;
     /** Sorted by StatVar count, largest first. */
-    patterns: OntologyPattern[];
-    constraint_values: OntologyConstraintValues[];
-    facets: OntologyFacets;
+    patterns: SchemaPattern[];
+    constraint_values: SchemaConstraintValues[];
+    facets: SchemaFacets;
 };
 
-/** GET /api/graph/ontology/provenances: how each provenance uses the model. */
-export type OntologyProvenances = {
-    provenances: OntologyProvenance[];
+/** GET /api/graph/schema/usage: how each provenance uses the model. */
+export type SchemaUsage = {
+    provenances: ProvenanceUsage[];
 };
 
-/** A constraint value as sent: a node dcid, or a literal or null the check refuses. */
+/** A constraint value as sent: a node dcid, or a literal or null the check flags. */
 export type CheckConstraintValue = string | number | boolean | null;
 
-/** One candidate StatisticalVariable definition. */
-export type OntologyCheckRow = {
+/** One candidate StatisticalVariable definition. An empty string counts as absent. */
+export type SchemaCheckRow = {
     /** The caller's label, echoed on its findings. */
     ref?: string | null;
     dcid?: string | null;
     population_type?: string | null;
-    measured_property: string;
+    measured_property?: string | null;
     stat_type?: string | null;
     measurement_qualifier?: string | null;
     measurement_denominator?: string | null;
@@ -149,22 +149,18 @@ export const CHECK_MAX_CONSTRAINT_PROPERTIES = 16;
 /** The most observation properties one check row names. */
 export const CHECK_MAX_OBSERVATION_PROPERTIES = 4;
 
-/** The longest dcid, and the longest string constraint value, a check row may send. */
-export const DCID_MAX_LENGTH = 512;
-
 /**
- * The dcid syntax of a check row's definition fields, observation properties
- * and constraint property names: segments of letters, digits, `_`, `.` and
- * `-`, joined by `/`.
+ * The longest string a check row may send: a definition field, an
+ * observation property, a constraint property name or a constraint value.
  */
-export const DCID_SYNTAX = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/;
+export const CHECK_MAX_STRING_LENGTH = 512;
 
 /** How long the Graph API works on one check request before it answers 503 or 504. */
 export const CHECK_DEADLINE_MS = 30_000;
 
-/** POST /api/graph/ontology/check: 1 to CHECK_MAX_ROWS rows. */
-export type OntologyCheckRequest = {
-    rows: readonly OntologyCheckRow[];
+/** POST /api/graph/schema/check: 1 to CHECK_MAX_ROWS rows. */
+export type SchemaCheckRequest = {
+    rows: readonly SchemaCheckRow[];
 };
 
 export const FINDING_CODES = [
@@ -177,6 +173,7 @@ export const FINDING_CODES = [
     'value_outside_range',
     'property_outside_domain',
     'definition_differs',
+    'origin_not_served',
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -185,32 +182,53 @@ export type FindingCode = (typeof FINDING_CODES)[number];
 export const isFindingCode = (code: string): code is FindingCode =>
     (FINDING_CODES as readonly string[]).includes(code);
 
+/** The row members a finding's `field` names. */
+export const CHECK_FIELDS = [
+    'dcid',
+    'population_type',
+    'measured_property',
+    'stat_type',
+    'measurement_qualifier',
+    'measurement_denominator',
+    'constraint_properties',
+    'observation_properties',
+] as const;
+
+export type CheckField = (typeof CHECK_FIELDS)[number];
+
+/** A finding's value as sent, or as served on `definition_differs`. */
+export type FindingValue = CheckConstraintValue | string[];
+
 /** One fault in one checked row. */
-export type OntologyFinding = {
+export type SchemaFinding = {
+    /** The row's index in the request's `rows`. */
+    row: number;
+    /** The row's `ref`, or null. */
     ref: string | null;
-    /** The row member, or `constraint_properties.<property>` for a constraint. */
-    field: string;
-    /** The value at fault. For `definition_differs`, the value the server holds. */
-    value: CheckConstraintValue | string[];
+    field: CheckField;
+    /** The constraint or observation property the finding is about, else null. */
+    property: string | null;
+    /** `property` when the finding judges the property itself, else `value`. */
+    subject: 'property' | 'value';
+    /** What was sent for the judged cell: the property dcid when `subject` is `property`. */
+    value: FindingValue;
+    /** The served value on `definition_differs`, null otherwise. */
+    served: FindingValue;
     /** One of FINDING_CODES, or a code the server sends that FINDING_CODES lacks. */
     code: string;
     severity: 'error' | 'warning';
 };
 
-/** How a finding's `field` names a constraint property. */
-export const CONSTRAINT_PREFIX = 'constraint_properties.';
-
-/** The constraint property a finding's field names, or null for a definition field. */
-export const findingProperty = (finding: Pick<OntologyFinding, 'field'>): string | null =>
-    finding.field.startsWith(CONSTRAINT_PREFIX)
-        ? finding.field.slice(CONSTRAINT_PREFIX.length)
-        : null;
-
-/** The answer to a check request. */
-export type OntologyCheckResponse = {
+/**
+ * The answer to a check request. The rows checked are the first
+ * `row_count` sent, and `next_row` is the first row left unchecked, or null
+ * when every row was checked.
+ */
+export type SchemaCheckResponse = {
     generation: string | null;
     row_count: number;
-    findings: OntologyFinding[];
+    next_row: number | null;
+    findings: SchemaFinding[];
 };
 
 /** A response whose shape differs from the one these types describe. */
@@ -272,7 +290,7 @@ const obj =
 const strList = list(str);
 const declaredBy = oneOf(['instance', 'base']);
 
-const ontologyDocument = obj({
+const schemaDocument = obj({
     generation: nullable(str),
     nodes: list(
         obj({
@@ -294,7 +312,7 @@ const ontologyDocument = obj({
     ),
 });
 
-const ontologyTerms = obj({
+const schemaTerms = obj({
     generation: nullable(str),
     terms: list(
         obj({
@@ -307,7 +325,7 @@ const ontologyTerms = obj({
     ),
 });
 
-const ontologyProvenances = obj({
+const schemaUsage = obj({
     provenances: list(
         obj({
             dcid: str,
@@ -351,14 +369,23 @@ const findingValue: Check = (value, path) => {
     }
 };
 
-const ontologyCheckResponse = obj({
+const index: Check = (value, path) => {
+    if (!Number.isInteger(value) || (value as number) < 0) fail(path, 'a whole number');
+};
+
+const schemaCheckResponse = obj({
     generation: nullable(str),
-    row_count: num,
+    row_count: index,
+    next_row: nullable(index),
     findings: list(
         obj({
+            row: index,
             ref: nullable(str),
-            field: str,
+            field: oneOf(CHECK_FIELDS),
+            property: nullable(str),
+            subject: oneOf(['property', 'value']),
             value: findingValue,
+            served: findingValue,
             code: str,
             severity: oneOf(['error', 'warning']),
         }),
@@ -379,13 +406,13 @@ const onePerDcid = (entries: readonly { readonly dcid: string }[], path: string)
 // Each guard runs its checks, then narrows. The checks make the cast true.
 
 /**
- * The ontology document, or a WireShapeError naming the first member out of
+ * The schema document, or a WireShapeError naming the first member out of
  * shape or the first dcid listed twice.
  */
-export const readOntology = (body: unknown): OntologyDocument => {
-    ontologyDocument(body, 'ontology');
-    const document = body as OntologyDocument;
-    onePerDcid(document.nodes, 'ontology.nodes');
+export const readSchema = (body: unknown): SchemaDocument => {
+    schemaDocument(body, 'schema');
+    const document = body as SchemaDocument;
+    onePerDcid(document.nodes, 'schema.nodes');
     return document;
 };
 
@@ -393,26 +420,26 @@ export const readOntology = (body: unknown): OntologyDocument => {
  * The terms list, or a WireShapeError naming the first member out of shape
  * or the first dcid listed twice.
  */
-export const readTerms = (body: unknown): OntologyTerms => {
-    ontologyTerms(body, 'terms');
-    const document = body as OntologyTerms;
+export const readTerms = (body: unknown): SchemaTerms => {
+    schemaTerms(body, 'terms');
+    const document = body as SchemaTerms;
     onePerDcid(document.terms, 'terms.terms');
     return document;
 };
 
 /**
- * The provenances document, or a WireShapeError naming the first member out
- * of shape or the first dcid listed twice.
+ * The usage document, or a WireShapeError naming the first member out of
+ * shape or the first dcid listed twice.
  */
-export const readProvenances = (body: unknown): OntologyProvenances => {
-    ontologyProvenances(body, 'provenances');
-    const document = body as OntologyProvenances;
-    onePerDcid(document.provenances, 'provenances.provenances');
+export const readUsage = (body: unknown): SchemaUsage => {
+    schemaUsage(body, 'usage');
+    const document = body as SchemaUsage;
+    onePerDcid(document.provenances, 'usage.provenances');
     return document;
 };
 
 /** A check response, or a WireShapeError naming the first member out of shape. */
-export const readCheckResponse = (body: unknown): OntologyCheckResponse => {
-    ontologyCheckResponse(body, 'check');
-    return body as OntologyCheckResponse;
+export const readCheckResponse = (body: unknown): SchemaCheckResponse => {
+    schemaCheckResponse(body, 'check');
+    return body as SchemaCheckResponse;
 };

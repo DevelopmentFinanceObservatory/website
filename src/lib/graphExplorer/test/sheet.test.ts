@@ -19,11 +19,11 @@ import {
     sheetRequest,
     toCsv,
 } from '../sheet.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 import { withPatternClass } from './sheetFixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 const spec = {
     classId: 'FinancialFlow',

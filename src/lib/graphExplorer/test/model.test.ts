@@ -15,10 +15,10 @@ import {
     searchMembers,
     type MemberTree,
 } from '../model.ts';
-import { readOntology, readProvenances, type OntologyNode } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage, type SchemaNode } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 const DAC1 = 'provenance/OECDDAC1';
 const DAC2A = 'provenance/OECDDAC2A';
@@ -47,11 +47,11 @@ test('a node reads as a class, value list, property or value, with its label and
 });
 
 test('a node the graph declares no type for is not base', () => {
-    const ontology = readOntology(ontologyBody());
-    const amount = ontology.nodes.find((node) => node.dcid === 'amount');
+    const schema = readSchema(schemaBody());
+    const amount = schema.nodes.find((node) => node.dcid === 'amount');
     assert.ok(amount);
     amount.declared_by = null;
-    const undeclared = buildModel(ontology, readProvenances(provenancesBody()));
+    const undeclared = buildModel(schema, readUsage(usageBody()));
     assert.equal(undeclared.isBase('amount'), false);
 });
 
@@ -63,11 +63,11 @@ test('a dataset with no label is named by the last path segment of its dcid', ()
     );
     assert.equal(datasetName({ dcid: 'Unprefixed', label: null }), 'Unprefixed');
 
-    const provenances = readProvenances(provenancesBody());
+    const provenances = readUsage(usageBody());
     const dac1 = provenances.provenances.find((dataset) => dataset.dcid === DAC1);
     assert.ok(dac1);
     dac1.label = null;
-    const unlabelled = buildModel(readOntology(ontologyBody()), provenances);
+    const unlabelled = buildModel(readSchema(schemaBody()), provenances);
     assert.equal(unlabelled.label(DAC1), 'OECDDAC1');
     assert.equal(unlabelled.datasetView(DAC1)?.label, 'OECDDAC1');
 });
@@ -116,7 +116,7 @@ test('a value list has its members and a member tree, roots first', () => {
 });
 
 /** A value of NettingBasisEnum that specialises `parents`. */
-const nettingValue = (dcid: string, parents: string[]): OntologyNode => ({
+const nettingValue = (dcid: string, parents: string[]): SchemaNode => ({
     dcid,
     name: null,
     description: null,
@@ -137,14 +137,14 @@ const treeIds = (trees: readonly MemberTree[]): string[] =>
     trees.flatMap((tree) => [tree.id, ...treeIds(tree.children)]);
 
 test('a member tree holds every member once, with a cycle and a self-loop as roots', () => {
-    const ontology = readOntology(ontologyBody());
-    ontology.nodes.push(
+    const schema = readSchema(schemaBody());
+    schema.nodes.push(
         nettingValue('CycleA', ['CycleB']),
         nettingValue('CycleB', ['CycleA']),
         nettingValue('UnderA', ['CycleA']),
         nettingValue('Itself', ['Itself']),
     );
-    const cyclic = buildModel(ontology, readProvenances(provenancesBody()));
+    const cyclic = buildModel(schema, readUsage(usageBody()));
     const tree = cyclic.memberTree('NettingBasisEnum');
 
     assert.deepEqual(treeIds(tree).toSorted(), [...cyclic.members('NettingBasisEnum')].toSorted());
@@ -158,11 +158,11 @@ test('a member tree holds every member once, with a cycle and a self-loop as roo
 });
 
 test('no list repeats an id', () => {
-    const ontology = readOntology(ontologyBody());
-    const netting = ontology.nodes.find((node) => node.dcid === 'nettingBasis');
+    const schema = readSchema(schemaBody());
+    const netting = schema.nodes.find((node) => node.dcid === 'nettingBasis');
     assert.ok(netting);
     netting.range_includes = ['NettingBasisEnum', 'NettingBasisEnum'];
-    const repeated = buildModel(ontology, readProvenances(provenancesBody()));
+    const repeated = buildModel(schema, readUsage(usageBody()));
 
     assert.deepEqual(repeated.node('nettingBasis')?.range_includes, ['NettingBasisEnum']);
     const withRange = repeated.propertiesWithRange('NettingBasisEnum');
@@ -189,13 +189,13 @@ test('usage counts StatVars per dataset from patterns and constraint values', ()
 
 test('a value in both a pattern field and the constraint values is counted once', () => {
     // DAC2B's second pattern (4 StatVars) gains DAC2bAidType972, which 2 StatVars take as a value.
-    const body = readProvenances(provenancesBody());
+    const body = readUsage(usageBody());
     const dac2b = body.provenances.find((provenance) => provenance.dcid === DAC2B);
     const pattern = dac2b?.patterns[1];
     assert.equal(pattern?.stat_var_count, 4);
     if (pattern) pattern.measurement_denominator = 'DAC2bAidType972';
 
-    const altered = buildModel(readOntology(ontologyBody()), body);
+    const altered = buildModel(readSchema(schemaBody()), body);
     assert.equal(altered.usageIn('DAC2bAidType972', DAC2B), 4);
 });
 

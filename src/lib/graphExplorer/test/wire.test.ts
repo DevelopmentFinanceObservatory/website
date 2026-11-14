@@ -6,14 +6,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { asRecord } from '../../asRecord.ts';
-import {
-    readCheckResponse,
-    readOntology,
-    readProvenances,
-    readTerms,
-    WireShapeError,
-} from '../wire.ts';
-import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
+import { readCheckResponse, readSchema, readUsage, readTerms, WireShapeError } from '../wire.ts';
+import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
 /** The record at `path` in a parsed document; fails the test when there is none. */
 const at = (body: unknown, path: (string | number)[]): Record<string, unknown> => {
@@ -33,38 +27,36 @@ const refuses = (read: (body: unknown) => unknown, body: unknown, member: string
     );
 
 test('each guard accepts the served document', () => {
-    assert.equal(readOntology(ontologyBody()).nodes.length, 230);
+    assert.equal(readSchema(schemaBody()).nodes.length, 230);
     assert.equal(readTerms(termsBody()).terms.length, 282);
-    assert.equal(readProvenances(provenancesBody()).provenances.length, 4);
+    assert.equal(readUsage(usageBody()).provenances.length, 4);
 });
 
-test('the ontology guard refuses a node with a member removed or retyped', () => {
-    const missing = ontologyBody();
+test('the schema guard refuses a node with a member removed or retyped', () => {
+    const missing = schemaBody();
     delete at(missing, ['nodes', 0]).declared_by;
-    refuses(readOntology, missing, 'ontology.nodes[0].declared_by');
+    refuses(readSchema, missing, 'schema.nodes[0].declared_by');
 
-    const retyped = ontologyBody();
+    const retyped = schemaBody();
     at(retyped, ['nodes', 0]).sub_class_of = 'Thing';
-    refuses(readOntology, retyped, 'ontology.nodes[0].sub_class_of');
+    refuses(readSchema, retyped, 'schema.nodes[0].sub_class_of');
 
-    const unknownDeclarer = ontologyBody();
+    const unknownDeclarer = schemaBody();
     at(unknownDeclarer, ['nodes', 0]).declared_by = 'shared';
-    refuses(readOntology, unknownDeclarer, 'ontology.nodes[0].declared_by');
+    refuses(readSchema, unknownDeclarer, 'schema.nodes[0].declared_by');
 
-    const listIndex = readOntology(ontologyBody()).nodes.findIndex(
-        (node) => node.enumeration !== null,
-    );
-    const unmarked = ontologyBody();
+    const listIndex = readSchema(schemaBody()).nodes.findIndex((node) => node.enumeration !== null);
+    const unmarked = schemaBody();
     delete at(unmarked, ['nodes', listIndex, 'enumeration']).complete;
-    refuses(readOntology, unmarked, `ontology.nodes[${listIndex}].enumeration.complete`);
+    refuses(readSchema, unmarked, `schema.nodes[${listIndex}].enumeration.complete`);
 
-    const undeclared = ontologyBody();
+    const undeclared = schemaBody();
     at(undeclared, ['nodes', 0]).declared_by = null;
-    assert.equal(readOntology(undeclared).nodes[0]?.declared_by, null);
+    assert.equal(readSchema(undeclared).nodes[0]?.declared_by, null);
 
-    const noGeneration = ontologyBody();
+    const noGeneration = schemaBody();
     delete at(noGeneration, []).generation;
-    refuses(readOntology, noGeneration, 'ontology.generation');
+    refuses(readSchema, noGeneration, 'schema.generation');
 });
 
 test('the terms guard refuses a term with a member removed', () => {
@@ -73,36 +65,28 @@ test('the terms guard refuses a term with a member removed', () => {
     refuses(readTerms, body, 'terms.terms[0].types');
 });
 
-test('the provenances guard checks patterns, constraint values and facets', () => {
-    const pattern = provenancesBody();
+test('the usage guard checks patterns, constraint values and facets', () => {
+    const pattern = usageBody();
     delete at(pattern, ['provenances', 0, 'patterns', 0]).observation_properties;
-    refuses(
-        readProvenances,
-        pattern,
-        'provenances.provenances[0].patterns[0].observation_properties',
-    );
+    refuses(readUsage, pattern, 'usage.provenances[0].patterns[0].observation_properties');
 
-    const count = provenancesBody();
+    const count = usageBody();
     at(count, ['provenances', 0, 'constraint_values', 0, 'values', 0]).stat_var_count = '10';
-    refuses(
-        readProvenances,
-        count,
-        'provenances.provenances[0].constraint_values[0].values[0].stat_var_count',
-    );
+    refuses(readUsage, count, 'usage.provenances[0].constraint_values[0].values[0].stat_var_count');
 
-    const facets = provenancesBody();
+    const facets = usageBody();
     delete at(facets, ['provenances', 0, 'facets']).currencies;
-    refuses(readProvenances, facets, 'provenances.provenances[0].facets.currencies');
+    refuses(readUsage, facets, 'usage.provenances[0].facets.currencies');
 });
 
 test('each guard checks every element of every list, not only the first', () => {
-    const ontology = ontologyBody();
-    at(ontology, ['nodes', 200]).alternate_name = null;
-    refuses(readOntology, ontology, 'ontology.nodes[200].alternate_name');
+    const schema = schemaBody();
+    at(schema, ['nodes', 200]).alternate_name = null;
+    refuses(readSchema, schema, 'schema.nodes[200].alternate_name');
 
-    const name = ontologyBody();
+    const name = schemaBody();
     at(name, ['nodes', 100]).sub_class_of = ['Thing', 7];
-    refuses(readOntology, name, 'ontology.nodes[100].sub_class_of[1]');
+    refuses(readSchema, name, 'schema.nodes[100].sub_class_of[1]');
 
     const terms = termsBody();
     delete at(terms, ['terms', 281]).declared_by;
@@ -112,15 +96,15 @@ test('each guard checks every element of every list, not only the first', () => 
     at(undeclaredTerm, ['terms', 281]).declared_by = null;
     assert.equal(readTerms(undeclaredTerm).terms[281]?.declared_by, null);
 
-    const pattern = provenancesBody();
+    const pattern = usageBody();
     at(pattern, ['provenances', 3, 'patterns', 0]).examples = null;
-    refuses(readProvenances, pattern, 'provenances.provenances[3].patterns[0].examples');
+    refuses(readUsage, pattern, 'usage.provenances[3].patterns[0].examples');
 });
 
 for (const [document, read, body, list] of [
-    ['ontology', readOntology, ontologyBody, 'nodes'],
+    ['schema', readSchema, schemaBody, 'nodes'],
     ['terms', readTerms, termsBody, 'terms'],
-    ['provenances', readProvenances, provenancesBody, 'provenances'],
+    ['usage', readUsage, usageBody, 'provenances'],
 ] as const) {
     test(`the ${document} guard refuses a dcid listed twice, naming it`, () => {
         const repeated = body();
@@ -140,55 +124,78 @@ for (const [document, read, body, list] of [
 
 test('the check guard reads every finding: an unknown code passes, a later finding out of shape fails', () => {
     const finding = {
+        row: 1,
         ref: 'row 2',
-        field: 'constraint_properties.crsPurpose',
+        field: 'constraint_properties',
+        property: 'crsPurpose',
+        subject: 'value',
         value: 'CRSPurposeCode99999',
+        served: null,
         code: 'node_not_held',
         severity: 'error',
     };
-    const answer = { generation: 'g1', row_count: 2, findings: [finding] };
-    assert.equal(readCheckResponse(answer).findings[0]?.code, 'node_not_held');
+    const answer = { generation: 'g1', row_count: 2, next_row: null, findings: [finding] };
+    assert.equal(readCheckResponse(answer).findings[0]?.property, 'crsPurpose');
 
-    const added = { ...answer, findings: [finding, { ...finding, code: 'some_new_code' }] };
-    assert.equal(readCheckResponse(added).findings[1]?.code, 'some_new_code');
+    const added = { ...answer, findings: [finding, { ...finding, code: 'origin_not_served' }] };
+    assert.equal(readCheckResponse(added).findings[1]?.code, 'origin_not_served');
+    const unknown = { ...answer, findings: [finding, { ...finding, code: 'some_new_code' }] };
+    assert.equal(readCheckResponse(unknown).findings[1]?.code, 'some_new_code');
 
-    const noField: Record<string, unknown> = { ...finding };
-    delete noField.field;
+    const later = (change: Record<string, unknown>) => ({
+        ...answer,
+        findings: [finding, { ...finding, ...change }],
+    });
+    for (const member of ['row', 'property', 'subject', 'served']) {
+        const missing: Record<string, unknown> = { ...finding };
+        delete missing[member];
+        refuses(
+            readCheckResponse,
+            { ...answer, findings: [finding, missing] },
+            `check.findings[1].${member}`,
+        );
+    }
+    refuses(readCheckResponse, later({ severity: 'fatal' }), 'check.findings[1].severity');
+    refuses(readCheckResponse, later({ value: ['a', 7] }), 'check.findings[1].value[1]');
     refuses(
         readCheckResponse,
-        { ...answer, findings: [finding, noField] },
+        later({ field: 'constraint_properties.crsPurpose' }),
         'check.findings[1].field',
     );
-    refuses(
-        readCheckResponse,
-        { ...answer, findings: [finding, { ...finding, severity: 'fatal' }] },
-        'check.findings[1].severity',
-    );
-    refuses(
-        readCheckResponse,
-        { ...answer, findings: [finding, { ...finding, value: ['a', 7] }] },
-        'check.findings[1].value[1]',
-    );
+    refuses(readCheckResponse, later({ subject: 'cell' }), 'check.findings[1].subject');
+    refuses(readCheckResponse, later({ row: 1.5 }), 'check.findings[1].row');
+    refuses(readCheckResponse, later({ row: -1 }), 'check.findings[1].row');
     refuses(readCheckResponse, { generation: 'g1', findings: [] }, 'check.row_count');
+    refuses(readCheckResponse, { generation: 'g1', row_count: 1, findings: [] }, 'check.next_row');
+    refuses(
+        readCheckResponse,
+        { generation: 'g1', row_count: 1, next_row: '2', findings: [] },
+        'check.next_row',
+    );
 });
 
 test('a null generation is accepted on every document and a non-string one is refused', () => {
-    const ontology = ontologyBody();
-    at(ontology, []).generation = null;
-    assert.equal(readOntology(ontology).generation, null);
+    const schema = schemaBody();
+    at(schema, []).generation = null;
+    assert.equal(readSchema(schema).generation, null);
 
     const terms = termsBody();
     at(terms, []).generation = null;
     assert.equal(readTerms(terms).generation, null);
 
     assert.equal(
-        readCheckResponse({ generation: null, row_count: 0, findings: [] }).generation,
+        readCheckResponse({ generation: null, row_count: 1, next_row: null, findings: [] })
+            .generation,
         null,
     );
 
-    const retyped = ontologyBody();
+    const retyped = schemaBody();
     at(retyped, []).generation = 7;
-    refuses(readOntology, retyped, 'ontology.generation');
+    refuses(readSchema, retyped, 'schema.generation');
     refuses(readTerms, { generation: 7, terms: [] }, 'terms.generation');
-    refuses(readCheckResponse, { generation: 7, row_count: 0, findings: [] }, 'check.generation');
+    refuses(
+        readCheckResponse,
+        { generation: 7, row_count: 1, next_row: null, findings: [] },
+        'check.generation',
+    );
 });

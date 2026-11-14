@@ -28,7 +28,7 @@ import {
 import type { Model } from './model.ts';
 import { NEW_SHEET_PATH } from './paths.ts';
 import type { SheetSpec } from './sheet.ts';
-import type { OntologyPattern } from './wire.ts';
+import type { SchemaPattern } from './wire.ts';
 
 /** A pattern named by its dataset and its index in that dataset's patterns. */
 export type PatternRef = { readonly dataset: string; readonly index: number };
@@ -91,7 +91,7 @@ export const sheetHref = (query: Partial<SheetQuery>, carried: Carried): string 
     `${NEW_SHEET_PATH}${sheetQuery({ ...NO_SHEET_QUERY, ...query }, carried)}`;
 
 /** A pattern with where it sits. */
-export type PlacedPattern = PatternRef & { readonly pattern: OntologyPattern };
+export type PlacedPattern = PatternRef & { readonly pattern: SchemaPattern };
 
 /** A property the page offers to split the figures by. */
 export type SplitOption = {
@@ -137,7 +137,7 @@ export type SheetSelection = {
     readonly unknown: readonly UnknownChoice[];
 };
 
-const place = (ref: PatternRef, pattern: OntologyPattern): PlacedPattern =>
+const place = (ref: PatternRef, pattern: SchemaPattern): PlacedPattern =>
     Object.freeze({ ...ref, pattern });
 
 /** The pattern a reference names, or null. */

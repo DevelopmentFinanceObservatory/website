@@ -1,19 +1,19 @@
 /**
  * The knowledge-graph model as one immutable index over two documents: the
- * ontology (terms and how they relate) and the provenances (how each dataset's
- * StatVars use those terms). Every answer is derived from the documents.
+ * schema (terms and how they relate) and the usage document (how each
+ * dataset's StatVars use those terms). Every answer is derived from the documents.
  *
  * Words for readers: a Class is a `class`, a Class with an enumeration is a
  * `valueList`, a Property is a `property`, any other node is a `value`, and a
- * provenance of the provenances document is a `dataset`.
+ * provenance of the usage document is a `dataset`.
  */
 import type {
-    OntologyDocument,
-    OntologyNode,
-    OntologyPattern,
-    OntologyProvenance,
-    OntologyProvenances,
-    OntologyTerm,
+    SchemaDocument,
+    SchemaNode,
+    SchemaPattern,
+    ProvenanceUsage,
+    SchemaUsage,
+    SchemaTerm,
 } from './wire.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
@@ -28,7 +28,7 @@ export const KIND_WORDS: Readonly<Record<Kind | 'dataset', string>> = {
 };
 
 /** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
-export const kindOfTerm = (term: Pick<OntologyTerm, 'types'>): 'class' | 'property' =>
+export const kindOfTerm = (term: Pick<SchemaTerm, 'types'>): 'class' | 'property' =>
     term.types.includes('Class') ? 'class' : 'property';
 
 /**
@@ -102,7 +102,7 @@ export type DatasetView = {
     readonly label: string;
     readonly description: string | null;
     readonly statVarCount: number;
-    readonly patterns: readonly OntologyPattern[];
+    readonly patterns: readonly SchemaPattern[];
     /** Each list is ordered by the StatVars that use the entry in this dataset, largest first. */
     readonly populationTypes: readonly string[];
     readonly measured: readonly string[];
@@ -157,11 +157,11 @@ export type LensEntry = {
 export type Model = {
     readonly generation: string | null;
     /** Every node, sorted by dcid. */
-    readonly nodes: readonly OntologyNode[];
+    readonly nodes: readonly SchemaNode[];
     /** Every dataset, in document order. */
-    readonly datasets: readonly OntologyProvenance[];
-    node(id: string): OntologyNode | undefined;
-    dataset(id: string): OntologyProvenance | undefined;
+    readonly datasets: readonly ProvenanceUsage[];
+    node(id: string): SchemaNode | undefined;
+    dataset(id: string): ProvenanceUsage | undefined;
     kind(id: string): Kind | undefined;
     /** The name, else a dataset's `datasetName`, else the dcid. */
     label(id: string): string;
@@ -215,14 +215,14 @@ export type Model = {
 const EMPTY: readonly string[] = Object.freeze([]);
 const NO_USAGE: Usage = Object.freeze({ byDataset: Object.freeze([]), total: 0 });
 
-const kindOf = (node: OntologyNode): Kind => {
+const kindOf = (node: SchemaNode): Kind => {
     if (node.types.includes('Class')) return node.enumeration ? 'valueList' : 'class';
     if (node.types.includes('Property')) return 'property';
     return 'value';
 };
 
 /** The node ids a pattern names, each once. */
-const patternIds = (pattern: OntologyPattern): Set<string> => {
+const patternIds = (pattern: SchemaPattern): Set<string> => {
     const ids = [
         pattern.population_type,
         pattern.measured_property,
@@ -236,7 +236,7 @@ const patternIds = (pattern: OntologyPattern): Set<string> => {
 };
 
 /** The roles each property has in one pattern. */
-const patternRoles = (pattern: OntologyPattern): [string, Role][] => [
+const patternRoles = (pattern: SchemaPattern): [string, Role][] => [
     [pattern.measured_property, 'measured'],
     ...pattern.observation_properties.map((id): [string, Role] => [id, 'between']),
     ...pattern.constraint_properties.map((id): [string, Role] => [id, 'split']),
@@ -263,13 +263,13 @@ const groupBy = <TItem extends { readonly roles: readonly Role[] }>(
 };
 
 /** A dataset's label, else the last path segment of its dcid. */
-export const datasetName = (dataset: Pick<OntologyProvenance, 'dcid' | 'label'>): string =>
+export const datasetName = (dataset: Pick<ProvenanceUsage, 'dcid' | 'label'>): string =>
     dataset.label ?? dataset.dcid.split('/').at(-1) ?? dataset.dcid;
 
 const distinct = (ids: readonly string[]): string[] => [...new Set(ids)];
 
 /** A node with each of its lists holding an id once. */
-const distinctLists = (node: OntologyNode): OntologyNode => ({
+const distinctLists = (node: SchemaNode): SchemaNode => ({
     ...node,
     types: distinct(node.types),
     alternate_name: distinct(node.alternate_name),
@@ -287,15 +287,15 @@ const distinctLists = (node: OntologyNode): OntologyNode => ({
 });
 
 /**
- * The index over an ontology document and a provenances document, each
+ * The index over a schema document and a usage document, each
  * listing a dcid once (the wire guards refuse a repeat). Every list on a
  * node holds an id once, so no list the model answers repeats an id.
  */
-export function buildModel(ontology: OntologyDocument, provenances: OntologyProvenances): Model {
+export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): Model {
     const nodes = Object.freeze(
-        ontology.nodes.map(distinctLists).sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
+        schema.nodes.map(distinctLists).sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
     );
-    const datasets = Object.freeze([...provenances.provenances]);
+    const datasets = Object.freeze([...usageDocument.provenances]);
     const byId = new Map(nodes.map((node) => [node.dcid, node]));
     const datasetById = new Map(datasets.map((dataset) => [dataset.dcid, dataset]));
     const kinds = new Map(nodes.map((node) => [node.dcid, kindOf(node)]));
@@ -430,7 +430,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
     // Usage: StatVar counts per node and dataset.
     const counts = new Map<string, Map<string, number>>();
     const roleIndex = new Map<string, Map<string, Set<Role>>>();
-    const patterns: { dataset: string; pattern: OntologyPattern }[] = [];
+    const patterns: { dataset: string; pattern: SchemaPattern }[] = [];
     const constraintValues = new Map<string, Map<string, readonly string[]>>();
 
     const add = (id: string, dataset: string, count: number, combine: 'sum' | 'max') => {
@@ -723,7 +723,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         );
 
     return Object.freeze({
-        generation: ontology.generation,
+        generation: schema.generation,
         nodes,
         datasets,
         node: (id: string) => byId.get(id),

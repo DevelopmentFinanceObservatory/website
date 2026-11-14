@@ -16,10 +16,10 @@ import {
 import { PARTIAL_LIST_LINE } from '../counts.ts';
 import { buildModel } from '../model.ts';
 import { exampleRows, sheetColumns } from '../sheet.ts';
-import { readOntology, readProvenances } from '../wire.ts';
-import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { readSchema, readUsage } from '../wire.ts';
+import { schemaBody, usageBody } from './fixtures.ts';
 
-const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
 const columns = sheetColumns(model, {
     classId: 'FinancialFlow',

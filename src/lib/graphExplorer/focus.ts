@@ -19,7 +19,7 @@ import {
     type Model,
     type ValuesUsed,
 } from './model.ts';
-import type { OntologyTerm, OntologyTerms } from './wire.ts';
+import type { SchemaTerm, SchemaTerms } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -225,7 +225,7 @@ export type CentreHeading = {
     /** Whether the base tag follows the name. */
     readonly base: boolean;
     /** The term on the graph outside the model, when the terms list holds it. */
-    readonly term: OntologyTerm | undefined;
+    readonly term: SchemaTerm | undefined;
 };
 
 /**
@@ -235,7 +235,7 @@ export type CentreHeading = {
 export function centreHeading(
     model: Model,
     centre: Centre,
-    baseTerms?: OntologyTerms,
+    baseTerms?: SchemaTerms,
 ): CentreHeading | null {
     if (centre.kind === 'dataset') {
         const view = model.datasetView(centre.id);
@@ -270,7 +270,7 @@ export function centreHeading(
 }
 
 /** What a term outside the model is, for its panel's label. */
-export const outsideKind = (term: OntologyTerm | undefined): string =>
+export const outsideKind = (term: SchemaTerm | undefined): string =>
     term ? `${KIND_WORDS[kindOfTerm(term)]} on the graph` : 'Not in the DFO model';
 
 /**

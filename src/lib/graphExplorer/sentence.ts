@@ -3,7 +3,7 @@
  * references, so a screen can render each term as a link.
  */
 import type { Model } from './model.ts';
-import type { OntologyPattern } from './wire.ts';
+import type { SchemaPattern } from './wire.ts';
 
 export type SentencePart =
     | { readonly kind: 'text'; readonly text: string }
@@ -26,7 +26,7 @@ const series = (model: Model, ids: readonly string[]): SentencePart[] =>
 export function patternSentence(
     model: Model,
     pattern: Pick<
-        OntologyPattern,
+        SchemaPattern,
         | 'population_type'
         | 'measured_property'
         | 'measurement_qualifier'
