@@ -34,7 +34,11 @@ const fixtureRequest = (): SheetRequest =>
         JSON.stringify({
             title: 'Financial flow',
             generation: model.generation,
-            columns: columns.map(({ name, kind, lookup }) => ({ name, kind, lookup })),
+            columns: columns.map(({ name, kind, lookup }) => ({
+                name,
+                kind,
+                lookup: lookup && { valueList: lookup.valueList, members: lookup.members },
+            })),
             rows: exampleRows(columns),
         }),
     );

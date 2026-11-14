@@ -7,12 +7,14 @@ import LoadStatus from './LoadStatus';
 import ScopedList from './ScopedList';
 import StartScreen from './StartScreen';
 import TopBar from './TopBar';
-import { useExplorerData } from './useExplorerData';
+import { LOADING, useExplorerData } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import {
+    awaitsTerms,
     checkFilter,
     exploreQuery,
+    listScopeExists,
     NO_CARRIED,
     NO_FILTER,
     START_VIEW,
@@ -59,26 +61,22 @@ const GraphExplorer = () => {
     const screen = (ready: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
             case 'start':
-                return (
-                    <StartScreen
-                        base={data.base}
-                        terms={data.terms}
-                        onBase={navigation.setBase}
-                        onRetryTerms={data.retryTerms}
-                    />
-                );
+                return <StartScreen />;
             case 'list': {
                 const { scope } = view;
-                if (scope.kind === 'class') {
-                    const kind = ready.kind(scope.id);
-                    if (kind !== 'class' && kind !== 'valueList') {
-                        return <Missing id={scope.id} onStart={() => navigation.go(START_VIEW)} />;
-                    }
+                if (scope.kind === 'class' && !listScopeExists(ready, scope)) {
+                    return <Missing id={scope.id} onStart={() => navigation.go(START_VIEW)} />;
                 }
                 return <ScopedList scope={scope} show={show} />;
             }
             case 'node':
             case 'dataset':
+                if (awaitsTerms(ready, view, data.base, baseTerms !== undefined)) {
+                    // The terms list is null for the render before its load starts.
+                    const terms =
+                        data.terms === null || data.terms.status === 'ready' ? LOADING : data.terms;
+                    return <LoadStatus state={terms} onRetry={data.retryTerms} subject="terms" />;
+                }
                 return <FocusView centre={view} show={show} baseTerms={baseTerms} />;
         }
     };
@@ -87,7 +85,7 @@ const GraphExplorer = () => {
         <NavigationProvider value={navigation}>
             <ModelProvider value={model}>
                 <div className={styles.explorer}>
-                    <TopBar screen="explore" model={model} baseTerms={baseTerms} />
+                    <TopBar />
                     <main
                         className={styles.main}
                         key={exploreQuery({ view: navigation.state.view, ...NO_CARRIED })}

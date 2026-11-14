@@ -26,8 +26,6 @@ export type ExploreNavigation = {
     readonly go: (view: ExploreView) => void;
     /** Changes the dataset filter in place: the back button skips it. */
     readonly setShow: (show: DatasetFilter) => void;
-    /** Turns the base switch on or off in place: the back button skips it. */
-    readonly setBase: (base: boolean) => void;
 };
 
 const NavigationContext = createContext<ExploreNavigation | null>(null);
@@ -67,17 +65,7 @@ export const useExploreState = (): ExploreNavigation => {
         [state],
     );
 
-    const setBase = useCallback(
-        (base: boolean) => {
-            window.history.replaceState(null, '', exploreHref({ ...state, base }));
-        },
-        [state],
-    );
-
-    return useMemo(
-        () => ({ state, hrefFor, go, setShow, setBase }),
-        [state, hrefFor, go, setShow, setBase],
-    );
+    return useMemo(() => ({ state, hrefFor, go, setShow }), [state, hrefFor, go, setShow]);
 };
 
 export const NavigationProvider = NavigationContext.Provider;

@@ -12,6 +12,7 @@ import {
     definedNotUsed,
     nodeBoxes,
     outsideKind,
+    periodText,
     pictureLens,
     sharePercent,
     type FocusBox,
@@ -96,7 +97,7 @@ test('a dataset: what it is about on the left; measured, between and splits on t
     assert.deepEqual(boxes.at(-1)?.values?.get('financialFlowType'), {
         used: 1,
         of: 14,
-        truncated: false,
+        complete: true,
     });
     assert.equal(boxes[0]?.values, null);
 });
@@ -176,3 +177,16 @@ test('a share is a whole percentage, at least 1 when anything is used', () => {
     assert.equal(sharePercent(5, 0), 0);
     assert.equal(sharePercent(14, 25), 56);
 });
+
+for (const [code, shown] of [
+    ['P1Y', 'Yearly (P1Y)'],
+    ['P3M', 'Quarterly (P3M)'],
+    ['P1M', 'Monthly (P1M)'],
+    ['P1D', 'Daily (P1D)'],
+    ['P6M', 'P6M'],
+    ['', ''],
+] as const) {
+    test(`the observation period ${code || '(empty)'} reads as ${shown || '(empty)'}`, () => {
+        assert.equal(periodText(code), shown);
+    });
+}

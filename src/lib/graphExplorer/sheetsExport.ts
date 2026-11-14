@@ -14,25 +14,21 @@ import {
     dropdownRequestBody,
     readSheetRequest,
     SHEETS_API,
+    type GoogleAccessReason,
     type SheetsAnswer,
 } from './googleSheet.ts';
 
 /** A linked sign-in account as Better Auth lists it. */
 export type LinkedAccount = { id: string; providerId: string; scopes: readonly string[] };
 
-/**
- * Why the reader must grant Google access before a sheet can be created:
- * no Google account is linked, the linked one lacks the `drive.file`
- * scope, or its token has expired and Better Auth holds no refresh token to
- * renew it with (or Google refused the token). A renewal that Better Auth
- * attempted and failed is `renewal_failed` in GoogleAccess, since its cause
- * is unknown.
- */
-export type GoogleAccessReason = 'no_google_account' | 'scope_missing' | 'token_expired';
-
 /** The step of the Google token read that failed. */
 export type GoogleAccessStep = 'list_accounts' | 'access_token';
 
+/**
+ * The Google token read: a token, a GoogleAccessReason the reader can mend
+ * by granting access, or a failure. A renewal Better Auth attempted and
+ * failed is `renewal_failed`, apart from the reasons, since its cause is unknown.
+ */
 export type GoogleAccess =
     | { kind: 'ready'; accessToken: string }
     | { kind: 'missing'; reason: GoogleAccessReason }

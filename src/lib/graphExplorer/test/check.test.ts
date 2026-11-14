@@ -12,6 +12,7 @@ import {
     CHECK_URL,
     cellKey,
     checkRows,
+    closestLookup,
     closestMembers,
     editDistance,
     exampleSheet,
@@ -318,16 +319,17 @@ test('every finding code, and a code this page does not know, reads as a line ab
     assert.ok(unknown.some((part) => part.kind === 'value' && part.text === 'some_new_code'));
 });
 
-test('a value outside the range links its value list, and the closest members come with it', () => {
+test('a value outside the range links its value list, and its closest members are offered', () => {
     const [line] = findingLines(model, mapHeaders(model, ['dac1AidType']), [
         finding({ code: 'value_outside_range' }),
     ]);
-    const terms = line?.parts.flatMap((part) => (part.kind === 'term' ? [part.id] : []));
+    assert.ok(line);
+    const terms = line.parts.flatMap((part) => (part.kind === 'term' ? [part.id] : []));
     assert.deepEqual(terms, ['DAC1AidTypeEnum']);
-    assert.equal(line?.closest[0], 'DAC1AidType1020');
+    assert.equal(closestLookup(model)(line.finding)[0], 'DAC1AidType1020');
 });
 
-test('the closest values are worked out once per field and value', () => {
+test('the closest values are worked out only when asked, once per field and value', () => {
     let lookups = 0;
     const counting = {
         ...model,
@@ -336,15 +338,20 @@ test('the closest values are worked out once per field and value', () => {
             return model.members(list);
         },
     };
-    const lines = findingLines(counting, mapHeaders(model, ['dac1AidType']), [
+    const findings = [
         finding({}),
         finding({ ref: '5' }),
         finding({ ref: '6', code: 'value_outside_range' }),
         finding({ ref: '7', value: 'DAC1AidTpye1010' }),
-    ]);
+    ];
+    findingLines(counting, mapHeaders(model, ['dac1AidType']), findings);
+    assert.equal(lookups, 0);
+
+    const closest = closestLookup(counting);
+    const offered = findings.map(closest);
     assert.equal(lookups, 2);
-    assert.deepEqual(lines[1]?.closest, lines[0]?.closest);
-    assert.equal(lines[0]?.closest[0], 'DAC1AidType1020');
+    assert.deepEqual(offered[1], offered[0]);
+    assert.equal(offered[0]?.[0], 'DAC1AidType1020');
 });
 
 test('a constraint key the graph lacks is named as typed, with no term link', () => {

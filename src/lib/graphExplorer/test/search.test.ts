@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { search, stepActive } from '../search.ts';
+import { enterChoice, escapeAction, search, stepActive } from '../search.ts';
 import { readOntology, readProvenances, readTerms } from '../wire.ts';
 import { ontologyBody, provenancesBody, termsBody } from './fixtures.ts';
 
@@ -119,4 +119,17 @@ test('the arrow keys wrap over the hits; with none active, up lands on the last'
     assert.equal(stepActive(4, 1, 5), 0);
     assert.equal(stepActive(2, 1, 5), 3);
     assert.equal(stepActive(-1, -1, 0), -1);
+});
+
+test('Enter opens the active hit, else the first, and does nothing while the list is hidden or empty', () => {
+    assert.equal(enterChoice(2, 5, true), 2);
+    assert.equal(enterChoice(-1, 5, true), 0);
+    assert.equal(enterChoice(7, 5, true), 0);
+    assert.equal(enterChoice(2, 5, false), null);
+    assert.equal(enterChoice(-1, 0, true), null);
+});
+
+test('Escape closes a shown list and clears the query once it is closed', () => {
+    assert.equal(escapeAction(true), 'close');
+    assert.equal(escapeAction(false), 'clear');
 });

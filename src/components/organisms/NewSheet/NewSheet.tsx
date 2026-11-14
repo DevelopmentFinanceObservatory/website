@@ -12,9 +12,10 @@ import {
     useModel,
 } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
-import { count, plural } from '@/components/organisms/GraphExplorer/format';
+import { count, plural, valueCount } from '@/components/organisms/GraphExplorer/format';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
+import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { NO_CARRIED, type Carried } from '@/lib/graphExplorer/explore';
@@ -45,18 +46,6 @@ const writeQuery = (query: SheetQuery, carried: Carried) =>
         keepReturned(sheetHref(query, carried), new URLSearchParams(window.location.search)),
     );
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
-    const id = useId();
-    return (
-        <section className={styles.section} aria-labelledby={id}>
-            <h2 id={id} className={styles.heading}>
-                {title}
-            </h2>
-            {children}
-        </section>
-    );
-};
-
 type SplitBoxProps = { option: SplitOption; checked: boolean; onToggle: () => void };
 
 /** One tick box: the property, its value list and size, and the datasets that use it. */
@@ -70,7 +59,8 @@ const SplitBox = ({ option, checked, onToggle }: SplitBoxProps) => {
                 <span className={styles.dcid}>{option.id}</span>
                 {option.valueList !== null && (
                     <span className={styles.from}>
-                        from {model.label(option.valueList)}, {plural(option.members, 'value')}
+                        from {model.label(option.valueList)},{' '}
+                        {valueCount(option.members, option.membersComplete)}
                     </span>
                 )}
             </span>
@@ -87,6 +77,7 @@ const PARAM_NOUNS: Readonly<Record<UnknownChoice['param'], string>> = {
     class: 'kind of thing',
     measured: 'measured property',
     split: 'property',
+    pattern: 'pattern',
 };
 
 /** The line naming the URL's ids the model does not offer, which their defaults replace. */
@@ -96,7 +87,14 @@ const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => (
         {unknown.map((choice, at) => (
             <span key={`${choice.param}:${choice.id}`}>
                 {at > 0 && (at === unknown.length - 1 ? ' or ' : ', ')}
-                the {PARAM_NOUNS[choice.param]} <code>{choice.id}</code>
+                the {PARAM_NOUNS[choice.param]}{' '}
+                {choice.param === 'pattern' ? (
+                    <>
+                        {choice.index} of <code>{choice.id}</code>
+                    </>
+                ) : (
+                    <code>{choice.id}</code>
+                )}
             </span>
         ))}{' '}
         here, so the sheet uses its defaults instead.
@@ -231,7 +229,12 @@ const ValueLists = ({ sheet }: { sheet: SheetDraft }) => {
                     <span className={styles.dcid}>{column.name}</span> takes a value from{' '}
                     <TermLink id={column.lookup?.valueList ?? ''} />{' '}
                     <span className={styles.size}>
-                        ({plural(column.lookup?.members.length ?? 0, 'value')})
+                        (
+                        {valueCount(
+                            column.lookup?.members.length ?? 0,
+                            column.lookup?.complete ?? true,
+                        )}
+                        )
                     </span>
                 </li>
             ))}
@@ -286,7 +289,7 @@ const SheetSteps = () => {
     return (
         <>
             {selection.unknown.length > 0 && <UnknownChoices unknown={selection.unknown} />}
-            <Section title="1. What are the figures about?">
+            <SheetSection title="1. What are the figures about?">
                 <div className={styles.pick} role="group" aria-label="Kind of thing">
                     {model.populationTypes().map((use) => (
                         <button
@@ -318,9 +321,9 @@ const SheetSteps = () => {
                         </button>
                     ))}
                 </div>
-            </Section>
+            </SheetSection>
 
-            <Section title="2. What is measured?">
+            <SheetSection title="2. What is measured?">
                 <div className={styles.pills} role="group" aria-label="Measured property">
                     {selection.measuredOptions.map((id) => (
                         <button
@@ -339,9 +342,9 @@ const SheetSteps = () => {
                 <p className={styles.note}>
                     The measured properties datasets use with {classLabel}.
                 </p>
-            </Section>
+            </SheetSection>
 
-            <Section title="3. Which properties split the figures?">
+            <SheetSection title="3. Which properties split the figures?">
                 <p className={styles.note}>
                     {count(selection.properties.length)} of{' '}
                     {plural(selection.splitOptions.length, 'property', 'properties')} ticked. Each
@@ -358,9 +361,9 @@ const SheetSteps = () => {
                         box={box}
                     />
                 )}
-            </Section>
+            </SheetSection>
 
-            <Section title="4. Your sheet">
+            <SheetSection title="4. Your sheet">
                 <Closest selection={selection} />
                 <Preview sheet={sheet} />
                 <p className={styles.note}>
@@ -372,7 +375,7 @@ const SheetSteps = () => {
                     <DownloadCsv sheet={sheet} />
                 </div>
                 <ValueLists sheet={sheet} />
-            </Section>
+            </SheetSection>
         </>
     );
 };
@@ -385,12 +388,11 @@ const SheetSteps = () => {
 const NewSheet = () => {
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const { baseTerms } = data;
 
     return (
         <ModelProvider value={model}>
             <div className={shell.explorer}>
-                <TopBar screen="new-sheet" model={model} baseTerms={baseTerms} />
+                <TopBar />
                 <main className={shell.main}>
                     <div className={styles.page}>
                         <header className={styles.header}>

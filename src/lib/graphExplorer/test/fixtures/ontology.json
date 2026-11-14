@@ -89,8 +89,8 @@
             "description": "A code used for recording information on the type of transfer from the donor to the first recipient of funds. The typology includes the typical modalities that are used in development co-operation.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "CRS Modality",
             "provenances": ["provenance/DFOOntology"],
@@ -108,8 +108,8 @@
             "description": "A code used for recording information on the purpose (sector of destination or other purpose \u2013 cf. Sector Classification) of individual aid activities. Purpose codes identify the specific area of the recipient\u2019s economic or social structure the transfer is intended to foster.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "CRS Purpose",
             "provenances": ["provenance/DFOOntology"],
@@ -127,8 +127,8 @@
             "description": "Classification of the financial instrument used by the activity. Financial instruments are categorised as grants, debt instruments, mezzanine finance instruments, and equity and shares in collective investment vehicles. The financial instrument classification also includes instruments that do not necessarily generate a flow (i.e. contingent liabilities) such as guarantees.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "CRS Finance",
             "provenances": ["provenance/DFOOntology"],
@@ -146,8 +146,8 @@
             "description": "Legacy code, derived from the type of flow and the financial instrument used, to represent the type of financial transcation associated to the activity",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "CRS Flow",
             "provenances": ["provenance/DFOOntology"],
@@ -245,14 +245,14 @@
             "description": "A classification of financing activities by the climate change policy objectives they are meant to advance.",
             "domain_includes": [],
             "enumeration": {
+                "complete": true,
                 "members": [
                     "AdaptationOnlyClimateChangePolicyObjective",
                     "ClimateChangePolicyObjective",
                     "CrossCuttingClimateChangePolicyObjective",
                     "MitigationOnlyClimateChangePolicyObjective",
                     "UnspecifiedClimateChangePolicyObjective"
-                ],
-                "truncated": false
+                ]
             },
             "name": "climate change policy objective",
             "provenances": ["provenance/DFOOntology"],
@@ -286,8 +286,8 @@
             "description": null,
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "conversion recipe",
             "provenances": ["provenance/DFOOntology"],
@@ -369,8 +369,8 @@
             "description": "A classification of amounts by the rate used to convert them between currencies.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "currency conversion basis",
             "provenances": ["provenance/DFOOntology"],
@@ -404,8 +404,8 @@
             "description": "Whether a currency is still in use, as recorded by its ISO 4217 code being current or withdrawn.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "Currency status",
             "provenances": ["provenance/DFOOntology"],
@@ -439,8 +439,8 @@
             "description": "A classification of amounts by whether the effect of the business cycle has been removed.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "cyclical adjustment",
             "provenances": ["provenance/DFOOntology"],
@@ -761,6 +761,7 @@
             "description": "A code the OECD uses in DAC Table 1 to classify a provider's resource flows by type.",
             "domain_includes": [],
             "enumeration": {
+                "complete": false,
                 "members": [
                     "DAC1AidType1010",
                     "DAC1AidType1015",
@@ -779,8 +780,7 @@
                     "DAC1AidType3300",
                     "DAC1AidType3320",
                     "DAC1AidType5"
-                ],
-                "truncated": true
+                ]
             },
             "name": "DAC 1 aid type",
             "provenances": ["provenance/DFOOntology"],
@@ -1161,6 +1161,7 @@
             "description": "A code the OECD uses in DAC Table 2a to classify the flows between a provider and a recipient by type.",
             "domain_includes": [],
             "enumeration": {
+                "complete": true,
                 "members": [
                     "DAC2aAidType106",
                     "DAC2aAidType201",
@@ -1183,8 +1184,7 @@
                     "DAC2aAidType250",
                     "DAC2aAidType255",
                     "DAC2aAidType299"
-                ],
-                "truncated": false
+                ]
             },
             "name": "DAC 2a aid type",
             "provenances": ["provenance/DFOOntology"],
@@ -1413,6 +1413,7 @@
             "description": "A code the OECD uses in DAC Table 2b to classify the flows between a provider and a recipient by type.",
             "domain_includes": [],
             "enumeration": {
+                "complete": true,
                 "members": [
                     "DAC2bAidType201",
                     "DAC2bAidType204",
@@ -1426,8 +1427,7 @@
                     "DAC2bAidType297",
                     "DAC2bAidType298",
                     "DAC2bAidType972"
-                ],
-                "truncated": false
+                ]
             },
             "name": "DAC 2b aid type",
             "provenances": ["provenance/DFOOntology"],
@@ -1461,8 +1461,8 @@
             "description": "The DAC's division of its List of Aid Recipients into Part I and Part II.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "DAC list part",
             "provenances": ["provenance/DFOOntology"],
@@ -1496,8 +1496,8 @@
             "description": "The DAC's division of finance into grants and non-grants in its aggregate tables.",
             "domain_includes": [],
             "enumeration": {
-                "members": ["DACTypeOfFinanceGrants", "DACTypeOfFinanceNonGrants"],
-                "truncated": false
+                "complete": true,
+                "members": ["DACTypeOfFinanceGrants", "DACTypeOfFinanceNonGrants"]
             },
             "name": "DAC type of finance",
             "provenances": ["provenance/DFOOntology"],
@@ -1611,8 +1611,8 @@
             "description": "Type of economic metric.",
             "domain_includes": [],
             "enumeration": {
-                "members": ["Nominal"],
-                "truncated": false
+                "complete": false,
+                "members": ["Nominal"]
             },
             "name": null,
             "provenances": ["dc/base/Schema"],
@@ -1694,8 +1694,8 @@
             "description": "A classification of final expenditure by whether it is for final consumption or capital formation.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "final expenditure type",
             "provenances": ["provenance/DFOOntology"],
@@ -1729,6 +1729,7 @@
             "description": "Types of financial flows.",
             "domain_includes": [],
             "enumeration": {
+                "complete": true,
                 "members": [
                     "Buyback",
                     "ClaimForgiveness",
@@ -1744,8 +1745,7 @@
                     "ServicingPayment",
                     "StockRescheduling",
                     "WriteDown"
-                ],
-                "truncated": false
+                ]
             },
             "name": "financial flow type",
             "provenances": ["provenance/DFOOntology"],
@@ -1779,8 +1779,8 @@
             "description": "Types of financial obligations.",
             "domain_includes": [],
             "enumeration": {
-                "members": ["Commitment"],
-                "truncated": false
+                "complete": true,
+                "members": ["Commitment"]
             },
             "name": "financial obligation type",
             "provenances": ["provenance/DFOOntology"],
@@ -1814,8 +1814,8 @@
             "description": "Types of financial positions.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "financial position type",
             "provenances": ["provenance/DFOOntology"],
@@ -1849,8 +1849,8 @@
             "description": "A classification of finance by what it is delivered as, apart from any claim it creates.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "financing form",
             "provenances": ["provenance/DFOOntology"],
@@ -1868,8 +1868,8 @@
             "description": "The purpose a financing activity serves. Root of the purpose value lists; narrower lists sit under it.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": false
+                "complete": true,
+                "members": []
             },
             "name": "financing purpose",
             "provenances": ["provenance/DFOOntology"],
@@ -1887,8 +1887,8 @@
             "description": "A classification of finance by the claim it creates, if any.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "financing resource",
             "provenances": ["provenance/DFOOntology"],
@@ -1906,8 +1906,8 @@
             "description": "A classification of amounts by whether consumption of fixed capital has been deducted from them.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "fixed capital consumption basis",
             "provenances": ["provenance/DFOOntology"],
@@ -1973,8 +1973,8 @@
             "description": "A classification of amounts by whether repayment is guaranteed by a third party.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "guarantee status",
             "provenances": ["provenance/DFOOntology"],
@@ -1992,8 +1992,8 @@
             "description": "A classification of amounts by whether their terms are softer than the market, as IDS determines it.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "IDS concessionality",
             "provenances": ["provenance/DFOOntology"],
@@ -2011,8 +2011,8 @@
             "description": "A classification of amounts by the class of lender they are owed to.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "IDS creditor type",
             "provenances": ["provenance/DFOOntology"],
@@ -2030,8 +2030,8 @@
             "description": "A classification of amounts by the class of borrower that owes them.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "IDS debtor type",
             "provenances": ["provenance/DFOOntology"],
@@ -2097,8 +2097,8 @@
             "description": "A classification of amounts by whether they include use of IMF credit.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "includes IMF credit",
             "provenances": ["provenance/DFOOntology"],
@@ -2164,8 +2164,8 @@
             "description": "A classification of claims by whether their interest rate moves with a market rate.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "interest rate variability",
             "provenances": ["provenance/DFOOntology"],
@@ -2247,8 +2247,8 @@
             "description": "A classification of claims by how long they run before repayment falls due.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "maturity band",
             "provenances": ["provenance/DFOOntology"],
@@ -2266,8 +2266,8 @@
             "description": "A classification of observations by how their values were produced.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "measurement method",
             "provenances": ["provenance/DFOOntology"],
@@ -2317,8 +2317,8 @@
             "description": "A classification of amounts by how offsetting amounts affect their calculation.",
             "domain_includes": [],
             "enumeration": {
-                "members": ["Gross", "Net"],
-                "truncated": false
+                "complete": true,
+                "members": ["Gross", "Net"]
             },
             "name": "netting basis",
             "provenances": ["provenance/DFOOntology"],
@@ -2416,8 +2416,8 @@
             "description": "A classification of financing activities by the policy aims they are meant to advance. Each policy area has a narrower list of its own.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": false
+                "complete": true,
+                "members": []
             },
             "name": "policy objective",
             "provenances": ["provenance/DFOOntology"],
@@ -2435,8 +2435,8 @@
             "description": "A classification of positions by how the claims in them are valued.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "position valuation",
             "provenances": ["provenance/DFOOntology"],
@@ -2518,8 +2518,8 @@
             "description": "A classification of amounts by whether taxes less subsidies on products are included in the value of output.",
             "domain_includes": [],
             "enumeration": {
-                "members": [],
-                "truncated": true
+                "complete": false,
+                "members": []
             },
             "name": "product tax basis",
             "provenances": ["provenance/DFOOntology"],

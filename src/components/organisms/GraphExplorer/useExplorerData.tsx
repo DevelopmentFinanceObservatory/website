@@ -4,7 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 
 import { useCarried } from './ExploreContext';
 
-import { LoadError, loadDocument, type FailureReason } from '@/lib/graphExplorer/load';
+import {
+    LoadError,
+    loadDocument,
+    type FailureReason,
+    type WaitCause,
+} from '@/lib/graphExplorer/load';
 import { buildModel, type Model } from '@/lib/graphExplorer/model';
 import {
     readOntology,
@@ -17,9 +22,12 @@ const ONTOLOGY_URL = '/api/graph/ontology';
 const PROVENANCES_URL = '/api/graph/ontology/provenances';
 const TERMS_URL = '/api/graph/ontology/terms';
 
-/** Loading, waiting for a build (`retryInMs` set), loaded, or failed with a message and why. */
+/** A wait before the next try: how long, and why the Graph API or the site asked for it. */
+export type Waiting = { readonly retryInMs: number; readonly cause: WaitCause };
+
+/** Loading, waiting before a retry (`waiting` set), loaded, or failed with a message and why. */
 export type Loadable<TValue> =
-    | { readonly status: 'loading'; readonly retryInMs: number | null }
+    | { readonly status: 'loading'; readonly waiting: Waiting | null }
     | { readonly status: 'ready'; readonly value: TValue }
     | {
           readonly status: 'failed';
@@ -27,7 +35,7 @@ export type Loadable<TValue> =
           readonly message: string;
       };
 
-const LOADING = { status: 'loading', retryInMs: null } as const;
+export const LOADING = { status: 'loading', waiting: null } as const;
 
 /** A load failure as the screens show it; an error that is no LoadError is logged with its cause. */
 const failure = (error: unknown): Loadable<never> => {
@@ -70,8 +78,10 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
         const controller = new AbortController();
         const options = {
             signal: controller.signal,
-            onWait: (retryInMs: number) => {
-                if (!controller.signal.aborted) setModel({ status: 'loading', retryInMs });
+            onWait: (retryInMs: number, cause: WaitCause) => {
+                if (!controller.signal.aborted) {
+                    setModel({ status: 'loading', waiting: { retryInMs, cause } });
+                }
             },
         };
 
@@ -117,7 +127,8 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
         update(LOADING);
         loadDocument('Base Data Commons terms', TERMS_URL, readTerms, {
             signal: controller.signal,
-            onWait: (retryInMs) => update({ status: 'loading', retryInMs }),
+            onWait: (retryInMs, cause) =>
+                update({ status: 'loading', waiting: { retryInMs, cause } }),
         }).then(
             (value) => update({ status: 'ready', value }),
             (error: unknown) => update(failure(error)),

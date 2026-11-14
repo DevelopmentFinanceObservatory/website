@@ -22,6 +22,8 @@ export type LookupMember = {
 export type Lookup = {
     readonly valueList: string;
     readonly members: readonly LookupMember[];
+    /** False when the graph holds members of the value list that `members` leaves out. */
+    readonly complete: boolean;
 };
 
 export type SheetColumn = {
@@ -54,7 +56,11 @@ const lookupOf = (model: Model, property: string): Lookup | null => {
             code: model.node(id)?.classification_code[0] ?? null,
         }),
     );
-    return Object.freeze({ valueList, members: Object.freeze(members) });
+    return Object.freeze({
+        valueList,
+        members: Object.freeze(members),
+        complete: model.membersComplete(valueList),
+    });
 };
 
 /** The ordered columns of a mapping sheet. */

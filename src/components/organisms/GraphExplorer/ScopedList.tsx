@@ -6,7 +6,7 @@ import { useId, useMemo, useState } from 'react';
 import { useExplore, useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import { downloadCsv } from './downloadCsv';
-import { count } from './format';
+import { count, memberTotal, ofMembers } from './format';
 import styles from './ScopedList.module.scss';
 import ShowPills from './ShowPills';
 
@@ -47,14 +47,13 @@ const ValueListCell = ({ row }: { row: ScopedRow }) => {
     const model = useModel();
     if (row.valueList === null) return <None />;
     const size = model.members(row.valueList).length;
+    const complete = model.membersComplete(row.valueList);
 
     return (
         <>
             <TermLink id={row.valueList} />{' '}
             <span className={styles.mono}>
-                {row.values
-                    ? `uses ${count(row.values.used)} of ${count(row.values.of)}`
-                    : count(size)}
+                {row.values ? `uses ${ofMembers(row.values)}` : memberTotal(size, complete)}
             </span>
         </>
     );
@@ -163,11 +162,7 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
                                 {rows.map((row) => (
                                     <tr
                                         key={row.id}
-                                        className={classNames(
-                                            show.kind === 'dataset' &&
-                                                row.counts[0] === 0 &&
-                                                styles.dim,
-                                        )}
+                                        className={classNames(row.dimmed && styles.dim)}
                                     >
                                         <td>
                                             <TermLink id={row.id} className={styles.name} />

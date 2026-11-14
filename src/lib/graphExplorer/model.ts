@@ -58,12 +58,13 @@ export type MemberTree = { readonly id: string; readonly children: readonly Memb
 
 /**
  * How many members of a value list one dataset uses: `used` of `of`.
- * `truncated` is true when the document lists only part of the list.
+ * `complete` is false when the graph holds members the document does not
+ * list, so `of` counts the listed members only.
  */
 export type ValuesUsed = {
     readonly used: number;
     readonly of: number;
-    readonly truncated: boolean;
+    readonly complete: boolean;
 };
 
 /** One property of a class, with the roles it has in patterns about that class. */
@@ -88,9 +89,6 @@ export type PopulationTypeUse = {
     readonly datasets: number;
     readonly statVars: number;
 };
-
-/** A capped list: the first `limit` entries and how many there are in all. */
-export type Top = { readonly items: readonly string[]; readonly total: number };
 
 /** A split-by property of a dataset with the members of its value list the dataset uses. */
 export type DatasetSplit = { readonly property: string; readonly values: ValuesUsed | null };
@@ -130,6 +128,8 @@ export type ScopedRow = {
     readonly usage: Usage;
     /** One count per entry of the list's `columns`, in that order. */
     readonly counts: readonly number[];
+    /** True when one dataset is chosen and none of its StatVars use the property. */
+    readonly dimmed: boolean;
     /** With one dataset chosen, the members of the value list it uses; null otherwise. */
     readonly values: ValuesUsed | null;
 };
@@ -175,6 +175,8 @@ export type Model = {
     valueListOfProperty(id: string): string | undefined;
     /** A value list's members, by classification code then label. */
     members(listId: string): readonly string[];
+    /** False when the graph holds members of the value list that `members` leaves out. */
+    membersComplete(listId: string): boolean;
     /** A value list's members as a tree by `specialization_of`, roots first. */
     memberTree(listId: string): readonly MemberTree[];
     /** Properties whose `domain_includes` names the class. */
@@ -191,7 +193,8 @@ export type Model = {
     /** The population types the datasets' patterns name: most datasets first, then most StatVars. */
     populationTypes(): readonly PopulationTypeUse[];
     propertiesOf(classId: string): ClassProperties;
-    topByUse(ids: Iterable<string>, limit?: number): Top;
+    /** The ids, each once, most used first, then by label. */
+    byUse(ids: Iterable<string>): readonly string[];
     datasetView(id: string): DatasetView | undefined;
     valuesUsed(datasetId: string, propertyId: string): ValuesUsed | null;
     scopedList(scope: ListScope, filter: DatasetFilter): ScopedList;
@@ -272,23 +275,16 @@ const distinctLists = (node: OntologyNode): OntologyNode => ({
     },
 });
 
-/** One entry per dcid: the last in the document, at the place of the first. */
-const lastPerDcid = <TEntry extends { readonly dcid: string }>(
-    entries: readonly TEntry[],
-): TEntry[] => [...new Map(entries.map((entry) => [entry.dcid, entry])).values()];
-
 /**
- * The index over an ontology document and a provenances document. A dcid
- * the documents repeat keeps its last node or dataset, and every list on a
+ * The index over an ontology document and a provenances document, each
+ * listing a dcid once (the wire guards refuse a repeat). Every list on a
  * node holds an id once, so no list the model answers repeats an id.
  */
 export function buildModel(ontology: OntologyDocument, provenances: OntologyProvenances): Model {
     const nodes = Object.freeze(
-        lastPerDcid(ontology.nodes)
-            .map(distinctLists)
-            .sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
+        ontology.nodes.map(distinctLists).sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
     );
-    const datasets = Object.freeze(lastPerDcid(provenances.provenances));
+    const datasets = Object.freeze([...provenances.provenances]);
     const byId = new Map(nodes.map((node) => [node.dcid, node]));
     const datasetById = new Map(datasets.map((dataset) => [dataset.dcid, dataset]));
     const kinds = new Map(nodes.map((node) => [node.dcid, kindOf(node)]));
@@ -529,16 +525,14 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         );
     })();
 
-    const byUse = (a: string, b: string): number =>
+    const moreUsed = (a: string, b: string): number =>
         usage(b).total - usage(a).total || byLabel(a, b);
 
-    const topByUse = (ids: Iterable<string>, limit = 8): Top => {
-        const ordered = [...new Set(ids)].sort(byUse);
-        return Object.freeze({
-            items: Object.freeze(ordered.slice(0, limit)),
-            total: ordered.length,
-        });
-    };
+    const byUse = (ids: Iterable<string>): readonly string[] =>
+        Object.freeze([...new Set(ids)].sort(moreUsed));
+
+    const membersComplete = (listId: string): boolean =>
+        byId.get(listId)?.enumeration?.complete ?? true;
 
     const propertiesOf = (classId: string): ClassProperties => {
         const own = new Set(domainIndex.get(classId) ?? EMPTY);
@@ -557,7 +551,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                 used.set(id, (used.get(id) ?? new Set()).add(role));
             }
         }
-        const ids = [...new Set([...own, ...inherited.keys(), ...used.keys()])].sort(byUse);
+        const ids = [...new Set([...own, ...inherited.keys(), ...used.keys()])].sort(moreUsed);
         const all = Object.freeze(
             ids.map((id) =>
                 Object.freeze({
@@ -580,7 +574,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         return Object.freeze({
             used: values.filter((value) => inList.has(value)).length,
             of: members.length,
-            truncated: byId.get(list)?.enumeration?.truncated ?? false,
+            complete: membersComplete(list),
         });
     };
 
@@ -639,7 +633,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                           roles: roles(node.dcid),
                           inheritedFrom: null,
                       }))
-                      .sort((a, b) => byUse(a.id, b.id));
+                      .sort((a, b) => moreUsed(a.id, b.id));
         const columns = Object.freeze(
             filter.kind === 'dataset'
                 ? [filter.id]
@@ -647,8 +641,9 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                   ? datasets.map((dataset) => dataset.dcid)
                   : [],
         );
-        const rows = entries.map((entry): ScopedRow =>
-            Object.freeze({
+        const rows = entries.map((entry): ScopedRow => {
+            const counted = columns.map((dataset) => usageIn(entry.id, dataset));
+            return Object.freeze({
                 id: entry.id,
                 roles: entry.roles,
                 inheritedFrom: entry.inheritedFrom,
@@ -656,10 +651,11 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                 domain: byId.get(entry.id)?.domain_includes ?? EMPTY,
                 valueList: valueListOfProperty(entry.id) ?? null,
                 usage: usage(entry.id),
-                counts: Object.freeze(columns.map((dataset) => usageIn(entry.id, dataset))),
+                counts: Object.freeze(counted),
+                dimmed: filter.kind === 'dataset' && counted[0] === 0,
                 values: filter.kind === 'dataset' ? valuesUsed(filter.id, entry.id) : null,
-            }),
-        );
+            });
+        });
         return Object.freeze({
             scope,
             filter,
@@ -679,7 +675,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                     members = Object.freeze({
                         used: listed.filter((member) => usageIn(member, datasetId) > 0).length,
                         of: listed.length,
-                        truncated: byId.get(id)?.enumeration?.truncated ?? false,
+                        complete: membersComplete(id),
                     });
                 }
                 return Object.freeze({
@@ -706,6 +702,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         valueListOf,
         valueListOfProperty,
         members: (listId: string) => membersIndex.get(listId) ?? EMPTY,
+        membersComplete,
         memberTree,
         propertiesWithDomain: (classId: string) => domainIndex.get(classId) ?? EMPTY,
         propertiesWithRange: (id: string) => rangeIndex.get(id) ?? EMPTY,
@@ -715,7 +712,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         usedWith,
         populationTypes: () => populationTypes,
         propertiesOf,
-        topByUse,
+        byUse,
         datasetView,
         valuesUsed,
         scopedList,

@@ -60,6 +60,14 @@ export type SheetRequest = {
     rows: string[][];
 };
 
+/**
+ * Why the reader must grant Google access before a sheet can be created:
+ * no Google account is linked, the linked one lacks the `drive.file`
+ * scope, or its token has expired and Better Auth holds no refresh token to
+ * renew it with (or Google refused the token).
+ */
+export type GoogleAccessReason = 'no_google_account' | 'scope_missing' | 'token_expired';
+
 /** What the handler answers. A sheet whose dropdowns could not be added is still a sheet. */
 export type SheetsAnswer =
     | { ok: true; url: string; dropdowns: 'added' | 'none' | 'failed' }
@@ -71,7 +79,7 @@ export type SheetsAnswer =
     | {
           ok: false;
           code: 'google_access_needed';
-          reason: 'no_google_account' | 'scope_missing' | 'token_expired';
+          reason: GoogleAccessReason;
           message: string;
       }
     | {

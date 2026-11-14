@@ -39,20 +39,21 @@ export const NO_FILTER: DatasetFilter = Object.freeze({ kind: 'none' });
 
 export const NO_CARRIED: Carried = Object.freeze({ show: NO_FILTER, base: false });
 
-/** The query parameters Explore reads; an empty value counts as unset. */
-type QueryReader = { get(name: string): string | null };
+/** The query parameters a Graph Explorer screen reads. */
+export type QueryReader = { get(name: string): string | null };
 
-const value = (params: QueryReader, name: string): string | null => {
+/** A query parameter's value, or null when it is missing or empty: an empty value counts as unset. */
+export const queryValue = (params: QueryReader, name: string): string | null => {
     const raw = params.get(name);
     return raw === null || raw === '' ? null : raw;
 };
 
 const readView = (params: QueryReader): ExploreView => {
-    const node = value(params, 'node');
+    const node = queryValue(params, 'node');
     if (node !== null) return { kind: 'node', id: node };
-    const dataset = value(params, 'dataset');
+    const dataset = queryValue(params, 'dataset');
     if (dataset !== null) return { kind: 'dataset', id: dataset };
-    const list = value(params, 'list');
+    const list = queryValue(params, 'list');
     if (list !== null) {
         return {
             kind: 'list',
@@ -63,7 +64,7 @@ const readView = (params: QueryReader): ExploreView => {
 };
 
 const readShow = (params: QueryReader): DatasetFilter => {
-    const show = value(params, 'show');
+    const show = queryValue(params, 'show');
     if (show === null) return NO_FILTER;
     return show === ALL ? { kind: 'all' } : { kind: 'dataset', id: show };
 };
@@ -71,7 +72,7 @@ const readShow = (params: QueryReader): DatasetFilter => {
 /** The carried parameters a query string holds. */
 export const readCarried = (params: QueryReader): Carried => ({
     show: readShow(params),
-    base: value(params, 'base') === '1',
+    base: queryValue(params, 'base') === '1',
 });
 
 /** Adds the carried parameters to `params`, leaving out each one at its default. */
@@ -92,6 +93,14 @@ export const carriedHref = (path: string, carried: Carried): string => {
     const params = new URLSearchParams();
     writeCarried(params, carried);
     return `${path}${queryString(params)}`;
+};
+
+/** A query string, `?` included, with the base switch turned on or off and every other parameter kept. */
+export const switchBase = (search: string, base: boolean): string => {
+    const params = new URLSearchParams(search);
+    if (base) params.set('base', '1');
+    else params.delete('base');
+    return queryString(params);
 };
 
 /** The Explore state a query string describes. */
@@ -139,3 +148,22 @@ export const checkFilter = (
     show.kind === 'dataset' && !model.dataset(show.id)
         ? { show: NO_FILTER, unknown: show.id }
         : { show, unknown: null };
+
+/** Whether the model holds what a scoped list's scope names: every instance property, or a class or value list. */
+export const listScopeExists = (model: Pick<Model, 'kind'>, scope: ListScope): boolean => {
+    if (scope.kind === 'instance') return true;
+    const kind = model.kind(scope.id);
+    return kind === 'class' || kind === 'valueList';
+};
+
+/**
+ * Whether a view waits on the base terms list before it can say what its
+ * centre is: a term the model lacks, with the base switch on and the list
+ * not yet in. Once the list is in, a term it lacks too is "Not in the DFO model".
+ */
+export const awaitsTerms = (
+    model: Pick<Model, 'kind'>,
+    view: ExploreView,
+    base: boolean,
+    termsIn: boolean,
+): boolean => view.kind === 'node' && base && !termsIn && model.kind(view.id) === undefined;

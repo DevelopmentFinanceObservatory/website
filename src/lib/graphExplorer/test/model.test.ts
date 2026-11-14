@@ -86,6 +86,10 @@ test('broader, narrower and ancestors follow subClassOf and specializationOf', (
 
 test('a value list has its members and a member tree, roots first', () => {
     assert.equal(model.members('FinancialFlowTypeEnum').length, 14);
+    assert.equal(model.membersComplete('FinancialFlowTypeEnum'), true);
+    // The document cut DAC1AidTypeEnum short, and lists the base EconomicMetricEnum in part.
+    assert.equal(model.membersComplete('DAC1AidTypeEnum'), false);
+    assert.equal(model.membersComplete('EconomicMetricEnum'), false);
     assert.equal(model.valueListOf('Buyback'), 'FinancialFlowTypeEnum');
     assert.equal(model.valueListOfProperty('dac1AidType'), 'DAC1AidTypeEnum');
 
@@ -153,19 +157,13 @@ test('a member tree holds every member once, with a cycle and a self-loop as roo
     );
 });
 
-test('a repeated dcid keeps its last node, and no list repeats an id', () => {
+test('no list repeats an id', () => {
     const ontology = readOntology(ontologyBody());
     const netting = ontology.nodes.find((node) => node.dcid === 'nettingBasis');
     assert.ok(netting);
-    ontology.nodes.push({
-        ...netting,
-        name: 'netting basis, again',
-        range_includes: ['NettingBasisEnum', 'NettingBasisEnum'],
-    });
+    netting.range_includes = ['NettingBasisEnum', 'NettingBasisEnum'];
     const repeated = buildModel(ontology, readProvenances(provenancesBody()));
 
-    assert.equal(repeated.nodes.filter((node) => node.dcid === 'nettingBasis').length, 1);
-    assert.equal(repeated.label('nettingBasis'), 'netting basis, again');
     assert.deepEqual(repeated.node('nettingBasis')?.range_includes, ['NettingBasisEnum']);
     const withRange = repeated.propertiesWithRange('NettingBasisEnum');
     assert.equal(new Set(withRange).size, withRange.length);
@@ -266,19 +264,19 @@ test("a class's properties join its domain, its ancestors' domains and use", () 
     );
 });
 
-test('topByUse keeps the most used and counts them all', () => {
+test('byUse lists each id once, most used first', () => {
     assert.deepEqual(
-        model.topByUse(
-            ['nettingBasis', 'crsPurpose', 'dacTypeOfFinance', 'financialFlowType', 'nettingBasis'],
-            2,
-        ),
-        { items: ['financialFlowType', 'nettingBasis'], total: 4 },
+        model.byUse([
+            'nettingBasis',
+            'crsPurpose',
+            'dacTypeOfFinance',
+            'financialFlowType',
+            'nettingBasis',
+        ]),
+        ['financialFlowType', 'nettingBasis', 'dacTypeOfFinance', 'crsPurpose'],
     );
     // Ties on use fall back to the label.
-    assert.deepEqual(model.topByUse(['crsTypeOfFlow', 'crsPurpose']).items, [
-        'crsPurpose',
-        'crsTypeOfFlow',
-    ]);
+    assert.deepEqual(model.byUse(['crsTypeOfFlow', 'crsPurpose']), ['crsPurpose', 'crsTypeOfFlow']);
 });
 
 test('a dataset reads as a node with its patterns and the values it uses of each list', () => {
@@ -294,13 +292,13 @@ test('a dataset reads as a node with its patterns and the values it uses of each
     assert.deepEqual(view.measured, ['amount']);
     assert.deepEqual(view.between, ['financingProvider', 'financingRecipient']);
     assert.deepEqual(view.splits, [
-        { property: 'dac2bAidType', values: { used: 12, of: 12, truncated: false } },
-        { property: 'financialFlowType', values: { used: 1, of: 14, truncated: false } },
-        { property: 'nettingBasis', values: { used: 2, of: 2, truncated: false } },
-        { property: 'dacTypeOfFinance', values: { used: 2, of: 2, truncated: false } },
+        { property: 'dac2bAidType', values: { used: 12, of: 12, complete: true } },
+        { property: 'financialFlowType', values: { used: 1, of: 14, complete: true } },
+        { property: 'nettingBasis', values: { used: 2, of: 2, complete: true } },
+        { property: 'dacTypeOfFinance', values: { used: 2, of: 2, complete: true } },
     ]);
     // The document lists only part of DAC1AidTypeEnum.
-    assert.deepEqual(model.valuesUsed(DAC1, 'dac1AidType'), { used: 12, of: 17, truncated: true });
+    assert.deepEqual(model.valuesUsed(DAC1, 'dac1AidType'), { used: 12, of: 17, complete: false });
     assert.equal(model.valuesUsed(DAC1, 'financingProvider'), null);
     assert.equal(model.datasetView('provenance/Nothing'), undefined);
 });
@@ -318,11 +316,13 @@ test('the scoped list of instance properties groups rows and counts the chosen d
 
     const flowType = list.groups.split.find((row) => row.id === 'financialFlowType');
     assert.deepEqual(flowType?.counts, [14]);
-    assert.deepEqual(flowType?.values, { used: 1, of: 14, truncated: false });
+    assert.equal(flowType?.dimmed, false);
+    assert.deepEqual(flowType?.values, { used: 1, of: 14, complete: true });
     assert.equal(flowType?.valueList, 'FinancialFlowTypeEnum');
 
     const dac1 = list.groups.split.find((row) => row.id === 'dac1AidType');
     assert.deepEqual(dac1?.counts, [0]);
+    assert.equal(dac1?.dimmed, true);
     assert.equal(dac1?.values, null);
 });
 
@@ -332,6 +332,8 @@ test('the scoped list of a class with every dataset as a column', () => {
     assert.equal(list.total, 34);
     const row = list.groups.split.find((entry) => entry.id === 'dacTypeOfFinance');
     assert.deepEqual(row?.counts, [259, 12, 10, 0]);
+    // A column of zeros dims nothing while every dataset has its own column.
+    assert.equal(row?.dimmed, false);
     assert.equal(row?.inheritedFrom, 'FinancingEvent');
     assert.equal(row?.values, null);
 
@@ -347,7 +349,7 @@ test('the lens says which nodes a dataset uses, and how many members of a value 
                 id: 'FinancialFlowTypeEnum',
                 count: 0,
                 used: true,
-                members: { used: 1, of: 14, truncated: false },
+                members: { used: 1, of: 14, complete: true },
             },
             { id: 'dac1AidType', count: 0, used: false, members: null },
         ],

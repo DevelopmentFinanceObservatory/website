@@ -146,6 +146,13 @@ test('the URL ids the model does not offer are named, in URL order; known ones a
             { param: 'split', id: 'notAProperty' },
         ],
     );
+    assert.deepEqual(resolve('dataset=provenance/Gone&pattern=0').unknown, [
+        { param: 'pattern', id: 'provenance/Gone', index: 0 },
+    ]);
+    assert.deepEqual(resolve('dataset=provenance/OECDDAC2B&pattern=99').unknown, [
+        { param: 'pattern', id: 'provenance/OECDDAC2B', index: 99 },
+    ]);
+    assert.deepEqual(resolve('dataset=provenance/OECDDAC2B&pattern=0').unknown, []);
     assert.deepEqual(resolve('class=FinancialFlow&measured=amount&split=nettingBasis').unknown, []);
     assert.deepEqual(resolve('').unknown, []);
 });

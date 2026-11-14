@@ -124,3 +124,15 @@ export const stepActive = (current: number, step: 1 | -1, count: number): number
     if (current < 0) return step === 1 ? 0 : count - 1;
     return (current + step + count) % count;
 };
+
+/**
+ * The hit Enter opens among `count` hits: the active one, else the first.
+ * Null while the list is hidden or empty, when Enter does nothing.
+ */
+export const enterChoice = (active: number, count: number, shown: boolean): number | null => {
+    if (!shown || count === 0) return null;
+    return active >= 0 && active < count ? active : 0;
+};
+
+/** What Escape does: close the list while it is shown, else clear the query. */
+export const escapeAction = (shown: boolean): 'close' | 'clear' => (shown ? 'close' : 'clear');

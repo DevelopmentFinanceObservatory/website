@@ -17,8 +17,12 @@ export type DeclaredBy = 'instance' | 'base';
 export type OntologyEnumeration = {
     /** The dcids of the members read, sorted. */
     members: string[];
-    /** True when the member read stopped at its cap. */
-    truncated: boolean;
+    /**
+     * True when `members` is every member the graph holds. False for a base
+     * Data Commons enumeration, whose list holds only the members the DFO
+     * code index names, and for a list whose read stopped at its cap.
+     */
+    complete: boolean;
 };
 
 /** One node of the ontology document. Every list is sorted. */
@@ -140,7 +144,7 @@ export const CHECK_MAX_ROWS = 2000;
 
 /** POST /api/graph/ontology/check: 1 to CHECK_MAX_ROWS rows. */
 export type OntologyCheckRequest = {
-    rows: OntologyCheckRow[];
+    rows: readonly OntologyCheckRow[];
 };
 
 export const FINDING_CODES = [
@@ -265,7 +269,7 @@ const ontologyDocument = obj({
             classification_code: strList,
             provenances: strList,
             declared_by: nullable(declaredBy),
-            enumeration: nullable(obj({ members: strList, truncated: bool })),
+            enumeration: nullable(obj({ members: strList, complete: bool })),
         }),
     ),
 });
@@ -341,24 +345,50 @@ const ontologyCheckResponse = obj({
     ),
 });
 
+/** Refuses a list of entries that names one dcid twice, naming the repeat. */
+const onePerDcid = (entries: readonly { readonly dcid: string }[], path: string): void => {
+    const seen = new Set<string>();
+    for (const [at, { dcid }] of entries.entries()) {
+        if (seen.has(dcid)) {
+            throw new WireShapeError(`${path}[${at}].dcid: ${dcid} is listed twice`);
+        }
+        seen.add(dcid);
+    }
+};
+
 // Each guard runs its checks, then narrows: the checks are what make the cast true.
 
-/** The ontology document, or a WireShapeError naming the first member out of shape. */
+/**
+ * The ontology document, or a WireShapeError naming the first member out of
+ * shape or the first dcid listed twice.
+ */
 export const readOntology = (body: unknown): OntologyDocument => {
     ontologyDocument(body, 'ontology');
-    return body as OntologyDocument;
+    const document = body as OntologyDocument;
+    onePerDcid(document.nodes, 'ontology.nodes');
+    return document;
 };
 
-/** The terms list, or a WireShapeError naming the first member out of shape. */
+/**
+ * The terms list, or a WireShapeError naming the first member out of shape
+ * or the first dcid listed twice.
+ */
 export const readTerms = (body: unknown): OntologyTerms => {
     ontologyTerms(body, 'terms');
-    return body as OntologyTerms;
+    const document = body as OntologyTerms;
+    onePerDcid(document.terms, 'terms.terms');
+    return document;
 };
 
-/** The provenances document, or a WireShapeError naming the first member out of shape. */
+/**
+ * The provenances document, or a WireShapeError naming the first member out
+ * of shape or the first dcid listed twice.
+ */
 export const readProvenances = (body: unknown): OntologyProvenances => {
     ontologyProvenances(body, 'provenances');
-    return body as OntologyProvenances;
+    const document = body as OntologyProvenances;
+    onePerDcid(document.provenances, 'provenances.provenances');
+    return document;
 };
 
 /** A check response, or a WireShapeError naming the first member out of shape. */

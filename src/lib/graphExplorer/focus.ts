@@ -64,14 +64,12 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
     const kind = model.kind(id);
     if (kind === undefined) return [];
 
-    const byUse = (ids: Iterable<string>): readonly string[] =>
-        model.topByUse(ids, Number.POSITIVE_INFINITY).items;
     const ofKind = (ids: readonly string[]): readonly string[] =>
         ids.filter((other) => {
             const otherKind = model.kind(other);
             return otherKind === undefined || SAME_KIND[kind].includes(otherKind);
         });
-    const narrower = byUse(
+    const narrower = model.byUse(
         model.narrower(id).filter((other) => {
             const otherKind = model.kind(other);
             return otherKind !== undefined && SAME_KIND[kind].includes(otherKind);
@@ -84,13 +82,13 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
             const { groups } = model.propertiesOf(id);
             const ids = (group: keyof typeof groups) => groups[group].map((entry) => entry.id);
             boxes.push(
-                box('up', 'up', 'A kind of', 'includes', byUse(ofKind(model.broader(id)))),
+                box('up', 'up', 'A kind of', 'includes', model.byUse(ofKind(model.broader(id)))),
                 box(
                     'left',
                     'left',
                     'It can be the value of',
                     'takes a value from',
-                    byUse(model.propertiesWithRange(id)),
+                    model.byUse(model.propertiesWithRange(id)),
                 ),
                 box(
                     'measured',
@@ -108,7 +106,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
         }
         case 'property':
             boxes.push(
-                box('up', 'up', 'Narrows', 'narrows', byUse(model.broader(id))),
+                box('up', 'up', 'Narrows', 'narrows', model.byUse(model.broader(id))),
                 box(
                     'left',
                     'left',
@@ -121,20 +119,20 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     'right',
                     'Takes its value from',
                     'takes a value from',
-                    byUse(model.node(id)?.range_includes ?? []),
+                    model.byUse(model.node(id)?.range_includes ?? []),
                 ),
                 box('down', 'down', 'Narrowed by', 'is narrowed by', narrower),
             );
             break;
         case 'valueList':
             boxes.push(
-                box('up', 'up', 'Part of', 'includes', byUse(ofKind(model.broader(id)))),
+                box('up', 'up', 'Part of', 'includes', model.byUse(ofKind(model.broader(id)))),
                 box(
                     'left',
                     'left',
                     'Set with',
                     'takes a value from',
-                    byUse(model.propertiesWithRange(id)),
+                    model.byUse(model.propertiesWithRange(id)),
                 ),
                 box('down', 'down', 'Narrower lists', 'includes', narrower),
             );
@@ -143,13 +141,19 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
             const list = model.valueListOf(id);
             boxes.push(
                 box('list', 'up', 'Value list', 'holds', list === undefined ? [] : [list]),
-                box('up', 'up', 'Broader value', 'includes', byUse(ofKind(model.broader(id)))),
+                box(
+                    'up',
+                    'up',
+                    'Broader value',
+                    'includes',
+                    model.byUse(ofKind(model.broader(id))),
+                ),
                 box(
                     'left',
                     'left',
                     'Set with',
                     'takes this value',
-                    list === undefined ? [] : byUse(model.propertiesWithRange(list)),
+                    list === undefined ? [] : model.byUse(model.propertiesWithRange(list)),
                 ),
                 box('down', 'down', 'Narrower values', 'includes', narrower),
             );
@@ -284,3 +288,17 @@ export const pictureLens = (centre: Centre, show: DatasetFilter): string | null 
  */
 export const sharePercent = (part: number, whole: number): number =>
     part <= 0 || whole <= 0 ? 0 : Math.max(1, Math.round((100 * part) / whole));
+
+/** The reader's words for the ISO 8601 durations a dataset's series are observed over. */
+const PERIOD_WORDS: Readonly<Record<string, string>> = {
+    P1Y: 'Yearly',
+    P3M: 'Quarterly',
+    P1M: 'Monthly',
+    P1D: 'Daily',
+};
+
+/** An observation period in words with its code, "Yearly (P1Y)"; any other code as it is. */
+export const periodText = (code: string): string => {
+    const words = PERIOD_WORDS[code];
+    return words === undefined ? code : `${words} (${code})`;
+};

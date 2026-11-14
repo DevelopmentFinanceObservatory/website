@@ -12,6 +12,7 @@ import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import { plural } from '@/components/organisms/GraphExplorer/format';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
+import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import {
@@ -19,6 +20,7 @@ import {
     CheckError,
     checkRows,
     exampleSheet,
+    closestLookup,
     FLAGGED_ROWS_STEP,
     findingLines,
     findingsCsvRows,
@@ -65,18 +67,6 @@ type Run =
       }
     | { readonly status: 'done'; readonly checked: Checked }
     | { readonly status: 'failed'; readonly message: string };
-
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
-    const id = useId();
-    return (
-        <section className={styles.section} aria-labelledby={id}>
-            <h2 id={id} className={styles.heading}>
-                {title}
-            </h2>
-            {children}
-        </section>
-    );
-};
 
 const readAs = (target: ColumnTarget): string => {
     if (target.kind === 'definition') return `Definition field (${target.field})`;
@@ -283,6 +273,13 @@ const Results = ({ checked }: { checked: Checked }) => {
         [model, mapping, result.findings],
     );
     const marks = useMemo(() => sheetMarks(lines, result.refused), [lines, result.refused]);
+    const shownLines = useMemo(() => lines.slice(0, findingsShown), [lines, findingsShown]);
+    // The closest values for the lines on screen only, each field and value pair once per model.
+    const closest = useMemo(() => closestLookup(model), [model]);
+    const suggestions = useMemo(
+        () => shownLines.map((line) => closest(line.finding)),
+        [closest, shownLines],
+    );
     const shown = useMemo(
         () =>
             shownRows(pasted.rows.length, marks.flaggedRows, {
@@ -373,7 +370,7 @@ const Results = ({ checked }: { checked: Checked }) => {
 
             {lineCount > 0 && (
                 <ul className={styles.findings}>
-                    {lines.slice(0, findingsShown).map((line, index) => {
+                    {shownLines.map((line, index) => {
                         const { finding, row, column, columnLabel } = line;
                         const key = row !== null && column !== null ? cellKey(row, column) : null;
                         const place = `Row ${finding.ref ?? '?'}, ${columnLabel}`;
@@ -410,7 +407,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                                         )}
                                         . <Message parts={line.parts} />
                                     </span>
-                                    <Suggestions closest={line.closest} />
+                                    <Suggestions closest={suggestions[index] ?? []} />
                                 </span>
                             </li>
                         );
@@ -561,7 +558,7 @@ const CheckSteps = () => {
 
     return (
         <>
-            <Section title="1. Paste the sheet">
+            <SheetSection title="1. Paste the sheet">
                 <label htmlFor={textId} className={styles.lead}>
                     Copy the header row and the rows from a spreadsheet and paste them here.
                 </label>
@@ -592,10 +589,10 @@ const CheckSteps = () => {
                         value misspelt in the {example.misspelt} column.
                     </p>
                 )}
-            </Section>
+            </SheetSection>
 
             {pasted.header.length > 0 && (
-                <Section title="2. The columns">
+                <SheetSection title="2. The columns">
                     <p className={styles.note}>
                         {plural(rows.length, 'row')} to check. Each column is read as a definition
                         field, a property or ignored; switch any column between property and
@@ -618,11 +615,11 @@ const CheckSteps = () => {
                             />
                         ))}
                     </ul>
-                </Section>
+                </SheetSection>
             )}
 
             {pasted.header.length > 0 && (
-                <Section title="3. Check against the graph">
+                <SheetSection title="3. Check against the graph">
                     <div>
                         <Button
                             variant="dark"
@@ -642,7 +639,7 @@ const CheckSteps = () => {
                         {statusText(run)}
                     </p>
                     {run.status === 'done' && <Results checked={run.checked} />}
-                </Section>
+                </SheetSection>
             )}
         </>
     );
@@ -656,12 +653,11 @@ const CheckSteps = () => {
 const CheckSheet = () => {
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const { baseTerms } = data;
 
     return (
         <ModelProvider value={model}>
             <div className={shell.explorer}>
-                <TopBar screen="check-sheet" model={model} baseTerms={baseTerms} />
+                <TopBar />
                 <main className={shell.main}>
                     <div className={styles.page}>
                         <header className={styles.header}>

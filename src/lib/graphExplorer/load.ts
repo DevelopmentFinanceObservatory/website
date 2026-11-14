@@ -41,7 +41,7 @@ const WAITED: ReadonlyMap<number, WaitCause> = new Map([
 ]);
 
 /** The line shown while a request waits. */
-export const waitText = (retryInMs: number, cause: WaitCause = 'building'): string => {
+export const waitText = (retryInMs: number, cause: WaitCause): string => {
     const seconds = Math.ceil(retryInMs / 1000);
     const lead =
         cause === 'building'

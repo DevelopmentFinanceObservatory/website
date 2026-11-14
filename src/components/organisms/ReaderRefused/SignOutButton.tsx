@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/atoms/Button/Button';
 import { signOut } from '@/lib/auth/client';
 
-/** Signs out and renders the page again, which now sends the visitor to sign in. */
+/** Signs out and renders the page again, and the gate sends a signed-out visitor to sign in. */
 const SignOutButton = () => {
     const router = useRouter();
 

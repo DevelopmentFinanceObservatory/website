@@ -44,20 +44,6 @@
     color: var(--color-stone);
 }
 
-.section {
-    @include flex(column, flex-start, stretch);
-
-    gap: rem(12);
-    min-width: 0;
-}
-
-.heading {
-    @include font-size(20px, 1.15);
-
-    font-weight: 700;
-    letter-spacing: -0.03em;
-}
-
 .paste {
     @include font-size(12px, 1.4);
 

@@ -5,13 +5,9 @@ import classNames from 'classnames';
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import styles from './FocusEntry.module.scss';
-import { count } from './format';
+import { count, ofMembers } from './format';
 
 import type { LensEntry, ValuesUsed } from '@/lib/graphExplorer/model';
-
-/** "12 of 14", with a plus when the graph lists only part of the value list. */
-export const ofMembers = (values: ValuesUsed): string =>
-    `${count(values.used)} of ${count(values.of)}${values.truncated ? '+' : ''}`;
 
 /** The dataset filter's answer for each id, or null when no single dataset is chosen. */
 export const useLens = (

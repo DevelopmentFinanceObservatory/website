@@ -51,6 +51,13 @@ test('the ontology guard refuses a node with a member removed or retyped', () =>
     at(unknownDeclarer, ['nodes', 0]).declared_by = 'shared';
     refuses(readOntology, unknownDeclarer, 'ontology.nodes[0].declared_by');
 
+    const listIndex = readOntology(ontologyBody()).nodes.findIndex(
+        (node) => node.enumeration !== null,
+    );
+    const unmarked = ontologyBody();
+    delete at(unmarked, ['nodes', listIndex, 'enumeration']).complete;
+    refuses(readOntology, unmarked, `ontology.nodes[${listIndex}].enumeration.complete`);
+
     const undeclared = ontologyBody();
     at(undeclared, ['nodes', 0]).declared_by = null;
     assert.equal(readOntology(undeclared).nodes[0]?.declared_by, null);
@@ -105,6 +112,27 @@ test('each guard checks every element of every list, not only the first', () => 
     at(pattern, ['provenances', 3, 'patterns', 0]).examples = null;
     refuses(readProvenances, pattern, 'provenances.provenances[3].patterns[0].examples');
 });
+
+for (const [document, read, body, list] of [
+    ['ontology', readOntology, ontologyBody, 'nodes'],
+    ['terms', readTerms, termsBody, 'terms'],
+    ['provenances', readProvenances, provenancesBody, 'provenances'],
+] as const) {
+    test(`the ${document} guard refuses a dcid listed twice, naming it`, () => {
+        const repeated = body();
+        const entries = at(repeated, [])[list];
+        assert.ok(Array.isArray(entries));
+        const dcid = at(repeated, [list, 1]).dcid;
+        entries.push({ ...at(repeated, [list, 1]) });
+        assert.throws(
+            () => read(repeated),
+            (error: unknown) =>
+                error instanceof WireShapeError &&
+                error.message.startsWith(`${document}.${list}[${entries.length - 1}].dcid`) &&
+                error.message.includes(String(dcid)),
+        );
+    });
+}
 
 test('the check guard reads every finding: an unknown code passes, a later finding out of shape fails', () => {
     const finding = {

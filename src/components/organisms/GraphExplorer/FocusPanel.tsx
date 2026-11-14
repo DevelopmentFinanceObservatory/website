@@ -7,15 +7,16 @@ import { useEffect, useRef, useState } from 'react';
 import { downloadCsv } from './downloadCsv';
 import { useCarried, useModel } from './ExploreContext';
 import { BaseTag, TermLink } from './ExploreLink';
-import FocusEntry, { ofMembers, useLens } from './FocusEntry';
+import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
-import { count, plural } from './format';
+import { count, ofMembers, plural, valueCount } from './format';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
 import {
     declaredDomain,
     outsideKind,
+    periodText,
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
@@ -129,6 +130,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const list = kind === 'value' ? model.valueListOf(id) : undefined;
     const domain = kind === 'property' ? declaredDomain(model, id) : null;
     const members = kind === 'valueList' ? model.members(id).length : 0;
+    const complete = kind === 'valueList' && model.membersComplete(id);
     const used =
         kind === 'valueList' && lens.dataset !== null
             ? model.lens(lens.dataset, [id])[0]
@@ -181,10 +183,10 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     .
                 </p>
             )}
-            {kind === 'valueList' && members > 0 && (
+            {kind === 'valueList' && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>
-                        {plural(members, 'value')}
+                        {valueCount(members, complete)}
                         {used?.members && `, ${lens.label} uses ${ofMembers(used.members)}`}
                     </Label>
                     <ValueTree listId={id} lensDataset={lens.dataset} />
@@ -212,9 +214,9 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     );
 };
 
-const FACETS: { key: keyof OntologyFacets; label: string }[] = [
+const FACETS: { key: keyof OntologyFacets; label: string; text?: (code: string) => string }[] = [
     { key: 'units', label: 'Units' },
-    { key: 'observation_periods', label: 'Periods' },
+    { key: 'observation_periods', label: 'Periods', text: periodText },
     { key: 'measurement_methods', label: 'Methods' },
     { key: 'currencies', label: 'Currencies' },
     { key: 'scaling_factors', label: 'Scaling factors' },
@@ -276,12 +278,17 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
             </section>
             {facets && (
                 <section className={styles.section}>
-                    <Label>Its series</Label>
-                    {FACETS.filter(({ key }) => facets[key].length > 0).map(({ key, label }) => (
-                        <p key={key} className={styles.line}>
-                            {label}: <span className={styles.mono}>{facets[key].join(', ')}</span>
-                        </p>
-                    ))}
+                    <Label>Series facts</Label>
+                    {FACETS.filter(({ key }) => facets[key].length > 0).map(
+                        ({ key, label, text = (code) => code }) => (
+                            <p key={key} className={styles.line}>
+                                {label}:{' '}
+                                <span className={styles.mono}>
+                                    {facets[key].map(text).join(', ')}
+                                </span>
+                            </p>
+                        ),
+                    )}
                 </section>
             )}
         </>

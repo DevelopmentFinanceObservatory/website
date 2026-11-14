@@ -5,18 +5,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    awaitsTerms,
     carriedHref,
     checkFilter,
     exploreHref,
     exploreQuery,
+    listScopeExists,
     NO_CARRIED,
     readCarried,
     readExplore,
     moveHref,
     sameView,
+    switchBase,
     type ExploreState,
 } from '../explore.ts';
-import { buildModel } from '../model.ts';
+import { buildModel, type ListScope } from '../model.ts';
 import { readOntology, readProvenances } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
@@ -151,4 +154,44 @@ test('a filter naming a dataset the model lacks applies no filter and names the 
         show: { kind: 'all' },
         unknown: null,
     });
+});
+
+test('a list scope exists for every instance property, a class or a value list', () => {
+    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const scopes: ListScope[] = [
+        { kind: 'instance' },
+        { kind: 'class', id: 'FinancialFlow' },
+        { kind: 'class', id: 'FinancialFlowTypeEnum' },
+        { kind: 'class', id: 'financialFlowType' },
+        { kind: 'class', id: 'Buyback' },
+        { kind: 'class', id: 'NoSuchClass' },
+    ];
+    assert.deepEqual(
+        scopes.map((scope) => listScopeExists(model, scope)),
+        [true, true, true, false, false, false],
+    );
+});
+
+test('a term the model lacks waits on the terms list only while base is on and it is not in', () => {
+    const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
+    const outside = { kind: 'node', id: 'Count_Thing' } as const;
+    assert.equal(awaitsTerms(model, outside, true, false), true);
+    assert.equal(awaitsTerms(model, outside, true, true), false);
+    assert.equal(awaitsTerms(model, outside, false, false), false);
+    assert.equal(awaitsTerms(model, { kind: 'node', id: 'FinancialFlow' }, true, false), false);
+    assert.equal(
+        awaitsTerms(model, { kind: 'dataset', id: 'provenance/Gone' }, true, false),
+        false,
+    );
+});
+
+test('the base switch sets or clears base and keeps every other parameter', () => {
+    assert.equal(
+        switchBase('?node=FinancialFlow&show=all', true),
+        '?node=FinancialFlow&show=all&base=1',
+    );
+    assert.equal(switchBase('?class=X&base=1&google=1', false), '?class=X&google=1');
+    assert.equal(switchBase('?base=1', false), '');
+    assert.equal(switchBase('', true), '?base=1');
+    assert.equal(switchBase('?base=1', true), '?base=1');
 });

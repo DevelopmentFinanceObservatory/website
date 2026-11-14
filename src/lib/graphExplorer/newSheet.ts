@@ -12,10 +12,17 @@
  * A parameter left out takes its default: the class from the pattern, else the
  * kind of thing the most datasets use; the measured property and the ticked
  * properties from the pattern, else from the class's most-used pattern. A
- * `class`, `measured` or `split` id the model does not offer takes the same
- * default, and the selection names it (SheetSelection.unknown).
+ * `class`, `measured` or `split` id, or a `dataset` and `pattern` pair, the
+ * model does not offer takes the same default, and the selection names it
+ * (SheetSelection.unknown).
  */
-import { queryString, writeCarried, type Carried } from './explore.ts';
+import {
+    queryString,
+    queryValue,
+    writeCarried,
+    type Carried,
+    type QueryReader,
+} from './explore.ts';
 import type { Model } from './model.ts';
 import { NEW_SHEET_PATH } from './paths.ts';
 import type { SheetSpec } from './sheet.ts';
@@ -33,24 +40,19 @@ export type SheetQuery = {
     readonly from: PatternRef | null;
 };
 
-type QueryReader = { get(name: string): string | null; has(name: string): boolean };
+type SheetQueryReader = QueryReader & { has(name: string): boolean };
 
-const value = (params: QueryReader, name: string): string | null => {
-    const raw = params.get(name);
-    return raw === null || raw === '' ? null : raw;
-};
-
-const readFrom = (params: QueryReader): PatternRef | null => {
-    const dataset = value(params, 'dataset');
-    const pattern = value(params, 'pattern');
+const readFrom = (params: SheetQueryReader): PatternRef | null => {
+    const dataset = queryValue(params, 'dataset');
+    const pattern = queryValue(params, 'pattern');
     if (dataset === null || pattern === null || !/^\d+$/.test(pattern)) return null;
     return { dataset, index: Number(pattern) };
 };
 
 /** The page state a query string holds. */
-export const readSheetQuery = (params: QueryReader): SheetQuery => ({
-    classId: value(params, 'class'),
-    measured: value(params, 'measured'),
+export const readSheetQuery = (params: SheetQueryReader): SheetQuery => ({
+    classId: queryValue(params, 'class'),
+    measured: queryValue(params, 'measured'),
     split: params.has('split')
         ? [...new Set((params.get('split') ?? '').split(',').filter((id) => id !== ''))]
         : null,
@@ -94,15 +96,23 @@ export type SplitOption = {
     readonly id: string;
     /** The value list the property draws from, or null. */
     readonly valueList: string | null;
+    /** How many members the value list lists; 0 without a value list. */
     readonly members: number;
+    /** False when the graph holds members of the value list that `members` leaves out. */
+    readonly membersComplete: boolean;
     /** The datasets whose StatVars use the property, most StatVars first. */
     readonly datasets: readonly string[];
     /** Whether a pattern about the class splits by it. */
     readonly inUse: boolean;
 };
 
-/** An id from the URL the model does not offer, with the parameter that named it. */
-export type UnknownChoice = { readonly param: 'class' | 'measured' | 'split'; readonly id: string };
+/**
+ * An id from the URL the model does not offer, with the parameter that named
+ * it; for a dataset pattern, the dataset's id and the pattern's index.
+ */
+export type UnknownChoice =
+    | { readonly param: 'class' | 'measured' | 'split'; readonly id: string }
+    | { readonly param: 'pattern'; readonly id: string; readonly index: number };
 
 export type SheetSelection = {
     readonly classId: string;
@@ -118,7 +128,10 @@ export type SheetSelection = {
     /** The properties to tick: those in use first, each part most used first. */
     readonly splitOptions: readonly SplitOption[];
     readonly spec: SheetSpec;
-    /** The URL's ids the model does not offer, which their defaults replace, in URL order. */
+    /**
+     * The URL's choices the model does not offer, which their defaults
+     * replace: the pattern, then the class, the measured property and the ticks.
+     */
     readonly unknown: readonly UnknownChoice[];
 };
 
@@ -166,6 +179,7 @@ export const splitOptions = (model: Model, classId: string): readonly SplitOptio
             id,
             valueList,
             members: valueList === null ? 0 : model.members(valueList).length,
+            membersComplete: valueList === null || model.membersComplete(valueList),
             datasets: Object.freeze(model.usage(id).byDataset.map((entry) => entry.dataset)),
             inUse,
         });
@@ -216,6 +230,9 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     const properties = Object.freeze([...new Set(wanted)].filter((id) => offered.has(id)));
 
     const unknown: UnknownChoice[] = [];
+    if (query.from !== null && fromUrl === null) {
+        unknown.push({ param: 'pattern', id: query.from.dataset, index: query.from.index });
+    }
     if (query.classId !== null && query.classId !== classId) {
         unknown.push({ param: 'class', id: query.classId });
     }

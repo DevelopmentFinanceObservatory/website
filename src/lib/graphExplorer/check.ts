@@ -23,6 +23,7 @@ import {
     isFindingCode,
     readCheckResponse,
     type FindingCode,
+    type OntologyCheckRequest,
     type OntologyCheckRow,
     type OntologyFinding,
 } from './wire.ts';
@@ -128,7 +129,7 @@ export async function checkRows(
                 init: {
                     method: 'POST',
                     headers: { 'content-type': 'application/json', accept: 'application/json' },
-                    body: JSON.stringify({ rows: chunk }),
+                    body: JSON.stringify({ rows: chunk } satisfies OntologyCheckRequest),
                 },
                 read: (body) => ({ kind: 'checked', body: readCheckResponse(body) }),
                 refusal: (status, problem) =>
@@ -406,25 +407,34 @@ export function findingPlace(mapping: Mapping, finding: OntologyFinding): Findin
     };
 }
 
-/** One finding as the result shows it: its place, its message and the closest values. */
+/** One finding as the result shows it: its place and its message. */
 export type FindingLine = FindingPlace & {
     readonly finding: OntologyFinding;
     readonly parts: readonly MessagePart[];
-    readonly closest: readonly string[];
 };
 
-/**
- * Each finding's place, message and closest values, worked out once. The
- * closest values are worked out once per field and value, which a sheet of
- * repeated source codes shares across many findings.
- */
+/** Each finding's place and message, worked out once. */
 export function findingLines(
     model: Model,
     mapping: Mapping,
     findings: readonly OntologyFinding[],
 ): FindingLine[] {
-    const closest = new Map<string, string[]>();
-    const closestTo = (finding: OntologyFinding): string[] => {
+    return findings.map((finding) => ({
+        ...findingPlace(mapping, finding),
+        finding,
+        parts: findingMessage(model, finding),
+    }));
+}
+
+/**
+ * closestMembers with a memory: each field and value pair is worked out
+ * once, and a sheet of repeated source codes shares it across findings.
+ * The result asks only for the lines on screen, so a step's cost follows the
+ * step and the value list, whatever the sheet's size.
+ */
+export function closestLookup(model: Model): (finding: OntologyFinding) => readonly string[] {
+    const closest = new Map<string, readonly string[]>();
+    return (finding) => {
         if (!SUGGESTED.has(finding.code)) return [];
         const key = JSON.stringify([finding.field, finding.value]);
         let members = closest.get(key);
@@ -434,12 +444,6 @@ export function findingLines(
         }
         return members;
     };
-    return findings.map((finding) => ({
-        ...findingPlace(mapping, finding),
-        finding,
-        parts: findingMessage(model, finding),
-        closest: closestTo(finding),
-    }));
 }
 
 /** The key of one cell of the pasted table. */

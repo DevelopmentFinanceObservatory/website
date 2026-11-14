@@ -10,7 +10,13 @@ import styles from './SearchBox.module.scss';
 
 import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
 import { KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
-import { search, stepActive, type SearchHit } from '@/lib/graphExplorer/search';
+import {
+    enterChoice,
+    escapeAction,
+    search,
+    stepActive,
+    type SearchHit,
+} from '@/lib/graphExplorer/search';
 import type { OntologyTerms } from '@/lib/graphExplorer/wire';
 
 /** What a hit is, in a few words: its kind, the list a value sits in, or that it is outside the model. */
@@ -72,8 +78,9 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
             return;
         }
         if (event.key === 'Enter') {
-            const hit = result.hits[active] ?? result.hits[0];
-            if (shown && hit) {
+            const chosen = enterChoice(active, count, shown);
+            const hit = chosen === null ? undefined : result.hits[chosen];
+            if (hit) {
                 event.preventDefault();
                 choose(hit);
             }
@@ -81,7 +88,7 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
         }
         if (event.key === 'Escape') {
             event.preventDefault();
-            if (shown) setOpen(false);
+            if (escapeAction(shown) === 'close') setOpen(false);
             else setQuery('');
             setActive(-1);
         }
