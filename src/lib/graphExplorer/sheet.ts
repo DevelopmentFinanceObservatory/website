@@ -1,0 +1,314 @@
+/**
+ * The columns of a mapping sheet for a new dataset, the sheet draft the
+ * Start a sheet page shows and exports, the closest existing dataset
+ * pattern to copy, and CSV output.
+ */
+import {
+    createBodyBytes,
+    jsonBytes,
+    LIMITS,
+    type SheetRequest,
+    type SheetRequestColumn,
+} from './googleSheet.ts';
+import { openColumns, type Model } from './model.ts';
+import { classAndNarrower } from './newSheet.ts';
+import type { SchemaPattern } from './wire.ts';
+
+/** A reference column carries the source's own identifiers. A definition field is part of the StatVar definition. A property column holds one constraint property. */
+export type ColumnKind = 'reference' | 'definition' | 'property';
+
+/** One member of a value list as a sheet lookup offers it. */
+export type LookupMember = {
+    readonly id: string;
+    readonly label: string;
+    /** The member's classification code, when it has one. */
+    readonly code: string | null;
+    /** The member's cell for each of the lookup's `fields`, in that order (OpenColumns.cell). */
+    readonly values: readonly string[];
+};
+
+/** The values behind a property column, from every range class that lists its instances. */
+export type Lookup = {
+    /** The range classes whose lists the members come from. */
+    readonly lists: readonly string[];
+    /** The open properties any member carries (OpenColumns.fields), each a column after the code. */
+    readonly fields: readonly string[];
+    readonly members: readonly LookupMember[];
+    /** False when the graph holds members of the value list that `members` leaves out. */
+    readonly complete: boolean;
+};
+
+export type SheetColumn = {
+    readonly name: string;
+    readonly kind: ColumnKind;
+    /** The value a pattern supplies for the column. Null when there is none. */
+    readonly fill: string | null;
+    /** Set on a property whose range names a value list. */
+    readonly lookup: Lookup | null;
+};
+
+export type SheetSpec = {
+    readonly classId: string | null;
+    readonly measuredProperty: string;
+    readonly statType: string | null;
+    readonly qualifier: string | null;
+    readonly denominator: string | null;
+    /** The properties each observation carries, such as who provided the money. */
+    readonly observationProperties: readonly string[];
+    /** The constraint properties to give a column each. */
+    readonly properties: readonly string[];
+};
+
+const REFERENCE_COLUMNS = ['source_code', 'source_label'] as const;
+
+const lookupOf = (model: Model, property: string): Lookup | null => {
+    const values = model.valueListOfProperty(property);
+    if (values === undefined) return null;
+    const { fields, cell } = openColumns(model, values.members);
+    const members = values.members.map((id): LookupMember =>
+        Object.freeze({
+            id,
+            label: model.label(id),
+            code: model.node(id)?.classification_code[0] ?? null,
+            values: Object.freeze(fields.map((property) => cell(id, property))),
+        }),
+    );
+    return Object.freeze({
+        lists: values.lists,
+        fields,
+        members: Object.freeze(members),
+        complete: values.complete,
+    });
+};
+
+/** The ordered columns of a mapping sheet. */
+export function sheetColumns(model: Model, spec: SheetSpec): readonly SheetColumn[] {
+    const column = (
+        name: string,
+        kind: ColumnKind,
+        fill: string | null,
+        lookup: Lookup | null = null,
+    ): SheetColumn => Object.freeze({ name, kind, fill, lookup });
+    return Object.freeze([
+        ...REFERENCE_COLUMNS.map((name) => column(name, 'reference', null)),
+        column('populationType', 'definition', spec.classId),
+        column('measuredProperty', 'definition', spec.measuredProperty),
+        column('statType', 'definition', spec.statType),
+        column('measurementQualifier', 'definition', spec.qualifier),
+        column('measurementDenominator', 'definition', spec.denominator),
+        column(
+            'observationProperties',
+            'definition',
+            spec.observationProperties.length > 0 ? spec.observationProperties.join(',') : null,
+        ),
+        ...spec.properties.map((property) =>
+            column(property, 'property', null, lookupOf(model, property)),
+        ),
+    ]);
+}
+
+export type ClosestPattern = {
+    readonly dataset: string;
+    readonly pattern: SchemaPattern;
+    /** How many of the chosen properties the pattern splits by. */
+    readonly shared: number;
+};
+
+/**
+ * The pattern about the class or a narrower class (classAndNarrower) that
+ * splits by the most of the chosen properties. The larger StatVar count wins
+ * a tie, then the earlier dataset. Null when no pattern shares any.
+ */
+export function closestPattern(
+    model: Model,
+    classId: string,
+    properties: readonly string[],
+): ClosestPattern | null {
+    const chosen = new Set(properties);
+    const about = classAndNarrower(model, classId);
+    let best: ClosestPattern | null = null;
+    for (const dataset of model.datasets) {
+        for (const pattern of dataset.patterns) {
+            if (pattern.population_type === null || !about.has(pattern.population_type)) continue;
+            const shared = pattern.constraint_properties.filter((id) => chosen.has(id)).length;
+            if (shared === 0) continue;
+            const better =
+                best === null ||
+                shared > best.shared ||
+                (shared === best.shared && pattern.stat_var_count > best.pattern.stat_var_count);
+            if (better) best = { dataset: dataset.ref, pattern, shared };
+        }
+    }
+    return best;
+}
+
+/**
+ * A field as CSV. A value starting with `=`, `+`, `-`, `@`, a tab or a
+ * carriage return gains a leading `'`, so a spreadsheet opening the file
+ * shows it as text and does not run it as a formula.
+ */
+const csvField = (raw: string): string => {
+    const value = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+};
+
+/**
+ * RFC 4180. Fields with a comma, quote or line break are quoted with quotes
+ * doubled, lines end CRLF, and a field that could run as a formula starts
+ * with `'`.
+ */
+export const toCsv = (rows: readonly (readonly string[])[]): string =>
+    rows.map((row) => row.map(csvField).join(',')).join('\r\n');
+
+/**
+ * Example rows for a sheet: reference columns numbered, definition fields
+ * as filled, and each property column a member of its value list, the rows
+ * spread across the list. A property with no value list stays empty.
+ */
+export function exampleRows(
+    columns: readonly SheetColumn[],
+    count = 3,
+): readonly (readonly string[])[] {
+    return Array.from({ length: count }, (_, row) =>
+        columns.map((column) => {
+            if (column.kind === 'reference') {
+                return column.name === 'source_code' ? `EX-${row + 1}` : `Example row ${row + 1}`;
+            }
+            if (column.kind === 'definition') return column.fill ?? '';
+            const members = column.lookup?.members ?? [];
+            return members[Math.floor((row * members.length) / count)]?.id ?? '';
+        }),
+    );
+}
+
+/** A file name from a label: lower case, runs of other characters as one hyphen. */
+export const csvFileName = (label: string): string => {
+    const stem = label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+    return `${stem || 'sheet'}.csv`;
+};
+
+/** The sheet the Start a sheet page shows, as each export receives it. */
+export type SheetDraft = {
+    /** The label of the kind of thing the figures are about. */
+    readonly title: string;
+    /** The graph generation the model was read from, or null when it has none. */
+    readonly generation: string | null;
+    /** The CSV file name built from the title. */
+    readonly fileName: string;
+    /** The columns in order, each property column with its value list's members as `lookup`. */
+    readonly columns: readonly SheetColumn[];
+    /** The example rows under the header, one value per column. */
+    readonly rows: readonly (readonly string[])[];
+};
+
+/** The draft for a sheet spec: its columns, example rows, title and file name. */
+export function sheetDraft(model: Model, spec: SheetSpec & { classId: string }): SheetDraft {
+    const columns = sheetColumns(model, spec);
+    const title = model.label(spec.classId);
+    return Object.freeze({
+        title,
+        generation: model.generation,
+        fileName: csvFileName(`${title} mapping sheet`),
+        columns,
+        rows: exampleRows(columns),
+    });
+}
+
+/** The draft as CSV rows: the header row, then the example rows. */
+export const draftCsvRows = (draft: SheetDraft): (readonly string[])[] => [
+    draft.columns.map((column) => column.name),
+    ...draft.rows,
+];
+
+/** A lookup cut to its first `size` members, marked partial when that drops any. */
+const cutLookup = (
+    lookup: NonNullable<SheetRequestColumn['lookup']>,
+    size: number,
+): NonNullable<SheetRequestColumn['lookup']> =>
+    lookup.members.length <= size
+        ? lookup
+        : { ...lookup, members: lookup.members.slice(0, size), complete: false };
+
+/**
+ * `text` within `max` UTF-16 code units, the handler's measure. A longer
+ * text keeps its start and ends in an ellipsis, without splitting a
+ * surrogate pair.
+ */
+const fitText = (text: string, max: number): string => {
+    if (text.length <= max) return text;
+    const cut = text.slice(0, max - 1);
+    return `${/[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut}…`;
+};
+
+/**
+ * A lookup's columns that fit the handler's bounds, as indexes into
+ * `fields`: a dcid within LIMITS.dcid and every member's cell within
+ * LIMITS.term, the first LIMITS.fields of those. A column outside them is
+ * left off the sheet.
+ */
+const fittingFields = (lookup: Lookup): number[] =>
+    lookup.fields
+        .flatMap((field, at) =>
+            field.length <= LIMITS.dcid &&
+            lookup.members.every((member) => (member.values[at] ?? '').length <= LIMITS.term)
+                ? [at]
+                : [],
+        )
+        .slice(0, LIMITS.fields);
+
+/**
+ * A lookup as the handler takes it: its columns cut to those that fit
+ * (fittingFields), each label and code cut to LIMITS.term (fitText). A
+ * member whose dcid is past LIMITS.dcid, which the graph does not serve, is
+ * left out and the list marked partial.
+ */
+const requestLookup = (lookup: Lookup): NonNullable<SheetRequestColumn['lookup']> => {
+    const kept = fittingFields(lookup);
+    const members = lookup.members.filter(({ id }) => id.length <= LIMITS.dcid);
+    return {
+        fields: kept.map((at) => lookup.fields[at] ?? ''),
+        members: members.map(({ id, label, code, values }) => ({
+            id,
+            label: fitText(label, LIMITS.term),
+            code: code === null ? null : fitText(code, LIMITS.term),
+            values: kept.map((at) => values[at] ?? ''),
+        })),
+        complete: lookup.complete && members.length === lookup.members.length,
+    };
+};
+
+/**
+ * The draft as the Google sheet handler takes it, within the handler's
+ * bounds. Each value list keeps its first LIMITS.members members and the
+ * open property columns that fit (fittingFields). While the body is over
+ * LIMITS.bodyBytes, or the create body built from it over
+ * LIMITS.createBytes, the longest list is halved. A cut list is marked
+ * partial, so its block on the value-list tab says so.
+ */
+export const sheetRequest = (draft: SheetDraft): SheetRequest => {
+    const request: SheetRequest = {
+        title: fitText(draft.title, LIMITS.title),
+        generation: draft.generation,
+        columns: draft.columns.map((column) => ({
+            name: fitText(column.name, LIMITS.columnName),
+            kind: column.kind,
+            lookup: column.lookup && cutLookup(requestLookup(column.lookup), LIMITS.members),
+        })),
+        rows: draft.rows.map((row) => [...row]),
+    };
+    while (jsonBytes(request) > LIMITS.bodyBytes || createBodyBytes(request) > LIMITS.createBytes) {
+        const longest = request.columns.reduce<SheetRequestColumn | null>(
+            (best, column) =>
+                (column.lookup?.members.length ?? 0) > (best?.lookup?.members.length ?? 0)
+                    ? column
+                    : best,
+            null,
+        );
+        if (!longest?.lookup) break;
+        longest.lookup = cutLookup(longest.lookup, Math.floor(longest.lookup.members.length / 2));
+    }
+    return request;
+};

@@ -1,0 +1,416 @@
+/**
+ * A mapping sheet as a Google spreadsheet: the request body the Start a sheet
+ * page sends, its bounds, and the Sheets API request bodies built from it.
+ *
+ * The spreadsheet has two tabs. The mapping tab holds the header row in bold
+ * and frozen, then the example rows. Its first cell carries a note naming the
+ * graph generation and the date. The value-list tab holds one block per
+ * property column with a value list: the property's name, then a row of
+ * `dcid`, `label`, `code` (when some member has a code) and the dcid of each
+ * open property the members carry, then one row per member, each block
+ * followed by an empty column.
+ * Each such property column gets a dropdown fed from its block's dcid range.
+ *
+ * Reference: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create
+ * and https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/request#setdatavalidationrequest
+ */
+import { asRecord } from '../asRecord.ts';
+import { PARTIAL_LIST_LINE } from './counts.ts';
+import type { ColumnKind } from './sheet.ts';
+
+/** The Google OAuth scope that lets the tool create files and see only those it created. */
+export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+export const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
+
+export const MAPPING_TAB = { sheetId: 0, title: 'Mapping sheet' } as const;
+export const VALUE_LIST_TAB = { sheetId: 1, title: 'Value lists' } as const;
+
+/** The mapping tab's rows a dropdown covers, under the header. */
+export const DROPDOWN_ROWS = 1000;
+
+export const LIMITS = {
+    /** The request body in bytes, read before parsing. */
+    bodyBytes: 5_000_000,
+    /**
+     * The `spreadsheets.create` body in bytes: the 2 MB payload the Sheets
+     * API recommends as a maximum. Each cell there carries its own JSON, so
+     * the create body can run to several times the request.
+     */
+    createBytes: 2_000_000,
+    title: 200,
+    generation: 200,
+    columns: 64,
+    columnName: 200,
+    rows: 50,
+    cell: 1000,
+    members: 5000,
+    /** Open property columns in one value list's block. */
+    fields: 16,
+    /**
+     * A value list's dcid, an open property's dcid or a member's dcid: the
+     * graph API's DCID_MAX_LENGTH, so no dcid the graph serves breaks it.
+     */
+    dcid: 512,
+    /** A member's label, code or open property cell. */
+    term: 500,
+} as const;
+
+/** One member of a value list, as the page sends it. `values` holds one cell per lookup field. */
+export type SheetMember = { id: string; label: string; code: string | null; values: string[] };
+
+export type SheetRequestColumn = {
+    name: string;
+    kind: ColumnKind;
+    /**
+     * `fields` names the open properties shown after the code. `complete` is
+     * false when the graph holds members of the value list that `members` leaves out.
+     */
+    lookup: {
+        fields: string[];
+        members: SheetMember[];
+        complete: boolean;
+    } | null;
+};
+
+/** The body of `POST /graph-explorer/api/sheets`. */
+export type SheetRequest = {
+    title: string;
+    /** The graph generation the sheet was made from, or null when the model has none. */
+    generation: string | null;
+    columns: SheetRequestColumn[];
+    /** The example rows under the header, one value per column. */
+    rows: string[][];
+};
+
+/**
+ * Why the reader must grant Google access before a sheet can be created:
+ * no Google account is linked, the linked one lacks the `drive.file`
+ * scope, or its token has expired and Better Auth holds no refresh token to
+ * renew it with (or Google refused the token).
+ */
+export type GoogleAccessReason = 'no_google_account' | 'scope_missing' | 'token_expired';
+
+/** What the handler answers. A sheet whose dropdowns could not be added counts as a sheet. */
+export type SheetsAnswer =
+    | { ok: true; url: string; dropdowns: 'added' | 'none' | 'failed' }
+    | {
+          ok: false;
+          code: 'signed_out' | 'email_not_verified' | 'domain_not_allowed' | 'invalid_body';
+          message: string;
+      }
+    | {
+          ok: false;
+          code: 'google_access_needed';
+          reason: GoogleAccessReason;
+          message: string;
+      }
+    | {
+          ok: false;
+          /**
+           * `google_unconfirmed`: the create call timed out, and the sheet may
+           * already be in the reader's Drive.
+           */
+          code: 'google_failed' | 'google_unconfirmed' | 'auth_failed' | 'google_renewal_failed';
+          message: string;
+      };
+
+const KINDS: readonly ColumnKind[] = ['reference', 'definition', 'property'];
+
+const isText = (value: unknown, max: number, min = 0): value is string =>
+    typeof value === 'string' && value.length >= min && value.length <= max;
+
+const isTextList = (value: unknown, max: number, min = 0): value is string[] =>
+    Array.isArray(value) && value.every((each) => isText(each, max, min));
+
+const readMember = (value: unknown, fields: number): SheetMember | null => {
+    const member = asRecord(value);
+    if (member === undefined) return null;
+    const { id, label, code, values } = member;
+    if (!isText(id, LIMITS.dcid, 1) || !isText(label, LIMITS.term)) return null;
+    if (code !== null && !isText(code, LIMITS.term)) return null;
+    if (!isTextList(values, LIMITS.term) || values.length !== fields) return null;
+    return { id, label, code, values };
+};
+
+const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined => {
+    if (value === null) return null;
+    const lookup = asRecord(value);
+    if (lookup === undefined) return undefined;
+    const { fields, members, complete } = lookup;
+    if (!isTextList(fields, LIMITS.dcid, 1) || fields.length > LIMITS.fields) return undefined;
+    if (typeof complete !== 'boolean') return undefined;
+    if (!Array.isArray(members) || members.length > LIMITS.members) return undefined;
+    const read = members.map((member) => readMember(member, fields.length));
+    if (read.some((member) => member === null)) return undefined;
+    return { fields, members: read.filter((member) => member !== null), complete };
+};
+
+const readColumn = (value: unknown): SheetRequestColumn | null => {
+    const column = asRecord(value);
+    if (column === undefined) return null;
+    const { name, kind, lookup } = column;
+    if (!isText(name, LIMITS.columnName, 1)) return null;
+    const known = KINDS.find((each) => each === kind);
+    if (known === undefined) return null;
+    const read = readLookup(lookup);
+    if (read === undefined) return null;
+    return { name, kind: known, lookup: read };
+};
+
+/** The byte length of a value as JSON, the measure every byte bound uses. */
+export const jsonBytes = (value: unknown): number =>
+    new TextEncoder().encode(JSON.stringify(value)).length;
+
+/**
+ * The bytes of the request's `spreadsheets.create` body. The date in the
+ * body's note is always ten characters, so a fixed one measures any day.
+ */
+export const createBodyBytes = (request: SheetRequest): number =>
+    jsonBytes(createSpreadsheetBody(request, '0000-00-00'));
+
+/**
+ * The request body checked against its bounds, or null when it breaks one,
+ * including a request whose create body would pass LIMITS.createBytes.
+ */
+export const readSheetRequest = (value: unknown): SheetRequest | null => {
+    const body = asRecord(value);
+    if (body === undefined) return null;
+    const { title, generation, columns, rows } = body;
+    if (!isText(title, LIMITS.title, 1)) return null;
+    if (generation !== null && !isText(generation, LIMITS.generation, 1)) return null;
+    if (!Array.isArray(columns) || columns.length === 0 || columns.length > LIMITS.columns) {
+        return null;
+    }
+    const read = columns.map(readColumn);
+    if (read.some((column) => column === null)) return null;
+    if (!Array.isArray(rows) || rows.length > LIMITS.rows) return null;
+    const fits = (row: unknown): row is string[] =>
+        Array.isArray(row) &&
+        row.length === columns.length &&
+        row.every((cell) => isText(cell, LIMITS.cell));
+    if (!rows.every(fits)) return null;
+    const request = {
+        title,
+        generation,
+        columns: read.filter((column) => column !== null),
+        rows,
+    };
+    return createBodyBytes(request) <= LIMITS.createBytes ? request : null;
+};
+
+/** A column's letters in A1 notation from its zero-based index: 0 is A, 26 is AA. */
+export const columnLetters = (index: number): string => {
+    let letters = '';
+    for (let rest = index + 1; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+        letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters;
+    }
+    return letters;
+};
+
+/** A property column with a non-empty value list, where its block sits on the value-list tab. */
+type Block = {
+    /** The column's index on the mapping tab. */
+    column: number;
+    name: string;
+    fields: string[];
+    members: SheetMember[];
+    complete: boolean;
+    /** True when some member has a code, so the block holds a code column. */
+    codes: boolean;
+    /** The block's first column on the value-list tab. */
+    start: number;
+};
+
+/** A block's column heads: dcid, label, code when some member has one, then its open properties. */
+const blockHeads = (block: Pick<Block, 'fields' | 'codes'>): string[] => [
+    'dcid',
+    'label',
+    ...(block.codes ? ['code'] : []),
+    ...block.fields,
+];
+
+/** A block's columns, without the empty column after it. */
+const blockWidth = (block: Pick<Block, 'fields' | 'codes'>): number => blockHeads(block).length;
+
+const blocksOf = (request: SheetRequest): Block[] => {
+    let start = 0;
+    return request.columns.flatMap((column, index) => {
+        if (column.kind !== 'property' || !column.lookup || column.lookup.members.length === 0) {
+            return [];
+        }
+        const block = {
+            column: index,
+            name: column.name,
+            fields: column.lookup.fields,
+            members: column.lookup.members,
+            complete: column.lookup.complete,
+            codes: column.lookup.members.some(
+                (member) => member.code !== null && member.code !== '',
+            ),
+            start,
+        };
+        start += blockWidth(block) + 1;
+        return [block];
+    });
+};
+
+/** The value-list tab's width: every block with an empty column between two. */
+const tabWidth = (blocks: readonly Block[]): number =>
+    blocks.reduce((width, block) => width + blockWidth(block) + 1, 0) - 1;
+
+/**
+ * The value-list tab's rows above the members: the property's name, the
+ * partial-list line when any block's list is partial, then the field names.
+ */
+const headerRows = (blocks: readonly Block[]): number =>
+    blocks.every((block) => block.complete) ? 2 : 3;
+
+/** A cell as the create body writes it: a string value, which Google does not parse as a formula. */
+export type Cell = {
+    userEnteredValue?: { stringValue: string };
+    userEnteredFormat?: { textFormat: { bold: boolean } };
+    note?: string;
+};
+
+const EMPTY: Cell = {};
+
+const text = (value: string): Cell => ({ userEnteredValue: { stringValue: value } });
+const bold = (value: string): Cell => ({
+    ...text(value),
+    userEnteredFormat: { textFormat: { bold: true } },
+});
+
+/** The note on the mapping tab's first cell. */
+export const generationNote = (generation: string | null, today: string): string =>
+    `Made with the DFO Graph Explorer on ${today} from ${
+        generation === null
+            ? 'a graph with no generation recorded'
+            : `graph generation ${generation}`
+    }. Each property column takes a dcid from the ${VALUE_LIST_TAB.title} tab.`;
+
+/** The value-list tab's rows: the blocks side by side, an empty column between two. */
+const valueListRows = (blocks: Block[]) => {
+    const header = headerRows(blocks);
+    const height = Math.max(0, ...blocks.map((block) => block.members.length)) + header;
+    return Array.from({ length: height }, (_, row) => ({
+        values: blocks.flatMap((block, at) => {
+            const gap = at < blocks.length - 1 ? [EMPTY] : [];
+            const blank = (from: number) =>
+                Array.from({ length: blockWidth(block) - from }, () => EMPTY);
+            if (row === 0) return [bold(block.name), ...blank(1), ...gap];
+            if (row === header - 1) {
+                return blockHeads(block).map(bold).concat(gap);
+            }
+            if (row < header) {
+                return [block.complete ? EMPTY : text(PARTIAL_LIST_LINE), ...blank(1), ...gap];
+            }
+            const member = block.members[row - header];
+            if (member === undefined) return [...blank(0), ...gap];
+            return [
+                text(member.id),
+                text(member.label),
+                ...(block.codes ? [text(member.code ?? '')] : []),
+                ...member.values.map(text),
+                ...gap,
+            ];
+        }),
+    }));
+};
+
+/** The `spreadsheets.create` body: both tabs, filled. */
+export const createSpreadsheetBody = (request: SheetRequest, today: string) => {
+    const blocks = blocksOf(request);
+    const valueRows =
+        blocks.length > 0
+            ? valueListRows(blocks)
+            : [{ values: [text('No column of this sheet takes a value from a value list.')] }];
+    const [first, ...rest] = request.columns;
+
+    return {
+        properties: { title: `${request.title} mapping sheet` },
+        sheets: [
+            {
+                properties: {
+                    ...MAPPING_TAB,
+                    index: 0,
+                    gridProperties: {
+                        rowCount: DROPDOWN_ROWS + 1,
+                        columnCount: Math.max(request.columns.length, 26),
+                        frozenRowCount: 1,
+                    },
+                },
+                data: [
+                    {
+                        startRow: 0,
+                        startColumn: 0,
+                        rowData: [
+                            {
+                                values: [
+                                    {
+                                        ...bold(first?.name ?? ''),
+                                        note: generationNote(request.generation, today),
+                                    },
+                                    ...rest.map((column) => bold(column.name)),
+                                ],
+                            },
+                            ...request.rows.map((row) => ({ values: row.map(text) })),
+                        ],
+                    },
+                ],
+            },
+            {
+                properties: {
+                    ...VALUE_LIST_TAB,
+                    index: 1,
+                    gridProperties: {
+                        rowCount: valueRows.length,
+                        columnCount: Math.max(1, tabWidth(blocks)),
+                        frozenRowCount: blocks.length > 0 ? headerRows(blocks) : 0,
+                    },
+                },
+                data: [{ startRow: 0, startColumn: 0, rowData: valueRows }],
+            },
+        ],
+    };
+};
+
+/** A block's dcid cells in A1 notation, as a formula on the value-list tab. */
+const dcidRange = (block: Block, header: number): string => {
+    const letters = columnLetters(block.start);
+    const top = header + 1;
+    return `='${VALUE_LIST_TAB.title}'!$${letters}$${top}:$${letters}$${top + block.members.length - 1}`;
+};
+
+/**
+ * The `spreadsheets.batchUpdate` body that puts a dropdown on each property
+ * column with a value list, over the first DROPDOWN_ROWS rows under the
+ * header, or null when no column has one. A value outside the list is
+ * flagged and accepted, so pasted source values stay visible.
+ */
+export const dropdownRequestBody = (request: SheetRequest) => {
+    const blocks = blocksOf(request);
+    if (blocks.length === 0) return null;
+    const header = headerRows(blocks);
+    return {
+        requests: blocks.map((block) => ({
+            setDataValidation: {
+                range: {
+                    sheetId: MAPPING_TAB.sheetId,
+                    startRowIndex: 1,
+                    endRowIndex: DROPDOWN_ROWS + 1,
+                    startColumnIndex: block.column,
+                    endColumnIndex: block.column + 1,
+                },
+                rule: {
+                    condition: {
+                        type: 'ONE_OF_RANGE',
+                        values: [{ userEnteredValue: dcidRange(block, header) }],
+                    },
+                    strict: false,
+                    showCustomUi: true,
+                },
+            },
+        })),
+    };
+};
