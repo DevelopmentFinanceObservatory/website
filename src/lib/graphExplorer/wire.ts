@@ -42,7 +42,7 @@ export type OntologyNode = {
     classification_code: string[];
     /** The provenances declaring the node's `typeOf` arc. */
     provenances: string[];
-    /** Null when the graph declares no type for the node. */
+    /** Null when the graph names no declaring provenance for the node. */
     declared_by: DeclaredBy | null;
     /** Set on an enumeration Class, null on every other node. */
     enumeration: OntologyEnumeration | null;
@@ -61,7 +61,8 @@ export type OntologyTerm = {
     name: string | null;
     types: ('Class' | 'Property')[];
     provenances: string[];
-    declared_by: DeclaredBy;
+    /** Null when the graph names no declaring provenance for the term. */
+    declared_by: DeclaredBy | null;
 };
 
 /** GET /api/graph/ontology/terms: every Class and Property on the graph. */
@@ -282,7 +283,7 @@ const ontologyTerms = obj({
             name: nullable(str),
             types: list(oneOf(['Class', 'Property'])),
             provenances: strList,
-            declared_by: declaredBy,
+            declared_by: nullable(declaredBy),
         }),
     ),
 });

@@ -108,6 +108,10 @@ test('each guard checks every element of every list, not only the first', () => 
     delete at(terms, ['terms', 281]).declared_by;
     refuses(readTerms, terms, 'terms.terms[281].declared_by');
 
+    const undeclaredTerm = termsBody();
+    at(undeclaredTerm, ['terms', 281]).declared_by = null;
+    assert.equal(readTerms(undeclaredTerm).terms[281]?.declared_by, null);
+
     const pattern = provenancesBody();
     at(pattern, ['provenances', 3, 'patterns', 0]).examples = null;
     refuses(readProvenances, pattern, 'provenances.provenances[3].patterns[0].examples');

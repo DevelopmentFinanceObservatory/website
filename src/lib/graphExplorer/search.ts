@@ -91,7 +91,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
         });
     }
     for (const term of baseTerms?.terms ?? []) {
-        if (term.declared_by !== 'base' || model.node(term.dcid)) continue;
+        if (term.declared_by === 'instance' || model.node(term.dcid)) continue;
         const match = bestMatch(needle, [term.name, term.dcid]);
         if (match === undefined) continue;
         hits.push({

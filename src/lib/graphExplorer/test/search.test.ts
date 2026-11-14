@@ -96,6 +96,18 @@ test('with the terms list, base terms outside the model follow those inside', ()
     );
 });
 
+test('a term with no declaring provenance outside the model is found', () => {
+    const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.dcid === 'AdministrativeArea1');
+    assert.ok(term);
+    term.declared_by = null;
+    const hits = search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) }).hits;
+    assert.deepEqual(
+        hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
+        [['AdministrativeArea1', false]],
+    );
+});
+
 test('a base term the model holds is found once, as part of the model', () => {
     const hits = search(model, 'AdministrativeArea', { baseTerms }).hits;
     assert.deepEqual(
