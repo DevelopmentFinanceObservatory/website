@@ -16,7 +16,7 @@ import {
     sheetQuery,
     splitOptions,
 } from '../newSheet.ts';
-import { readSchema, readUsage } from '../wire.ts';
+import { CHECK_MAX_CONSTRAINT_PROPERTIES, readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 import { patternIdAt, withPatternClass, withReversedPatterns } from './sheetFixtures.ts';
 
@@ -240,4 +240,16 @@ test('a measured property offered through a narrower class finds its template th
     assert.equal(selection.measured, 'grantEquivalent');
     assert.deepEqual([selection.template?.dataset, selection.template?.id], [DAC1, grantId]);
     assert.equal(selection.spec.statType, selection.template?.pattern.stat_type);
+});
+
+test('a split list past the check limit keeps the first properties in URL order and names the rest', () => {
+    const offered = splitOptions(model, 'FinancialFlow').map((option) => option.id);
+    assert.ok(offered.length > CHECK_MAX_CONSTRAINT_PROPERTIES);
+    const flow = resolve(`class=FinancialFlow&split=${[...offered].reverse().join(',')}`);
+    const ordered = [...offered].reverse();
+    assert.deepEqual(flow.properties, ordered.slice(0, CHECK_MAX_CONSTRAINT_PROPERTIES));
+    assert.deepEqual(flow.overLimit, ordered.slice(CHECK_MAX_CONSTRAINT_PROPERTIES));
+    assert.equal(flow.spec.properties.length, CHECK_MAX_CONSTRAINT_PROPERTIES);
+    assert.deepEqual(queryOf(flow).split, flow.properties);
+    assert.deepEqual(resolve('class=FinancialFlow').overLimit, []);
 });

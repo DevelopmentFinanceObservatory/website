@@ -37,6 +37,7 @@ import {
     type SplitOption,
     type UnknownChoice,
 } from '@/lib/graphExplorer/newSheet';
+import { CHECK_MAX_CONSTRAINT_PROPERTIES } from '@/lib/graphExplorer/wire';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
@@ -47,14 +48,27 @@ import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer
 const writeQuery = (query: SheetQuery, carried: Carried) =>
     window.history.replaceState(null, '', sheetHref(query, carried));
 
-type SplitBoxProps = { option: SplitOption; checked: boolean; onToggle: () => void };
+type SplitBoxProps = {
+    option: SplitOption;
+    checked: boolean;
+    /** True when the sheet is at the split limit and this box is unticked. */
+    full: boolean;
+    limitNoteId: string;
+    onToggle: () => void;
+};
 
 /** One tick box: the property, its value list and size, and the datasets that use it. */
-const SplitBox = ({ option, checked, onToggle }: SplitBoxProps) => {
+const SplitBox = ({ option, checked, full, limitNoteId, onToggle }: SplitBoxProps) => {
     const model = useModel();
     return (
         <label className={styles.check}>
-            <input type="checkbox" checked={checked} onChange={onToggle} />
+            <input
+                type="checkbox"
+                checked={checked}
+                disabled={full}
+                aria-describedby={full ? limitNoteId : undefined}
+                onChange={onToggle}
+            />
             <span className={styles.grow}>
                 <span className={styles.term}>{model.label(option.id)}</span>{' '}
                 <span className={styles.dcid}>
@@ -82,6 +96,23 @@ const PARAM_NOUNS: Readonly<Record<UnknownChoice['param'], string>> = {
     split: 'property',
     pattern: 'pattern',
 };
+
+/** The line naming the properties left unticked because the sheet is at its split limit. */
+const OverLimit = ({ ids }: { ids: readonly string[] }) => (
+    <p className={styles.note} role="status">
+        A sheet can split by at most {CHECK_MAX_CONSTRAINT_PROPERTIES} properties, the most the
+        check accepts per row. These were left unticked:{' '}
+        {ids.map((id, at) => (
+            <span key={id}>
+                {at > 0 && ', '}
+                <code>
+                    <BreakableId text={id} />
+                </code>
+            </span>
+        ))}
+        .
+    </p>
+);
 
 /** The line naming the URL's ids the model does not offer, which their defaults replace. */
 const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => {
@@ -276,6 +307,7 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
     const model = useModel();
     const params = useSearchParams();
     const carried = useCarried();
+    const limitNoteId = useId();
     const selection = useMemo(() => resolveSheet(model, readSheetQuery(params)), [model, params]);
     // The draft the page opened on is the one the reader returned to from the consent screen.
     const [createMemory, setCreateMemory] = useState<CreateMemory>(() =>
@@ -307,6 +339,8 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
             },
             carried,
         );
+    const left = CHECK_MAX_CONSTRAINT_PROPERTIES - selection.properties.length;
+    const atLimit = left <= 0;
     const inUse = selection.splitOptions.filter((option) => option.inUse);
     const unused = selection.splitOptions.filter((option) => !option.inUse);
     const box = (option: SplitOption) => (
@@ -314,6 +348,8 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
             key={option.id}
             option={option}
             checked={ticked.has(option.id)}
+            full={atLimit && !ticked.has(option.id)}
+            limitNoteId={limitNoteId}
             onToggle={() => toggle(option.id)}
         />
     );
@@ -322,6 +358,7 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
     return (
         <>
             {selection.unknown.length > 0 && <UnknownChoices unknown={selection.unknown} />}
+            {selection.overLimit.length > 0 && <OverLimit ids={selection.overLimit} />}
             <SheetSection title="1. What are the figures about?">
                 <div className={styles.pick} role="group" aria-label="Kind of thing">
                     {model.populationTypes().map((use) => (
@@ -383,6 +420,13 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
                     {plural(selection.splitOptions.length, 'property', 'properties')} ticked. Each
                     ticked property becomes a column. The datasets that use each are listed on the
                     right.
+                </p>
+                <p className={styles.note} id={limitNoteId}>
+                    A sheet can split by at most {CHECK_MAX_CONSTRAINT_PROPERTIES} properties, the
+                    most the check accepts per row.{' '}
+                    {atLimit
+                        ? 'The limit is reached, so the other boxes are disabled.'
+                        : `${plural(left, 'more property', 'more properties')} can be ticked.`}
                 </p>
                 {inUse.length > 0 && <div className={styles.checks}>{inUse.map(box)}</div>}
                 {unused.length > 0 && (

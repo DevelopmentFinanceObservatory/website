@@ -19,6 +19,12 @@
  * (SheetSelection.unknown). A pattern id the dataset lacks, such as one from a
  * link written before the dataset's patterns changed, names no pattern. A
  * pattern about no kind of thing counts as one the model does not offer.
+ *
+ * Every ticked property becomes a property column, and the Graph API's check
+ * refuses a row with more than CHECK_MAX_CONSTRAINT_PROPERTIES of them, so a
+ * selection keeps the first that many ticks in order and names the rest
+ * (SheetSelection.overLimit). The pattern and the class fix no property
+ * column of their own.
  */
 import {
     queryString,
@@ -30,7 +36,7 @@ import {
 import type { Model } from './model.ts';
 import { NEW_SHEET_PATH } from './paths.ts';
 import type { SheetSpec } from './sheet.ts';
-import type { SchemaPattern } from './wire.ts';
+import { CHECK_MAX_CONSTRAINT_PROPERTIES, type SchemaPattern } from './wire.ts';
 
 /** A pattern named by its dataset and its patternId. */
 export type PatternRef = { readonly dataset: string; readonly id: string };
@@ -166,6 +172,11 @@ export type SheetSelection = {
      * replace: the pattern, then the class, the measured property and the ticks.
      */
     readonly unknown: readonly UnknownChoice[];
+    /**
+     * The offered properties the URL or the template named beyond
+     * CHECK_MAX_CONSTRAINT_PROPERTIES, which the selection leaves unticked.
+     */
+    readonly overLimit: readonly string[];
 };
 
 const place = (ref: PatternRef, pattern: SchemaPattern): PlacedPattern =>
@@ -275,7 +286,9 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     const options = splitOptions(model, classId);
     const offered = new Set(options.map((option) => option.id));
     const wanted = query.split ?? template?.pattern.constraint_properties ?? [];
-    const properties = Object.freeze([...new Set(wanted)].filter((id) => offered.has(id)));
+    const known = [...new Set(wanted)].filter((id) => offered.has(id));
+    const properties = Object.freeze(known.slice(0, CHECK_MAX_CONSTRAINT_PROPERTIES));
+    const overLimit = Object.freeze(known.slice(CHECK_MAX_CONSTRAINT_PROPERTIES));
 
     const unknown: UnknownChoice[] = [];
     // A pattern about no kind of thing cannot start a sheet, so it counts as unknown too.
@@ -312,6 +325,7 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
             properties,
         }),
         unknown: Object.freeze(unknown.map((choice) => Object.freeze(choice))),
+        overLimit,
     });
 };
 
