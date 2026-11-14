@@ -117,25 +117,31 @@ So a key on `/mcp` serves programmatic and developer use. Chat-app users stay an
 
 ### Limits
 
-A key's limit is two plain numbers, one per surface. There are no named tiers.
+A key's limit is one plain number, in calls per window. There are no named tiers.
 
-| Surface | Covers                                 | Anonymous limit today          | Setting on the key |
-| ------- | -------------------------------------- | ------------------------------ | ------------------ |
-| API     | `/api/v1/*`, `/openapi.json`, `/codes` | 120 calls a minute per address | `api_limit`        |
-| MCP     | `/mcp`                                 | 300 calls a minute per address | `mcp_limit`        |
+The number applies to each surface separately. A key with a limit of 200 can make 200 calls a minute on the API and 200 a minute on MCP, and heavy use of one does not use up the other.
 
-- Each setting is an optional integer, in calls per window.
-- Empty means the default for keyed callers, set per deployment in env (for example `RATE_LIMIT_API_KEYED` and `RATE_LIMIT_MCP_KEYED`). Most keys store nothing, and raising the default moves them all at once.
+| Surface | Covers                                 | Anonymous limit today          | Keyed limit     |
+| ------- | -------------------------------------- | ------------------------------ | --------------- |
+| API     | `/api/v1/*`, `/openapi.json`, `/codes` | 120 calls a minute per address | The key's limit |
+| MCP     | `/mcp`                                 | 300 calls a minute per address | The key's limit |
+
+- The limit is an optional integer on the key.
+- Empty means the default for keyed callers, set per deployment in env (for example `RATE_LIMIT_KEYED`). Most keys store nothing, and raising the default moves them all at once.
 - A number overrides the default for that key.
 - The window stays global at 60 seconds (`RATE_LIMIT_WINDOW_S`). There is no per-key window.
 
-This is all on the admin side. If we later want tiers, for single or bulk changes to keys, they can be added as a column or as a bulk update over these two numbers without changing what the numbers mean.
+One number is simpler to explain to a key holder, simpler to administer, and fits Better Auth's plugin, which has one limit per key. The anonymous limits differ by surface because chat vendors send many users from one address. That does not apply to a key, which is one caller.
+
+What this gives up is setting a key's MCP limit apart from its API limit. MCP can be a significant cost driver, so a separate MCP limit is listed under [Future Features][]. It can be added later as a second optional number without disturbing existing keys.
+
+This is all on the admin side. If we later want tiers, for single or bulk changes to keys, they can be added as a column or as a bulk update over this number without changing what it means.
 
 Not covered by a key's limits:
 
 - The proxy's third allowance, `/api/download-pin` at 10 calls a minute, belongs to the site's download UI and is not part of the public API.
 - The Studio's daily prompt allowance is for the site's own chat UI.
-- dfo-apis keeps its own daily allowances per caller: 10 shares and 500 presentation cards, plus pins. A keyed caller gets these at the default values. Raising them for a partner would be a dfo-apis setting, not a setting on the key.
+- dfo-apis keeps its own daily allowances per caller: 10 shares and 500 presentation cards, plus pins. A keyed caller gets these at the default values. Raising them for a partner would be a dfo-apis setting, not part of the key's limit.
 
 ### Cloudflare Integration
 
@@ -187,15 +193,15 @@ In this option we own the key store: a table in the website's Postgres, a lookup
 
 A new `api_key` table in the website's Postgres, beside the accounts and the limit counters.
 
-| Column                               | Purpose                                                                     |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| id                                   | Short public identifier, used in logs and as the caller name                |
-| key_hash                             | SHA-256 of the key, unique                                                  |
-| prefix                               | First characters of the key, so its owner can recognize it in a list        |
-| label                                | What the key is for                                                         |
-| user_id                              | Owning account. Empty for a manually provisioned key in Phase 1             |
-| api_limit, mcp_limit                 | Calls per window on each surface. Empty means the default for keyed callers |
-| created_at, revoked_at, last_used_at | Lifecycle                                                                   |
+| Column                               | Purpose                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| id                                   | Short public identifier, used in logs and as the caller name                         |
+| key_hash                             | SHA-256 of the key, unique                                                           |
+| prefix                               | First characters of the key, so its owner can recognize it in a list                 |
+| label                                | What the key is for                                                                  |
+| user_id                              | Owning account. Empty for a manually provisioned key in Phase 1                      |
+| rate_limit                           | Calls per window, applied to each surface. Empty means the default for keyed callers |
+| created_at, revoked_at, last_used_at | Lifecycle                                                                            |
 
 Postgres rather than Redis: the limiter already counts there, key volume is small, and it adds no new infrastructure. This can be changed later if we need something more scalable and performant at the cost of some additional dev and operational complexity.
 
@@ -206,7 +212,7 @@ In `forward()`, before the rate limit:
 1. Read the key header. No header: carry on as an anonymous caller.
 2. Hash the key and look it up, through a short in-process cache (about 60 seconds) so a keyed call adds no query in the common case.
 3. Unknown or revoked key: answer 401 with a problem document. It does not fall back to anonymous, so a caller finds out their key is dead.
-4. Valid key: count the call against `key:<id>` at the key's limit, using the existing counter.
+4. Valid key: count the call against `key:<id>` at the key's limit, using the existing counter, which already counts each surface separately.
 
 A revoked key can keep working until the cache entry expires, so revocation takes up to a minute per instance. If the key lookup itself fails, the proposal is to treat the call as anonymous, in line with the limiter failing open.
 
@@ -243,7 +249,7 @@ In this option the key store is the [API key plugin][better-auth-api-key] of Bet
 
 - **Proxy check.** The steps in [The Proxy Check][] stay the same, with the lookup replaced by `verifyApiKey`. We would keep the short in-process cache, because the plugin writes to the key's row on each verification unless updates are deferred.
 - **Header.** A small getter reads `Authorization: Bearer dfo_…` and `X-API-Key`, so [Key Format and Communication][] holds as written.
-- **Limits.** Our design has two limits per key, one per surface, and the plugin has one. We would turn the plugin's limiter off, keep counting in `limit_counter`, and hold the two numbers in the key's metadata. The alternative is to move to one limit per key.
+- **Limits.** The plugin has one limit per key, as our design does. Its per-key maximum field holds our number. We would still turn the plugin's own limiter off and keep counting in `limit_counter`: ours fails open on a slow database, lets verification sit behind the cache, emits the `X-RateLimit-*` headers, and is the limiter anonymous traffic uses anyway.
 - **Ownership.** A hand-provisioned Phase 1 key needs an account to belong to. We would create one for the partner, or for ourselves on their behalf.
 - **Caller name.** The plugin's key id becomes the `<id>` in `x-dfo-caller: key:<id>`.
 - **Schema.** The plugin's table is added through our existing migrations, as the auth tables were.
@@ -271,7 +277,7 @@ Saves:
 Costs:
 
 - A dependency in the path of every keyed request, on a package that has changed recently: it moved to its own package, and its owner column was renamed.
-- A second limiter we would switch off, and limits kept in metadata instead of typed columns.
+- A second limiter that we would switch off.
 - Every key must have an owning account.
 - Less control over the table's shape, and upgrades that may bring migrations.
 
@@ -283,7 +289,7 @@ A day or two should answer these. Any "no" sends us to [Build][].
 - [ ] Can verification run without a database write per request, or is the write cheap enough behind our cache?
 - [ ] Does a getter for `Authorization: Bearer` work alongside the plugin's own endpoints?
 - [ ] Is the stored hash a plain SHA-256 of the key, so keys could be moved to or from our own table?
-- [ ] Can an operator set a key's metadata and limits for another user's key from the server?
+- [ ] Can an operator set the limit on another user's key from the server, and can the proxy read that number while the plugin's own limiter is off?
 
 ## Phases
 
@@ -337,7 +343,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Also needed:** Usage reports by caller, a playbook for lowering a limit and rolling it back, edge rules that respect keys
 
-Phase 1 should avoid choices that Phase 2 has to undo. The table has an owner column from the start, and limits are stored per key in a form a tier can replace.
+Phase 1 should avoid choices that Phase 2 has to undo. The table has an owner column from the start, and the limit is stored per key in a form a tier can replace.
 
 ## Work by Repository
 
@@ -371,6 +377,7 @@ Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
 - **Multiple keys per account.** An account holds several keys at once, for example one per application or to rotate a key without downtime.
+- **A separate MCP limit per key.** A second optional number that sets a key's limit on `/mcp` apart from its limit on the API. MCP calls can cost much more than API calls, so this is the first refinement we expect to want. Keys without it keep using their one limit on both surfaces.
 - **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future:
     - Soft vs. hard limits (warnings)
     - Hourly vs. weekly limits, like how modern chat interfaces work. This protects against spiky workloads while mitigating the impact of hitting a limit ("try again in a few hours").
