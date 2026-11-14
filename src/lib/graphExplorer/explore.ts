@@ -3,7 +3,7 @@
  * view can be shared and the browser's history steps between views.
  *
  * - nothing set: the start screen
- * - `?list=all`: every property the instance declares
+ * - `?list=dfo`: every property the DFO declares
  * - `?list=<class dcid>`: one class's properties
  * - `?node=<dcid>`: one term at the centre
  * - `?dataset=<provenance dcid>`: one dataset at the centre
@@ -32,8 +32,11 @@ export type Carried = {
 
 export type ExploreState = Carried & { readonly view: ExploreView };
 
-/** The `list` and `show` value that means every instance property or every dataset. */
+/** The `show` value that means every dataset. */
 export const ALL = 'all';
+
+/** The `list` value that means every property the DFO declares. */
+export const DFO = 'dfo';
 
 export const START_VIEW: ExploreView = Object.freeze({ kind: 'start' });
 export const NO_FILTER: DatasetFilter = Object.freeze({ kind: 'none' });
@@ -58,7 +61,7 @@ const readView = (params: QueryReader): ExploreView => {
     if (list !== null) {
         return {
             kind: 'list',
-            scope: list === ALL ? { kind: 'instance' } : { kind: 'class', id: list },
+            scope: list === DFO ? { kind: 'dfo' } : { kind: 'class', id: list },
         };
     }
     return START_VIEW;
@@ -117,7 +120,7 @@ export const exploreQuery = (state: ExploreState): string => {
     if (view.kind === 'node') params.set('node', view.id);
     else if (view.kind === 'dataset') params.set('dataset', view.id);
     else if (view.kind === 'list') {
-        params.set('list', view.scope.kind === 'instance' ? ALL : view.scope.id);
+        params.set('list', view.scope.kind === 'dfo' ? DFO : view.scope.id);
     }
     writeCarried(params, state);
     return queryString(params);
@@ -150,9 +153,9 @@ export const checkFilter = (
         ? { show: NO_FILTER, unknown: show.id }
         : { show, unknown: null };
 
-/** Whether the model holds what a scoped list's scope names: every instance property, or a class or value list. */
+/** Whether the model holds what a scoped list's scope names: every DFO property, or a class or value list. */
 export const listScopeExists = (model: Pick<Model, 'kind'>, scope: ListScope): boolean => {
-    if (scope.kind === 'instance') return true;
+    if (scope.kind === 'dfo') return true;
     const kind = model.kind(scope.id);
     return kind === 'class' || kind === 'valueList';
 };

@@ -65,16 +65,16 @@ test('the schema guard refuses a node with a member removed or retyped', () => {
     refuses(readSchema, noGeneration, 'schema.generation');
 });
 
-test('the schema guard reads open properties as dcid or literal values', () => {
+test('the schema guard reads open properties as ref or literal values', () => {
     const nodes = readSchema(schemaBody()).nodes;
-    assert.deepEqual(nodes.find((node) => node.dcid === 'CurrencyCHF')?.other_properties, {
-        currencyStatus: [{ dcid: 'CurrencyStatusCurrent' }],
+    assert.deepEqual(nodes.find((node) => node.ref === 'CurrencyCHF')?.other_properties, {
+        currencyStatus: [{ ref: 'CurrencyStatusCurrent' }],
         dacCode: [{ value: '11' }, { value: '70' }],
         iso4217AlphaCode: [{ value: 'CHF' }],
         iso4217NumericCode: [{ value: '756' }],
-        nationalCurrencyOf: [{ dcid: 'country/CHE' }, { dcid: 'country/LIE' }],
+        nationalCurrencyOf: [{ ref: 'country/CHE' }, { ref: 'country/LIE' }],
     });
-    const index = nodes.findIndex((node) => node.dcid === 'CurrencyCHF');
+    const index = nodes.findIndex((node) => node.ref === 'CurrencyCHF');
     const path = `schema.nodes[${index}].other_properties`;
 
     const missing = schemaBody();
@@ -82,12 +82,12 @@ test('the schema guard reads open properties as dcid or literal values', () => {
     refuses(readSchema, missing, path);
 
     for (const [entry, member] of [
-        [{ dcid: 'X', value: 'Y' }, `${path}.dacCode[0]:`],
+        [{ ref: 'X', value: 'Y' }, `${path}.dacCode[0]:`],
         [{}, `${path}.dacCode[0]:`],
         [{ code: 'X' }, `${path}.dacCode[0]:`],
         ['11', `${path}.dacCode[0]:`],
         [{ value: 11 }, `${path}.dacCode[0].value`],
-        [{ dcid: null }, `${path}.dacCode[0].dcid`],
+        [{ ref: null }, `${path}.dacCode[0].ref`],
     ] as const) {
         const body = schemaBody();
         at(body, ['nodes', index, 'other_properties']).dacCode = [entry];
@@ -150,18 +150,18 @@ for (const [document, read, body, list] of [
     ['terms', readTerms, termsBody, 'terms'],
     ['usage', readUsage, usageBody, 'provenances'],
 ] as const) {
-    test(`the ${document} guard refuses a dcid listed twice, naming it`, () => {
+    test(`the ${document} guard refuses a ref listed twice, naming it`, () => {
         const repeated = body();
         const entries = at(repeated, [])[list];
         assert.ok(Array.isArray(entries));
-        const dcid = at(repeated, [list, 1]).dcid;
+        const ref = at(repeated, [list, 1]).ref;
         entries.push({ ...at(repeated, [list, 1]) });
         assert.throws(
             () => read(repeated),
             (error: unknown) =>
                 error instanceof WireShapeError &&
-                error.message.startsWith(`${document}.${list}[${entries.length - 1}].dcid`) &&
-                error.message.includes(String(dcid)),
+                error.message.startsWith(`${document}.${list}[${entries.length - 1}].ref`) &&
+                error.message.includes(String(ref)),
         );
     });
 }

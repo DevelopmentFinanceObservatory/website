@@ -130,8 +130,7 @@ export type DatasetView = {
 };
 
 /** The properties a scoped list covers: one class's, or every DFO-declared property. */
-export type ListScope =
-    { readonly kind: 'class'; readonly id: string } | { readonly kind: 'instance' };
+export type ListScope = { readonly kind: 'class'; readonly id: string } | { readonly kind: 'dfo' };
 
 /** Which datasets a scoped list counts: none chosen, one, or every dataset as a column. */
 export type DatasetFilter =
@@ -218,7 +217,7 @@ export type Model = {
     /** The ids, each once, most used first, then by label. */
     byUse(ids: Iterable<string>): readonly string[];
     /** The properties DFO declares, most used first, then by label. */
-    instanceProperties(): readonly string[];
+    dfoProperties(): readonly string[];
     datasetView(id: string): DatasetView | undefined;
     valuesUsed(datasetId: string, propertyId: string): ValuesUsed | null;
     scopedList(scope: ListScope, filter: DatasetFilter): ScopedList;
@@ -282,8 +281,8 @@ const groupBy = <TItem extends { readonly roles: readonly Role[] }>(
 };
 
 /** A dataset's label, else the last path segment of its dcid. */
-export const datasetName = (dataset: Pick<ProvenanceUsage, 'dcid' | 'label'>): string =>
-    dataset.label ?? dataset.dcid.split('/').at(-1) ?? dataset.dcid;
+export const datasetName = (dataset: Pick<ProvenanceUsage, 'ref' | 'label'>): string =>
+    dataset.label ?? dataset.ref.split('/').at(-1) ?? dataset.ref;
 
 const distinct = (ids: readonly string[]): string[] => [...new Set(ids)];
 
@@ -312,15 +311,15 @@ const distinctLists = (node: SchemaNode): SchemaNode => ({
  */
 export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): Model {
     const nodes = Object.freeze(
-        schema.nodes.map(distinctLists).sort((a, b) => (a.dcid < b.dcid ? -1 : 1)),
+        schema.nodes.map(distinctLists).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
     );
     const datasets = Object.freeze([...usageDocument.provenances]);
-    const byId = new Map(nodes.map((node) => [node.dcid, node]));
-    const datasetById = new Map(datasets.map((dataset) => [dataset.dcid, dataset]));
-    const kinds = new Map(nodes.map((node) => [node.dcid, kindOf(node)]));
+    const byId = new Map(nodes.map((node) => [node.ref, node]));
+    const datasetById = new Map(datasets.map((dataset) => [dataset.ref, dataset]));
+    const kinds = new Map(nodes.map((node) => [node.ref, kindOf(node)]));
 
     const label = (id: string): string => {
-        const name = byId.get(id)?.name;
+        const name = byId.get(id)?.label;
         if (name) return name;
         const dataset = datasetById.get(id);
         return dataset ? datasetName(dataset) : id;
@@ -339,22 +338,22 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         const broader = [
             ...new Set([...node.sub_class_of, ...node.sub_property_of, ...node.specialization_of]),
         ];
-        broaderOf.set(node.dcid, Object.freeze(broader));
-        for (const id of broader) push(narrowerOf, id, node.dcid);
-        if (kinds.get(node.dcid) === 'property') {
-            for (const id of node.domain_includes) push(domainOf, id, node.dcid);
-            for (const id of node.range_includes) push(rangeOf, id, node.dcid);
+        broaderOf.set(node.ref, Object.freeze(broader));
+        for (const id of broader) push(narrowerOf, id, node.ref);
+        if (kinds.get(node.ref) === 'property') {
+            for (const id of node.domain_includes) push(domainOf, id, node.ref);
+            for (const id of node.range_includes) push(rangeOf, id, node.ref);
         }
         for (const id of node.enumeration?.members ?? []) {
-            membersOf.set(node.dcid, (membersOf.get(node.dcid) ?? new Set()).add(id));
+            membersOf.set(node.ref, (membersOf.get(node.ref) ?? new Set()).add(id));
         }
     }
     // A value typed by a value list belongs to it whether or not the list's member read reached it.
     for (const node of nodes) {
-        if (kinds.get(node.dcid) !== 'value') continue;
+        if (kinds.get(node.ref) !== 'value') continue;
         for (const type of node.types) {
             if (kinds.get(type) === 'valueList') {
-                membersOf.set(type, (membersOf.get(type) ?? new Set()).add(node.dcid));
+                membersOf.set(type, (membersOf.get(type) ?? new Set()).add(node.ref));
             }
         }
     }
@@ -461,13 +460,13 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
 
     for (const dataset of datasets) {
         for (const pattern of dataset.patterns) {
-            patterns.push({ dataset: dataset.dcid, pattern });
+            patterns.push({ dataset: dataset.ref, pattern });
             for (const id of patternIds(pattern)) {
-                add(id, dataset.dcid, pattern.stat_var_count, 'sum');
+                add(id, dataset.ref, pattern.stat_var_count, 'sum');
             }
             for (const [id, role] of patternRoles(pattern)) {
                 const perDataset = roleIndex.get(id) ?? new Map<string, Set<Role>>();
-                perDataset.set(dataset.dcid, (perDataset.get(dataset.dcid) ?? new Set()).add(role));
+                perDataset.set(dataset.ref, (perDataset.get(dataset.ref) ?? new Set()).add(role));
                 roleIndex.set(id, perDataset);
             }
         }
@@ -480,10 +479,10 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
             // A value can also sit in a pattern field. The larger count stands, so no StatVar
             // counts twice.
             for (const value of constraint.values) {
-                add(value.value, dataset.dcid, value.stat_var_count, 'max');
+                add(value.value, dataset.ref, value.stat_var_count, 'max');
             }
         }
-        constraintValues.set(dataset.dcid, values);
+        constraintValues.set(dataset.ref, values);
     }
 
     const usageCache = new Map<string, Usage>();
@@ -568,12 +567,12 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     const byUse = (ids: Iterable<string>): readonly string[] =>
         Object.freeze([...new Set(ids)].sort(moreUsed));
 
-    let instanceList: readonly string[] | undefined;
-    const instanceProperties = (): readonly string[] =>
-        (instanceList ??= Object.freeze(
+    let dfoList: readonly string[] | undefined;
+    const dfoProperties = (): readonly string[] =>
+        (dfoList ??= Object.freeze(
             nodes
-                .filter((node) => kinds.get(node.dcid) === 'property' && node.declared_by === 'dfo')
-                .map((node) => node.dcid)
+                .filter((node) => kinds.get(node.ref) === 'property' && node.declared_by === 'dfo')
+                .map((node) => node.ref)
                 .sort(moreUsed),
         ));
 
@@ -668,7 +667,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         const entries: { id: string; roles: readonly Role[]; inheritedFrom: string | null }[] =
             scope.kind === 'class'
                 ? [...propertiesOf(scope.id).all]
-                : instanceProperties().map((id) => ({
+                : dfoProperties().map((id) => ({
                       id,
                       roles: roles(id),
                       inheritedFrom: null,
@@ -677,7 +676,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
             filter.kind === 'dataset'
                 ? [filter.id]
                 : filter.kind === 'all'
-                  ? datasets.map((dataset) => dataset.dcid)
+                  ? datasets.map((dataset) => dataset.ref)
                   : [],
         );
         const rows = entries.map((entry): ScopedRow => {
@@ -717,9 +716,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     const memberUse = (listId: string): readonly DatasetMembers[] =>
         Object.freeze(
             datasets
-                .map(({ dcid }) =>
-                    Object.freeze({ dataset: dcid, values: membersUsed(listId, dcid) }),
-                )
+                .map(({ ref }) => Object.freeze({ dataset: ref, values: membersUsed(listId, ref) }))
                 .filter(({ values }) => values.used > 0)
                 .sort((a, b) => b.values.used - a.values.used || byLabel(a.dataset, b.dataset)),
         );
@@ -764,7 +761,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         populationTypes: () => populationTypes,
         propertiesOf,
         byUse,
-        instanceProperties,
+        dfoProperties,
         datasetView,
         valuesUsed,
         scopedList,
@@ -775,7 +772,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
 
 /** An open property value as text: a node's dcid, else the literal. */
 export const openValueText = (value: OpenValue): string =>
-    'dcid' in value ? value.dcid : value.value;
+    'ref' in value ? value.ref : value.value;
 
 /** The literal values of a node's open properties, which match as its codes do. Dcid values are left out. */
 export const openLiterals = (node: SchemaNode | undefined): string[] =>

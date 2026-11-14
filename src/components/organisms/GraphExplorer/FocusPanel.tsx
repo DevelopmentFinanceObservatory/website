@@ -373,7 +373,7 @@ export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | unde
         <div className={styles.section}>
             <Label>{outsideKind(term)}</Label>
             <h2 className={styles.name}>
-                {term?.name ?? id}
+                {term?.label ?? id}
                 {term?.declared_by === 'base' && (
                     <>
                         {' '}

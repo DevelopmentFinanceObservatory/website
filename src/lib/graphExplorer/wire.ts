@@ -2,8 +2,10 @@
  * The Graph API's schema documents, as served under /api/graph/schema, and
  * a guard per response that refuses an unexpected shape.
  *
- * Members keep the server's snake case and Data Commons nouns: `types` is
- * `typeOf`, `sub_class_of` is `subClassOf`, and so on. Each guard checks
+ * A node, term or provenance names itself by `ref` (its dcid) and `label`
+ * (its name), as the Graph surface does. Other members keep the server's
+ * snake case and Data Commons nouns: `types` is `typeOf`, `sub_class_of` is
+ * `subClassOf`, and so on. Each guard checks
  * every member of every node, pattern, term and finding, so a response
  * with a different shape fails at the point it enters, before any screen
  * reads it. A member drawn from a fixed list that may grow (`declared_by`,
@@ -36,8 +38,8 @@ export type SchemaEnumeration = {
     complete: boolean;
 };
 
-/** One value of an open property: a node by its dcid, or a literal. */
-export type OpenValue = { readonly dcid: string } | { readonly value: string };
+/** One value of an open property: a node by its ref, or a literal. */
+export type OpenValue = { readonly ref: string } | { readonly value: string };
 
 /**
  * Every outgoing property of a node besides the named fields, by property
@@ -47,9 +49,9 @@ export type OtherProperties = Readonly<Record<string, readonly OpenValue[]>>;
 
 /** One node of the schema document. Every list is sorted. */
 export type SchemaNode = {
-    dcid: string;
+    ref: string;
     /** Null when the graph names the node only by its dcid. */
-    name: string | null;
+    label: string | null;
     description: string | null;
     /** The node's `typeOf` values. */
     types: string[];
@@ -82,8 +84,8 @@ export type SchemaDocument = {
 
 /** One Class or Property on the graph. */
 export type SchemaTerm = {
-    dcid: string;
-    name: string | null;
+    ref: string;
+    label: string | null;
     types: ('Class' | 'Property')[];
     provenances: string[];
     /** As on a schema node: one of DECLARERS, another origin, or null. */
@@ -133,7 +135,7 @@ export type SchemaFacets = {
 
 /** How one provenance's StatVars use the model. */
 export type ProvenanceUsage = {
-    dcid: string;
+    ref: string;
     label: string | null;
     description: string | null;
     stat_var_count: number;
@@ -319,13 +321,13 @@ const obj =
 
 const strList = list(str);
 
-/** An open property's value: an object holding exactly one of `dcid` and `value`, a string. */
+/** An open property's value: an object holding exactly one of `ref` and `value`, a string. */
 const openValue: Check = (value, path) => {
     const record = asRecord(value);
     const keys = record ? Object.keys(record) : [];
     const [key] = keys;
-    if (keys.length !== 1 || (key !== 'dcid' && key !== 'value')) {
-        return fail(path, 'an object with exactly one of dcid and value');
+    if (keys.length !== 1 || (key !== 'ref' && key !== 'value')) {
+        return fail(path, 'an object with exactly one of ref and value');
     }
     str(record?.[key], `${path}.${key}`);
 };
@@ -344,8 +346,8 @@ const schemaDocument = obj({
     generation: nullable(str),
     nodes: list(
         obj({
-            dcid: str,
-            name: nullable(str),
+            ref: str,
+            label: nullable(str),
             description: nullable(str),
             types: strList,
             alternate_name: strList,
@@ -367,8 +369,8 @@ const schemaTerms = obj({
     generation: nullable(str),
     terms: list(
         obj({
-            dcid: str,
-            name: nullable(str),
+            ref: str,
+            label: nullable(str),
             types: list(oneOf(['Class', 'Property'])),
             provenances: strList,
             declared_by: nullable(str),
@@ -379,7 +381,7 @@ const schemaTerms = obj({
 const schemaUsage = obj({
     provenances: list(
         obj({
-            dcid: str,
+            ref: str,
             label: nullable(str),
             description: nullable(str),
             stat_var_count: num,
@@ -441,14 +443,14 @@ const schemaCheckResponse = obj({
     ),
 });
 
-/** Refuses a list of entries that names one dcid twice, naming the repeat. */
-const onePerDcid = (entries: readonly { readonly dcid: string }[], path: string): void => {
+/** Refuses a list of entries that names one ref twice, naming the repeat. */
+const onePerRef = (entries: readonly { readonly ref: string }[], path: string): void => {
     const seen = new Set<string>();
-    for (const [at, { dcid }] of entries.entries()) {
-        if (seen.has(dcid)) {
-            throw new WireShapeError(`${path}[${at}].dcid: ${dcid} is listed twice`);
+    for (const [at, { ref }] of entries.entries()) {
+        if (seen.has(ref)) {
+            throw new WireShapeError(`${path}[${at}].ref: ${ref} is listed twice`);
         }
-        seen.add(dcid);
+        seen.add(ref);
     }
 };
 
@@ -456,34 +458,34 @@ const onePerDcid = (entries: readonly { readonly dcid: string }[], path: string)
 
 /**
  * The schema document, or a WireShapeError naming the first member out of
- * shape or the first dcid listed twice.
+ * shape or the first ref listed twice.
  */
 export const readSchema = (body: unknown): SchemaDocument => {
     schemaDocument(body, 'schema');
     const document = body as SchemaDocument;
-    onePerDcid(document.nodes, 'schema.nodes');
+    onePerRef(document.nodes, 'schema.nodes');
     return document;
 };
 
 /**
  * The terms list, or a WireShapeError naming the first member out of shape
- * or the first dcid listed twice.
+ * or the first ref listed twice.
  */
 export const readTerms = (body: unknown): SchemaTerms => {
     schemaTerms(body, 'terms');
     const document = body as SchemaTerms;
-    onePerDcid(document.terms, 'terms.terms');
+    onePerRef(document.terms, 'terms.terms');
     return document;
 };
 
 /**
  * The usage document, or a WireShapeError naming the first member out of
- * shape or the first dcid listed twice.
+ * shape or the first ref listed twice.
  */
 export const readUsage = (body: unknown): SchemaUsage => {
     schemaUsage(body, 'usage');
     const document = body as SchemaUsage;
-    onePerDcid(document.provenances, 'usage.provenances');
+    onePerRef(document.provenances, 'usage.provenances');
     return document;
 };
 

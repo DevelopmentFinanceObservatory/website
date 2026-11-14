@@ -2,1977 +2,1977 @@
     "generation": "fixture",
     "terms": [
         {
-            "dcid": "ABSGreaterCapitalCityStatisticalArea",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSGreaterCapitalCityStatisticalArea",
             "types": ["Class"]
         },
         {
-            "dcid": "ABSState",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSState",
             "types": ["Class"]
         },
         {
-            "dcid": "ABSStatisticalAreaLevel1",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel1",
             "types": ["Class"]
         },
         {
-            "dcid": "ABSStatisticalAreaLevel2",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel2",
             "types": ["Class"]
         },
         {
-            "dcid": "ABSStatisticalAreaLevel3",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel3",
             "types": ["Class"]
         },
         {
-            "dcid": "ABSStatisticalAreaLevel4",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ABSStatisticalAreaLevel4",
             "types": ["Class"]
         },
         {
-            "dcid": "ACLGroup",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ACLGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "ACSEDChild",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ACSEDChild",
             "types": ["Class"]
         },
         {
-            "dcid": "ACSEDParent",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ACSEDParent",
             "types": ["Class"]
         },
         {
-            "dcid": "APIReference",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "APIReference",
             "types": ["Class"]
         },
         {
-            "dcid": "Abortion",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Abortion",
             "types": ["Class"]
         },
         {
-            "dcid": "AboutPage",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AboutPage",
             "types": ["Class"]
         },
         {
-            "dcid": "AbsenteeismStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AbsenteeismStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AcademicAssessmentEvent",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AcademicAssessmentEvent",
             "types": ["Class"]
         },
         {
-            "dcid": "AcademicAssessmentTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AcademicAssessmentTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AcceptAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AcceptAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AccidentCauseEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AccidentCauseEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AccidentTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AccidentTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Accommodation",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Accommodation",
             "types": ["Class"]
         },
         {
-            "dcid": "AccountingService",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AccountingService",
             "types": ["Class"]
         },
         {
-            "dcid": "AchieveAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AchieveAction",
             "types": ["Class"]
         },
         {
-            "dcid": "Action",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Action",
             "types": ["Class"]
         },
         {
-            "dcid": "ActionStatusType",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ActionStatusType",
             "types": ["Class"]
         },
         {
-            "dcid": "ActivateAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ActivateAction",
             "types": ["Class"]
         },
         {
-            "dcid": "ActiveIngredientAmount",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ActiveIngredientAmount",
             "types": ["Class"]
         },
         {
-            "dcid": "AddAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AddAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AdjustmentTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdjustmentTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrationRouteEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrationRouteEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea1",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea1",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea2",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea2",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea3",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea3",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea4",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea4",
             "types": ["Class"]
         },
         {
-            "dcid": "AdministrativeArea5",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdministrativeArea5",
             "types": ["Class"]
         },
         {
-            "dcid": "AdultEntertainment",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdultEntertainment",
             "types": ["Class"]
         },
         {
-            "dcid": "AdultSkillsDeprivation",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AdultSkillsDeprivation",
             "types": ["Class"]
         },
         {
-            "dcid": "AffectedByEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AffectedByEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AgeGroupClassificationEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AgeGroupClassificationEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AgeStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AgeStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AgentSkill",
             "declared_by": "dfo",
-            "name": "agent skill",
+            "label": "agent skill",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "AgentSkill",
             "types": ["Class"]
         },
         {
-            "dcid": "AgentSkillReference",
             "declared_by": "dfo",
-            "name": "agent skill reference",
+            "label": "agent skill reference",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "AgentSkillReference",
             "types": ["Class"]
         },
         {
-            "dcid": "AggregateOffer",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AggregateOffer",
             "types": ["Class"]
         },
         {
-            "dcid": "AggregateRating",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AggregateRating",
             "types": ["Class"]
         },
         {
-            "dcid": "AggregateTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AggregateTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AggregationSlice",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AggregationSlice",
             "types": ["Class"]
         },
         {
-            "dcid": "AgreeAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AgreeAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AgriculturalFacility",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AgriculturalFacility",
             "types": ["Class"]
         },
         {
-            "dcid": "AgricultureTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AgricultureTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AirPollutantEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AirPollutantEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AirQualitySite",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AirQualitySite",
             "types": ["Class"]
         },
         {
-            "dcid": "Airline",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Airline",
             "types": ["Class"]
         },
         {
-            "dcid": "Airport",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Airport",
             "types": ["Class"]
         },
         {
-            "dcid": "AlcoholConsumptionRecordTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholConsumptionRecordTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AlcoholUsageEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholUsageEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AlcoholicBeverageTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AlcoholicBeverageTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AlignmentObject",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AlignmentObject",
             "types": ["Class"]
         },
         {
-            "dcid": "AllegationEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AllegationEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Allele",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Allele",
             "types": ["Class"]
         },
         {
-            "dcid": "AlleleTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AlleleTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AllocateAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AllocateAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AmenityFeatureEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AmenityFeatureEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Amount",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Amount",
             "types": ["Class"]
         },
         {
-            "dcid": "AmrGlassCategoryEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AmrGlassCategoryEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AmusementPark",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AmusementPark",
             "types": ["Class"]
         },
         {
-            "dcid": "AnatomicalTherapeuticChemicalCode",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AnatomicalTherapeuticChemicalCode",
             "types": ["Class"]
         },
         {
-            "dcid": "AnimalShelter",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AnimalShelter",
             "types": ["Class"]
         },
         {
-            "dcid": "Answer",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Answer",
             "types": ["Class"]
         },
         {
-            "dcid": "AntenatalStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AntenatalStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Antibody",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Antibody",
             "types": ["Class"]
         },
         {
-            "dcid": "AntibodyTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AntibodyTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Apartment",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Apartment",
             "types": ["Class"]
         },
         {
-            "dcid": "ApartmentComplex",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ApartmentComplex",
             "types": ["Class"]
         },
         {
-            "dcid": "AppendAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AppendAction",
             "types": ["Class"]
         },
         {
-            "dcid": "ApplicationTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ApplicationTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "ApplyAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ApplyAction",
             "types": ["Class"]
         },
         {
-            "dcid": "Aquarium",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Aquarium",
             "types": ["Class"]
         },
         {
-            "dcid": "AreaUnitOfMeasure",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AreaUnitOfMeasure",
             "types": ["Class"]
         },
         {
-            "dcid": "ArriveAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ArriveAction",
             "types": ["Class"]
         },
         {
-            "dcid": "ArtGallery",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "ArtGallery",
             "types": ["Class"]
         },
         {
-            "dcid": "Article",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Article",
             "types": ["Class"]
         },
         {
-            "dcid": "AshImpoundmentStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AshImpoundmentStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AskAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AskAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AssessAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssessAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AssessmentLevelEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentLevelEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssessmentScoreLevelEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentScoreLevelEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssessmentStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssessmentStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssetsOwnedEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssetsOwnedEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssignAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssignAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AssistiveTechnologyProductEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssistiveTechnologyProductEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssistiveTechnologySubquestionEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssistiveTechnologySubquestionEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "Association",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Association",
             "types": ["Class"]
         },
         {
-            "dcid": "AssociationSourceEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssociationSourceEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AssociationTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AssociationTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AstronomicalLowTideEvent",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AstronomicalLowTideEvent",
             "types": ["Class"]
         },
         {
-            "dcid": "Atmosphere",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Atmosphere",
             "types": ["Class"]
         },
         {
-            "dcid": "Attorney",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Attorney",
             "types": ["Class"]
         },
         {
-            "dcid": "Audience",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Audience",
             "types": ["Class"]
         },
         {
-            "dcid": "AudioObject",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AudioObject",
             "types": ["Class"]
         },
         {
-            "dcid": "AuthorizeAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AuthorizeAction",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoBodyShop",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoBodyShop",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoDealer",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoDealer",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoPartsStore",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoPartsStore",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoRental",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoRental",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoRepair",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoRepair",
             "types": ["Class"]
         },
         {
-            "dcid": "AutoWash",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutoWash",
             "types": ["Class"]
         },
         {
-            "dcid": "AutomatedTeller",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutomatedTeller",
             "types": ["Class"]
         },
         {
-            "dcid": "AutomaticRefreshTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutomaticRefreshTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AutomotiveBusiness",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutomotiveBusiness",
             "types": ["Class"]
         },
         {
-            "dcid": "AutonomousRegion",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AutonomousRegion",
             "types": ["Class"]
         },
         {
-            "dcid": "AvailabilityToObtainEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AvailabilityToObtainEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "AvalancheEvent",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AvalancheEvent",
             "types": ["Class"]
         },
         {
-            "dcid": "AwareAntibioticsGroupEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "AwareAntibioticsGroupEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BLSEstablishment",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BLSEstablishment",
             "types": ["Class"]
         },
         {
-            "dcid": "BLSWorker",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BLSWorker",
             "types": ["Class"]
         },
         {
-            "dcid": "Bakery",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Bakery",
             "types": ["Class"]
         },
         {
-            "dcid": "Bank",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Bank",
             "types": ["Class"]
         },
         {
-            "dcid": "BankAccount",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BankAccount",
             "types": ["Class"]
         },
         {
-            "dcid": "BankAccountTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BankAccountTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BankOrCreditUnion",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BankOrCreditUnion",
             "types": ["Class"]
         },
         {
-            "dcid": "BarOrPub",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BarOrPub",
             "types": ["Class"]
         },
         {
-            "dcid": "Barcode",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Barcode",
             "types": ["Class"]
         },
         {
-            "dcid": "BarriersToAccessingAssistiveProductEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BarriersToAccessingAssistiveProductEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BarriersToHousingAndServices",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BarriersToHousingAndServices",
             "types": ["Class"]
         },
         {
-            "dcid": "Beach",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Beach",
             "types": ["Class"]
         },
         {
-            "dcid": "BeautySalon",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BeautySalon",
             "types": ["Class"]
         },
         {
-            "dcid": "Bed",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "Bed",
             "types": ["Class"]
         },
         {
-            "dcid": "BedAndBreakfast",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BedAndBreakfast",
             "types": ["Class"]
         },
         {
-            "dcid": "BedDetails",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BedDetails",
             "types": ["Class"]
         },
         {
-            "dcid": "BedLine",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BedLine",
             "types": ["Class"]
         },
         {
-            "dcid": "BefriendAction",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BefriendAction",
             "types": ["Class"]
         },
         {
-            "dcid": "BenefitProgramEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BenefitProgramEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BenefitTypeEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BenefitTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BenefitsStatusEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BenefitsStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BiasMotivationEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiasMotivationEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BikeStore",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BikeStore",
             "types": ["Class"]
         },
         {
-            "dcid": "BinaryOperatorEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BinaryOperatorEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BioChemEntity",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BioChemEntity",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalClass",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalClass",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalEntity",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalEntity",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalFamily",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalFamily",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalGenus",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalGenus",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalHostEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalHostEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalInfraSpecies",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalInfraSpecies",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalKingdom",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalKingdom",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalOrder",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalOrder",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalPhylum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalPhylum",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalSpecies",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSpecies",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalSpecimen",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSpecimen",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalSubGenus",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSubGenus",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalSuperFamily",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalSuperFamily",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalTaxonomicDivisionEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalTaxonomicDivisionEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "BiologicalTaxonomicRankEnum",
             "declared_by": "base",
-            "name": null,
+            "label": null,
             "provenances": ["dc/base/Schema"],
+            "ref": "BiologicalTaxonomicRankEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CRSCooperationModalityEnum",
             "declared_by": "dfo",
-            "name": "CRS Modality",
+            "label": "CRS Modality",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSCooperationModalityEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CRSPurposeCodeEnum",
             "declared_by": "dfo",
-            "name": "CRS Purpose",
+            "label": "CRS Purpose",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSPurposeCodeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CRSTypeOfFinanceEnum",
             "declared_by": "dfo",
-            "name": "CRS Finance",
+            "label": "CRS Finance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSTypeOfFinanceEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CRSTypeOfFlowEnum",
             "declared_by": "dfo",
-            "name": "CRS Flow",
+            "label": "CRS Flow",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CRSTypeOfFlowEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "ClimateChangePolicyObjectiveEnum",
             "declared_by": "dfo",
-            "name": "climate change policy objective",
+            "label": "climate change policy objective",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "ClimateChangePolicyObjectiveEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "ConversionRecipeEnum",
             "declared_by": "dfo",
-            "name": "conversion recipe",
+            "label": "conversion recipe",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "ConversionRecipeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CurrencyConversionBasisEnum",
             "declared_by": "dfo",
-            "name": "currency conversion basis",
+            "label": "currency conversion basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyConversionBasisEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CurrencyDenomination",
             "declared_by": "dfo",
-            "name": "Currency denomination",
+            "label": "Currency denomination",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyDenomination",
             "types": ["Class"]
         },
         {
-            "dcid": "CurrencyStatusEnum",
             "declared_by": "dfo",
-            "name": "Currency status",
+            "label": "Currency status",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "CurrencyUnit",
             "declared_by": "dfo",
-            "name": "Currency",
+            "label": "Currency",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CurrencyUnit",
             "types": ["Class"]
         },
         {
-            "dcid": "CyclicalAdjustmentEnum",
             "declared_by": "dfo",
-            "name": "cyclical adjustment",
+            "label": "cyclical adjustment",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "CyclicalAdjustmentEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DAC1AidTypeEnum",
             "declared_by": "dfo",
-            "name": "DAC 1 aid type",
+            "label": "DAC 1 aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC1AidTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DAC2aAidTypeEnum",
             "declared_by": "dfo",
-            "name": "DAC 2a aid type",
+            "label": "DAC 2a aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC2aAidTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DAC2bAidTypeEnum",
             "declared_by": "dfo",
-            "name": "DAC 2b aid type",
+            "label": "DAC 2b aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DAC2bAidTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DACGroup",
             "declared_by": "dfo",
-            "name": "DAC group",
+            "label": "DAC group",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DACGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "DACPartEnum",
             "declared_by": "dfo",
-            "name": "DAC list part",
+            "label": "DAC list part",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DACPartEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DACRecipientUnallocatedByCountry",
             "declared_by": "dfo",
-            "name": "DAC recipient unallocated by country",
+            "label": "DAC recipient unallocated by country",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DACRecipientUnallocatedByCountry",
             "types": ["Class"]
         },
         {
-            "dcid": "DACTypeOfFinanceEnum",
             "declared_by": "dfo",
-            "name": "DAC type of finance",
+            "label": "DAC type of finance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DACTypeOfFinanceEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "DACUnspecifiedParty",
             "declared_by": "dfo",
-            "name": "DAC unspecified party",
+            "label": "DAC unspecified party",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "DACUnspecifiedParty",
             "types": ["Class"]
         },
         {
-            "dcid": "EconomicProduction",
             "declared_by": "dfo",
-            "name": "economic production",
+            "label": "economic production",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "EconomicProduction",
             "types": ["Class"]
         },
         {
-            "dcid": "EconomicUnit",
             "declared_by": "dfo",
-            "name": "economic unit",
+            "label": "economic unit",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "EconomicUnit",
             "types": ["Class"]
         },
         {
-            "dcid": "FinalExpenditure",
             "declared_by": "dfo",
-            "name": "final expenditure",
+            "label": "final expenditure",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinalExpenditure",
             "types": ["Class"]
         },
         {
-            "dcid": "FinalExpenditureTypeEnum",
             "declared_by": "dfo",
-            "name": "final expenditure type",
+            "label": "final expenditure type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinalExpenditureTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialFlow",
             "declared_by": "dfo",
-            "name": "financial flow",
+            "label": "financial flow",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialFlow",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialFlowTypeEnum",
             "declared_by": "dfo",
-            "name": "financial flow type",
+            "label": "financial flow type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialFlowTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialObligation",
             "declared_by": "dfo",
-            "name": "financial obligation",
+            "label": "financial obligation",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialObligation",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialObligationTypeEnum",
             "declared_by": "dfo",
-            "name": "financial obligation type",
+            "label": "financial obligation type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialObligationTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialPosition",
             "declared_by": "dfo",
-            "name": "financial position",
+            "label": "financial position",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialPosition",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancialPositionTypeEnum",
             "declared_by": "dfo",
-            "name": "financial position type",
+            "label": "financial position type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancialPositionTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancingEvent",
             "declared_by": "dfo",
-            "name": "financing event",
+            "label": "financing event",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingEvent",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancingFormEnum",
             "declared_by": "dfo",
-            "name": "financing form",
+            "label": "financing form",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingFormEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancingPurposeEnum",
             "declared_by": "dfo",
-            "name": "financing purpose",
+            "label": "financing purpose",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingPurposeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FinancingResourceEnum",
             "declared_by": "dfo",
-            "name": "financing resource",
+            "label": "financing resource",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FinancingResourceEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "FixedCapitalConsumptionBasisEnum",
             "declared_by": "dfo",
-            "name": "fixed capital consumption basis",
+            "label": "fixed capital consumption basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "FixedCapitalConsumptionBasisEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "GeoGrouping",
             "declared_by": "dfo",
-            "name": "geographic grouping",
+            "label": "geographic grouping",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "GeoGrouping",
             "types": ["Class"]
         },
         {
-            "dcid": "Grouping",
             "declared_by": "dfo",
-            "name": "grouping",
+            "label": "grouping",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "Grouping",
             "types": ["Class"]
         },
         {
-            "dcid": "GuaranteeStatusEnum",
             "declared_by": "dfo",
-            "name": "guarantee status",
+            "label": "guarantee status",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "GuaranteeStatusEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "IDSConcessionalityEnum",
             "declared_by": "dfo",
-            "name": "IDS concessionality",
+            "label": "IDS concessionality",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSConcessionalityEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "IDSCreditorTypeEnum",
             "declared_by": "dfo",
-            "name": "IDS creditor type",
+            "label": "IDS creditor type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSCreditorTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "IDSDebtorTypeEnum",
             "declared_by": "dfo",
-            "name": "IDS debtor type",
+            "label": "IDS debtor type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSDebtorTypeEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "IDSUnidentifiedCreditor",
             "declared_by": "dfo",
-            "name": "IDS unidentified creditor",
+            "label": "IDS unidentified creditor",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IDSUnidentifiedCreditor",
             "types": ["Class"]
         },
         {
-            "dcid": "IMFEconomyGroup",
             "declared_by": "dfo",
-            "name": "IMF economy group",
+            "label": "IMF economy group",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IMFEconomyGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "IMFRegion",
             "declared_by": "dfo",
-            "name": "IMF region",
+            "label": "IMF region",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IMFRegion",
             "types": ["Class"]
         },
         {
-            "dcid": "IncludesIMFCreditEnum",
             "declared_by": "dfo",
-            "name": "includes IMF credit",
+            "label": "includes IMF credit",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "IncludesIMFCreditEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "InterestRateVariabilityEnum",
             "declared_by": "dfo",
-            "name": "interest rate variability",
+            "label": "interest rate variability",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "InterestRateVariabilityEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "M49IntermediateRegion",
             "declared_by": "dfo",
-            "name": "UN M49 intermediate region",
+            "label": "UN M49 intermediate region",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "M49IntermediateRegion",
             "types": ["Class"]
         },
         {
-            "dcid": "M49Region",
             "declared_by": "dfo",
-            "name": "UN M49 region",
+            "label": "UN M49 region",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "M49Region",
             "types": ["Class"]
         },
         {
-            "dcid": "M49SubRegion",
             "declared_by": "dfo",
-            "name": "UN M49 sub-region",
+            "label": "UN M49 sub-region",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "M49SubRegion",
             "types": ["Class"]
         },
         {
-            "dcid": "MaturityBandEnum",
             "declared_by": "dfo",
-            "name": "maturity band",
+            "label": "maturity band",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "MaturityBandEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "MeasurementEnum",
             "declared_by": "dfo",
-            "name": "measurement method",
+            "label": "measurement method",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "MeasurementEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "NettingBasisEnum",
             "declared_by": "dfo",
-            "name": "netting basis",
+            "label": "netting basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "NettingBasisEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "NonSpecificCurrency",
             "declared_by": "dfo",
-            "name": "Non-specific currency",
+            "label": "Non-specific currency",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "NonSpecificCurrency",
             "types": ["Class"]
         },
         {
-            "dcid": "PolicyObjectiveEnum",
             "declared_by": "dfo",
-            "name": "policy objective",
+            "label": "policy objective",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "PolicyObjectiveEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "PositionValuationEnum",
             "declared_by": "dfo",
-            "name": "position valuation",
+            "label": "position valuation",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "PositionValuationEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "ProductTaxBasisEnum",
             "declared_by": "dfo",
-            "name": "product tax basis",
+            "label": "product tax basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "ProductTaxBasisEnum",
             "types": ["Class"]
         },
         {
-            "dcid": "PurchasingPowerUnit",
             "declared_by": "dfo",
-            "name": "purchasing power unit",
+            "label": "purchasing power unit",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "PurchasingPowerUnit",
             "types": ["Class"]
         },
         {
-            "dcid": "UNCountryDevelopmentGroup",
             "declared_by": "dfo",
-            "name": "UN country development group",
+            "label": "UN country development group",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "UNCountryDevelopmentGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "WorldBankIncomeGroup",
             "declared_by": "dfo",
-            "name": "World Bank income group",
+            "label": "World Bank income group",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankIncomeGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "WorldBankLendingGroup",
             "declared_by": "dfo",
-            "name": "World Bank lending group",
+            "label": "World Bank lending group",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankLendingGroup",
             "types": ["Class"]
         },
         {
-            "dcid": "WorldBankRegion",
             "declared_by": "dfo",
-            "name": "World Bank region",
+            "label": "World Bank region",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "WorldBankRegion",
             "types": ["Class"]
         },
         {
-            "dcid": "agentSkillReferences",
             "declared_by": "dfo",
-            "name": "agent skill references",
+            "label": "agent skill references",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "agentSkillReferences",
             "types": ["Property"]
         },
         {
-            "dcid": "amountMobilised",
             "declared_by": "dfo",
-            "name": "amount mobilised",
+            "label": "amount mobilised",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "amountMobilised",
             "types": ["Property"]
         },
         {
-            "dcid": "attributedAmount",
             "declared_by": "dfo",
-            "name": "attributed amount",
+            "label": "attributed amount",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "attributedAmount",
             "types": ["Property"]
         },
         {
-            "dcid": "classificationCode",
             "declared_by": "dfo",
-            "name": "classification code",
+            "label": "classification code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "classificationCode",
             "types": ["Property"]
         },
         {
-            "dcid": "climatePolicyObjective",
             "declared_by": "dfo",
-            "name": "climate change policy objective",
+            "label": "climate change policy objective",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "climatePolicyObjective",
             "types": ["Property"]
         },
         {
-            "dcid": "combinesMethods",
             "declared_by": "dfo",
-            "name": "combines methods",
+            "label": "combines methods",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "combinesMethods",
             "types": ["Property"]
         },
         {
-            "dcid": "conversionRecipe",
             "declared_by": "dfo",
-            "name": "conversion recipe",
+            "label": "conversion recipe",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "conversionRecipe",
             "types": ["Property"]
         },
         {
-            "dcid": "crsCooperationModality",
             "declared_by": "dfo",
-            "name": "CRS cooperation modality",
+            "label": "CRS cooperation modality",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "crsCooperationModality",
             "types": ["Property"]
         },
         {
-            "dcid": "crsPurpose",
             "declared_by": "dfo",
-            "name": "CRS purpose",
+            "label": "CRS purpose",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "crsPurpose",
             "types": ["Property"]
         },
         {
-            "dcid": "crsTypeOfFinance",
             "declared_by": "dfo",
-            "name": "CRS type of finance",
+            "label": "CRS type of finance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "crsTypeOfFinance",
             "types": ["Property"]
         },
         {
-            "dcid": "crsTypeOfFlow",
             "declared_by": "dfo",
-            "name": "CRS type of flow",
+            "label": "CRS type of flow",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "crsTypeOfFlow",
             "types": ["Property"]
         },
         {
-            "dcid": "currencyConversionBasis",
             "declared_by": "dfo",
-            "name": "currency conversion basis",
+            "label": "currency conversion basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyConversionBasis",
             "types": ["Property"]
         },
         {
-            "dcid": "currencyOfDenomination",
             "declared_by": "dfo",
-            "name": "currency of denomination",
+            "label": "currency of denomination",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyOfDenomination",
             "types": ["Property"]
         },
         {
-            "dcid": "currencyStatus",
             "declared_by": "dfo",
-            "name": "currency status",
+            "label": "currency status",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "currencyStatus",
             "types": ["Property"]
         },
         {
-            "dcid": "cyclicalAdjustment",
             "declared_by": "dfo",
-            "name": "cyclical adjustment",
+            "label": "cyclical adjustment",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "cyclicalAdjustment",
             "types": ["Property"]
         },
         {
-            "dcid": "dac1AidType",
             "declared_by": "dfo",
-            "name": "DAC 1 aid type",
+            "label": "DAC 1 aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dac1AidType",
             "types": ["Property"]
         },
         {
-            "dcid": "dac2aAidType",
             "declared_by": "dfo",
-            "name": "DAC 2a aid type",
+            "label": "DAC 2a aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dac2aAidType",
             "types": ["Property"]
         },
         {
-            "dcid": "dac2bAidType",
             "declared_by": "dfo",
-            "name": "DAC 2b aid type",
+            "label": "DAC 2b aid type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dac2bAidType",
             "types": ["Property"]
         },
         {
-            "dcid": "dacCode",
             "declared_by": "dfo",
-            "name": "DAC code",
+            "label": "DAC code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dacCode",
             "types": ["Property"]
         },
         {
-            "dcid": "dacPart",
             "declared_by": "dfo",
-            "name": "DAC list part",
+            "label": "DAC list part",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dacPart",
             "types": ["Property"]
         },
         {
-            "dcid": "dacTypeOfFinance",
             "declared_by": "dfo",
-            "name": "DAC type of finance",
+            "label": "DAC type of finance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dacTypeOfFinance",
             "types": ["Property"]
         },
         {
-            "dcid": "dataTransformationChangelog",
             "declared_by": "dfo",
-            "name": "data transformation changelog",
+            "label": "data transformation changelog",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dataTransformationChangelog",
             "types": ["Property"]
         },
         {
-            "dcid": "dataTransformationDescription",
             "declared_by": "dfo",
-            "name": "data transformation description",
+            "label": "data transformation description",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "dataTransformationDescription",
             "types": ["Property"]
         },
         {
-            "dcid": "deflator",
             "declared_by": "dfo",
-            "name": null,
+            "label": null,
             "provenances": ["provenance/DFOOntology"],
+            "ref": "deflator",
             "types": ["Property"]
         },
         {
-            "dcid": "deflatorBaseYear",
             "declared_by": "dfo",
-            "name": "deflator base year",
+            "label": "deflator base year",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "deflatorBaseYear",
             "types": ["Property"]
         },
         {
-            "dcid": "economicBalance",
             "declared_by": "dfo",
-            "name": "economic balance",
+            "label": "economic balance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "economicBalance",
             "types": ["Property"]
         },
         {
-            "dcid": "finalExpenditureType",
             "declared_by": "dfo",
-            "name": "final expenditure type",
+            "label": "final expenditure type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "finalExpenditureType",
             "types": ["Property"]
         },
         {
-            "dcid": "financialFlowType",
             "declared_by": "dfo",
-            "name": "financial flow type",
+            "label": "financial flow type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financialFlowType",
             "types": ["Property"]
         },
         {
-            "dcid": "financialObligationType",
             "declared_by": "dfo",
-            "name": "financial obligation type",
+            "label": "financial obligation type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financialObligationType",
             "types": ["Property"]
         },
         {
-            "dcid": "financialPositionType",
             "declared_by": "dfo",
-            "name": "financial position type",
+            "label": "financial position type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financialPositionType",
             "types": ["Property"]
         },
         {
-            "dcid": "financingForm",
             "declared_by": "dfo",
-            "name": "financing form",
+            "label": "financing form",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingForm",
             "types": ["Property"]
         },
         {
-            "dcid": "financingParticipant",
             "declared_by": "dfo",
-            "name": "financing participant",
+            "label": "financing participant",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingParticipant",
             "types": ["Property"]
         },
         {
-            "dcid": "financingProvider",
             "declared_by": "dfo",
-            "name": "financing provider",
+            "label": "financing provider",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingProvider",
             "types": ["Property"]
         },
         {
-            "dcid": "financingPurpose",
             "declared_by": "dfo",
-            "name": "financing purpose",
+            "label": "financing purpose",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingPurpose",
             "types": ["Property"]
         },
         {
-            "dcid": "financingRecipient",
             "declared_by": "dfo",
-            "name": "financing recipient",
+            "label": "financing recipient",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingRecipient",
             "types": ["Property"]
         },
         {
-            "dcid": "financingResource",
             "declared_by": "dfo",
-            "name": "financing resource",
+            "label": "financing resource",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "financingResource",
             "types": ["Property"]
         },
         {
-            "dcid": "fixedCapitalConsumptionBasis",
             "declared_by": "dfo",
-            "name": "fixed capital consumption basis",
+            "label": "fixed capital consumption basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "fixedCapitalConsumptionBasis",
             "types": ["Property"]
         },
         {
-            "dcid": "gracePeriod",
             "declared_by": "dfo",
-            "name": "grace period",
+            "label": "grace period",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "gracePeriod",
             "types": ["Property"]
         },
         {
-            "dcid": "grantElement",
             "declared_by": "dfo",
-            "name": "grant element",
+            "label": "grant element",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "grantElement",
             "types": ["Property"]
         },
         {
-            "dcid": "grantEquivalent",
             "declared_by": "dfo",
-            "name": "grant equivalent",
+            "label": "grant equivalent",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "grantEquivalent",
             "types": ["Property"]
         },
         {
-            "dcid": "guaranteeStatus",
             "declared_by": "dfo",
-            "name": "guarantee status",
+            "label": "guarantee status",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "guaranteeStatus",
             "types": ["Property"]
         },
         {
-            "dcid": "hasMember",
             "declared_by": "dfo",
-            "name": "has member",
+            "label": "has member",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "hasMember",
             "types": ["Property"]
         },
         {
-            "dcid": "idsConcessionality",
             "declared_by": "dfo",
-            "name": "IDS concessionality",
+            "label": "IDS concessionality",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "idsConcessionality",
             "types": ["Property"]
         },
         {
-            "dcid": "idsCreditorType",
             "declared_by": "dfo",
-            "name": "IDS creditor type",
+            "label": "IDS creditor type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "idsCreditorType",
             "types": ["Property"]
         },
         {
-            "dcid": "idsDebtorType",
             "declared_by": "dfo",
-            "name": "IDS debtor type",
+            "label": "IDS debtor type",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "idsDebtorType",
             "types": ["Property"]
         },
         {
-            "dcid": "imfEconomyCode",
             "declared_by": "dfo",
-            "name": "IMF economy code",
+            "label": "IMF economy code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "imfEconomyCode",
             "types": ["Property"]
         },
         {
-            "dcid": "includesIMFCredit",
             "declared_by": "dfo",
-            "name": "includes IMF credit",
+            "label": "includes IMF credit",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "includesIMFCredit",
             "types": ["Property"]
         },
         {
-            "dcid": "incomeBalance",
             "declared_by": "dfo",
-            "name": "income balance",
+            "label": "income balance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "incomeBalance",
             "types": ["Property"]
         },
         {
-            "dcid": "interestRateVariability",
             "declared_by": "dfo",
-            "name": "interest rate variability",
+            "label": "interest rate variability",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "interestRateVariability",
             "types": ["Property"]
         },
         {
-            "dcid": "iso4217AlphaCode",
             "declared_by": "dfo",
-            "name": "ISO 4217 currency code",
+            "label": "ISO 4217 currency code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "iso4217AlphaCode",
             "types": ["Property"]
         },
         {
-            "dcid": "iso4217NumericCode",
             "declared_by": "dfo",
-            "name": "ISO 4217 currency number",
+            "label": "ISO 4217 currency number",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "iso4217NumericCode",
             "types": ["Property"]
         },
         {
-            "dcid": "m49Code",
             "declared_by": "dfo",
-            "name": "M49 code",
+            "label": "M49 code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "m49Code",
             "types": ["Property"]
         },
         {
-            "dcid": "maturityBand",
             "declared_by": "dfo",
-            "name": "maturity band",
+            "label": "maturity band",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "maturityBand",
             "types": ["Property"]
         },
         {
-            "dcid": "nationalCurrencyOf",
             "declared_by": "dfo",
-            "name": "national currency of",
+            "label": "national currency of",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "nationalCurrencyOf",
             "types": ["Property"]
         },
         {
-            "dcid": "netOf",
             "declared_by": "dfo",
-            "name": "net of",
+            "label": "net of",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "netOf",
             "types": ["Property"]
         },
         {
-            "dcid": "nettingBasis",
             "declared_by": "dfo",
-            "name": "netting basis",
+            "label": "netting basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "nettingBasis",
             "types": ["Property"]
         },
         {
-            "dcid": "outputGap",
             "declared_by": "dfo",
-            "name": "output gap",
+            "label": "output gap",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "outputGap",
             "types": ["Property"]
         },
         {
-            "dcid": "partialObservationDate",
             "declared_by": "dfo",
-            "name": "partial observation date",
+            "label": "partial observation date",
             "provenances": ["provenance/DFOShared"],
+            "ref": "partialObservationDate",
             "types": ["Property"]
         },
         {
-            "dcid": "policyObjective",
             "declared_by": "dfo",
-            "name": "policy objective",
+            "label": "policy objective",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "policyObjective",
             "types": ["Property"]
         },
         {
-            "dcid": "positionValuation",
             "declared_by": "dfo",
-            "name": "position valuation",
+            "label": "position valuation",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "positionValuation",
             "types": ["Property"]
         },
         {
-            "dcid": "primaryIncome",
             "declared_by": "dfo",
-            "name": "primary income",
+            "label": "primary income",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "primaryIncome",
             "types": ["Property"]
         },
         {
-            "dcid": "productTaxBasis",
             "declared_by": "dfo",
-            "name": "product tax basis",
+            "label": "product tax basis",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "productTaxBasis",
             "types": ["Property"]
         },
         {
-            "dcid": "saving",
             "declared_by": "dfo",
-            "name": null,
+            "label": null,
             "provenances": ["provenance/DFOOntology"],
+            "ref": "saving",
             "types": ["Property"]
         },
         {
-            "dcid": "skillAppliesTo",
             "declared_by": "dfo",
-            "name": "skill applies to",
+            "label": "skill applies to",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "skillAppliesTo",
             "types": ["Property"]
         },
         {
-            "dcid": "skillAppliesToProvenance",
             "declared_by": "dfo",
-            "name": "skill applies to provenance",
+            "label": "skill applies to provenance",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "skillAppliesToProvenance",
             "types": ["Property"]
         },
         {
-            "dcid": "sourceIndicatorCode",
             "declared_by": "dfo",
-            "name": "source indicator code",
+            "label": "source indicator code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "sourceIndicatorCode",
             "types": ["Property"]
         },
         {
-            "dcid": "valueAdded",
             "declared_by": "dfo",
-            "name": "value added",
+            "label": "value added",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "valueAdded",
             "types": ["Property"]
         },
         {
-            "dcid": "wbCode",
             "declared_by": "dfo",
-            "name": "World Bank code",
+            "label": "World Bank code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "wbCode",
             "types": ["Property"]
         },
         {
-            "dcid": "wbCounterpartCode",
             "declared_by": "dfo",
-            "name": "World Bank counterpart code",
+            "label": "World Bank counterpart code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "wbCounterpartCode",
             "types": ["Property"]
         },
         {
-            "dcid": "wbEconomyCode",
             "declared_by": "dfo",
-            "name": "World Bank economy code",
+            "label": "World Bank economy code",
             "provenances": ["provenance/DFOOntology"],
+            "ref": "wbEconomyCode",
             "types": ["Property"]
         }
     ]

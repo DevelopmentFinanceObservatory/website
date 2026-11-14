@@ -819,7 +819,7 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
             ];
             return {
                 text: [header, ...rows].map((cells) => cells.join('\t')).join('\n'),
-                dataset: dataset.dcid,
+                dataset: dataset.ref,
                 misspelt: typo.id,
             };
         }

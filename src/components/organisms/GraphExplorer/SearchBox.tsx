@@ -37,7 +37,7 @@ type SearchBoxProps = {
 };
 
 /**
- * The top bar's search: results as the reader types, instance terms first,
+ * The top bar's search: results as the reader types, DFO terms first,
  * reachable by keyboard (arrows move, Enter opens, Escape closes, then
  * clears). Choosing a dataset opens `?dataset=`, anything else `?node=`.
  */

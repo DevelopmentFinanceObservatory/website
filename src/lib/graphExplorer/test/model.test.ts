@@ -51,7 +51,7 @@ test('a node reads as a class, value list, property or value, with its label and
 
 test('a node the graph declares no type for is not base', () => {
     const schema = readSchema(schemaBody());
-    const amount = schema.nodes.find((node) => node.dcid === 'amount');
+    const amount = schema.nodes.find((node) => node.ref === 'amount');
     assert.ok(amount);
     amount.declared_by = null;
     const undeclared = buildModel(schema, readUsage(usageBody()));
@@ -60,12 +60,12 @@ test('a node the graph declares no type for is not base', () => {
 
 test('only a DFO-declared property is in the DFO scope, and each origin has its words', () => {
     const schema = readSchema(schemaBody());
-    const flowType = schema.nodes.find((node) => node.dcid === 'financialFlowType');
+    const flowType = schema.nodes.find((node) => node.ref === 'financialFlowType');
     assert.ok(flowType);
-    assert.ok(model.instanceProperties().includes('financialFlowType'));
+    assert.ok(model.dfoProperties().includes('financialFlowType'));
     flowType.declared_by = 'un_system';
     const elsewhere = buildModel(schema, readUsage(usageBody()));
-    assert.ok(!elsewhere.instanceProperties().includes('financialFlowType'));
+    assert.ok(!elsewhere.dfoProperties().includes('financialFlowType'));
     assert.equal(elsewhere.isBase('financialFlowType'), false);
 
     assert.deepEqual(['dfo', 'base', 'un_system', 'some_new_origin', null].map(declarerWords), [
@@ -78,15 +78,15 @@ test('only a DFO-declared property is in the DFO scope, and each origin has its 
 });
 
 test('a dataset with no label is named by the last path segment of its dcid', () => {
-    assert.equal(datasetName({ dcid: DAC2B, label: 'OECD DAC2b' }), 'OECD DAC2b');
+    assert.equal(datasetName({ ref: DAC2B, label: 'OECD DAC2b' }), 'OECD DAC2b');
     assert.equal(
-        datasetName({ dcid: 'provenance/WorldBankInternationalDebtStatistics', label: null }),
+        datasetName({ ref: 'provenance/WorldBankInternationalDebtStatistics', label: null }),
         'WorldBankInternationalDebtStatistics',
     );
-    assert.equal(datasetName({ dcid: 'Unprefixed', label: null }), 'Unprefixed');
+    assert.equal(datasetName({ ref: 'Unprefixed', label: null }), 'Unprefixed');
 
     const provenances = readUsage(usageBody());
-    const dac1 = provenances.provenances.find((dataset) => dataset.dcid === DAC1);
+    const dac1 = provenances.provenances.find((dataset) => dataset.ref === DAC1);
     assert.ok(dac1);
     dac1.label = null;
     const unlabelled = buildModel(readSchema(schemaBody()), provenances);
@@ -139,8 +139,8 @@ test('a value list has its members and a member tree, roots first', () => {
 
 /** A value of NettingBasisEnum that specialises `parents`. */
 const nettingValue = (dcid: string, parents: string[]): SchemaNode => ({
-    dcid,
-    name: null,
+    ref: dcid,
+    label: null,
     description: null,
     types: ['NettingBasisEnum'],
     alternate_name: [],
@@ -182,7 +182,7 @@ test('a member tree holds every member once, with a cycle and a self-loop as roo
 
 test('no list repeats an id', () => {
     const schema = readSchema(schemaBody());
-    const netting = schema.nodes.find((node) => node.dcid === 'nettingBasis');
+    const netting = schema.nodes.find((node) => node.ref === 'nettingBasis');
     assert.ok(netting);
     netting.range_includes = ['NettingBasisEnum', 'NettingBasisEnum'];
     const repeated = buildModel(schema, readUsage(usageBody()));
@@ -213,7 +213,7 @@ test('usage counts StatVars per dataset from patterns and constraint values', ()
 test('a value in both a pattern field and the constraint values is counted once', () => {
     // DAC2B's second pattern (4 StatVars) gains DAC2bAidType972, which 2 StatVars take as a value.
     const body = readUsage(usageBody());
-    const dac2b = body.provenances.find((provenance) => provenance.dcid === DAC2B);
+    const dac2b = body.provenances.find((provenance) => provenance.ref === DAC2B);
     const pattern = dac2b?.patterns[1];
     assert.equal(pattern?.stat_var_count, 4);
     if (pattern) pattern.measurement_denominator = 'DAC2bAidType972';
@@ -326,8 +326,8 @@ test('a dataset reads as a node with its patterns and the values it uses of each
     assert.equal(model.datasetView('provenance/Nothing'), undefined);
 });
 
-test('the scoped list of instance properties groups rows and counts the chosen dataset', () => {
-    const list = model.scopedList({ kind: 'instance' }, { kind: 'dataset', id: DAC2B });
+test('the scoped list of DFO properties groups rows and counts the chosen dataset', () => {
+    const list = model.scopedList({ kind: 'dfo' }, { kind: 'dataset', id: DAC2B });
     assert.deepEqual(list.columns, [DAC2B]);
     assert.equal(list.total, 70);
     assert.deepEqual(
@@ -336,7 +336,7 @@ test('the scoped list of instance properties groups rows and counts the chosen d
     );
     // The start screen counts the same properties without building the list.
     assert.deepEqual(
-        model.instanceProperties().toSorted(),
+        model.dfoProperties().toSorted(),
         GROUPS.flatMap((group) => list.groups[group].map((row) => row.id)).toSorted(),
     );
     // amount is a base property, so outside this scope.
@@ -365,7 +365,7 @@ test('the scoped list of a class with every dataset as a column', () => {
     assert.equal(row?.inheritedFrom, 'FinancingEvent');
     assert.equal(row?.values, null);
 
-    assert.deepEqual(model.scopedList({ kind: 'instance' }, { kind: 'none' }).columns, []);
+    assert.deepEqual(model.scopedList({ kind: 'dfo' }, { kind: 'none' }).columns, []);
 });
 
 test('the lens says which nodes a dataset uses, and how many members of a value list', () => {
@@ -435,7 +435,7 @@ test('the open properties of a list are those its members carry, each member a c
 });
 
 test('a scoped list filter keeps rows by label or dcid, and blank text keeps every row', () => {
-    const list = model.scopedList({ kind: 'instance' }, { kind: 'none' });
+    const list = model.scopedList({ kind: 'dfo' }, { kind: 'none' });
     assert.equal(filterScopedList(model, list, ' '), list.groups);
     const kept = filterScopedList(model, list, 'NETTING');
     assert.deepEqual(

@@ -115,13 +115,13 @@ test('broader and range boxes order their entries by use, as every other box doe
     const base = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const unused = (kind: 'class' | 'property') =>
         body.nodes
-            .map((node) => String(node.dcid))
+            .map((node) => String(node.ref))
             .find((id) => base.kind(id) === kind && base.usage(id).total === 0);
     const unusedClass = unused('class');
     const unusedProperty = unused('property');
     assert.ok(unusedClass && unusedProperty);
 
-    const provider = body.nodes.find((node) => node.dcid === 'financingProvider');
+    const provider = body.nodes.find((node) => node.ref === 'financingProvider');
     assert.ok(provider);
     provider.range_includes = [unusedClass, 'FinancialFlow'];
     provider.sub_property_of = [unusedProperty, 'amount'];
@@ -153,7 +153,7 @@ test('the centre heading reads a dataset, a model term, a base term and an unkno
     const outside = 'ABSState';
     const base = centreHeading(model, { kind: 'node', id: outside }, baseTerms);
     assert.deepEqual(
-        [base?.base, base?.term?.dcid, base?.sub],
+        [base?.base, base?.term?.ref, base?.sub],
         [true, outside, { kind: 'dcid', id: outside }],
     );
     assert.notEqual(outsideKind(base?.term), outsideKind(undefined));
@@ -166,8 +166,8 @@ test('the centre heading reads a dataset, a model term, a base term and an unkno
 
 test('a term outside the model is headed by the origin declaring it', () => {
     const headingFor = (declaredBy: string | null) => {
-        const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
-        const term = body.terms.find((entry) => entry.dcid === 'ABSState');
+        const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
+        const term = body.terms.find((entry) => entry.ref === 'ABSState');
         assert.ok(term);
         term.declared_by = declaredBy;
         const heading = centreHeading(model, { kind: 'node', id: 'ABSState' }, readTerms(body));

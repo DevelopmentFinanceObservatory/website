@@ -100,7 +100,6 @@
                     ]
                 }
             ],
-            "dcid": "provenance/OECDDAC1",
             "description": "Donors' aggregate official and private flows reported to the OECD, as totals by donor without a breakdown by recipient.",
             "facets": {
                 "currencies": ["USD"],
@@ -181,6 +180,7 @@
                     "stat_var_count": 86
                 }
             ],
+            "ref": "provenance/OECDDAC1",
             "stat_var_count": 653
         },
         {
@@ -310,7 +310,6 @@
                     ]
                 }
             ],
-            "dcid": "provenance/OECDDAC2A",
             "description": "Donors' official development assistance disbursements reported to the OECD, by recipient and type of aid.",
             "facets": {
                 "currencies": ["USD"],
@@ -411,6 +410,7 @@
                     "stat_var_count": 1
                 }
             ],
+            "ref": "provenance/OECDDAC2A",
             "stat_var_count": 25
         },
         {
@@ -504,7 +504,6 @@
                     ]
                 }
             ],
-            "dcid": "provenance/OECDDAC2B",
             "description": "Other official flows and officially supported export credits that providers report to the OECD, by recipient and type of flow.",
             "facets": {
                 "currencies": ["USD"],
@@ -551,6 +550,7 @@
                     "stat_var_count": 4
                 }
             ],
+            "ref": "provenance/OECDDAC2B",
             "stat_var_count": 14
         },
         {
@@ -608,7 +608,6 @@
                     ]
                 }
             ],
-            "dcid": "provenance/ONEClimateFinance",
             "description": "Climate finance each provider committed and paid out, by recipient, as ONE Data estimates it from the OECD's CRS and climate-related development finance data.",
             "facets": {
                 "currencies": ["USD"],
@@ -695,6 +694,7 @@
                     "stat_var_count": 4
                 }
             ],
+            "ref": "provenance/ONEClimateFinance",
             "stat_var_count": 19
         }
     ]

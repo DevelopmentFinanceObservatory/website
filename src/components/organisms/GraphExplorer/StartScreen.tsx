@@ -8,11 +8,11 @@ import styles from './StartScreen.module.scss';
 /**
  * The start screen: the datasets with their StatVar counts, the kinds of
  * thing their figures are about with how many datasets use each, and one way
- * to list every property the instance declares.
+ * to list every property the DFO declares.
  */
 const StartScreen = () => {
     const model = useModel();
-    const propertyCount = model.instanceProperties().length;
+    const propertyCount = model.dfoProperties().length;
 
     return (
         <div className={styles.start}>
@@ -23,12 +23,12 @@ const StartScreen = () => {
                     </h2>
                     <ul className={styles.rows}>
                         {model.datasets.map((dataset) => (
-                            <li key={dataset.dcid} className={styles.row}>
+                            <li key={dataset.ref} className={styles.row}>
                                 <ExploreLink
-                                    view={{ kind: 'dataset', id: dataset.dcid }}
+                                    view={{ kind: 'dataset', id: dataset.ref }}
                                     className={styles.name}
                                 >
-                                    {model.label(dataset.dcid)}
+                                    {model.label(dataset.ref)}
                                 </ExploreLink>
                                 <span className={styles.figure}>
                                     {plural(dataset.stat_var_count, 'StatVar')}
@@ -65,7 +65,7 @@ const StartScreen = () => {
                         <ul className={styles.rows}>
                             <li className={styles.row}>
                                 <ExploreLink
-                                    view={{ kind: 'list', scope: { kind: 'instance' } }}
+                                    view={{ kind: 'list', scope: { kind: 'dfo' } }}
                                     className={styles.name}
                                 >
                                     Every DFO property

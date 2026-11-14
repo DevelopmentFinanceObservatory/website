@@ -66,7 +66,7 @@ type ScopedListProps = {
 };
 
 /**
- * The properties of one class, or every property the instance declares,
+ * The properties of one class, or every property the DFO declares,
  * grouped by what they do in a StatVar. Each row has the label, the dcid,
  * the value list it draws from and its StatVar count. The Show pills narrow
  * the count to one dataset (dimming the rows it does not use) or give each

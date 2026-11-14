@@ -234,8 +234,8 @@ export function openEntries(model: Model, id: string): readonly OpenEntry[] {
         label: model.label(property),
         values: values.map((value): OpenEntryValue => {
             if ('value' in value) return { kind: 'text', text: value.value };
-            const held = model.node(value.dcid) || model.dataset(value.dcid);
-            return held ? { kind: 'node', id: value.dcid } : { kind: 'text', text: value.dcid };
+            const held = model.node(value.ref) || model.dataset(value.ref);
+            return held ? { kind: 'node', id: value.ref } : { kind: 'text', text: value.ref };
         }),
     }));
 }
@@ -298,10 +298,10 @@ export function centreHeading(
             term: undefined,
         };
     }
-    const term = baseTerms?.terms.find((entry) => entry.dcid === centre.id);
+    const term = baseTerms?.terms.find((entry) => entry.ref === centre.id);
     return {
         kind: term ? termOrigin(term) : 'Not in the DFO model',
-        name: term?.name ?? centre.id,
+        name: term?.label ?? centre.id,
         sub: { kind: 'dcid', id: centre.id },
         base: term?.declared_by === 'base',
         term,

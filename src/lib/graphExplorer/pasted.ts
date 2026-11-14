@@ -204,8 +204,8 @@ const propertyOf = (model: Model, header: string, properties: readonly string[])
  */
 export function mapHeaders(model: Model, headers: readonly string[]): Mapping {
     const properties = model.nodes
-        .filter((node) => model.kind(node.dcid) === 'property')
-        .map((node) => node.dcid);
+        .filter((node) => model.kind(node.ref) === 'property')
+        .map((node) => node.ref);
     const read = (header: string): ColumnTarget => {
         const field = fieldOf(header);
         if (field !== undefined) return { kind: 'definition', field };

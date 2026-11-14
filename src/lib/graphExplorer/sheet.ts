@@ -129,7 +129,7 @@ export function closestPattern(
                 best === null ||
                 shared > best.shared ||
                 (shared === best.shared && pattern.stat_var_count > best.pattern.stat_var_count);
-            if (better) best = { dataset: dataset.dcid, pattern, shared };
+            if (better) best = { dataset: dataset.ref, pattern, shared };
         }
     }
     return best;

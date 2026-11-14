@@ -64,42 +64,42 @@ export function search(model: Model, query: string, options: SearchOptions = {})
     const hits: SearchHit[] = [];
     for (const node of model.nodes) {
         const match = bestMatch(needle, [
-            node.name,
-            node.dcid,
+            node.label,
+            node.ref,
             ...node.alternate_name,
             ...node.classification_code,
             ...openNames(node),
         ]);
         if (match === undefined) continue;
         hits.push({
-            id: node.dcid,
-            kind: model.kind(node.dcid) ?? 'value',
-            label: model.label(node.dcid),
+            id: node.ref,
+            kind: model.kind(node.ref) ?? 'value',
+            label: model.label(node.ref),
             match,
             base: node.declared_by === 'base',
             inModel: true,
         });
     }
     for (const dataset of model.datasets) {
-        const match = bestMatch(needle, [dataset.label, dataset.dcid]);
+        const match = bestMatch(needle, [dataset.label, dataset.ref]);
         if (match === undefined) continue;
         hits.push({
-            id: dataset.dcid,
+            id: dataset.ref,
             kind: 'dataset',
-            label: model.label(dataset.dcid),
+            label: model.label(dataset.ref),
             match,
             base: false,
             inModel: true,
         });
     }
     for (const term of baseTerms?.terms ?? []) {
-        if (term.declared_by === 'dfo' || model.node(term.dcid)) continue;
-        const match = bestMatch(needle, [term.name, term.dcid]);
+        if (term.declared_by === 'dfo' || model.node(term.ref)) continue;
+        const match = bestMatch(needle, [term.label, term.ref]);
         if (match === undefined) continue;
         hits.push({
-            id: term.dcid,
+            id: term.ref,
             kind: kindOfTerm(term),
-            label: term.name ?? term.dcid,
+            label: term.label ?? term.ref,
             match,
             base: term.declared_by === 'base',
             inModel: false,

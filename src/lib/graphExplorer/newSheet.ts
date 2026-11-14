@@ -177,7 +177,7 @@ export const mostUsedPattern = (
             if (pattern.population_type === null || !about.has(pattern.population_type)) continue;
             if (measured !== undefined && pattern.measured_property !== measured) continue;
             if (best === null || pattern.stat_var_count > best.pattern.stat_var_count) {
-                best = place({ dataset: dataset.dcid, index }, pattern);
+                best = place({ dataset: dataset.ref, index }, pattern);
             }
         }
     }

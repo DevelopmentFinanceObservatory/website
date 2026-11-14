@@ -50,8 +50,8 @@ test('exact beats prefix beats substring', () => {
     );
 });
 
-test('within a rank, instance terms and datasets come before base terms', () => {
-    // Dataset is a base class with a shorter label than either instance property.
+test('within a rank, DFO terms and datasets come before base terms', () => {
+    // Dataset is a base class with a shorter label than either DFO property.
     assert.deepEqual(ids('data').slice(0, 4), [
         'dataTransformationChangelog',
         'dataTransformationDescription',
@@ -108,8 +108,8 @@ test('with the terms list, base terms outside the model follow those inside', ()
 });
 
 test('a term with no declaring provenance outside the model is found', () => {
-    const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
-    const term = body.terms.find((entry) => entry.dcid === 'AdministrativeArea1');
+    const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
     assert.ok(term);
     term.declared_by = null;
     const hits = search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) }).hits;
@@ -120,8 +120,8 @@ test('a term with no declaring provenance outside the model is found', () => {
 });
 
 test('a term outside the model carries the base tag only when base Data Commons declares it', () => {
-    const body = termsBody() as { terms: { dcid: string; declared_by: string | null }[] };
-    const term = body.terms.find((entry) => entry.dcid === 'AdministrativeArea1');
+    const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
+    const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
     assert.ok(term);
     const exact = () =>
         search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) })

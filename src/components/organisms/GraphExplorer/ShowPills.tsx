@@ -24,9 +24,9 @@ const ShowPills = ({ value, onChange, withAll = false }: ShowPillsProps) => {
     const choices: { key: string; label: string; filter: DatasetFilter }[] = [
         { key: 'none', label: 'Everything', filter: { kind: 'none' } },
         ...model.datasets.map((dataset) => ({
-            key: dataset.dcid,
-            label: model.label(dataset.dcid),
-            filter: { kind: 'dataset', id: dataset.dcid } as const,
+            key: dataset.ref,
+            label: model.label(dataset.ref),
+            filter: { kind: 'dataset', id: dataset.ref } as const,
         })),
         ...(withAll
             ? [{ key: 'all', label: 'All datasets', filter: { kind: 'all' } as const }]

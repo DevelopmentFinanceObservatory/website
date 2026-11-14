@@ -610,7 +610,7 @@ test('the bounded edit distance is exact within its bound and one past it beyond
 test('the closest members match a full ranking of every member, ties in list order', () => {
     // Every value list property of the fixture, each against a few typed values.
     const properties = model.nodes
-        .map((node) => node.dcid)
+        .map((node) => node.ref)
         .filter((id) => model.valueListOfProperty(id) !== undefined);
     assert.ok(properties.length > 5);
     let checked = 0;
@@ -657,17 +657,17 @@ test('the closest members to a misspelt value come from the property’s value l
 
 test('a literal open property value finds the member that carries it, as a code does', () => {
     const body = schemaBody();
-    const nodes = (body as { nodes: { dcid: string; other_properties: unknown }[] }).nodes;
+    const nodes = (body as { nodes: { ref: string; other_properties: unknown }[] }).nodes;
     const carry = (dcid: string, other: unknown) => {
-        const member = nodes.find((node) => node.dcid === dcid);
+        const member = nodes.find((node) => node.ref === dcid);
         assert.ok(member);
         member.other_properties = other;
     };
     carry('DAC1AidType1020', { wbCode: [{ value: 'Q7' }] });
-    carry('DAC1AidType1030', { sameAs: [{ dcid: 'Q8' }] });
+    carry('DAC1AidType1030', { sameAs: [{ ref: 'Q8' }] });
     const carried = buildModel(readSchema(body), readUsage(usageBody()));
     assert.equal(closestMembers(carried, finding({ value: 'q7' }))[0], 'DAC1AidType1020');
-    // A dcid value names a node, not a code, so Q8 does not match the member that points to it.
+    // A ref value names a node, not a code, so Q8 does not match the member that points to it.
     assert.equal(closestMembers(carried, finding({ value: 'q8' }))[0], 'DAC1AidType1020');
     assert.notEqual(closestMembers(model, finding({ value: 'q7' }))[0], 'DAC1AidType1020');
 });

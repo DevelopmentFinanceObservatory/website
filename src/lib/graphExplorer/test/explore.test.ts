@@ -32,7 +32,7 @@ test('nothing set is the start screen with no dataset filter', () => {
 });
 
 test('each view parameter reads as its view', () => {
-    assert.deepEqual(read('list=all').view, { kind: 'list', scope: { kind: 'instance' } });
+    assert.deepEqual(read('list=dfo').view, { kind: 'list', scope: { kind: 'dfo' } });
     assert.deepEqual(read('list=FinancialFlow').view, {
         kind: 'list',
         scope: { kind: 'class', id: 'FinancialFlow' },
@@ -45,8 +45,8 @@ test('each view parameter reads as its view', () => {
 });
 
 test('node wins over dataset, and dataset over list', () => {
-    assert.deepEqual(read('list=all&dataset=d&node=n').view, { kind: 'node', id: 'n' });
-    assert.deepEqual(read('list=all&dataset=d').view, { kind: 'dataset', id: 'd' });
+    assert.deepEqual(read('list=dfo&dataset=d&node=n').view, { kind: 'node', id: 'n' });
+    assert.deepEqual(read('list=dfo&dataset=d').view, { kind: 'dataset', id: 'd' });
 });
 
 test('show reads as one dataset or every dataset', () => {
@@ -62,7 +62,7 @@ test('every state writes a query that reads back as the same state', () => {
         { view: { kind: 'start' }, show: { kind: 'none' }, base: false },
         { view: { kind: 'start' }, show: { kind: 'all' }, base: false },
         {
-            view: { kind: 'list', scope: { kind: 'instance' } },
+            view: { kind: 'list', scope: { kind: 'dfo' } },
             show: { kind: 'none' },
             base: false,
         },
@@ -91,11 +91,11 @@ test('the start screen with no filter has a bare path', () => {
     );
     assert.equal(
         exploreHref({
-            view: { kind: 'list', scope: { kind: 'instance' } },
+            view: { kind: 'list', scope: { kind: 'dfo' } },
             show: { kind: 'all' },
             base: false,
         }),
-        '/graph-explorer?list=all&show=all',
+        '/graph-explorer?list=dfo&show=all',
     );
 });
 
@@ -122,7 +122,7 @@ test('two views are the same when they show the same thing', () => {
     assert.equal(sameView({ kind: 'node', id: 'a' }, { kind: 'dataset', id: 'a' }), false);
     assert.equal(
         sameView(
-            { kind: 'list', scope: { kind: 'instance' } },
+            { kind: 'list', scope: { kind: 'dfo' } },
             { kind: 'list', scope: { kind: 'class', id: 'FinancialFlow' } },
         ),
         false,
@@ -156,10 +156,10 @@ test('a filter naming a dataset the model lacks applies no filter and names the 
     });
 });
 
-test('a list scope exists for every instance property, a class or a value list', () => {
+test('a list scope exists for every DFO property, a class or a value list', () => {
     const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const scopes: ListScope[] = [
-        { kind: 'instance' },
+        { kind: 'dfo' },
         { kind: 'class', id: 'FinancialFlow' },
         { kind: 'class', id: 'FinancialFlowTypeEnum' },
         { kind: 'class', id: 'financialFlowType' },
