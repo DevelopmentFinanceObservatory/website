@@ -14,7 +14,7 @@ import {
     type RequestOptions,
     type WaitCause,
 } from './load.ts';
-import { KIND_WORDS, type Model } from './model.ts';
+import { KIND_WORDS, openLiterals, type Model } from './model.ts';
 import { camelCase, findingColumn, sheetRow, type Mapping } from './pasted.ts';
 import type { SentencePart } from './sentence.ts';
 import {
@@ -425,11 +425,6 @@ const SUGGESTED: ReadonlySet<string> = new Set<FindingCode>([
     'value_outside_range',
 ]);
 
-/**
- * Up to `limit` members of the constraint property's value list closest to
- * the finding's value by edit distance to the member's label, dcid or code,
- * ignoring case. A tie keeps the list's order. Empty for other findings.
- */
 /** Each value list's members with their names in lower case, worked out once per model. */
 const memberNames = new WeakMap<
     Model,
@@ -445,7 +440,13 @@ const namesOf = (model: Model, list: string): readonly (readonly [string, readon
     let named = lists.get(list);
     if (named === undefined) {
         named = model.members(list).map((id) => {
-            const names = [id, model.label(id), ...(model.node(id)?.classification_code ?? [])];
+            const node = model.node(id);
+            const names = [
+                id,
+                model.label(id),
+                ...(node?.classification_code ?? []),
+                ...openLiterals(node),
+            ];
             return [id, names.map((name) => name.toLowerCase())] as const;
         });
         lists.set(list, named);
@@ -453,6 +454,12 @@ const namesOf = (model: Model, list: string): readonly (readonly [string, readon
     return named;
 };
 
+/**
+ * Up to `limit` members of the constraint property's value list closest to
+ * the finding's value by edit distance to the member's label, dcid, code or
+ * open property literal, ignoring case. A tie keeps the list's order. Empty
+ * for other findings.
+ */
 export function closestMembers(model: Model, finding: SchemaFinding, limit = 3): string[] {
     const { property } = finding;
     if (!SUGGESTED.has(finding.code) || property === null || finding.subject !== 'value') return [];

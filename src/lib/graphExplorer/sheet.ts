@@ -4,7 +4,7 @@
  * pattern to copy, and CSV output.
  */
 import { LIMITS, type SheetRequest, type SheetRequestColumn } from './googleSheet.ts';
-import type { Model } from './model.ts';
+import { memberFields, openCell, type Model } from './model.ts';
 import { classAndNarrower } from './newSheet.ts';
 import type { SchemaPattern } from './wire.ts';
 
@@ -17,11 +17,15 @@ export type LookupMember = {
     readonly label: string;
     /** The member's classification code, when it has one. */
     readonly code: string | null;
+    /** The member's cell for each of the lookup's `fields`, in that order (openCell). */
+    readonly values: readonly string[];
 };
 
 /** The value list behind a property column. */
 export type Lookup = {
     readonly valueList: string;
+    /** The open properties any member carries (memberFields), each a column after the code. */
+    readonly fields: readonly string[];
     readonly members: readonly LookupMember[];
     /** False when the graph holds members of the value list that `members` leaves out. */
     readonly complete: boolean;
@@ -53,15 +57,18 @@ const REFERENCE_COLUMNS = ['source_code', 'source_label'] as const;
 const lookupOf = (model: Model, property: string): Lookup | null => {
     const valueList = model.valueListOfProperty(property);
     if (valueList === undefined) return null;
+    const fields = memberFields(model, valueList);
     const members = model.members(valueList).map((id): LookupMember =>
         Object.freeze({
             id,
             label: model.label(id),
             code: model.node(id)?.classification_code[0] ?? null,
+            values: Object.freeze(fields.map((property) => openCell(model, id, property))),
         }),
     );
     return Object.freeze({
         valueList,
+        fields,
         members: Object.freeze(members),
         complete: model.membersComplete(valueList),
     });
@@ -223,10 +230,42 @@ const cutLookup = (
         : { ...lookup, members: lookup.members.slice(0, size), complete: false };
 
 /**
+ * A lookup's columns that fit the handler's bounds, as indexes into
+ * `fields`: a name and every member's cell within LIMITS.term, the first
+ * LIMITS.fields of those. A column outside them is left off the sheet.
+ */
+const fittingFields = (lookup: Lookup): number[] =>
+    lookup.fields
+        .flatMap((field, at) =>
+            field.length <= LIMITS.term &&
+            lookup.members.every((member) => (member.values[at] ?? '').length <= LIMITS.term)
+                ? [at]
+                : [],
+        )
+        .slice(0, LIMITS.fields);
+
+/** A lookup as the handler takes it, its columns cut to those that fit (fittingFields). */
+const requestLookup = (lookup: Lookup): NonNullable<SheetRequestColumn['lookup']> => {
+    const kept = fittingFields(lookup);
+    return {
+        valueList: lookup.valueList,
+        fields: kept.map((at) => lookup.fields[at] ?? ''),
+        members: lookup.members.map(({ id, label, code, values }) => ({
+            id,
+            label,
+            code,
+            values: kept.map((at) => values[at] ?? ''),
+        })),
+        complete: lookup.complete,
+    };
+};
+
+/**
  * The draft as the Google sheet handler takes it, within the handler's
- * bounds. Each value list keeps its first LIMITS.members members. While the
- * body is over LIMITS.bodyBytes, the longest list is halved. A cut list is
- * marked partial, so its block on the value-list tab says so.
+ * bounds. Each value list keeps its first LIMITS.members members and the
+ * open property columns that fit (fittingFields). While the body is over
+ * LIMITS.bodyBytes, the longest list is halved. A cut list is marked
+ * partial, so its block on the value-list tab says so.
  */
 export const sheetRequest = (draft: SheetDraft): SheetRequest => {
     const request: SheetRequest = {
@@ -235,20 +274,7 @@ export const sheetRequest = (draft: SheetDraft): SheetRequest => {
         columns: draft.columns.map((column) => ({
             name: column.name,
             kind: column.kind,
-            lookup:
-                column.lookup &&
-                cutLookup(
-                    {
-                        valueList: column.lookup.valueList,
-                        members: column.lookup.members.map(({ id, label, code }) => ({
-                            id,
-                            label,
-                            code,
-                        })),
-                        complete: column.lookup.complete,
-                    },
-                    LIMITS.members,
-                ),
+            lookup: column.lookup && cutLookup(requestLookup(column.lookup), LIMITS.members),
         })),
         rows: draft.rows.map((row) => [...row]),
     };

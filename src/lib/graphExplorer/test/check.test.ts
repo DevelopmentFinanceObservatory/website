@@ -32,7 +32,7 @@ import {
     type RowFinding,
 } from '../check.ts';
 import type { WaitCause } from '../load.ts';
-import { buildModel } from '../model.ts';
+import { buildModel, openLiterals } from '../model.ts';
 import { mapHeaders, parsePasted, rowsToCheck } from '../pasted.ts';
 import {
     CHECK_MAX_ROWS,
@@ -540,6 +540,7 @@ test('the closest members match a full ranking of every member, ties in list ord
                         id,
                         model.label(id),
                         ...(model.node(id)?.classification_code ?? []),
+                        ...openLiterals(model.node(id)),
                     ];
                     const score = Math.min(
                         ...names.map((name) => fullDistance(lower, name.toLowerCase())),
@@ -565,6 +566,23 @@ test('the closest members to a misspelt value come from the property’s value l
         'Gross',
         'Net',
     ]);
+});
+
+test('a literal open property value finds the member that carries it, as a code does', () => {
+    const body = schemaBody();
+    const nodes = (body as { nodes: { dcid: string; other_properties: unknown }[] }).nodes;
+    const carry = (dcid: string, other: unknown) => {
+        const member = nodes.find((node) => node.dcid === dcid);
+        assert.ok(member);
+        member.other_properties = other;
+    };
+    carry('DAC1AidType1020', { wbCode: [{ value: 'Q7' }] });
+    carry('DAC1AidType1030', { sameAs: [{ dcid: 'Q8' }] });
+    const carried = buildModel(readSchema(body), readUsage(usageBody()));
+    assert.equal(closestMembers(carried, finding({ value: 'q7' }))[0], 'DAC1AidType1020');
+    // A dcid value names a node, not a code, so Q8 does not match the member that points to it.
+    assert.equal(closestMembers(carried, finding({ value: 'q8' }))[0], 'DAC1AidType1020');
+    assert.notEqual(closestMembers(model, finding({ value: 'q7' }))[0], 'DAC1AidType1020');
 });
 
 test('a label or code close to the value finds its member', () => {

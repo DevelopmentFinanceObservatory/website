@@ -11,6 +11,7 @@ import {
     declaredDomain,
     definedNotUsed,
     nodeBoxes,
+    openEntries,
     outsideKind,
     periodText,
     pictureLens,
@@ -169,6 +170,52 @@ test('a dataset’s own view under its own filter carries no marks', () => {
     assert.equal(pictureLens({ kind: 'dataset', id: 'provenance/OECDDAC2A' }, dac1), dac1.id);
     assert.equal(pictureLens({ kind: 'node', id: 'FinancialFlow' }, dac1), dac1.id);
     assert.equal(pictureLens({ kind: 'node', id: 'FinancialFlow' }, { kind: 'all' }), null);
+});
+
+test('open properties read with their labels, held nodes as links and the rest as text', () => {
+    // isProvisional and True are not nodes of the fixture, so both read as their dcids.
+    assert.deepEqual(openEntries(model, 'CurrencyCHF'), [
+        {
+            property: 'currencyStatus',
+            label: 'currency status',
+            values: [{ kind: 'node', id: 'CurrencyStatusCurrent' }],
+        },
+        {
+            property: 'dacCode',
+            label: 'DAC code',
+            values: [
+                { kind: 'text', text: '11' },
+                { kind: 'text', text: '70' },
+            ],
+        },
+        {
+            property: 'iso4217AlphaCode',
+            label: 'ISO 4217 currency code',
+            values: [{ kind: 'text', text: 'CHF' }],
+        },
+        {
+            property: 'iso4217NumericCode',
+            label: 'ISO 4217 currency number',
+            values: [{ kind: 'text', text: '756' }],
+        },
+        {
+            property: 'nationalCurrencyOf',
+            label: 'national currency of',
+            values: [
+                { kind: 'text', text: 'country/CHE' },
+                { kind: 'text', text: 'country/LIE' },
+            ],
+        },
+    ]);
+    assert.deepEqual(openEntries(model, 'combinesMethods'), [
+        {
+            property: 'isProvisional',
+            label: 'isProvisional',
+            values: [{ kind: 'text', text: 'True' }],
+        },
+    ]);
+    assert.deepEqual(openEntries(model, 'AdministrativeArea'), []);
+    assert.deepEqual(openEntries(model, 'NotANode'), []);
 });
 
 test('a share is a whole percentage, at least 1 when anything is used', () => {

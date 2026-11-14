@@ -25,6 +25,15 @@ export type SchemaEnumeration = {
     complete: boolean;
 };
 
+/** One value of an open property: a node by its dcid, or a literal. */
+export type OpenValue = { readonly dcid: string } | { readonly value: string };
+
+/**
+ * Every outgoing property of a node besides the named fields, by property
+ * dcid, each with its values sorted. Empty for a node with none.
+ */
+export type OtherProperties = Readonly<Record<string, readonly OpenValue[]>>;
+
 /** One node of the schema document. Every list is sorted. */
 export type SchemaNode = {
     dcid: string;
@@ -46,6 +55,7 @@ export type SchemaNode = {
     declared_by: DeclaredBy | null;
     /** Set on an enumeration Class, null on every other node. */
     enumeration: SchemaEnumeration | null;
+    other_properties: OtherProperties;
 };
 
 /** GET /api/graph/schema: the instance's model. */
@@ -288,6 +298,28 @@ const obj =
     };
 
 const strList = list(str);
+
+/** An open property's value: an object holding exactly one of `dcid` and `value`, a string. */
+const openValue: Check = (value, path) => {
+    const record = asRecord(value);
+    const keys = record ? Object.keys(record) : [];
+    const [key] = keys;
+    if (keys.length !== 1 || (key !== 'dcid' && key !== 'value')) {
+        return fail(path, 'an object with exactly one of dcid and value');
+    }
+    str(record?.[key], `${path}.${key}`);
+};
+
+const openValues = list(openValue);
+
+/** A map from property dcid to a list of open values. */
+const openMap: Check = (value, path) => {
+    const record = asRecord(value);
+    if (!record) return fail(path, 'an object');
+    for (const [property, values] of Object.entries(record))
+        openValues(values, `${path}.${property}`);
+};
+
 const declaredBy = oneOf(['instance', 'base']);
 
 const schemaDocument = obj({
@@ -308,6 +340,7 @@ const schemaDocument = obj({
             provenances: strList,
             declared_by: nullable(declaredBy),
             enumeration: nullable(obj({ members: strList, complete: bool })),
+            other_properties: openMap,
         }),
     ),
 });

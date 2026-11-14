@@ -27,7 +27,7 @@ const refuses = (read: (body: unknown) => unknown, body: unknown, member: string
     );
 
 test('each guard accepts the served document', () => {
-    assert.equal(readSchema(schemaBody()).nodes.length, 230);
+    assert.equal(readSchema(schemaBody()).nodes.length, 234);
     assert.equal(readTerms(termsBody()).terms.length, 282);
     assert.equal(readUsage(usageBody()).provenances.length, 4);
 });
@@ -57,6 +57,44 @@ test('the schema guard refuses a node with a member removed or retyped', () => {
     const noGeneration = schemaBody();
     delete at(noGeneration, []).generation;
     refuses(readSchema, noGeneration, 'schema.generation');
+});
+
+test('the schema guard reads open properties as dcid or literal values', () => {
+    const nodes = readSchema(schemaBody()).nodes;
+    assert.deepEqual(nodes.find((node) => node.dcid === 'CurrencyCHF')?.other_properties, {
+        currencyStatus: [{ dcid: 'CurrencyStatusCurrent' }],
+        dacCode: [{ value: '11' }, { value: '70' }],
+        iso4217AlphaCode: [{ value: 'CHF' }],
+        iso4217NumericCode: [{ value: '756' }],
+        nationalCurrencyOf: [{ dcid: 'country/CHE' }, { dcid: 'country/LIE' }],
+    });
+    const index = nodes.findIndex((node) => node.dcid === 'CurrencyCHF');
+    const path = `schema.nodes[${index}].other_properties`;
+
+    const missing = schemaBody();
+    delete at(missing, ['nodes', index]).other_properties;
+    refuses(readSchema, missing, path);
+
+    for (const [entry, member] of [
+        [{ dcid: 'X', value: 'Y' }, `${path}.dacCode[0]:`],
+        [{}, `${path}.dacCode[0]:`],
+        [{ code: 'X' }, `${path}.dacCode[0]:`],
+        ['11', `${path}.dacCode[0]:`],
+        [{ value: 11 }, `${path}.dacCode[0].value`],
+        [{ dcid: null }, `${path}.dacCode[0].dcid`],
+    ] as const) {
+        const body = schemaBody();
+        at(body, ['nodes', index, 'other_properties']).dacCode = [entry];
+        refuses(readSchema, body, member);
+    }
+
+    const notList = schemaBody();
+    at(notList, ['nodes', index, 'other_properties']).dacCode = { value: '11' };
+    refuses(readSchema, notList, `${path}.dacCode`);
+
+    const notMap = schemaBody();
+    at(notMap, ['nodes', index]).other_properties = [];
+    refuses(readSchema, notMap, path);
 });
 
 test('the terms guard refuses a term with a member removed', () => {

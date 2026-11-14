@@ -3,7 +3,7 @@
  * value list's members.
  */
 import type { Model, ScopedList } from './model.ts';
-import { filterScopedList, GROUPS } from './model.ts';
+import { filterScopedList, GROUPS, memberFields, openCell } from './model.ts';
 import { csvFileName } from './sheet.ts';
 
 /**
@@ -32,12 +32,15 @@ export function scopedListTable(
 }
 
 /**
- * A value list's members in list order: dcid, label, classification code and
- * the broader members of the same list, separated by semicolons.
+ * A value list's members in list order: dcid, label, classification code,
+ * the broader members of the same list, then one column per open property
+ * any member carries (memberFields), headed by the property's dcid. Several
+ * values in a cell are separated by semicolons.
  */
 export function valueListTable(model: Model, listId: string): readonly (readonly string[])[] {
     const members = model.members(listId);
     const inList = new Set(members);
+    const fields = memberFields(model, listId);
     const rows = members.map((id) => [
         id,
         model.label(id),
@@ -46,8 +49,9 @@ export function valueListTable(model: Model, listId: string): readonly (readonly
             .broader(id)
             .filter((broader) => inList.has(broader))
             .join(';'),
+        ...fields.map((property) => openCell(model, id, property)),
     ]);
-    return [['dcid', 'label', 'code', 'broader'], ...rows];
+    return [['dcid', 'label', 'code', 'broader', ...fields], ...rows];
 }
 
 /** A value list's CSV file name from its label, ending `-partial.csv` when the list is partial. */

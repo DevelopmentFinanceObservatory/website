@@ -8,6 +8,7 @@
  * provenance of the usage document is a `dataset`.
  */
 import type {
+    OpenValue,
     SchemaDocument,
     SchemaNode,
     SchemaPattern,
@@ -757,14 +758,48 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
     });
 }
 
+/** An open property value as text: a node's dcid, else the literal. */
+export const openValueText = (value: OpenValue): string =>
+    'dcid' in value ? value.dcid : value.value;
+
+/** The literal values of a node's open properties, which match as its codes do. Dcid values are left out. */
+export const openLiterals = (node: SchemaNode | undefined): string[] =>
+    Object.values(node?.other_properties ?? {}).flatMap((values) =>
+        values.flatMap((value) => ('value' in value ? [value.value] : [])),
+    );
+
+/** A node's open property names and the text of each of their values. */
+export const openNames = (node: SchemaNode): string[] =>
+    Object.entries(node.other_properties).flatMap(([property, values]) => [
+        property,
+        ...values.map(openValueText),
+    ]);
+
+/** The open properties any member of a value list carries, sorted by dcid. */
+export const memberFields = (model: Model, listId: string): readonly string[] =>
+    [
+        ...new Set(
+            model
+                .members(listId)
+                .flatMap((id) => Object.keys(model.node(id)?.other_properties ?? {})),
+        ),
+    ].sort();
+
+/**
+ * One member's values of an open property as one cell: each node's dcid or
+ * literal, in the node's order, joined by `separator`. Empty when it has none.
+ */
+export const openCell = (model: Model, id: string, property: string, separator = ';'): string =>
+    (model.node(id)?.other_properties[property] ?? []).map(openValueText).join(separator);
+
 /** The most matches a value-list member search returns. */
 export const MEMBER_HIT_LIMIT = 60;
 
 /**
- * The members of a value list whose label, dcid, classification code or
- * other name holds `text`, ignoring case and surrounding space, in list
- * order. Returns the first `limit` and how many match in all. Empty for
- * blank text.
+ * The members of a value list whose label, dcid, classification code, other
+ * name or open property literal holds `text`, ignoring case and surrounding
+ * space, in list order. Returns the first `limit` and how many match in all.
+ * Empty for blank text.
  */
 export function searchMembers(
     model: Model,
@@ -781,6 +816,7 @@ export function searchMembers(
             id,
             ...(node?.classification_code ?? []),
             ...(node?.alternate_name ?? []),
+            ...openLiterals(node),
         ].some((name) => name.toLowerCase().includes(needle));
     });
     return { hits: matched.slice(0, limit), total: matched.length };

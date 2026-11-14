@@ -15,6 +15,7 @@ import Button from '@/components/atoms/Button/Button';
 import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
     declaredDomain,
+    openEntries,
     outsideKind,
     periodText,
     sharePercent,
@@ -162,6 +163,27 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     );
 };
 
+/** A node's open properties, each a line beside the named fields: links to nodes the model holds, the rest as text. */
+const OpenLines = ({ id }: { id: string }) => {
+    const model = useModel();
+
+    return openEntries(model, id).map(({ property, label, values }) => (
+        <p key={property} className={styles.line}>
+            {label}:{' '}
+            {values.map((value, index) => (
+                <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
+                    {index > 0 && ', '}
+                    {value.kind === 'node' ? (
+                        <TermLink id={value.id} />
+                    ) : (
+                        <span className={styles.mono}>{value.text}</span>
+                    )}
+                </span>
+            ))}
+        </p>
+    ));
+};
+
 /** A term the model holds: what it is, its names, its definition, its source and its use. */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
@@ -226,6 +248,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     .
                 </p>
             )}
+            <OpenLines id={id} />
             {kind === 'valueList' && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>

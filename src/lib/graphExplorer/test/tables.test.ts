@@ -68,6 +68,12 @@ test('a value list has each member with its code and broader members of the list
     ]);
 });
 
+test('a value list has a column per open property its members carry', () => {
+    const table = valueListTable(model, 'FinancialPositionTypeEnum');
+    assert.deepEqual(table[0], ['dcid', 'label', 'code', 'broader', 'wbCode']);
+    assert.deepEqual(table[1], ['AmountOutstanding', 'amount outstanding', '', '', 'DOD']);
+});
+
 for (const [listId, fileName] of [
     ['NettingBasisEnum', 'netting-basis.csv'],
     ['DAC1AidTypeEnum', 'dac-1-aid-type-partial.csv'],

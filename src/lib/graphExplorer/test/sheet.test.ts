@@ -57,8 +57,8 @@ test('sheet columns run reference, definition, then one per chosen property with
     const netting = columns[8]?.lookup;
     assert.equal(netting?.valueList, 'NettingBasisEnum');
     assert.deepEqual(netting?.members, [
-        { id: 'Gross', label: 'gross', code: null },
-        { id: 'Net', label: 'net', code: null },
+        { id: 'Gross', label: 'gross', code: null, values: [] },
+        { id: 'Net', label: 'net', code: null, values: [] },
     ]);
 
     const dac1 = columns[9]?.lookup;
@@ -68,9 +68,54 @@ test('sheet columns run reference, definition, then one per chosen property with
         id: 'DAC1AidType5',
         label: 'official and private flow (DAC 1 aid type)',
         code: '5',
+        values: [],
     });
 
     assert.equal(columns[10]?.lookup, null);
+});
+
+test('a lookup carries a column per open property its members hold, each member a cell', () => {
+    const [column] = sheetColumns(model, { ...spec, properties: ['financialPositionType'] }).slice(
+        -1,
+    );
+    assert.deepEqual(column?.lookup?.fields, ['wbCode']);
+    assert.deepEqual(
+        column?.lookup?.members.find((member) => member.id === 'AmountOutstanding')?.values,
+        ['DOD'],
+    );
+});
+
+test('the sheet request keeps the open property columns that fit the handler bounds', () => {
+    const draft = sheetDraft(model, { ...spec, properties: ['financialPositionType'] });
+    const fields = Array.from({ length: LIMITS.fields + 2 }, (_, at) => `f${at}`);
+    const widened = {
+        ...draft,
+        columns: draft.columns.map((column) =>
+            column.lookup === null
+                ? column
+                : {
+                      ...column,
+                      lookup: {
+                          ...column.lookup,
+                          fields,
+                          members: column.lookup.members.map((member) => ({
+                              ...member,
+                              // f0 holds a cell past the bound, so it is left off.
+                              values: fields.map((_, at) =>
+                                  at === 0 ? 'x'.repeat(LIMITS.term + 1) : `v${at}`,
+                              ),
+                          })),
+                      },
+                  },
+        ),
+    };
+    const lookup = sheetRequest(widened).columns.find((column) => column.lookup)?.lookup;
+    assert.deepEqual(lookup?.fields, fields.slice(1, LIMITS.fields + 1));
+    assert.deepEqual(
+        lookup?.members[0]?.values,
+        fields.slice(1, LIMITS.fields + 1).map((_, at) => `v${at + 1}`),
+    );
+    assert.ok(readSheetRequest(JSON.parse(JSON.stringify(sheetRequest(widened)))));
 });
 
 test('the closest pattern shares the most properties; a tie goes to the larger StatVar count', () => {
@@ -252,6 +297,7 @@ const draftWithList = (count: number, textLength: number) => {
                               id: `M${at}`,
                               label: text,
                               code: text,
+                              values: [],
                           })),
                       },
                   },

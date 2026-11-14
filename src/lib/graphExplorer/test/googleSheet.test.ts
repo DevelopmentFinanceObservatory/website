@@ -15,7 +15,7 @@ import {
 } from '../googleSheet.ts';
 import { PARTIAL_LIST_LINE } from '../counts.ts';
 import { buildModel } from '../model.ts';
-import { exampleRows, sheetColumns } from '../sheet.ts';
+import { exampleRows, sheetColumns, sheetDraft, sheetRequest } from '../sheet.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 
@@ -42,6 +42,7 @@ const fixtureRequest = (): SheetRequest =>
                 kind,
                 lookup: lookup && {
                     valueList: lookup.valueList,
+                    fields: lookup.fields,
                     members: lookup.members,
                     complete: lookup.complete,
                 },
@@ -52,7 +53,7 @@ const fixtureRequest = (): SheetRequest =>
 
 const text = (length: number) => 'x'.repeat(length);
 
-const member = (at: number) => ({ id: `M${at}`, label: `member ${at}`, code: null });
+const member = (at: number) => ({ id: `M${at}`, label: `member ${at}`, code: null, values: [] });
 
 /** A request of `count` property columns, each with one member. */
 const withColumns = (count: number) => ({
@@ -61,7 +62,7 @@ const withColumns = (count: number) => ({
     columns: Array.from({ length: count }, (_, at) => ({
         name: `p${at}`,
         kind: 'property',
-        lookup: { valueList: 'L', members: [member(at)], complete: true },
+        lookup: { valueList: 'L', fields: [], members: [member(at)], complete: true },
     })),
     rows: [],
 });
@@ -72,6 +73,17 @@ test('the fixture sheet passes its bounds unchanged', () => {
 });
 
 type Edit = (request: Record<string, any>) => void; // eslint-disable-line @typescript-eslint/no-explicit-any -- tests reach into plain JSON
+
+/** Gives column 8's list `count` open property columns named `name` and numbered, each member's cell `cell`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tests reach into plain JSON
+const withFields = (request: Record<string, any>, fields: string[], cell: string) => {
+    const lookup = request.columns[8].lookup;
+    lookup.fields = fields;
+    for (const each of lookup.members) each.values = fields.map(() => cell);
+};
+
+/** `count` open property names. */
+const names = (count: number) => Array.from({ length: count }, (_, at) => `f${at}`);
 
 const bounds: [string, Edit, Edit][] = [
     [
@@ -132,6 +144,26 @@ const bounds: [string, Edit, Edit][] = [
         'member id',
         (r) => (r.columns[8].lookup.members[0].id = 'x'),
         (r) => (r.columns[8].lookup.members[0].id = ''),
+    ],
+    [
+        'open property fields',
+        (r) => withFields(r, names(LIMITS.fields), 'DOD'),
+        (r) => withFields(r, names(LIMITS.fields + 1), 'DOD'),
+    ],
+    [
+        'open property field name',
+        (r) => withFields(r, [text(LIMITS.term)], ''),
+        (r) => withFields(r, [''], ''),
+    ],
+    [
+        'open property cell',
+        (r) => withFields(r, ['wbCode'], text(LIMITS.term)),
+        (r) => withFields(r, ['wbCode'], text(LIMITS.term + 1)),
+    ],
+    [
+        'cells per member',
+        (r) => (r.columns[8].lookup.members[0].values = []),
+        (r) => (r.columns[8].lookup.members[0].values = ['DOD']),
     ],
     [
         'value list',
@@ -294,6 +326,48 @@ test('one dropdown per property column with a value list, none on reference or d
         assert.equal(setDataValidation.rule.condition.type, 'ONE_OF_RANGE');
         assert.equal(setDataValidation.rule.showCustomUi, true);
     }
+});
+
+test('a block holds a column per open property its members carry, and the next block starts after it', () => {
+    const request = sheetRequest(
+        sheetDraft(model, {
+            classId: 'FinancialFlow',
+            measuredProperty: 'amount',
+            statType: 'measuredValue',
+            qualifier: null,
+            denominator: null,
+            observationProperties: [],
+            properties: ['financialPositionType', 'nettingBasis'],
+        }),
+    );
+    assert.deepEqual(readSheetRequest(JSON.parse(JSON.stringify(request))), request);
+    const { properties, cells } = valueListCells(request);
+    assert.equal(properties?.gridProperties.columnCount, 8);
+    assert.deepEqual(cells[0], ['financialPositionType', '', '', '', '', 'nettingBasis', '', '']);
+    const header = cells.findIndex((row) => row[0] === 'dcid');
+    assert.deepEqual(cells[header], [
+        'dcid',
+        'label',
+        'code',
+        'wbCode',
+        '',
+        'dcid',
+        'label',
+        'code',
+    ]);
+    assert.deepEqual(cells[header + 1]?.slice(0, 4), [
+        'AmountOutstanding',
+        'amount outstanding',
+        '',
+        'DOD',
+    ]);
+    assert.deepEqual(
+        dropdownRequestBody(request)?.requests.map(
+            ({ setDataValidation }) =>
+                setDataValidation.rule.condition.values[0]?.userEnteredValue.split('!')[1],
+        ),
+        [`$A$${header + 2}:$A$${header + 2}`, `$F$${header + 2}:$F$${header + 3}`],
+    );
 });
 
 test('a sheet with no value-list column needs no dropdown request', () => {

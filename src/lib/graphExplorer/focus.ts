@@ -207,6 +207,38 @@ export function declaredDomain(model: Model, id: string): readonly string[] | nu
     return same ? null : domain;
 }
 
+/** One value of an open property as the panel shows it: a link to a node the model holds, else text. */
+export type OpenEntryValue =
+    | { readonly kind: 'node'; readonly id: string }
+    | { readonly kind: 'text'; readonly text: string };
+
+/** One open property of a node with its label and values. */
+export type OpenEntry = {
+    readonly property: string;
+    /** The property's name when the model holds it, else its dcid. */
+    readonly label: string;
+    readonly values: readonly OpenEntryValue[];
+};
+
+/**
+ * A node's open properties in the document's order. A dcid value the model
+ * holds as a node or dataset is a `node`; any other dcid and every literal
+ * is `text`. Empty for a node the model lacks.
+ */
+export function openEntries(model: Model, id: string): readonly OpenEntry[] {
+    const node = model.node(id);
+    if (!node) return [];
+    return Object.entries(node.other_properties).map(([property, values]) => ({
+        property,
+        label: model.label(property),
+        values: values.map((value): OpenEntryValue => {
+            if ('value' in value) return { kind: 'text', text: value.value };
+            const held = model.node(value.dcid) || model.dataset(value.dcid);
+            return held ? { kind: 'node', id: value.dcid } : { kind: 'text', text: value.dcid };
+        }),
+    }));
+}
+
 /** What is centred: a term (`?node=`) or a dataset (`?dataset=`). */
 export type Centre = { readonly kind: 'node' | 'dataset'; readonly id: string };
 

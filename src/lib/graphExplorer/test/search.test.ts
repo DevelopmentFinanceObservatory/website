@@ -26,6 +26,17 @@ test('a classification code or alternate name matches exactly, ignoring case', (
     assert.equal(oda?.match, 'exact');
 });
 
+test('an open property value or name finds the nodes that carry it', () => {
+    assert.deepEqual(
+        search(model, 'DOD').hits.map((hit) => [hit.id, hit.match]),
+        [['AmountOutstanding', 'exact']],
+    );
+    assert.equal(search(model, 'chf').hits[0]?.id, 'CurrencyCHF');
+    assert.ok(ids('country/LIE').includes('CurrencyCHF'));
+    assert.ok(ids('wbCode').includes('AmountOutstanding'));
+    assert.ok(ids('wbCode').includes('wbCode'));
+});
+
 test('exact beats prefix beats substring', () => {
     const hits = search(model, 'Source', { limit: 50 }).hits;
     assert.deepEqual(

@@ -1,9 +1,10 @@
 /**
  * Search over the model: terms, values and datasets by label, dcid,
- * alternate name and classification code. With the terms list it also
+ * alternate name, classification code, and the names and values of each
+ * node's open properties. With the terms list it also
  * reaches base classes and properties the model does not hold.
  */
-import { kindOfTerm, type Kind, type Model } from './model.ts';
+import { kindOfTerm, openNames, type Kind, type Model } from './model.ts';
 import type { SchemaTerms } from './wire.ts';
 
 /** How a query matched a hit's best field. */
@@ -67,6 +68,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             node.dcid,
             ...node.alternate_name,
             ...node.classification_code,
+            ...openNames(node),
         ]);
         if (match === undefined) continue;
         hits.push({

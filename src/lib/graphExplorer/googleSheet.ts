@@ -6,9 +6,9 @@
  * and frozen, then the example rows. Its first cell carries a note naming the
  * graph generation and the date. The value-list tab holds one block per
  * property column with a value list: the property's name, then a row of
- * `dcid`, `label` and `code`, then one row per member, each block followed by
- * an empty column. Each such property column gets a dropdown fed from its
- * block's dcid range.
+ * `dcid`, `label`, `code` and the dcid of each open property the members
+ * carry, then one row per member, each block followed by an empty column.
+ * Each such property column gets a dropdown fed from its block's dcid range.
  *
  * Reference: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create
  * and https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/request#setdatavalidationrequest
@@ -38,18 +38,28 @@ export const LIMITS = {
     rows: 50,
     cell: 1000,
     members: 5000,
-    /** A value list's dcid, a member's dcid, label or code. */
+    /** Open property columns in one value list's block. */
+    fields: 16,
+    /** A value list's dcid, an open property's dcid, a member's dcid, label, code or open property cell. */
     term: 500,
 } as const;
 
-/** One member of a value list, as the page sends it. */
-export type SheetMember = { id: string; label: string; code: string | null };
+/** One member of a value list, as the page sends it. `values` holds one cell per lookup field. */
+export type SheetMember = { id: string; label: string; code: string | null; values: string[] };
 
 export type SheetRequestColumn = {
     name: string;
     kind: ColumnKind;
-    /** `complete` is false when the graph holds members of the value list that `members` leaves out. */
-    lookup: { valueList: string; members: SheetMember[]; complete: boolean } | null;
+    /**
+     * `fields` names the open properties shown after the code. `complete` is
+     * false when the graph holds members of the value list that `members` leaves out.
+     */
+    lookup: {
+        valueList: string;
+        fields: string[];
+        members: SheetMember[];
+        complete: boolean;
+    } | null;
 };
 
 /** The body of `POST /graph-explorer/api/sheets`. */
@@ -99,26 +109,31 @@ const KINDS: readonly ColumnKind[] = ['reference', 'definition', 'property'];
 const isText = (value: unknown, max: number, min = 0): value is string =>
     typeof value === 'string' && value.length >= min && value.length <= max;
 
-const readMember = (value: unknown): SheetMember | null => {
+const isTextList = (value: unknown, max: number, min = 0): value is string[] =>
+    Array.isArray(value) && value.every((each) => isText(each, max, min));
+
+const readMember = (value: unknown, fields: number): SheetMember | null => {
     const member = asRecord(value);
     if (member === undefined) return null;
-    const { id, label, code } = member;
+    const { id, label, code, values } = member;
     if (!isText(id, LIMITS.term, 1) || !isText(label, LIMITS.term)) return null;
     if (code !== null && !isText(code, LIMITS.term)) return null;
-    return { id, label, code };
+    if (!isTextList(values, LIMITS.term) || values.length !== fields) return null;
+    return { id, label, code, values };
 };
 
 const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined => {
     if (value === null) return null;
     const lookup = asRecord(value);
     if (lookup === undefined) return undefined;
-    const { valueList, members, complete } = lookup;
+    const { valueList, fields, members, complete } = lookup;
     if (!isText(valueList, LIMITS.term, 1)) return undefined;
+    if (!isTextList(fields, LIMITS.term, 1) || fields.length > LIMITS.fields) return undefined;
     if (typeof complete !== 'boolean') return undefined;
     if (!Array.isArray(members) || members.length > LIMITS.members) return undefined;
-    const read = members.map(readMember);
+    const read = members.map((member) => readMember(member, fields.length));
     if (read.some((member) => member === null)) return undefined;
-    return { valueList, members: read.filter((member) => member !== null), complete };
+    return { valueList, fields, members: read.filter((member) => member !== null), complete };
 };
 
 const readColumn = (value: unknown): SheetRequestColumn | null => {
@@ -173,29 +188,42 @@ type Block = {
     /** The column's index on the mapping tab. */
     column: number;
     name: string;
+    fields: string[];
     members: SheetMember[];
     complete: boolean;
     /** The block's first column on the value-list tab. */
     start: number;
 };
 
-const BLOCK_WIDTH = 4;
+/** The columns every block holds before its open property columns: dcid, label and code. */
+const BASE_FIELDS = ['dcid', 'label', 'code'] as const;
 
-const blocksOf = (request: SheetRequest): Block[] =>
-    request.columns
-        .flatMap((column, index) =>
-            column.kind === 'property' && column.lookup && column.lookup.members.length > 0
-                ? [
-                      {
-                          column: index,
-                          name: column.name,
-                          members: column.lookup.members,
-                          complete: column.lookup.complete,
-                      },
-                  ]
-                : [],
-        )
-        .map((block, at) => ({ ...block, start: at * BLOCK_WIDTH }));
+/** A block's columns, without the empty column after it. */
+const blockWidth = (block: Pick<Block, 'fields'>): number =>
+    BASE_FIELDS.length + block.fields.length;
+
+const blocksOf = (request: SheetRequest): Block[] => {
+    let start = 0;
+    return request.columns.flatMap((column, index) => {
+        if (column.kind !== 'property' || !column.lookup || column.lookup.members.length === 0) {
+            return [];
+        }
+        const block = {
+            column: index,
+            name: column.name,
+            fields: column.lookup.fields,
+            members: column.lookup.members,
+            complete: column.lookup.complete,
+            start,
+        };
+        start += blockWidth(block) + 1;
+        return [block];
+    });
+};
+
+/** The value-list tab's width: every block with an empty column between two. */
+const tabWidth = (blocks: readonly Block[]): number =>
+    blocks.reduce((width, block) => width + blockWidth(block) + 1, 0) - 1;
 
 /**
  * The value-list tab's rows above the members: the property's name, the
@@ -234,14 +262,24 @@ const valueListRows = (blocks: Block[]) => {
     return Array.from({ length: height }, (_, row) => ({
         values: blocks.flatMap((block, at) => {
             const gap = at < blocks.length - 1 ? [EMPTY] : [];
-            if (row === 0) return [bold(block.name), EMPTY, EMPTY, ...gap];
-            if (row === header - 1) return [bold('dcid'), bold('label'), bold('code'), ...gap];
+            const blank = (from: number) =>
+                Array.from({ length: blockWidth(block) - from }, () => EMPTY);
+            if (row === 0) return [bold(block.name), ...blank(1), ...gap];
+            if (row === header - 1) {
+                return [...BASE_FIELDS, ...block.fields].map(bold).concat(gap);
+            }
             if (row < header) {
-                return [block.complete ? EMPTY : text(PARTIAL_LIST_LINE), EMPTY, EMPTY, ...gap];
+                return [block.complete ? EMPTY : text(PARTIAL_LIST_LINE), ...blank(1), ...gap];
             }
             const member = block.members[row - header];
-            if (member === undefined) return [EMPTY, EMPTY, EMPTY, ...gap];
-            return [text(member.id), text(member.label), text(member.code ?? ''), ...gap];
+            if (member === undefined) return [...blank(0), ...gap];
+            return [
+                text(member.id),
+                text(member.label),
+                text(member.code ?? ''),
+                ...member.values.map(text),
+                ...gap,
+            ];
         }),
     }));
 };
@@ -293,7 +331,7 @@ export const createSpreadsheetBody = (request: SheetRequest, today: string) => {
                     index: 1,
                     gridProperties: {
                         rowCount: valueRows.length,
-                        columnCount: Math.max(1, blocks.length * BLOCK_WIDTH - 1),
+                        columnCount: Math.max(1, tabWidth(blocks)),
                         frozenRowCount: blocks.length > 0 ? headerRows(blocks) : 0,
                     },
                 },

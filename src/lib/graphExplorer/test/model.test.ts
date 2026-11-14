@@ -12,6 +12,8 @@ import {
     filterScopedList,
     GROUPS,
     kindOfTerm,
+    memberFields,
+    openCell,
     searchMembers,
     type MemberTree,
 } from '../model.ts';
@@ -131,6 +133,7 @@ const nettingValue = (dcid: string, parents: string[]): SchemaNode => ({
     provenances: ['provenance/DFOOntology'],
     declared_by: 'instance',
     enumeration: null,
+    other_properties: {},
 });
 
 const treeIds = (trees: readonly MemberTree[]): string[] =>
@@ -391,6 +394,24 @@ test('a member search matches label, dcid, code or other name, ignoring case and
     assert.deepEqual(capped.hits.length, 2);
     assert.ok(capped.total > 2);
     assert.deepEqual(searchMembers(model, 'DAC1AidTypeEnum', '   '), { hits: [], total: 0 });
+});
+
+test('a member search matches an open property literal', () => {
+    assert.deepEqual(searchMembers(model, 'FinancialPositionTypeEnum', 'dod'), {
+        hits: ['AmountOutstanding'],
+        total: 1,
+    });
+});
+
+test('the open properties of a list are those its members carry, each member a cell', () => {
+    assert.deepEqual(memberFields(model, 'FinancialPositionTypeEnum'), ['wbCode']);
+    assert.deepEqual(memberFields(model, 'NettingBasisEnum'), []);
+    assert.equal(openCell(model, 'CurrencyCHF', 'dacCode'), '11;70');
+    assert.equal(
+        openCell(model, 'CurrencyCHF', 'nationalCurrencyOf', ', '),
+        'country/CHE, country/LIE',
+    );
+    assert.equal(openCell(model, 'CurrencyCHF', 'wbCode'), '');
 });
 
 test('a scoped list filter keeps rows by label or dcid, and blank text keeps every row', () => {
