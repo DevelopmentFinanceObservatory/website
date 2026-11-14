@@ -152,12 +152,16 @@ const Button = ({
         <>
             {children && (
                 <span className={styles.label}>
+                    {/* The word spans and their hidden copies are drawn only; this one copy of the
+                        label is what assistive technology reads, so the name says each word once. */}
+                    {words && <span className={styles.spoken}>{children}</span>}
                     {words
                         ? words.map((word, index) => (
                               <span
                                   key={`${word}-${index}`}
                                   className={styles.word}
                                   style={{ '--wi': index } as React.CSSProperties}
+                                  aria-hidden="true"
                               >
                                   <span className={styles.wordInner} data-word={word}>
                                       {word}
