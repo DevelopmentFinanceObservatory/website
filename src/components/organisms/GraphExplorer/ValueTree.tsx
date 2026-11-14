@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
-import { count } from './format';
+import { count } from '@/lib/graphExplorer/counts';
 import styles from './ValueTree.module.scss';
 
 import { searchMembers, type MemberTree } from '@/lib/graphExplorer/model';

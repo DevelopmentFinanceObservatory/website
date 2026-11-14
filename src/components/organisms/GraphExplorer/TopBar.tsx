@@ -61,9 +61,11 @@ const TermsLine = ({
 /**
  * The wordmark, the search box, the base Data Commons switch and the three
  * screens, over the section's loaded documents. Every link keeps the carried
- * parameters, and the switch writes the carried `base` parameter.
+ * parameters, and the switch writes the carried `base` parameter. The terms
+ * list's progress or failure shows under the bar unless `termsInMain`, when
+ * the main area shows it.
  */
-const TopBar = () => {
+const TopBar = ({ termsInMain = false }: { termsInMain?: boolean }) => {
     const screen = screenOf(usePathname());
     const carried = useCarried();
     const data = useExplorerData();
@@ -103,7 +105,7 @@ const TopBar = () => {
                     </Link>
                 ))}
             </nav>
-            {data.terms !== null && data.terms.status !== 'ready' && (
+            {!termsInMain && data.terms !== null && data.terms.status !== 'ready' && (
                 <TermsLine terms={data.terms} onRetry={data.retryTerms} />
             )}
         </header>

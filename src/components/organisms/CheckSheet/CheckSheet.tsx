@@ -9,7 +9,7 @@ import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
 import { ModelProvider, useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
-import { plural } from '@/components/organisms/GraphExplorer/format';
+import { plural } from '@/lib/graphExplorer/counts';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
@@ -77,11 +77,17 @@ type ColumnRowProps = {
     header: string;
     read: ColumnTarget;
     target: ColumnTarget;
+    /** The earlier column this one repeats, when it is ignored for that reason. */
+    repeats: { readonly index: number; readonly header: string } | null;
     onSwitch: (to: Switch | null) => void;
 };
 
-/** One pasted column: how the page read it and a switch between property and ignored. */
-const ColumnRow = ({ header, read, target, onSwitch }: ColumnRowProps) => {
+/**
+ * One pasted column: how the page read it, a switch between property and
+ * ignored, and the earlier column it repeats, which keeps it ignored
+ * whatever the switch says.
+ */
+const ColumnRow = ({ header, read, target, repeats, onSwitch }: ColumnRowProps) => {
     const model = useModel();
     const selectId = useId();
     const options: { value: string; label: string }[] = [
@@ -112,6 +118,11 @@ const ColumnRow = ({ header, read, target, onSwitch }: ColumnRowProps) => {
                     </option>
                 ))}
             </select>
+            {repeats !== null && (
+                <span className={styles.columnNote}>
+                    Repeats column {repeats.index + 1} ({repeats.header || 'no header'})
+                </span>
+            )}
             {target.kind === 'property' && (
                 <span className={styles.columnNote}>
                     {held ? (
@@ -611,6 +622,14 @@ const CheckSteps = () => {
                                 header={column.header}
                                 read={read[column.index]?.wanted ?? column.wanted}
                                 target={column.target}
+                                repeats={
+                                    column.duplicateOf === null
+                                        ? null
+                                        : {
+                                              index: column.duplicateOf,
+                                              header: mapping[column.duplicateOf]?.header ?? '',
+                                          }
+                                }
                                 onSwitch={(to) => switchTo(column.index, to)}
                             />
                         ))}

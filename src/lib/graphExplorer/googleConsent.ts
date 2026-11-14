@@ -6,6 +6,7 @@
  * added when it fails: the reader declined, or the Google account could not
  * be linked to this one.
  */
+import { queryString } from './explore.ts';
 import type { SheetsAnswer } from './googleSheet.ts';
 
 /** The parameter Better Auth adds to the return address when the link failed. */
@@ -14,15 +15,26 @@ export const LINK_ERROR_PARAM = 'error';
 /** The parameter on the return address after a trip that granted Google access. */
 export const RETURNED_PARAM = 'google';
 
-type QueryReader = { get(name: string): string | null; has(name: string): boolean };
-
 /** What the return address says about the last trip through Google's consent screen. */
 export type ConsentTrip = 'none' | 'granted' | 'refused';
 
-/** The trip a query records. A query with LINK_ERROR_PARAM never counts as granted. */
-export const consentTrip = (params: QueryReader): ConsentTrip => {
-    if (params.has(LINK_ERROR_PARAM)) return 'refused';
-    return params.has(RETURNED_PARAM) ? 'granted' : 'none';
+/**
+ * The trip the return address `query` records, and `query` without the
+ * trip's parameters. Start a sheet reads the trip once when it mounts and
+ * writes the cleaned query back, so a copied or bookmarked address carries
+ * no trip.
+ */
+export const takeConsentTrip = (query: string): { trip: ConsentTrip; query: string } => {
+    const params = new URLSearchParams(query);
+    // A query with LINK_ERROR_PARAM never counts as granted.
+    const trip: ConsentTrip = params.has(LINK_ERROR_PARAM)
+        ? 'refused'
+        : params.has(RETURNED_PARAM)
+          ? 'granted'
+          : 'none';
+    params.delete(LINK_ERROR_PARAM);
+    params.delete(RETURNED_PARAM);
+    return { trip, query: queryString(params) };
 };
 
 /**
@@ -37,18 +49,6 @@ export const consentReturns = (href: string): { callbackURL: string; errorCallba
     const errorCallbackURL = `${back.pathname}${back.search}`;
     back.searchParams.set(RETURNED_PARAM, '1');
     return { callbackURL: `${back.pathname}${back.search}`, errorCallbackURL };
-};
-
-/**
- * `href` with RETURNED_PARAM set when `params` holds it, so a granted trip
- * is still known after the page rewrites its query.
- */
-export const keepReturned = (href: string, params: QueryReader): string => {
-    if (consentTrip(params) !== 'granted') return href;
-    const [path = '', query = ''] = href.split('?', 2);
-    const next = new URLSearchParams(query);
-    next.set(RETURNED_PARAM, '1');
-    return `${path}?${next.toString()}`;
 };
 
 /**
@@ -76,8 +76,27 @@ const UNREACHED = 'The sheet could not be created. Check your connection and try
 const CONSENT_UNAVAILABLE = 'Google’s consent screen could not be opened. Try again.';
 
 /** The state the control opens in: after a refused trip, the consent screen is offered again. */
-export const initialCreateState = (trip: ConsentTrip): CreateState =>
+const initialCreateState = (trip: ConsentTrip): CreateState =>
     trip === 'refused' ? { kind: 'needs_google', message: NOT_GRANTED } : { kind: 'idle' };
+
+/** A state of the control and the draft query it was reached for. */
+export type CreateRecord = { readonly query: string; readonly state: CreateState };
+
+/**
+ * The state shown for the draft `query`: the record's while the record was
+ * made for that draft or a request is in flight, else the state the control
+ * opens in. A request in flight shows on every draft, so one create runs at
+ * a time. A request that finishes after an edit records its sheet against
+ * the draft it was made for, so returning to that draft shows its link.
+ */
+export const shownCreateState = (
+    record: CreateRecord | null,
+    query: string,
+    trip: ConsentTrip,
+): CreateState =>
+    record !== null && (record.query === query || record.state.kind === 'working')
+        ? record.state
+        : initialCreateState(trip);
 
 /**
  * The state the handler's answer leads to, or null for no answer. A request

@@ -5,7 +5,7 @@ import classNames from 'classnames';
 import { ExploreLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPicture.module.scss';
-import { count } from './format';
+import { count } from '@/lib/graphExplorer/counts';
 
 import { BOX_LIMIT, type FocusBox, type Side } from '@/lib/graphExplorer/focus';
 

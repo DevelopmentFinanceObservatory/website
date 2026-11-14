@@ -57,6 +57,9 @@ const GraphExplorer = () => {
     const filter = model
         ? checkFilter(model, navigation.state.show)
         : { show: NO_FILTER, unknown: null };
+    const termsInMain =
+        model !== null &&
+        awaitsTerms(model, navigation.state.view, data.base, baseTerms !== undefined);
 
     const screen = (ready: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
@@ -71,7 +74,7 @@ const GraphExplorer = () => {
             }
             case 'node':
             case 'dataset':
-                if (awaitsTerms(ready, view, data.base, baseTerms !== undefined)) {
+                if (termsInMain) {
                     // The terms list is null for the render before its load starts.
                     const terms =
                         data.terms === null || data.terms.status === 'ready' ? LOADING : data.terms;
@@ -85,7 +88,7 @@ const GraphExplorer = () => {
         <NavigationProvider value={navigation}>
             <ModelProvider value={model}>
                 <div className={styles.explorer}>
-                    <TopBar />
+                    <TopBar termsInMain={termsInMain} />
                     <main
                         className={styles.main}
                         key={exploreQuery({ view: navigation.state.view, ...NO_CARRIED })}

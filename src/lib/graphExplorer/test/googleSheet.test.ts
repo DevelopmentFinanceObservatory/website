@@ -13,6 +13,7 @@ import {
     readSheetRequest,
     type SheetRequest,
 } from '../googleSheet.ts';
+import { PARTIAL_LIST_LINE } from '../counts.ts';
 import { buildModel } from '../model.ts';
 import { exampleRows, sheetColumns } from '../sheet.ts';
 import { readOntology, readProvenances } from '../wire.ts';
@@ -37,7 +38,11 @@ const fixtureRequest = (): SheetRequest =>
             columns: columns.map(({ name, kind, lookup }) => ({
                 name,
                 kind,
-                lookup: lookup && { valueList: lookup.valueList, members: lookup.members },
+                lookup: lookup && {
+                    valueList: lookup.valueList,
+                    members: lookup.members,
+                    complete: lookup.complete,
+                },
             })),
             rows: exampleRows(columns),
         }),
@@ -54,7 +59,7 @@ const withColumns = (count: number) => ({
     columns: Array.from({ length: count }, (_, at) => ({
         name: `p${at}`,
         kind: 'property',
-        lookup: { valueList: 'L', members: [member(at)] },
+        lookup: { valueList: 'L', members: [member(at)], complete: true },
     })),
     rows: [],
 });
@@ -130,6 +135,11 @@ const bounds: [string, Edit, Edit][] = [
         'value list',
         (r) => (r.columns[6].lookup.valueList = text(LIMITS.term)),
         (r) => (r.columns[6].lookup.valueList = text(LIMITS.term + 1)),
+    ],
+    [
+        'list completeness',
+        (r) => (r.columns[6].lookup.complete = false),
+        (r) => (r.columns[6].lookup.complete = 'no'),
     ],
 ];
 
@@ -208,17 +218,34 @@ test('a model with no generation says so in the note', () => {
     assert.notEqual(note, noteOf(generation));
 });
 
+const valueListCells = (request: SheetRequest) => {
+    const tab = createSpreadsheetBody(request, '2026-11-13').sheets[1];
+    const cells = (tab?.data[0]?.rowData ?? []).map((row) =>
+        row.values.map((cell) => cell.userEnteredValue?.stringValue ?? ''),
+    );
+    return { properties: tab?.properties, cells };
+};
+
+/** The fixture request with every value list complete. */
+const completeRequest = (): SheetRequest => {
+    const request = fixtureRequest();
+    return {
+        ...request,
+        columns: request.columns.map((column) => ({
+            ...column,
+            lookup: column.lookup && { ...column.lookup, complete: true },
+        })),
+    };
+};
+
 test('the value-list tab holds one block of dcid, label and code per property with a value list', () => {
-    const tab = createSpreadsheetBody(fixtureRequest(), '2026-11-13').sheets[1];
-    assert.deepEqual(tab?.properties, {
+    const { properties, cells } = valueListCells(completeRequest());
+    assert.deepEqual(properties, {
         sheetId: 1,
         title: 'Value lists',
         index: 1,
         gridProperties: { rowCount: 19, columnCount: 7, frozenRowCount: 2 },
     });
-    const cells = (tab?.data[0]?.rowData ?? []).map((row) =>
-        row.values.map((cell) => cell.userEnteredValue?.stringValue ?? ''),
-    );
     assert.deepEqual(cells[0], ['nettingBasis', '', '', '', 'dac1AidType', '', '']);
     assert.deepEqual(cells[1], ['dcid', 'label', 'code', '', 'dcid', 'label', 'code']);
     assert.deepEqual(cells[2]?.slice(0, 3), ['Gross', 'gross', '']);
@@ -231,6 +258,20 @@ test('the value-list tab holds one block of dcid, label and code per property wi
     assert.equal(cells.length, 2 + 17);
 });
 
+test('a partial value list carries the partial line under its name, and every block moves down a row', () => {
+    const { properties, cells } = valueListCells(fixtureRequest());
+    assert.deepEqual(properties?.gridProperties, {
+        rowCount: 20,
+        columnCount: 7,
+        frozenRowCount: 3,
+    });
+    assert.deepEqual(cells[0], ['nettingBasis', '', '', '', 'dac1AidType', '', '']);
+    assert.deepEqual(cells[1], ['', '', '', '', PARTIAL_LIST_LINE, '', '']);
+    assert.deepEqual(cells[2], ['dcid', 'label', 'code', '', 'dcid', 'label', 'code']);
+    assert.deepEqual(cells[3]?.slice(0, 3), ['Gross', 'gross', '']);
+    assert.equal(cells.length, 3 + 17);
+});
+
 test('one dropdown per property column with a value list, none on reference or definition columns', () => {
     const body = dropdownRequestBody(fixtureRequest());
     assert.deepEqual(
@@ -240,8 +281,8 @@ test('one dropdown per property column with a value list, none on reference or d
             rule.condition.values[0]?.userEnteredValue,
         ]),
         [
-            [6, 7, "='Value lists'!$A$3:$A$4"],
-            [7, 8, "='Value lists'!$E$3:$E$19"],
+            [6, 7, "='Value lists'!$A$4:$A$5"],
+            [7, 8, "='Value lists'!$E$4:$E$20"],
         ],
     );
     for (const { setDataValidation } of body?.requests ?? []) {

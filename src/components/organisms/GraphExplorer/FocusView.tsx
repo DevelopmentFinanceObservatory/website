@@ -7,7 +7,7 @@ import { BaseTag } from './ExploreLink';
 import { DatasetPanel, FullList, NodePanel, OutsidePanel, type PanelLens } from './FocusPanel';
 import FocusPicture from './FocusPicture';
 import styles from './FocusView.module.scss';
-import { plural } from './format';
+import { plural } from '@/lib/graphExplorer/counts';
 
 import Button from '@/components/atoms/Button/Button';
 import { NO_FILTER, START_VIEW } from '@/lib/graphExplorer/explore';

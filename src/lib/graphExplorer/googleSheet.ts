@@ -14,6 +14,7 @@
  * and https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/request#setdatavalidationrequest
  */
 import { asRecord } from '../asRecord.ts';
+import { PARTIAL_LIST_LINE } from './counts.ts';
 import type { ColumnKind } from './sheet.ts';
 
 /** The Google OAuth scope that lets the tool create files and see only those it created. */
@@ -47,7 +48,8 @@ export type SheetMember = { id: string; label: string; code: string | null };
 export type SheetRequestColumn = {
     name: string;
     kind: ColumnKind;
-    lookup: { valueList: string; members: SheetMember[] } | null;
+    /** `complete` is false when the graph holds members of the value list that `members` leaves out. */
+    lookup: { valueList: string; members: SheetMember[]; complete: boolean } | null;
 };
 
 /** The body of `POST /graph-explorer/api/sheets`. */
@@ -106,12 +108,13 @@ const readLookup = (value: unknown): SheetRequestColumn['lookup'] | undefined =>
     if (value === null) return null;
     const lookup = asRecord(value);
     if (lookup === undefined) return undefined;
-    const { valueList, members } = lookup;
+    const { valueList, members, complete } = lookup;
     if (!isText(valueList, LIMITS.term, 1)) return undefined;
+    if (typeof complete !== 'boolean') return undefined;
     if (!Array.isArray(members) || members.length > LIMITS.members) return undefined;
     const read = members.map(readMember);
     if (read.some((member) => member === null)) return undefined;
-    return { valueList, members: read.filter((member) => member !== null) };
+    return { valueList, members: read.filter((member) => member !== null), complete };
 };
 
 const readColumn = (value: unknown): SheetRequestColumn | null => {
@@ -167,22 +170,35 @@ type Block = {
     column: number;
     name: string;
     members: SheetMember[];
+    complete: boolean;
     /** The block's first column on the value-list tab. */
     start: number;
 };
 
 const BLOCK_WIDTH = 4;
-/** The value-list tab's rows above the members: the property's name, then the field names. */
-const BLOCK_HEADER_ROWS = 2;
 
 const blocksOf = (request: SheetRequest): Block[] =>
     request.columns
         .flatMap((column, index) =>
             column.kind === 'property' && column.lookup && column.lookup.members.length > 0
-                ? [{ column: index, name: column.name, members: column.lookup.members }]
+                ? [
+                      {
+                          column: index,
+                          name: column.name,
+                          members: column.lookup.members,
+                          complete: column.lookup.complete,
+                      },
+                  ]
                 : [],
         )
         .map((block, at) => ({ ...block, start: at * BLOCK_WIDTH }));
+
+/**
+ * The value-list tab's rows above the members: the property's name, the
+ * partial-list line when any block's list is partial, then the field names.
+ */
+const headerRows = (blocks: readonly Block[]): number =>
+    blocks.every((block) => block.complete) ? 2 : 3;
 
 /** A cell as the create body writes it: always a string value, never parsed as a formula. */
 export type Cell = {
@@ -209,13 +225,17 @@ export const generationNote = (generation: string | null, today: string): string
 
 /** The value-list tab's rows: the blocks side by side, an empty column between two. */
 const valueListRows = (blocks: Block[]) => {
-    const height = Math.max(0, ...blocks.map((block) => block.members.length)) + BLOCK_HEADER_ROWS;
+    const header = headerRows(blocks);
+    const height = Math.max(0, ...blocks.map((block) => block.members.length)) + header;
     return Array.from({ length: height }, (_, row) => ({
         values: blocks.flatMap((block, at) => {
             const gap = at < blocks.length - 1 ? [EMPTY] : [];
             if (row === 0) return [bold(block.name), EMPTY, EMPTY, ...gap];
-            if (row === 1) return [bold('dcid'), bold('label'), bold('code'), ...gap];
-            const member = block.members[row - BLOCK_HEADER_ROWS];
+            if (row === header - 1) return [bold('dcid'), bold('label'), bold('code'), ...gap];
+            if (row < header) {
+                return [block.complete ? EMPTY : text(PARTIAL_LIST_LINE), EMPTY, EMPTY, ...gap];
+            }
+            const member = block.members[row - header];
             if (member === undefined) return [EMPTY, EMPTY, EMPTY, ...gap];
             return [text(member.id), text(member.label), text(member.code ?? ''), ...gap];
         }),
@@ -270,7 +290,7 @@ export const createSpreadsheetBody = (request: SheetRequest, today: string) => {
                     gridProperties: {
                         rowCount: valueRows.length,
                         columnCount: Math.max(1, blocks.length * BLOCK_WIDTH - 1),
-                        frozenRowCount: blocks.length > 0 ? BLOCK_HEADER_ROWS : 0,
+                        frozenRowCount: blocks.length > 0 ? headerRows(blocks) : 0,
                     },
                 },
                 data: [{ startRow: 0, startColumn: 0, rowData: valueRows }],
@@ -280,9 +300,9 @@ export const createSpreadsheetBody = (request: SheetRequest, today: string) => {
 };
 
 /** A block's dcid cells in A1 notation, as a formula on the value-list tab. */
-const dcidRange = (block: Block): string => {
+const dcidRange = (block: Block, header: number): string => {
     const letters = columnLetters(block.start);
-    const top = BLOCK_HEADER_ROWS + 1;
+    const top = header + 1;
     return `='${VALUE_LIST_TAB.title}'!$${letters}$${top}:$${letters}$${top + block.members.length - 1}`;
 };
 
@@ -295,6 +315,7 @@ const dcidRange = (block: Block): string => {
 export const dropdownRequestBody = (request: SheetRequest) => {
     const blocks = blocksOf(request);
     if (blocks.length === 0) return null;
+    const header = headerRows(blocks);
     return {
         requests: blocks.map((block) => ({
             setDataValidation: {
@@ -308,7 +329,7 @@ export const dropdownRequestBody = (request: SheetRequest) => {
                 rule: {
                     condition: {
                         type: 'ONE_OF_RANGE',
-                        values: [{ userEnteredValue: dcidRange(block) }],
+                        values: [{ userEnteredValue: dcidRange(block, header) }],
                     },
                     strict: false,
                     showCustomUi: true,

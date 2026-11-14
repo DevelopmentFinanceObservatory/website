@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 
 import styles from './NewSheet.module.scss';
 import { CreateGoogleSheet, DownloadCsv } from './SheetExports';
@@ -12,14 +12,18 @@ import {
     useModel,
 } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
-import { count, plural, valueCount } from '@/components/organisms/GraphExplorer/format';
+import { count, plural, valueCount } from '@/lib/graphExplorer/counts';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { NO_CARRIED, type Carried } from '@/lib/graphExplorer/explore';
-import { keepReturned } from '@/lib/graphExplorer/googleConsent';
+import {
+    takeConsentTrip,
+    type ConsentTrip,
+    type CreateRecord,
+} from '@/lib/graphExplorer/googleConsent';
 import {
     queryOf,
     readSheetQuery,
@@ -35,16 +39,11 @@ import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
 /**
- * Replaces the page's query in place, keeping the carried parameters and the
- * mark of a granted Google consent trip: the URL holds the sheet, and the
- * back button skips edits.
+ * Replaces the page's query in place, keeping the carried parameters: the
+ * URL holds the sheet, and the back button skips edits.
  */
 const writeQuery = (query: SheetQuery, carried: Carried) =>
-    window.history.replaceState(
-        null,
-        '',
-        keepReturned(sheetHref(query, carried), new URLSearchParams(window.location.search)),
-    );
+    window.history.replaceState(null, '', sheetHref(query, carried));
 
 type SplitBoxProps = { option: SplitOption; checked: boolean; onToggle: () => void };
 
@@ -242,11 +241,15 @@ const ValueLists = ({ sheet }: { sheet: SheetDraft }) => {
     );
 };
 
-/** The four steps, top to bottom, over the model and the URL's choices. */
-const SheetSteps = () => {
+/**
+ * The four steps, top to bottom, over the model and the URL's choices.
+ * `trip` is the Google consent trip the page opened after.
+ */
+const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
     const model = useModel();
     const params = useSearchParams();
     const carried = useCarried();
+    const [createRecord, setCreateRecord] = useState<CreateRecord | null>(null);
     const selection = useMemo(() => resolveSheet(model, readSheetQuery(params)), [model, params]);
     const sheet = useMemo(
         (): SheetDraft | null =>
@@ -371,7 +374,13 @@ const SheetSteps = () => {
                     labels. Each property column takes a value from its value list.
                 </p>
                 <div className={styles.exports}>
-                    <CreateGoogleSheet key={sheetQuery(current, NO_CARRIED)} sheet={sheet} />
+                    <CreateGoogleSheet
+                        sheet={sheet}
+                        query={sheetQuery(current, NO_CARRIED)}
+                        trip={trip}
+                        record={createRecord}
+                        onRecord={setCreateRecord}
+                    />
                     <DownloadCsv sheet={sheet} />
                 </div>
                 <ValueLists sheet={sheet} />
@@ -387,6 +396,19 @@ const SheetSteps = () => {
  */
 const NewSheet = () => {
     const data = useExplorerData();
+    const params = useSearchParams();
+    // The return address's consent trip counts once: it is read on mount and
+    // its parameters leave the address at once.
+    const [trip] = useState(() => takeConsentTrip(params.toString()).trip);
+    useEffect(() => {
+        const { query } = takeConsentTrip(window.location.search);
+        if (query === window.location.search) return;
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${query}${window.location.hash}`,
+        );
+    }, []);
     const model = data.model.status === 'ready' ? data.model.value : null;
 
     return (
@@ -405,7 +427,7 @@ const NewSheet = () => {
                             </p>
                         </header>
                         {data.model.status === 'ready' ? (
-                            <SheetSteps />
+                            <SheetSteps trip={trip} />
                         ) : (
                             <LoadStatus state={data.model} onRetry={data.retryModel} />
                         )}

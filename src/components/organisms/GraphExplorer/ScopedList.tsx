@@ -6,7 +6,7 @@ import { useId, useMemo, useState } from 'react';
 import { useExplore, useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import { downloadCsv } from './downloadCsv';
-import { count, memberTotal, ofMembers } from './format';
+import { count, memberTotal, ofMembers } from '@/lib/graphExplorer/counts';
 import styles from './ScopedList.module.scss';
 import ShowPills from './ShowPills';
 

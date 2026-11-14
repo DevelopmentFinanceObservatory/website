@@ -10,24 +10,24 @@ export type PastedRange = {
     readonly rows: readonly (readonly string[])[];
 };
 
-/** The cell delimiter of a paste: a tab when its header line holds one, else a comma. */
-const delimiterOf = (text: string): '\t' | ',' => {
-    const lineEnd = text.search(/[\r\n]/);
-    return (lineEnd === -1 ? text : text.slice(0, lineEnd)).includes('\t') ? '\t' : ',';
+type Scan = {
+    readonly records: string[][];
+    /** The delimiters that ended a cell outside quotes. */
+    readonly split: ReadonlySet<string>;
 };
 
 /**
- * Tab-separated text as spreadsheets copy it, or comma-separated text as
- * they save it: a cell wrapped in quotes may hold delimiters, line breaks
- * and doubled quotes. One leading byte-order mark is dropped. A quote that
- * opens a cell and never closes is read as an ordinary character, so the
- * rows after it stay rows. The first row is the header; trailing blank rows
- * are dropped.
+ * Reads `text` into records, each cell ended by any character of
+ * `delimiters` or by a line end. A cell that opens with a quote may hold
+ * delimiters, line breaks and doubled quotes. Its closing quote counts only
+ * when a delimiter, a line end or the end of the text follows it. When
+ * anything else follows, or the quote never closes, the cell is read again
+ * from its opening quote as plain text, so the rows after it stay rows.
+ * Stops after `limit` records.
  */
-export function parsePasted(pasted: string): PastedRange {
-    const text = pasted.startsWith('\uFEFF') ? pasted.slice(1) : pasted;
-    const delimiter = delimiterOf(text);
+const scan = (text: string, delimiters: string, limit = Infinity): Scan => {
     const records: string[][] = [];
+    const split = new Set<string>();
     let record: string[] = [];
     let cell = '';
     let quoted = false;
@@ -45,11 +45,16 @@ export function parsePasted(pasted: string): PastedRange {
         records.push(record);
         record = [];
     };
+    const closes = (next: string): boolean =>
+        next === '' || next === '\n' || next === '\r' || delimiters.includes(next);
 
-    for (let i = 0; i <= text.length; i += 1) {
-        if (i === text.length) {
-            if (!quoted) break;
-            // The quote never closed: read its cell again from the quote, unquoted.
+    for (let i = 0; i <= text.length && records.length < limit; i += 1) {
+        const char = text.charAt(i);
+        const unclosed = i === text.length && quoted;
+        const stray =
+            quoted && char === '"' && text.charAt(i + 1) !== '"' && !closes(text.charAt(i + 1));
+        if (unclosed || stray) {
+            // Read the quoted cell again from its opening quote, unquoted.
             records.length = opened.records;
             record = [...opened.record];
             cell = '"';
@@ -58,7 +63,7 @@ export function parsePasted(pasted: string): PastedRange {
             i = opened.at;
             continue;
         }
-        const char = text.charAt(i);
+        if (i === text.length) break;
         if (quoted) {
             if (char !== '"') cell += char;
             else if (text.charAt(i + 1) === '"') {
@@ -69,8 +74,10 @@ export function parsePasted(pasted: string): PastedRange {
             opened = { at: i, records: records.length, record: [...record] };
             quoted = true;
             cellStart = false;
-        } else if (char === delimiter) endCell();
-        else if (char === '\n') endRecord();
+        } else if (delimiters.includes(char)) {
+            split.add(char);
+            endCell();
+        } else if (char === '\n') endRecord();
         else if (char === '\r') {
             if (text.charAt(i + 1) === '\n') i += 1;
             endRecord();
@@ -79,8 +86,26 @@ export function parsePasted(pasted: string): PastedRange {
             cellStart = false;
         }
     }
-    if (cell !== '' || record.length > 0) endRecord();
+    if (records.length < limit && (cell !== '' || record.length > 0)) endRecord();
+    return { records, split };
+};
 
+/**
+ * The cell delimiter of a paste: a tab when one ends a cell of the header
+ * record read with quotes honoured, else a comma.
+ */
+const delimiterOf = (text: string): '\t' | ',' =>
+    scan(text, '\t,', 1).split.has('\t') ? '\t' : ',';
+
+/**
+ * Tab-separated text as spreadsheets copy it, or comma-separated text as
+ * they save it, read by the quote rules of `scan`. One leading byte-order
+ * mark is dropped. The first row is the header, and trailing blank rows
+ * are dropped.
+ */
+export function parsePasted(pasted: string): PastedRange {
+    const text = pasted.startsWith('\uFEFF') ? pasted.slice(1) : pasted;
+    const { records } = scan(text, delimiterOf(text));
     while (records.length > 0 && isBlank(records[records.length - 1] ?? [])) records.pop();
     const [header = [], ...rows] = records;
     return { header, rows };

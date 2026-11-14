@@ -161,8 +161,16 @@ test('the sheet draft names the class, and both exports carry its columns and ro
     const request = readSheetRequest(sheetRequest(draft));
     assert.ok(request);
     assert.deepEqual(
-        request.columns.map((column) => [column.name, column.lookup?.valueList ?? null]),
-        draft.columns.map((column) => [column.name, column.lookup?.valueList ?? null]),
+        request.columns.map((column) => [
+            column.name,
+            column.lookup?.valueList ?? null,
+            column.lookup?.complete ?? null,
+        ]),
+        draft.columns.map((column) => [
+            column.name,
+            column.lookup?.valueList ?? null,
+            column.lookup?.complete ?? null,
+        ]),
     );
     assert.deepEqual(request.rows, draft.rows);
 });

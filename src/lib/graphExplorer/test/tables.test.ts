@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { scopedListTable, valueListTable } from '../tables.ts';
+import { scopedListTable, valueListFileName, valueListTable } from '../tables.ts';
 import { readOntology, readProvenances } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
@@ -67,3 +67,12 @@ test('a value list has each member with its code and broader members of the list
         'DAC1AidType5',
     ]);
 });
+
+for (const [listId, fileName] of [
+    ['NettingBasisEnum', 'netting-basis.csv'],
+    ['DAC1AidTypeEnum', 'dac-1-aid-type-partial.csv'],
+] as const) {
+    test(`the CSV file of ${listId} is ${fileName}`, () => {
+        assert.equal(valueListFileName(model, listId), fileName);
+    });
+}

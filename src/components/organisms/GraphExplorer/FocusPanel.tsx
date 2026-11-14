@@ -9,10 +9,10 @@ import { useCarried, useModel } from './ExploreContext';
 import { BaseTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
-import { count, ofMembers, plural, valueCount } from './format';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
+import { count, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
     declaredDomain,
     outsideKind,
@@ -23,8 +23,7 @@ import {
 import { KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
 import { sheetHref } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
-import { csvFileName } from '@/lib/graphExplorer/sheet';
-import { valueListTable } from '@/lib/graphExplorer/tables';
+import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
 import type { OntologyFacets, OntologyTerm } from '@/lib/graphExplorer/wire';
 
 const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
@@ -186,15 +185,20 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
             {kind === 'valueList' && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>
-                        {valueCount(members, complete)}
-                        {used?.members && `, ${lens.label} uses ${ofMembers(used.members)}`}
+                        {valueListLabel(
+                            members,
+                            complete,
+                            used?.members && lens.label !== null
+                                ? { user: lens.label, values: used.members }
+                                : null,
+                        )}
                     </Label>
                     <ValueTree listId={id} lensDataset={lens.dataset} />
                     <div>
                         <Button
                             small
                             onClick={() =>
-                                downloadCsv(valueListTable(model, id), csvFileName(model.label(id)))
+                                downloadCsv(valueListTable(model, id), valueListFileName(model, id))
                             }
                         >
                             Download CSV

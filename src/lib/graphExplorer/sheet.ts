@@ -207,6 +207,7 @@ export const sheetRequest = (draft: SheetDraft): SheetRequest => ({
         lookup: column.lookup && {
             valueList: column.lookup.valueList,
             members: column.lookup.members.map(({ id, label, code }) => ({ id, label, code })),
+            complete: column.lookup.complete,
         },
     })),
     rows: draft.rows.map((row) => [...row]),

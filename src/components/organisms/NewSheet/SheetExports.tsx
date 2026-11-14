@@ -1,8 +1,5 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
-
 import styles from './NewSheet.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
@@ -12,10 +9,10 @@ import {
     answerState,
     CONSENT_FAILED_STATE,
     consentReturns,
-    consentTrip,
-    initialCreateState,
+    shownCreateState,
     UNREACHED_STATE,
-    type CreateState,
+    type ConsentTrip,
+    type CreateRecord,
 } from '@/lib/graphExplorer/googleConsent';
 import { DRIVE_FILE_SCOPE, type SheetsAnswer } from '@/lib/graphExplorer/googleSheet';
 import { SHEETS_ROUTE } from '@/lib/graphExplorer/paths';
@@ -56,6 +53,15 @@ const continueWithGoogle = async (): Promise<boolean> => {
     return false;
 };
 
+type CreateGoogleSheetProps = {
+    sheet: SheetDraft;
+    /** The draft's query, which the control's states are recorded against. */
+    query: string;
+    trip: ConsentTrip;
+    record: CreateRecord | null;
+    onRecord: (record: CreateRecord) => void;
+};
+
 /**
  * Creates the sheet as a Google spreadsheet in the reader's own Drive, then
  * links to it. The handler's answer sets what is shown (answerState): the
@@ -63,14 +69,21 @@ const continueWithGoogle = async (): Promise<boolean> => {
  * Again beside it when Better Auth failed to renew the access, and the
  * handler's message for every other refusal. After a trip through the
  * consent screen that the reader declined or that could not link, the
- * consent screen is offered again.
+ * consent screen is offered again. Each state is recorded against the draft
+ * it was reached for, and shown while that draft is current
+ * (shownCreateState).
  */
-export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
-    const trip = consentTrip(useSearchParams());
-    const [state, setState] = useState<CreateState>(() => initialCreateState(trip));
+export const CreateGoogleSheet = ({
+    sheet,
+    query,
+    trip,
+    record,
+    onRecord,
+}: CreateGoogleSheetProps) => {
+    const state = shownCreateState(record, query, trip);
 
     const create = async () => {
-        setState({ kind: 'working' });
+        onRecord({ query, state: { kind: 'working' } });
         try {
             const response = await fetch(SHEETS_ROUTE, {
                 method: 'POST',
@@ -78,14 +91,14 @@ export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
                 body: JSON.stringify(sheetRequest(sheet)),
             });
             const answer = (await response.json().catch(() => null)) as SheetsAnswer | null;
-            setState(answerState(answer, trip));
+            onRecord({ query, state: answerState(answer, trip) });
         } catch {
-            setState(UNREACHED_STATE);
+            onRecord({ query, state: UNREACHED_STATE });
         }
     };
 
     const consent = async () => {
-        if (!(await continueWithGoogle())) setState(CONSENT_FAILED_STATE);
+        if (!(await continueWithGoogle())) onRecord({ query, state: CONSENT_FAILED_STATE });
     };
 
     const offersConsent = state.kind === 'needs_google' || state.kind === 'renewal_failed';
@@ -96,6 +109,7 @@ export const CreateGoogleSheet = ({ sheet }: { sheet: SheetDraft }) => {
                 {state.kind === 'working' ? 'Creating…' : 'Create Google Sheet'}
             </Button>
             <p className={styles.exportStatus} role="status">
+                {state.kind === 'working' && 'A Google Sheet is being created.'}
                 {state.kind === 'created' && (
                     <>
                         <a href={state.url} target="_blank" rel="noopener noreferrer">

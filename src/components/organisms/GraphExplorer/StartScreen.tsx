@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 
 import { useModel } from './ExploreContext';
 import { ExploreLink } from './ExploreLink';
-import { plural } from './format';
+import { plural } from '@/lib/graphExplorer/counts';
 import styles from './StartScreen.module.scss';
 
 /**

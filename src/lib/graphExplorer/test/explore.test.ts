@@ -190,7 +190,7 @@ test('the base switch sets or clears base and keeps every other parameter', () =
         switchBase('?node=FinancialFlow&show=all', true),
         '?node=FinancialFlow&show=all&base=1',
     );
-    assert.equal(switchBase('?class=X&base=1&google=1', false), '?class=X&google=1');
+    assert.equal(switchBase('?class=X&base=1&split=a', false), '?class=X&split=a');
     assert.equal(switchBase('?base=1', false), '');
     assert.equal(switchBase('', true), '?base=1');
     assert.equal(switchBase('?base=1', true), '?base=1');

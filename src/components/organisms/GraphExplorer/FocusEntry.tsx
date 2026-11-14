@@ -5,7 +5,7 @@ import classNames from 'classnames';
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import styles from './FocusEntry.module.scss';
-import { count, ofMembers } from './format';
+import { count, ofMembers } from '@/lib/graphExplorer/counts';
 
 import type { LensEntry, ValuesUsed } from '@/lib/graphExplorer/model';
 

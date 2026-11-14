@@ -46,11 +46,30 @@ test('comma-separated text is read with the same quote rules', () => {
     ]);
 });
 
-test('a header line holding a tab reads commas as text', () => {
-    const { header, rows } = parsePasted('code\tlabel\nA1\tOne, two\n');
-    assert.deepEqual(header, ['code', 'label']);
-    assert.deepEqual(rows, [['A1', 'One, two']]);
-});
+for (const [name, text, header, rows] of [
+    [
+        'a tab in the header reads commas as text',
+        'code\tlabel\nA1\tOne, two\n',
+        ['code', 'label'],
+        [['A1', 'One, two']],
+    ],
+    [
+        'a tab after a quoted line break in the header',
+        '"source\ncode"\tmeasuredProperty\nX1\tamount\n',
+        ['source\ncode', 'measuredProperty'],
+        [['X1', 'amount']],
+    ],
+    [
+        'a tab inside a quoted header cell',
+        '"a\tb",measuredProperty\nX1,amount\n',
+        ['a\tb', 'measuredProperty'],
+        [['X1', 'amount']],
+    ],
+] as const) {
+    test(`the delimiter is read from the header record: ${name}`, () => {
+        assert.deepEqual(parsePasted(text), { header, rows });
+    });
+}
 
 test('a byte-order mark before a quoted first header is dropped', () => {
     assert.deepEqual(parsePasted('\uFEFF"dcid"\tmeasuredProperty\n').header, [
@@ -67,6 +86,17 @@ test('a quote that opens a cell and never closes is read as text', () => {
         ['"sv1', 'amount'],
         ['sv2', 'amount'],
         ['sv3', 'amount'],
+    ]);
+});
+
+test('a quote followed by anything but a delimiter or line end does not close a cell', () => {
+    const { rows } = parsePasted(
+        'label\tmeasuredProperty\n"Big\tamount\nmid\tamount\n"Small\tamount\n',
+    );
+    assert.deepEqual(rows, [
+        ['"Big', 'amount'],
+        ['mid', 'amount'],
+        ['"Small', 'amount'],
     ]);
 });
 

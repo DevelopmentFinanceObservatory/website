@@ -4,6 +4,7 @@
  */
 import type { Model, ScopedList } from './model.ts';
 import { filterScopedList, GROUPS } from './model.ts';
+import { csvFileName } from './sheet.ts';
 
 /**
  * The rows of a scoped list that the filter text keeps (filterScopedList),
@@ -48,3 +49,9 @@ export function valueListTable(model: Model, listId: string): readonly (readonly
     ]);
     return [['dcid', 'label', 'code', 'broader'], ...rows];
 }
+
+/** A value list's CSV file name from its label, ending `-partial.csv` when the list is partial. */
+export const valueListFileName = (model: Model, listId: string): string => {
+    const name = csvFileName(model.label(listId));
+    return model.membersComplete(listId) ? name : name.replace(/\.csv$/, '-partial.csv');
+};

@@ -8,21 +8,31 @@ import test from 'node:test';
 import {
     answerState,
     consentReturns,
-    consentTrip,
-    initialCreateState,
-    keepReturned,
+    shownCreateState,
+    takeConsentTrip,
     type ConsentTrip,
+    type CreateState,
 } from '../googleConsent.ts';
 import type { SheetsAnswer } from '../googleSheet.ts';
 
-const trip = (query: string) => consentTrip(new URLSearchParams(query));
-const tripOf = (href: string) => consentTrip(new URL(href, 'https://site.example').searchParams);
+const tripOf = (href: string) => takeConsentTrip(new URL(href, 'https://site.example').search).trip;
 
-test('a return with an error never counts as granted', () => {
-    assert.equal(trip(''), 'none');
-    assert.equal(trip('class=X&google=1'), 'granted');
-    assert.equal(trip('class=X&error=access_denied'), 'refused');
-    assert.equal(trip('class=X&google=1&error=access_denied'), 'refused');
+for (const [query, trip, rest] of [
+    ['', 'none', ''],
+    ['?class=X', 'none', '?class=X'],
+    ['?class=X&google=1', 'granted', '?class=X'],
+    ['?google=1', 'granted', ''],
+    ['?class=X&error=access_denied', 'refused', '?class=X'],
+    ['?class=X&google=1&error=access_denied', 'refused', '?class=X'],
+] as const) {
+    test(`a return to "${query}" records trip ${trip} and leaves "${rest}"`, () => {
+        assert.deepEqual(takeConsentTrip(query), { trip, query: rest });
+    });
+}
+
+test('the cleaned query records no trip', () => {
+    const { query } = takeConsentTrip('?class=X&google=1');
+    assert.equal(takeConsentTrip(query).trip, 'none');
 });
 
 test('only the success address carries the mark, and both drop the last trip', () => {
@@ -34,23 +44,47 @@ test('only the success address carries the mark, and both drop the last trip', (
     assert.equal(tripOf(errorCallbackURL), 'none');
 });
 
-test('the mark of a granted trip survives a rewritten query, and only that one', () => {
-    const href = '/graph-explorer/new-sheet?class=Y';
-    const kept = (query: string) => keepReturned(href, new URLSearchParams(query));
-    assert.equal(tripOf(kept('google=1')), 'granted');
-    assert.equal(
-        tripOf(keepReturned('/graph-explorer/new-sheet', new URLSearchParams('google=1'))),
-        'granted',
-    );
-    assert.equal(kept(''), href);
-    assert.equal(kept('google=1&error=x'), href);
-});
+const created: CreateState = { kind: 'created', url: 'u', dropdownsFailed: false };
 
-test('a refused trip opens on the consent screen again', () => {
-    assert.equal(initialCreateState('refused').kind, 'needs_google');
-    assert.equal(initialCreateState('none').kind, 'idle');
-    assert.equal(initialCreateState('granted').kind, 'idle');
-});
+for (const [name, record, trip, expected] of [
+    ['no record opens idle', null, 'none', 'idle'],
+    ['no record after a refused trip offers consent', null, 'refused', 'needs_google'],
+    ['no record after a granted trip opens idle', null, 'granted', 'idle'],
+    [
+        'a record for the current draft is shown',
+        { query: '?class=X', state: created },
+        'none',
+        'created',
+    ],
+    [
+        'a working record for the current draft is shown',
+        { query: '?class=X', state: { kind: 'working' } },
+        'none',
+        'working',
+    ],
+    [
+        'a request in flight for another draft is shown',
+        { query: '?class=Y', state: { kind: 'working' } },
+        'none',
+        'working',
+    ],
+    [
+        'a record for another draft is not shown',
+        { query: '?class=Y', state: created },
+        'none',
+        'idle',
+    ],
+    [
+        'a record for another draft after a refused trip',
+        { query: '?class=Y', state: created },
+        'refused',
+        'needs_google',
+    ],
+] as [string, { query: string; state: CreateState } | null, ConsentTrip, string][]) {
+    test(`shown state: ${name}`, () => {
+        assert.equal(shownCreateState(record, '?class=X', trip).kind, expected);
+    });
+}
 
 const refusal = (code: string, reason?: string) =>
     ({ ok: false, code, reason, message: 'm' }) as SheetsAnswer;
