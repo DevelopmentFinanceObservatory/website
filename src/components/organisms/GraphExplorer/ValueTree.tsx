@@ -1,8 +1,9 @@
 'use client';
 
 import classNames from 'classnames';
-import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 
+import { BreakableId } from './BreakableId';
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import { count } from '@/lib/graphExplorer/counts';
@@ -23,19 +24,6 @@ type Columns = {
     readonly list: readonly { readonly property: string; readonly width: number }[];
 };
 
-/** A cell's text with a break opportunity after each "/", the only place an id may wrap. */
-const breakAfterSlashes = (text: string) =>
-    text.split('/').map((piece, at) =>
-        at === 0 ? (
-            piece
-        ) : (
-            <Fragment key={at}>
-                /<wbr />
-                {piece}
-            </Fragment>
-        ),
-    );
-
 /** A member's cell per open property, right-aligned so the columns line up at every depth. */
 const Cells = ({ id, columns }: { id: string; columns: Columns }) => {
     const model = useModel();
@@ -50,7 +38,7 @@ const Cells = ({ id, columns }: { id: string; columns: Columns }) => {
                     style={{ width: `${width}ch` }}
                     title={model.label(property)}
                 >
-                    {breakAfterSlashes(columns.cell(id, property, ', '))}
+                    <BreakableId text={columns.cell(id, property, ', ')} />
                 </span>
             ))}
         </span>

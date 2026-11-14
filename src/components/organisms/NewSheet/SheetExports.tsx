@@ -1,5 +1,7 @@
 'use client';
 
+import classNames from 'classnames';
+
 import styles from './NewSheet.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
@@ -101,10 +103,19 @@ export const CreateGoogleSheet = ({ sheet, query, memory, onMemory }: CreateGoog
 
     return (
         <>
+            {/* The label stays put while it works, so the buttons beside it do not move. */}
             <Button onClick={create} disabled={state.kind === 'working'}>
-                {state.kind === 'working' ? 'Creating…' : 'Create Google Sheet'}
+                Create Google Sheet
             </Button>
-            <p className={styles.exportStatus} role="status">
+            <p
+                className={classNames(
+                    styles.exportStatus,
+                    (state.kind === 'failed' || offersConsent) && styles.exportProblem,
+                    (state.kind === 'failed' || state.kind === 'renewal_failed') &&
+                        styles.exportFailed,
+                )}
+                role="status"
+            >
                 {state.kind === 'working' && 'A Google Sheet is being created.'}
                 {state.kind === 'created' && (
                     <>

@@ -57,6 +57,9 @@
     border: 1px solid var(--color-stone-light);
     border-radius: rem(6);
     resize: vertical;
+
+    // Lines do not wrap, so the box scrolls both ways and shows its scrollbars.
+    @include scrollbar-visible(var(--color-stone), both);
 }
 
 .actions {
@@ -87,7 +90,7 @@
     min-width: 0;
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .select {
@@ -107,11 +110,11 @@
     flex: 1 1 rem(200);
     min-width: 0;
     color: var(--color-stone);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 
     code {
         font-family: var(--font-dm-mono);
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
     }
 }
 
@@ -129,6 +132,12 @@
     color: var(--color-red);
 }
 
+.clean {
+    padding: rem(12) rem(14);
+    background-color: var(--color-mint);
+    border-radius: rem(4);
+}
+
 // What the check would refuse, shown before any request.
 .problems {
     @include font-size(14px, 1.45);
@@ -141,11 +150,13 @@
     list-style: disc;
 }
 
-// The table scrolls inside its own box so the page does not scroll sideways.
+// The table scrolls inside its own box so the page does not scroll sideways,
+// with its scrollbar in view as the cue that more lies past the edge.
 .scroll {
+    @include scrollbar-visible(var(--color-stone), both);
+
     max-width: 100%;
     max-height: rem(560);
-    overflow: auto;
 }
 
 .sheet {
@@ -216,7 +227,7 @@
 
     gap: rem(4);
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .tag {
@@ -270,5 +281,23 @@
 @include breakpoint(phone) {
     .title {
         @include font-size(26px, 1.05);
+    }
+
+    // Every column row stacks alike: its name, its select, then its note.
+    .column {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
+    }
+
+    // The tag sits over the finding, so a long id has the full width.
+    .finding {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: rem(6);
+    }
+
+    .value {
+        @include font-size(12px, 1.3);
     }
 }

@@ -1,12 +1,23 @@
 @use "variables" as *;
 @use "mixins" as *;
-@use "breakpoints" as *;
+
+// Below this width the side columns would squeeze their boxes under about
+// 160 px, so the picture stacks into one column.
+$stack-below: 720px;
+
+// The frame is the container the picture's layout reads, so the picture
+// stacks by its own width, whatever sits beside it.
+.frame {
+    min-width: 0;
+    container: picture / inline-size;
+}
 
 // Three columns: the left boxes, the centre, the right boxes. The boxes above
-// and below span all three and sit centred over and under the centre.
+// and below span all three and sit centred over and under the centre. The
+// side columns keep at least 240 px and the centre gives up width first.
 .picture {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(rem(180), rem(300)) minmax(0, 1fr);
+    grid-template-columns: minmax(rem(240), 1fr) minmax(rem(180), rem(300)) minmax(rem(240), 1fr);
     grid-template-areas:
         "up up up"
         "left self right"
@@ -22,7 +33,8 @@
 
 // With no left box the left column folds away and the right one takes its
 // width. The boxes above and below then line up with the centre's left edge.
-@include breakpoint(not-phone) {
+
+@container picture (min-width: #{$stack-below}) {
     .noLeft {
         grid-template-columns: 0 minmax(rem(180), rem(300)) minmax(0, 1fr);
 
@@ -90,16 +102,43 @@
     }
 }
 
+// The centre's cell spans the row, and a hairline above and below the card
+// carries the joins of the boxes over and under it to the card's edges.
+.centre {
+    @include flex(column, center, stretch);
+
+    grid-area: self;
+    align-self: stretch;
+    min-width: 0;
+
+    &::before,
+    &::after {
+        content: "";
+        flex: 1 1 0;
+        align-self: center;
+        width: 1px;
+    }
+}
+
+.joinUp::before,
+.joinDown::after {
+    background-color: var(--color-charcoal);
+}
+
 .self {
     @include flex(column, flex-start, flex-start);
 
-    grid-area: self;
     gap: rem(6);
     min-width: 0;
     padding: rem(14) rem(16);
     color: var(--color-bg);
     background-color: var(--color-charcoal);
     border-radius: rem(6);
+
+    // Lines narrower than the card wrap inside it; a dcid wider than it breaks at the edge.
+    > * {
+        max-width: 100%;
+    }
 }
 
 .kind,
@@ -109,6 +148,7 @@
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
     text-transform: uppercase;
+    text-wrap: balance;
 }
 
 .kind {
@@ -124,7 +164,7 @@
 
     font-weight: 700;
     letter-spacing: -0.03em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .sub {
@@ -132,7 +172,7 @@
 
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .box {
@@ -179,14 +219,20 @@
     @include font-size(12px, 1.3);
 
     align-self: flex-end;
-    max-width: 100%;
+    max-width: calc(100% - #{rem(16)});
+    margin-inline-start: rem(16);
+    padding: rem(2) rem(4);
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
     text-decoration: underline;
     text-decoration-color: var(--color-sage);
     text-underline-offset: rem(3);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+
+    // The picture's colour behind the words, so the grid's dots stop at the text.
+    background-color: var(--color-net-light);
+    border-radius: rem(4);
 }
 
 // A join is its words over a hairline, across between a side box and the centre.
@@ -232,8 +278,9 @@
     border-radius: rem(4);
 }
 
-// On narrow screens it is one column in reading order, and every join is a short vertical line.
-@include breakpoint(phone) {
+// In a narrow frame it is one column in reading order, and every join is a short vertical line.
+
+@container picture (max-width: #{$stack-below - 1px}) {
     .picture {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas:
@@ -265,7 +312,9 @@
 
     .unused {
         align-self: flex-start;
+        max-width: 100%;
         margin-top: rem(10);
+        margin-inline-start: 0;
     }
 
     .hjoin {

@@ -57,6 +57,12 @@
     color: var(--color-stone);
 }
 
+// A zero basis keeps the text beside the spinner, wrapping within its own box.
+.termsText {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
 .links {
     display: flex;
     flex-wrap: wrap;

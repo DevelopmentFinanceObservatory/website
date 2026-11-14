@@ -20,5 +20,5 @@
     @include font-size(15px, 1.4);
 
     color: var(--color-stone);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }

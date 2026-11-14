@@ -7,11 +7,18 @@
     align-items: baseline;
     gap: rem(2) rem(6);
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+
+    // A name wider than the line takes a line of its own, then breaks at the edge.
+    > * {
+        min-width: 0;
+    }
 }
 
-.dim {
-    opacity: 0.45;
+// Dimmed by a solid colour that keeps 3:1 against white and the page.
+.dim,
+.dim .figure {
+    color: var(--color-gray-1800);
 }
 
 .figure,

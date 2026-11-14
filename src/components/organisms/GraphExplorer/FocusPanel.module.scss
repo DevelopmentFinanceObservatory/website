@@ -22,7 +22,7 @@
 
     font-weight: 700;
     letter-spacing: -0.03em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .total {
@@ -36,12 +36,17 @@
     align-items: center;
     gap: rem(6) rem(12);
     min-width: 0;
+
+    // A dcid wider than the line takes a line of its own, then breaks at the edge.
+    > * {
+        min-width: 0;
+    }
 }
 
 .mono {
     font-family: var(--font-dm-mono);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .code {
@@ -68,7 +73,7 @@
 .line {
     @include font-size(14px, 1.4);
 
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .uses {
@@ -85,11 +90,16 @@
     align-items: center;
     gap: rem(10);
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
+// Dimmed by a solid colour that keeps 3:1 against white and the page.
 .dim {
-    opacity: 0.45;
+    color: var(--color-gray-1800);
+
+    .bar i {
+        background-color: var(--color-gray-1800);
+    }
 }
 
 .bar {
@@ -126,7 +136,7 @@
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .full {

@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import { BreakableId } from './BreakableId';
 import { useCarried, useOptionalExplore } from './ExploreContext';
 import { BaseTag } from './ExploreLink';
 import styles from './SearchBox.module.scss';
@@ -14,6 +15,7 @@ import {
     enterChoice,
     escapeAction,
     search,
+    searchPlaceholder,
     stepActive,
     type SearchHit,
 } from '@/lib/graphExplorer/search';
@@ -30,8 +32,10 @@ const describe = (model: Model, hit: SearchHit): string => {
 };
 
 type SearchBoxProps = {
-    /** Null while the model loads, when the box is disabled. */
+    /** Null while the model loads or after it failed, when the box is disabled. */
     model: Model | null;
+    /** Whether the model is loading or failed to load, for the disabled box's placeholder. */
+    modelStatus: 'loading' | 'ready' | 'failed';
     /** The terms list when the base Data Commons switch is on and it has loaded. */
     baseTerms?: SchemaTerms;
 };
@@ -41,7 +45,7 @@ type SearchBoxProps = {
  * reachable by keyboard (arrows move, Enter opens, Escape closes, then
  * clears). Choosing a dataset opens `?dataset=`, anything else `?node=`.
  */
-const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
+const SearchBox = ({ model, modelStatus, baseTerms }: SearchBoxProps) => {
     const navigation = useOptionalExplore();
     const carried = useCarried();
     const router = useRouter();
@@ -118,7 +122,7 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
                 aria-expanded={shown}
                 aria-controls={listId}
                 aria-activedescendant={activeHit ? `${id}-${active}` : undefined}
-                placeholder={model ? 'Search names, codes and dcids' : 'Loading the model'}
+                placeholder={searchPlaceholder(model ? 'ready' : modelStatus)}
                 autoComplete="off"
                 spellCheck={false}
                 disabled={!model}
@@ -161,7 +165,9 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
                                 </span>
                                 <span className={styles.meta}>
                                     {describe(model, hit)}
-                                    <span className={styles.dcid}>{hit.id}</span>
+                                    <span className={styles.dcid}>
+                                        <BreakableId text={hit.id} />
+                                    </span>
                                 </span>
                             </li>
                         ))}

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { enterChoice, escapeAction, search, stepActive } from '../search.ts';
+import { enterChoice, escapeAction, search, searchPlaceholder, stepActive } from '../search.ts';
 import { readSchema, readUsage, readTerms } from '../wire.ts';
 import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
@@ -170,4 +170,9 @@ test('Enter opens the active hit, else the first, and does nothing while the lis
 test('Escape closes a shown list and clears the query once it is closed', () => {
     assert.equal(escapeAction(true), 'close');
     assert.equal(escapeAction(false), 'clear');
+});
+
+test('the placeholder says search is off after the model failed, apart from while it loads', () => {
+    assert.notEqual(searchPlaceholder('failed'), searchPlaceholder('loading'));
+    assert.notEqual(searchPlaceholder('failed'), searchPlaceholder('ready'));
 });

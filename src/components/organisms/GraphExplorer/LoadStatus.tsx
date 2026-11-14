@@ -25,14 +25,16 @@ type LoadStatusProps = {
 /** The screen while a document loads, waits before a retry, or has failed. */
 const LoadStatus = ({ state, onRetry, subject = 'model' }: LoadStatusProps) => {
     if (state.status === 'failed') {
+        // Each line says something the other does not: a heading naming the
+        // build reads with the full message, one naming the document with
+        // what went wrong.
+        const building = state.reason === 'build_timeout';
         return (
             <div className={styles.status} role="alert">
                 <h1 className={styles.title}>
-                    {state.reason === 'build_timeout'
-                        ? `The Graph API is still ${BUILDING}`
-                        : WORDS[subject].failed}
+                    {building ? `The Graph API is still ${BUILDING}` : WORDS[subject].failed}
                 </h1>
-                <p className={styles.message}>{state.message}</p>
+                <p className={styles.message}>{building ? state.message : state.explanation}</p>
                 <div>
                     <Button onClick={onRetry}>Try Again</Button>
                 </div>

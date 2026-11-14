@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { BreakableId } from './BreakableId';
 import { useExplore, useModel } from './ExploreContext';
 import { BaseTag } from './ExploreLink';
 import { DatasetPanel, FullList, NodePanel, OutsidePanel, type PanelLens } from './FocusPanel';
@@ -123,7 +124,11 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
         return (
             <div className={styles.missing} role="status">
                 <p>
-                    The model has no dataset <code>{centre.id}</code>.
+                    The model has no dataset{' '}
+                    <code>
+                        <BreakableId text={centre.id} />
+                    </code>
+                    .
                 </p>
                 <div>
                     <Button onClick={() => go(START_VIEW)}>Start</Button>

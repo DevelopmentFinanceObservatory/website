@@ -216,7 +216,7 @@ test('open properties read with their labels, held nodes as links and the rest a
         {
             property: 'currencyStatus',
             label: 'currency status',
-            values: [{ kind: 'node', id: 'CurrencyStatusCurrent' }],
+            values: [{ kind: 'node', id: 'CurrencyStatusCurrent', name: 'current' }],
         },
         {
             property: 'dacCode',

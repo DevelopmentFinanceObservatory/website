@@ -14,6 +14,7 @@ import {
     declarerWords,
     KIND_WORDS,
     kindOfTerm,
+    plainName,
     type DatasetFilter,
     type DatasetView,
     type Kind,
@@ -208,9 +209,12 @@ export function declaredDomain(model: Model, id: string): readonly string[] | nu
     return same ? null : domain;
 }
 
-/** One value of an open property as the panel shows it: a link to a node the model holds, else text. */
+/**
+ * One value of an open property as the panel shows it: a link to a node the
+ * model holds, named as the value-list table names it, else text.
+ */
 export type OpenEntryValue =
-    | { readonly kind: 'node'; readonly id: string }
+    | { readonly kind: 'node'; readonly id: string; readonly name: string }
     | { readonly kind: 'text'; readonly text: string };
 
 /** One open property of a node with its label and values. */
@@ -223,21 +227,42 @@ export type OpenEntry = {
 
 /**
  * A node's open properties in the document's order. A dcid value the model
- * holds as a node or dataset is a `node`; any other dcid and every literal
- * is `text`. Empty for a node the model lacks.
+ * holds as a node or dataset is a `node`, named by its plain name
+ * (plainName), or by its full label where two values of the line share a
+ * plain name, as openColumns names a reference. Any other dcid and every
+ * literal is `text`. Empty for a node the model lacks.
  */
 export function openEntries(model: Model, id: string): readonly OpenEntry[] {
     const node = model.node(id);
     if (!node) return [];
-    return Object.entries(node.other_properties).map(([property, values]) => ({
-        property,
-        label: model.label(property),
-        values: values.map((value): OpenEntryValue => {
-            if ('value' in value) return { kind: 'text', text: value.value };
-            const held = model.node(value.ref) || model.dataset(value.ref);
-            return held ? { kind: 'node', id: value.ref } : { kind: 'text', text: value.ref };
-        }),
-    }));
+    return Object.entries(node.other_properties).map(([property, values]) => {
+        const held = new Set(
+            values.flatMap((value) =>
+                'ref' in value && (model.node(value.ref) || model.dataset(value.ref))
+                    ? [value.ref]
+                    : [],
+            ),
+        );
+        const sharing = new Map<string, number>();
+        for (const ref of held) {
+            const name = plainName(model, ref);
+            sharing.set(name, (sharing.get(name) ?? 0) + 1);
+        }
+        const nameOf = (ref: string): string => {
+            const name = plainName(model, ref);
+            return (sharing.get(name) ?? 0) > 1 ? model.label(ref) : name;
+        };
+        return {
+            property,
+            label: model.label(property),
+            values: values.map((value): OpenEntryValue => {
+                if ('value' in value) return { kind: 'text', text: value.value };
+                return held.has(value.ref)
+                    ? { kind: 'node', id: value.ref, name: nameOf(value.ref) }
+                    : { kind: 'text', text: value.ref };
+            }),
+        };
+    });
 }
 
 /** What is centred: a term (`?node=`) or a dataset (`?dataset=`). */

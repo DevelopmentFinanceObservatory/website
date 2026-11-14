@@ -2,6 +2,7 @@
 
 import classNames from 'classnames';
 
+import { BreakableId } from './BreakableId';
 import { ExploreLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPicture.module.scss';
@@ -90,60 +91,74 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
     const unusedClass = unused > 0 ? shared.listClass : null;
 
     return (
-        <div className={classNames(styles.picture, left.length === 0 && styles.noLeft)}>
-            {up.length > 0 && (
-                <div className={styles.up}>
-                    {up.map((box) => (
-                        <div key={box.key} className={styles.column}>
-                            <Box box={box} {...shared} />
-                            <Join text={box.join} vertical />
-                        </div>
-                    ))}
-                </div>
-            )}
-            {left.length > 0 && (
-                <div className={styles.left}>
-                    {left.map((box) => (
-                        <div key={box.key} className={styles.row}>
-                            <Box box={box} {...shared} />
-                            <Join text={box.join} vertical={false} />
-                        </div>
-                    ))}
-                </div>
-            )}
-            <div className={styles.self}>
-                <p className={styles.kind}>{kind}</p>
-                <h1 className={styles.name}>{name}</h1>
-                {sub && <p className={styles.sub}>{sub}</p>}
-            </div>
-            {(right.length > 0 || unusedClass !== null) && (
-                <div className={styles.right}>
-                    {right.map((box) => (
-                        <div key={box.key} className={styles.row}>
-                            <Join text={box.join} vertical={false} />
-                            <Box box={box} {...shared} />
-                        </div>
-                    ))}
-                    {unusedClass !== null && (
-                        <ExploreLink
-                            view={{ kind: 'list', scope: { kind: 'class', id: unusedClass } }}
-                            className={styles.unused}
-                        >
-                            {count(unused)} more defined, not yet used by a dataset
-                        </ExploreLink>
+        <div className={styles.frame}>
+            <div className={classNames(styles.picture, left.length === 0 && styles.noLeft)}>
+                {up.length > 0 && (
+                    <div className={styles.up}>
+                        {up.map((box) => (
+                            <div key={box.key} className={styles.column}>
+                                <Box box={box} {...shared} />
+                                <Join text={box.join} vertical />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {left.length > 0 && (
+                    <div className={styles.left}>
+                        {left.map((box) => (
+                            <div key={box.key} className={styles.row}>
+                                <Box box={box} {...shared} />
+                                <Join text={box.join} vertical={false} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <div
+                    className={classNames(
+                        styles.centre,
+                        up.length > 0 && styles.joinUp,
+                        down.length > 0 && styles.joinDown,
                     )}
+                >
+                    <div className={styles.self}>
+                        <p className={styles.kind}>{kind}</p>
+                        <h1 className={styles.name}>{name}</h1>
+                        {sub && (
+                            <p className={styles.sub}>
+                                <BreakableId text={sub} />
+                            </p>
+                        )}
+                    </div>
                 </div>
-            )}
-            {down.length > 0 && (
-                <div className={styles.down}>
-                    {down.map((box) => (
-                        <div key={box.key} className={styles.column}>
-                            <Join text={box.join} vertical />
-                            <Box box={box} {...shared} />
-                        </div>
-                    ))}
-                </div>
-            )}
+                {(right.length > 0 || unusedClass !== null) && (
+                    <div className={styles.right}>
+                        {right.map((box) => (
+                            <div key={box.key} className={styles.row}>
+                                <Join text={box.join} vertical={false} />
+                                <Box box={box} {...shared} />
+                            </div>
+                        ))}
+                        {unusedClass !== null && (
+                            <ExploreLink
+                                view={{ kind: 'list', scope: { kind: 'class', id: unusedClass } }}
+                                className={styles.unused}
+                            >
+                                {count(unused)} more defined, not yet used by a dataset
+                            </ExploreLink>
+                        )}
+                    </div>
+                )}
+                {down.length > 0 && (
+                    <div className={styles.down}>
+                        {down.map((box) => (
+                            <div key={box.key} className={styles.column}>
+                                <Join text={box.join} vertical />
+                                <Box box={box} {...shared} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

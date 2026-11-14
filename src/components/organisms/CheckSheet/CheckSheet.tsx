@@ -8,6 +8,7 @@ import styles from './CheckSheet.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
 import { ModelProvider, useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
+import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import { plural } from '@/lib/graphExplorer/counts';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
@@ -24,6 +25,7 @@ import {
     FLAGGED_ROWS_STEP,
     findingLines,
     findingsCsvRows,
+    flaggedRowCount,
     flaggedShownFor,
     QUIET_ROWS_STEP,
     resultSentence,
@@ -132,8 +134,10 @@ const ColumnRow = ({ header, read, target, repeats, onSwitch }: ColumnRowProps) 
                         <TermLink id={target.property} />
                     ) : (
                         <>
-                            <code>{target.property}</code> is not in the DFO model, so the check
-                            looks it up on the graph
+                            <code>
+                                <BreakableId text={target.property} />
+                            </code>{' '}
+                            is not in the DFO model, so the check looks it up on the graph
                         </>
                     )}
                 </span>
@@ -150,7 +154,7 @@ const Message = ({ parts }: { parts: readonly MessagePart[] }) => (
             if (part.kind === 'value') {
                 return (
                     <code key={at} className={styles.value}>
-                        {part.text}
+                        <BreakableId text={part.text} />
                     </code>
                 );
             }
@@ -167,7 +171,10 @@ const Suggestions = ({ closest }: { closest: readonly string[] }) => {
             {closest.map((id, at) => (
                 <span key={id}>
                     {at > 0 && ', '}
-                    <TermLink id={id} /> <code className={styles.dcid}>{id}</code>
+                    <TermLink id={id} />{' '}
+                    <code className={styles.dcid}>
+                        <BreakableId text={id} />
+                    </code>
                 </span>
             ))}
         </span>
@@ -575,6 +582,8 @@ const CheckSteps = () => {
     };
 
     const canCheck = sheet.rows.length > 0 && problems.length === 0;
+    // A check with nothing to show is its result line alone, marked as passed.
+    const clean = run.status === 'done' && flaggedRowCount(run.checked.result) === 0;
     const repeated = mapping
         .filter((column) => column.duplicateOf !== null)
         .map(
@@ -676,12 +685,13 @@ const CheckSteps = () => {
                         className={classNames(
                             styles.result,
                             run.status === 'failed' && styles.failed,
+                            clean && styles.clean,
                         )}
                         role="status"
                     >
                         {statusText(run)}
                     </p>
-                    {run.status === 'done' && <Results checked={run.checked} />}
+                    {run.status === 'done' && !clean && <Results checked={run.checked} />}
                 </SheetSection>
             )}
         </>

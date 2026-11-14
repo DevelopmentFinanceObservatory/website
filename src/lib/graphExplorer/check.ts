@@ -712,13 +712,21 @@ export const resultCounts = (
 const listed = (items: readonly string[]): string =>
     items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 
+/** How many of the checked rows carry a finding or were refused. */
+export const flaggedRowCount = (result: Pick<CheckResult, 'findings' | 'refused'>): number =>
+    new Set([...result.findings, ...result.refused].map(({ index }) => index)).size;
+
 /**
- * "3 errors and 1 warning in 6 rows, checked against the graph at
- * generation X." Without a generation the sentence ends at the rows. With
- * several it names each and says the graph changed during the check.
+ * "3 errors and 1 warning in 2 of 6 rows, checked against the graph at
+ * generation X." The rows are those with a finding, out of `rows`: "in all
+ * 6 rows" when every row has one, "in 1 row" for a sheet of one row, and
+ * "No problems in 6 rows." for a clean check. Without a generation the
+ * sentence ends at the rows. With several it names each and says the graph
+ * changed during the check.
  */
 export function resultSentence(result: CheckResult, rows: number): string {
     const { errors, warnings } = resultCounts(result);
+    const flagged = flaggedRowCount(result);
     const { generations } = result;
     const against =
         generations.length === 0
@@ -730,8 +738,14 @@ export function resultSentence(result: CheckResult, rows: number): string {
         ...(errors > 0 ? [plural(errors, 'error')] : []),
         ...(warnings > 0 ? [plural(warnings, 'warning')] : []),
     ];
+    const where =
+        problems.length === 0 || rows === 1
+            ? plural(rows, 'row')
+            : flagged >= rows
+              ? `all ${plural(rows, 'row')}`
+              : `${flagged.toLocaleString('en-GB')} of ${plural(rows, 'row')}`;
     const lead = problems.length === 0 ? 'No problems' : problems.join(' and ');
-    return `${lead} in ${plural(rows, 'row')}${against}.`;
+    return `${lead} in ${where}${against}.`;
 }
 
 /** A message as one line of text. Terms appear as their dcids. */

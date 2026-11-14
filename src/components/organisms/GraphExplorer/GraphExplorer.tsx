@@ -1,5 +1,6 @@
 'use client';
 
+import { BreakableId } from './BreakableId';
 import { ModelProvider, NavigationProvider, useExploreState } from './ExploreContext';
 import FocusView from './FocusView';
 import styles from './GraphExplorer.module.scss';
@@ -27,7 +28,11 @@ import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => (
     <p className={styles.filterNote} role="status">
         <span>
-            The model has no dataset <code>{id}</code>, so nothing is filtered.
+            The model has no dataset{' '}
+            <code>
+                <BreakableId text={id} />
+            </code>
+            , so nothing is filtered.
         </span>
         <Button variant="bordered" small onClick={onClear}>
             Clear
@@ -38,7 +43,11 @@ const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => 
 const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
     <div className={styles.missing} role="status">
         <p>
-            The model has no kind of thing <code>{id}</code>, so it has no properties to list.
+            The model has no kind of thing{' '}
+            <code>
+                <BreakableId text={id} />
+            </code>
+            , so it has no properties to list.
         </p>
         <div>
             <Button onClick={onStart}>Start</Button>

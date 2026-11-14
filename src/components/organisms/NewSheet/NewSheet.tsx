@@ -11,6 +11,7 @@ import {
     useCarried,
     useModel,
 } from '@/components/organisms/GraphExplorer/ExploreContext';
+import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import { count, plural, valueCount } from '@/lib/graphExplorer/counts';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
@@ -56,7 +57,9 @@ const SplitBox = ({ option, checked, onToggle }: SplitBoxProps) => {
             <input type="checkbox" checked={checked} onChange={onToggle} />
             <span className={styles.grow}>
                 <span className={styles.term}>{model.label(option.id)}</span>{' '}
-                <span className={styles.dcid}>{option.id}</span>
+                <span className={styles.dcid}>
+                    <BreakableId text={option.id} />
+                </span>
                 {option.valueLists.length > 0 && (
                     <span className={styles.from}>
                         from {option.valueLists.map((id) => model.label(id)).join(', ')},{' '}
@@ -90,10 +93,15 @@ const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => (
                 the {PARAM_NOUNS[choice.param]}{' '}
                 {choice.param === 'pattern' ? (
                     <>
-                        {choice.index} of <code>{choice.id}</code>
+                        {choice.index} of{' '}
+                        <code>
+                            <BreakableId text={choice.id} />
+                        </code>
                     </>
                 ) : (
-                    <code>{choice.id}</code>
+                    <code>
+                        <BreakableId text={choice.id} />
+                    </code>
                 )}
             </span>
         ))}{' '}
@@ -227,7 +235,10 @@ const ValueLists = ({ sheet }: { sheet: SheetDraft }) => {
         <ul className={styles.lists}>
             {listed.map((column) => (
                 <li key={column.name}>
-                    <span className={styles.dcid}>{column.name}</span> takes a value from{' '}
+                    <span className={styles.dcid}>
+                        <BreakableId text={column.name} />
+                    </span>{' '}
+                    takes a value from{' '}
                     {column.lookup?.lists.map((id, at) => (
                         <span key={id}>
                             {at > 0 && ', '}

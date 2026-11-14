@@ -45,9 +45,11 @@ const TermsLine = ({
     terms.status === 'loading' ? (
         <p className={styles.terms} role="status">
             <Spinner size={14} label="Loading" />
-            {terms.waiting === null
-                ? 'Loading base Data Commons terms.'
-                : waitText(terms.waiting.retryInMs, terms.waiting.cause)}
+            <span className={styles.termsText}>
+                {terms.waiting === null
+                    ? 'Loading base Data Commons terms.'
+                    : waitText(terms.waiting.retryInMs, terms.waiting.cause)}
+            </span>
         </p>
     ) : (
         <div className={styles.terms} role="alert">
@@ -76,7 +78,7 @@ const TopBar = ({ termsInMain = false }: { termsInMain?: boolean }) => {
             <ExploreLink view={START_VIEW} className={styles.wordmark}>
                 Graph Explorer
             </ExploreLink>
-            <SearchBox model={model} baseTerms={data.baseTerms} />
+            <SearchBox model={model} modelStatus={data.model.status} baseTerms={data.baseTerms} />
             <label className={styles.switch}>
                 <input
                     type="checkbox"

@@ -58,7 +58,7 @@
     min-width: 0;
     font-weight: 400;
     text-decoration: none;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 
     @media (hover: hover) {
         &:hover {

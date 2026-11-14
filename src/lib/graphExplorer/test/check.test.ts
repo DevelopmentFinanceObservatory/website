@@ -24,6 +24,7 @@ import {
     flaggedShownFor,
     QUIET_ROWS_STEP,
     resultCounts,
+    flaggedRowCount,
     resultSentence,
     sheetMarks,
     shownRows,
@@ -763,6 +764,25 @@ test('the result counts a refused row as an error, and the sentence names the ge
     assert.deepEqual(resultCounts(result), { errors: 3, warnings: 1 });
     assert.ok(resultSentence(result, 6).includes('g7'));
     assert.deepEqual(resultCounts({ findings: [], refused: [] }), { errors: 0, warnings: 0 });
+});
+
+test('the result sentence counts the rows with findings out of the rows checked', () => {
+    const result = (findings: RowFinding[], refused: { index: number; detail: string }[] = []) => ({
+        generations: [],
+        rowCount: 11,
+        findings,
+        refused,
+    });
+    const errorsOn = (rows: number[]) => rows.flatMap((index) => at([finding({})], index));
+    // Eleven errors on eight of eleven rows, one row refused.
+    const eight = result(errorsOn([2, 3, 5, 6, 7, 8, 9, 9, 9, 10]), [{ index: 10, detail: 'no' }]);
+    assert.equal(flaggedRowCount(eight), 8);
+    assert.equal(resultSentence(eight, 11), '11 errors in 8 of 11 rows.');
+    assert.equal(resultSentence(result(errorsOn([0])), 3), '1 error in 1 of 3 rows.');
+    assert.equal(resultSentence(result(errorsOn([0, 1])), 2), '2 errors in all 2 rows.');
+    assert.equal(resultSentence(result(errorsOn([0, 0])), 1), '2 errors in 1 row.');
+    assert.equal(flaggedRowCount(result([])), 0);
+    assert.equal(resultSentence(result([]), 3), 'No problems in 3 rows.');
 });
 
 test('the findings CSV has a row per finding and per refused row, under the column header', () => {

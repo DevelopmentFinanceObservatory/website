@@ -77,6 +77,12 @@ export type FailureDetails<TReason extends string> = {
     readonly status?: number;
     /** The problem's detail or the guard's complaint, when there is one. */
     readonly detail?: string | null;
+    /**
+     * What went wrong as a sentence of its own, without the message's
+     * opening that names the request: "The Graph API answered 500.". The
+     * message stands in when there is none.
+     */
+    readonly explanation?: string;
     readonly cause?: unknown;
 };
 
@@ -85,12 +91,18 @@ export class GraphFailure<TReason extends string> extends Error {
     readonly reason: TReason;
     readonly status: number | null;
     readonly detail: string | null;
+    /** What went wrong, for a screen whose heading already names the request. */
+    readonly explanation: string;
 
-    constructor(message: string, { reason, status, detail, cause }: FailureDetails<TReason>) {
+    constructor(
+        message: string,
+        { reason, status, detail, explanation, cause }: FailureDetails<TReason>,
+    ) {
         super(message, cause === undefined ? undefined : { cause });
         this.reason = reason;
         this.status = status ?? null;
         this.detail = detail ?? null;
+        this.explanation = explanation ?? message;
     }
 }
 
@@ -249,8 +261,18 @@ export async function requestGraph<TAnswer>(
 ): Promise<TAnswer> {
     const { bounds, words, fail, onWait, fetch: send = fetch, sleep = abortable } = options;
     const now = options.now ?? Date.now;
+    /** Fails with "<head>: <what>." as the message and "<What>." as the explanation. */
+    const failAs = (
+        head: string,
+        what: string,
+        details: Omit<FailureDetails<FailureReason>, 'explanation'>,
+    ) =>
+        fail(`${head}: ${what}.`, {
+            ...details,
+            explanation: `${what.charAt(0).toUpperCase()}${what.slice(1)}.`,
+        });
     const timeout = (cause?: unknown) =>
-        fail(`${words.stopped}: the Graph API did not answer in time.`, {
+        failAs(words.stopped, 'the Graph API did not answer in time', {
             reason: 'timeout',
             cause,
         });
@@ -267,7 +289,7 @@ export async function requestGraph<TAnswer>(
             response = await send(request.url, { ...request.init, signal: bounds.request() });
         } catch (error) {
             throw failed(error, () =>
-                fail(`${words.unsent}: the Graph API did not answer.`, {
+                failAs(words.unsent, 'the Graph API did not answer', {
                     reason: 'unreachable',
                     cause: error,
                 }),
@@ -282,6 +304,7 @@ export async function requestGraph<TAnswer>(
                 throw failed(error, () =>
                     fail(`${words.answered} with a body that is not JSON.`, {
                         reason: 'not_json',
+                        explanation: 'The Graph API answered with a body that is not JSON.',
                         cause: error,
                     }),
                 );
@@ -292,7 +315,12 @@ export async function requestGraph<TAnswer>(
                 if (!(error instanceof WireShapeError)) throw error;
                 throw fail(
                     `${words.answered} with a shape this page does not read: ${error.message}.`,
-                    { reason: 'shape', detail: error.message, cause: error },
+                    {
+                        reason: 'shape',
+                        detail: error.message,
+                        explanation: `The Graph API answered with a shape this page does not read: ${error.message}.`,
+                        cause: error,
+                    },
                 );
             }
         }
@@ -323,8 +351,9 @@ export async function requestGraph<TAnswer>(
         const answer = request.refusal?.(status, read) ?? null;
         if (answer !== null) return answer;
         if (waited && cause !== 'busy') {
-            throw fail(
-                `${words.stopped}: the Graph API was ${cause === 'check_busy' ? 'still ' : ''}${UNAVAILABLE[cause]} after a minute.`,
+            throw failAs(
+                words.stopped,
+                `the Graph API was ${cause === 'check_busy' ? 'still ' : ''}${UNAVAILABLE[cause]} after a minute`,
                 {
                     reason: cause === 'schema_building' ? 'build_timeout' : 'unavailable',
                     status,
@@ -333,13 +362,15 @@ export async function requestGraph<TAnswer>(
             );
         }
         if (waited) {
-            throw fail(
-                `${words.stopped}: this site was still refusing requests from your address after a minute.`,
+            throw failAs(
+                words.stopped,
+                'this site was still refusing requests from your address after a minute',
                 { reason: 'status', status, detail: problem },
             );
         }
-        throw fail(
-            `${words.stopped}: the Graph API answered ${status}${problem ? ` (${problem})` : ''}.`,
+        throw failAs(
+            words.stopped,
+            `the Graph API answered ${status}${problem ? ` (${problem})` : ''}`,
             { reason: 'status', status, detail: problem },
         );
     }
@@ -399,7 +430,10 @@ export type Loadable<TValue> =
     | {
           readonly status: 'failed';
           readonly reason: FailureReason | 'unexpected';
+          /** The failure in full, naming the document: "The model could not be loaded: ...". */
           readonly message: string;
+          /** What went wrong, for a screen whose heading names the document already. */
+          readonly explanation: string;
       };
 
 export const LOADING = { status: 'loading', waiting: null } as const;
@@ -407,13 +441,19 @@ export const LOADING = { status: 'loading', waiting: null } as const;
 /** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
 export const loadFailure = (error: unknown): Loadable<never> => {
     if (error instanceof LoadError) {
-        return { status: 'failed', reason: error.reason, message: error.message };
+        return {
+            status: 'failed',
+            reason: error.reason,
+            message: error.message,
+            explanation: error.explanation,
+        };
     }
     console.error('Graph Explorer: loading the model failed', error);
     return {
         status: 'failed',
         reason: 'unexpected',
         message: 'Something went wrong reading the model.',
+        explanation: 'Something went wrong reading the model.',
     };
 };
 

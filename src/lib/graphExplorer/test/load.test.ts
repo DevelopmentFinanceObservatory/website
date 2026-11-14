@@ -8,6 +8,7 @@ import test from 'node:test';
 import {
     LoadError,
     loadDocument,
+    loadFailure,
     RETRY_WAIT_MS,
     retryDelay,
     sharedLoad,
@@ -153,6 +154,30 @@ test('another failing status names the status and the problem detail', async () 
         { name: 'LoadError', reason: 'status', status: 502, detail: 'The graph did not answer' },
     );
     assert.deepEqual(waits, []);
+});
+
+test('a failure explains what went wrong without naming the document the heading names', async () => {
+    const failures = [
+        rig([() => json({ title: 'Server error', detail: 'boom' }, 500)]),
+        rig([
+            () => {
+                throw new TypeError('fetch failed');
+            },
+        ]),
+    ];
+    for (const { options } of failures) {
+        const state = await loadDocument(
+            'The model',
+            '/api/graph/schema',
+            readSchema,
+            options,
+        ).then(() => assert.fail('the load should fail'), loadFailure);
+        assert.equal(state.status, 'failed');
+        if (state.status !== 'failed') return;
+        assert.ok(state.message.startsWith('The model '));
+        assert.ok(!state.explanation.includes('The model'), state.explanation);
+        assert.ok(state.message.toLowerCase().endsWith(state.explanation.toLowerCase()));
+    }
 });
 
 test('a changed wire shape fails with the guard error', async () => {

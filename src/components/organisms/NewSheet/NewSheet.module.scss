@@ -81,7 +81,7 @@
     @include font-size(17px, 1.2);
 
     font-weight: 700;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .choiceMeta {
@@ -164,7 +164,7 @@
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .from {
@@ -185,7 +185,7 @@
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .more > summary {
@@ -198,10 +198,12 @@
     cursor: pointer;
 }
 
-// The table scrolls inside its own box so the page does not scroll sideways.
+// The table scrolls inside its own box so the page does not scroll sideways,
+// with its scrollbar in view as the cue that more lies past the edge.
 .scroll {
+    @include scrollbar-visible(var(--color-stone), x);
+
     max-width: 100%;
-    overflow-x: auto;
 }
 
 .sheet {
@@ -257,6 +259,17 @@
     &:empty {
         display: none;
     }
+}
+
+// A refusal or a request for consent, set apart from the notes around it.
+.exportProblem {
+    padding: rem(10) rem(12);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(4);
+}
+
+.exportFailed {
+    color: var(--color-red);
 }
 
 .exportAction {

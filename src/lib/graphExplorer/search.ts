@@ -138,3 +138,11 @@ export const enterChoice = (active: number, count: number, shown: boolean): numb
 
 /** What Escape does. It closes the list while the list is shown, else clears the query. */
 export const escapeAction = (shown: boolean): 'close' | 'clear' => (shown ? 'close' : 'clear');
+
+/** The search box's placeholder: what it searches, or why it is off while the model is missing. */
+export const searchPlaceholder = (model: 'loading' | 'ready' | 'failed'): string =>
+    model === 'ready'
+        ? 'Search names, codes and dcids'
+        : model === 'loading'
+          ? 'Loading the model'
+          : 'Search is off until the model loads';

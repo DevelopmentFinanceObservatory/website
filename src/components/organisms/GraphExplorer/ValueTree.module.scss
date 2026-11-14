@@ -183,8 +183,9 @@ details[open] > .summary .branch::before {
     @include font-size(11px, 1.3);
 }
 
+// Dimmed by a solid colour that keeps 3:1 against white and the page.
 .dim {
-    opacity: 0.45;
+    color: var(--color-gray-1800);
 }
 
 .note {

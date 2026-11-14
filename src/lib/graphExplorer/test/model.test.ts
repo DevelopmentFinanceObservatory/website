@@ -20,6 +20,7 @@ import {
     searchMembers,
     type MemberTree,
 } from '../model.ts';
+import { openEntries } from '../focus.ts';
 import { readSchema, readUsage, type SchemaNode } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 import { withListedParties } from './sheetFixtures.ts';
@@ -137,12 +138,17 @@ test('only a DFO-declared property is in the DFO scope, and each origin has its 
     ]);
 });
 
-test('a dataset with no label is named by the last path segment of its dcid', () => {
+test('a dataset with no label is named by the words of the last path segment of its dcid', () => {
     assert.equal(datasetName({ ref: DAC2B, label: 'OECD DAC2b' }), 'OECD DAC2b');
     assert.equal(
         datasetName({ ref: 'provenance/WorldBankInternationalDebtStatistics', label: null }),
-        'WorldBankInternationalDebtStatistics',
+        'World Bank International Debt Statistics',
     );
+    assert.equal(
+        datasetName({ ref: 'provenance/IDSCreditorReports', label: null }),
+        'IDS Creditor Reports',
+    );
+    assert.equal(datasetName({ ref: 'provenance/OECDDAC2A', label: null }), 'OECDDAC2A');
     assert.equal(datasetName({ ref: 'Unprefixed', label: null }), 'Unprefixed');
 
     const provenances = readUsage(usageBody());
@@ -529,6 +535,37 @@ test("a plain name leaves out a closing parenthesis that names one of the node's
     assert.equal(plainName(labelled, 'DAC1AidType1010'), 'official development assistance');
     assert.equal(plainName(labelled, 'CurrencyEUR'), 'Euro');
     assert.equal(plainName(labelled, 'NotANode'), 'NotANode');
+});
+
+test('the definition panel names a held open property value as the value-list table does', () => {
+    const named = (labelled: ReturnType<typeof withStatusLabels>, id: string) =>
+        openEntries(labelled, id)
+            .find((entry) => entry.property === 'currencyStatus')
+            ?.values.map((value) => (value.kind === 'node' ? value.name : value.text));
+    assert.deepEqual(named(withStatusLabels(false), 'CurrencyCHF'), ['current']);
+
+    // Two values of one line sharing a plain name keep their full labels.
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const current = body.nodes.find((each) => each.ref === 'CurrencyStatusCurrent');
+    const chf = body.nodes.find((each) => each.ref === 'CurrencyCHF') as
+        { other_properties: Record<string, unknown> } | undefined;
+    if (current === undefined || chf === undefined) throw new Error('fixture changed');
+    current.label = 'current (currency status)';
+    body.nodes.push({
+        ...current,
+        ref: 'GroupingCurrent',
+        label: 'current (grouping)',
+        types: ['Grouping'],
+    });
+    chf.other_properties = {
+        ...chf.other_properties,
+        currencyStatus: [{ ref: 'CurrencyStatusCurrent' }, { ref: 'GroupingCurrent' }],
+    };
+    const shared = buildModel(readSchema(body), readUsage(usageBody()));
+    assert.deepEqual(named(shared, 'CurrencyCHF'), [
+        'current (currency status)',
+        'current (grouping)',
+    ]);
 });
 
 test('an open property cell names a held reference by its plain name, a reference the model lacks by its dcid', () => {

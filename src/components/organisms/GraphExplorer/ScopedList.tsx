@@ -3,6 +3,7 @@
 import classNames from 'classnames';
 import { useId, useMemo, useState } from 'react';
 
+import { BreakableId } from './BreakableId';
 import { useExplore, useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
 import { downloadCsv } from './downloadCsv';
@@ -171,7 +172,9 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
                                     >
                                         <td>
                                             <TermLink id={row.id} className={styles.name} />
-                                            <span className={styles.dcid}>{row.id}</span>
+                                            <span className={styles.dcid}>
+                                                <BreakableId text={row.id} />
+                                            </span>
                                         </td>
                                         <td>
                                             <ValueListCell row={row} />

@@ -74,17 +74,26 @@ export const BaseTag = () => (
 );
 
 /**
- * A term or dataset by its label, linking to its view: `?dataset=` for a
- * dataset, `?node=` for anything else, with the "base" tag on a base term.
+ * A term or dataset by its label, or by `name` where the caller names it,
+ * linking to its view: `?dataset=` for a dataset, `?node=` for anything
+ * else, with the "base" tag on a base term.
  */
-export const TermLink = ({ id, className }: { id: string; className?: string }) => {
+export const TermLink = ({
+    id,
+    name,
+    className,
+}: {
+    id: string;
+    name?: string;
+    className?: string;
+}) => {
     const model = useModel();
     const view: ExploreView = model.dataset(id) ? { kind: 'dataset', id } : { kind: 'node', id };
 
     return (
         <>
             <ExploreLink view={view} className={className ?? styles.term}>
-                {model.label(id)}
+                {name ?? model.label(id)}
             </ExploreLink>
             {model.isBase(id) && (
                 <>

@@ -300,9 +300,19 @@ const groupBy = <TItem extends { readonly roles: readonly Role[] }>(
     return Object.freeze(groups);
 };
 
-/** A dataset's label, else the last path segment of its dcid. */
+/**
+ * The word breaks inside a CamelCase name: before a capital that follows a
+ * lower-case letter, and before the last capital of a run that starts a
+ * word ("IDSCreditor" reads "IDS Creditor").
+ */
+const CAMEL_BREAKS = /(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/g;
+
+/**
+ * A dataset's label, else the last path segment of its dcid with its
+ * CamelCase words spaced apart: "World Bank International Debt Statistics".
+ */
 export const datasetName = (dataset: Pick<ProvenanceUsage, 'ref' | 'label'>): string =>
-    dataset.label ?? dataset.ref.split('/').at(-1) ?? dataset.ref;
+    dataset.label ?? (dataset.ref.split('/').at(-1) ?? dataset.ref).replace(CAMEL_BREAKS, ' ');
 
 const distinct = (ids: readonly string[]): string[] => [...new Set(ids)];
 

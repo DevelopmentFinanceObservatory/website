@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
 import { useCarried, useModel } from './ExploreContext';
 import { BaseTag, TermLink } from './ExploreLink';
@@ -49,10 +50,12 @@ const IdLine = ({ id, codes = [] }: { id: string; codes?: readonly string[] }) =
 
     return (
         <div className={styles.idLine}>
-            <span className={styles.mono}>{id}</span>
+            <span className={styles.mono}>
+                <BreakableId text={id} />
+            </span>
             {codes.length > 0 && (
                 <span className={styles.code}>
-                    {codes.length === 1 ? 'Code' : 'Codes'} {codes.join(', ')}
+                    {codes.length === 1 ? 'Code' : 'Codes'} <BreakableId text={codes.join(', ')} />
                 </span>
             )}
             <Button small onClick={copy}>
@@ -174,9 +177,11 @@ const OpenLines = ({ id }: { id: string }) => {
                 <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
                     {index > 0 && ', '}
                     {value.kind === 'node' ? (
-                        <TermLink id={value.id} />
+                        <TermLink id={value.id} name={value.name} />
                     ) : (
-                        <span className={styles.mono}>{value.text}</span>
+                        <span className={styles.mono}>
+                            <BreakableId text={value.text} />
+                        </span>
                     )}
                 </span>
             ))}
@@ -224,7 +229,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <p className={styles.line}>
                     Declared by {declarerWords(node.declared_by)} in{' '}
                     <span className={styles.mono}>
-                        {node.provenances.join(', ') || 'no source'}
+                        <BreakableId text={node.provenances.join(', ') || 'no source'} />
                     </span>
                 </p>
             )}
@@ -326,7 +331,9 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                             {pattern.examples[0] !== undefined && (
                                 <p className={styles.meta}>
                                     For example{' '}
-                                    <span className={styles.mono}>{pattern.examples[0]}</span>
+                                    <span className={styles.mono}>
+                                        <BreakableId text={pattern.examples[0]} />
+                                    </span>
                                 </p>
                             )}
                             <div>
@@ -348,7 +355,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                             <p key={key} className={styles.line}>
                                 {label}:{' '}
                                 <span className={styles.mono}>
-                                    {facets[key].map(text).join(', ')}
+                                    <BreakableId text={facets[key].map(text).join(', ')} />
                                 </span>
                             </p>
                         ),
