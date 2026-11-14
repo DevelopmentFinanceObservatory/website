@@ -67,6 +67,9 @@ export type ValuesUsed = {
     readonly complete: boolean;
 };
 
+/** A dataset with how many members of one value list it uses. */
+export type DatasetMembers = { readonly dataset: string; readonly values: ValuesUsed };
+
 /** One property of a class, with the roles it has in patterns about that class. */
 export type ClassProperty = {
     readonly id: string;
@@ -195,10 +198,18 @@ export type Model = {
     propertiesOf(classId: string): ClassProperties;
     /** The ids, each once, most used first, then by label. */
     byUse(ids: Iterable<string>): readonly string[];
+    /** The properties the instance declares, most used first, then by label. */
+    instanceProperties(): readonly string[];
     datasetView(id: string): DatasetView | undefined;
     valuesUsed(datasetId: string, propertyId: string): ValuesUsed | null;
     scopedList(scope: ListScope, filter: DatasetFilter): ScopedList;
     lens(datasetId: string, ids: Iterable<string>): readonly LensEntry[];
+    /**
+     * The datasets that use a member of a value list, each with how many of
+     * its members it uses: most members first, then by label. The lens counts
+     * a dataset's members the same way.
+     */
+    memberUse(listId: string): readonly DatasetMembers[];
 };
 
 const EMPTY: readonly string[] = Object.freeze([]);
@@ -481,21 +492,28 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         return orderRoles([...perDataset.values()].flatMap((held) => [...held]));
     };
 
-    const usedWith = (id: string): readonly ClassCount[] => {
-        const totals = new Map<string, number>();
-        for (const { pattern } of patterns) {
-            if (pattern.population_type === null) continue;
-            if (!patternRoles(pattern).some(([property]) => property === id)) continue;
-            totals.set(
-                pattern.population_type,
-                (totals.get(pattern.population_type) ?? 0) + pattern.stat_var_count,
-            );
+    // StatVars per property and population type, over the patterns that give the property a role.
+    const usedWithCounts = new Map<string, Map<string, number>>();
+    for (const { pattern } of patterns) {
+        const classId = pattern.population_type;
+        if (classId === null) continue;
+        for (const property of new Set(patternRoles(pattern).map(([id]) => id))) {
+            const totals = usedWithCounts.get(property) ?? new Map<string, number>();
+            totals.set(classId, (totals.get(classId) ?? 0) + pattern.stat_var_count);
+            usedWithCounts.set(property, totals);
         }
-        return Object.freeze(
-            [...totals]
+    }
+    const usedWithCache = new Map<string, readonly ClassCount[]>();
+    const usedWith = (id: string): readonly ClassCount[] => {
+        const cached = usedWithCache.get(id);
+        if (cached) return cached;
+        const result = Object.freeze(
+            [...(usedWithCounts.get(id) ?? [])]
                 .map(([classId, count]) => Object.freeze({ classId, count }))
                 .sort((a, b) => b.count - a.count || byLabel(a.classId, b.classId)),
         );
+        usedWithCache.set(id, result);
+        return result;
     };
 
     const populationTypes: readonly PopulationTypeUse[] = (() => {
@@ -530,6 +548,18 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
 
     const byUse = (ids: Iterable<string>): readonly string[] =>
         Object.freeze([...new Set(ids)].sort(moreUsed));
+
+    let instanceList: readonly string[] | undefined;
+    const instanceProperties = (): readonly string[] =>
+        (instanceList ??= Object.freeze(
+            nodes
+                .filter(
+                    (node) =>
+                        kinds.get(node.dcid) === 'property' && node.declared_by === 'instance',
+                )
+                .map((node) => node.dcid)
+                .sort(moreUsed),
+        ));
 
     const membersComplete = (listId: string): boolean =>
         byId.get(listId)?.enumeration?.complete ?? true;
@@ -622,18 +652,11 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         const entries: { id: string; roles: readonly Role[]; inheritedFrom: string | null }[] =
             scope.kind === 'class'
                 ? [...propertiesOf(scope.id).all]
-                : nodes
-                      .filter(
-                          (node) =>
-                              kinds.get(node.dcid) === 'property' &&
-                              node.declared_by === 'instance',
-                      )
-                      .map((node) => ({
-                          id: node.dcid,
-                          roles: roles(node.dcid),
-                          inheritedFrom: null,
-                      }))
-                      .sort((a, b) => moreUsed(a.id, b.id));
+                : instanceProperties().map((id) => ({
+                      id,
+                      roles: roles(id),
+                      inheritedFrom: null,
+                  }));
         const columns = Object.freeze(
             filter.kind === 'dataset'
                 ? [filter.id]
@@ -665,19 +688,31 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         });
     };
 
+    /** How many members of a value list one dataset uses. */
+    const membersUsed = (listId: string, datasetId: string): ValuesUsed => {
+        const listed = membersIndex.get(listId) ?? EMPTY;
+        return Object.freeze({
+            used: listed.filter((member) => usageIn(member, datasetId) > 0).length,
+            of: listed.length,
+            complete: membersComplete(listId),
+        });
+    };
+
+    const memberUse = (listId: string): readonly DatasetMembers[] =>
+        Object.freeze(
+            datasets
+                .map(({ dcid }) =>
+                    Object.freeze({ dataset: dcid, values: membersUsed(listId, dcid) }),
+                )
+                .filter(({ values }) => values.used > 0)
+                .sort((a, b) => b.values.used - a.values.used || byLabel(a.dataset, b.dataset)),
+        );
+
     const lens = (datasetId: string, ids: Iterable<string>): readonly LensEntry[] =>
         Object.freeze(
             [...ids].map((id) => {
                 const count = usageIn(id, datasetId);
-                let members: ValuesUsed | null = null;
-                if (kinds.get(id) === 'valueList') {
-                    const listed = membersIndex.get(id) ?? EMPTY;
-                    members = Object.freeze({
-                        used: listed.filter((member) => usageIn(member, datasetId) > 0).length,
-                        of: listed.length,
-                        complete: membersComplete(id),
-                    });
-                }
+                const members = kinds.get(id) === 'valueList' ? membersUsed(id, datasetId) : null;
                 return Object.freeze({
                     id,
                     count,
@@ -713,10 +748,12 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
         populationTypes: () => populationTypes,
         propertiesOf,
         byUse,
+        instanceProperties,
         datasetView,
         valuesUsed,
         scopedList,
         lens,
+        memberUse,
     });
 }
 

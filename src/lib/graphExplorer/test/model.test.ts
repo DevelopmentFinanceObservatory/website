@@ -311,6 +311,11 @@ test('the scoped list of instance properties groups rows and counts the chosen d
         GROUPS.map((group) => list.groups[group].length),
         [2, 2, 8, 58],
     );
+    // The start screen counts the same properties without building the list.
+    assert.deepEqual(
+        model.instanceProperties().toSorted(),
+        GROUPS.flatMap((group) => list.groups[group].map((row) => row.id)).toSorted(),
+    );
     // amount is a base property, so outside this scope.
     assert.ok(list.groups.measured.every((row) => row.id !== 'amount'));
 
@@ -354,6 +359,21 @@ test('the lens says which nodes a dataset uses, and how many members of a value 
             { id: 'dac1AidType', count: 0, used: false, members: null },
         ],
     );
+});
+
+test("a value list's use is read from its members, as the lens reads it", () => {
+    // No pattern names DAC2aAidTypeEnum itself, but DAC2A uses all 21 of its members.
+    assert.equal(model.usage('DAC2aAidTypeEnum').total, 0);
+    assert.deepEqual(model.memberUse('DAC2aAidTypeEnum'), [
+        { dataset: DAC2A, values: { used: 21, of: 21, complete: true } },
+    ]);
+    assert.deepEqual(model.memberUse('DAC1AidTypeEnum'), [
+        { dataset: DAC1, values: { used: 12, of: 17, complete: false } },
+    ]);
+    for (const { dataset, values } of model.memberUse('FinancialFlowTypeEnum')) {
+        assert.deepEqual(model.lens(dataset, ['FinancialFlowTypeEnum'])[0]?.members, values);
+    }
+    assert.deepEqual(model.memberUse('CRSPurposeCodeEnum'), []);
 });
 
 test('the model is frozen', () => {

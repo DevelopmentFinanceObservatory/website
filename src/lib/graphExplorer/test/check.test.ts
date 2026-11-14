@@ -15,6 +15,7 @@ import {
     closestLookup,
     closestMembers,
     editDistance,
+    editDistanceWithin,
     exampleSheet,
     findingLines,
     findingMessage,
@@ -330,12 +331,19 @@ test('a value outside the range links its value list, and its closest members ar
 });
 
 test('the closest values are worked out only when asked, once per field and value', () => {
+    // Each closestMembers call asks for the property's value list once, and the first for a
+    // list reads its members.
     let lookups = 0;
+    let memberReads = 0;
     const counting = {
         ...model,
         members: (list: string) => {
-            lookups += 1;
+            memberReads += 1;
             return model.members(list);
+        },
+        valueListOfProperty: (id: string) => {
+            lookups += 1;
+            return model.valueListOfProperty(id);
         },
     };
     const findings = [
@@ -345,11 +353,11 @@ test('the closest values are worked out only when asked, once per field and valu
         finding({ ref: '7', value: 'DAC1AidTpye1010' }),
     ];
     findingLines(counting, mapHeaders(model, ['dac1AidType']), findings);
-    assert.equal(lookups, 0);
-
+    assert.equal(memberReads, 0);
     const closest = closestLookup(counting);
+    const before = lookups;
     const offered = findings.map(closest);
-    assert.equal(lookups, 2);
+    assert.equal(lookups - before, 2);
     assert.deepEqual(offered[1], offered[0]);
     assert.equal(offered[0]?.[0], 'DAC1AidType1020');
 });
@@ -367,6 +375,79 @@ test('edit distance counts single-character edits', () => {
     assert.equal(editDistance('kitten', 'sitting'), 3);
     assert.equal(editDistance('', 'abc'), 3);
     assert.equal(editDistance('same', 'same'), 0);
+});
+
+/** The full Levenshtein table, as the reference the bounded count must agree with. */
+const fullDistance = (a: string, b: string): number => {
+    const table = Array.from({ length: a.length + 1 }, (_, i) =>
+        Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+    );
+    for (let i = 1; i <= a.length; i += 1) {
+        for (let j = 1; j <= b.length; j += 1) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            table[i]![j] = Math.min(
+                table[i - 1]![j]! + 1,
+                table[i]![j - 1]! + 1,
+                table[i - 1]![j - 1]! + cost,
+            );
+        }
+    }
+    return table[a.length]![b.length]!;
+};
+
+test('the bounded edit distance is exact within its bound and one past it beyond', () => {
+    const words = ['', 'a', 'gross', 'gros', 'net', 'dac1aidtype1020', 'dac1aidtpye1020', 'kitten'];
+    let pairs = 0;
+    for (const a of words) {
+        for (const b of words) {
+            const exact = fullDistance(a, b);
+            for (const bound of [0, 1, 2, 3, 20]) {
+                assert.equal(
+                    editDistanceWithin(a, b, bound),
+                    Math.min(exact, bound + 1),
+                    `${a}|${b}|${bound}`,
+                );
+                pairs += 1;
+            }
+        }
+    }
+    assert.equal(pairs, words.length * words.length * 5);
+});
+
+test('the closest members match a full ranking of every member, ties in list order', () => {
+    // Every value list property of the fixture, each against a few typed values.
+    const properties = model.nodes
+        .map((node) => node.dcid)
+        .filter((id) => model.valueListOfProperty(id) !== undefined);
+    assert.ok(properties.length > 5);
+    let checked = 0;
+    for (const property of properties) {
+        const list = model.valueListOfProperty(property) ?? '';
+        const members = model.members(list);
+        for (const typed of ['x', 'Gros', 'DAC1AidTpye1020', 'ODA', members[0] ?? 'none']) {
+            const found = finding({ field: `constraint_properties.${property}`, value: typed });
+            const lower = typed.toLowerCase();
+            const expected = members
+                .filter((id) => id !== typed)
+                .map((id, order) => {
+                    const names = [
+                        id,
+                        model.label(id),
+                        ...(model.node(id)?.classification_code ?? []),
+                    ];
+                    const score = Math.min(
+                        ...names.map((name) => fullDistance(lower, name.toLowerCase())),
+                    );
+                    return { id, order, score };
+                })
+                .sort((a, b) => a.score - b.score || a.order - b.order)
+                .slice(0, 3)
+                .map(({ id }) => id);
+            assert.deepEqual(closestMembers(model, found), expected, `${property}|${typed}`);
+            checked += 1;
+        }
+    }
+    assert.equal(checked, properties.length * 5);
 });
 
 test('the closest members to a misspelt value come from the property’s value list', () => {

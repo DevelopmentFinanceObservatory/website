@@ -26,6 +26,8 @@ const columns = sheetColumns(model, {
     measuredProperty: 'amount',
     statType: 'measuredValue',
     qualifier: 'Nominal',
+    denominator: null,
+    observationProperties: ['financingProvider'],
     properties: ['nettingBasis', 'dac1AidType', 'financingProvider'],
 });
 
@@ -108,38 +110,38 @@ const bounds: [string, Edit, Edit][] = [
     [
         'members per lookup',
         (r) =>
-            (r.columns[6].lookup.members = Array.from({ length: LIMITS.members }, (_, at) =>
+            (r.columns[8].lookup.members = Array.from({ length: LIMITS.members }, (_, at) =>
                 member(at),
             )),
         (r) =>
-            (r.columns[6].lookup.members = Array.from({ length: LIMITS.members + 1 }, (_, at) =>
+            (r.columns[8].lookup.members = Array.from({ length: LIMITS.members + 1 }, (_, at) =>
                 member(at),
             )),
     ],
     [
         'member label',
-        (r) => (r.columns[6].lookup.members[0].label = text(LIMITS.term)),
-        (r) => (r.columns[6].lookup.members[0].label = text(LIMITS.term + 1)),
+        (r) => (r.columns[8].lookup.members[0].label = text(LIMITS.term)),
+        (r) => (r.columns[8].lookup.members[0].label = text(LIMITS.term + 1)),
     ],
     [
         'member code',
-        (r) => (r.columns[6].lookup.members[0].code = text(LIMITS.term)),
-        (r) => (r.columns[6].lookup.members[0].code = 5),
+        (r) => (r.columns[8].lookup.members[0].code = text(LIMITS.term)),
+        (r) => (r.columns[8].lookup.members[0].code = 5),
     ],
     [
         'member id',
-        (r) => (r.columns[6].lookup.members[0].id = 'x'),
-        (r) => (r.columns[6].lookup.members[0].id = ''),
+        (r) => (r.columns[8].lookup.members[0].id = 'x'),
+        (r) => (r.columns[8].lookup.members[0].id = ''),
     ],
     [
         'value list',
-        (r) => (r.columns[6].lookup.valueList = text(LIMITS.term)),
-        (r) => (r.columns[6].lookup.valueList = text(LIMITS.term + 1)),
+        (r) => (r.columns[8].lookup.valueList = text(LIMITS.term)),
+        (r) => (r.columns[8].lookup.valueList = text(LIMITS.term + 1)),
     ],
     [
         'list completeness',
-        (r) => (r.columns[6].lookup.complete = false),
-        (r) => (r.columns[6].lookup.complete = 'no'),
+        (r) => (r.columns[8].lookup.complete = false),
+        (r) => (r.columns[8].lookup.complete = 'no'),
     ],
 ];
 
@@ -281,8 +283,8 @@ test('one dropdown per property column with a value list, none on reference or d
             rule.condition.values[0]?.userEnteredValue,
         ]),
         [
-            [6, 7, "='Value lists'!$A$4:$A$5"],
-            [7, 8, "='Value lists'!$E$4:$E$20"],
+            [8, 9, "='Value lists'!$A$4:$A$5"],
+            [9, 10, "='Value lists'!$E$4:$E$20"],
         ],
     );
     for (const { setDataValidation } of body?.requests ?? []) {
@@ -307,7 +309,7 @@ test('a sheet with no value-list column needs no dropdown request', () => {
 
 test('a reference or definition column gets no block or dropdown, even when sent a lookup', () => {
     const request = fixtureRequest();
-    const lookup = request.columns[6]?.lookup ?? null;
+    const lookup = request.columns[8]?.lookup ?? null;
     const moved = {
         ...request,
         columns: request.columns.map((column, at) =>
@@ -318,6 +320,6 @@ test('a reference or definition column gets no block or dropdown, even when sent
         dropdownRequestBody(moved)?.requests.map(
             ({ setDataValidation }) => setDataValidation.range.startColumnIndex,
         ),
-        [6, 7],
+        [8, 9],
     );
 });

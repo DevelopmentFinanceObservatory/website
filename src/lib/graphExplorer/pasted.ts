@@ -2,8 +2,17 @@
  * A range pasted from a spreadsheet, read into check rows, and a finding
  * placed back on the cell it belongs to.
  */
+import { plural } from './counts.ts';
 import type { Model } from './model.ts';
-import { findingProperty, type OntologyCheckRow, type OntologyFinding } from './wire.ts';
+import {
+    CHECK_MAX_CONSTRAINT_PROPERTIES,
+    CHECK_MAX_OBSERVATION_PROPERTIES,
+    DCID_MAX_LENGTH,
+    DCID_SYNTAX,
+    findingProperty,
+    type OntologyCheckRow,
+    type OntologyFinding,
+} from './wire.ts';
 
 export type PastedRange = {
     readonly header: readonly string[];
@@ -259,8 +268,9 @@ export const sheetRow = (dataIndex: number): number => dataIndex + 2;
  * Check rows in the wire shape. `ref` is the sheet row number. Each property
  * or field is read from the one column the mapping gives it, the column
  * `locateFinding` places its findings on. An empty cell in a property
- * column leaves the property out. An empty measured property is sent as an
- * empty string so the check reports it. Blank rows are skipped.
+ * column leaves the property out. An empty measured property is an empty
+ * string, which `sheetProblems` reports before any request. Blank rows are
+ * skipped.
  */
 export function rowsToCheck(
     mapping: Mapping,
@@ -299,6 +309,174 @@ export function rowsToCheck(
             },
         ];
     });
+}
+
+/**
+ * Why the check route would refuse rows before checking them:
+ * - `measured_property_missing`: no column is read as measuredProperty, or
+ *   the rows in `rows` leave it empty.
+ * - `too_many_constraint_properties`: the rows fill more than
+ *   CHECK_MAX_CONSTRAINT_PROPERTIES property columns.
+ * - `too_many_observation_properties`: the rows name more than
+ *   CHECK_MAX_OBSERVATION_PROPERTIES observation properties.
+ * - `property_not_dcid`: a property column's header is not a dcid, and the
+ *   rows fill it.
+ * - `value_not_dcid`: the rows hold a definition field or an observation
+ *   property that is not a dcid.
+ * - `value_too_long`: the rows hold a property value over DCID_MAX_LENGTH
+ *   characters.
+ */
+export type SheetProblemCode =
+    | 'measured_property_missing'
+    | 'too_many_constraint_properties'
+    | 'too_many_observation_properties'
+    | 'property_not_dcid'
+    | 'value_not_dcid'
+    | 'value_too_long';
+
+export type SheetProblem = {
+    readonly code: SheetProblemCode;
+    /** The column at fault, or null when the fault is the sheet's or a row's. */
+    readonly column: number | null;
+    /** The column's header, or null with no column. */
+    readonly header: string | null;
+    /** The sheet rows at fault, in order; empty when every row is. */
+    readonly rows: readonly number[];
+};
+
+/** Whether the route reads `id` as a dcid: its syntax and its length ceiling. */
+export const isDcid = (id: string): boolean => id.length <= DCID_MAX_LENGTH && DCID_SYNTAX.test(id);
+
+/** The definition fields of a check row, by the sheet field that fills each. */
+const DCID_FIELDS = [
+    ['dcid', 'dcid'],
+    ['populationType', 'population_type'],
+    ['measuredProperty', 'measured_property'],
+    ['statType', 'stat_type'],
+    ['measurementQualifier', 'measurement_qualifier'],
+    ['measurementDenominator', 'measurement_denominator'],
+] as const satisfies readonly (readonly [DefinitionField, keyof OntologyCheckRow])[];
+
+/**
+ * What in `rows` the check route would refuse, one problem per cause and
+ * column, so the reader can fix the sheet before any request. `rows` are the
+ * rows `rowsToCheck` built from `mapping`.
+ */
+export function sheetProblems(mapping: Mapping, rows: readonly OntologyCheckRow[]): SheetProblem[] {
+    const problems: SheetProblem[] = [];
+    const rowOf = (row: OntologyCheckRow): number => Number(row.ref);
+    const columnOf = (field: DefinitionField) =>
+        mapping.find(({ target }) => target.kind === 'definition' && target.field === field);
+    const add = (
+        code: SheetProblemCode,
+        column: MappedColumn | undefined,
+        at: readonly OntologyCheckRow[],
+    ) => {
+        if (at.length === 0) return;
+        problems.push({
+            code,
+            column: column?.index ?? null,
+            header: column?.header ?? null,
+            rows: at.map(rowOf),
+        });
+    };
+
+    const measured = columnOf('measuredProperty');
+    if (measured === undefined && rows.length > 0) {
+        problems.push({ code: 'measured_property_missing', column: null, header: null, rows: [] });
+    } else {
+        add(
+            'measured_property_missing',
+            measured,
+            rows.filter((row) => row.measured_property === ''),
+        );
+    }
+    for (const [field, key] of DCID_FIELDS) {
+        add(
+            'value_not_dcid',
+            columnOf(field),
+            rows.filter((row) => {
+                const value = row[key];
+                return typeof value === 'string' && value !== '' && !isDcid(value);
+            }),
+        );
+    }
+    const observations = columnOf('observationProperties');
+    add(
+        'value_not_dcid',
+        observations,
+        rows.filter((row) => (row.observation_properties ?? []).some((id) => !isDcid(id))),
+    );
+    add(
+        'too_many_observation_properties',
+        observations,
+        rows.filter(
+            (row) => (row.observation_properties ?? []).length > CHECK_MAX_OBSERVATION_PROPERTIES,
+        ),
+    );
+    add(
+        'too_many_constraint_properties',
+        undefined,
+        rows.filter(
+            (row) =>
+                Object.keys(row.constraint_properties ?? {}).length >
+                CHECK_MAX_CONSTRAINT_PROPERTIES,
+        ),
+    );
+    for (const column of mapping) {
+        const { target } = column;
+        if (target.kind !== 'property') continue;
+        const filled = rows.filter(
+            (row) => row.constraint_properties?.[target.property] !== undefined,
+        );
+        if (!isDcid(target.property)) add('property_not_dcid', column, filled);
+        add(
+            'value_too_long',
+            column,
+            filled.filter((row) => {
+                const value = row.constraint_properties?.[target.property];
+                return typeof value === 'string' && value.length > DCID_MAX_LENGTH;
+            }),
+        );
+    }
+    return problems;
+}
+
+/** The most row numbers a problem's line names before it counts the rest. */
+const NAMED_ROWS = 5;
+
+/** "row 3", "rows 3, 5 and 9", "rows 3, 5, 9, 12, 14 and 6 more". */
+const rowsText = (rows: readonly number[]): string => {
+    const named = rows.slice(0, NAMED_ROWS).map(String);
+    const rest = rows.length - named.length;
+    const parts = rest > 0 ? [...named, `${rest.toLocaleString('en-GB')} more`] : named;
+    const list =
+        parts.length < 2
+            ? (parts[0] ?? '')
+            : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+    return `${rows.length === 1 ? 'row' : 'rows'} ${list}`;
+};
+
+/** A problem as one line: what the check would refuse, where, and what to do. */
+export function sheetProblemText(problem: SheetProblem): string {
+    const column = `Column ${problem.header || '(no header)'}`;
+    const on = rowsText(problem.rows);
+    switch (problem.code) {
+        case 'measured_property_missing':
+            return problem.column === null
+                ? 'No column is read as measuredProperty, and every row needs a measured property. Add a measuredProperty column.'
+                : `${column} has no measured property on ${on}. Fill those cells.`;
+        case 'too_many_constraint_properties':
+            return `${on.charAt(0).toUpperCase()}${on.slice(1)} ${problem.rows.length === 1 ? 'fills' : 'fill'} more than ${plural(CHECK_MAX_CONSTRAINT_PROPERTIES, 'property column')}, the most one row can have. Set some columns to Ignored.`;
+        case 'too_many_observation_properties':
+            return `${column} names more than ${plural(CHECK_MAX_OBSERVATION_PROPERTIES, 'observation property', 'observation properties')} on ${on}, the most one row can have.`;
+        case 'property_not_dcid':
+            return `${column} is read as a property, but its header is not a dcid: letters, digits, _, . and -, in parts joined by /. Rename the header, or set the column to Ignored.`;
+        case 'value_not_dcid':
+            return `${column} holds a value that is not a dcid on ${on}. A dcid has only letters, digits, _, . and -, in parts joined by /.`;
+        case 'value_too_long':
+            return `${column} holds a value longer than ${DCID_MAX_LENGTH} characters on ${on}. Shorten it, or set the column to Ignored.`;
+    }
 }
 
 /** The cell a finding belongs to. `column` is null when its field maps to no column. */

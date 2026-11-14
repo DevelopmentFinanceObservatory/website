@@ -12,9 +12,15 @@ import {
     mapHeaders,
     parsePasted,
     rowsToCheck,
+    sheetProblems,
     switchColumn,
 } from '../pasted.ts';
-import { readOntology, readProvenances } from '../wire.ts';
+import {
+    CHECK_MAX_CONSTRAINT_PROPERTIES,
+    DCID_MAX_LENGTH,
+    readOntology,
+    readProvenances,
+} from '../wire.ts';
 import type { OntologyFinding } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
 
@@ -179,6 +185,98 @@ test('rows to check number rows as the sheet shows them and apply the empty-cell
     assert.deepEqual(rows[1]?.observation_properties, []);
     assert.equal(rows[2]?.ref, '5');
     assert.equal(rows[2]?.population_type, null);
+});
+
+/** The problems of a sheet with `header` and `cells`, as code, column and rows. */
+const problemsOf = (header: string[], cells: string[][], switches: [number, 'property'][] = []) => {
+    let mapping = mapHeaders(model, header);
+    for (const [index, to] of switches) mapping = switchColumn(mapping, index, to);
+    return sheetProblems(mapping, rowsToCheck(mapping, cells)).map(({ code, column, rows }) => ({
+        code,
+        column,
+        rows,
+    }));
+};
+
+test('a sheet the check would refuse is caught before any request, one problem per cause and column', () => {
+    const tooMany = Array.from(
+        { length: CHECK_MAX_CONSTRAINT_PROPERTIES + 1 },
+        (_, at) => `p${at}`,
+    );
+    const cases: [string, string[], string[][], [number, 'property'][], unknown[]][] = [
+        ['a clean sheet', ['measuredProperty', 'nettingBasis'], [['amount', 'Gross']], [], []],
+        [
+            'no measuredProperty column',
+            ['nettingBasis'],
+            [['Gross'], ['Net']],
+            [],
+            [{ code: 'measured_property_missing', column: null, rows: [] }],
+        ],
+        [
+            'an empty measured property',
+            ['source_code', 'measuredProperty'],
+            [
+                ['A', 'amount'],
+                ['B', ''],
+                ['C', ''],
+            ],
+            [],
+            [{ code: 'measured_property_missing', column: 1, rows: [3, 4] }],
+        ],
+        [
+            'a definition value that is not a dcid',
+            ['measuredProperty', 'populationType'],
+            [
+                ['amount', 'Financial Flow'],
+                ['amount', 'FinancialFlow'],
+            ],
+            [],
+            [{ code: 'value_not_dcid', column: 1, rows: [2] }],
+        ],
+        [
+            'too many observation properties, one not a dcid',
+            ['measuredProperty', 'observationProperties'],
+            [
+                ['amount', 'a, b, c, d, e'],
+                ['amount', 'a b'],
+            ],
+            [],
+            [
+                { code: 'value_not_dcid', column: 1, rows: [3] },
+                { code: 'too_many_observation_properties', column: 1, rows: [2] },
+            ],
+        ],
+        [
+            'too many filled property columns',
+            ['measuredProperty', ...tooMany],
+            [
+                ['amount', ...tooMany.map(() => 'X')],
+                ['amount', ...tooMany.map((_, at) => (at ? 'X' : ''))],
+            ],
+            tooMany.map((_, at): [number, 'property'] => [at + 1, 'property']),
+            [{ code: 'too_many_constraint_properties', column: null, rows: [2] }],
+        ],
+        [
+            'a property header that is not a dcid, filled on one row',
+            ['measuredProperty', 'Aid type'],
+            [
+                ['amount', 'X'],
+                ['amount', ''],
+            ],
+            [[1, 'property']],
+            [{ code: 'property_not_dcid', column: 1, rows: [2] }],
+        ],
+        [
+            'a property value past the length ceiling',
+            ['measuredProperty', 'nettingBasis'],
+            [['amount', 'x'.repeat(DCID_MAX_LENGTH + 1)]],
+            [],
+            [{ code: 'value_too_long', column: 1, rows: [2] }],
+        ],
+    ];
+    for (const [name, header, cells, switches, expected] of cases) {
+        assert.deepEqual(problemsOf(header, cells, switches), expected, name);
+    }
 });
 
 test('a repeated property keeps its first column, and the check reads and marks that one', () => {

@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import { useRouter } from 'next/navigation';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useCarried, useOptionalExplore } from './ExploreContext';
 import { BaseTag } from './ExploreLink';
@@ -48,6 +48,8 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
+    // Set when the arrow keys move the active result, so only they scroll the list.
+    const stepped = useRef(false);
     const id = useId();
     const listId = `${id}-results`;
 
@@ -74,6 +76,7 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
             setOpen(true);
             if (count === 0) return;
             const step = event.key === 'ArrowDown' ? 1 : -1;
+            stepped.current = true;
             setActive((current) => stepActive(current, step, count));
             return;
         }
@@ -95,6 +98,14 @@ const SearchBox = ({ model, baseTerms }: SearchBoxProps) => {
     };
 
     const activeHit = shown ? result.hits[active] : undefined;
+
+    // The results box scrolls, so a result reached by the arrow keys is scrolled into it.
+    useEffect(() => {
+        if (!stepped.current) return;
+        stepped.current = false;
+        if (active >= 0)
+            document.getElementById(`${id}-${active}`)?.scrollIntoView({ block: 'nearest' });
+    }, [active, id]);
 
     return (
         <div className={styles.search}>

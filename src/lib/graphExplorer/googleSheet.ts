@@ -86,7 +86,11 @@ export type SheetsAnswer =
       }
     | {
           ok: false;
-          code: 'google_failed' | 'auth_failed' | 'google_renewal_failed';
+          /**
+           * `google_unconfirmed`: the create call timed out, and the sheet may
+           * already be in the reader's Drive.
+           */
+          code: 'google_failed' | 'google_unconfirmed' | 'auth_failed' | 'google_renewal_failed';
           message: string;
       };
 

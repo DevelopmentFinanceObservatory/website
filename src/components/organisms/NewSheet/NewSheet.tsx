@@ -20,9 +20,10 @@ import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { NO_CARRIED, type Carried } from '@/lib/graphExplorer/explore';
 import {
+    openingMemory,
     takeConsentTrip,
     type ConsentTrip,
-    type CreateRecord,
+    type CreateMemory,
 } from '@/lib/graphExplorer/googleConsent';
 import {
     queryOf,
@@ -162,8 +163,9 @@ const Closest = ({ selection }: { selection: SheetSelection }) => {
                 </p>
             )}
             <p className={styles.note}>
-                The closest pattern is the one about this kind of thing that splits by the most of
-                the ticked properties. A tie goes to the pattern with more StatVars.
+                The closest pattern is the one about this kind of thing, or a narrower kind, that
+                splits by the most of the ticked properties. A tie goes to the pattern with more
+                StatVars.
             </p>
         </>
     );
@@ -249,8 +251,11 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
     const model = useModel();
     const params = useSearchParams();
     const carried = useCarried();
-    const [createRecord, setCreateRecord] = useState<CreateRecord | null>(null);
     const selection = useMemo(() => resolveSheet(model, readSheetQuery(params)), [model, params]);
+    // The draft the page opened on is the one the reader returned to from the consent screen.
+    const [createMemory, setCreateMemory] = useState<CreateMemory>(() =>
+        openingMemory(trip, selection ? sheetQuery(queryOf(selection), NO_CARRIED) : ''),
+    );
     const sheet = useMemo(
         (): SheetDraft | null =>
             selection && sheetDraft(model, { ...selection.spec, classId: selection.classId }),
@@ -377,9 +382,8 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
                     <CreateGoogleSheet
                         sheet={sheet}
                         query={sheetQuery(current, NO_CARRIED)}
-                        trip={trip}
-                        record={createRecord}
-                        onRecord={setCreateRecord}
+                        memory={createMemory}
+                        onMemory={setCreateMemory}
                     />
                     <DownloadCsv sheet={sheet} />
                 </div>

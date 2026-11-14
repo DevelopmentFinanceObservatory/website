@@ -26,10 +26,12 @@ export const resolveOnSite = (path: string | null | undefined): URL | null => {
  * backslash and no control character, and resolve on this site
  * (resolveOnSite) to a path that does not begin with `//`. Dot segments can
  * resolve `/a/..//host` to `//host`, which a redirect reads as another host.
- * Anything else, including a missing or empty value, gives `/studio`.
+ * Anything else, including a missing or empty value, gives `/studio`. A
+ * query that repeats `next` arrives as a list, and its first value is read.
  */
-export const safeNext = (next?: string): string => {
-    const url = next === undefined || UNSAFE.test(next) ? null : resolveOnSite(next);
+export const safeNext = (next?: string | readonly string[]): string => {
+    const first = typeof next === 'string' ? next : next?.[0];
+    const url = first === undefined || UNSAFE.test(first) ? null : resolveOnSite(first);
 
     if (url === null || url.pathname.startsWith('//')) {
         return FALLBACK;

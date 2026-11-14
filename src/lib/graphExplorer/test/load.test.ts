@@ -5,7 +5,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { LoadError, loadDocument, RETRY_WAIT_MS, retryDelay, type WaitCause } from '../load.ts';
+import {
+    LoadError,
+    loadDocument,
+    RETRY_WAIT_MS,
+    retryDelay,
+    sharedLoad,
+    type Loadable,
+    type WaitCause,
+} from '../load.ts';
 import { readOntology } from '../wire.ts';
 import { ontologyBody } from './fixtures.ts';
 
@@ -208,4 +216,66 @@ test('a load that outlasts its overall bound fails as a timeout', async () => {
         { name: 'LoadError', reason: 'timeout' },
     );
     assert.ok(calls >= 1);
+});
+
+/** A shared load over a load the test settles by hand, and every state it published. */
+const sharedRig = () => {
+    const runs: { signal: AbortSignal; settle: (value: string) => void; fail: () => void }[] = [];
+    const states: (Loadable<string> | null)[] = [];
+    const shared = sharedLoad<string>({
+        load: ({ signal }) =>
+            new Promise((resolve, reject) => {
+                runs.push({
+                    signal,
+                    settle: resolve,
+                    fail: () => reject(new LoadError('failed', { reason: 'unreachable' })),
+                });
+            }),
+        publish: (state) => states.push(state),
+    });
+    return { runs, states, shared };
+};
+
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a shared load runs once however often it is started', async () => {
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    shared.start();
+    assert.equal(runs.length, 1);
+    runs[0]?.settle('terms');
+    await settled();
+    shared.start();
+    assert.equal(runs.length, 1);
+    assert.deepEqual(states.at(-1), { status: 'ready', value: 'terms' });
+});
+
+test('a shared load aborted while running starts again, and the aborted run publishes nothing', async () => {
+    // StrictMode mounts, cleans up and mounts again: start, abort, start.
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    shared.abort();
+    assert.equal(runs[0]?.signal.aborted, true);
+    assert.equal(states.at(-1), null);
+
+    shared.start();
+    assert.equal(runs.length, 2);
+    runs[0]?.settle('stale');
+    runs[1]?.settle('fresh');
+    await settled();
+    assert.deepEqual(states.at(-1), { status: 'ready', value: 'fresh' });
+    assert.ok(!states.some((state) => state?.status === 'ready' && state.value === 'stale'));
+});
+
+test('a finished shared load survives an abort, and only a retry restarts a failed one', async () => {
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    runs[0]?.fail();
+    await settled();
+    shared.abort();
+    assert.equal(states.at(-1)?.status, 'failed');
+    shared.start();
+    assert.equal(runs.length, 1);
+    shared.start(true);
+    assert.equal(runs.length, 2);
 });

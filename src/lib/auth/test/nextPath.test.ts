@@ -7,7 +7,10 @@ import test from 'node:test';
 
 import { safeNext } from '../nextPath.ts';
 
-const cases: [label: string, input: string | undefined, expected: string][] = [
+const cases: [label: string, input: string | readonly string[] | undefined, expected: string][] = [
+    ['a repeated next reads the first', ['/history', '//evil.example'], '/history'],
+    ['a repeated next whose first is unsafe', ['//evil.example', '/history'], '/studio'],
+    ['an empty list', [], '/studio'],
     ['protocol-relative', '//evil.example', '/studio'],
     ['an empty host, which does not parse', '//', '/studio'],
     ['backslash host', '/\\evil.example/x', '/studio'],

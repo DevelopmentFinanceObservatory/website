@@ -348,3 +348,91 @@ export async function loadDocument<TDocument>(
         },
     );
 }
+
+/** A wait before the next try: how long, and why the Graph API or the site asked for it. */
+export type Waiting = { readonly retryInMs: number; readonly cause: WaitCause };
+
+/** Loading, waiting before a retry (`waiting` set), loaded, or failed with a message and why. */
+export type Loadable<TValue> =
+    | { readonly status: 'loading'; readonly waiting: Waiting | null }
+    | { readonly status: 'ready'; readonly value: TValue }
+    | {
+          readonly status: 'failed';
+          readonly reason: FailureReason | 'unexpected';
+          readonly message: string;
+      };
+
+export const LOADING = { status: 'loading', waiting: null } as const;
+
+/** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
+export const loadFailure = (error: unknown): Loadable<never> => {
+    if (error instanceof LoadError) {
+        return { status: 'failed', reason: error.reason, message: error.message };
+    }
+    console.error('Graph Explorer: loading the model failed', error);
+    return {
+        status: 'failed',
+        reason: 'unexpected',
+        message: 'Something went wrong reading the model.',
+    };
+};
+
+/** One load shared by every screen that asks for it. */
+export type SharedLoad = {
+    /** Begins the load unless it is running or done; `retry` also begins it again after a failure. */
+    readonly start: (retry?: boolean) => void;
+    /** Stops a running load and forgets it, so the next `start` begins it again. */
+    readonly abort: () => void;
+};
+
+/**
+ * A load that runs once for every caller of `start`, publishing each state
+ * it passes through. `abort` forgets a load still running, publishing null,
+ * so a caller that aborts and starts again (as React's StrictMode does with
+ * an effect) gets a fresh load. A finished or failed load stays as it is.
+ */
+export function sharedLoad<TValue>({
+    load,
+    publish,
+}: {
+    load: (options: {
+        signal: AbortSignal;
+        onWait: (retryInMs: number, cause: WaitCause) => void;
+    }) => Promise<TValue>;
+    publish: (state: Loadable<TValue> | null) => void;
+}): SharedLoad {
+    let state: Loadable<TValue> | null = null;
+    let running: AbortController | null = null;
+    const set = (next: Loadable<TValue> | null) => {
+        state = next;
+        publish(next);
+    };
+
+    return {
+        start: (retry = false) => {
+            if (state !== null && !(retry && state.status === 'failed')) return;
+            const controller = new AbortController();
+            running = controller;
+            const update = (next: Loadable<TValue>) => {
+                if (controller.signal.aborted) return;
+                if (next.status !== 'loading') running = null;
+                set(next);
+            };
+            update(LOADING);
+            load({
+                signal: controller.signal,
+                onWait: (retryInMs, cause) =>
+                    update({ status: 'loading', waiting: { retryInMs, cause } }),
+            }).then(
+                (value) => update({ status: 'ready', value }),
+                (error: unknown) => update(loadFailure(error)),
+            );
+        },
+        abort: () => {
+            if (running === null) return;
+            running.abort();
+            running = null;
+            set(null);
+        },
+    };
+}

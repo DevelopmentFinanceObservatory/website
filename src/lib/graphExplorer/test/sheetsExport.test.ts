@@ -40,7 +40,7 @@ const request = {
     rows: [['EX-1', 'Gross']],
 };
 
-type Reply = { status: number; body?: unknown } | 'network_error';
+type Reply = { status: number; body?: unknown } | 'network_error' | 'timeout';
 
 type Run = {
     result: Awaited<ReturnType<typeof createGoogleSheet>>;
@@ -78,6 +78,9 @@ const run = async ({
         steps.push('fetch');
         calls.push({ url: String(url), init: init ?? {} });
         const reply = queue.shift() ?? { status: 500 };
+        if (reply === 'timeout') {
+            throw new DOMException('The operation timed out.', 'TimeoutError');
+        }
         if (reply === 'network_error') {
             throw new TypeError(`fetch failed ${GOOGLE_SECRET}`, {
                 cause: Object.assign(new Error(GOOGLE_SECRET), { code: 'ENOTFOUND' }),
@@ -304,6 +307,45 @@ test('Google answering 401 on create asks for Google access again', async () => 
     const outcome = await run({ replies: [{ status: 401 }] });
     assert.equal(outcome.result.status, 409);
     assert.equal(code(outcome.result.body), 'google_access_needed');
+    assertNoLeak(outcome);
+});
+
+test('Google answering 403 for a missing scope on create asks for Google access', async () => {
+    const outcome = await run({
+        replies: [
+            {
+                status: 403,
+                body: {
+                    error: {
+                        status: 'PERMISSION_DENIED',
+                        details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }],
+                    },
+                },
+            },
+        ],
+    });
+    assert.equal(outcome.result.status, 409);
+    assert.deepEqual(
+        outcome.result.body.ok
+            ? null
+            : [
+                  outcome.result.body.code,
+                  'reason' in outcome.result.body ? outcome.result.body.reason : null,
+              ],
+        ['google_access_needed', 'scope_missing'],
+    );
+    assert.equal(outcome.calls.length, 1);
+    assertNoLeak(outcome);
+});
+
+test('a create call that times out answers 504 google_unconfirmed, logged, without a dropdown call', async () => {
+    const outcome = await run({ replies: ['timeout'] });
+    assert.equal(outcome.result.status, 504);
+    assert.equal(code(outcome.result.body), 'google_unconfirmed');
+    assert.equal(outcome.calls.length, 1);
+    assert.deepEqual(outcome.logs, [
+        'sheets export: create request timed out; the sheet may exist {"status":null,"cause":"TimeoutError"}',
+    ]);
     assertNoLeak(outcome);
 });
 

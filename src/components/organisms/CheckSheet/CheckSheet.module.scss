@@ -129,6 +129,18 @@
     color: var(--color-red);
 }
 
+// What the check would refuse, shown before any request.
+.problems {
+    @include font-size(14px, 1.45);
+
+    display: flex;
+    flex-direction: column;
+    gap: rem(6);
+    padding-left: rem(18);
+    color: var(--color-red);
+    list-style: disc;
+}
+
 // The table scrolls inside its own box so the page does not scroll sideways.
 .scroll {
     max-width: 100%;

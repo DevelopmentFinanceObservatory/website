@@ -40,6 +40,8 @@ import {
     mapHeaders,
     parsePasted,
     rowsToCheck,
+    sheetProblems,
+    sheetProblemText,
     type ColumnSwitch,
     type ColumnTarget,
     type Mapping,
@@ -499,6 +501,7 @@ const CheckSteps = () => {
     const read = useMemo(() => mapHeaders(model, pasted.header), [model, pasted.header]);
     const mapping = useMemo(() => applySwitches(read, switches), [read, switches]);
     const rows = useMemo(() => rowsToCheck(mapping, pasted.rows), [mapping, pasted.rows]);
+    const problems = useMemo(() => sheetProblems(mapping, rows), [mapping, rows]);
     const example = useMemo(() => exampleSheet(model), [model]);
     const reading = text !== settled;
 
@@ -559,7 +562,7 @@ const CheckSteps = () => {
         }
     };
 
-    const hasRows = rows.length > 0;
+    const canCheck = rows.length > 0 && problems.length === 0;
     const repeated = mapping
         .filter((column) => column.duplicateOf !== null)
         .map(
@@ -639,10 +642,19 @@ const CheckSteps = () => {
 
             {pasted.header.length > 0 && (
                 <SheetSection title="3. Check against the graph">
+                    {problems.length > 0 && (
+                        <ul className={styles.problems}>
+                            {problems.map((problem) => (
+                                <li key={`${problem.code}:${problem.column ?? ''}`}>
+                                    {sheetProblemText(problem)}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     <div>
                         <Button
                             variant="dark"
-                            disabled={!hasRows || reading || run.status === 'running'}
+                            disabled={!canCheck || reading || run.status === 'running'}
                             onClick={check}
                         >
                             Check Against the Graph

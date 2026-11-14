@@ -79,28 +79,38 @@ const UNREACHED = 'The sheet could not be created. Check your connection and try
 
 const CONSENT_UNAVAILABLE = 'Google’s consent screen could not be opened. Try again.';
 
-/** The state the control opens in. After a refused trip, the consent screen is offered again. */
-const initialCreateState = (trip: ConsentTrip): CreateState =>
-    trip === 'refused' ? { kind: 'needs_google', message: NOT_GRANTED } : { kind: 'idle' };
-
 /** A state of the control and the draft query it was reached for. */
 export type CreateRecord = { readonly query: string; readonly state: CreateState };
 
 /**
- * The state shown for the draft `query`. It is the record's while the record
- * was made for that draft or a request is in flight, else the state the
- * control opens in. A request in flight shows on every draft, so one create runs at
- * a time. A request that finishes after an edit records its sheet against
- * the draft it was made for, so returning to that draft shows its link.
+ * The control's memory: the last state it reached, and the consent trip the
+ * page opened after while no answer has been judged against it.
  */
-export const shownCreateState = (
-    record: CreateRecord | null,
-    query: string,
-    trip: ConsentTrip,
-): CreateState =>
+export type CreateMemory = { readonly record: CreateRecord | null; readonly trip: ConsentTrip };
+
+/**
+ * The memory the page opens with, on the draft `query` the reader returned
+ * to. A refused trip offers the consent screen again on that draft only.
+ */
+export const openingMemory = (trip: ConsentTrip, query: string): CreateMemory => ({
+    record:
+        trip === 'refused'
+            ? { query, state: { kind: 'needs_google', message: NOT_GRANTED } }
+            : null,
+    trip,
+});
+
+/**
+ * The state shown for the draft `query`. It is the record's while the record
+ * was made for that draft or a request is in flight, else idle. A request in
+ * flight shows on every draft, so one create runs at a time. A request that
+ * finishes after an edit records its sheet against the draft it was made
+ * for, so returning to that draft shows its link.
+ */
+export const shownCreateState = (record: CreateRecord | null, query: string): CreateState =>
     record !== null && (record.query === query || record.state.kind === 'working')
         ? record.state
-        : initialCreateState(trip);
+        : { kind: 'idle' };
 
 /**
  * The state the handler's answer leads to, `failed` when there is no answer
@@ -123,6 +133,19 @@ export const answerState = (answer: SheetsAnswer | null, trip: ConsentTrip): Cre
             return { kind: 'failed', message: answer.message };
     }
 };
+
+/**
+ * The memory after the handler answered for the draft `query`. The trip
+ * judges this answer and no later one.
+ */
+export const rememberAnswer = (
+    memory: CreateMemory,
+    query: string,
+    answer: SheetsAnswer | null,
+): CreateMemory => ({
+    record: { query, state: answerState(answer, memory.trip) },
+    trip: 'none',
+});
 
 /** The state after the request to the handler threw. */
 export const UNREACHED_STATE: CreateState = Object.freeze({ kind: 'failed', message: UNREACHED });

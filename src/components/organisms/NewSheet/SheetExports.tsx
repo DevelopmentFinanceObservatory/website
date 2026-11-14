@@ -6,13 +6,13 @@ import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
 import { authClient } from '@/lib/auth/client';
 import {
-    answerState,
     CONSENT_FAILED_STATE,
     consentReturns,
+    rememberAnswer,
     shownCreateState,
     UNREACHED_STATE,
-    type ConsentTrip,
-    type CreateRecord,
+    type CreateMemory,
+    type CreateState,
 } from '@/lib/graphExplorer/googleConsent';
 import { DRIVE_FILE_SCOPE, type SheetsAnswer } from '@/lib/graphExplorer/googleSheet';
 import { SHEETS_ROUTE } from '@/lib/graphExplorer/paths';
@@ -57,9 +57,8 @@ type CreateGoogleSheetProps = {
     sheet: SheetDraft;
     /** The draft's query, which the control's states are recorded against. */
     query: string;
-    trip: ConsentTrip;
-    record: CreateRecord | null;
-    onRecord: (record: CreateRecord) => void;
+    memory: CreateMemory;
+    onMemory: (update: (memory: CreateMemory) => CreateMemory) => void;
 };
 
 /**
@@ -69,21 +68,18 @@ type CreateGoogleSheetProps = {
  * Again beside it when Better Auth failed to renew the access, and the
  * handler's message for every other refusal. After a trip through the
  * consent screen that the reader declined or that could not link, the
- * consent screen is offered again. Each state is recorded against the draft
- * it was reached for, and shown while that draft is current
- * (shownCreateState).
+ * consent screen is offered again on the draft the reader returned to. The
+ * trip judges the first answer after the return only (rememberAnswer). Each
+ * state is recorded against the draft it was reached for, and shown while
+ * that draft is current (shownCreateState).
  */
-export const CreateGoogleSheet = ({
-    sheet,
-    query,
-    trip,
-    record,
-    onRecord,
-}: CreateGoogleSheetProps) => {
-    const state = shownCreateState(record, query, trip);
+export const CreateGoogleSheet = ({ sheet, query, memory, onMemory }: CreateGoogleSheetProps) => {
+    const state = shownCreateState(memory.record, query);
+    const record = (reached: CreateState) =>
+        onMemory((last) => ({ ...last, record: { query, state: reached } }));
 
     const create = async () => {
-        onRecord({ query, state: { kind: 'working' } });
+        record({ kind: 'working' });
         try {
             const response = await fetch(SHEETS_ROUTE, {
                 method: 'POST',
@@ -91,14 +87,14 @@ export const CreateGoogleSheet = ({
                 body: JSON.stringify(sheetRequest(sheet)),
             });
             const answer = (await response.json().catch(() => null)) as SheetsAnswer | null;
-            onRecord({ query, state: answerState(answer, trip) });
+            onMemory((last) => rememberAnswer(last, query, answer));
         } catch {
-            onRecord({ query, state: UNREACHED_STATE });
+            record(UNREACHED_STATE);
         }
     };
 
     const consent = async () => {
-        if (!(await continueWithGoogle())) onRecord({ query, state: CONSENT_FAILED_STATE });
+        if (!(await continueWithGoogle())) record(CONSENT_FAILED_STATE);
     };
 
     const offersConsent = state.kind === 'needs_google' || state.kind === 'renewal_failed';

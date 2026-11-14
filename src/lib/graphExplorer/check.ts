@@ -5,10 +5,10 @@
  * result sentence, the findings as CSV rows, and an example sheet built from
  * a dataset pattern.
  */
+import { plural } from './counts.ts';
 import {
     bounded,
     GraphFailure,
-    REQUEST_TIMEOUT_MS,
     requestGraph,
     type FailureReason,
     type RequestOptions,
@@ -18,6 +18,7 @@ import { KIND_WORDS, type Model } from './model.ts';
 import { locateFinding, sheetRow, type Mapping } from './pasted.ts';
 import type { SentencePart } from './sentence.ts';
 import {
+    CHECK_DEADLINE_MS,
     CHECK_MAX_ROWS,
     findingProperty,
     isFindingCode,
@@ -41,6 +42,13 @@ export const CHECK_URL = '/api/graph/ontology/check';
  * every pair of halves.
  */
 export const CHECK_CHUNK_ROWS = 500;
+
+/**
+ * How long one check request may take: the Graph API's deadline, then time
+ * for its 503 or 504 to come back through the site's proxy, so the reader
+ * sees why it stopped and a 503's `Retry-After` is honoured.
+ */
+export const CHECK_REQUEST_TIMEOUT_MS = CHECK_DEADLINE_MS + 10_000;
 
 /** How long a whole check may take, waits for a build included. */
 export const CHECK_LIMIT_MS = 5 * 60_000;
@@ -74,7 +82,7 @@ export type CheckOptions = {
     /** Called before each wait, with what the wait is for. */
     readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
     readonly chunkRows?: number;
-    /** The bound on one request. REQUEST_TIMEOUT_MS by default. */
+    /** The bound on one request. CHECK_REQUEST_TIMEOUT_MS by default. */
     readonly requestTimeoutMs?: number;
     /** The bound on the whole check. CHECK_LIMIT_MS by default. */
     readonly limitMs?: number;
@@ -109,7 +117,7 @@ export async function checkRows(
     let size = largest;
     const bounds = bounded(signal, {
         limitMs: options.limitMs ?? CHECK_LIMIT_MS,
-        requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+        requestMs: options.requestTimeoutMs ?? CHECK_REQUEST_TIMEOUT_MS,
     });
     const requestOptions: RequestOptions = {
         ...options,
@@ -340,18 +348,45 @@ export function findingMessage(model: Model, finding: OntologyFinding): MessageP
 
 /** Levenshtein distance between two strings. */
 export function editDistance(a: string, b: string): number {
-    const row = Array.from({ length: b.length + 1 }, (_, j) => j);
-    for (let i = 1; i <= a.length; i += 1) {
-        let diagonal = row[0] ?? 0;
-        row[0] = i;
-        for (let j = 1; j <= b.length; j += 1) {
-            const above = row[j] ?? 0;
-            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-            row[j] = Math.min(above + 1, (row[j - 1] ?? 0) + 1, diagonal + cost);
-            diagonal = above;
-        }
+    return editDistanceWithin(a, b, Math.max(a.length, b.length));
+}
+
+/** Two rows of the distance table, reused by every count and grown when a string is longer. */
+let scratch = { previous: new Int32Array(64), row: new Int32Array(64) };
+
+/**
+ * Levenshtein distance between two strings when it is at most `bound`, else
+ * `bound + 1`. Only the cells within `bound` of the diagonal are worked out,
+ * and a row whose every cell passes `bound` ends the count.
+ */
+export function editDistanceWithin(a: string, b: string, bound: number): number {
+    const over = bound + 1;
+    if (Math.abs(a.length - b.length) > bound) return over;
+    if (scratch.row.length <= b.length) {
+        scratch = { previous: new Int32Array(b.length + 1), row: new Int32Array(b.length + 1) };
     }
-    return row[b.length] ?? 0;
+    let { previous, row } = scratch;
+    for (let j = 0; j <= b.length; j += 1) previous[j] = j < over ? j : over;
+    for (let i = 1; i <= a.length; i += 1) {
+        const from = Math.max(1, i - bound);
+        const to = Math.min(b.length, i + bound);
+        // The cells either side of the band read as past the bound.
+        row[from - 1] = from === 1 ? (i < over ? i : over) : over;
+        if (to < b.length) row[to + 1] = over;
+        let least = row[from - 1]!;
+        const char = a.charCodeAt(i - 1);
+        for (let j = from; j <= to; j += 1) {
+            let cell = previous[j - 1]! + (char === b.charCodeAt(j - 1) ? 0 : 1);
+            if (previous[j]! + 1 < cell) cell = previous[j]! + 1;
+            if (row[j - 1]! + 1 < cell) cell = row[j - 1]! + 1;
+            if (cell > over) cell = over;
+            row[j] = cell;
+            if (cell < least) least = cell;
+        }
+        if (least > bound) return over;
+        [previous, row] = [row, previous];
+    }
+    return previous[b.length]! < over ? previous[b.length]! : over;
 }
 
 /** The codes whose value a closer member of the property's value list may replace. */
@@ -365,6 +400,29 @@ const SUGGESTED: ReadonlySet<string> = new Set<FindingCode>([
  * the finding's value by edit distance to the member's label, dcid or code,
  * ignoring case. A tie keeps the list's order. Empty for other findings.
  */
+/** Each value list's members with their names in lower case, worked out once per model. */
+const memberNames = new WeakMap<
+    Model,
+    Map<string, readonly (readonly [string, readonly string[]])[]>
+>();
+
+const namesOf = (model: Model, list: string): readonly (readonly [string, readonly string[]])[] => {
+    let lists = memberNames.get(model);
+    if (lists === undefined) {
+        lists = new Map();
+        memberNames.set(model, lists);
+    }
+    let named = lists.get(list);
+    if (named === undefined) {
+        named = model.members(list).map((id) => {
+            const names = [id, model.label(id), ...(model.node(id)?.classification_code ?? [])];
+            return [id, names.map((name) => name.toLowerCase())] as const;
+        });
+        lists.set(list, named);
+    }
+    return named;
+};
+
 export function closestMembers(model: Model, finding: OntologyFinding, limit = 3): string[] {
     const property = findingProperty(finding);
     if (!SUGGESTED.has(finding.code) || property === null) return [];
@@ -372,18 +430,30 @@ export function closestMembers(model: Model, finding: OntologyFinding, limit = 3
     const list = model.valueListOfProperty(property);
     if (list === undefined) return [];
 
+    // The closest `limit` so far, in list order among ties. A member is measured only as far as
+    // it could still beat the farthest of them, so most members stop after a few cells.
     const typed = finding.value.toLowerCase();
-    const distance = (id: string): number => {
-        const names = [id, model.label(id), ...(model.node(id)?.classification_code ?? [])];
-        return Math.min(...names.map((name) => editDistance(typed, name.toLowerCase())));
-    };
-    return model
-        .members(list)
-        .filter((id) => id !== finding.value)
-        .map((id, order) => ({ id, order, score: distance(id) }))
-        .sort((a, b) => a.score - b.score || a.order - b.order)
-        .slice(0, limit)
-        .map(({ id }) => id);
+    const best: { id: string; score: number }[] = [];
+    for (const [id, names] of namesOf(model, list)) {
+        if (id === finding.value) continue;
+        const full = best.length >= limit;
+        let bound = full ? (best.at(-1)?.score ?? 0) - 1 : Infinity;
+        if (bound < 0) break;
+        let score = Infinity;
+        for (const lower of names) {
+            const cap = Math.min(bound, Math.max(typed.length, lower.length));
+            const distance = editDistanceWithin(typed, lower, cap);
+            if (distance <= cap) {
+                score = Math.min(score, distance);
+                bound = Math.min(bound, distance - 1);
+            }
+        }
+        if (score === Infinity) continue;
+        const at = best.findIndex((entry) => entry.score > score);
+        best.splice(at === -1 ? best.length : at, 0, { id, score });
+        if (best.length > limit) best.pop();
+    }
+    return best.map(({ id }) => id);
 }
 
 /** Where a finding sits in the pasted table. */
@@ -546,9 +616,6 @@ export const resultCounts = (
     warnings: result.findings.filter((finding) => finding.severity === 'warning').length,
 });
 
-const counted = (n: number, one: string): string =>
-    `${n.toLocaleString('en-GB')} ${n === 1 ? one : `${one}s`}`;
-
 const listed = (items: readonly string[]): string =>
     items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 
@@ -567,11 +634,11 @@ export function resultSentence(result: CheckResult, rows: number): string {
               ? `, checked against the graph at generation ${generations[0]}`
               : `, checked against graph generations ${listed(generations)}. The graph changed during the check`;
     const problems = [
-        ...(errors > 0 ? [counted(errors, 'error')] : []),
-        ...(warnings > 0 ? [counted(warnings, 'warning')] : []),
+        ...(errors > 0 ? [plural(errors, 'error')] : []),
+        ...(warnings > 0 ? [plural(warnings, 'warning')] : []),
     ];
     const lead = problems.length === 0 ? 'No problems' : problems.join(' and ');
-    return `${lead} in ${counted(rows, 'row')}${against}.`;
+    return `${lead} in ${plural(rows, 'row')}${against}.`;
 }
 
 /** A message as one line of text. Terms appear as their dcids. */

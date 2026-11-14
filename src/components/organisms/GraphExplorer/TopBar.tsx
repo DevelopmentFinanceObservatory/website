@@ -7,12 +7,12 @@ import { useCarried } from './ExploreContext';
 import { ExploreLink } from './ExploreLink';
 import SearchBox from './SearchBox';
 import styles from './TopBar.module.scss';
-import { useExplorerData, type Loadable } from './useExplorerData';
+import { useExplorerData } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import Spinner from '@/components/atoms/Spinner/Spinner';
 import { carriedHref, START_VIEW, switchBase } from '@/lib/graphExplorer/explore';
-import { waitText } from '@/lib/graphExplorer/load';
+import { waitText, type Loadable } from '@/lib/graphExplorer/load';
 import {
     CHECK_SHEET_PATH,
     NEW_SHEET_PATH,

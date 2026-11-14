@@ -3,8 +3,9 @@
  * Start a sheet page shows and exports, the closest existing dataset
  * pattern to copy, and CSV output.
  */
-import type { SheetRequest } from './googleSheet.ts';
+import { LIMITS, type SheetRequest, type SheetRequestColumn } from './googleSheet.ts';
 import type { Model } from './model.ts';
+import { classAndNarrower } from './newSheet.ts';
 import type { OntologyPattern } from './wire.ts';
 
 /** A reference column carries the source's own identifiers. A definition field is part of the StatVar definition. A property column holds one constraint property. */
@@ -40,6 +41,9 @@ export type SheetSpec = {
     readonly measuredProperty: string;
     readonly statType: string | null;
     readonly qualifier: string | null;
+    readonly denominator: string | null;
+    /** The properties each observation carries, such as who provided the money. */
+    readonly observationProperties: readonly string[];
     /** The constraint properties to give a column each. */
     readonly properties: readonly string[];
 };
@@ -77,6 +81,12 @@ export function sheetColumns(model: Model, spec: SheetSpec): readonly SheetColum
         column('measuredProperty', 'definition', spec.measuredProperty),
         column('statType', 'definition', spec.statType),
         column('measurementQualifier', 'definition', spec.qualifier),
+        column('measurementDenominator', 'definition', spec.denominator),
+        column(
+            'observationProperties',
+            'definition',
+            spec.observationProperties.length > 0 ? spec.observationProperties.join(',') : null,
+        ),
         ...spec.properties.map((property) =>
             column(property, 'property', null, lookupOf(model, property)),
         ),
@@ -91,9 +101,9 @@ export type ClosestPattern = {
 };
 
 /**
- * The pattern about the class that splits by the most of the chosen
- * properties. The larger StatVar count wins a tie, then the earlier dataset.
- * Null when no pattern shares any.
+ * The pattern about the class or a narrower class (classAndNarrower) that
+ * splits by the most of the chosen properties. The larger StatVar count wins
+ * a tie, then the earlier dataset. Null when no pattern shares any.
  */
 export function closestPattern(
     model: Model,
@@ -101,10 +111,11 @@ export function closestPattern(
     properties: readonly string[],
 ): ClosestPattern | null {
     const chosen = new Set(properties);
+    const about = classAndNarrower(model, classId);
     let best: ClosestPattern | null = null;
     for (const dataset of model.datasets) {
         for (const pattern of dataset.patterns) {
-            if (pattern.population_type !== classId) continue;
+            if (pattern.population_type === null || !about.has(pattern.population_type)) continue;
             const shared = pattern.constraint_properties.filter((id) => chosen.has(id)).length;
             if (shared === 0) continue;
             const better =
@@ -198,18 +209,59 @@ export const draftCsvRows = (draft: SheetDraft): (readonly string[])[] => [
     ...draft.rows,
 ];
 
-/** The draft as the Google sheet handler takes it. */
-export const sheetRequest = (draft: SheetDraft): SheetRequest => ({
-    title: draft.title,
-    generation: draft.generation,
-    columns: draft.columns.map((column) => ({
-        name: column.name,
-        kind: column.kind,
-        lookup: column.lookup && {
-            valueList: column.lookup.valueList,
-            members: column.lookup.members.map(({ id, label, code }) => ({ id, label, code })),
-            complete: column.lookup.complete,
-        },
-    })),
-    rows: draft.rows.map((row) => [...row]),
-});
+/** The byte length of a value as JSON, the measure the handler bounds the body by. */
+const jsonBytes = (value: unknown): number =>
+    new TextEncoder().encode(JSON.stringify(value)).length;
+
+/** A lookup cut to its first `size` members, marked partial when that drops any. */
+const cutLookup = (
+    lookup: NonNullable<SheetRequestColumn['lookup']>,
+    size: number,
+): NonNullable<SheetRequestColumn['lookup']> =>
+    lookup.members.length <= size
+        ? lookup
+        : { ...lookup, members: lookup.members.slice(0, size), complete: false };
+
+/**
+ * The draft as the Google sheet handler takes it, within the handler's
+ * bounds. Each value list keeps its first LIMITS.members members. While the
+ * body is over LIMITS.bodyBytes, the longest list is halved. A cut list is
+ * marked partial, so its block on the value-list tab says so.
+ */
+export const sheetRequest = (draft: SheetDraft): SheetRequest => {
+    const request: SheetRequest = {
+        title: draft.title,
+        generation: draft.generation,
+        columns: draft.columns.map((column) => ({
+            name: column.name,
+            kind: column.kind,
+            lookup:
+                column.lookup &&
+                cutLookup(
+                    {
+                        valueList: column.lookup.valueList,
+                        members: column.lookup.members.map(({ id, label, code }) => ({
+                            id,
+                            label,
+                            code,
+                        })),
+                        complete: column.lookup.complete,
+                    },
+                    LIMITS.members,
+                ),
+        })),
+        rows: draft.rows.map((row) => [...row]),
+    };
+    while (jsonBytes(request) > LIMITS.bodyBytes) {
+        const longest = request.columns.reduce<SheetRequestColumn | null>(
+            (best, column) =>
+                (column.lookup?.members.length ?? 0) > (best?.lookup?.members.length ?? 0)
+                    ? column
+                    : best,
+            null,
+        );
+        if (!longest?.lookup) break;
+        longest.lookup = cutLookup(longest.lookup, Math.floor(longest.lookup.members.length / 2));
+    }
+    return request;
+};

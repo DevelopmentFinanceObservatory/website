@@ -7,7 +7,7 @@ import LoadStatus from './LoadStatus';
 import ScopedList from './ScopedList';
 import StartScreen from './StartScreen';
 import TopBar from './TopBar';
-import { LOADING, useExplorerData } from './useExplorerData';
+import { useExplorerData } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import {
@@ -20,6 +20,7 @@ import {
     START_VIEW,
     type ExploreView,
 } from '@/lib/graphExplorer/explore';
+import { LOADING } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 
 /** The line naming a filtered dataset the model lacks, with a way to clear the filter. */

@@ -143,6 +143,25 @@ export type OntologyCheckRow = {
 /** The most rows one check request carries. */
 export const CHECK_MAX_ROWS = 2000;
 
+/** The most constraint properties one check row names. */
+export const CHECK_MAX_CONSTRAINT_PROPERTIES = 16;
+
+/** The most observation properties one check row names. */
+export const CHECK_MAX_OBSERVATION_PROPERTIES = 4;
+
+/** The longest dcid, and the longest string constraint value, a check row may send. */
+export const DCID_MAX_LENGTH = 512;
+
+/**
+ * The dcid syntax of a check row's definition fields, observation properties
+ * and constraint property names: segments of letters, digits, `_`, `.` and
+ * `-`, joined by `/`.
+ */
+export const DCID_SYNTAX = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/;
+
+/** How long the Graph API works on one check request before it answers 503 or 504. */
+export const CHECK_DEADLINE_MS = 30_000;
+
 /** POST /api/graph/ontology/check: 1 to CHECK_MAX_ROWS rows. */
 export type OntologyCheckRequest = {
     rows: readonly OntologyCheckRow[];

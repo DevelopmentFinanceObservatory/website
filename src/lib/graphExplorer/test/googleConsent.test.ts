@@ -8,6 +8,8 @@ import test from 'node:test';
 import {
     answerState,
     consentReturns,
+    openingMemory,
+    rememberAnswer,
     shownCreateState,
     takeConsentTrip,
     type ConsentTrip,
@@ -47,45 +49,48 @@ test('only the success address carries the mark, and both drop the last trip', (
 
 const created: CreateState = { kind: 'created', url: 'u', dropdownsFailed: false };
 
-for (const [name, record, trip, expected] of [
-    ['no record opens idle', null, 'none', 'idle'],
-    ['no record after a refused trip offers consent', null, 'refused', 'needs_google'],
-    ['no record after a granted trip opens idle', null, 'granted', 'idle'],
-    [
-        'a record for the current draft is shown',
-        { query: '?class=X', state: created },
-        'none',
-        'created',
-    ],
+for (const [name, record, expected] of [
+    ['no record opens idle', null, 'idle'],
+    ['a record for the current draft is shown', { query: '?class=X', state: created }, 'created'],
     [
         'a working record for the current draft is shown',
         { query: '?class=X', state: { kind: 'working' } },
-        'none',
         'working',
     ],
     [
         'a request in flight for another draft is shown',
         { query: '?class=Y', state: { kind: 'working' } },
-        'none',
         'working',
     ],
-    [
-        'a record for another draft is not shown',
-        { query: '?class=Y', state: created },
-        'none',
-        'idle',
-    ],
-    [
-        'a record for another draft after a refused trip',
-        { query: '?class=Y', state: created },
-        'refused',
-        'needs_google',
-    ],
-] as [string, { query: string; state: CreateState } | null, ConsentTrip, string][]) {
+    ['a record for another draft is not shown', { query: '?class=Y', state: created }, 'idle'],
+] as [string, { query: string; state: CreateState } | null, string][]) {
     test(`shown state: ${name}`, () => {
-        assert.equal(shownCreateState(record, '?class=X', trip).kind, expected);
+        assert.equal(shownCreateState(record, '?class=X').kind, expected);
     });
 }
+
+test('a refused trip offers consent on the draft the reader returned to, and on no other', () => {
+    const { record } = openingMemory('refused', '?class=X');
+    assert.equal(shownCreateState(record, '?class=X').kind, 'needs_google');
+    assert.equal(shownCreateState(record, '?class=Y').kind, 'idle');
+    for (const trip of ['none', 'granted'] as const) {
+        assert.equal(openingMemory(trip, '?class=X').record, null);
+    }
+});
+
+test('the trip judges the first answer after the return and no later one', () => {
+    const accessNeeded = {
+        ok: false,
+        code: 'google_access_needed',
+        reason: 'scope_missing',
+        message: 'm',
+    } as const;
+    const first = rememberAnswer(openingMemory('granted', '?class=X'), '?class=X', accessNeeded);
+    assert.equal(first.record?.state.kind, 'failed');
+    const second = rememberAnswer(first, '?class=X', accessNeeded);
+    assert.equal(second.record?.state.kind, 'needs_google');
+    assert.equal(second.trip, 'none');
+});
 
 const refusal = (code: string, reason?: string) =>
     ({ ok: false, code, reason, message: 'm' }) as SheetsAnswer;

@@ -12,7 +12,7 @@ import styles from './FocusPanel.module.scss';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
-import { count, plural, valueListLabel } from '@/lib/graphExplorer/counts';
+import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
     declaredDomain,
     outsideKind,
@@ -118,6 +118,50 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     );
 };
 
+/**
+ * One bar per dataset that uses a value list's members: how many of them,
+ * against the list's size. A StatVar names the members, so the list's use is
+ * read from them, as the dataset filter reads it.
+ */
+const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
+    const model = useModel();
+    const uses = model.memberUse(id);
+
+    return (
+        <section className={styles.section}>
+            <Label>Datasets that use its values</Label>
+            {uses.length === 0 ? (
+                <p className={styles.note}>No dataset uses its values.</p>
+            ) : (
+                <ul className={styles.uses}>
+                    {uses.map(({ dataset, values }) => {
+                        const percent = sharePercent(values.used, values.of);
+                        return (
+                            <li
+                                key={dataset}
+                                className={classNames(
+                                    styles.use,
+                                    lens.dataset !== null && lens.dataset !== dataset && styles.dim,
+                                )}
+                            >
+                                <TermLink id={dataset} />
+                                <span className={styles.mono}>{ofMembers(values)}</span>
+                                <span
+                                    className={styles.bar}
+                                    role="img"
+                                    aria-label={`${percent}% of its values`}
+                                >
+                                    <i style={{ width: `${Math.max(1, percent)}%` }} />
+                                </span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </section>
+    );
+};
+
 /** A term the model holds: what it is, its names, its definition, its source and its use. */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
@@ -206,7 +250,11 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     </div>
                 </section>
             )}
-            <UsageBars id={id} lens={lens} />
+            {kind === 'valueList' ? (
+                <MemberBars id={id} lens={lens} />
+            ) : (
+                <UsageBars id={id} lens={lens} />
+            )}
             {kind === 'class' && (
                 <div>
                     <SheetLink href={sheetHref({ classId: id }, carried)}>

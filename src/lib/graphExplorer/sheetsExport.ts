@@ -109,19 +109,29 @@ export const errorCause = (error: unknown): string => {
 const GOOGLE_ENUM = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 /**
- * A Google refusal named for the log: the body's `error.status` and each
- * `error.details[].reason`, such as `PERMISSION_DENIED SERVICE_DISABLED`,
- * or undefined when the body carries neither. Only values shaped as Google's
- * enums are logged, so nothing else from the body reaches the log.
+ * A Google refusal's enums: the body's `error.status` and each
+ * `error.details[].reason`, such as `PERMISSION_DENIED SERVICE_DISABLED`.
+ * Only values shaped as Google's enums are kept, so nothing else from the
+ * body reaches the log.
  */
-const googleRefusalCause = async (response: Response): Promise<string | undefined> => {
+const googleRefusalEnums = async (response: Response): Promise<readonly string[]> => {
     const error = asRecord(asRecord(await response.json().catch(() => null))?.error);
     const details: unknown[] = Array.isArray(error?.details) ? error.details : [];
-    const parts = [error?.status, ...details.map((detail) => asRecord(detail)?.reason)].filter(
+    return [error?.status, ...details.map((detail) => asRecord(detail)?.reason)].filter(
         (part): part is string => typeof part === 'string' && GOOGLE_ENUM.test(part),
     );
-    return parts.length > 0 ? parts.join(' ') : undefined;
 };
+
+/** The enums joined for the log, or undefined when the body carries none. */
+const causeOf = (enums: readonly string[]): string | undefined =>
+    enums.length > 0 ? enums.join(' ') : undefined;
+
+/**
+ * Google's reason for a token that lacks a scope the call needs. Better Auth
+ * stores the union of every scope a Google account was granted, so the stored
+ * list can name `drive.file` when the token in hand lacks it.
+ */
+const SCOPE_INSUFFICIENT = 'ACCESS_TOKEN_SCOPE_INSUFFICIENT';
 
 export type GoogleAccessDeps = {
     /** The signed-in reader's linked accounts (Better Auth's listUserAccounts). */
@@ -179,7 +189,7 @@ export type SheetsExportDeps = {
     /**
      * Receives a message, the HTTP status Google answered and the cause. For
      * a thrown call the cause is the error's name and codes (errorCause), and
-     * for a Google refusal the enums in its error body (googleRefusalCause).
+     * for a Google refusal the enums in its error body (googleRefusalEnums).
      * It receives no token or body.
      */
     log: (message: string, fields: { status: number | null; cause?: string }) => void;
@@ -197,6 +207,17 @@ const googleFailed = refused(502, {
     ok: false,
     code: 'google_failed',
     message: 'Google could not create the sheet. Try again in a minute.',
+});
+
+/**
+ * The create call outlived its timeout. Google may have made the sheet all
+ * the same, so a retry could make a second one.
+ */
+const createUnconfirmed = refused(504, {
+    ok: false,
+    code: 'google_unconfirmed',
+    message:
+        'Google did not confirm the sheet in time, and it may already be in your Google Drive. Look there before you try again.',
 });
 
 const accessNeeded = (reason: GoogleAccessReason): SheetsExportResult =>
@@ -236,9 +257,11 @@ const readCreated = async (response: Response): Promise<{ id: string; url: strin
 /**
  * The handler's answer. A reason to grant Google access answers 409
  * `google_access_needed`, and so does Google answering 401 on create, since
- * the token does not work. A failed token read in Better Auth answers 502
- * `google_renewal_failed`, a failed auth call 502 `auth_failed`, and any
- * other Google failure 502 `google_failed`, each logged with its cause. When
+ * the token does not work, or 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT`, since
+ * the token lacks `drive.file`. A failed token read in Better Auth answers
+ * 502 `google_renewal_failed`, a failed auth call 502 `auth_failed`, a create
+ * call that timed out 504 `google_unconfirmed`, and any other Google failure
+ * 502 `google_failed`, each logged with its cause. When
  * the sheet exists but its dropdowns could not be added, the answer is the
  * sheet, with `dropdowns: 'failed'`.
  */
@@ -302,18 +325,26 @@ export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsE
             createSpreadsheetBody(request, deps.today),
         );
     } catch (error) {
-        deps.log('sheets export: create request failed', {
-            status: null,
-            cause: errorCause(error),
-        });
-        return googleFailed;
+        const timedOut = error instanceof Error && error.name === 'TimeoutError';
+        deps.log(
+            timedOut
+                ? 'sheets export: create request timed out; the sheet may exist'
+                : 'sheets export: create request failed',
+            { status: null, cause: errorCause(error) },
+        );
+        return timedOut ? createUnconfirmed : googleFailed;
     }
     if (!created.ok) {
+        const enums = await googleRefusalEnums(created);
         deps.log('sheets export: Google refused create', {
             status: created.status,
-            cause: await googleRefusalCause(created),
+            cause: causeOf(enums),
         });
-        return created.status === 401 ? accessNeeded('token_expired') : googleFailed;
+        if (created.status === 401) return accessNeeded('token_expired');
+        if (created.status === 403 && enums.includes(SCOPE_INSUFFICIENT)) {
+            return accessNeeded('scope_missing');
+        }
+        return googleFailed;
     }
     const sheet = await readCreated(created);
     if (sheet === null) {
@@ -333,7 +364,7 @@ export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsE
         if (!updated.ok) {
             deps.log('sheets export: Google refused dropdowns', {
                 status: updated.status,
-                cause: await googleRefusalCause(updated),
+                cause: causeOf(await googleRefusalEnums(updated)),
             });
             return { status: 200, body: { ok: true, url: sheet.url, dropdowns: 'failed' } };
         }

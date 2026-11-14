@@ -18,6 +18,7 @@ import {
 } from '../newSheet.ts';
 import { readOntology, readProvenances } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { withPatternClass } from './sheetFixtures.ts';
 
 const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
 const read = (query: string) => readSheetQuery(new URLSearchParams(query));
@@ -182,4 +183,28 @@ test('split options: in use first, then unused ones declared for the class with 
     assert.equal(netting?.valueList, 'NettingBasisEnum');
     assert.equal(netting?.members, 2);
     assert.equal(netting?.datasets[0], 'provenance/OECDDAC1');
+});
+
+test('a named pattern about no kind of thing is named as unknown and the default class used', () => {
+    const classless = withPatternClass('provenance/OECDDAC2A', 3, null);
+    const selection = resolveSheet(classless, read('dataset=provenance/OECDDAC2A&pattern=3'));
+    assert.equal(selection?.classId, 'FinancialFlow');
+    assert.equal(selection?.templateNamed, false);
+    assert.deepEqual(selection?.unknown, [
+        { param: 'pattern', id: 'provenance/OECDDAC2A', index: 3 },
+    ]);
+});
+
+test('a measured property offered through a narrower class finds its template there', () => {
+    // FinancialFlow and FinancialObligation are narrower than FinancingEvent.
+    const broad = withPatternClass('provenance/ONEClimateFinance', 0, 'FinancingEvent');
+    const selection = resolveSheet(broad, read('class=FinancingEvent&measured=grantEquivalent'));
+    assert.ok(selection);
+    assert.ok(selection.measuredOptions.includes('grantEquivalent'));
+    assert.equal(selection.measured, 'grantEquivalent');
+    assert.deepEqual(
+        [selection.template?.dataset, selection.template?.index],
+        ['provenance/OECDDAC1', 3],
+    );
+    assert.equal(selection.spec.statType, selection.template?.pattern.stat_type);
 });

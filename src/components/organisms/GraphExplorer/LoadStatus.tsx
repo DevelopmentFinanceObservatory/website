@@ -1,9 +1,8 @@
 import styles from './LoadStatus.module.scss';
-import type { Loadable } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import Spinner from '@/components/atoms/Spinner/Spinner';
-import { BUILDING, waitText } from '@/lib/graphExplorer/load';
+import { BUILDING, waitText, type Loadable } from '@/lib/graphExplorer/load';
 
 /** What is loading: the DFO model, or the base Data Commons terms list. */
 type Subject = 'model' | 'terms';

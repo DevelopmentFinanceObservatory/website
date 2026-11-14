@@ -1,7 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
-
 import { useModel } from './ExploreContext';
 import { ExploreLink } from './ExploreLink';
 import { plural } from '@/lib/graphExplorer/counts';
@@ -14,10 +12,7 @@ import styles from './StartScreen.module.scss';
  */
 const StartScreen = () => {
     const model = useModel();
-    const propertyCount = useMemo(
-        () => model.scopedList({ kind: 'instance' }, { kind: 'none' }).total,
-        [model],
-    );
+    const propertyCount = model.instanceProperties().length;
 
     return (
         <div className={styles.start}>

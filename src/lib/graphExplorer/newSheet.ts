@@ -15,7 +15,8 @@
  * properties come from the pattern, else from the class's most-used pattern. A
  * `class`, `measured` or `split` id, or a `dataset` and `pattern` pair, the
  * model does not offer takes the same default, and the selection names it
- * (SheetSelection.unknown).
+ * (SheetSelection.unknown). A pattern about no kind of thing counts as one the
+ * model does not offer.
  */
 import {
     queryString,
@@ -147,18 +148,33 @@ const named = (model: Model, ref: PatternRef | null): PlacedPattern | null => {
 };
 
 /**
- * The pattern about the class with the most StatVars, optionally with one
- * measured property. The earlier dataset and pattern win a tie.
+ * The class and every class narrower than it. A pattern about any of them
+ * counts as about the class, the rule Model.propertiesOf counts roles by, so
+ * the options the page offers and the patterns it picks agree.
+ */
+export const classAndNarrower = (model: Model, classId: string): ReadonlySet<string> => {
+    const found = new Set([classId]);
+    for (const id of found) {
+        for (const child of model.narrower(id)) found.add(child);
+    }
+    return found;
+};
+
+/**
+ * The pattern about the class or a narrower class (classAndNarrower) with the
+ * most StatVars, optionally with one measured property. The earlier dataset
+ * and pattern win a tie.
  */
 export const mostUsedPattern = (
     model: Model,
     classId: string,
     measured?: string,
 ): PlacedPattern | null => {
+    const about = classAndNarrower(model, classId);
     let best: PlacedPattern | null = null;
     for (const dataset of model.datasets) {
         for (const [index, pattern] of dataset.patterns.entries()) {
-            if (pattern.population_type !== classId) continue;
+            if (pattern.population_type === null || !about.has(pattern.population_type)) continue;
             if (measured !== undefined && pattern.measured_property !== measured) continue;
             if (best === null || pattern.stat_var_count > best.pattern.stat_var_count) {
                 best = place({ dataset: dataset.dcid, index }, pattern);
@@ -231,7 +247,8 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     const properties = Object.freeze([...new Set(wanted)].filter((id) => offered.has(id)));
 
     const unknown: UnknownChoice[] = [];
-    if (query.from !== null && fromUrl === null) {
+    // A pattern about no kind of thing cannot start a sheet, so it counts as unknown too.
+    if (query.from !== null && (fromUrl === null || fromUrl.pattern.population_type === null)) {
         unknown.push({ param: 'pattern', id: query.from.dataset, index: query.from.index });
     }
     if (query.classId !== null && query.classId !== classId) {
@@ -257,6 +274,10 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
             measuredProperty: measured,
             statType: template?.pattern.stat_type ?? null,
             qualifier: template?.pattern.measurement_qualifier ?? null,
+            denominator: template?.pattern.measurement_denominator ?? null,
+            observationProperties: Object.freeze([
+                ...(template?.pattern.observation_properties ?? []),
+            ]),
             properties,
         }),
         unknown: Object.freeze(unknown.map((choice) => Object.freeze(choice))),

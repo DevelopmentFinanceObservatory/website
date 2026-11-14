@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { readSheetRequest } from '../googleSheet.ts';
+import { LIMITS, readSheetRequest } from '../googleSheet.ts';
+import { readSheetQuery, resolveSheet } from '../newSheet.ts';
 import {
     closestPattern,
     csvFileName,
@@ -20,6 +21,7 @@ import {
 } from '../sheet.ts';
 import { readOntology, readProvenances } from '../wire.ts';
 import { ontologyBody, provenancesBody } from './fixtures.ts';
+import { withPatternClass } from './sheetFixtures.ts';
 
 const model = buildModel(readOntology(ontologyBody()), readProvenances(provenancesBody()));
 
@@ -28,6 +30,8 @@ const spec = {
     measuredProperty: 'amount',
     statType: 'measuredValue',
     qualifier: 'Nominal',
+    denominator: null,
+    observationProperties: ['financingProvider', 'financingRecipient'],
     properties: ['nettingBasis', 'dac1AidType', 'financingProvider'],
 };
 
@@ -42,20 +46,22 @@ test('sheet columns run reference, definition, then one per chosen property with
             ['measuredProperty', 'definition', 'amount'],
             ['statType', 'definition', 'measuredValue'],
             ['measurementQualifier', 'definition', 'Nominal'],
+            ['measurementDenominator', 'definition', null],
+            ['observationProperties', 'definition', 'financingProvider,financingRecipient'],
             ['nettingBasis', 'property', null],
             ['dac1AidType', 'property', null],
             ['financingProvider', 'property', null],
         ],
     );
 
-    const netting = columns[6]?.lookup;
+    const netting = columns[8]?.lookup;
     assert.equal(netting?.valueList, 'NettingBasisEnum');
     assert.deepEqual(netting?.members, [
         { id: 'Gross', label: 'gross', code: null },
         { id: 'Net', label: 'net', code: null },
     ]);
 
-    const dac1 = columns[7]?.lookup;
+    const dac1 = columns[9]?.lookup;
     assert.equal(dac1?.valueList, 'DAC1AidTypeEnum');
     assert.equal(dac1?.members.length, 17);
     assert.deepEqual(dac1?.members[0], {
@@ -64,7 +70,7 @@ test('sheet columns run reference, definition, then one per chosen property with
         code: '5',
     });
 
-    assert.equal(columns[8]?.lookup, null);
+    assert.equal(columns[10]?.lookup, null);
 });
 
 test('the closest pattern shares the most properties; a tie goes to the larger StatVar count', () => {
@@ -120,11 +126,18 @@ test('example rows fill definition fields and spread property values across each
         ],
     );
     for (const row of rows) {
-        assert.deepEqual(row.slice(2, 6), ['FinancialFlow', 'amount', 'measuredValue', 'Nominal']);
+        assert.deepEqual(row.slice(2, 8), [
+            'FinancialFlow',
+            'amount',
+            'measuredValue',
+            'Nominal',
+            '',
+            'financingProvider,financingRecipient',
+        ]);
     }
     // nettingBasis has two members, DAC1AidTypeEnum 17; financingProvider has no value list.
     assert.deepEqual(
-        rows.map((row) => row.slice(6)),
+        rows.map((row) => row.slice(8)),
         [
             ['Gross', 'DAC1AidType5', ''],
             ['Gross', 'DAC1AidType1020', ''],
@@ -134,8 +147,19 @@ test('example rows fill definition fields and spread property values across each
 });
 
 test('an empty definition field stays empty in the example rows', () => {
-    const rows = exampleRows(sheetColumns(model, { ...spec, statType: null, properties: [] }));
-    assert.deepEqual(rows[0], ['EX-1', 'Example row 1', 'FinancialFlow', 'amount', '', 'Nominal']);
+    const rows = exampleRows(
+        sheetColumns(model, { ...spec, statType: null, observationProperties: [], properties: [] }),
+    );
+    assert.deepEqual(rows[0], [
+        'EX-1',
+        'Example row 1',
+        'FinancialFlow',
+        'amount',
+        '',
+        'Nominal',
+        '',
+        '',
+    ]);
 });
 
 test('a CSV file name is the label in lower case with hyphens', () => {
@@ -173,4 +197,97 @@ test('the sheet draft names the class, and both exports carry its columns and ro
         ]),
     );
     assert.deepEqual(request.rows, draft.rows);
+});
+
+/** The draft the Start a sheet page makes for a query. */
+const draftFor = (query: string) => {
+    const selection = resolveSheet(model, readSheetQuery(new URLSearchParams(query)));
+    assert.ok(selection);
+    return sheetDraft(model, { ...selection.spec, classId: selection.classId });
+};
+
+for (const [query, field, value] of [
+    // The default template, DAC1 pattern 0, gives financingProvider an observation role.
+    ['', 'observationProperties', 'financingProvider'],
+    ['dataset=provenance/OECDDAC2A&pattern=3', 'measurementDenominator', 'Count_Person'],
+    [
+        'dataset=provenance/OECDDAC2A&pattern=3',
+        'observationProperties',
+        'financingProvider,financingRecipient',
+    ],
+] as const) {
+    test(`both exports of "${query}" carry ${field} ${value}`, () => {
+        const draft = draftFor(query);
+        const [header = [], ...rows] = draftCsvRows(draft);
+        const at = header.indexOf(field);
+        assert.ok(at >= 0, field);
+        assert.deepEqual(
+            rows.map((row) => row[at]),
+            [value, value, value],
+        );
+        const request = readSheetRequest(sheetRequest(draft));
+        assert.ok(request);
+        assert.equal(request.columns[at]?.name, field);
+        assert.deepEqual(
+            request.rows.map((row) => row[at]),
+            [value, value, value],
+        );
+    });
+}
+
+/** A draft whose one property column lists `count` members, each label and code `textLength` long. */
+const draftWithList = (count: number, textLength: number) => {
+    const draft = sheetDraft(model, { ...spec, properties: ['nettingBasis'] });
+    const text = 'x'.repeat(textLength);
+    return {
+        ...draft,
+        columns: draft.columns.map((column) =>
+            column.lookup === null
+                ? column
+                : {
+                      ...column,
+                      lookup: {
+                          ...column.lookup,
+                          members: Array.from({ length: count }, (_, at) => ({
+                              id: `M${at}`,
+                              label: text,
+                              code: text,
+                          })),
+                      },
+                  },
+        ),
+    };
+};
+
+test('a value list over the member cap is cut to it and marked partial, so the handler takes it', () => {
+    const request = sheetRequest(draftWithList(LIMITS.members + 1, 1));
+    const lookup = request.columns.find((column) => column.lookup !== null)?.lookup;
+    assert.equal(lookup?.members.length, LIMITS.members);
+    assert.equal(lookup?.complete, false);
+    assert.ok(readSheetRequest(JSON.parse(JSON.stringify(request))));
+});
+
+test('a body over the byte cap halves its longest list until it fits', () => {
+    const request = sheetRequest(draftWithList(LIMITS.members, LIMITS.term));
+    const bytes = new TextEncoder().encode(JSON.stringify(request)).length;
+    assert.ok(bytes <= LIMITS.bodyBytes, String(bytes));
+    const lookup = request.columns.find((column) => column.lookup !== null)?.lookup;
+    assert.equal(lookup?.members.length, LIMITS.members / 2);
+    assert.equal(lookup?.complete, false);
+});
+
+test('a list within both caps is sent whole', () => {
+    const lookup = sheetRequest(draftWithList(LIMITS.members, 1)).columns.find(
+        (column) => column.lookup !== null,
+    )?.lookup;
+    assert.equal(lookup?.members.length, LIMITS.members);
+    assert.equal(lookup?.complete, true);
+});
+
+test('the closest pattern counts patterns about a narrower class, as the offered options do', () => {
+    // FinancialFlow and FinancialObligation are narrower than FinancingEvent.
+    const broad = withPatternClass('provenance/ONEClimateFinance', 0, 'FinancingEvent');
+    const closest = closestPattern(broad, 'FinancingEvent', ['dac1AidType']);
+    assert.equal(closest?.dataset, 'provenance/OECDDAC1');
+    assert.equal(closest?.pattern.stat_var_count, 209);
 });

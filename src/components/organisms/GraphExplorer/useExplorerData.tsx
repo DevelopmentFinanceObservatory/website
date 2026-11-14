@@ -1,13 +1,15 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useCarried } from './ExploreContext';
 
 import {
-    LoadError,
+    LOADING,
     loadDocument,
-    type FailureReason,
+    loadFailure,
+    sharedLoad,
+    type Loadable,
     type WaitCause,
 } from '@/lib/graphExplorer/load';
 import { buildModel, type Model } from '@/lib/graphExplorer/model';
@@ -21,34 +23,6 @@ import {
 const ONTOLOGY_URL = '/api/graph/ontology';
 const PROVENANCES_URL = '/api/graph/ontology/provenances';
 const TERMS_URL = '/api/graph/ontology/terms';
-
-/** A wait before the next try: how long, and why the Graph API or the site asked for it. */
-export type Waiting = { readonly retryInMs: number; readonly cause: WaitCause };
-
-/** Loading, waiting before a retry (`waiting` set), loaded, or failed with a message and why. */
-export type Loadable<TValue> =
-    | { readonly status: 'loading'; readonly waiting: Waiting | null }
-    | { readonly status: 'ready'; readonly value: TValue }
-    | {
-          readonly status: 'failed';
-          readonly reason: FailureReason | 'unexpected';
-          readonly message: string;
-      };
-
-export const LOADING = { status: 'loading', waiting: null } as const;
-
-/** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
-const failure = (error: unknown): Loadable<never> => {
-    if (error instanceof LoadError) {
-        return { status: 'failed', reason: error.reason, message: error.message };
-    }
-    console.error('Graph Explorer: loading the model failed', error);
-    return {
-        status: 'failed',
-        reason: 'unexpected',
-        message: 'Something went wrong reading the model.',
-    };
-};
 
 type LoadedDocuments = {
     readonly model: Loadable<Model>;
@@ -71,8 +45,13 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
     const [model, setModel] = useState<Loadable<Model>>(LOADING);
     const [attempt, setAttempt] = useState(0);
     const [terms, setTerms] = useState<Loadable<OntologyTerms> | null>(null);
-    const termsState = useRef<Loadable<OntologyTerms> | null>(null);
-    const termsAbort = useRef<AbortController | null>(null);
+    const [termsLoad] = useState(() =>
+        sharedLoad({
+            load: (options) =>
+                loadDocument('Base Data Commons terms', TERMS_URL, readTerms, options),
+            publish: setTerms,
+        }),
+    );
 
     useEffect(() => {
         const controller = new AbortController();
@@ -100,43 +79,23 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
             } catch (error) {
                 if (controller.signal.aborted) return;
                 controller.abort();
-                setModel(failure(error));
+                setModel(loadFailure(error));
             }
         })();
 
         return () => controller.abort();
     }, [attempt]);
 
-    useEffect(() => () => termsAbort.current?.abort(), []);
+    // An abort forgets a load still running, so StrictMode's second mount starts it again.
+    useEffect(() => () => termsLoad.abort(), [termsLoad]);
 
     const retryModel = useCallback(() => {
         setModel(LOADING);
         setAttempt((n) => n + 1);
     }, []);
 
-    const loadTerms = useCallback((retry = false) => {
-        const current = termsState.current;
-        if (current !== null && !(retry && current.status === 'failed')) return;
-        const controller = new AbortController();
-        termsAbort.current = controller;
-        const update = (next: Loadable<OntologyTerms>) => {
-            if (controller.signal.aborted) return;
-            termsState.current = next;
-            setTerms(next);
-        };
-        update(LOADING);
-        loadDocument('Base Data Commons terms', TERMS_URL, readTerms, {
-            signal: controller.signal,
-            onWait: (retryInMs, cause) =>
-                update({ status: 'loading', waiting: { retryInMs, cause } }),
-        }).then(
-            (value) => update({ status: 'ready', value }),
-            (error: unknown) => update(failure(error)),
-        );
-    }, []);
-
     return (
-        <DocumentsContext.Provider value={{ model, retryModel, terms, loadTerms }}>
+        <DocumentsContext.Provider value={{ model, retryModel, terms, loadTerms: termsLoad.start }}>
             {children}
         </DocumentsContext.Provider>
     );
