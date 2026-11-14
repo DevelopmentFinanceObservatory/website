@@ -15,7 +15,7 @@ type SessionUser = NonNullable<Awaited<ReturnType<typeof getUser>>>;
 
 /**
  * The allowlisted email domains, read once from `GRAPH_EXPLORER_EMAIL_DOMAINS`
- * when the module first loads; an empty list is logged then, once.
+ * when the module first loads. An empty list is logged then, once.
  */
 const READER_DOMAINS = parseEmailDomains(process.env.GRAPH_EXPLORER_EMAIL_DOMAINS);
 const allowlistWarning = emptyAllowlistWarning(READER_DOMAINS);
@@ -30,7 +30,7 @@ export const readerDecision = async (): Promise<ReaderDecision<SessionUser>> =>
 
 /**
  * The gate for a page or layout: a signed-out visitor is redirected to
- * `signIn`; anyone signed in gets the decision, admitted or refused.
+ * `signIn`. Anyone signed in gets the decision, admitted or refused.
  */
 export const requireReader = async ({
     signIn,

@@ -28,7 +28,7 @@ export type SearchResult = {
 };
 
 export type SearchOptions = {
-    /** The terms list; when given, base terms outside the model are searched too. */
+    /** The terms list. When given, base terms outside the model are searched too. */
     readonly baseTerms?: OntologyTerms;
     readonly limit?: number;
 };
@@ -53,7 +53,7 @@ const tier = (hit: SearchHit): number => (!hit.inModel ? 2 : hit.base ? 1 : 0);
 
 /**
  * Hits for `query`, case-insensitive, ranked exact, then prefix, then
- * substring; within a rank, instance terms before base terms, then by label.
+ * substring. Within a rank, instance terms come before base terms, then by label.
  */
 export function search(model: Model, query: string, options: SearchOptions = {}): SearchResult {
     const { baseTerms, limit = 12 } = options;
@@ -134,5 +134,5 @@ export const enterChoice = (active: number, count: number, shown: boolean): numb
     return active >= 0 && active < count ? active : 0;
 };
 
-/** What Escape does: close the list while it is shown, else clear the query. */
+/** What Escape does. It closes the list while the list is shown, else clears the query. */
 export const escapeAction = (shown: boolean): 'close' | 'clear' => (shown ? 'close' : 'clear');

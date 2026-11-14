@@ -37,7 +37,7 @@ export type Loadable<TValue> =
 
 export const LOADING = { status: 'loading', waiting: null } as const;
 
-/** A load failure as the screens show it; an error that is no LoadError is logged with its cause. */
+/** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
 const failure = (error: unknown): Loadable<never> => {
     if (error instanceof LoadError) {
         return { status: 'failed', reason: error.reason, message: error.message };

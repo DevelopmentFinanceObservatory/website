@@ -2,7 +2,7 @@
  * Requests to the Graph API through the site's proxy, with one rule for
  * waiting and one mapping of failures. The Graph API builds the ontology
  * documents once per graph generation and answers 503 with `Retry-After`
- * while a build runs; the proxy answers 429 with `Retry-After` once a
+ * while a build runs, and the proxy answers 429 with `Retry-After` once a
  * reader's allowance of calls is spent. Either is waited out for up to a
  * minute. Every other failure becomes an error naming the request and what
  * went wrong, including a response whose shape the guard refuses.
@@ -67,7 +67,7 @@ export type FailureDetails<TReason extends string> = {
     readonly cause?: unknown;
 };
 
-/** A failed Graph API request: `message` for the reader, the rest for code. */
+/** A failed Graph API request. `message` is for the reader, the rest for code. */
 export class GraphFailure<TReason extends string> extends Error {
     readonly reason: TReason;
     readonly status: number | null;
@@ -81,7 +81,7 @@ export class GraphFailure<TReason extends string> extends Error {
     }
 }
 
-/** A document that could not be loaded; `message` says which and why. */
+/** A document that could not be loaded. `message` says which and why. */
 export class LoadError extends GraphFailure<FailureReason> {
     override name = 'LoadError';
 }
@@ -120,8 +120,8 @@ const retryAfterMs = (header: string, nowMs: number): number => {
 };
 
 /**
- * How long to wait before asking again, or null to stop: only a 503 or a
- * 429 that carries `Retry-After` is retried, and never past RETRY_WAIT_MS
+ * How long to wait before asking again, or null to stop. Only a 503 or a
+ * 429 that carries `Retry-After` is retried, and not past RETRY_WAIT_MS
  * after the first wait.
  */
 export const retryDelay = ({
@@ -177,11 +177,11 @@ export type RequestWords = {
     readonly answered: string;
 };
 
-/** One request: where it goes, and how its answers are read. */
+/** One request, with where it goes and how its answers are read. */
 export type GraphRequest<TAnswer> = {
     readonly url: string;
     readonly init?: Omit<RequestInit, 'signal'>;
-    /** The answer a 200's body gives; a WireShapeError is a `shape` failure. */
+    /** The answer a 200's body gives. A WireShapeError is a `shape` failure. */
     readonly read: (body: unknown) => TAnswer;
     /** The answer a failing status gives, or null to fail with it. */
     readonly refusal?: (status: number, problem: string | null) => TAnswer | null;
@@ -307,9 +307,9 @@ export async function requestGraph<TAnswer>(
 
 export type LoadOptions = {
     readonly signal?: AbortSignal;
-    /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
+    /** The bound on one request. REQUEST_TIMEOUT_MS by default. */
     readonly requestTimeoutMs?: number;
-    /** The bound on the whole load; LOAD_LIMIT_MS by default. */
+    /** The bound on the whole load. LOAD_LIMIT_MS by default. */
     readonly limitMs?: number;
     /** Called before each wait, with what the wait is for. */
     readonly onWait?: (retryInMs: number, cause: WaitCause) => void;

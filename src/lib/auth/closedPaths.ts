@@ -5,7 +5,7 @@
  * with that token (`/account-info`). The Google token carries the Drive
  * scope, so the HTTP router refuses all three with a 404. Better Auth checks
  * `disabledPaths` only in that router (`onRequest` in
- * better-auth/dist/api/index.mjs), so server code still calls
+ * better-auth/dist/api/index.mjs), so server code can call
  * `auth.api.getAccessToken`.
  */
 export const TOKEN_PATHS: readonly string[] = [

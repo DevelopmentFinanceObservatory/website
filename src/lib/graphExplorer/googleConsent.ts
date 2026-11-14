@@ -3,8 +3,8 @@
  * consent screen as the return address records it. Better Auth sends the
  * reader back to `callbackURL`, which carries RETURNED_PARAM, when the link
  * succeeds, and to `errorCallbackURL`, which does not, with LINK_ERROR_PARAM
- * added when it fails: the reader declined, or the Google account could not
- * be linked to this one.
+ * added when it fails (the reader declined, or the Google account could not
+ * be linked to this one).
  */
 import { queryString } from './explore.ts';
 import type { SheetsAnswer } from './googleSheet.ts';
@@ -32,7 +32,7 @@ export type ConsentTrip = 'none' | 'granted' | 'refused';
  */
 export const takeConsentTrip = (query: string): { trip: ConsentTrip; query: string } => {
     const params = new URLSearchParams(query);
-    // A query with LINK_ERROR_PARAM never counts as granted.
+    // LINK_ERROR_PARAM outranks RETURNED_PARAM.
     const trip: ConsentTrip = params.has(LINK_ERROR_PARAM)
         ? 'refused'
         : params.has(RETURNED_PARAM)
@@ -44,8 +44,8 @@ export const takeConsentTrip = (query: string): { trip: ConsentTrip; query: stri
 
 /**
  * The success and failure return addresses for a trip from `href`, each a
- * path and query. Both drop a previous trip's parameters; only the success
- * address carries RETURNED_PARAM.
+ * path and query. Both drop an earlier trip's parameters, and only the
+ * success address carries RETURNED_PARAM.
  */
 export const consentReturns = (href: string): { callbackURL: string; errorCallbackURL: string } => {
     const back = new URL(href);
@@ -56,8 +56,8 @@ export const consentReturns = (href: string): { callbackURL: string; errorCallba
 };
 
 /**
- * The control's state. `needs_google` offers Continue with Google;
- * `renewal_failed` offers Try Again and Continue with Google; `failed`
+ * The control's state. `needs_google` offers Continue with Google.
+ * `renewal_failed` offers Try Again and Continue with Google. `failed`
  * offers neither.
  */
 export type CreateState =
@@ -71,7 +71,7 @@ export type CreateState =
 const NOT_GRANTED = 'Google access was not granted, so no sheet was created.';
 
 const STILL_REFUSED =
-    'Google access was granted, but the tool still cannot use it, so no sheet was created. Sign out, sign in again and try once more; if it fails again, download the CSV.';
+    'Google access was granted, but the tool cannot use it, so no sheet was created. Sign out, sign in again and try once more. If it fails again, download the CSV.';
 
 const UNANSWERED = 'The sheet could not be created. Try again.';
 
@@ -79,7 +79,7 @@ const UNREACHED = 'The sheet could not be created. Check your connection and try
 
 const CONSENT_UNAVAILABLE = 'Google’s consent screen could not be opened. Try again.';
 
-/** The state the control opens in: after a refused trip, the consent screen is offered again. */
+/** The state the control opens in. After a refused trip, the consent screen is offered again. */
 const initialCreateState = (trip: ConsentTrip): CreateState =>
     trip === 'refused' ? { kind: 'needs_google', message: NOT_GRANTED } : { kind: 'idle' };
 
@@ -87,9 +87,9 @@ const initialCreateState = (trip: ConsentTrip): CreateState =>
 export type CreateRecord = { readonly query: string; readonly state: CreateState };
 
 /**
- * The state shown for the draft `query`: the record's while the record was
- * made for that draft or a request is in flight, else the state the control
- * opens in. A request in flight shows on every draft, so one create runs at
+ * The state shown for the draft `query`. It is the record's while the record
+ * was made for that draft or a request is in flight, else the state the
+ * control opens in. A request in flight shows on every draft, so one create runs at
  * a time. A request that finishes after an edit records its sheet against
  * the draft it was made for, so returning to that draft shows its link.
  */
@@ -103,8 +103,8 @@ export const shownCreateState = (
         : initialCreateState(trip);
 
 /**
- * The state the handler's answer leads to, or null for no answer. A request
- * for Google access right after a granted trip is a refusal the consent
+ * The state the handler's answer leads to, `failed` when there is no answer
+ * (null). A request for Google access right after a granted trip is a refusal the consent
  * screen cannot fix, so it is `failed` and the button is not offered again.
  */
 export const answerState = (answer: SheetsAnswer | null, trip: ConsentTrip): CreateState => {

@@ -8,8 +8,8 @@ import { csvFileName } from './sheet.ts';
 
 /**
  * The rows of a scoped list that the filter text keeps (filterScopedList),
- * group by group, under a header. The counts are the StatVar total, or one column per dataset the
- * list counts, headed by the dataset's label.
+ * group by group, under a header. The counts are the StatVar total, or one
+ * column per dataset the list counts, headed by the dataset's label.
  */
 export function scopedListTable(
     model: Model,

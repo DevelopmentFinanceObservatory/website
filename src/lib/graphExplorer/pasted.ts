@@ -21,7 +21,7 @@ type Scan = {
  * `delimiters` or by a line end. A cell that opens with a quote may hold
  * delimiters, line breaks and doubled quotes. Its closing quote counts only
  * when a delimiter, a line end or the end of the text follows it. When
- * anything else follows, or the quote never closes, the cell is read again
+ * anything else follows, or the quote does not close, the cell is read again
  * from its opening quote as plain text, so the rows after it stay rows.
  * Stops after `limit` records.
  */
@@ -91,7 +91,7 @@ const scan = (text: string, delimiters: string, limit = Infinity): Scan => {
 };
 
 /**
- * The cell delimiter of a paste: a tab when one ends a cell of the header
+ * The cell delimiter of a paste, a tab when one ends a cell of the header
  * record read with quotes honoured, else a comma.
  */
 const delimiterOf = (text: string): '\t' | ',' =>
@@ -155,7 +155,7 @@ const targetKey = (target: ColumnTarget): string | null => {
 /**
  * Each column with its wanted target, except that the first column wanting
  * a property or field keeps it and each later one is ignored, naming the
- * first in `duplicateOf`. A column already settled is kept as it is.
+ * first in `duplicateOf`. A column already settled is returned as it is.
  */
 const settle = (columns: readonly MappedColumn[]): Mapping => {
     const first = new Map<string, number>();
@@ -183,7 +183,7 @@ const camelCase = (name: string): string =>
 const fieldOf = (header: string): DefinitionField | undefined =>
     DEFINITION_FIELDS.find((field) => field === header || field === camelCase(header));
 
-/** The property a header names: the dcid itself, or the one whose snake case form it is. */
+/** The property a header names, which is the dcid itself or the one whose snake case form it is. */
 const propertyOf = (model: Model, header: string, properties: readonly string[]) => {
     if (model.kind(header) === 'property') return header;
     const named = properties.filter((id) => snakeCase(id) === header);
@@ -233,13 +233,13 @@ export function switchColumn(mapping: Mapping, index: number, to: 'property' | '
     );
 }
 
-/** A reader's choice for one column, kept while the column's header reads `header`. */
+/** A reader's choice for one column, applied while the column's header reads `header`. */
 export type ColumnSwitch = { readonly header: string; readonly to: 'property' | 'ignored' };
 
 /**
  * The mapping with the reader's switches applied. A switch whose column's
- * header has changed since it was made is passed over, so editing the rows
- * keeps every choice and editing a header drops only that column's.
+ * header differs from the one it was made for is passed over, so editing the
+ * rows keeps every choice and editing a header drops only that column's.
  */
 export function applySwitches(
     mapping: Mapping,
@@ -252,14 +252,14 @@ export function applySwitches(
     return switched;
 }
 
-/** The sheet row a data row sits on as the reader sees it: the header is row 1. */
+/** The sheet row a data row sits on as the reader sees it, with the header as row 1. */
 export const sheetRow = (dataIndex: number): number => dataIndex + 2;
 
 /**
  * Check rows in the wire shape. `ref` is the sheet row number. Each property
  * or field is read from the one column the mapping gives it, the column
  * `locateFinding` places its findings on. An empty cell in a property
- * column leaves the property out; an empty measured property is sent as an
+ * column leaves the property out. An empty measured property is sent as an
  * empty string so the check reports it. Blank rows are skipped.
  */
 export function rowsToCheck(
@@ -301,7 +301,7 @@ export function rowsToCheck(
     });
 }
 
-/** The cell a finding belongs to; `column` is null when its field maps to no column. */
+/** The cell a finding belongs to. `column` is null when its field maps to no column. */
 export type FindingLocation = { readonly row: number; readonly column: number | null };
 
 /** Places a finding by its `ref` (a sheet row number) and `field`. Null when `ref` is no row number. */

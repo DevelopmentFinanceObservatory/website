@@ -142,7 +142,7 @@ export const auth = betterAuth({
     advanced: {
         ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
-    // The token endpoints stay closed to the browser (closedPaths).
+    // The token endpoints answer 404 to the browser (closedPaths).
     disabledPaths: [...TOKEN_PATHS, ...(emailOptions?.disabledPaths ?? [])],
     hooks: {
         // A provider callback or an email code that ended in a session is a

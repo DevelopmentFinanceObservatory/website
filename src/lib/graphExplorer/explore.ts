@@ -3,11 +3,12 @@
  * view can be shared and the browser's history steps between views.
  *
  * - nothing set: the start screen
- * - `?list=all`: every property the instance declares; `?list=<class dcid>`: one class's properties
+ * - `?list=all`: every property the instance declares
+ * - `?list=<class dcid>`: one class's properties
  * - `?node=<dcid>`: one term at the centre
  * - `?dataset=<provenance dcid>`: one dataset at the centre
- * - `?show=<provenance dcid>` or `?show=all`: the dataset filter, kept while the reader moves
- * - `?base=1`: search reaches base Data Commons terms, kept while the reader moves
+ * - `?show=<provenance dcid>` or `?show=all`: the dataset filter, carried while the reader moves
+ * - `?base=1`: search reaches base Data Commons terms, carried while the reader moves
  *
  * When several view parameters are set, `node` wins, then `dataset`, then `list`.
  * `show` and `base` are the carried parameters: every link in the section,
@@ -42,7 +43,7 @@ export const NO_CARRIED: Carried = Object.freeze({ show: NO_FILTER, base: false 
 /** The query parameters a Graph Explorer screen reads. */
 export type QueryReader = { get(name: string): string | null };
 
-/** A query parameter's value, or null when it is missing or empty: an empty value counts as unset. */
+/** A query parameter's value, or null when it is missing or empty, which counts as unset. */
 export const queryValue = (params: QueryReader, name: string): string | null => {
     const raw = params.get(name);
     return raw === null || raw === '' ? null : raw;
@@ -95,7 +96,7 @@ export const carriedHref = (path: string, carried: Carried): string => {
     return `${path}${queryString(params)}`;
 };
 
-/** A query string, `?` included, with the base switch turned on or off and every other parameter kept. */
+/** A query string, `?` included, with the base switch turned on or off and every other parameter unchanged. */
 export const switchBase = (search: string, base: boolean): string => {
     const params = new URLSearchParams(search);
     if (base) params.set('base', '1');
@@ -138,8 +139,8 @@ export const moveHref = (state: ExploreState, view: ExploreView): string | null 
 
 /**
  * The dataset filter the screens apply, and the dataset id the URL named
- * that the model lacks, or null. An unknown dataset applies no filter; the
- * screen names it so the change is never silent.
+ * that the model lacks, or null. An unknown dataset applies no filter, and
+ * the screen names it.
  */
 export const checkFilter = (
     model: Pick<Model, 'dataset'>,
@@ -158,8 +159,9 @@ export const listScopeExists = (model: Pick<Model, 'kind'>, scope: ListScope): b
 
 /**
  * Whether a view waits on the base terms list before it can say what its
- * centre is: a term the model lacks, with the base switch on and the list
- * not yet in. Once the list is in, a term it lacks too is "Not in the DFO model".
+ * centre is. That holds for a term the model lacks, with the base switch on
+ * and the list not yet in. Once the list is in, a term it lacks too is "Not
+ * in the DFO model".
  */
 export const awaitsTerms = (
     model: Pick<Model, 'kind'>,

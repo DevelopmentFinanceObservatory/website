@@ -1,11 +1,11 @@
 /**
  * The Graph API's ontology documents, as served under /api/graph/ontology,
- * and a guard per response that refuses a changed shape.
+ * and a guard per response that refuses an unexpected shape.
  *
  * Members keep the server's snake case and Data Commons nouns: `types` is
  * `typeOf`, `sub_class_of` is `subClassOf`, and so on. Each guard checks
  * every member of every node, pattern, term and finding, so a response
- * whose shape has moved fails at the point it enters, before any screen
+ * with a different shape fails at the point it enters, before any screen
  * reads it.
  */
 import { asRecord } from '../asRecord.ts';
@@ -161,7 +161,7 @@ export const FINDING_CODES = [
 
 export type FindingCode = (typeof FINDING_CODES)[number];
 
-/** True for a code this page has a message for; the server may send others. */
+/** True for a code this page has a message for. The server may send others. */
 export const isFindingCode = (code: string): code is FindingCode =>
     (FINDING_CODES as readonly string[]).includes(code);
 
@@ -170,9 +170,9 @@ export type OntologyFinding = {
     ref: string | null;
     /** The row member, or `constraint_properties.<property>` for a constraint. */
     field: string;
-    /** The value at fault; for `definition_differs`, the value the server holds. */
+    /** The value at fault. For `definition_differs`, the value the server holds. */
     value: CheckConstraintValue | string[];
-    /** One of FINDING_CODES, or a code added on the server since. */
+    /** One of FINDING_CODES, or a code the server sends that FINDING_CODES lacks. */
     code: string;
     severity: 'error' | 'warning';
 };
@@ -356,7 +356,7 @@ const onePerDcid = (entries: readonly { readonly dcid: string }[], path: string)
     }
 };
 
-// Each guard runs its checks, then narrows: the checks are what make the cast true.
+// Each guard runs its checks, then narrows. The checks make the cast true.
 
 /**
  * The ontology document, or a WireShapeError naming the first member out of

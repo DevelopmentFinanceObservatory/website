@@ -22,7 +22,7 @@ const readJson = async (request: NextRequest): Promise<ReadBody> => {
 };
 
 /**
- * POST /graph-explorer/api/sheets: creates the Start a sheet page's mapping
+ * POST /graph-explorer/api/sheets creates the Start a sheet page's mapping
  * sheet as a Google spreadsheet in the reader's own Drive and answers its
  * URL. The decision flow and its statuses are in lib/graphExplorer/sheetsExport.
  */

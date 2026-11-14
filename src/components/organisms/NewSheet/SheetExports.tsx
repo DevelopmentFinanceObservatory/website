@@ -24,10 +24,10 @@ export const DownloadCsv = ({ sheet }: { sheet: SheetDraft }) => (
 );
 
 /**
- * Sends Google's consent screen for the `drive.file` scope, then returns to
- * this page with its query, so the sheet the reader built is still there:
- * with RETURNED_PARAM when access was granted, with Better Auth's error
- * otherwise (consentReturns). Returns false, after logging the error's code,
+ * Sends the reader to Google's consent screen for the `drive.file` scope,
+ * then back to this page with its query, so the sheet the reader built is
+ * still there. The return carries RETURNED_PARAM when access was granted and
+ * Better Auth's error otherwise (consentReturns). Returns false, after logging the error's code,
  * when the consent screen could not be opened.
  */
 const continueWithGoogle = async (): Promise<boolean> => {
@@ -116,7 +116,7 @@ export const CreateGoogleSheet = ({
                             Open your new Google Sheet
                         </a>
                         {state.dropdownsFailed &&
-                            '. Google did not add the dropdowns, so the property columns take any value; the value lists are on the second tab.'}
+                            '. Google did not add the dropdowns, so the property columns take any value. The value lists are on the second tab.'}
                     </>
                 )}
                 {(state.kind === 'failed' || offersConsent) && state.message}

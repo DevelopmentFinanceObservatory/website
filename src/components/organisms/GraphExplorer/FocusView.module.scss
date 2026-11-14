@@ -2,7 +2,7 @@
 @use "mixins" as *;
 @use "breakpoints" as *;
 
-// The picture and the panel side by side; below desktop width the panel follows the picture.
+// The picture and the panel side by side. Below desktop width the panel follows the picture.
 .work {
     display: grid;
     grid-template-columns: minmax(0, 1fr) rem(380);

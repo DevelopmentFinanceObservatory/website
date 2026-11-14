@@ -26,7 +26,7 @@ const SHEET_LINKS: { screen: GraphExplorerScreen; path: string; label: string }[
     { screen: 'check-sheet', path: CHECK_SHEET_PATH, label: 'Check a sheet' },
 ];
 
-/** Turns the base switch on or off in place, keeping the rest of the URL: the back button skips it. */
+/** Turns the base switch on or off in place and keeps the rest of the URL. The back button skips it. */
 const writeBase = (on: boolean) =>
     window.history.replaceState(
         null,

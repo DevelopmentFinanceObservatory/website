@@ -20,11 +20,11 @@ export type ExploreNavigation = {
     /** The address of a view, keeping the carried parameters. */
     readonly hrefFor: (view: ExploreView) => string;
     /**
-     * Opens a view as a new history entry, keeping the carried parameters;
-     * the view already on show adds no entry.
+     * Opens a view as a new history entry, keeping the carried parameters.
+     * The view already on show adds no entry.
      */
     readonly go: (view: ExploreView) => void;
-    /** Changes the dataset filter in place: the back button skips it. */
+    /** Changes the dataset filter in place, and the back button skips it. */
     readonly setShow: (show: DatasetFilter) => void;
 };
 
@@ -74,14 +74,14 @@ export const ModelProvider = ModelContext.Provider;
 /** Explore's navigation, or null outside GraphExplorer. */
 export const useOptionalExplore = (): ExploreNavigation | null => useContext(NavigationContext);
 
-/** Explore's navigation; only inside GraphExplorer. */
+/** Explore's navigation. Throws outside GraphExplorer. */
 export const useExplore = (): ExploreNavigation => {
     const navigation = useContext(NavigationContext);
     if (!navigation) throw new Error('useExplore is used outside GraphExplorer');
     return navigation;
 };
 
-/** The loaded model; only inside a screen GraphExplorer renders once the model is ready. */
+/** The loaded model. Throws until the model is ready. */
 export const useModel = (): Model => {
     const model = useContext(ModelContext);
     if (!model) throw new Error('useModel is used before the model is loaded');

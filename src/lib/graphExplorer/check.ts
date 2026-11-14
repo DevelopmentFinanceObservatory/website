@@ -34,7 +34,7 @@ export const CHECK_URL = '/api/graph/ontology/check';
 /**
  * The rows the first request carries, and the most any request carries. A
  * chunk the route refuses is halved until the refused row stands alone, and
- * the smaller size carries on to the chunks that follow; each new chunk the
+ * the smaller size carries on to the chunks that follow. Each new chunk the
  * route answers doubles the size again, up to this one. The halves of a
  * split chunk leave the size alone when answered, so a paste the route can
  * take only in small chunks does not climb back to a refused size after
@@ -48,7 +48,7 @@ export const CHECK_LIMIT_MS = 5 * 60_000;
 /** Why a check stopped: a request failure, or an answer covering other rows than were sent. */
 export type CheckFailureReason = FailureReason | 'row_count';
 
-/** A check that could not finish; `message` says why, `reason` says so for code. */
+/** A check that could not finish. `message` says why, and `reason` says so for code. */
 export class CheckError extends GraphFailure<CheckFailureReason> {
     override name = 'CheckError';
 }
@@ -74,9 +74,9 @@ export type CheckOptions = {
     /** Called before each wait, with what the wait is for. */
     readonly onWait?: (retryInMs: number, cause: WaitCause) => void;
     readonly chunkRows?: number;
-    /** The bound on one request; REQUEST_TIMEOUT_MS by default. */
+    /** The bound on one request. REQUEST_TIMEOUT_MS by default. */
     readonly requestTimeoutMs?: number;
-    /** The bound on the whole check; CHECK_LIMIT_MS by default. */
+    /** The bound on the whole check. CHECK_LIMIT_MS by default. */
     readonly limitMs?: number;
     readonly fetch?: typeof fetch;
     readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -90,10 +90,10 @@ type Answer =
 /**
  * Checks `rows` in chunks, each sent through `requestGraph`. A 200 adds its
  * findings, and on a new chunk (one that is not the half of a split)
- * doubles the chunk size, up to `chunkRows`; one whose `row_count` is not
+ * doubles the chunk size, up to `chunkRows`. A 200 whose `row_count` is not
  * the rows sent stops the check. A 400 on a chunk of more than one row
  * splits it in two halves, checked in turn, and the half's size becomes the
- * chunk size for the rows after them; a 400 on one row refuses that row
+ * chunk size for the rows after them. A 400 on one row refuses that row
  * with the problem's detail. A 503 or 429 with `Retry-After` waits and asks
  * again, for up to a minute per chunk. A request past `requestTimeoutMs`,
  * its 400 body included, or a check past `limitMs`, stops with reason
@@ -195,7 +195,7 @@ const FIELD_NAMES: Readonly<Record<string, string>> = {
     observation_properties: 'observation properties',
 };
 
-/** The finding's value as typed in the sheet; a list joins with commas. */
+/** The finding's value as typed in the sheet. A list joins with commas. */
 export const valueText = (value: OntologyFinding['value']): string => {
     if (Array.isArray(value)) return value.join(', ');
     return value === null ? '' : String(value);
@@ -230,7 +230,7 @@ const chooseFrom = ({ valueList, text, term }: MessageContext, fallback: string)
 const fieldName = ({ finding, property }: MessageContext): string =>
     property ?? FIELD_NAMES[finding.field] ?? finding.field;
 
-/** One line per code: what is wrong, then what to do. */
+/** One line per code, saying what is wrong and then what to do. */
 const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => MessagePart[]>> = {
     node_not_held: (context) => {
         const { finding, property, value, text } = context;
@@ -310,7 +310,7 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
     ],
 };
 
-/** A finding whose code this page has no message for: the value and the code as sent. */
+/** The message for a finding whose code this page has no message for. It names the value and the code as sent. */
 const unknownMessage = ({ finding, value, text }: MessageContext): MessagePart[] => [
     ...(value === ''
         ? [text('The check flagged this cell')]
@@ -363,7 +363,7 @@ const SUGGESTED: ReadonlySet<string> = new Set<FindingCode>([
 /**
  * Up to `limit` members of the constraint property's value list closest to
  * the finding's value by edit distance to the member's label, dcid or code,
- * ignoring case; a tie keeps the list's order. Empty for other findings.
+ * ignoring case. A tie keeps the list's order. Empty for other findings.
  */
 export function closestMembers(model: Model, finding: OntologyFinding, limit = 3): string[] {
     const property = findingProperty(finding);
@@ -482,7 +482,7 @@ export const QUIET_ROWS_STEP = 100;
 
 /**
  * How many flagged rows the result table shows at first, and each "show
- * more" adds; the findings list steps by the same count.
+ * more" adds. The findings list steps by the same count.
  */
 export const FLAGGED_ROWS_STEP = 300;
 
@@ -493,8 +493,9 @@ export type ShownRow = { readonly dataIndex: number; readonly row: number };
 export type ShownCounts = { readonly flagged: number; readonly quiet: number };
 
 /**
- * The rows the result table shows, in sheet order: the first `shown.flagged`
- * flagged rows and the first `shown.quiet` rows without a finding.
+ * The rows the result table shows, in sheet order. They are the first
+ * `shown.flagged` flagged rows and the first `shown.quiet` rows without a
+ * finding.
  * `hiddenFlagged` and `hiddenQuiet` count the rows of each kind left out.
  */
 export function shownRows(
@@ -522,8 +523,8 @@ export function shownRows(
 }
 
 /**
- * How many flagged rows the table must show for `row` to be among them: a
- * whole number of FLAGGED_ROWS_STEP steps, never fewer than `shown`.
+ * How many flagged rows the table must show for `row` to be among them. It
+ * is a whole number of FLAGGED_ROWS_STEP steps and at least `shown`.
  */
 export function flaggedShownFor(
     flaggedRows: ReadonlySet<number>,
@@ -535,7 +536,7 @@ export function flaggedShownFor(
     return Math.max(shown, Math.ceil((rank + 1) / FLAGGED_ROWS_STEP) * FLAGGED_ROWS_STEP);
 }
 
-/** The counts a result sentence reads: a refused row counts as an error. */
+/** The counts a result sentence reads. A refused row counts as an error. */
 export const resultCounts = (
     result: Pick<CheckResult, 'findings' | 'refused'>,
 ): { readonly errors: number; readonly warnings: number } => ({
@@ -553,7 +554,7 @@ const listed = (items: readonly string[]): string =>
 
 /**
  * "3 errors and 1 warning in 6 rows, checked against the graph at
- * generation X." Without a generation the sentence ends at the rows; with
+ * generation X." Without a generation the sentence ends at the rows. With
  * several it names each and says the graph changed during the check.
  */
 export function resultSentence(result: CheckResult, rows: number): string {
@@ -564,7 +565,7 @@ export function resultSentence(result: CheckResult, rows: number): string {
             ? ''
             : generations.length === 1
               ? `, checked against the graph at generation ${generations[0]}`
-              : `, checked against graph generations ${listed(generations)}: the graph changed during the check`;
+              : `, checked against graph generations ${listed(generations)}. The graph changed during the check`;
     const problems = [
         ...(errors > 0 ? [counted(errors, 'error')] : []),
         ...(warnings > 0 ? [counted(warnings, 'warning')] : []),
@@ -573,7 +574,7 @@ export function resultSentence(result: CheckResult, rows: number): string {
     return `${lead} in ${counted(rows, 'row')}${against}.`;
 }
 
-/** A message as one line of text; terms appear as their dcids. */
+/** A message as one line of text. Terms appear as their dcids. */
 export const messageText = (parts: readonly MessagePart[]): string =>
     parts
         .map((part) => (part.kind === 'term' ? part.id : part.text))
@@ -621,9 +622,9 @@ export type ExampleSheet = {
 
 /**
  * A small sheet from the first dataset pattern whose constraint properties
- * all have values in use: the definition fields as the pattern names them,
- * and each property cycling through the values the dataset uses. One row
- * carries a misspelt value on a property with a value list. Null when no
+ * all have values in use. It holds the definition fields as the pattern
+ * names them, and each property cycles through the values the dataset uses.
+ * One row carries a misspelt value on a property with a value list. Null when no
  * pattern qualifies.
  */
 export function exampleSheet(model: Model, count = 5): ExampleSheet | null {

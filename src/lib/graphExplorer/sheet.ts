@@ -7,7 +7,7 @@ import type { SheetRequest } from './googleSheet.ts';
 import type { Model } from './model.ts';
 import type { OntologyPattern } from './wire.ts';
 
-/** A reference column carries the source's own identifiers; a definition field is part of the StatVar definition; a property column holds one constraint property. */
+/** A reference column carries the source's own identifiers. A definition field is part of the StatVar definition. A property column holds one constraint property. */
 export type ColumnKind = 'reference' | 'definition' | 'property';
 
 /** One member of a value list as a sheet lookup offers it. */
@@ -29,7 +29,7 @@ export type Lookup = {
 export type SheetColumn = {
     readonly name: string;
     readonly kind: ColumnKind;
-    /** The value a pattern supplies for the column; null when there is none. */
+    /** The value a pattern supplies for the column. Null when there is none. */
     readonly fill: string | null;
     /** Set on a property whose range names a value list. */
     readonly lookup: Lookup | null;
@@ -92,7 +92,7 @@ export type ClosestPattern = {
 
 /**
  * The pattern about the class that splits by the most of the chosen
- * properties; the larger StatVar count wins a tie, then the earlier dataset.
+ * properties. The larger StatVar count wins a tie, then the earlier dataset.
  * Null when no pattern shares any.
  */
 export function closestPattern(
@@ -120,7 +120,7 @@ export function closestPattern(
 /**
  * A field as CSV. A value starting with `=`, `+`, `-`, `@`, a tab or a
  * carriage return gains a leading `'`, so a spreadsheet opening the file
- * shows it as text instead of running it as a formula.
+ * shows it as text and does not run it as a formula.
  */
 const csvField = (raw: string): string => {
     const value = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
@@ -128,8 +128,9 @@ const csvField = (raw: string): string => {
 };
 
 /**
- * RFC 4180: fields with a comma, quote or line break are quoted, quotes
- * doubled, lines end CRLF; a field that could run as a formula starts with `'`.
+ * RFC 4180. Fields with a comma, quote or line break are quoted with quotes
+ * doubled, lines end CRLF, and a field that could run as a formula starts
+ * with `'`.
  */
 export const toCsv = (rows: readonly (readonly string[])[]): string =>
     rows.map((row) => row.map(csvField).join(',')).join('\r\n');

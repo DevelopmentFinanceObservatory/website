@@ -129,8 +129,8 @@ const ColumnRow = ({ header, read, target, repeats, onSwitch }: ColumnRowProps) 
                         <TermLink id={target.property} />
                     ) : (
                         <>
-                            <code>{target.property}</code> is not in the DFO model; the check looks
-                            it up on the graph
+                            <code>{target.property}</code> is not in the DFO model, so the check
+                            looks it up on the graph
                         </>
                     )}
                 </span>
@@ -187,7 +187,7 @@ const SheetTable = ({ pasted, rows, marks, cellId, rowId }: SheetTableProps) => 
             className={styles.scroll}
             role="region"
             aria-labelledby={captionId}
-            // The box scrolls sideways; a tab stop lets a keyboard scroll it.
+            // The box scrolls sideways, and a tab stop lets a keyboard scroll it.
             tabIndex={0}
         >
             <table className={styles.sheet}>
@@ -198,7 +198,7 @@ const SheetTable = ({ pasted, rows, marks, cellId, rowId }: SheetTableProps) => 
                     <tr>
                         <th scope="col">Row</th>
                         {pasted.header.map((header, index) => (
-                            // Pasted headers may repeat; the position is the identity.
+                            // Pasted headers may repeat, so the position is the identity.
                             <th key={index} scope="col">
                                 {header}
                             </th>
@@ -246,7 +246,7 @@ type ShowMoreProps = {
     note: string;
     hidden: number;
     step: number;
-    /** Shows one more step; `last` is true when it shows everything left. */
+    /** Shows one more step. `last` is true when it shows everything left. */
     onShow: (last: boolean) => void;
 };
 
@@ -305,7 +305,7 @@ const Results = ({ checked }: { checked: Checked }) => {
     const lineCount = lines.length + result.refused.length;
     const shownRefused = result.refused.slice(0, Math.max(0, findingsShown - lines.length));
 
-    // The highlight moves on the cells directly, so a click leaves the table unrendered.
+    // The highlight is set on the cells directly, so a click does not re-render the table.
     const light = useCallback(
         (key: string) => {
             const cell = document.getElementById(cellId(key));
@@ -386,7 +386,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                         const key = row !== null && column !== null ? cellKey(row, column) : null;
                         const place = `Row ${finding.ref ?? '?'}, ${columnLabel}`;
                         return (
-                            // Findings carry no id; their order is fixed for a result.
+                            // Findings carry no id, and their order is fixed for a result.
                             <li
                                 key={index}
                                 id={lineId(index)}
@@ -482,7 +482,7 @@ const CheckSteps = () => {
     const model = useModel();
     const textId = useId();
     const [text, setText] = useState('');
-    // The text the columns and rows are read from: `text` once typing pauses.
+    // The text the columns and rows are read from, which is `text` once typing pauses.
     const [settled, setSettled] = useState('');
     const [switches, setSwitches] = useState<ReadonlyMap<number, ColumnSwitch>>(new Map());
     const [run, setRun] = useState<Run>({ status: 'idle' });
@@ -606,7 +606,7 @@ const CheckSteps = () => {
                 <SheetSection title="2. The columns">
                     <p className={styles.note}>
                         {plural(rows.length, 'row')} to check. Each column is read as a definition
-                        field, a property or ignored; switch any column between property and
+                        field, a property or ignored. Switch any column between property and
                         ignored.
                     </p>
                     {repeated.length > 0 && (

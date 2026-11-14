@@ -70,7 +70,7 @@ export type ValuesUsed = {
 /** One property of a class, with the roles it has in patterns about that class. */
 export type ClassProperty = {
     readonly id: string;
-    /** The ancestor whose `domain_includes` names the property; null when the class's own does or none does. */
+    /** The ancestor whose `domain_includes` names the property. Null when the class's own does or none does. */
     readonly inheritedFrom: string | null;
     /** Whether `domain_includes` on the class or an ancestor names the property. */
     readonly declared: boolean;
@@ -130,7 +130,7 @@ export type ScopedRow = {
     readonly counts: readonly number[];
     /** True when one dataset is chosen and none of its StatVars use the property. */
     readonly dimmed: boolean;
-    /** With one dataset chosen, the members of the value list it uses; null otherwise. */
+    /** With one dataset chosen, the members of the value list it uses. Null otherwise. */
     readonly values: ValuesUsed | null;
 };
 
@@ -160,7 +160,7 @@ export type Model = {
     node(id: string): OntologyNode | undefined;
     dataset(id: string): OntologyProvenance | undefined;
     kind(id: string): Kind | undefined;
-    /** The name, else the dcid; a dataset's name by `datasetName`. */
+    /** The name, else a dataset's `datasetName`, else the dcid. */
     label(id: string): string;
     isBase(id: string): boolean;
     /** `sub_class_of`, `sub_property_of` and `specialization_of`. */
@@ -353,7 +353,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
     const valueListOfProperty = (id: string): string | undefined =>
         byId.get(id)?.range_includes.find((range) => kinds.get(range) === 'valueList');
 
-    // Both walks append to the array they iterate; for...of reaches the appended entries.
+    // Both walks append to the array they iterate, and for...of reaches the appended entries.
     const ancestors = (id: string): readonly string[] => {
         const seen = new Set<string>();
         const queue = [...(broaderOf.get(id) ?? EMPTY)];
@@ -381,7 +381,7 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
 
     /**
      * Each member once. A member sits under its first `specialization_of`
-     * parent in the list whose own parents never lead back to the member; a
+     * parent in the list whose own parents do not lead back to the member. A
      * member with no such parent is a root, so a cycle's members and a member
      * that specialises itself are roots.
      */
@@ -447,8 +447,8 @@ export function buildModel(ontology: OntologyDocument, provenances: OntologyProv
                 constraint.property,
                 Object.freeze(constraint.values.map((value) => value.value)),
             );
-            // A value can also sit in a pattern field; the larger count stands, which never
-            // counts one StatVar twice.
+            // A value can also sit in a pattern field. The larger count stands, so no StatVar
+            // counts twice.
             for (const value of constraint.values) {
                 add(value.value, dataset.dcid, value.stat_var_count, 'max');
             }
@@ -726,7 +726,8 @@ export const MEMBER_HIT_LIMIT = 60;
 /**
  * The members of a value list whose label, dcid, classification code or
  * other name holds `text`, ignoring case and surrounding space, in list
- * order: the first `limit`, and how many match in all. Empty for blank text.
+ * order. Returns the first `limit` and how many match in all. Empty for
+ * blank text.
  */
 export function searchMembers(
     model: Model,
@@ -750,7 +751,7 @@ export function searchMembers(
 
 /**
  * A scoped list's groups with only the rows whose label or dcid holds
- * `text`, ignoring case and surrounding space; blank text keeps every row.
+ * `text`, ignoring case and surrounding space. Blank text keeps every row.
  * The screen and the list's CSV both read it, so they agree.
  */
 export function filterScopedList(

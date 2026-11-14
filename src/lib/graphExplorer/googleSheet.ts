@@ -3,7 +3,7 @@
  * page sends, its bounds, and the Sheets API request bodies built from it.
  *
  * The spreadsheet has two tabs. The mapping tab holds the header row in bold
- * and frozen, then the example rows; its first cell carries a note naming the
+ * and frozen, then the example rows. Its first cell carries a note naming the
  * graph generation and the date. The value-list tab holds one block per
  * property column with a value list: the property's name, then a row of
  * `dcid`, `label` and `code`, then one row per member, each block followed by
@@ -70,7 +70,7 @@ export type SheetRequest = {
  */
 export type GoogleAccessReason = 'no_google_account' | 'scope_missing' | 'token_expired';
 
-/** What the handler answers. A sheet whose dropdowns could not be added is still a sheet. */
+/** What the handler answers. A sheet whose dropdowns could not be added counts as a sheet. */
 export type SheetsAnswer =
     | { ok: true; url: string; dropdowns: 'added' | 'none' | 'failed' }
     | {
@@ -200,7 +200,7 @@ const blocksOf = (request: SheetRequest): Block[] =>
 const headerRows = (blocks: readonly Block[]): number =>
     blocks.every((block) => block.complete) ? 2 : 3;
 
-/** A cell as the create body writes it: always a string value, never parsed as a formula. */
+/** A cell as the create body writes it: a string value, which Google does not parse as a formula. */
 export type Cell = {
     userEnteredValue?: { stringValue: string };
     userEnteredFormat?: { textFormat: { bold: boolean } };
@@ -310,7 +310,7 @@ const dcidRange = (block: Block, header: number): string => {
  * The `spreadsheets.batchUpdate` body that puts a dropdown on each property
  * column with a value list, over the first DROPDOWN_ROWS rows under the
  * header, or null when no column has one. A value outside the list is
- * flagged, not refused, so pasted source values stay visible.
+ * flagged and accepted, so pasted source values stay visible.
  */
 export const dropdownRequestBody = (request: SheetRequest) => {
     const blocks = blocksOf(request);

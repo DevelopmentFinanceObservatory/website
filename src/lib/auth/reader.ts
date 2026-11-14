@@ -1,7 +1,7 @@
 /**
- * Who may open the Graph Explorer: a signed-in user whose verified email
- * belongs to one of the allowlisted domains. Pure, so `node --test` loads
- * it; requireReader.ts reads the session and the environment.
+ * A signed-in user whose verified email belongs to one of the allowlisted
+ * domains may open the Graph Explorer. This module is pure, so `node --test`
+ * loads it. requireReader.ts reads the session and the environment.
  */
 
 /** The fields of a session's user the decision reads. */
@@ -33,9 +33,9 @@ export const emptyAllowlistWarning = (domains: ReadonlySet<string>): string | nu
         : null;
 
 /**
- * The allowlist from its environment variable: comma-separated email
- * domains, each trimmed and lowercased, empty entries dropped. Unset or
- * empty gives an empty list, which admits nobody.
+ * The allowlist from its environment variable, which holds comma-separated
+ * email domains. Each is trimmed and lowercased, and empty entries are
+ * dropped. Unset or empty gives an empty list, which admits nobody.
  */
 export const parseEmailDomains = (value: string | undefined): ReadonlySet<string> =>
     new Set(
@@ -48,7 +48,7 @@ export const parseEmailDomains = (value: string | undefined): ReadonlySet<string
 const ASCII_DOMAIN = /^[A-Za-z0-9.-]+$/;
 
 /**
- * The domain after an address's last `@`, lowercased; null without one, or
+ * The domain after an address's last `@`, lowercased. Null without one, or
  * when the domain holds anything but ASCII letters, digits, dots and
  * hyphens. The check runs before lowercasing, since `toLowerCase` maps some
  * non-ASCII letters to ASCII ones (the Kelvin sign to `k`).

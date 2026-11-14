@@ -30,7 +30,7 @@ const describe = (model: Model, hit: SearchHit): string => {
 };
 
 type SearchBoxProps = {
-    /** Null while the model loads; the box is disabled until then. */
+    /** Null while the model loads, when the box is disabled. */
     model: Model | null;
     /** The terms list when the base Data Commons switch is on and it has loaded. */
     baseTerms?: OntologyTerms;

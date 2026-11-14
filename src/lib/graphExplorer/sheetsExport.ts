@@ -36,7 +36,7 @@ export type GoogleAccess =
      * Better Auth failed to read or renew the token: a refused refresh, a
      * Google outage, a failed write of the renewed token or a failed
      * decryption, which its error does not tell apart. `cause` names the
-     * error for the log; never a token.
+     * error for the log and carries no token.
      */
     | { kind: 'renewal_failed'; cause: string }
     | { kind: 'failed'; step: GoogleAccessStep; cause: string };
@@ -44,9 +44,9 @@ export type GoogleAccess =
 /** What the reader is told for each reason, with what Continue with Google will do. */
 export const GOOGLE_ACCESS_MESSAGES: Readonly<Record<GoogleAccessReason, string>> = {
     no_google_account:
-        'Creating a Google Sheet needs a Google account linked to this one. Continue with Google to link it and let the tool add files to your Drive; it sees only the files it creates.',
+        'Creating a Google Sheet needs a Google account linked to this one. Continue with Google to link it and let the tool add files to your Drive. It sees only the files it creates.',
     scope_missing:
-        'Creating a Google Sheet needs permission to add files to your Google Drive. Continue with Google to grant it; the tool sees only the files it creates.',
+        'Creating a Google Sheet needs permission to add files to your Google Drive. Continue with Google to grant it. The tool sees only the files it creates.',
     token_expired:
         'The tool’s access to your Google Drive has lapsed and cannot be renewed. Continue with Google to grant it again.',
 };
@@ -86,8 +86,8 @@ const RENEWAL_FAILED = 'FAILED_TO_GET_ACCESS_TOKEN';
 /**
  * An error named for the log: its name, the Better Auth code or HTTP status
  * it carries, and the code of its `cause` (a failed `fetch` carries the
- * network error's, such as `ENOTFOUND`). Never a message, which can quote a
- * failed query.
+ * network error's, such as `ENOTFOUND`). The message is left out because it
+ * can quote a failed query.
  */
 export const errorCause = (error: unknown): string => {
     const record = asRecord(error);
@@ -112,7 +112,7 @@ const GOOGLE_ENUM = /^[A-Z][A-Z0-9_]{0,63}$/;
  * A Google refusal named for the log: the body's `error.status` and each
  * `error.details[].reason`, such as `PERMISSION_DENIED SERVICE_DISABLED`,
  * or undefined when the body carries neither. Only values shaped as Google's
- * enums are kept, so nothing else from the body reaches the log.
+ * enums are logged, so nothing else from the body reaches the log.
  */
 const googleRefusalCause = async (response: Response): Promise<string | undefined> => {
     const error = asRecord(asRecord(await response.json().catch(() => null))?.error);
@@ -177,10 +177,10 @@ export type SheetsExportDeps = {
     /** The date for the sheet's note, `YYYY-MM-DD`. */
     today: string;
     /**
-     * Receives a message, the HTTP status Google answered and the cause: for
-     * a thrown call the error's name and codes (errorCause), for a Google
-     * refusal the enums in its error body (googleRefusalCause). Never a token
-     * or a body.
+     * Receives a message, the HTTP status Google answered and the cause. For
+     * a thrown call the cause is the error's name and codes (errorCause), and
+     * for a Google refusal the enums in its error body (googleRefusalCause).
+     * It receives no token or body.
      */
     log: (message: string, fields: { status: number | null; cause?: string }) => void;
 };
@@ -239,8 +239,8 @@ const readCreated = async (response: Response): Promise<{ id: string; url: strin
  * the token does not work. A failed token read in Better Auth answers 502
  * `google_renewal_failed`, a failed auth call 502 `auth_failed`, and any
  * other Google failure 502 `google_failed`, each logged with its cause. When
- * the sheet exists but its dropdowns could not be added, the answer is still
- * the sheet, with `dropdowns: 'failed'`.
+ * the sheet exists but its dropdowns could not be added, the answer is the
+ * sheet, with `dropdowns: 'failed'`.
  */
 export const createGoogleSheet = async (deps: SheetsExportDeps): Promise<SheetsExportResult> => {
     const decision = await deps.decide();

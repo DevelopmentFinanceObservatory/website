@@ -9,8 +9,8 @@ import styles from './StartScreen.module.scss';
 
 /**
  * The start screen: the datasets with their StatVar counts, the kinds of
- * thing their figures are about with how many datasets use each, one way to
- * list every property the instance declares.
+ * thing their figures are about with how many datasets use each, and one way
+ * to list every property the instance declares.
  */
 const StartScreen = () => {
     const model = useModel();

@@ -39,7 +39,7 @@ import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { closestPattern, sheetDraft, type SheetDraft } from '@/lib/graphExplorer/sheet';
 
 /**
- * Replaces the page's query in place, keeping the carried parameters: the
+ * Replaces the page's query in place and keeps the carried parameters. The
  * URL holds the sheet, and the back button skips edits.
  */
 const writeQuery = (query: SheetQuery, carried: Carried) =>
@@ -96,14 +96,14 @@ const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => (
                 )}
             </span>
         ))}{' '}
-        here, so the sheet uses its defaults instead.
+        so the sheet uses its defaults.
     </p>
 );
 
 /**
  * The properties no dataset splits by yet, folded away. The reader opens and
- * closes the list; a tick never closes it, so a focused checkbox stays in
- * view. It opens on first render when one of them is ticked.
+ * closes the list, and ticking a box leaves it open so a focused checkbox
+ * stays in view. It opens on first render when one of them is ticked.
  */
 const MoreProperties = ({
     unused,
@@ -177,7 +177,7 @@ const Preview = ({ sheet }: { sheet: SheetDraft }) => {
             className={styles.scroll}
             role="region"
             aria-labelledby={captionId}
-            // The box scrolls sideways; a tab stop lets a keyboard scroll it.
+            // The box scrolls sideways, and a tab stop lets a keyboard scroll it.
             tabIndex={0}
         >
             <table className={styles.sheet}>
@@ -370,7 +370,7 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
                 <Closest selection={selection} />
                 <Preview sheet={sheet} />
                 <p className={styles.note}>
-                    The three rows are examples: replace them with the source&rsquo;s own codes and
+                    The three rows are examples. Replace them with the source&rsquo;s own codes and
                     labels. Each property column takes a value from its value list.
                 </p>
                 <div className={styles.exports}>
@@ -392,12 +392,12 @@ const SheetSteps = ({ trip }: { trip: ConsentTrip }) => {
 /**
  * Start a sheet: the columns a new dataset's mapping sheet needs and what goes
  * in them. The choices live in the URL query, so a sheet can be shared and
- * reloaded; the model is the one the section's layout loaded.
+ * reloaded. The model is the one the section's layout loaded.
  */
 const NewSheet = () => {
     const data = useExplorerData();
     const params = useSearchParams();
-    // The return address's consent trip counts once: it is read on mount and
+    // The return address's consent trip counts once. It is read on mount, and
     // its parameters leave the address at once.
     const [trip] = useState(() => takeConsentTrip(params.toString()).trip);
     useEffect(() => {

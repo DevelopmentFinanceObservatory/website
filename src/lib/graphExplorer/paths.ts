@@ -20,7 +20,7 @@ export const SHEETS_ROUTE = `${GRAPH_EXPLORER_PATH}/api/sheets`;
 /** The section's three screens. */
 export type GraphExplorerScreen = 'explore' | 'new-sheet' | 'check-sheet';
 
-/** The screen a path inside the section belongs to; any other path is Explore's. */
+/** The screen a path inside the section belongs to. Any other path is Explore's. */
 export const screenOf = (path: string): GraphExplorerScreen => {
     if (path.startsWith(NEW_SHEET_PATH)) return 'new-sheet';
     if (path.startsWith(CHECK_SHEET_PATH)) return 'check-sheet';

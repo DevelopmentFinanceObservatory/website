@@ -7,7 +7,7 @@
  * - right: what the term connects to
  * - below: narrower terms
  *
- * Each box lists every entry, most used first; a screen shows the first
+ * Each box lists every entry, most used first. A screen shows the first
  * BOX_LIMIT and opens the rest where `more` says.
  */
 import {
@@ -59,7 +59,7 @@ const box = (
 ): FocusBox =>
     Object.freeze({ key, side, title, join, ids: Object.freeze([...ids]), more, values });
 
-/** The boxes around a term the model holds, empty boxes left out; [] for any other id. */
+/** The boxes around a term the model holds, empty boxes left out. An id the model lacks gets []. */
 export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
     const kind = model.kind(id);
     if (kind === undefined) return [];
@@ -165,7 +165,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
 
 /**
  * How many properties a class declares that no dataset's pattern about it
- * uses; 0 for any other id.
+ * uses. 0 for any other id.
  */
 export function definedNotUsed(model: Model, id: string): number {
     return model.kind(id) === 'class' ? model.propertiesOf(id).groups.unused.length : 0;
@@ -196,7 +196,7 @@ export function datasetBoxes(view: DatasetView): readonly FocusBox[] {
 
 /**
  * A property's declared domain when it differs from the classes the picture
- * shows it used with; null when the two hold the same classes or the
+ * shows it used with. Null when the two hold the same classes or the
  * property declares none.
  */
 export function declaredDomain(model: Model, id: string): readonly string[] | null {
@@ -230,7 +230,7 @@ export type CentreHeading = {
 
 /**
  * The heading for a centred dataset, model term, or term outside the model
- * (found in `baseTerms` when given); null for a dataset the model lacks.
+ * (found in `baseTerms` when given). Null for a dataset the model lacks.
  */
 export function centreHeading(
     model: Model,
@@ -284,7 +284,7 @@ export const pictureLens = (centre: Centre, show: DatasetFilter): string | null 
 
 /**
  * `part` as a whole percentage of `whole`: 0 when either is 0, else at
- * least 1, so a small share never reads as none.
+ * least 1, so a small share does not round down to none.
  */
 export const sharePercent = (part: number, whole: number): number =>
     part <= 0 || whole <= 0 ? 0 : Math.max(1, Math.round((100 * part) / whole));
@@ -297,7 +297,7 @@ const PERIOD_WORDS: Readonly<Record<string, string>> = {
     P1D: 'Daily',
 };
 
-/** An observation period in words with its code, "Yearly (P1Y)"; any other code as it is. */
+/** An observation period in words with its code, "Yearly (P1Y)". Any other code comes back as it is. */
 export const periodText = (code: string): string => {
     const words = PERIOD_WORDS[code];
     return words === undefined ? code : `${words} (${code})`;

@@ -63,9 +63,9 @@ const WithTag = ({ name, base }: { name: string; base: boolean }) => (
 );
 
 /**
- * The dataset filter as one line: while a dataset is chosen, what it shows
- * and a way to clear it; on a dataset's own view without it, a way to choose
- * that dataset.
+ * The dataset filter as one line. While a dataset is chosen, the line says
+ * what it shows and offers a way to clear it. On a dataset's own view with no
+ * filter, it offers a way to choose that dataset.
  */
 const FilterLine = ({ lens, dataset }: { lens: PanelLens; dataset: string | null }) => {
     const { setShow } = useExplore();
@@ -175,7 +175,7 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
                 <p className={styles.note}>
                     Select any name to put it at the centre. The back button retraces your steps.
                     {markLens.dataset !== null &&
-                        ` Names ${markLens.label} uses carry its StatVar count; the rest are dimmed.`}
+                        ` Names ${markLens.label} uses carry its StatVar count. The rest are dimmed.`}
                 </p>
             </div>
             <aside className={styles.panel} aria-label={openBox ? openBox.title : 'Definition'}>

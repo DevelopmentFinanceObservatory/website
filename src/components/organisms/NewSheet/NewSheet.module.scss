@@ -198,7 +198,7 @@
     cursor: pointer;
 }
 
-// The table scrolls inside its own box so the page never scrolls sideways.
+// The table scrolls inside its own box so the page does not scroll sideways.
 .scroll {
     max-width: 100%;
     overflow-x: auto;

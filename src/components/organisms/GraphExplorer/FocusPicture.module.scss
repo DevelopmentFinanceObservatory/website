@@ -2,7 +2,7 @@
 @use "mixins" as *;
 @use "breakpoints" as *;
 
-// Three columns: the left boxes, the centre, the right boxes; the boxes above
+// Three columns: the left boxes, the centre, the right boxes. The boxes above
 // and below span all three and sit centred over and under the centre.
 .picture {
     display: grid;
@@ -21,7 +21,7 @@
 }
 
 // With no left box the left column folds away and the right one takes its
-// width; the boxes above and below then line up with the centre's left edge.
+// width. The boxes above and below then line up with the centre's left edge.
 @include breakpoint(not-phone) {
     .noLeft {
         grid-template-columns: 0 minmax(rem(180), rem(300)) minmax(0, 1fr);
@@ -189,7 +189,7 @@
     overflow-wrap: anywhere;
 }
 
-// A join: its words over a hairline, across between a side box and the centre.
+// A join is its words over a hairline, across between a side box and the centre.
 .hjoin {
     @include flex(column, center, center);
 
@@ -208,7 +208,7 @@
     }
 }
 
-// A join between a box above or below and the centre: a hairline through its words.
+// A join between a box above or below and the centre is a hairline through its words.
 .vjoin {
     @include flex(column, flex-start, center);
 
@@ -232,7 +232,7 @@
     border-radius: rem(4);
 }
 
-// Narrow screens: one column in reading order, every join a short vertical line.
+// On narrow screens it is one column in reading order, and every join is a short vertical line.
 @include breakpoint(phone) {
     .picture {
         grid-template-columns: minmax(0, 1fr);

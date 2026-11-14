@@ -5,13 +5,14 @@
  *
  * - `?class=<class dcid>`: the kind of thing the figures are about
  * - `?measured=<property dcid>`: the measured property
- * - `?split=<dcid>,<dcid>`: the ticked properties, in column order; `split=` ticks none
+ * - `?split=<dcid>,<dcid>`: the ticked properties, in column order
+ * - `?split=`: no property ticked
  * - `?dataset=<provenance dcid>&pattern=<index>`: a dataset pattern to start from
  * - `show` and `base`, carried through unread (explore.ts)
  *
  * A parameter left out takes its default: the class from the pattern, else the
- * kind of thing the most datasets use; the measured property and the ticked
- * properties from the pattern, else from the class's most-used pattern. A
+ * kind of thing the most datasets use. The measured property and the ticked
+ * properties come from the pattern, else from the class's most-used pattern. A
  * `class`, `measured` or `split` id, or a `dataset` and `pattern` pair, the
  * model does not offer takes the same default, and the selection names it
  * (SheetSelection.unknown).
@@ -35,7 +36,7 @@ export type PatternRef = { readonly dataset: string; readonly index: number };
 export type SheetQuery = {
     readonly classId: string | null;
     readonly measured: string | null;
-    /** The ticked properties in order; null takes the default. */
+    /** The ticked properties in order. Null takes the default. */
     readonly split: readonly string[] | null;
     readonly from: PatternRef | null;
 };
@@ -59,7 +60,7 @@ export const readSheetQuery = (params: SheetQueryReader): SheetQuery => ({
     from: readFrom(params),
 });
 
-/** The page state with nothing chosen: every choice takes its default. */
+/** The page state with nothing chosen, so every choice takes its default. */
 export const NO_SHEET_QUERY: SheetQuery = Object.freeze({
     classId: null,
     measured: null,
@@ -96,7 +97,7 @@ export type SplitOption = {
     readonly id: string;
     /** The value list the property draws from, or null. */
     readonly valueList: string | null;
-    /** How many members the value list lists; 0 without a value list. */
+    /** How many members the value list lists. 0 without a value list. */
     readonly members: number;
     /** False when the graph holds members of the value list that `members` leaves out. */
     readonly membersComplete: boolean;
@@ -108,7 +109,7 @@ export type SplitOption = {
 
 /**
  * An id from the URL the model does not offer, with the parameter that named
- * it; for a dataset pattern, the dataset's id and the pattern's index.
+ * it. For a dataset pattern, it holds the dataset's id and the pattern's index.
  */
 export type UnknownChoice =
     | { readonly param: 'class' | 'measured' | 'split'; readonly id: string }
@@ -125,7 +126,7 @@ export type SheetSelection = {
     readonly templateNamed: boolean;
     /** The measured properties patterns about the class use, most used first. */
     readonly measuredOptions: readonly string[];
-    /** The properties to tick: those in use first, each part most used first. */
+    /** The properties to tick, those in use first, each part most used first. */
     readonly splitOptions: readonly SplitOption[];
     readonly spec: SheetSpec;
     /**
@@ -147,7 +148,7 @@ const named = (model: Model, ref: PatternRef | null): PlacedPattern | null => {
 
 /**
  * The pattern about the class with the most StatVars, optionally with one
- * measured property; the earlier dataset and pattern win a tie.
+ * measured property. The earlier dataset and pattern win a tie.
  */
 export const mostUsedPattern = (
     model: Model,
@@ -262,7 +263,7 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     });
 };
 
-/** The URL state that holds a selection exactly: every choice written out. */
+/** The URL state that holds a selection exactly, with every choice written out. */
 export const queryOf = (selection: SheetSelection): SheetQuery => ({
     classId: selection.classId,
     measured: selection.measured,

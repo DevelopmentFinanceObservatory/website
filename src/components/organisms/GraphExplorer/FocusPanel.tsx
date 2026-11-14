@@ -68,7 +68,7 @@ const IdLine = ({ id, codes = [] }: { id: string; codes?: readonly string[] }) =
     );
 };
 
-/** A link to the sheet page, styled as an action; prefetch is off for the dynamic page. */
+/** A link to the sheet page, styled as an action. Prefetch is off for the dynamic page. */
 const SheetLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
     <Link href={href} prefetch={false} className={styles.action}>
         {children}
@@ -247,7 +247,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                 <Label>How its StatVars are formed</Label>
                 <ol className={styles.patterns}>
                     {view.patterns.map((pattern, index) => (
-                        // Patterns have no id; their order is the document's and does not change.
+                        // Patterns have no id. Their order is the document's and does not change.
                         <li key={index} className={styles.pattern}>
                             <p className={styles.sentence}>
                                 {patternSentence(model, pattern).map((part, at) =>

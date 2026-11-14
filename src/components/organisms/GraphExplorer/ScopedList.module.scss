@@ -63,7 +63,7 @@
     color: var(--color-stone);
 }
 
-// The table scrolls inside its own box so the page never scrolls sideways.
+// The table scrolls inside its own box so the page does not scroll sideways.
 .scroll {
     max-width: 100%;
     overflow-x: auto;
@@ -111,7 +111,7 @@
         padding-right: 0;
     }
 
-    // A dataset column head may wrap: nine labels side by side would otherwise run wide.
+    // A dataset column head may wrap, because nine labels side by side would otherwise run wide.
     .datasetHead {
         min-width: rem(80);
         white-space: normal;

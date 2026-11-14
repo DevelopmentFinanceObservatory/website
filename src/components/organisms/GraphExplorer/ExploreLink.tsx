@@ -18,7 +18,7 @@ type ExploreLinkProps = {
 /**
  * A link to an Explore view. Inside GraphExplorer a plain click moves within
  * the page through history and a modified click (new tab, new window)
- * follows the href; a plain anchor keeps Next from prefetching the dynamic
+ * follows the href. A plain anchor keeps Next from prefetching the dynamic
  * page for every link. Outside it (the sheet pages) the link navigates to
  * the Explore page. Either way it keeps the carried parameters.
  */
