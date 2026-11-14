@@ -21,7 +21,7 @@ import {
 } from '../sheet.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
-import { withListedParties, withPatternClass } from './sheetFixtures.ts';
+import { patternIdAt, withListedParties, withPatternClass } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -280,6 +280,8 @@ test('the sheet draft names the class, and both exports carry its columns and ro
     assert.deepEqual(request.rows, draft.rows);
 });
 
+const dac2aId = patternIdAt(model, 'provenance/OECDDAC2A', 3);
+
 /** The draft the Start a sheet page makes for a query. */
 const draftFor = (query: string) => {
     const selection = resolveSheet(model, readSheetQuery(new URLSearchParams(query)));
@@ -290,9 +292,9 @@ const draftFor = (query: string) => {
 for (const [query, field, value] of [
     // The default template, DAC1 pattern 0, gives financingProvider an observation role.
     ['', 'observationProperties', 'financingProvider'],
-    ['dataset=provenance/OECDDAC2A&pattern=3', 'measurementDenominator', 'Count_Person'],
+    [`dataset=provenance/OECDDAC2A&pattern=${dac2aId}`, 'measurementDenominator', 'Count_Person'],
     [
-        'dataset=provenance/OECDDAC2A&pattern=3',
+        `dataset=provenance/OECDDAC2A&pattern=${dac2aId}`,
         'observationProperties',
         'financingProvider,financingRecipient',
     ],

@@ -18,10 +18,12 @@ import {
 } from '../newSheet.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
-import { withPatternClass } from './sheetFixtures.ts';
+import { patternIdAt, withPatternClass, withReversedPatterns } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 const read = (query: string) => readSheetQuery(new URLSearchParams(query));
+const DAC1 = 'provenance/OECDDAC1';
+const grantId = patternIdAt(model, DAC1, 3);
 const resolve = (query: string) => {
     const selection = resolveSheet(model, read(query));
     assert.ok(selection);
@@ -35,14 +37,12 @@ test('the two entry forms read as a class or a dataset pattern', () => {
         split: null,
         from: null,
     });
-    assert.deepEqual(read('dataset=provenance%2FOECDDAC1&pattern=3'), {
+    assert.deepEqual(read(`dataset=provenance%2FOECDDAC1&pattern=${grantId}`), {
         classId: null,
         measured: null,
         split: null,
-        from: { dataset: 'provenance/OECDDAC1', index: 3 },
+        from: { dataset: DAC1, id: grantId },
     });
-    // A pattern index that is not a whole number names no pattern.
-    assert.equal(read('dataset=provenance/OECDDAC1&pattern=x').from, null);
     assert.equal(read('dataset=provenance/OECDDAC1').from, null);
 });
 
@@ -59,7 +59,7 @@ test('a written query reads back as the same state', () => {
             classId: 'FinancialFlow',
             measured: 'amount',
             split: ['nettingBasis', 'dac1AidType'],
-            from: { dataset: 'provenance/OECDDAC1', index: 0 },
+            from: { dataset: DAC1, id: grantId },
         },
         { classId: 'FinancialFlow', measured: null, split: [], from: null },
     ];
@@ -76,11 +76,11 @@ test('a written query reads back as the same state', () => {
 
 test('a sheet link keeps the carried dataset filter and base switch', () => {
     const carried = { show: { kind: 'all' }, base: true } as const;
-    const href = sheetHref({ from: { dataset: 'provenance/OECDDAC1', index: 2 } }, carried);
+    const href = sheetHref({ from: { dataset: DAC1, id: grantId } }, carried);
     const params = new URL(href, 'https://x.invalid').searchParams;
     assert.equal(new URL(href, 'https://x.invalid').pathname, '/graph-explorer/new-sheet');
     assert.deepEqual(readCarried(params), carried);
-    assert.deepEqual(readSheetQuery(params).from, { dataset: 'provenance/OECDDAC1', index: 2 });
+    assert.deepEqual(readSheetQuery(params).from, { dataset: DAC1, id: grantId });
     assert.equal(
         sheetHref({ classId: 'FinancialFlow' }, NO_CARRIED),
         '/graph-explorer/new-sheet?class=FinancialFlow',
@@ -91,7 +91,10 @@ test('a class takes its most-used pattern: measured property, ticks and definiti
     const flow = resolve('class=FinancialFlow');
     assert.equal(flow.measured, 'amount');
     assert.deepEqual(flow.properties, ['dac1AidType', 'financialFlowType', 'nettingBasis']);
-    assert.deepEqual([flow.template?.dataset, flow.template?.index], ['provenance/OECDDAC1', 0]);
+    assert.deepEqual(
+        [flow.template?.dataset, flow.template?.id],
+        [DAC1, patternIdAt(model, DAC1, 0)],
+    );
     assert.equal(flow.templateNamed, false);
     assert.equal(flow.spec.statType, 'measuredValue');
     assert.equal(flow.spec.qualifier, 'Nominal');
@@ -111,23 +114,45 @@ test('nothing set takes the kind of thing the most datasets use', () => {
 });
 
 test('a dataset pattern sets the class, measured property and ticks in its own order', () => {
-    const selection = resolve('dataset=provenance/OECDDAC1&pattern=3');
+    const selection = resolve(`dataset=provenance/OECDDAC1&pattern=${grantId}`);
     assert.equal(selection.classId, 'FinancialFlow');
     assert.equal(selection.measured, 'grantEquivalent');
     assert.deepEqual(selection.properties, ['dac1AidType', 'financialFlowType']);
     assert.equal(selection.templateNamed, true);
     assert.deepEqual(read(sheetQuery(queryOf(selection), NO_CARRIED)).from, {
-        dataset: 'provenance/OECDDAC1',
-        index: 3,
+        dataset: DAC1,
+        id: grantId,
     });
 });
 
+test('a pattern id names the same pattern when the dataset lists its patterns in another order', () => {
+    const reordered = withReversedPatterns(DAC1);
+    assert.notEqual(patternIdAt(reordered, DAC1, 0), patternIdAt(model, DAC1, 0));
+    const query = read(`dataset=provenance/OECDDAC1&pattern=${grantId}`);
+    const before = resolveSheet(model, query);
+    const after = resolveSheet(reordered, query);
+    assert.ok(before?.template && after?.template);
+    assert.equal(after.template.id, grantId);
+    assert.deepEqual(after.template.pattern, before.template.pattern);
+    assert.equal(after.measured, 'grantEquivalent');
+    assert.deepEqual(after.unknown, []);
+});
+
+test('a pattern id the dataset lacks, or the numeric position form, is named as unknown', () => {
+    for (const pattern of ['3', 'ffffffffffffffff']) {
+        const selection = resolve(`dataset=provenance/OECDDAC1&pattern=${pattern}`);
+        assert.deepEqual(selection.unknown, [{ param: 'pattern', id: DAC1, pattern }]);
+        assert.equal(selection.templateNamed, false);
+        assert.equal(queryOf(selection).from, null);
+    }
+});
+
 test('another measured property drops the named pattern for the most-used one with it', () => {
-    const selection = resolve('dataset=provenance/OECDDAC1&pattern=3&measured=amount');
+    const selection = resolve(`dataset=provenance/OECDDAC1&pattern=${grantId}&measured=amount`);
     assert.equal(selection.templateNamed, false);
     assert.deepEqual(
-        [selection.template?.dataset, selection.template?.index],
-        ['provenance/OECDDAC1', 0],
+        [selection.template?.dataset, selection.template?.id],
+        [DAC1, patternIdAt(model, DAC1, 0)],
     );
     assert.equal(queryOf(selection).from, null);
 });
@@ -147,13 +172,11 @@ test('the URL ids the model does not offer are named, in URL order; known ones a
             { param: 'split', id: 'notAProperty' },
         ],
     );
-    assert.deepEqual(resolve('dataset=provenance/Gone&pattern=0').unknown, [
-        { param: 'pattern', id: 'provenance/Gone', index: 0 },
+    assert.deepEqual(resolve(`dataset=provenance/Gone&pattern=${grantId}`).unknown, [
+        { param: 'pattern', id: 'provenance/Gone', pattern: grantId },
     ]);
-    assert.deepEqual(resolve('dataset=provenance/OECDDAC2B&pattern=99').unknown, [
-        { param: 'pattern', id: 'provenance/OECDDAC2B', index: 99 },
-    ]);
-    assert.deepEqual(resolve('dataset=provenance/OECDDAC2B&pattern=0').unknown, []);
+    const dac2b = patternIdAt(model, 'provenance/OECDDAC2B', 0);
+    assert.deepEqual(resolve(`dataset=provenance/OECDDAC2B&pattern=${dac2b}`).unknown, []);
     assert.deepEqual(resolve('class=FinancialFlow&measured=amount&split=nettingBasis').unknown, []);
     assert.deepEqual(resolve('').unknown, []);
 });
@@ -196,11 +219,15 @@ test('a property ranging over a class with instances is offered with its value l
 
 test('a named pattern about no kind of thing is named as unknown and the default class used', () => {
     const classless = withPatternClass('provenance/OECDDAC2A', 3, null);
-    const selection = resolveSheet(classless, read('dataset=provenance/OECDDAC2A&pattern=3'));
+    const classlessId = patternIdAt(classless, 'provenance/OECDDAC2A', 3);
+    const selection = resolveSheet(
+        classless,
+        read(`dataset=provenance/OECDDAC2A&pattern=${classlessId}`),
+    );
     assert.equal(selection?.classId, 'FinancialFlow');
     assert.equal(selection?.templateNamed, false);
     assert.deepEqual(selection?.unknown, [
-        { param: 'pattern', id: 'provenance/OECDDAC2A', index: 3 },
+        { param: 'pattern', id: 'provenance/OECDDAC2A', pattern: classlessId },
     ]);
 });
 
@@ -211,9 +238,6 @@ test('a measured property offered through a narrower class finds its template th
     assert.ok(selection);
     assert.ok(selection.measuredOptions.includes('grantEquivalent'));
     assert.equal(selection.measured, 'grantEquivalent');
-    assert.deepEqual(
-        [selection.template?.dataset, selection.template?.index],
-        ['provenance/OECDDAC1', 3],
-    );
+    assert.deepEqual([selection.template?.dataset, selection.template?.id], [DAC1, grantId]);
     assert.equal(selection.spec.statType, selection.template?.pattern.stat_type);
 });

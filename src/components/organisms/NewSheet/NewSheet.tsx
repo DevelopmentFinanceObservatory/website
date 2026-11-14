@@ -84,30 +84,39 @@ const PARAM_NOUNS: Readonly<Record<UnknownChoice['param'], string>> = {
 };
 
 /** The line naming the URL's ids the model does not offer, which their defaults replace. */
-const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => (
-    <p className={styles.note} role="status">
-        The model does not offer{' '}
-        {unknown.map((choice, at) => (
-            <span key={`${choice.param}:${choice.id}`}>
-                {at > 0 && (at === unknown.length - 1 ? ' or ' : ', ')}
-                the {PARAM_NOUNS[choice.param]}{' '}
-                {choice.param === 'pattern' ? (
-                    <>
-                        {choice.index} of{' '}
-                        <code>
-                            <BreakableId text={choice.id} />
-                        </code>
-                    </>
-                ) : (
+const UnknownChoices = ({ unknown }: { unknown: readonly UnknownChoice[] }) => {
+    type Pattern = Extract<UnknownChoice, { param: 'pattern' }>;
+    const patterns = unknown.filter((choice): choice is Pattern => choice.param === 'pattern');
+    const ids = unknown.filter((choice) => choice.param !== 'pattern');
+    return (
+        <>
+            {patterns.map((choice) => (
+                <p key={`${choice.id}:${choice.pattern}`} className={styles.note} role="status">
+                    The linked template is no longer available in{' '}
                     <code>
                         <BreakableId text={choice.id} />
                     </code>
-                )}
-            </span>
-        ))}{' '}
-        so the sheet uses its defaults.
-    </p>
-);
+                    , so the sheet starts from the defaults.
+                </p>
+            ))}
+            {ids.length > 0 && (
+                <p className={styles.note} role="status">
+                    The model does not offer{' '}
+                    {ids.map((choice, at) => (
+                        <span key={`${choice.param}:${choice.id}`}>
+                            {at > 0 && (at === ids.length - 1 ? ' or ' : ', ')}
+                            the {PARAM_NOUNS[choice.param]}{' '}
+                            <code>
+                                <BreakableId text={choice.id} />
+                            </code>
+                        </span>
+                    ))}{' '}
+                    so the sheet uses its defaults.
+                </p>
+            )}
+        </>
+    );
+};
 
 /**
  * The properties no dataset splits by yet, folded away. The reader opens and

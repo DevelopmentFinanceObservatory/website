@@ -7,7 +7,8 @@
  * - `?measured=<property dcid>`: the measured property
  * - `?split=<dcid>,<dcid>`: the ticked properties, in column order
  * - `?split=`: no property ticked
- * - `?dataset=<provenance dcid>&pattern=<index>`: a dataset pattern to start from
+ * - `?dataset=<provenance dcid>&pattern=<id>`: a dataset pattern to start from, named by
+ *   its patternId, a hash of the fields that define it
  * - `show` and `base`, carried through unread (explore.ts)
  *
  * A parameter left out takes its default: the class from the pattern, else the
@@ -15,8 +16,9 @@
  * properties come from the pattern, else from the class's most-used pattern. A
  * `class`, `measured` or `split` id, or a `dataset` and `pattern` pair, the
  * model does not offer takes the same default, and the selection names it
- * (SheetSelection.unknown). A pattern about no kind of thing counts as one the
- * model does not offer.
+ * (SheetSelection.unknown). A pattern id the dataset lacks, such as one from a
+ * link written before the dataset's patterns changed, names no pattern. A
+ * pattern about no kind of thing counts as one the model does not offer.
  */
 import {
     queryString,
@@ -30,8 +32,37 @@ import { NEW_SHEET_PATH } from './paths.ts';
 import type { SheetSpec } from './sheet.ts';
 import type { SchemaPattern } from './wire.ts';
 
-/** A pattern named by its dataset and its index in that dataset's patterns. */
-export type PatternRef = { readonly dataset: string; readonly index: number };
+/** A pattern named by its dataset and its patternId. */
+export type PatternRef = { readonly dataset: string; readonly id: string };
+
+/** A 32-bit FNV-1a hash of `text` from `seed`, as 8 hex digits. */
+const fnv1a = (text: string, seed: number): string => {
+    let hash = seed;
+    for (let at = 0; at < text.length; at += 1) {
+        hash = Math.imul(hash ^ text.charCodeAt(at), 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+/**
+ * A pattern's identity in the URL: 16 hex digits hashed from the fields that
+ * define it (population type, measured property, stat type, qualifier,
+ * denominator, and the constraint and observation properties as sets). The
+ * StatVar count and the examples change as usage grows and the API orders
+ * patterns by count, so neither the position nor those fields enter the id.
+ */
+export const patternId = (pattern: SchemaPattern): string => {
+    const defining = JSON.stringify([
+        pattern.population_type,
+        pattern.measured_property,
+        pattern.stat_type,
+        pattern.measurement_qualifier,
+        pattern.measurement_denominator,
+        [...pattern.constraint_properties].sort(),
+        [...pattern.observation_properties].sort(),
+    ]);
+    return fnv1a(defining, 0x811c9dc5) + fnv1a(defining, 0x9747b28c);
+};
 
 /** The page state as the URL holds it, before the model fills the defaults. */
 export type SheetQuery = {
@@ -46,9 +77,8 @@ type SheetQueryReader = QueryReader & { has(name: string): boolean };
 
 const readFrom = (params: SheetQueryReader): PatternRef | null => {
     const dataset = queryValue(params, 'dataset');
-    const pattern = queryValue(params, 'pattern');
-    if (dataset === null || pattern === null || !/^\d+$/.test(pattern)) return null;
-    return { dataset, index: Number(pattern) };
+    const id = queryValue(params, 'pattern');
+    return dataset === null || id === null ? null : { dataset, id };
 };
 
 /** The page state a query string holds. */
@@ -80,7 +110,7 @@ export const sheetQuery = (query: SheetQuery, carried: Carried): string => {
     if (query.split !== null) params.set('split', query.split.join(','));
     if (query.from !== null) {
         params.set('dataset', query.from.dataset);
-        params.set('pattern', String(query.from.index));
+        params.set('pattern', query.from.id);
     }
     writeCarried(params, carried);
     return queryString(params);
@@ -90,7 +120,7 @@ export const sheetQuery = (query: SheetQuery, carried: Carried): string => {
 export const sheetHref = (query: Partial<SheetQuery>, carried: Carried): string =>
     `${NEW_SHEET_PATH}${sheetQuery({ ...NO_SHEET_QUERY, ...query }, carried)}`;
 
-/** A pattern with where it sits. */
+/** A pattern with its dataset and id. */
 export type PlacedPattern = PatternRef & { readonly pattern: SchemaPattern };
 
 /** A property the page offers to split the figures by. */
@@ -110,11 +140,12 @@ export type SplitOption = {
 
 /**
  * An id from the URL the model does not offer, with the parameter that named
- * it. For a dataset pattern, it holds the dataset's id and the pattern's index.
+ * it. For a dataset pattern, `id` is the dataset's id and `pattern` the
+ * pattern id the URL gave.
  */
 export type UnknownChoice =
     | { readonly param: 'class' | 'measured' | 'split'; readonly id: string }
-    | { readonly param: 'pattern'; readonly id: string; readonly index: number };
+    | { readonly param: 'pattern'; readonly id: string; readonly pattern: string };
 
 export type SheetSelection = {
     readonly classId: string;
@@ -143,7 +174,7 @@ const place = (ref: PatternRef, pattern: SchemaPattern): PlacedPattern =>
 /** The pattern a reference names, or null. */
 const named = (model: Model, ref: PatternRef | null): PlacedPattern | null => {
     if (ref === null) return null;
-    const pattern = model.dataset(ref.dataset)?.patterns[ref.index];
+    const pattern = model.dataset(ref.dataset)?.patterns.find((each) => patternId(each) === ref.id);
     return pattern ? place(ref, pattern) : null;
 };
 
@@ -173,11 +204,11 @@ export const mostUsedPattern = (
     const about = classAndNarrower(model, classId);
     let best: PlacedPattern | null = null;
     for (const dataset of model.datasets) {
-        for (const [index, pattern] of dataset.patterns.entries()) {
+        for (const pattern of dataset.patterns) {
             if (pattern.population_type === null || !about.has(pattern.population_type)) continue;
             if (measured !== undefined && pattern.measured_property !== measured) continue;
             if (best === null || pattern.stat_var_count > best.pattern.stat_var_count) {
-                best = place({ dataset: dataset.ref, index }, pattern);
+                best = place({ dataset: dataset.ref, id: patternId(pattern) }, pattern);
             }
         }
     }
@@ -249,7 +280,7 @@ export const resolveSheet = (model: Model, query: SheetQuery): SheetSelection | 
     const unknown: UnknownChoice[] = [];
     // A pattern about no kind of thing cannot start a sheet, so it counts as unknown too.
     if (query.from !== null && (fromUrl === null || fromUrl.pattern.population_type === null)) {
-        unknown.push({ param: 'pattern', id: query.from.dataset, index: query.from.index });
+        unknown.push({ param: 'pattern', id: query.from.dataset, pattern: query.from.id });
     }
     if (query.classId !== null && query.classId !== classId) {
         unknown.push({ param: 'class', id: query.classId });
@@ -291,6 +322,6 @@ export const queryOf = (selection: SheetSelection): SheetQuery => ({
     split: selection.properties,
     from:
         selection.templateNamed && selection.template
-            ? { dataset: selection.template.dataset, index: selection.template.index }
+            ? { dataset: selection.template.dataset, id: selection.template.id }
             : null,
 });

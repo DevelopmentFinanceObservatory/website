@@ -574,6 +574,19 @@ test('a field, subject or severity this page does not know reads in plain words'
     assert.deepEqual(closestLookup(model)(marked[0]!.finding), []);
 });
 
+test('a range_not_judged finding counts as one warning and the summary does not say No problems', () => {
+    const judged = finding({ code: 'range_not_judged', severity: 'warning', subject: 'cell' });
+    const result = { generations: [], rowCount: 6, findings: at([judged]), refused: [] };
+    assert.deepEqual(resultCounts(result), { errors: 0, warnings: 1 });
+    assert.doesNotMatch(resultSentence(result, 6), /No problems/);
+    assert.match(
+        messageText(findingMessage(model, judged)),
+        /was not fully checked.*Look at the value yourself\./,
+    );
+    const lines = findingLines(model, mapHeaders(model, ['dac1AidType']), SHEET_ROWS, at([judged]));
+    assert.deepEqual([...sheetMarks(lines, [], SHEET_ROWS).cells], [[cellKey(4, 0), 'warning']]);
+});
+
 test('edit distance counts single-character edits', () => {
     assert.equal(editDistance('kitten', 'sitting'), 3);
     assert.equal(editDistance('', 'abc'), 3);

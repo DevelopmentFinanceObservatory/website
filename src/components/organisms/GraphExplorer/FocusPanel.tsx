@@ -23,7 +23,7 @@ import {
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
 import { declarerWords, KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
-import { sheetHref } from '@/lib/graphExplorer/newSheet';
+import { patternId, sheetHref } from '@/lib/graphExplorer/newSheet';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
 import type { SchemaFacets, SchemaTerm } from '@/lib/graphExplorer/wire';
@@ -311,9 +311,8 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
             <section className={styles.section}>
                 <Label>How its StatVars are formed</Label>
                 <ol className={styles.patterns}>
-                    {view.patterns.map((pattern, index) => (
-                        // Patterns have no id. Their order is the document's and does not change.
-                        <li key={index} className={styles.pattern}>
+                    {view.patterns.map((pattern) => (
+                        <li key={patternId(pattern)} className={styles.pattern}>
                             <p className={styles.sentence}>
                                 {patternSentence(model, pattern).map((part, at) =>
                                     part.kind === 'term' ? (
@@ -338,7 +337,10 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                             )}
                             <div>
                                 <SheetLink
-                                    href={sheetHref({ from: { dataset: view.id, index } }, carried)}
+                                    href={sheetHref(
+                                        { from: { dataset: view.id, id: patternId(pattern) } },
+                                        carried,
+                                    )}
                                 >
                                     Start a Sheet Like This
                                 </SheetLink>

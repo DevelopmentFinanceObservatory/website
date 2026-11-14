@@ -387,6 +387,20 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
             ' comes from a source this deployment of the graph does not serve. Use a term from a source it serves.',
         ),
     ],
+    range_not_judged: (context) => [
+        shown(context.value),
+        context.text(
+            context.finding.property === null
+                ? ` was not fully checked: the check could not confirm it fits what the ${fieldName(context)} allows. Look at the value yourself.`
+                : ' was not fully checked: the check could not confirm it fits the range of ',
+        ),
+        ...(context.finding.property === null
+            ? []
+            : [
+                  context.term(context.finding.property),
+                  context.text('. Look at the value yourself.'),
+              ]),
+    ],
 };
 
 /** The message for a finding whose code this page has no message for. It names the value and the code as sent. */

@@ -200,6 +200,7 @@ export const FINDING_CODES = [
     'definition_differs',
     'origin_not_served',
     'not_a_node',
+    'range_not_judged',
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
