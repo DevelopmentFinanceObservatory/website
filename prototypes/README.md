@@ -127,7 +127,7 @@ There is one copy of `next` and `react`, the root's. A second copy under `protot
 ## Build and preview
 
 ```sh
-pnpm check:data && pnpm typecheck && pnpm build && pnpm check:dist
+pnpm test && pnpm check:data && pnpm typecheck && pnpm build && pnpm check:dist
 pnpm preview            # wrangler dev on dist/, http://localhost:8787/prototypes/
 pnpm preview --port 8798   # when 8787 is taken
 ```

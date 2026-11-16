@@ -80,6 +80,9 @@ jobs:
       - run: pnpm check:deps
         working-directory: prototypes
 
+      - run: pnpm test
+        working-directory: prototypes
+
       - run: pnpm check:data
         working-directory: prototypes
 

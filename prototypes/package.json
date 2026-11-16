@@ -18,7 +18,8 @@
     "data": "node scripts/data.mts",
     "check:deps": "node scripts/check-deps.mts",
     "check:data": "node scripts/check-data.mts",
-    "check:dist": "node scripts/check-dist.mts"
+    "check:dist": "node scripts/check-dist.mts",
+    "test": "node --test scripts/*.test.mts"
   },
   "devDependencies": {
     "@developmentfinance/client": "0.2.0",

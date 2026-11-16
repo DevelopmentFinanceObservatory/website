@@ -7,6 +7,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
+import { decodeEntities } from './html.mts';
+
 const DIST = path.join(import.meta.dirname, '..', 'dist');
 const BASE = '/prototypes/';
 
@@ -26,13 +28,6 @@ const files = (dir: string): string[] =>
 
         return entry.isDirectory() ? files(full) : [full];
     });
-
-const decodeEntities = (value: string): string =>
-    value
-        .replaceAll('&amp;', '&')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#x27;', "'")
-        .replaceAll('&#39;', "'");
 
 /** The file in dist/ a URL path names, or null when there is none. With
  *  trailingSlash a page is <path>/index.html. */
