@@ -29,6 +29,8 @@ Last Update: Nov 16, 2026
     - [Phase 1: Validate][]
     - [Phase 2: Provision][]
     - [Phase 3: Enforce][]
+- [Testing][]
+    - [Local Test Results][]
 - [Work by Repository][]
 - [Alternatives Considered][]
 - [Future Features][]
@@ -384,6 +386,44 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 Phase 1 should avoid choices that Phase 2 has to undo. Every key has an owning account from the start, and the limit is stored per account in a form a tier can replace.
 
+## Testing
+
+### Local Test Results
+
+Run on Nov 16, 2026 against the local stack: the website on the implementation branch, the ai harness, and the dev apis proxy. Sign-in used an emailed code caught by a local mail catcher, and the key was created on the account's API keys page. The key went in as `Authorization: Bearer dfo_live_…`.
+
+| Test                              | How                                                                                                                                                          | Result                                                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Question and answer through MCP   | The pi coding agent, with a small local model, connected to the site's `/mcp` with the key as its bearer and was asked how much money Kenya received in 2025 | Answered from OECD DAC2A, citing the dataset and the partial 2025 data. The figures came from the tools. The small model's totals were unreliable: it mixed official and private donors |
+| MCP session with a key            | A scripted session: `initialize`, then `tools/list`                                                                                                          | 16 tools. `X-RateLimit-Limit: 600`, the keyed default, where an anonymous MCP caller gets 300                                                                                           |
+| Usage counted against the account | The limiter's rows after keyed calls                                                                                                                         | Counted as `mcp:acct:<user id>` and `api:acct:<user id>`, not by address. The key's last use advanced as calls were made                                                                |
+| Anonymous traffic unaffected      | An anonymous call during the keyed burst below                                                                                                               | 200, counted against its address at the anonymous limit (120)                                                                                                                           |
+| Limit enforced on the API         | Account limit set to 5; seven keyed `GET /openapi.json` calls at the start of a window                                                                       | Calls 1 to 5 answered 200, with remaining counting down from 4 to 0. Calls 6 and 7 answered 429 with `Retry-After: 58`                                                                  |
+| Limit enforced on MCP             | Two MCP sessions under the limit of 5                                                                                                                        | The first used 3 calls. The second was refused at `initialize` with 429, because the account's calls are shared across sessions                                                         |
+| An MCP client under a low limit   | Account limit set to 2; pi asked the same question                                                                                                           | pi finished, in about 4 minutes against 2 at the default limit                                                                                                                          |
+| Limit changes take effect         | The limit set to 5, then 2, then cleared                                                                                                                     | Each change reached the proxy within 8 seconds, inside the cache lifetime of about a minute                                                                                             |
+
+A refused call is answered with a problem document, the `Retry-After` header and the `X-RateLimit-*` headers:
+
+```
+HTTP/1.1 429 Too Many Requests
+content-type: application/problem+json
+retry-after: 36
+x-ratelimit-limit: 5
+x-ratelimit-remaining: 0
+x-ratelimit-reset: 36
+
+{"type":"/codes/rate_limited","title":"Too Many Requests","status":429,
+ "detail":"Too many requests: 5 per window per account. Try again in 36s.",
+ "code":"rate_limited","retryable":true,"trace_id":"…"}
+```
+
+Observations:
+
+- **Refused calls count.** A refused call still adds to the window's count, because the limiter counts every attempt. Usage read from the counters therefore includes refusals. Usage reports should come from the usage log line, which records the outcome of each call.
+- **Backends not exercised.** The local stack sends no caller to the backends, because the caller key and the shared secret are unset there. dfo-apis and dfo-ai seeing the account as a `user:` caller has to be tested on dev, after their changes are deployed.
+- **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests so far.
+
 ## Work by Repository
 
 Most of the work is in the website. This split holds for both options: Use and Build differ only in the website row, in where keys are stored and how they are looked up. The other rows are the same either way, since those systems see only the caller name and the key header. Codex's review corrected the dfo-ai row, which first read "little or none". The Phase 1 pieces:
@@ -462,6 +502,8 @@ None of these block Phase 1.
 [Phase 1: Validate]: #phase-1-validate
 [Phase 2: Provision]: #phase-2-provision
 [Phase 3: Enforce]: #phase-3-enforce
+[Testing]: #testing
+[Local Test Results]: #local-test-results
 [Work by Repository]: #work-by-repository
 [Alternatives Considered]: #alternatives-considered
 [Future Features]: #future-features
