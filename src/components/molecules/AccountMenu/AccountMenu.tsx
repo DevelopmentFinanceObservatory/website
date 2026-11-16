@@ -104,6 +104,11 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                             My History
                         </button>
                     </DropdownMenu.Item>
+                    <DropdownMenu.Item asChild onSelect={() => navigate('/account/api-keys')}>
+                        <button type="button" className={styles.item}>
+                            API keys
+                        </button>
+                    </DropdownMenu.Item>
                     <DropdownMenu.Item asChild onSelect={leave}>
                         <button type="button" className={styles.item}>
                             Sign out
