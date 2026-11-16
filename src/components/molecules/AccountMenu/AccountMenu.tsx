@@ -10,7 +10,6 @@ import DeleteAccountModal from './DeleteAccountModal';
 
 import Button from '@/components/atoms/Button/Button';
 import { useSiteNavigate } from '@/hooks/useSiteNavigate';
-import { viewerIsAdmin } from '@/lib/apiKeys/viewer';
 import { signOut, useSession } from '@/lib/auth/client';
 import { IS_SITE } from '@/lib/site';
 
@@ -21,8 +20,8 @@ import { IS_SITE } from '@/lib/site';
  * house panel), sign out.
  *
  * Whether the viewer is an admin is a server setting (ADMIN_EMAILS), so the
- * menu asks once, the first time it opens for a given user, and shows the
- * Admin item when the answer comes back. The prototypes app has no admin
+ * menu asks GET /api/account/admin once, the first time it opens for a given
+ * user, and shows the Admin item when the answer comes back. The prototypes app has no admin
  * page, so it never asks.
  */
 type AccountMenuProps = {
@@ -67,10 +66,12 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
         }
         const userId = user.id;
 
-        viewerIsAdmin().then(
-            (answer) => setAdmin({ userId, admin: answer }),
-            () => setAdmin({ userId, admin: false }),
-        );
+        fetch('/api/account/admin', { cache: 'no-store' })
+            .then((response) => (response.ok ? response.json() : { admin: false }))
+            .then(
+                (body: { admin?: unknown }) => setAdmin({ userId, admin: body.admin === true }),
+                () => setAdmin({ userId, admin: false }),
+            );
     };
 
     const leave = async () => {
