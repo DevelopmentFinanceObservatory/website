@@ -52,7 +52,7 @@ Requirements:
 - Each account that holds keys has its own rate limit, shared by all of its keys.
 - Some MCP features may later require sign-in. That is separate from keys and out of scope here.
 
-**Recommendation.** Use Better Auth's API key plugin from Phase 1, with keys in our own Postgres. The site already uses Better Auth for sign-in and sessions, so the plugin gives us key generation, hashing, storage, ownership checks and the create, list and delete endpoints without writing them, and it makes self-service possible from the start. We keep our own limiter, which anonymous traffic needs anyway, and we own caching and outage handling around the plugin's verification. A short spike confirms the plugin fits before Phase 1 code is written. If it does not, we fall back to building a small key table of our own behind the same verifier.
+**Recommendation.** Use Better Auth's API key plugin from Phase 1, with keys in our own Postgres. The site already uses Better Auth for sign-in and sessions, so the plugin gives us key generation, hashing, storage, and the create, list and delete operations with ownership checks, without writing them, and it makes self-service possible from the start. We keep our own limiter, which anonymous traffic needs anyway, and we own the key lookup on the request path, with its caching and outage handling. A spike confirmed the plugin fits, with workarounds. If that changes, we fall back to building a small key table of our own behind the same verifier.
 See [Use: Better Auth API Key Plugin][], [Build][] and [Alternatives Considered][].
 
 We'll take a phased approach. Initially we'll prove the concept with hand-provisioned keys and limited features. Once this is proven in production, follow-on work will enable more features, self-service provisioning, and admin interfaces to adjust access and limits.
@@ -278,14 +278,16 @@ In this option the key store is the [API key plugin][better-auth-api-key] of Bet
 
 ### How It Would Fit
 
-- **Proxy check.** The steps in [The Proxy Check][] stay the same, with the lookup replaced by `verifyApiKey`. We keep the short in-process cache, because the plugin writes to the key's row on each verification unless updates are deferred.
-- **Outages.** The plugin reports a database outage as an invalid key. Our verifier owns outage handling: it treats an error or timeout as "store unavailable", and before answering 401 it confirms the store is reachable, so failing open works as in [Identity, Failure and Abuse][].
-- **Header.** A small getter reads `Authorization: Bearer dfo_…` and `X-API-Key`, so [Key Format and Communication][] holds as written.
-- **Limits.** The plugin's limits are per key, and ours are per account, so we turn the plugin's own limiter off and keep counting in `limit_counter`: ours lets verification sit behind the cache, emits the `X-RateLimit-*` headers, and is the limiter anonymous traffic uses anyway. The account's limit is an extra field on the Better Auth user record.
-- **Revocation.** Operators revoke by deleting the key, because the plugin lets an owner re-enable a disabled key.
-- **Ownership.** A hand-provisioned Phase 1 key needs an account to belong to. We would create one for the partner, or for ourselves on their behalf.
-- **Caller name.** The key's account names the caller to the backends. The plugin's key id is the public id in logs.
-- **Schema.** The plugin's table is added through our existing migrations, as the auth tables were.
+The spike (below) shaped these. The plugin generates, hashes, stores and manages keys. Our code owns the request path.
+
+- **Proxy check.** The proxy does not call `verifyApiKey`. That call writes to the key's row on every verification, with no way to turn the writes off, and it reports a database outage as an invalid key. Instead our verifier hashes the key with the plugin's own hasher (`base64url(SHA-256(key))`) and reads the plugin's `apikey` table with Drizzle, on its own bounded pool and timeout. It checks `enabled` and `expiresAt` itself. A throw or timeout means "store unavailable", so failing open works as in [Identity, Failure and Abuse][]. The read is behind the short in-process cache, and the cache stores `expiresAt` so an expired key is not admitted from the cache.
+- **Header.** The proxy parses `Authorization: Bearer dfo_…` and `X-API-Key` itself. The plugin's option to turn a key into a session (`enableSessionForAPIKeys`) stays off: with it on, a key acts as its owner on every `/api/auth/*` endpoint, account deletion included.
+- **Limits.** The plugin's limiter is off. We count in `limit_counter`: ours lets verification sit behind the cache, emits the `X-RateLimit-*` headers, and is the limiter anonymous traffic uses anyway. The account's limit is an extra field on the Better Auth user record (`apiRateLimit`, not settable by the user).
+- **Endpoints.** The plugin's HTTP endpoints for keys are disabled. A user could otherwise create a key with any prefix, re-enable a key an operator disabled, or remove an expiry. Our own thin routes call the plugin's server methods, force the `dfo_live_` prefix, and always use the signed-in user as owner.
+- **Revocation.** Revoking deletes the key. The plugin's server-side delete needs the owner's session, so operator deletes go through its adapter or Drizzle.
+- **Ownership.** Every key belongs to an account. A hand-provisioned key belongs to an account we create for the partner, or to ourselves on their behalf.
+- **Caller name.** The key's account names the caller to the backends as `user:<32 hex>`, a keyed digest of the account id. The plugin's key id, a 32-character random string, is the public id in logs.
+- **Schema.** The plugin's table is added through our existing migrations, as the auth tables were, with two changes: a unique index on the key hash, and a foreign key to the user that deletes an account's keys with the account. The plugin has neither.
 
 ### Admin System
 
@@ -318,15 +320,15 @@ Every key needing an owning account is not a cost here: limits are per account a
 
 ### Spike Before Deciding
 
-Run this before Phase 1 code is written. A day or two should answer these. A "no" that cannot be worked around means Phase 1 uses the Build store instead.
+Run on Nov 16, 2026 against `better-auth` 1.7.7 and `@better-auth/api-key` 1.7.7 on Postgres. Verdict: fits, with the workarounds in [How It Would Fit][].
 
-- [ ] Does `@better-auth/api-key` work with the site's `better-auth` 1.7.7 and its Drizzle migrations?
-- [ ] Can verification run without a database write per request, or is the write cheap enough behind our cache?
-- [ ] Does a getter for `Authorization: Bearer` work alongside the plugin's own endpoints?
-- [ ] Can a signed-in user reach only their own keys, and are they unable to raise their own account's limit?
-- [ ] What happens to an account's keys when the account is deleted, and when a key expires while it is in our cache?
-- [ ] How does the verifier tell an invalid key from an unavailable store, given the plugin reports both as invalid?
-- [ ] Can an admin command delete another user's key and set an account's limit from the server, and run as a Cloud Run Job?
+- [x] Works with `better-auth` 1.7.7 and our Drizzle migrations. The plugin's version tracks `better-auth` exactly, so the two are upgraded together.
+- [x] Verification writes on every call (a read and two updates), and the writes cannot be turned off. The proxy reads the table itself instead.
+- [x] Headers: the proxy parses them itself. The plugin's getter only matters for key-as-session, which stays off.
+- [x] A signed-in user reaches only their own keys and cannot set limits or permissions. They can set a key's prefix, re-enable a disabled key and remove an expiry, so the plugin's HTTP endpoints are disabled and wrapped.
+- [x] Without a foreign key, deleting an account leaves keys that still verify. We add the foreign key. An expired key is deleted when it is next verified, so our cache checks expiry itself.
+- [x] The plugin cannot tell an invalid key from an unavailable store. Our own read can.
+- [x] An admin command can create a key for another user and set an account's limit from the server. Deleting another user's key goes through the adapter or Drizzle. Running it as a Cloud Run Job was not tested.
 
 ## Phases
 
@@ -346,7 +348,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Anonymous access:** Unchanged
 
-**Also needed:** The plugin spike, proxy check behind a verifier, the plugin's key table, admin command with an emergency off switch, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
+**Also needed:** Proxy check behind a verifier, the plugin's key table, admin command with an emergency off switch, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
 
 **Exit criteria:** The first partner runs on a key in production without incident, and per-key counts in the logs match what they report sending.
 
