@@ -216,7 +216,7 @@ On every surface, a `dfo_` bearer is consumed by the proxy and never copied upst
 
 ## Build
 
-In this option we own the key store: a table in the website's Postgres, a lookup in the proxy, and an admin command. Nothing new is installed. This is the fallback if the plugin spike fails.
+In this option we own the key store: a table in the website's Postgres, a lookup in the proxy, and admin pages. Nothing new is installed. This is the fallback if the plugin spike fails.
 
 The proxy reaches the store through a small verifier: it takes a key and answers with the key's public id, limit and owner, or says the key is invalid, or says the store is unavailable. Nothing else in the proxy knows where keys live, so the store can change later. Public ids stay the same if it does.
 
@@ -249,11 +249,11 @@ Before the rate limit, on the surfaces in [Where Keys Apply][]:
 
 [Identity, Failure and Abuse][] covers revocation delay and failing open when the store is unavailable.
 
-A keyed call is named to the backends by its account instead of `ip:<digest>`, so their allowances are per account too. The exact form (`key:` or the `user:` form dfo-ai already documents) is settled with the dfo-apis change. dfo-apis refuses any form but `ip:` with a 400 today. dfo-ai accepts a keyed caller on arrival, but its MCP servers drop any caller that is not `ip:<digest>` before they call dfo-apis. Both need a change. See [Work by Repository][].
+A keyed call is named to the backends by its account instead of `ip:<digest>`, so their allowances are per account too. The form is `user:` and the first 32 hex digits of an HMAC-SHA-256 over the account id, keyed like the `ip:` digest, so no account id leaves the website. dfo-apis refuses any form but `ip:` with a 400 today. dfo-ai accepts a keyed caller on arrival, but its MCP servers drop any caller that is not `ip:<digest>` before they call dfo-apis. Both need a change. See [Work by Repository][].
 
 ### Future Work: Admin Interface
 
-Phase 1 has only an admin command that creates and revokes keys and sets account limits, run in production as a Cloud Run Job. Later phases need more, and all of it would be ours to build:
+Operators work from an admin page (see [Admin System][]). Later phases need more, and all of it would be ours to build:
 
 - Self-service pages in the account menu to create, label and revoke keys and see last use, with the endpoints and ownership checks behind them (Phase 2).
 - An operator view to find a key, see its usage, and raise or cut its limits (Phase 3).
@@ -301,7 +301,11 @@ There is no admin interface to leverage. This was checked in three places:
 | [Better Auth admin plugin][better-auth-admin]            | User administration: list and edit users, roles, bans, sessions, impersonation                                       | No. It has no pages either, only methods, and it does not cover API keys                                                                               |
 | [Better Auth Infrastructure dashboard][better-auth-dash] | A hosted dashboard from the Better Auth company, fed by a plugin that sends user and session events to their service | Not documented. It would also send account activity to a third party                                                                                   |
 
-So an admin command, run in production as a Cloud Run Job, and later an operator view, are ours to write in either option. With the plugin, they are thin wrappers over its server methods instead of our own queries. The plugin's own client methods already cover a signed-in user's keys, which is most of what self-service needs. A community library, better-auth-ui, has ready-made components for a user's own keys, which could shorten the Phase 2 self-service pages. It has not been evaluated.
+So the operator view is ours to write in either option. With the plugin, it is a thin wrapper over its server methods instead of our own queries.
+
+Phase 1 ships it as a proof of concept at `/admin/api-keys`. It is open to signed-in users whose verified email is in `ADMIN_EMAILS`, and answers 404 to everyone else, checked on the page and in every action. An operator can list every key with its owner and last use, filter by email, create a key for an account, delete any key, and set or clear an account's limit. Each change writes a log line naming the operator. A Cloud Run Job running an admin command is no longer needed for Phase 1, though one could still be added for scripted changes.
+
+The self-service page, `/account/api-keys`, is built the same way: our own server actions over the plugin's server methods, since the plugin's HTTP endpoints are disabled.
 
 ### What It Saves and What It Costs
 
@@ -344,13 +348,13 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Who gets a key:** A few callers we choose
 
-**Provisioning:** Manual: an admin command, run as a Cloud Run Job, creates and revokes keys
+**Provisioning:** Manual: operators create and revoke keys on the admin page, `/admin/api-keys`
 
 **Limits:** Set per account by hand
 
 **Anonymous access:** Unchanged
 
-**Also needed:** Proxy check behind a verifier, the plugin's key table, admin command with an emergency off switch, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
+**Also needed:** Proxy check behind a verifier, the plugin's key table, the admin page, the `API_KEYS_ENABLED` switch that turns all keyed access off, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
 
 **Exit criteria:** The first partner runs on a key in production without incident, and per-key counts in the logs match what they report sending.
 
@@ -360,7 +364,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Who gets a key:** Any signed-in account
 
-**Provisioning:** Self-service from the account menu: create, label, revoke, see last use. The plugin's endpoints make this mostly page work, so it could start earlier if a partner needs it.
+**Provisioning:** Self-service from the account menu, `/account/api-keys`: create, label, revoke, see last use, up to `API_KEYS_MAX_PER_ACCOUNT` keys (5 by default). The page was built alongside Phase 1, so Phase 2 is when it is announced rather than when it is written.
 
 **Limits:** A default for self-service accounts, with higher limits granted by an operator. We will examine current usage and tune the default and the anonymous thresholds at that time, as part of the transition plan.
 
@@ -428,14 +432,14 @@ Observations:
 
 Most of the work is in the website. This split holds for both options: Use and Build differ only in the website row, in where keys are stored and how they are looked up. The other rows are the same either way, since those systems see only the caller name and the key header. Codex's review corrected the dfo-ai row, which first read "little or none". The Phase 1 pieces:
 
-| Where      | Size       | What                                                                                                                                                                                                                                                          |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| website    | Most of it | The plugin and its table migration (or our own `api_key`); key check, per-account limit, burst-safe counter fallback and key usage logging in `forward()`; admin command to create and revoke; OpenAPI security scheme; tests beside the existing proxy tests |
-| dfo-apis   | Small      | Accept a keyed caller in `x-dfo-caller` beside the website's shared secret, so allowances count per account. Today only `ip:<digest>` is accepted, and anything else gets a 400                                                                               |
-| dfo-ai     | Small      | Pass a keyed caller on to dfo-apis. Its data, presentation and analysis clients forward only `ip:<digest>` today and drop anything else, which would count a keyed caller's allowances against dfo-ai itself                                                  |
-| infra      | Small      | A Cloud Run Job that runs the admin command in production, so keys can be deleted and limits changed there                                                                                                                                                    |
-| docs       | Small      | The API quickstart, which says no key is needed, and a page on keys                                                                                                                                                                                           |
-| Cloudflare | None today | The Pro plan's per-address rules (600 a minute on the data API) sit well above the proxy's limits. Revisit if an account is granted more than that from one address                                                                                           |
+| Where      | Size       | What                                                                                                                                                                                                                                                        |
+| ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| website    | Most of it | The plugin and its table migration (or our own `api_key`); key check, per-account limit, burst-safe counter fallback and key usage logging in `forward()`; the self-service and admin pages; OpenAPI security scheme; tests beside the existing proxy tests |
+| dfo-apis   | Small      | Accept a keyed caller in `x-dfo-caller` beside the website's shared secret, so allowances count per account. Today only `ip:<digest>` is accepted, and anything else gets a 400                                                                             |
+| dfo-ai     | Small      | Pass a keyed caller on to dfo-apis. Its data, presentation and analysis clients forward only `ip:<digest>` today and drop anything else, which would count a keyed caller's allowances against dfo-ai itself                                                |
+| infra      | Optional   | The admin page covers operator changes in production. A Cloud Run Job for a scripted admin command is optional                                                                                                                                              |
+| docs       | Small      | The API quickstart, which says no key is needed, and a page on keys                                                                                                                                                                                         |
+| Cloudflare | None today | The Pro plan's per-address rules (600 a minute on the data API) sit well above the proxy's limits. Revisit if an account is granted more than that from one address                                                                                         |
 
 Order matters. dfo-apis refuses a caller form it does not recognize with a 400 when it arrives with the shared secret. So dfo-apis ships first, then dfo-ai, and the website starts sending keyed callers last. An end-to-end test should show a keyed call through `/mcp` spending the account's own allowance in dfo-apis.
 
@@ -469,7 +473,7 @@ Not planned for any phase yet. The design should not rule them out.
 None of these block Phase 1.
 
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
-- [ ] **Does a key identify an account to the backends as well,** so a signed-in user's key and their site session share allowances? dfo-ai already names a `user:` caller form.
+- [ ] **Should a signed-in site session be named by its account too,** so a user's key and their Studio session share allowances in the backends? A key already names its account to the backends as `user:<digest>`, and the Studio still names its callers by address.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
