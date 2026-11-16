@@ -1,0 +1,36 @@
+{
+  "name": "dfo-prototypes",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.5.2",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "imports": {
+    "#lib/*": "./lib/*"
+  },
+  "scripts": {
+    "dev": "node ../node_modules/next/dist/bin/next dev",
+    "build": "node scripts/build.mts",
+    "preview": "wrangler dev",
+    "typecheck": "node ../node_modules/typescript/bin/tsc --noEmit",
+    "new": "node scripts/new.mts",
+    "data": "node scripts/data.mts",
+    "check:deps": "node scripts/check-deps.mts",
+    "check:data": "node scripts/check-data.mts",
+    "check:dist": "node scripts/check-dist.mts"
+  },
+  "devDependencies": {
+    "@developmentfinance/client": "0.2.0",
+    "@mdx-js/loader": "3.1.1",
+    "@next/mdx": "16.4.5",
+    "@types/mdx": "2.0.14",
+    "wrangler": "4.163.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}

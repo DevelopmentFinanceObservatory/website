@@ -1,0 +1,24 @@
+// An assets-only Worker: no script, so a request with no matching file is a
+// 404. The route hands developmentfinance.org/prototypes* to it and leaves
+// every other path on the website. Files sit under dist/prototypes/, which is
+// the public path, so no base_path is needed. Deployed from
+// .github/workflows/deploy-prototypes.yml.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dfo-prototypes",
+  "compatibility_date": "2026-11-16",
+  "assets": {
+    "directory": "./dist",
+    // The nearest 404.html answers, so dist/prototypes/404.html covers /prototypes/*.
+    "not_found_handling": "404-page",
+    // Next exports with trailingSlash, so /prototypes/x redirects to /prototypes/x/.
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [
+    { "pattern": "developmentfinance.org/prototypes*", "zone_name": "developmentfinance.org" }
+  ],
+  // Preview URLs live on workers.dev, so it stays on. edge/_redirects sends the
+  // bare workers.dev root to /prototypes/.
+  "workers_dev": true,
+  "preview_urls": true
+}

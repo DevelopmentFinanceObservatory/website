@@ -1,0 +1,34 @@
+import Button from '@/components/atoms/Button/Button';
+import SourceLink from '@/components/atoms/SourceLink/SourceLink';
+
+import MapBanner from '../components/MapBanner/MapBanner';
+import PrototypeList from '../components/PrototypeList/PrototypeList';
+import RevealStatTiles from '../components/RevealStatTiles/RevealStatTiles';
+
+export const metadata = {
+    title: { absolute: 'Prototypes · Development Finance Observatory' },
+};
+
+# Prototypes
+
+Small tools built on the [Development Finance Observatory](https://developmentfinance.org/)'s data, one a day during the build week of 16 to 20 November 2026. Each one fetches its data once with the DFO SDKs and ships as a static page.
+
+<PrototypeList />
+
+## Built from the site's parts
+
+These pages use the site's fonts, colours and components directly, so a prototype looks like the rest of the Observatory.
+
+<MapBanner>
+    <Button variant="dark" icon="arrow" href="https://developmentfinance.org/data">Explore the data</Button>
+    <Button icon="arrow-up-right" href="https://developmentfinance.org/docs">Read the docs</Button>
+</MapBanner>
+
+<RevealStatTiles
+    stats={[
+        { value: '5', label: 'prototypes in five days' },
+        { value: '0.2.0', label: 'SDK release they use' },
+    ]}
+/>
+
+Every number traces to its source. The aid figures come from the <SourceLink dcid="provenance/OECDCreditorReportingSystem">OECD Creditor Reporting System</SourceLink>.
