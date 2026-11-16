@@ -6,6 +6,7 @@ from pipeline.countries import ISO3
 from pipeline.creditors import groups, net_flows
 from pipeline.panel import Panel, Series, amount_of, span, whole
 from pipeline.project import project_service
+from pipeline.valuation import present_value
 
 
 def build_view(
@@ -79,6 +80,7 @@ def build_view(
         built[iso3] = {
             "year": view.base,
             "debtFace": whole(stock),
+            "debtPV": whole(present_value(keys, view.base)),
             "gdp": whole(gdp(view.base)),
             **capacity_for(capacity.get(iso3), view.base),
             "years": years,

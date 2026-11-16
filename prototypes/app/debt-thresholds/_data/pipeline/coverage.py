@@ -20,7 +20,7 @@ def coverage_rows(built: Mapping[str, dict], view: View) -> list[dict]:
         base = built[country.iso3]
         base_row = next(r for r in base["years"] if r["year"] == view.base)
         cells = {
-            "debt stock": base["debtFace"] is not None,
+            "debt stock": base["debtPV"] is not None,
             "debt service": base_row["service"] is not None,
             "GDP": base["gdp"] is not None,
             "revenue": base_row["revenue"] is not None,

@@ -345,7 +345,7 @@ export const DebtThresholds = ({
             <div className={styles.tool}>
                 <div className={styles.chartCard}>
                     <p className={styles.title}>
-                        External public debt at face value against peak debt service, {year} to{' '}
+                        External public debt at present value against peak debt service, {year} to{' '}
                         {lastYear}
                     </p>
                     <div className={styles.whatIf}>

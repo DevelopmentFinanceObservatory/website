@@ -32,7 +32,12 @@ def test_build_view_shapes_records_and_inputs_for_every_country() -> None:
         "mlat_service": dict.fromkeys(every_year, 10.0),
     }
     panel = {iso3: {key: dict(series) for key, series in flows.items()} for iso3 in ISO3}
-    panel[ISO3[0]] |= {"ppg_stock": {2024: 100.0}, "imf_stock": {2024: 20.0}}
+    panel[ISO3[0]] |= {
+        "ppg_stock": {2024: 100.0},
+        "imf_stock": {2024: 20.0},
+        "ppg_concessional_stock": {2024: 50.0},
+        "ppg_grant_element": {2024: 40.0},
+    }
     built, inputs = build_view(
         VIEW,
         panel,
@@ -45,6 +50,7 @@ def test_build_view_shapes_records_and_inputs_for_every_country() -> None:
     assert set(built) == set(inputs) == set(ISO3)
     first = built[ISO3[0]]
     assert first["debtFace"] == 100  # PPG only: the debt test leaves out IMF credit
+    assert first["debtPV"] == 80  # half concessional at a 40% grant element
     assert inputs[ISO3[0]]["external_debt"] == {"2024": 120.0}  # the projection keeps it
     assert first["gdp"] == 10_000_000_000
     assert first["capacitySource"] == "dsa"
@@ -55,4 +61,5 @@ def test_build_view_shapes_records_and_inputs_for_every_country() -> None:
     assert inputs[ISO3[0]]["external_debt"] == {"2024": 120.0}
     assert inputs[ISO3[0]]["projection_error"] is None
     assert built[ISO3[1]]["debtFace"] is None  # no stock reported
+    assert built[ISO3[1]]["debtPV"] is None
     assert built[ISO3[1]]["capacity"] is None

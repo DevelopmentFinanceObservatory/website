@@ -65,7 +65,8 @@ const synthetic = (
     bases: {
         [baseYear]: {
             year: baseYear,
-            debtFace: debt * 10,
+            debtFace: debt * 12,
+            debtPV: debt * 10,
             gdp: 1000,
             capacity,
             capacitySource: capacity === null ? null : 'dsa',
@@ -88,7 +89,7 @@ test('the fixture is a valid envelope with a group for every case and six projec
     assert.ok(
         envelope.provenance.sdk && envelope.provenance.query && envelope.provenance.retrieved,
     );
-    assert.equal(envelope.data.measure, 'face');
+    assert.equal(envelope.data.measure, 'pv');
     assert.deepEqual(
         countries.map((c) => classify(c, 2024, effectiveCapacity(c, 2024, 'assessed'))),
         ['service', 'debt', 'debt', 'below', 'nodata'],
@@ -317,7 +318,7 @@ test('toCsv writes one row per country and honours the override', () => {
     assert.equal(lines.length, 1 + countries.length);
     assert.equal(
         lines[0],
-        'iso3,name,capacity,capacity source,external public debt at face value % of GDP,debt service % of revenue (base year),peak debt service % of revenue,peak year,group,"FDL group, 2024"',
+        'iso3,name,capacity,capacity source,external public debt at present value % of GDP,debt service % of revenue (base year),peak debt service % of revenue,peak year,group,"FDL group, 2024"',
     );
     assert.equal(
         lines[1],

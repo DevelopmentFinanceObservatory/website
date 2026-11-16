@@ -50,7 +50,7 @@ The switch above the chart moves between two views. "FDL, 2024 data" shows the g
 
 FDL applies the IMF and World Bank's debt thresholds to 58 low and lower-middle-income countries. It separates countries that owe too much from countries that owe a manageable amount but cannot keep up with repayments.
 
-1. FDL checks external public and publicly guaranteed debt at face value as a share of GDP in the base year. Above 30%, 40%, or 55% for weak, medium, or strong capacity, it puts the country at risk of insolvency.
+1. FDL checks external public and publicly guaranteed debt at present value as a share of GDP in the base year. Above 30%, 40%, or 55% for weak, medium, or strong capacity, it puts the country at risk of insolvency.
 2. For the remaining countries, it checks external public debt service as a share of government revenue in the base year and each of the six years after it. Above 14%, 18%, or 23% in any of those years, FDL calls the country illiquid.
 3. Countries below both thresholds in every year are at lower risk.
 
@@ -58,11 +58,11 @@ Each threshold depends on a country's debt-carrying capacity (weak, medium, or s
 
 ## Notes
 
-Based on 2024 data, this tool puts <FdlMatch data={thresholds.data} /> countries in the same group as FDL, including all <GroupCount data={thresholds.data} year={2024} group="debt" /> that FDL finds at risk of insolvency.
+Based on 2024 data, this tool puts <FdlMatch data={thresholds.data} /> countries in the same group as FDL.
 
-That means we get different results for seven countries.
+That means we get different results for four countries.
 
-- FDL places Lesotho, Rwanda and São Tomé and Príncipe at lower risk and The Gambia among the illiquid. This page places them above the debt threshold.
+- FDL places Mozambique at risk of insolvency, here we place it above the debt-service threshold. Its debt sits just below the debt threshold at our estimate of present value.
 - FDL places Haiti and Sierra Leone at lower risk, here we place them above the debt-service threshold.
 - FDL places Comoros illiquid, here we put it below both.
 
@@ -71,7 +71,7 @@ The differences are likely methodological. FDL has not published the updated mod
 ### Other methodological notes
 
 - The debt test counts public and publicly guaranteed debt without IMF credit, which matches FDL's 2024 groups most closely. Debt service includes payments to the IMF.
-- Debt is at face value. The IMF–World Bank thresholds are set on present value, so face value counts concessional debt at more than its present cost.
+- The IMF–World Bank thresholds are set on the present value of debt, which the World Bank does not publish. This page estimates it by discounting the concessional share of each country's debt by the average grant element of its new loans since 2015.
 - Revenue is IMF WEO general government revenue, which includes grants. The IMF–World Bank thresholds use revenue excluding grants, so ratios are lower for countries that rely on aid.
 - Debt service after the base year (2026 to 2031 in the DFO view, 2025 to 2030 in FDL's) our projection for this page. Payments already scheduled on existing loans, from the World Bank, plus payments on the new loans each country would need to cover its financing gap, following the method FDL set out in [2023](https://findevlab.org/wp-content/uploads/2023/12/FDL_Debt-distress-update_final20231204.pdf). New loans use the creditor type's average terms from 2015 to 2019.
 - Like FDL's method, the projection does not subtract disbursements still due on loans already signed. New borrowing, and the debt service on it, may therefore run high, which pushes some countries towards illiquid.

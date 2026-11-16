@@ -21,6 +21,7 @@ def built_for(view_base: int, *, gap: str | None = None) -> dict[str, dict]:
     for country in COUNTRIES:
         built[country.iso3] = {
             "debtFace": 1.0,
+            "debtPV": 1.0,
             "gdp": None if country.iso3 == gap else 1.0,
             "capacity": {} if country.iso3 != "BTN" else None,
             "years": [

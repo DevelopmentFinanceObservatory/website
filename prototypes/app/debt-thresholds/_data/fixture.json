@@ -10,7 +10,7 @@
       2025
     ],
     "defaultYear": 2025,
-    "measure": "face",
+    "measure": "pv",
     "vintages": {
       "2024": {
         "ids": "October 2026",
@@ -37,7 +37,8 @@
         "bases": {
           "2024": {
             "year": 2024,
-            "debtFace": 33000000000,
+            "debtFace": 41250000000,
+            "debtPV": 33000000000,
             "gdp": 110000000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -228,7 +229,8 @@
           },
           "2025": {
             "year": 2025,
-            "debtFace": 34000000000,
+            "debtFace": 42500000000,
+            "debtPV": 34000000000,
             "gdp": 115000000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -426,7 +428,8 @@
         "bases": {
           "2024": {
             "year": 2024,
-            "debtFace": 17000000000,
+            "debtFace": 21250000000,
+            "debtPV": 17000000000,
             "gdp": 28000000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -617,7 +620,8 @@
           },
           "2025": {
             "year": 2025,
-            "debtFace": 17500000000,
+            "debtFace": 21875000000,
+            "debtPV": 17500000000,
             "gdp": 30000000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -815,7 +819,8 @@
         "bases": {
           "2024": {
             "year": 2024,
-            "debtFace": 20000000000,
+            "debtFace": 25000000000,
+            "debtPV": 20000000000,
             "gdp": 31000000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -1006,7 +1011,8 @@
           },
           "2025": {
             "year": 2025,
-            "debtFace": 22000000000,
+            "debtFace": 27500000000,
+            "debtPV": 22000000000,
             "gdp": 32000000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -1204,7 +1210,8 @@
         "bases": {
           "2024": {
             "year": 2024,
-            "debtFace": 6000000000,
+            "debtFace": 7500000000,
+            "debtPV": 6000000000,
             "gdp": 20000000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -1395,7 +1402,8 @@
           },
           "2025": {
             "year": 2025,
-            "debtFace": 6200000000,
+            "debtFace": 7750000000,
+            "debtPV": 6200000000,
             "gdp": 21000000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -1594,6 +1602,7 @@
           "2024": {
             "year": 2024,
             "debtFace": null,
+            "debtPV": null,
             "gdp": null,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -1695,6 +1704,7 @@
           "2025": {
             "year": 2025,
             "debtFace": null,
+            "debtPV": null,
             "gdp": null,
             "capacity": null,
             "capacitySource": null,

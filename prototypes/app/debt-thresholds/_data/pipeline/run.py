@@ -150,7 +150,7 @@ def build_thresholds(out: Path, *, client: httpx.Client, now: datetime, ids: str
     data = {
         "baseYears": [v.base for v in both],
         "defaultYear": default_year,
-        "measure": "face",
+        "measure": "pv",
         "vintages": {
             str(v.base): {
                 "ids": v.ids,
