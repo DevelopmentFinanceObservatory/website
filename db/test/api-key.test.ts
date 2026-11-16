@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import test from 'node:test';
 import { defaultKeyHasher } from '@better-auth/api-key';
@@ -93,8 +92,13 @@ test('API key table and plugin setup', async (t) => {
                 .from(schema.apikey)
                 .where(eq(schema.apikey.id, created.id));
 
-            assert.equal(row?.key, createHash('sha256').update(created.key).digest('base64url'));
             assert.equal(row?.key, await defaultKeyHasher(created.key));
+            // The stored form is base64url(SHA-256(key)), unpadded: the plugin's
+            // hasher on a fixed input matches that, computed independently.
+            assert.equal(
+                await defaultKeyHasher('dfo_live_known-answer'),
+                'NJcfEBlh8jOAAbK52QabqvvVBcoa3ykj-SNDqq0F7Y0',
+            );
             assert.equal(row?.referenceId, alice.user.id);
         },
     );
