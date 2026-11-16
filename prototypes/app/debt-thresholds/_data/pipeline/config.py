@@ -1,7 +1,7 @@
 """Constants of the method, the two base-year views and the output paths."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Literal, Self
 
@@ -33,12 +33,22 @@ class View:
         return self.base + HORIZON
 
 
+def release_dir(release: str) -> str:
+    """Return the cache folder name for an IDS release named "November 2026": `ids-2026-11`.
+
+    The current view's bulk files and parsed panel live in this folder, so a new
+    release downloads and parses afresh instead of reusing an older one's files.
+    """
+    return f"ids-{datetime.strptime(release, '%B %Y'):%Y-%m}"
+
+
 def views(today: date, *, current_ids: str) -> tuple[View, View]:
     """The 2024 view on the archived releases and the 2025 view on current data.
 
     `today` stamps the current view's capacity vintage, so the clock is read by
     the caller and not at import. `current_ids` names the IDS release the DFO
-    holds (`sources.dfo_api.ids_release`), so the label follows the data.
+    holds (`sources.dfo_api.ids_release`), so the label and the cache folder
+    follow the data.
     """
     return (
         View(
@@ -53,7 +63,7 @@ def views(today: date, *, current_ids: str) -> tuple[View, View]:
         View(
             base=2025,
             ids=current_ids,
-            ids_dir="ids-current",
+            ids_dir=release_dir(current_ids),
             archived=False,
             weo=("October", 2026),
             capacity_as_of=today.isoformat(),
