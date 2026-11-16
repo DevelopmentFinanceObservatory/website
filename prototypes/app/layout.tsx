@@ -19,7 +19,7 @@ import '@/styles/main.scss';
 
 // The same fonts and global styles as the site (src/app/layout.tsx), without
 // its analytics and consent scripts, because the prototypes are static pages.
-const DESCRIPTION = `Small tools built on the ${SITE_NAME}'s data.`;
+const DESCRIPTION = `Tools and apps built on the ${SITE_NAME} infrastructure.`;
 
 export const metadata: Metadata = {
     metadataBase: new URL(`${SITE_ORIGIN}/prototypes/`),
