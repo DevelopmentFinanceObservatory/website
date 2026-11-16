@@ -10,7 +10,12 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { applyMigrations } from '../../../../db/apply-migrations.ts';
 import * as schema from '../../../../db/schema.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
-import { API_KEY_PATHS, API_KEY_PREFIX, apiKeyPlugin } from '../../auth/apiKeyOptions.ts';
+import {
+    API_KEY_PATHS,
+    API_KEY_PREFIX,
+    API_KEY_START_LENGTH,
+    apiKeyPlugin,
+} from '../../auth/apiKeyOptions.ts';
 import { createKeyVerifier } from '../../proxy/keyVerifier.ts';
 import { createKeyService } from '../service.ts';
 
@@ -126,8 +131,10 @@ test('API key service', async (t) => {
 
         assert.equal(everything.includes(made.key), false);
         assert.equal(everything.includes(row.key), false);
-        // The start is the first characters only.
-        assert.ok(listed[0]!.start && listed[0]!.start.length < made.key.length);
+        // The start is the prefix and three random characters, nothing more.
+        assert.equal(listed[0]!.start, made.key.slice(0, API_KEY_START_LENGTH));
+        assert.equal(listed[0]!.start?.length, 12);
+        assert.match(listed[0]!.start ?? '', /^dfo_live_[A-Za-z0-9]{3}$/);
 
         await service.deleteOwn(bob, made.id);
     });

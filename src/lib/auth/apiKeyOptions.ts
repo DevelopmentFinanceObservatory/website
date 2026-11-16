@@ -20,6 +20,14 @@ export const API_KEY_PATHS: readonly string[] = [
 ];
 
 /**
+ * How much of a key is stored in the clear as the row's `start`, which the
+ * key pages show so an owner can tell keys apart: the prefix and three
+ * random characters (`dfo_live_RCd`). Three of 32 random characters give
+ * nothing to guess with.
+ */
+export const API_KEY_START_LENGTH = API_KEY_PREFIX.length + 3;
+
+/**
  * The `@better-auth/api-key` plugin, set up so the proxy owns the request
  * path (src/lib/proxy/keyVerifier): the plugin's own limiter, metadata and
  * key-as-session are off. A key as a session would let it act as its owner
@@ -32,5 +40,6 @@ export const apiKeyPlugin = (overrides: Parameters<typeof apiKey>[0] = {}) =>
         rateLimit: { enabled: false },
         enableSessionForAPIKeys: false,
         enableMetadata: false,
+        startingCharactersConfig: { shouldStore: true, charactersLength: API_KEY_START_LENGTH },
         ...overrides,
     });
