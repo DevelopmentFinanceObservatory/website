@@ -24,6 +24,8 @@ IDS_WORLD = {
     "ppg_principal": "DT.AMT.DPPG.CD",
     "ppg_disb": "DT.DIS.DPPG.CD",
     "ppg_stock": "DT.DOD.DPPG.CD",
+    "ppg_concessional_stock": "DT.DOD.ALLC.CD",
+    "ppg_grant_element": "DT.GRE.DPPG",
     "mlat_service": "DT.TDS.MLAT.CD",
     "mlat_principal": "DT.AMT.MLAT.CD",
     "mlat_disb": "DT.DIS.MLAT.CD",

@@ -43,6 +43,11 @@ export type BaseYear = {
     year: number;
     /** External public and publicly guaranteed debt (PPG, without IMF credit) at the end of the base year, face value. */
     debtFace: number | null;
+    /**
+     * The same debt at estimated present value: the concessional share of the stock
+     * discounted by the mean grant element of commitments from 2015 to the base year (IDS).
+     */
+    debtPV: number | null;
     /** GDP in the base year, IMF WEO. */
     gdp: number | null;
     /** Capacity in force for this base year. Null only while a rating is missing (no data). */
@@ -85,8 +90,8 @@ export type ThresholdsData = {
     baseYears: number[];
     /** The year the page opens on, set by the data step's coverage check. */
     defaultYear: number;
-    /** Debt is measured at face value. */
-    measure: 'face';
+    /** The debt test uses estimated present value (`debtPV`). */
+    measure: 'pv';
     /** Keyed by base year as a string. */
     vintages: Record<string, Vintage>;
     /** Countries whose 2024 rebuilt group equals FDL's published group, from the reproduction check. */

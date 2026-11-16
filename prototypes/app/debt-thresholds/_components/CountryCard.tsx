@@ -208,7 +208,7 @@ export const CountryCard = ({
                 </div>
                 <div ref={debtRef}>
                     <h3 className={styles.heading}>
-                        External public debt at face value, % of GDP, {year}
+                        External public debt at present value, % of GDP, {year}
                     </h3>
                     <DebtBar value={debt} capacity={capacity} width={debtWidth} />
                 </div>

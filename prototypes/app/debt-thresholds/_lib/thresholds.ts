@@ -50,11 +50,11 @@ export const effectiveCapacity = (
 ): Capacity | null =>
     override === 'assessed' ? (toBase(country, year)?.capacity ?? null) : override;
 
-/** External public debt at face value in % of GDP. */
+/** External public debt at estimated present value in % of GDP. */
 export const debtRatio = (base: BaseYear): number | null => {
-    const { debtFace, gdp } = base;
+    const { debtPV, gdp } = base;
 
-    return debtFace === null || !isPositive(gdp) ? null : (debtFace * 100) / gdp;
+    return debtPV === null || !isPositive(gdp) ? null : (debtPV * 100) / gdp;
 };
 
 /** External debt service in % of revenue for every year in the base year's series. */
@@ -325,7 +325,7 @@ const CSV_HEADER = [
     'name',
     'capacity',
     'capacity source',
-    'external public debt at face value % of GDP',
+    'external public debt at present value % of GDP',
     'debt service % of revenue (base year)',
     'peak debt service % of revenue',
     'peak year',

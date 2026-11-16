@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "External public debt (PPG, and IMF credit for service): stock, service, principal and disbursements by creditor group, and GDP, for the 58 countries in FDL's March 2026 note, 2015 to 2031",
-    "retrieved": "2026-11-16T22:14:58.151Z",
+    "retrieved": "2026-11-16T22:41:58.439Z",
     "citation": "World Bank International Debt Statistics (December 2025 and November 2026 releases; November 2026 read through the Development Finance Observatory) and IMF World Economic Outlook (October 2025 and October 2026)",
     "dfo": [
       {
@@ -2680,10 +2680,12 @@
           "DT.DIS.DPPG.CD",
           "DT.DIS.MLAT.CD",
           "DT.DIS.PRVT.CD",
+          "DT.DOD.ALLC.CD",
           "DT.DOD.DIMF.CD",
           "DT.DOD.DPPG.CD",
           "DT.GPA.OFFT",
           "DT.GPA.PRVT",
+          "DT.GRE.DPPG",
           "DT.INR.OFFT",
           "DT.INR.PRVT",
           "DT.INT.DIMF.CD",
@@ -2754,10 +2756,12 @@
           "DT.DIS.DPPG.CD",
           "DT.DIS.MLAT.CD",
           "DT.DIS.PRVT.CD",
+          "DT.DOD.ALLC.CD",
           "DT.DOD.DIMF.CD",
           "DT.DOD.DPPG.CD",
           "DT.GPA.OFFT",
           "DT.GPA.PRVT",
+          "DT.GRE.DPPG",
           "DT.INR.OFFT",
           "DT.INR.PRVT",
           "DT.INT.DIMF.CD",
@@ -2819,7 +2823,7 @@
       2025
     ],
     "defaultYear": 2025,
-    "measure": "face",
+    "measure": "pv",
     "vintages": {
       "2024": {
         "ids": "December 2025",
@@ -2843,6 +2847,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 3322918900,
+            "debtPV": 3192025982,
             "gdp": 3098000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -3034,6 +3039,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 3284537829,
+            "debtPV": 3141719214,
             "gdp": 3509759000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -3232,6 +3238,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 2794536990,
+            "debtPV": 2564207802,
             "gdp": 4291000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -3423,6 +3430,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 2864744060,
+            "debtPV": 2588918255,
             "gdp": 4489378000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -3621,6 +3629,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 1310171789,
+            "debtPV": 1109010787,
             "gdp": 2186000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -3812,6 +3821,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1400709956,
+            "debtPV": 1171463249,
             "gdp": 2655691000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -4010,6 +4020,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 9150147490,
+            "debtPV": 6557754999,
             "gdp": 22745000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -4201,6 +4212,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9295232055,
+            "debtPV": 6805449863,
             "gdp": 23603114000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -4399,6 +4411,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 15473254703,
+            "debtPV": 15244256753,
             "gdp": 26326000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -4590,6 +4603,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 16017665500,
+            "debtPV": 15802371849,
             "gdp": 28709065000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -4788,6 +4802,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 5334336291,
+            "debtPV": 5181226764,
             "gdp": 14774000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -4979,6 +4994,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 6386070786,
+            "debtPV": 6225956026,
             "gdp": 15425708000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -5177,6 +5193,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 10024589006,
+            "debtPV": 9516239826,
             "gdp": 15908000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -5368,6 +5385,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 10116261206,
+            "debtPV": 9637645054,
             "gdp": 16906450000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -5566,6 +5584,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 25093882285,
+            "debtPV": 23580689074,
             "gdp": 32816000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -5757,6 +5776,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 27694845847,
+            "debtPV": 25995499055,
             "gdp": 37076468000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -5919,6 +5939,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 77581679615,
+            "debtPV": 64642361129,
             "gdp": 450461000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -6110,6 +6131,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 83456652763,
+            "debtPV": 70284840493,
             "gdp": 457903817000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -6308,6 +6330,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 438777676,
+            "debtPV": 378008531,
             "gdp": 2831000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -6499,6 +6522,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 464944299,
+            "debtPV": 411174782,
             "gdp": 4636131000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -6697,6 +6721,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 323974704,
+            "debtPV": 220489307,
             "gdp": 1442000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -6888,6 +6913,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 378360980,
+            "debtPV": 265151783,
             "gdp": 1608049000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -7086,6 +7112,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 106926880075,
+            "debtPV": 106574777108,
             "gdp": 383105000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -7277,6 +7304,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 114576924655,
+            "debtPV": 114262788514,
             "gdp": 364638351000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -7475,6 +7503,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 33950250176,
+            "debtPV": 27705267341,
             "gdp": 142073000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -7666,6 +7695,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 36308242412,
+            "debtPV": 29534720226,
             "gdp": 126350980000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -7864,6 +7894,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 1009688795,
+            "debtPV": 740796282,
             "gdp": 2355000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -8055,6 +8086,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1047496099,
+            "debtPV": 773816154,
             "gdp": 2783092000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -8253,6 +8285,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 4093001848,
+            "debtPV": 3546216085,
             "gdp": 24229000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -8444,6 +8477,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 5187614266,
+            "debtPV": 4564198549,
             "gdp": 42272473000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -8642,6 +8676,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 4527618637,
+            "debtPV": 2976462172,
             "gdp": 19866000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -8833,6 +8868,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 5573465218,
+            "debtPV": 3570257412,
             "gdp": 21269730000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -9031,6 +9067,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 89555608083,
+            "debtPV": 86781258210,
             "gdp": 371408000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -9186,6 +9223,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 92898820157,
+            "debtPV": 90136248644,
             "gdp": 408160033000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -9348,6 +9386,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 7252683040,
+            "debtPV": 7149275461,
             "gdp": 31496000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -9539,6 +9578,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 7519318854,
+            "debtPV": 7410462272,
             "gdp": 33097745000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -9737,6 +9777,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 24277203877,
+            "debtPV": 20142896386,
             "gdp": 79236000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -9928,6 +9969,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 27527515839,
+            "debtPV": 22901595280,
             "gdp": 89613915000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -10126,6 +10168,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 20816257886,
+            "debtPV": 20359998292,
             "gdp": 52925000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -10317,6 +10360,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 21007274315,
+            "debtPV": 20492230190,
             "gdp": 57264299000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -10515,6 +10559,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 46109545926,
+            "debtPV": 46112929789,
             "gdp": 115214000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -10706,6 +10751,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 49754911996,
+            "debtPV": 49773692589,
             "gdp": 140683116000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -10904,6 +10950,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 8920517760,
+            "debtPV": 8157719421,
             "gdp": 21487000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -11095,6 +11142,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 11202076067,
+            "debtPV": 10366046562,
             "gdp": 24612884000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -11293,6 +11341,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 12516539291,
+            "debtPV": 11448814071,
             "gdp": 54394000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -11484,6 +11533,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 14236033218,
+            "debtPV": 13020917946,
             "gdp": 59159168000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -11682,6 +11732,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 31249010244,
+            "debtPV": 30410895435,
             "gdp": 87096000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -11873,6 +11924,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 35857696082,
+            "debtPV": 34910446005,
             "gdp": 99897427000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -12071,6 +12123,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 25584060934,
+            "debtPV": 25241607280,
             "gdp": 82825000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -12262,6 +12315,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 26546486202,
+            "debtPV": 26066237079,
             "gdp": 114707564000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -12460,6 +12514,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 23707731206,
+            "debtPV": 23460997905,
             "gdp": 53428000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -12651,6 +12706,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 26296050435,
+            "debtPV": 26015120075,
             "gdp": 61697074000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -12849,6 +12905,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 35582544109,
+            "debtPV": 33244326268,
             "gdp": 119307000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -13040,6 +13097,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 38751061226,
+            "debtPV": 36524004591,
             "gdp": 135919027000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -13238,6 +13296,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 50191529195,
+            "debtPV": 49179145798,
             "gdp": 252109000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -13429,6 +13488,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 56884060832,
+            "debtPV": 55956423453,
             "gdp": 290490877000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -13627,6 +13687,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 5121248651,
+            "debtPV": 3302272410,
             "gdp": 23130000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -13818,6 +13879,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 6235463245,
+            "debtPV": 4067922065,
             "gdp": 27679505000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -14016,6 +14078,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 601229942,
+            "debtPV": 513885480,
             "gdp": 4827000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -14207,6 +14270,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 602661370,
+            "debtPV": 513392317,
             "gdp": 6784283000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -14405,6 +14469,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 11917966029,
+            "debtPV": 8754096675,
             "gdp": 46098000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -14596,6 +14661,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 12781989661,
+            "debtPV": 9501761580,
             "gdp": 50658773000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -14794,6 +14860,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 2443737367,
+            "debtPV": 2292128907,
             "gdp": 19836000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -14985,6 +15052,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 2556285436,
+            "debtPV": 2386417162,
             "gdp": 21957559000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -15183,6 +15251,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 7924885122,
+            "debtPV": 5908093114,
             "gdp": 74498000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -15374,6 +15443,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9244797466,
+            "debtPV": 6573077464,
             "gdp": 92901030000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -15572,6 +15642,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 866919775,
+            "debtPV": 857277131,
             "gdp": 4944000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -15763,6 +15834,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1189572150,
+            "debtPV": 1180884151,
             "gdp": 5206788000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -15961,6 +16033,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 250601500,
+            "debtPV": 221313677,
             "gdp": 25285000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -16152,6 +16225,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 242067492,
+            "debtPV": 215565253,
             "gdp": 32102279000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -16350,6 +16424,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 238949800499,
+            "debtPV": 230065395379,
             "gdp": 3909892000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -16541,6 +16616,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 252897692214,
+            "debtPV": 244023041474,
             "gdp": 3908963671000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -16739,6 +16815,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 4216586368,
+            "debtPV": 3213668991,
             "gdp": 17491000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -16930,6 +17007,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 5140959288,
+            "debtPV": 4054396539,
             "gdp": 22625108000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -17128,6 +17206,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 1016058493,
+            "debtPV": 850150330,
             "gdp": 2298000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -17319,6 +17398,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1115501382,
+            "debtPV": 934771337,
             "gdp": 2765798000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -17517,6 +17597,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 1408536038,
+            "debtPV": 841479816,
             "gdp": 4778000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -17708,6 +17789,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1633837377,
+            "debtPV": 972561446,
             "gdp": 5215934000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -17906,6 +17988,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 4765753163,
+            "debtPV": 2843925323,
             "gdp": 17421000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -18097,6 +18180,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 5666535638,
+            "debtPV": 3320297494,
             "gdp": 19467730000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -18295,6 +18379,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 3003754814,
+            "debtPV": 1773441242,
             "gdp": 11797000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -18486,6 +18571,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 3320034936,
+            "debtPV": 2039354777,
             "gdp": 15095519000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -18684,6 +18770,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 5618291338,
+            "debtPV": 3769305288,
             "gdp": 22789000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -18875,6 +18962,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 6414175274,
+            "debtPV": 4308837821,
             "gdp": 31231985000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -19073,6 +19161,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 3607484340,
+            "debtPV": 3231568386,
             "gdp": 11003000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -19264,6 +19353,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 3664943443,
+            "debtPV": 3262453073,
             "gdp": 12603024000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -19462,6 +19552,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 9239552754,
+            "debtPV": 7135970010,
             "gdp": 61653000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -19653,6 +19744,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9069288439,
+            "debtPV": 7111853576,
             "gdp": 82309346000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -19851,6 +19943,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 8870826934,
+            "debtPV": 4987894508,
             "gdp": 42914000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -20042,6 +20135,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9809952845,
+            "debtPV": 5496004686,
             "gdp": 45489810000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -20240,6 +20334,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 7206043640,
+            "debtPV": 7031892380,
             "gdp": 19694000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -20431,6 +20526,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 7440590482,
+            "debtPV": 7292761684,
             "gdp": 22237176000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -20629,6 +20725,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 8345599360,
+            "debtPV": 6060108111,
             "gdp": 14251000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -20820,6 +20917,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9298460508,
+            "debtPV": 6842247002,
             "gdp": 16372776000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -21018,6 +21116,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 254540060,
+            "debtPV": 224389042,
             "gdp": 828000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -21209,6 +21308,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 286350748,
+            "debtPV": 250103266,
             "gdp": 981111000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -21407,6 +21507,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 1314090731,
+            "debtPV": 961908526,
             "gdp": 7792000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -21598,6 +21699,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 1313326907,
+            "debtPV": 952881926,
             "gdp": 7711041000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -21796,6 +21898,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 284840422,
+            "debtPV": 164680726,
             "gdp": 1778000000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -21987,6 +22090,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 381577158,
+            "debtPV": 215014191,
             "gdp": 1728408000,
             "capacity": "weak",
             "capacitySource": "dsa",
@@ -22185,6 +22289,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 2995608795,
+            "debtPV": 2685261311,
             "gdp": 14199000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -22376,6 +22481,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 2860343923,
+            "debtPV": 2574242069,
             "gdp": 17541694000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -22574,6 +22680,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 14099703963,
+            "debtPV": 11521234528,
             "gdp": 56232000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -22765,6 +22872,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 17515733252,
+            "debtPV": 15754980711,
             "gdp": 66450627000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -22963,6 +23071,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 39164853498,
+            "debtPV": 38332382747,
             "gdp": 114962000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -23154,6 +23263,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 47264391399,
+            "debtPV": 46237288126,
             "gdp": 147069036000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -23352,6 +23462,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 352895057,
+            "debtPV": 277445402,
             "gdp": 1090000000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -23543,6 +23654,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 386909509,
+            "debtPV": 311586225,
             "gdp": 1306102000,
             "capacity": "medium",
             "capacitySource": "dsa",
@@ -23741,6 +23853,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 38450213371,
+            "debtPV": 30824159453,
             "gdp": 459472000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -23932,6 +24045,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 36129680299,
+            "debtPV": 29306986718,
             "gdp": 494045513000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -24130,6 +24244,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 9565004967,
+            "debtPV": 9176293100,
             "gdp": 37100000000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -24321,6 +24436,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 9523532973,
+            "debtPV": 9184266147,
             "gdp": 39598296000,
             "capacity": "strong",
             "capacitySource": "dsa",
@@ -24519,6 +24635,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 45727304918,
+            "debtPV": 45222971466,
             "gdp": 160606000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -24710,6 +24827,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 55144706869,
+            "debtPV": 54394347695,
             "gdp": 183973267000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -24908,6 +25026,7 @@
           "2024": {
             "year": 2024,
             "debtFace": 80508809537,
+            "debtPV": 78423207118,
             "gdp": 461617000000,
             "capacity": "strong",
             "capacitySource": "assumed",
@@ -25099,6 +25218,7 @@
           "2025": {
             "year": 2025,
             "debtFace": 89883811212,
+            "debtPV": 87666170224,
             "gdp": 487086085000,
             "capacity": "strong",
             "capacitySource": "assumed",
