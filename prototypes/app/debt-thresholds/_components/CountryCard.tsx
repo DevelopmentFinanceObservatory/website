@@ -17,6 +17,7 @@ import {
 import { CardFoot } from './CardFoot';
 import styles from './CountryCard.module.scss';
 import { DebtBar } from './DebtBar';
+import { countryLink } from './selection';
 import { CREDITORS, ServiceBars } from './ServiceBars';
 
 import type { BaseYear, Country, Vintage } from '../_data/types.ts';
@@ -165,7 +166,7 @@ export const CountryCard = ({
     const onCurrentData = year === FDL_YEAR && vintage?.archived === false;
 
     const copyLink = async () => {
-        const url = `${window.location.href.split('#')[0]}#${country.iso3}`;
+        const url = countryLink(country.iso3);
 
         try {
             await navigator.clipboard.writeText(url);

@@ -8,6 +8,7 @@ import { CountrySearch } from './CountrySearch';
 import styles from './DebtThresholds.module.scss';
 import { NetTransfers } from './NetTransfers';
 import { Summary } from './Summary';
+import { subscribeSelection, readSelection, writeSelection } from './selection';
 import { GROUP_COLOURS, ThresholdScatter, type ScatterPoint } from './ThresholdScatter';
 
 import type { Capacity, Country, ThresholdsData } from '../_data/types.ts';
@@ -44,30 +45,6 @@ const CAPACITY_OPTIONS = [
 /** When FDL published the groups its view shows. */
 const FDL_PUBLISHED = 'March 2026';
 const MOVERS_NAMED = 6;
-
-// The selected country lives in the URL hash (#KEN), so a link opens on it. Writing
-// with replaceState fires no hashchange, so writes notify subscribers themselves.
-const hashListeners = new Set<() => void>();
-
-const subscribeHash = (listener: () => void) => {
-    hashListeners.add(listener);
-    window.addEventListener('hashchange', listener);
-
-    return () => {
-        hashListeners.delete(listener);
-        window.removeEventListener('hashchange', listener);
-    };
-};
-
-const readHash = (): string => decodeURIComponent(window.location.hash.slice(1)).toUpperCase();
-
-/** Writes the selection to the hash; an empty code clears it. */
-const writeHash = (iso3: string) => {
-    const { pathname, search } = window.location;
-
-    window.history.replaceState(null, '', iso3 === '' ? `${pathname}${search}` : `#${iso3}`);
-    hashListeners.forEach((listener) => listener());
-};
 
 const Segmented = <TValue extends string | number>({
     label,
@@ -249,8 +226,8 @@ const scatterTicks = (data: ThresholdsData): { x: number[]; y: number[] } => {
  * The interactive part of the page: group counts and the view switch, the scatter with
  * the capacity what-if, the selected country's card, and net transfers by group. FDL's
  * view (base year 2024) shows FDL's published groups; the latest view applies FDL's test
- * to the newest base year. The selection is kept in the URL hash as the country's ISO3
- * code; with none, the card asks the reader to pick a country.
+ * to the newest base year. The selection is kept in the query string as the country's
+ * ISO3 code; with none, the card asks the reader to pick a country.
  */
 export const DebtThresholds = ({
     data,
@@ -263,7 +240,7 @@ export const DebtThresholds = ({
     const ticks = scatterTicks(data);
     const [year, setYear] = useState(data.defaultYear);
     const [override, setOverride] = useState<CapacityOverride>('assessed');
-    const hash = useSyncExternalStore(subscribeHash, readHash, () => '');
+    const selection = useSyncExternalStore(subscribeSelection, readSelection, () => '');
 
     const groups = new Map(
         countries.map((country) => [country.iso3, shownGroup(country, year, override)]),
@@ -299,7 +276,7 @@ export const DebtThresholds = ({
         }
     }
 
-    const selected = countries.find((country) => country.iso3 === hash);
+    const selected = countries.find((country) => country.iso3 === selection);
     // The search always shows a country; a dot clicked again clears the selection.
     const countrySlot = useRef<HTMLDivElement>(null);
     // The card sits under the scatter, so a dot clicked brings the card's top into view
@@ -315,13 +292,13 @@ export const DebtThresholds = ({
             }
         });
     const choose = (iso3: string) => {
-        writeHash(iso3);
+        writeSelection(iso3);
         reveal();
     };
     const select = (iso3: string) => {
         const next = iso3 === selected?.iso3 ? '' : iso3;
 
-        writeHash(next);
+        writeSelection(next);
         if (next !== '') {
             reveal();
         }
