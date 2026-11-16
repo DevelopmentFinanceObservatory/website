@@ -5,7 +5,14 @@ from collections import defaultdict
 import pytest
 
 from pipeline.errors import DataError
-from pipeline.sources.dfo_api import DFO_KEYS, PINNED_ORIGIN, Collected, pinned_specs, put
+from pipeline.sources.dfo_api import (
+    CHINA_KEYS,
+    DFO_KEYS,
+    PINNED_ORIGIN,
+    Collected,
+    pinned_specs,
+    put,
+)
 
 
 def test_put_stores_one_value_per_country_year():
@@ -22,7 +29,6 @@ def test_put_refuses_several_rows_per_country_year():
 
 def test_pinned_specs_cover_every_reading_the_fetch_maps():
     specs = pinned_specs()
-    plain = {key for key in specs if not key.endswith("_by_creditor") and key != "imf_flows"}
-    assert plain == set(DFO_KEYS)
+    assert set(specs) == set(DFO_KEYS) | set(CHINA_KEYS) | {"imf_flows"}
     assert set(PINNED_ORIGIN) <= set(specs)
     assert all(pin["definition"]["spec_id"].startswith("spec_") for pin in specs.values())

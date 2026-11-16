@@ -1,7 +1,7 @@
 """Constants of the method, the two base-year views and the output paths."""
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Literal, Self
 
@@ -21,25 +21,21 @@ class View:
 
     base: int
     ids: str
-    ids_dir: str
+    # Cache folder of the IDS bulk files; None when the view reads IDS through the DFO.
+    ids_dir: str | None
     archived: bool
     weo: tuple[Literal["April", "October"], int]
     capacity_as_of: str
-    use_dfo: bool
 
     @property
     def end(self) -> int:
         """The last projected year."""
         return self.base + HORIZON
 
-
-def release_dir(release: str) -> str:
-    """Return the cache folder name for an IDS release named "November 2026": `ids-2026-11`.
-
-    The current view's bulk files and parsed panel live in this folder, so a new
-    release downloads and parses afresh instead of reusing an older one's files.
-    """
-    return f"ids-{datetime.strptime(release, '%B %Y'):%Y-%m}"
+    @property
+    def use_dfo(self) -> bool:
+        """True when the view reads IDS and its base-year GDP through the DFO."""
+        return self.ids_dir is None
 
 
 def views(today: date, *, current_ids: str) -> tuple[View, View]:
@@ -47,8 +43,7 @@ def views(today: date, *, current_ids: str) -> tuple[View, View]:
 
     `today` stamps the current view's capacity vintage, so the clock is read by
     the caller and not at import. `current_ids` names the IDS release the DFO
-    holds (`sources.dfo_api.ids_release`), so the label and the cache folder
-    follow the data.
+    holds (`sources.dfo_api.ids_release`), so the label follows the data.
     """
     return (
         View(
@@ -58,16 +53,14 @@ def views(today: date, *, current_ids: str) -> tuple[View, View]:
             archived=True,
             weo=("October", 2025),
             capacity_as_of="2026-03-14",
-            use_dfo=False,
         ),
         View(
             base=2025,
             ids=current_ids,
-            ids_dir=release_dir(current_ids),
+            ids_dir=None,
             archived=False,
             weo=("October", 2026),
             capacity_as_of=today.isoformat(),
-            use_dfo=True,
         ),
     )
 

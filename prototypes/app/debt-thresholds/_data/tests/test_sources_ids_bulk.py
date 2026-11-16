@@ -45,5 +45,5 @@ def test_check_release_refuses_a_release_with_later_actuals(tmp_path: Path):
     good = {iso3: {"ppg_stock": {view.base: 1.0}} for iso3 in ISO3}
     check_release(good, view, paths=paths)
     later = {iso3: {"ppg_stock": {view.base: 1.0, view.base + 1: 1.0}} for iso3 in ISO3}
-    with pytest.raises(DataError, match="are not the December 2025 release"):
+    with pytest.raises(DataError, match="does not end its actuals in 2024"):
         check_release(later, view, paths=paths)

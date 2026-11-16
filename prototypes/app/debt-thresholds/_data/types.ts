@@ -45,7 +45,8 @@ export type BaseYear = {
     debtFace: number | null;
     /**
      * The same debt at estimated present value: the concessional share of the stock
-     * discounted by the mean grant element of commitments from 2015 to the base year (IDS).
+     * discounted by the grant element of commitments from 2015 to the base year, weighted
+     * by the amount committed each year (IDS).
      */
     debtPV: number | null;
     /** GDP in the base year, IMF WEO. */

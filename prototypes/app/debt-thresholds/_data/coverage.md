@@ -75,14 +75,13 @@ IDS December 2025 (archived bulk files), WEO October 2025, projected to 2030.
 
 ## Base year 2025
 
-IDS November 2026 (DFO API, filled from the current bulk files), WEO October 2026, projected to 2031.
+IDS November 2026 (DFO API), WEO October 2026, projected to 2031.
 
 - Countries lacking a core series: 0
 - Countries without a projection: 2 (SEN, PAK)
 - Countries without a capacity: 0
 - Creditor-group guard, 1%: 869 of 870 country-years pass
   - NIC 2017: sum of DFO creditors 199,338,848 against PPG 205,334,848
-- DFO against the IDS bulk files, 1%: 4470 of 4470 values agree
 - No 2015-19 commitments from a source, so the 58-country average terms stand in: BTN private, DJI private, GNB private, BGD private, CAF private, COM private, NER private, BDI private, KHM private, TCD private, SWZ private, HTI private, KGZ private, LSO private, MWI private, MLI private, MRT private, NPL private, SLE private, SLB private, VUT private
 
 | Country | ISO3 | Debt stock | Debt service | GDP | Revenue | Projection | Capacity |

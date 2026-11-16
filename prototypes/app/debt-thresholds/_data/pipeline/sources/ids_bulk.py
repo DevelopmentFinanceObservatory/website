@@ -9,10 +9,10 @@ from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pipeline.config import MAX_MISSING, Paths, View
+from pipeline.config import Paths, View
 from pipeline.countries import ISO3
 from pipeline.errors import DataError
-from pipeline.panel import Panel, Series
+from pipeline.panel import Panel, Series, check_actuals
 from pipeline.provenance import Ledger
 
 if TYPE_CHECKING:
@@ -83,6 +83,8 @@ def load_ids(view: View, *, paths: Paths, client: httpx.Client, ledger: Ledger) 
     # Imported here so the parsing helpers load without the HTTP client installed.
     from pipeline.sources.http import download
 
+    if view.ids_dir is None:
+        raise DataError(f"the {view.base} view reads IDS through the DFO, not the bulk files.")
     folder = paths.cache / view.ids_dir
     files = []
     for name, capture in IDS_FILES.items():
@@ -174,12 +176,9 @@ def parse_ids_sheets(sheets: Iterable[Sheet]) -> tuple[Panel, int]:
 
 def check_release(panel: Panel, view: View, *, paths: Paths) -> None:
     """Raise `DataError` when the files' last actual year is not the view's base year."""
-    stocks = [keys.get("ppg_stock", {}) for keys in panel.values()]
-    actual = sum(1 for s in stocks if view.base in s)
-    later = sum(1 for s in stocks if view.base + 1 in s)
-    if actual < len(ISO3) - MAX_MISSING or later > 0:
-        raise DataError(
-            f"the IDS files in {paths.cache / view.ids_dir} are not the "
-            f"{view.ids} release: {actual} countries have a {view.base} debt stock "
-            f"and {later} one for {view.base + 1}. Delete the folder to download again."
-        )
+    check_actuals(
+        panel,
+        view.base,
+        source=f"the {view.ids} release in {paths.cache / str(view.ids_dir)}",
+        hint=" Delete the folder to download again.",
+    )
