@@ -35,6 +35,9 @@ const proxy = async (req: NextRequest, { params }: { params: Promise<{ path: str
 
     const options = {
         surface: 'api',
+        // The Studio is the site's own chat UI: an API key sent here is
+        // stripped and ignored, and never lifts the prompt allowance.
+        keys: false,
         target: `${STUDIO_API_BASE}/api/studio/${route}${req.nextUrl.search}`,
         bearer: STUDIO_TOKEN,
         unreachable: 'The studio agent is unreachable. Is it running? (just dev in dfo-ai)',

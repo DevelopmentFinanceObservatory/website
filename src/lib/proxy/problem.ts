@@ -1,7 +1,7 @@
 /**
  * The problem documents the proxy answers with when it refuses a call
  * itself: a route it does not have (404), a spent allowance (429), an
- * upstream it cannot reach (502, 503). They are in the shape dfo-apis uses
+ * upstream it cannot reach (502, 503), a bad API key (401). They are in the shape dfo-apis uses
  * for its own refusals (the docs corpus's dfo-apis/conventions.md, "Problem
  * details"): `application/problem+json` with the registry `code`, a
  * `trace_id` repeated in the `x-dfo-trace-id` header, and `retryable`. A
@@ -119,15 +119,39 @@ export const unauthorizedProblem = (): Response =>
         retryable: false,
     });
 
-/** A 429 `rate_limited` problem document; `headers` carry the rate headers. */
+/**
+ * A 401 `invalid_api_key` problem document: the call's API key is unknown,
+ * disabled, expired or malformed. The call is not treated as anonymous.
+ * No `WWW-Authenticate`, which would send an MCP client looking for OAuth.
+ */
+export const invalidKeyProblem = (): Response =>
+    problem({
+        status: 401,
+        code: 'invalid_api_key',
+        detail: 'The API key is not valid. Check the key, or leave it off to call without one.',
+        retryable: false,
+    });
+
+/** A 400 `request_invalid` problem document: two different keys on one call. */
+export const conflictingKeysProblem = (): Response =>
+    requestInvalidProblem(
+        'The Authorization bearer and X-API-Key carry different API keys. Send one key.',
+    );
+
+/**
+ * A 429 `rate_limited` problem document; `headers` carry the rate headers.
+ * `scope` says whose allowance is spent: the caller's address or, for a
+ * call with an API key, its account.
+ */
 export const rateLimitedProblem = (
     { limit, reset }: { limit: number; reset: number },
     headers: Record<string, string>,
+    scope: 'address' | 'account' = 'address',
 ): Response =>
     problem({
         status: 429,
         code: 'rate_limited',
-        detail: `Too many requests: ${limit} per window per address. Try again in ${reset}s.`,
+        detail: `Too many requests: ${limit} per window per ${scope}. Try again in ${reset}s.`,
         retryable: true,
         headers: { ...headers, 'Retry-After': String(reset) },
     });
