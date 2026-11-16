@@ -8,7 +8,9 @@
     @include page-band(var(--page-gutter));
 
     width: 100%;
-    padding-block: rem(48) rem(96);
+
+    // The top clears the fixed site header (src/components/organisms/Header).
+    padding-block: rem(140) rem(96);
     color: var(--color-text);
 }
 

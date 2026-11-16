@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 
-import SiteHeader from '../components/SiteHeader/SiteHeader';
-
 import { CARD } from '../registry';
 
+import Footer from '@/components/organisms/Footer/Footer';
+import Header from '@/components/organisms/Header/Header';
 import { pageOpenGraph, SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 import '@fontsource/outfit/300.css';
@@ -17,8 +17,11 @@ import '@fontsource/dm-mono/500.css';
 
 import '@/styles/main.scss';
 
-// The same fonts and global styles as the site (src/app/layout.tsx), without
-// its analytics and consent scripts, because the prototypes are static pages.
+// The same fonts, global styles, header and footer as the site
+// (src/app/layout.tsx and src/app/(site)/layout.tsx), without its analytics
+// and consent scripts, because the prototypes are static pages. The header
+// and footer link to the site through siteHref (src/lib/site.ts), and the
+// footer's privacy settings load the consent manager on demand.
 const DESCRIPTION = `Tools and apps built on the ${SITE_NAME} infrastructure.`;
 
 export const metadata: Metadata = {
@@ -44,8 +47,9 @@ export const viewport: Viewport = {
 const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => (
     <html lang="en">
         <body className="page">
-            <SiteHeader />
+            <Header />
             <main>{children}</main>
+            <Footer />
         </body>
     </html>
 );
