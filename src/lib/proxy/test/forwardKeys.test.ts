@@ -302,6 +302,51 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
+test('forward: logs one line per keyed call with the key id, account, surface and outcome, never the key', async () => {
+    fresh();
+    fakes(VALID);
+    await call({ authorization: `Bearer ${KEY}` });
+
+    fakes({ kind: 'invalid' });
+    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
+
+    fakes({ kind: 'unavailable' });
+    await call({ 'x-api-key': KEY });
+
+    await call({});
+
+    assert.deepEqual(
+        lines.map((line) => JSON.parse(line)),
+        [
+            {
+                severity: 'INFO',
+                message: 'api key call',
+                surface: 'api',
+                outcome: 'allowed',
+                keyId: 'key-public-1',
+                accountId: ACCOUNT,
+            },
+            {
+                severity: 'INFO',
+                message: 'api key call',
+                surface: 'mcp',
+                outcome: 'invalid',
+                keyId: null,
+                accountId: null,
+            },
+            {
+                severity: 'INFO',
+                message: 'api key call',
+                surface: 'api',
+                outcome: 'unavailable',
+                keyId: null,
+                accountId: null,
+            },
+        ],
+    );
+    assert.doesNotMatch(lines.join('\n'), /dfo_live/);
+});
+
 test('forward on a real key store and counter', async (t) => {
     fresh();
     const database = await createTestDatabase();

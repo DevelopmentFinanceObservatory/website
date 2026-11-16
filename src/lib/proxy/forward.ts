@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 import { apisFetch } from '@/lib/apisAuth';
 import { keyDb } from '@/lib/db';
 
-import { decideAccess, type AccessDeps } from './access';
+import { decideAccess, type Access, type AccessDeps } from './access';
 import { API_KEY_HEADER, bearerKey } from './apiKey';
 import {
     accountCaller,
@@ -102,6 +102,25 @@ export const accessDeps: AccessDeps = {
 const keysEnabled = (): boolean =>
     !['false', '0', 'off', 'no'].includes(process.env.API_KEYS_ENABLED?.trim().toLowerCase() ?? '');
 
+// One structured line per call that carried a key. The key's public id and
+// the account are named; the key and its hash never are.
+const logKeyUse = (surface: Surface | undefined, { identity, outcome }: Access): void => {
+    if (!outcome) {
+        return;
+    }
+
+    console.log(
+        JSON.stringify({
+            severity: 'INFO',
+            message: 'api key call',
+            surface: surface ?? null,
+            outcome,
+            keyId: identity.kind === 'keyed' ? identity.keyId : null,
+            accountId: identity.kind === 'keyed' ? identity.accountId : null,
+        }),
+    );
+};
+
 type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
@@ -180,6 +199,8 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         headers: req.headers,
         ip: clientIp(req),
     });
+
+    logKeyUse(options.surface, access);
 
     if (access.refusal) {
         return access.refusal;
