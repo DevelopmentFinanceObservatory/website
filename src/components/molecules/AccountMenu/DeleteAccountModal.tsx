@@ -8,6 +8,7 @@ import styles from './DeleteAccountModal.module.scss';
 import form from '@/components/organisms/Studio/modals/TextCardModal.module.scss';
 
 import Modal from '@/components/molecules/Modal/Modal';
+import { useSiteNavigate } from '@/hooks/useSiteNavigate';
 import { deleteUser } from '@/lib/auth/client';
 
 // What the user types to confirm — there is no password to ask for.
@@ -31,6 +32,7 @@ const ERRORS: Record<string, string> = {
 
 const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => {
     const router = useRouter();
+    const navigate = useSiteNavigate();
     const [typed, setTyped] = useState('');
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState<string | null>(null);
@@ -57,7 +59,7 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
 
         // The account (and its session) is gone — home, with the header re-read.
         onOpenChange(false);
-        router.push('/');
+        navigate('/');
         router.refresh();
     };
 

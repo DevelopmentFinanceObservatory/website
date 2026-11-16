@@ -16,6 +16,7 @@ import { enterProgress } from '@/utils/scroll';
 import { showPrivacySettings } from '@/lib/consent';
 import { DOCS_MENU } from '@/lib/docs/nav';
 import { GALLERY_PUBLISHED } from '@/lib/gallery/published';
+import { IS_SITE, siteHref } from '@/lib/site';
 import Logo from '@/assets/svg/logo.svg';
 import WorldMap from '@/components/atoms/WorldMap/WorldMap';
 
@@ -76,7 +77,7 @@ const Footer = () => {
     return (
         <footer
             ref={footerRef}
-            className={classNames(styles.footer, pathname === '/data' && styles.flat)}
+            className={classNames(styles.footer, IS_SITE && pathname === '/data' && styles.flat)}
             data-nav-dark="true"
         >
             {/* Covers the whole footer at its natural ratio — whatever
@@ -150,7 +151,7 @@ const Footer = () => {
                                             // has no business on a mailto.
                                             <a href={FOOTER_ROUTES[link]}>{link}</a>
                                         ) : (
-                                            <Link href={FOOTER_ROUTES[link]}>{link}</Link>
+                                            <Link href={siteHref(FOOTER_ROUTES[link])}>{link}</Link>
                                         )}
                                     </li>
                                 ))}
@@ -166,7 +167,7 @@ const Footer = () => {
                     >
                         Privacy Policy
                     </a>
-                    <Link href="/ai-policy">AI Policy</Link>
+                    <Link href={siteHref('/ai-policy')}>AI Policy</Link>
                     <button type="button" onClick={showPrivacySettings}>
                         Privacy settings
                     </button>

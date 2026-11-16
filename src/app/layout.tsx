@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 
 import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
+import { CMP_LOADER_SRC, CMP_SETTINGS_ID } from '@/lib/consent';
 import { EMBED_PREFIX } from '@/lib/embed';
 import { SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
@@ -82,8 +83,8 @@ gtag('consent', 'default', {
                     {`if (!location.pathname.startsWith(${JSON.stringify(EMBED_PREFIX)})) {
     const cmp = document.createElement('script');
     cmp.id = 'usercentrics-cmp';
-    cmp.src = 'https://web.cmp.usercentrics.eu/ui/loader.js';
-    cmp.setAttribute('data-settings-id', 'yv5DSuw_0kFrRJ');
+    cmp.src = '${CMP_LOADER_SRC}';
+    cmp.setAttribute('data-settings-id', '${CMP_SETTINGS_ID}');
     cmp.async = true;
     document.head.appendChild(cmp);
 }`}
