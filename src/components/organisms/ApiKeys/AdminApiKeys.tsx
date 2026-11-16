@@ -47,6 +47,10 @@ const AdminApiKeys = ({
                 : ': keys are stripped and every call is counted by address.'}{' '}
             It is set in the deployment, not here.
         </p>
+        <p className={styles.note}>
+            Last request is approximate: it is written when the proxy looks a key up, so it can be a
+            minute or so behind the last call.
+        </p>
         {notice && (
             <p className={styles.status} role="status">
                 {notice}
@@ -98,9 +102,7 @@ const AdminApiKeys = ({
                                 </td>
                                 <td>{key.ownerEmail}</td>
                                 <td>{formatDate(key.createdAt)}</td>
-                                <td>
-                                    {key.lastRequest ? formatDate(key.lastRequest) : 'Not recorded'}
-                                </td>
+                                <td>{key.lastRequest ? formatDate(key.lastRequest) : 'Not yet'}</td>
                                 <td>
                                     {key.accountLimit === null
                                         ? `default (${defaultLimit.toLocaleString('en-GB')})`

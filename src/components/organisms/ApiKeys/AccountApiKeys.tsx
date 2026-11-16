@@ -64,9 +64,7 @@ const AccountApiKeys = ({
                                 <code>{key.start ? `${key.start}…` : '—'}</code>
                             </td>
                             <td>{formatDate(key.createdAt)}</td>
-                            <td>
-                                {key.lastRequest ? formatDate(key.lastRequest) : 'Not recorded'}
-                            </td>
+                            <td>{key.lastRequest ? formatDate(key.lastRequest) : 'Not yet'}</td>
                             <td className={styles.actions}>
                                 <DeleteKeyButton
                                     action={deleteAction}
@@ -80,7 +78,8 @@ const AccountApiKeys = ({
             </table>
         )}
         <p className={styles.note}>
-            A deleted key stops working within about a minute. You can hold {max} keys.
+            A deleted key stops working within about a minute. “Last used” is approximate, up to a
+            minute or so behind. You can hold {max} keys.
         </p>
 
         <h2 className={styles.heading}>Create a key</h2>

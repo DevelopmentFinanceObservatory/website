@@ -57,8 +57,9 @@ export type OwnKey = {
     name: string | null;
     start: string | null;
     createdAt: Date;
-    // The plugin writes this when it verifies a key. The proxy verifies keys
-    // itself and does not, so it is empty until the usage log feeds it.
+    // When the proxy last looked the key up (keyVerifier records it on a
+    // cache miss), so up to about a minute behind the last call. Null until
+    // the key is first used.
     lastRequest: Date | null;
 };
 

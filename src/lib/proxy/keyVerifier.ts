@@ -29,6 +29,16 @@ import { hasKeyPrefix } from './apiKey.ts';
  * invalid entry lives CACHE_INVALID_MS. An unavailable answer is not cached.
  * Neither the key nor its hash leaves this module except as the cache key
  * (hash only, in memory).
+ *
+ * A lookup that finds a valid key also records its use: `apikey.last_request`
+ * is set to the time of the lookup, which the key pages show as "last used".
+ * It is written only on a cache miss, so at most about once per cache
+ * lifetime per key per instance, and not on every call, which would put a
+ * write on the request path. The write is fire and forget on the same pool:
+ * the verdict does not wait for it, and a failed or slow write is logged at
+ * most (the key's public id is not in the line) and changes nothing. An
+ * invalid or unavailable answer writes nothing. The shown time is therefore
+ * approximate, up to a cache lifetime behind the last call.
  */
 export type KeyVerdict =
     | {
@@ -50,7 +60,7 @@ export const CACHE_INVALID_MS = 30_000;
 const CACHE_MAX_ENTRIES = 5_000;
 
 /** Reads only; the pool behind it is src/lib/db's keyDb. */
-export type KeyDb = Pick<NodePgDatabase, 'select'>;
+export type KeyDb = Pick<NodePgDatabase, 'select' | 'update'>;
 
 type Row = {
     id: string;
@@ -142,6 +152,20 @@ export const createKeyVerifier = (
     // One read per hash at a time: callers arriving during it share it.
     const reading = new Map<string, Promise<KeyVerdict>>();
 
+    // Records the key's use. Never throws, and nothing waits on it.
+    const touch = (keyId: string): void => {
+        void (async () => {
+            try {
+                await db
+                    .update(apikey)
+                    .set({ lastRequest: new Date(now()) })
+                    .where(eq(apikey.id, keyId));
+            } catch (error) {
+                log('api key last use not recorded', error);
+            }
+        })();
+    };
+
     const read = async (hash: string): Promise<KeyVerdict> => {
         let rows: Row[];
 
@@ -182,6 +206,7 @@ export const createKeyVerifier = (
         };
 
         valid.set(hash, verdict, Math.min(at + validMs, row.expiresAt?.getTime() ?? Infinity));
+        touch(row.id);
 
         return verdict;
     };

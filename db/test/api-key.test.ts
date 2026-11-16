@@ -69,6 +69,17 @@ test('API key table and plugin setup', async (t) => {
         await pool.query('select api_rate_limit from "user" limit 1');
     });
 
+    await t.test("the runtime role can record a key's last use", async () => {
+        const created = await auth.api.createApiKey({ body: { userId: alice.user.id } });
+        const updated = await pool.query(
+            'update apikey set last_request = now() where id = $1 returning last_request',
+            [created.id],
+        );
+
+        assert.equal(updated.rowCount, 1);
+        assert.ok(updated.rows[0].last_request);
+    });
+
     await t.test(
         'a key is stored as its SHA-256, base64url, with the dfo_live_ prefix',
         async () => {

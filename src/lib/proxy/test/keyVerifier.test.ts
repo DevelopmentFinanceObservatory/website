@@ -121,25 +121,139 @@ test('keyVerifier on the key store', async (t) => {
         }
     });
 
-    await t.test('a lookup writes nothing to the key store', async () => {
+    const lastRequestOf = async (id: string) =>
+        (await admin.query('select last_request from apikey where id = $1', [id])).rows[0]
+            ?.last_request as Date | null | undefined;
+
+    // The write is fire and forget, so a test waits for it to land.
+    const eventually = async <T>(read: () => Promise<T | null | undefined>): Promise<T> => {
+        for (let i = 0; i < 100; i++) {
+            const value = await read();
+
+            if (value) {
+                return value;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        throw new Error('the write never landed');
+    };
+
+    await t.test('a valid lookup records last_request and changes nothing else', async () => {
         const before = await admin.query(
-            `select id, request_count, last_request, updated_at, remaining from apikey order by id`,
+            `select id, request_count, updated_at, remaining, enabled, expires_at from apikey where id <> 'id-fresh' order by id`,
         );
 
-        const verifier = createKeyVerifier(db);
+        const fresh = await addKey('fresh', 'acct-default');
 
-        await verifier.verify(live);
+        assert.equal(await lastRequestOf('id-fresh'), null);
+
+        const clock = Date.now();
+        const verifier = createKeyVerifier(db, { now: () => clock });
+
+        assert.equal((await verifier.verify(fresh)).kind, 'valid');
         await verifier.verify(expired);
+        await verifier.verify(disabled);
+        await verifier.verify(keyOf('nobody'));
+
+        const written = await eventually(() => lastRequestOf('id-fresh'));
+
+        // The column has no time zone, which Drizzle writes and the driver reads as UTC.
+        assert.ok(Math.abs(written.getTime() - clock) < 24 * 3_600_000);
 
         const after = await admin.query(
-            `select id, request_count, last_request, updated_at, remaining from apikey order by id`,
+            `select id, request_count, updated_at, remaining, enabled, expires_at from apikey where id <> 'id-fresh' order by id`,
         );
 
         assert.deepEqual(after.rows, before.rows);
+        // Only the valid key was touched: not the expired, the disabled or the unknown.
+        assert.equal(await lastRequestOf('id-expired'), null);
+        assert.equal(await lastRequestOf('id-disabled'), null);
         assert.equal(
             (await admin.query('select 1 from apikey where id = $1', ['id-expired'])).rowCount,
             1,
         );
+    });
+
+    await t.test('a cache hit does not write, a later miss does', async () => {
+        let clock = 1_000_000;
+        let updates = 0;
+        const counting = {
+            select: db.select.bind(db),
+            update: (...args: Parameters<typeof db.update>) => {
+                updates += 1;
+
+                return db.update(...args);
+            },
+        } as unknown as typeof db;
+        const verifier = createKeyVerifier(counting, { now: () => clock });
+
+        assert.equal((await verifier.verify(own)).kind, 'valid');
+        assert.equal(updates, 1);
+
+        for (let i = 0; i < 5; i++) {
+            assert.equal((await verifier.verify(own)).kind, 'valid');
+            assert.equal((await verifier.cachedValid(own))?.kind, 'valid');
+        }
+
+        assert.equal(updates, 1);
+
+        clock += CACHE_VALID_MS;
+        assert.equal((await verifier.verify(own)).kind, 'valid');
+        assert.equal(updates, 2);
+
+        // Not for answers that are not valid.
+        await verifier.verify(keyOf('nobody'));
+        await verifier.verify(disabled);
+        assert.equal(updates, 2);
+        await eventually(() => lastRequestOf('id-own'));
+    });
+
+    await t.test('a failed write is logged without the key and changes no verdict', async () => {
+        const logged: string[] = [];
+        const rejecting = {
+            select: db.select.bind(db),
+            update: () => ({
+                set: () => ({
+                    where: () => Promise.reject(new Error('write refused')),
+                }),
+            }),
+        } as unknown as typeof db;
+        const throwing = {
+            select: db.select.bind(db),
+            update: () => {
+                throw new Error('no update here');
+            },
+        } as unknown as typeof db;
+
+        for (const store of [rejecting, throwing]) {
+            const verifier = createKeyVerifier(store, { log: (message) => logged.push(message) });
+
+            assert.equal((await verifier.verify(own)).kind, 'valid');
+            // Cached, with no second read and no second write.
+            assert.equal((await verifier.cachedValid(own))?.kind, 'valid');
+        }
+
+        await eventually(async () => (logged.length === 2 ? true : null));
+        assert.ok(logged.every((line) => line === 'api key last use not recorded'));
+        assert.doesNotMatch(logged.join(), /dfo_/);
+    });
+
+    await t.test('a write that is slow does not hold the verdict', async () => {
+        const slow = {
+            select: db.select.bind(db),
+            update: () => ({
+                set: () => ({
+                    where: () => new Promise(() => {}),
+                }),
+            }),
+        } as unknown as typeof db;
+        const verifier = createKeyVerifier(slow);
+        const started = Date.now();
+
+        assert.equal((await verifier.verify(own)).kind, 'valid');
+        assert.ok(Date.now() - started < 1_000);
     });
 
     await t.test('a valid answer is cached for an absolute minute, never extended', async () => {
@@ -149,7 +263,12 @@ test('keyVerifier on the key store', async (t) => {
         const sql = pool.query.bind(pool) as (...args: unknown[]) => unknown;
 
         (pool as unknown as { query: unknown }).query = (...args: unknown[]) => {
-            reads.push(String((args[0] as { text?: string }).text ?? args[0]));
+            const text = String((args[0] as { text?: string }).text ?? args[0]);
+
+            // The key's use is recorded in the background, which is not a read.
+            if (text.startsWith('select')) {
+                reads.push(text);
+            }
 
             return sql(...args);
         };
@@ -289,6 +408,7 @@ test('keyVerifier on the key store', async (t) => {
                 down: false,
                 select: (...args: Parameters<typeof db.select>) =>
                     flaky.down ? (undefined as never) : db.select(...args),
+                update: (...args: Parameters<typeof db.update>) => db.update(...args),
             };
             const verifier = createKeyVerifier(flaky as unknown as typeof db, {
                 now: () => clock,
