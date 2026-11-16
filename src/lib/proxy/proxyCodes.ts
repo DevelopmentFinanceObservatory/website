@@ -8,7 +8,7 @@
  * `proxy-codes.json` is the client contract's file of the same name,
  * vendored from the spec-kit repository's
  * `python/client-contract/src/dfo_client_contract/proxy-codes.json` at
- * 0d19172, formatted by Prettier. The vendored `@developmentfinance/client`
+ * 57ee5cd, formatted by Prettier. The vendored `@developmentfinance/client`
  * carries its statuses and not its descriptions, so the file is copied here.
  * Kept apart from the route so `node --test` can load it.
  */

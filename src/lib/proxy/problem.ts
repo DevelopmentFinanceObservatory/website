@@ -30,6 +30,7 @@ export type ProblemStatus = keyof typeof TITLES;
  * code the site refuses with is its own, and its `type` is `about:blank`.
  */
 export const REGISTRY_CODES = [
+    'invalid_api_key',
     'request_invalid',
     'not_found',
     'rate_limited',

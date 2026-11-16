@@ -197,7 +197,9 @@ test('an invalid key is a 401 problem document and does not fall back to anonymo
 
     assert.equal(access.refusal?.status, 401);
     assert.equal(access.refusal?.headers.get('content-type'), 'application/problem+json');
-    assert.equal((await access.refusal!.json()).code, 'invalid_api_key');
+    const body = await access.refusal!.json();
+    assert.equal(body.code, 'invalid_api_key');
+    assert.equal(body.type, '/codes/invalid_api_key');
     assert.equal(access.outcome, 'invalid');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     // No account count, and the 401 carries no limit headers.
