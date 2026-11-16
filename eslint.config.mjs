@@ -16,6 +16,12 @@ const eslintConfig = defineConfig([
     // migrate entrypoint here, and linting a 10mb generated bundle reports
     // thousands of problems in vendored code.
     "dist/**",
+    // The prototypes app's generated files. Its source stays linted.
+    "prototypes/next-env.d.ts",
+    "prototypes/.next/**",
+    "prototypes/out/**",
+    "prototypes/dist/**",
+    "prototypes/node_modules/**",
   ]),
 ]);
 

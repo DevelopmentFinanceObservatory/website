@@ -1,0 +1,227 @@
+name: Deploy prototypes
+
+# Builds the static prototypes app (prototypes/) and publishes it as the
+# dfo-prototypes Cloudflare Worker, an assets-only Worker routed at
+# developmentfinance.org/prototypes*. It runs apart from deploy.yml and
+# deploy-prod.yml, which ignore prototypes/, so a prototype ships without a
+# website release.
+#
+# A push to dev that touches prototypes/ or this file deploys to the production
+# route. main moves only through a release pull request carrying every website
+# change on dev, so a main trigger would tie each prototype to a website
+# release. There is no approval gate, and dev's unreleased src/ ships through
+# /prototypes because the app imports it. A Cloudflare token cannot be limited
+# to preview uploads, so any branch in this repository can deploy with it.
+#
+# A pull request builds and, when the secrets exist, uploads a preview version
+# under the alias pr-<number>. The build covers src/ and the root manifest as
+# well, because prototypes import src/ and run on the root install, so a website
+# change can break them. Draft pull requests skip, as ci.yml does.
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN  with Account > Workers Scripts > Edit, Zone > Workers
+#                         Routes > Edit and Zone > Zone > Read, the zone
+#                         resources limited to developmentfinance.org.
+#   CLOUDFLARE_ACCOUNT_ID the account that owns the zone and the Worker.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'prototypes/**'
+      - '.github/workflows/deploy-prototypes.yml'
+  pull_request:
+    branches: [main, dev, 'fix/**', 'feat/**']
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'prototypes/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-prototypes.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# A newer push supersedes a pending one, so an older build cannot deploy after
+# a newer one. A deploy already running finishes. A pull request's newer
+# commit cancels its older run.
+concurrency:
+  group: prototypes-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Runs without the Cloudflare token, so a pull request from a branch cannot
+  # read it through the build.
+  build:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            prototypes/pnpm-lock.yaml
+
+      # The app imports src/, whose bare imports resolve from the root
+      # node_modules, so the root install comes first.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: prototypes
+
+      - run: pnpm check:deps
+        working-directory: prototypes
+
+      - run: pnpm test
+        working-directory: prototypes
+
+      - run: pnpm check:data
+        working-directory: prototypes
+
+      - run: pnpm typecheck
+        working-directory: prototypes
+
+      - run: pnpm build
+        working-directory: prototypes
+
+      - run: pnpm check:dist
+        working-directory: prototypes
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prototypes-dist
+          path: prototypes/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  preview:
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: prototypes/pnpm-lock.yaml
+
+      # A pull request from a fork or Dependabot, or a repository before its
+      # secrets exist, has none. The upload is skipped and the job passes.
+      - id: token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Cloudflare secrets in this run, so no preview was uploaded." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - if: steps.token.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+        working-directory: prototypes
+
+      - if: steps.token.outputs.enabled == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: prototypes-dist
+          path: prototypes/dist
+
+      # Aliases hold lowercase letters, digits and dashes, and start with a
+      # letter; pr-<number> fits. Cloudflare keeps the newest 1,000.
+      - if: steps.token.outputs.enabled == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        working-directory: prototypes
+        # bash with pipefail, so a failed upload fails the step through tee.
+        shell: bash
+        run: |
+          pnpm exec wrangler versions upload --preview-alias "pr-$PR_NUMBER" | tee upload.log
+          {
+            echo "### Prototypes preview"
+            echo
+            grep -oE "https://pr-$PR_NUMBER-[^ ]+" upload.log | head -n 1 || echo "Uploaded; the alias URL is in the step log."
+            echo
+            echo "Open it at /prototypes/ (the root redirects there)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: prototypes/pnpm-lock.yaml
+
+      - env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set, so prototypes cannot deploy."
+              exit 1
+            fi
+          done
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: prototypes
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: prototypes-dist
+          path: prototypes/dist
+
+      - env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: prototypes
+        run: pnpm exec wrangler deploy
+
+      # The route can take a few seconds to reach the edge, so each probe
+      # retries before it fails. The second probe checks that the Worker route
+      # does not shadow the website at the root.
+      - name: Smoke test
+        run: |
+          probe() {
+            url="$1"
+            for _ in 1 2 3 4 5 6; do
+              code=$(curl -sS -o body.html -w '%{http_code}' "$url" || true)
+              [ "$code" = "200" ] && return 0
+              sleep 5
+            done
+            echo "::error::$url answered $code, expected 200."
+            return 1
+          }
+          probe https://developmentfinance.org/prototypes/
+          if ! grep -q '/prototypes/_next/static/' body.html; then
+            echo "::error::/prototypes/ did not serve the prototypes app."
+            exit 1
+          fi
+          probe https://developmentfinance.org/
+          if grep -q '/prototypes/_next/static/' body.html; then
+            echo "::error::The site root now serves the prototypes app."
+            exit 1
+          fi

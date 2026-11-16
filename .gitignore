@@ -27,3 +27,6 @@ npm-debug.log*
 
 /.claude
 /.idea
+
+# wrangler dev state (prototypes/)
+.wrangler/

@@ -1,0 +1,16 @@
+import { prototype, prototypeMetadata } from '../../registry';
+
+import SeriesChart from './_components/SeriesChart';
+import series from './_data/series.json';
+
+export const entry = prototype('__SLUG__');
+
+export const metadata = prototypeMetadata(entry);
+
+# {entry.title}
+
+{entry.summary}
+
+<SeriesChart file={series} />
+
+Source: {series.provenance.citation}. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {series.provenance.retrieved.slice(0, 10)} with {series.provenance.sdk}.
