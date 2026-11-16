@@ -1,8 +1,8 @@
-import Link from 'next/link';
-
 import styles from './PrototypeList.module.scss';
 
 import { prototypes } from '../../registry';
+
+import Button from '@/components/atoms/Button/Button';
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
@@ -11,27 +11,24 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'UTC',
 });
 
-/** Every prototype in the registry, newest first. */
-const PrototypeList = () => {
-    if (prototypes.length === 0) {
-        return <p className={styles.empty}>The first prototype lands on 16 November 2026.</p>;
-    }
-
-    return (
+/** Every prototype in the registry, newest first, in the row style of
+ *  Insights → Publications without the cover. */
+const PrototypeList = () =>
+    prototypes.length > 0 && (
         <ul className={styles.list}>
             {prototypes.map((item) => (
-                <li key={item.slug} className={styles.item}>
-                    <Link className={styles.link} href={`/${item.slug}/`}>
-                        <time className={styles.date} dateTime={item.date}>
-                            {dateFormat.format(new Date(item.date))}
-                        </time>
-                        <span className={styles.title}>{item.title}</span>
-                        <span className={styles.summary}>{item.summary}</span>
-                    </Link>
+                <li key={item.slug} className={styles.row}>
+                    <h2 className={styles.title}>{item.title}</h2>
+                    <time className={styles.date} dateTime={item.date}>
+                        {dateFormat.format(new Date(item.date))}
+                    </time>
+                    <p className={styles.summary}>{item.summary}</p>
+                    <Button icon="arrow" href={`/${item.slug}/`}>
+                        Open
+                    </Button>
                 </li>
             ))}
         </ul>
     );
-};
 
 export default PrototypeList;

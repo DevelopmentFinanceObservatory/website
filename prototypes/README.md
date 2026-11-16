@@ -118,7 +118,7 @@ Source: {series.provenance.citation}, fetched on {series.provenance.retrieved.sl
 
 Link to the main site with absolute URLs such as `https://developmentfinance.org/data`. The app's `basePath` turns a root-relative link into `/prototypes/data`, which does not exist. `SourceLink` already writes absolute URLs here. `pnpm check:dist` fails on any link, image or CSS `url()` in the build that leaves `/prototypes/` or names a missing file.
 
-Shared components import from `@/components/...` as in the site. Interactive ones need `'use client'` in your component file. Some shared components work only inside a client component. `StatTiles` calls `revealIndex` from a client module, and its tiles stay hidden until the site's `useReveal` hook marks them. Wrap such a component in a small client component of your own, as `components/RevealStatTiles` does, and use the wrapper from MDX.
+Shared components import from `@/components/...` as in the site. Interactive ones need `'use client'` in your component file. Some shared components work only inside a client component. `StatTiles` calls `revealIndex` from a client module, and its tiles stay hidden until the site's `useReveal` hook marks them. Wrap such a component in a small client component of your own that calls `useReveal`, and use the wrapper from MDX.
 
 ## Dependencies
 
