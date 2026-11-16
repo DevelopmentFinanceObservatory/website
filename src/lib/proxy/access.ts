@@ -29,9 +29,7 @@ import type { RateVerdict } from './rateHeaders.ts';
 import type { Surface } from './rateLimit.ts';
 import { rateHeaders } from './rateHeaders.ts';
 
-export type Identity =
-    | { kind: 'anonymous' }
-    | { kind: 'keyed'; keyId: string; accountId: string };
+export type Identity = { kind: 'anonymous' } | { kind: 'keyed'; keyId: string; accountId: string };
 
 /** What the usage line says happened to a keyed call. */
 export type KeyOutcome = 'allowed' | 'limited' | 'invalid' | 'unavailable';
