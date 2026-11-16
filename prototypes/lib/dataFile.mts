@@ -1,7 +1,7 @@
 // The envelope every prototype data file uses: what the page shows, plus the
 // SDK, the question and the time it was fetched, so the source line travels
 // with the data and CI needs no DFO credentials. `pnpm check:data` enforces
-// the shape; a Python data step writes the same one.
+// the shape, and a Python data step writes the same one.
 //
 // A page imports only the types (`import type`), so this module's node:fs
 // never reaches the browser bundle. It is .mts because the package has no
@@ -28,7 +28,7 @@ export type DataFile<TData> = {
     data: TData;
 };
 
-/** The SDK stamp, read from the installed client rather than typed by hand. */
+/** The SDK stamp, read from the installed client. */
 export const SDK = `@developmentfinance/client@${VERSION}`;
 
 /**

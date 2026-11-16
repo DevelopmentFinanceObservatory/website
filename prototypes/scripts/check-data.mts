@@ -31,7 +31,9 @@ const problems = (value: unknown): string[] => {
     }
 
     if (typeof provenance.sdk !== 'string' || !SDK.test(provenance.sdk)) {
-        found.push('provenance.sdk must be "@developmentfinance/client@<version>" or "development-finance==<version>"');
+        found.push(
+            'provenance.sdk must be "@developmentfinance/client@<version>" or "development-finance==<version>"',
+        );
     }
 
     if (typeof provenance.query !== 'string' || provenance.query.trim() === '') {
@@ -40,8 +42,14 @@ const problems = (value: unknown): string[] => {
 
     const { retrieved } = provenance;
 
-    if (typeof retrieved !== 'string' || !UTC_TIME.test(retrieved) || Number.isNaN(Date.parse(retrieved))) {
-        found.push('provenance.retrieved must be an ISO 8601 UTC time such as 2026-11-16T09:30:00.000Z');
+    if (
+        typeof retrieved !== 'string' ||
+        !UTC_TIME.test(retrieved) ||
+        Number.isNaN(Date.parse(retrieved))
+    ) {
+        found.push(
+            'provenance.retrieved must be an ISO 8601 UTC time such as 2026-11-16T09:30:00.000Z',
+        );
     }
 
     return found;
@@ -68,7 +76,9 @@ for (const file of dataFiles) {
     try {
         parsed = JSON.parse(readFileSync(file, 'utf8'));
     } catch (error) {
-        failures.push(`${where}: not valid JSON (${error instanceof Error ? error.message : String(error)})`);
+        failures.push(
+            `${where}: not valid JSON (${error instanceof Error ? error.message : String(error)})`,
+        );
         continue;
     }
 

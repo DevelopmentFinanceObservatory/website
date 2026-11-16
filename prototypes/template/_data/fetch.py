@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["development-finance==0.2.0"]
 # ///
-"""The data step in Python: run by hand with `pnpm data <slug>`, never by the build.
+"""The data step in Python, run by hand with `pnpm data <slug>`.
 
 uv reads the block above, installs the pinned SDK in a cached environment and
 runs the script. It writes _data/series.json in the same envelope as the

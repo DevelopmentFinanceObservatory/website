@@ -1,14 +1,11 @@
-import { prototype } from '../../registry';
+import { prototype, prototypeMetadata } from '../../registry';
 
 import SeriesChart from './_components/SeriesChart';
 import series from './_data/series.json';
 
 export const entry = prototype('__SLUG__');
 
-export const metadata = {
-    title: entry.title,
-    description: entry.summary,
-};
+export const metadata = prototypeMetadata(entry);
 
 # {entry.title}
 

@@ -1,8 +1,9 @@
-// An assets-only Worker: no script, so a request with no matching file is a
+// An assets-only Worker has no script, so a request with no matching file is a
 // 404. The route hands developmentfinance.org/prototypes* to it and leaves
 // every other path on the website. Files sit under dist/prototypes/, which is
-// the public path, so no base_path is needed. Deployed from
-// .github/workflows/deploy-prototypes.yml.
+// the public path, so no base_path is needed. wrangler warns that the route
+// "will match assets: dist/prototypes*", which this layout produces. Deployed
+// from .github/workflows/deploy-prototypes.yml.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dfo-prototypes",

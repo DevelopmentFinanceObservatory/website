@@ -36,4 +36,6 @@ if (existsSync(EDGE)) {
     cpSync(EDGE, DIST, { recursive: true });
 }
 
-console.log(`Assembled ${path.relative(APP, DIST)}/ (export under prototypes/${existsSync(EDGE) ? ', edge/ at the root' : ''}).`);
+console.log(
+    `Assembled ${path.relative(APP, DIST)}/ (export under prototypes/${existsSync(EDGE) ? ', edge/ at the root' : ''}).`,
+);

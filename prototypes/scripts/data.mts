@@ -1,7 +1,7 @@
 // `pnpm data <slug>`: runs a prototype's data step by hand. app/<slug>/_data/
 // fetch.mts runs under Node, fetch.py under `uv run`, which installs the SDK
-// its inline metadata pins. The build never runs a data step: the page reads
-// the JSON the step wrote, which git keeps, so CI needs no DFO credentials.
+// its inline metadata pins. The build runs no data step. The page reads the
+// JSON the step wrote, which git keeps, so CI needs no DFO credentials.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';

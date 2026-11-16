@@ -26,12 +26,16 @@ if (!existsSync(OWN)) {
 const rootNext = version(ROOT, 'next');
 
 if (!rootNext) {
-    failures.push('next is missing from the root node_modules: run pnpm install at the repository root.');
+    failures.push(
+        'next is missing from the root node_modules: run pnpm install at the repository root.',
+    );
 }
 
 for (const name of FORBIDDEN) {
     if (existsSync(path.join(OWN, name))) {
-        failures.push(`prototypes/node_modules/${name} exists; it must resolve from the root install.`);
+        failures.push(
+            `prototypes/node_modules/${name} exists; it must resolve from the root install.`,
+        );
     }
 }
 
@@ -44,7 +48,9 @@ if (existsSync(store)) {
 
     for (const entry of readdirSync(store)) {
         if (prefixes.some((prefix) => entry.startsWith(prefix))) {
-            failures.push(`prototypes/node_modules/.pnpm/${entry}: a dependency pulled in its own copy.`);
+            failures.push(
+                `prototypes/node_modules/.pnpm/${entry}: a dependency pulled in its own copy.`,
+            );
         }
     }
 }
@@ -52,7 +58,9 @@ if (existsSync(store)) {
 const mdx = version(OWN, '@next/mdx');
 
 if (rootNext && mdx !== rootNext) {
-    failures.push(`@next/mdx is ${mdx ?? 'not installed'} but the root's next is ${rootNext}; pin @next/mdx to ${rootNext}.`);
+    failures.push(
+        `@next/mdx is ${mdx ?? 'not installed'} but the root's next is ${rootNext}; pin @next/mdx to ${rootNext}.`,
+    );
 }
 
 if (failures.length > 0) {
@@ -60,4 +68,6 @@ if (failures.length > 0) {
     process.exit(1);
 }
 
-console.log(`check:deps: one next (${rootNext}) and one react, from the root install; @next/mdx ${mdx}.`);
+console.log(
+    `check:deps: one next (${rootNext}) and one react, from the root install; @next/mdx ${mdx}.`,
+);

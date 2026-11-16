@@ -4,7 +4,7 @@ import Link from 'next/link';
 import styles from './components/Prose/Prose.module.scss';
 
 // The site's type scale for every MDX page. A root-relative Markdown link
-// goes through next/link, which prefixes /prototypes; links to the main site
+// goes through next/link, which prefixes /prototypes, so links to the main site
 // are written as absolute https://developmentfinance.org/... URLs.
 const components: MDXComponents = {
     wrapper: ({ children }) => <div className={styles.prose}>{children}</div>,

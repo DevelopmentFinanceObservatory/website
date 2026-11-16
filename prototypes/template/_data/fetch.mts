@@ -1,4 +1,4 @@
-// The data step: run by hand with `pnpm data <slug>`, never by the build.
+// The data step, run by hand with `pnpm data <slug>`.
 // It writes _data/series.json, which the page imports and git keeps.
 import { Client } from '@developmentfinance/client';
 

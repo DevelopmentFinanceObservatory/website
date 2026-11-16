@@ -1,3 +1,12 @@
+import type { Metadata } from 'next';
+
+import { pageOpenGraph, SITE_CARD, SITE_ORIGIN } from '@/lib/site';
+
+/** The site's link-preview card by its full address. Next joins a
+ *  root-relative image path onto the metadataBase path, /prototypes/, where
+ *  no card exists. */
+export const CARD = { ...SITE_CARD, url: `${SITE_ORIGIN}${SITE_CARD.url}` };
+
 /** One published prototype. Its page is app/<slug>/page.mdx and it takes its
  *  metadata from this entry, so a title lives in one place. */
 export type Prototype = {
@@ -24,3 +33,11 @@ export const prototype = (slug: string): Prototype => {
 
     return entry;
 };
+
+/** A prototype page's metadata: its title and summary, with Open Graph tags
+ *  so a shared link shows a card. */
+export const prototypeMetadata = ({ title, summary }: Prototype): Metadata => ({
+    title,
+    description: summary,
+    openGraph: pageOpenGraph({ title, description: summary, image: CARD }),
+});

@@ -57,7 +57,9 @@ const check = (file: string, fileUrl: string, raw: string) => {
     const where = path.relative(DIST, file);
 
     if (resolved.pathname !== '/prototypes' && !resolved.pathname.startsWith(BASE)) {
-        failures.push(`${where}: "${value}" leaves ${BASE}; link to the main site with an absolute https://developmentfinance.org/... URL.`);
+        failures.push(
+            `${where}: "${value}" leaves ${BASE}; link to the main site with an absolute https://developmentfinance.org/... URL.`,
+        );
 
         return;
     }

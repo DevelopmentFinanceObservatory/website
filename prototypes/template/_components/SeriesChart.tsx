@@ -10,7 +10,10 @@ import type { Point } from '../_data/types.ts';
 
 const WINDOWS = [10, 20, Infinity] as const;
 
-const formatValue = new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 });
+const formatValue = new Intl.NumberFormat('en-GB', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+});
 
 /** A bar chart of the series, with a choice of how many recent years to show. */
 const SeriesChart = ({ file }: { file: DataFile<Point[]> }) => {
@@ -43,7 +46,9 @@ const SeriesChart = ({ file }: { file: DataFile<Point[]> }) => {
                     />
                 ))}
             </ol>
-            <figcaption className={styles.caption}>{String(file.provenance.sentence ?? file.provenance.query)}</figcaption>
+            <figcaption className={styles.caption}>
+                {String(file.provenance.sentence ?? file.provenance.query)}
+            </figcaption>
         </figure>
     );
 };

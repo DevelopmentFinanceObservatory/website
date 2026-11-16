@@ -8,7 +8,7 @@ const repoRoot = path.join(__dirname, '..');
 
 const nextConfig: NextConfig = {
     // A static export served from developmentfinance.org/prototypes by a
-    // Cloudflare Worker; scripts/build.mts moves out/ to dist/prototypes/.
+    // Cloudflare Worker. scripts/build.mts moves out/ to dist/prototypes/.
     output: 'export',
     basePath: '/prototypes',
     // Each page exports as <slug>/index.html.
@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
     },
 };
 
-// Plugins go in by string name only: Turbopack cannot take functions.
+// Plugins go in by string name, because Turbopack cannot take functions.
 const withMDX = createMDX({
     extension: /\.(md|mdx)$/,
 });

@@ -25,7 +25,9 @@ if (!slug) {
 }
 
 if (!SLUG.test(slug)) {
-    fail(`"${slug}" is not a slug: use lowercase letters, digits and single dashes, starting with a letter.`);
+    fail(
+        `"${slug}" is not a slug: use lowercase letters, digits and single dashes, starting with a letter.`,
+    );
 }
 
 const target = path.join(APP, 'app', slug);
@@ -46,7 +48,7 @@ if (!registry.includes(LIST_START)) {
 /** A single-quoted TypeScript string literal, as the repository's Prettier writes them. */
 const quote = (text: string): string => `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
 
-const entryTitle =title ?? slug.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+const entryTitle = title ?? slug.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 const date = new Date().toISOString().slice(0, 10);
 const entry = [
     '    {',
@@ -57,7 +59,7 @@ const entry = [
     '    },',
 ].join('\n');
 
-// An empty list reads `= [];`; a filled one has its entries on the next lines.
+// An empty list reads `= [];` and a filled one has its entries on the next lines.
 const updated = registry.includes(`${LIST_START}];`)
     ? registry.replace(`${LIST_START}];`, `${LIST_START}\n${entry}\n];`)
     : registry.replace(`${LIST_START}\n`, `${LIST_START}\n${entry}\n`);

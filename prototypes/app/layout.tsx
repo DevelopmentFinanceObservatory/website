@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next';
 
 import SiteHeader from '../components/SiteHeader/SiteHeader';
 
-import { SITE_NAME, SITE_ORIGIN } from '@/lib/site';
+import { CARD } from '../registry';
+
+import { pageOpenGraph, SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 import '@fontsource/outfit/300.css';
 import '@fontsource/outfit/400.css';
@@ -16,14 +18,20 @@ import '@fontsource/dm-mono/500.css';
 import '@/styles/main.scss';
 
 // The same fonts and global styles as the site (src/app/layout.tsx), without
-// its analytics and consent scripts: the prototypes are static pages.
+// its analytics and consent scripts, because the prototypes are static pages.
+const DESCRIPTION = `Small tools built on the ${SITE_NAME}'s data.`;
+
 export const metadata: Metadata = {
     metadataBase: new URL(`${SITE_ORIGIN}/prototypes/`),
     title: {
         default: `Prototypes · ${SITE_NAME}`,
         template: `%s · Prototypes · ${SITE_NAME}`,
     },
-    description: `Small tools built on the ${SITE_NAME}'s data, one a day.`,
+    description: DESCRIPTION,
+    openGraph: {
+        ...pageOpenGraph({ title: 'Prototypes', description: DESCRIPTION, image: CARD }),
+        type: 'website',
+    },
 };
 
 export const viewport: Viewport = {
