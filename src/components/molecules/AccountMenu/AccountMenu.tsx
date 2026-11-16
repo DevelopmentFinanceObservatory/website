@@ -9,7 +9,9 @@ import styles from './AccountMenu.module.scss';
 import DeleteAccountModal from './DeleteAccountModal';
 
 import Button from '@/components/atoms/Button/Button';
+import { useSiteNavigate } from '@/hooks/useSiteNavigate';
 import { signOut, useSession } from '@/lib/auth/client';
+import { IS_SITE } from '@/lib/site';
 
 /**
  * The header's account button. Signed out it leads to /login (and back
@@ -23,6 +25,7 @@ type AccountMenuProps = {
 const AccountMenu = ({ className }: AccountMenuProps) => {
     const { data: session, isPending } = useSession();
     const router = useRouter();
+    const navigate = useSiteNavigate();
     const pathname = usePathname();
     const [deleteOpen, setDeleteOpen] = useState(false);
     // Keys the modal per opening so its fields start clean; it stays
@@ -35,7 +38,13 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                 className={className}
                 icon="user"
                 aria-label={isPending ? 'Account' : 'Sign in'}
-                onClick={() => router.push(`/login?next=${encodeURIComponent(pathname)}`)}
+                onClick={() => {
+                    // Back to this page after sign-in. In the prototypes app
+                    // usePathname() drops the basePath, so read the address.
+                    const here = IS_SITE ? pathname : window.location.pathname;
+
+                    navigate(`/login?next=${encodeURIComponent(here)}`);
+                }}
             />
         );
     }
@@ -46,7 +55,7 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
         await signOut();
         // Studio is account-only — leaving it signed out goes home; elsewhere
         // just refresh the header state.
-        if (pathname.startsWith('/studio')) {
+        if (IS_SITE && pathname.startsWith('/studio')) {
             router.push('/');
         } else {
             router.refresh();
@@ -90,9 +99,14 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                         </span>
                     </div>
                     <DropdownMenu.Separator className={styles.separator} />
-                    <DropdownMenu.Item asChild onSelect={() => router.push('/history')}>
+                    <DropdownMenu.Item asChild onSelect={() => navigate('/history')}>
                         <button type="button" className={styles.item}>
                             My History
+                        </button>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item asChild onSelect={() => navigate('/account/api-keys')}>
+                        <button type="button" className={styles.item}>
+                            API keys
                         </button>
                     </DropdownMenu.Item>
                     <DropdownMenu.Item asChild onSelect={leave}>

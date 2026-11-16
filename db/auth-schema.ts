@@ -1,5 +1,13 @@
 import { relations } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import {
+    boolean,
+    index,
+    integer,
+    pgTable,
+    text,
+    timestamp,
+    uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
     id: text('id').primaryKey(),
@@ -15,6 +23,9 @@ export const user = pgTable('user', {
     // Set when the account's deletion begins (`user.additionalFields` in
     // src/lib/auth/auth.ts), so no share token is stored for it after.
     deletingAt: timestamp('deleting_at', { withTimezone: true }),
+    // The account's own calls-per-window limit for API keys (`user.additionalFields`
+    // in src/lib/auth/auth.ts). Null is the deployment default (RATE_LIMIT_KEYED).
+    apiRateLimit: integer('api_rate_limit'),
 });
 
 export const session = pgTable(
@@ -74,6 +85,49 @@ export const verification = pgTable(
             .notNull(),
     },
     (table) => [index('verification_identifier_idx').on(table.identifier)],
+);
+
+/**
+ * The `@better-auth/api-key` plugin's table (its columns, as the plugin
+ * writes them). Differences from the plugin's own schema: `reference_id` has
+ * a foreign key to `user` that deletes an account's keys with the account
+ * (the plugin's owner may also be an organization, so it has none), and the
+ * index on `key`, the SHA-256 of the key, is unique. The proxy reads this
+ * table itself (src/lib/proxy/keyVerifier).
+ */
+export const apikey = pgTable(
+    'apikey',
+    {
+        id: text('id').primaryKey(),
+        configId: text('config_id').default('default').notNull(),
+        name: text('name'),
+        start: text('start'),
+        referenceId: text('reference_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        prefix: text('prefix'),
+        key: text('key').notNull(),
+        refillInterval: integer('refill_interval'),
+        refillAmount: integer('refill_amount'),
+        lastRefillAt: timestamp('last_refill_at'),
+        enabled: boolean('enabled').default(true),
+        rateLimitEnabled: boolean('rate_limit_enabled').default(true),
+        rateLimitTimeWindow: integer('rate_limit_time_window'),
+        rateLimitMax: integer('rate_limit_max'),
+        requestCount: integer('request_count').default(0),
+        remaining: integer('remaining'),
+        lastRequest: timestamp('last_request'),
+        expiresAt: timestamp('expires_at'),
+        createdAt: timestamp('created_at').notNull(),
+        updatedAt: timestamp('updated_at').notNull(),
+        permissions: text('permissions'),
+        metadata: text('metadata'),
+    },
+    (table) => [
+        index('apikey_configId_idx').on(table.configId),
+        index('apikey_referenceId_idx').on(table.referenceId),
+        uniqueIndex('apikey_key_idx').on(table.key),
+    ],
 );
 
 export const userRelations = relations(user, ({ many }) => ({

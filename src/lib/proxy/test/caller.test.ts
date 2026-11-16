@@ -15,6 +15,7 @@ import {
     clientAddress,
     limiterBucket,
     limiterKeyFor,
+    resolveAccountCaller,
     resolveCaller,
     setCaller,
     trustedHops,
@@ -219,4 +220,24 @@ test('apisCallerFor: a principal without a usable key or hops goes alone and log
         assert.deepEqual(caller('1.1.1.1, 2.2.2.2'), { principal: 'secret' });
         assert.equal(logged.length, 1);
     }
+});
+
+// The digest's input is the cross-service contract, as the address's is.
+test('resolveAccountCaller: user: and 32 hex of HMAC-SHA-256 over "user:" and the account id', () => {
+    const caller = resolveAccountCaller('acct-1', { key: KEY, hops: 0 });
+
+    assert.equal(
+        caller,
+        `user:${createHmac('sha256', KEY).update('user:acct-1').digest('hex').slice(0, 32)}`,
+    );
+    assert.match(caller, /^user:[0-9a-f]{32}$/);
+    assert.notEqual(caller, resolveAccountCaller('acct-2', { key: KEY, hops: 0 }));
+    assert.notEqual(caller, resolveAccountCaller('acct-1', { key: 'other', hops: 0 }));
+});
+
+test('apisCallerFor: an account named by the proxy goes in place of the address', () => {
+    const named = apisCallerFor({ DFO_CALLER_PRINCIPAL: 'p', CALLER_HMAC_KEY: KEY });
+
+    assert.deepEqual(named('2.2.2.2', 'user:abc'), { principal: 'p', caller: 'user:abc' });
+    assert.deepEqual(named('2.2.2.2'), { principal: 'p', caller: digest('2.2.2.2') });
 });

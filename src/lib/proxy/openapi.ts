@@ -12,7 +12,9 @@ import { SEARCH_API_SURFACES } from './surfaces.ts';
  * presentation API, which the site does not proxy. The component schemas
  * only those paths used go with them.
  * The document carries no `servers`, so a client generated from it calls the
- * host that served it, whichever environment that is.
+ * host that served it, whichever environment that is. It declares the
+ * optional API key as a security scheme (bearer and X-API-Key), and as the
+ * document's `security` when dfo-apis's own sets none.
  */
 
 // dfo-apis deploys on its own schedule, so a cached copy goes stale in
@@ -105,6 +107,23 @@ const keptSchemas = (schemas: JsonObject, root: unknown): JsonObject => {
     return Object.fromEntries(Object.entries(schemas).filter(([name]) => found.has(name)));
 };
 
+// How a call names its API key (src/lib/proxy/apiKey). A key is optional, so
+// the document's `security` leads with the empty requirement.
+const KEY_SECURITY_SCHEMES = {
+    ApiKeyBearer: {
+        type: 'http',
+        scheme: 'bearer',
+        description:
+            'An optional API key, `dfo_live_…`, as `Authorization: Bearer <key>`. Calls without a key are counted by address; a call with a valid key is counted against its account, and one with an invalid key is refused with 401.',
+    },
+    ApiKeyHeader: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'The same optional API key, as `X-API-Key: <key>`.',
+    },
+} as const;
+
 /** dfo-apis's OpenAPI document as the site publishes it. */
 export const publicOpenApi = (document: OpenApiDocument): OpenApiDocument => {
     const paths = Object.fromEntries(
@@ -130,6 +149,15 @@ export const publicOpenApi = (document: OpenApiDocument): OpenApiDocument => {
             schemas: keptSchemas(schemas, { ...out, components: others }),
         };
     }
+
+    out.components = {
+        ...out.components,
+        securitySchemes: {
+            ...asRecord(out.components?.securitySchemes),
+            ...KEY_SECURITY_SCHEMES,
+        },
+    };
+    out.security ??= [{}, { ApiKeyBearer: [] }, { ApiKeyHeader: [] }];
 
     return out;
 };

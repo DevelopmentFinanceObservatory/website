@@ -13,10 +13,19 @@ import { galleryCard, pageOpenGraph } from './site.ts';
 /**
  * The routes kept out of search results, each with everything under it:
  * share and embed links are unlisted by design (anyone with the link can
- * read them, nobody should find them in a search), and the Studio, history
- * and sign-in pages are a person's own.
+ * read them, nobody should find them in a search), the Studio, history
+ * and sign-in pages are a person's own, and the Graph Explorer is for
+ * signed-in team accounts.
  */
-export const NOINDEX_ROUTES = ['/s', '/embed', '/studio', '/history', '/login', '/register'];
+export const NOINDEX_ROUTES = [
+    '/s',
+    '/embed',
+    '/studio',
+    '/history',
+    '/login',
+    '/register',
+    '/graph-explorer',
+];
 
 /** The header that keeps a response out of search results. */
 export const NOINDEX_HEADER = { key: 'X-Robots-Tag', value: 'noindex, nofollow' };

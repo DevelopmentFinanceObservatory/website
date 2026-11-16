@@ -220,6 +220,21 @@ Production needs the same set in its own project: a deployer service
 account with the same roles, its own Artifact Registry repo, Cloud Run
 service, and migration Job with its migrator identity.
 
+The Graph Explorer's "Create Google Sheet" export
+(`src/app/graph-explorer/api/sheets/route.ts`) creates the sheet in the
+reader's own Drive with the Google sign-in client's token. It needs two
+settings on that OAuth client's Google Cloud project: the consent screen
+lists the `https://www.googleapis.com/auth/drive.file` scope, and the Google
+Sheets API is enabled. Without the Sheets API, creating a sheet answers
+502 and logs `sheets export: Google refused create` with the cause
+`PERMISSION_DENIED SERVICE_DISABLED`. A token read that fails inside Better
+Auth (a refused refresh, a Google outage, or a failed storage write or
+decryption, which Better Auth does not tell apart) answers 502
+`google_renewal_failed` and logs `Google token read failed in Better Auth`.
+Better Auth's `/get-access-token`, `/refresh-token` and `/account-info`
+answer 404 (`src/lib/auth/closedPaths.ts`), so the browser cannot read the
+Google token.
+
 ## Runtime env contract (provisional)
 
 The app defines the definitive contract once it exists. Known so far:
@@ -236,6 +251,10 @@ The app defines the definitive contract once it exists. Known so far:
 | `RATE_LIMIT_API`                      | Calls per window per address on `/api`; default 120                                                                                                                                                     |
 | `RATE_LIMIT_PIN`                      | Calls per window per address on `/api/download-pin`; default 10                                                                                                                                         |
 | `RATE_LIMIT_MCP`                      | Requests per window per address on `/mcp`; default 300, above `/api` because a vendor's address can carry many users                                                                                    |
+| `RATE_LIMIT_KEYED`                    | Calls per window per account, on each of `/api` and `/mcp`, for a call with a valid API key whose account has no limit of its own (`user.api_rate_limit`); default 600                                |
+| `API_KEYS_ENABLED`                    | Emergency switch for API keys; default on. `false`, `0`, `off` or `no` strips keys and counts every call by address, without a code change                                                          |
+| `API_KEYS_MAX_PER_ACCOUNT`            | How many API keys one account may hold on `/account/api-keys`; default 5. Housekeeping, not security, since limits are per account                                                                    |
+| `ADMIN_EMAILS`                        | Comma-separated emails, matched case-insensitively against a signed-in user with a verified email, who may open `/admin/api-keys` (every account's keys, create, delete, set a limit; a proof of concept). Everyone else gets a 404; unset or empty means no admins |
 | `OPENAI_APPS_CHALLENGE`               | OpenAI's domain-verification token; `/.well-known/openai-apps-challenge` serves it as plain text, 404 while unset                                                                                       |
 | `TRUSTED_PROXY_HOPS`                  | Which `X-Forwarded-For` entry is the client, counted from the right; keys the `/api` and `/mcp` limits, the guest Studio allowance and the caller digest; default 0 (Cloud Run's); +1 per load balancer |
 | `WEBSITE_DB_INSTANCE_CONNECTION_NAME` | Cloud SQL instance the connector dials over PSC; set by infra                                                                                                                                           |
@@ -245,6 +264,7 @@ The app defines the definitive contract once it exists. Known so far:
 | `BETTER_AUTH_URL`                     | This app's own public origin; plain env var set by infra                                                                                                                                                |
 | `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
 | `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
+| `GRAPH_EXPLORER_EMAIL_DOMAINS`        | Comma-separated email domains the Graph Explorer admits (`src/lib/auth/reader.ts`), matched exactly against a signed-in user's verified email; unset or empty admits nobody; plain env var              |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the

@@ -9,6 +9,10 @@ name: Deploy production
 on:
   push:
     branches: [main]
+    # prototypes/ ships from deploy-prototypes.yml and is not in the website image.
+    paths-ignore:
+      - 'prototypes/**'
+      - '.github/workflows/deploy-prototypes.yml'
   workflow_dispatch: {}
 
 concurrency:

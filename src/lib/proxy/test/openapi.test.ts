@@ -89,6 +89,37 @@ test('publicOpenApi: keeps the schemas the kept paths and webhooks reach, throug
     ]);
 });
 
+test('publicOpenApi: declares the optional API key as bearer and X-API-Key', () => {
+    const out = publicOpenApi(structuredClone(DOCUMENT));
+
+    const schemes = (document: typeof out) =>
+        (document.components as { securitySchemes?: Record<string, unknown> }).securitySchemes;
+
+    assert.deepEqual(Object.keys(schemes(out) ?? {}), ['ApiKeyBearer', 'ApiKeyHeader']);
+    assert.deepEqual(schemes(out)?.ApiKeyHeader, {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'The same optional API key, as `X-API-Key: <key>`.',
+    });
+    // Optional: the empty requirement comes first.
+    assert.deepEqual(out.security, [{}, { ApiKeyBearer: [] }, { ApiKeyHeader: [] }]);
+    // The document's own schemes and security stay.
+    const own: Record<string, unknown> & typeof DOCUMENT = structuredClone(DOCUMENT);
+
+    Object.assign(own.components, { securitySchemes: { Mine: { type: 'http', scheme: 'basic' } } });
+    own.security = [{ Mine: [] }];
+
+    const kept = publicOpenApi(own as typeof DOCUMENT);
+
+    assert.deepEqual(Object.keys(schemes(kept as typeof out) ?? {}), [
+        'Mine',
+        'ApiKeyBearer',
+        'ApiKeyHeader',
+    ]);
+    assert.deepEqual(kept.security, [{ Mine: [] }]);
+});
+
 test('publicOpenApi: keeps every schema when a $ref names one the document lacks', () => {
     const document = structuredClone(DOCUMENT);
 

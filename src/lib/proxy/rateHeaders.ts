@@ -6,8 +6,9 @@ import type { Verdict } from './limitCounter';
 
 /** A verdict, and whether a count ran to reach it. */
 export type RateVerdict = Verdict & {
-    // False for the verdict of the fail-open path (a database error or
-    // timeout): the call passed without a count, so no limit applies.
+    // False for a call that passed without a count, so no limit applies. The
+    // limiter always counts now: a shared count that fails is counted in
+    // memory instead (src/lib/proxy/rateLimit).
     counted: boolean;
 };
 

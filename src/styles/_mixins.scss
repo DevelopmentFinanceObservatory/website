@@ -91,8 +91,9 @@ $browser-context: 16px;
 // keep the thumb solid reads the same value.
 $scrollbar-width: rem(6);
 
-// A scroll region's own scrollbar, on one axis: `y` for a list or thread,
-// `x` for a code block or table that scrolls sideways. The site hides every
+// A scroll region's own scrollbar: `y` for a list or thread, `x` for a code
+// block or table that scrolls sideways, `both` for a box that scrolls either
+// way, such as a capped table or a text area. The site hides every
 // scrollbar (main.scss, on *), and a scroll region needs its cue back, so
 // this draws one that stays in view. A styled ::-webkit-scrollbar is a
 // classic bar, where an overlay one on a Mac would show only while
@@ -111,8 +112,10 @@ $scrollbar-width: rem(6);
         scrollbar-gutter: stable;
     } @else if $axis == x {
         overflow: auto hidden;
+    } @else if $axis == both {
+        overflow: auto;
     } @else {
-        @error "scrollbar-visible takes $axis x or y, not `#{$axis}`.";
+        @error "scrollbar-visible takes $axis x, y or both, not `#{$axis}`.";
     }
 
     scrollbar-width: auto;
