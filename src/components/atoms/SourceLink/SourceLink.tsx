@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 
+import { siteHref } from '@/lib/site';
+
 // Prefetch is off for every link to a source's page. This Next build
 // prefetches a link as it scrolls into view and fully renders the
 // force-dynamic source page to do it, each render a cold graph read on
@@ -22,7 +24,7 @@ type SourceLinkProps = Omit<ComponentProps<typeof Link>, 'href' | 'prefetch'> & 
  *  dcid carries slashes, so the route is a catch-all and the id goes in
  *  unescaped. */
 const SourceLink = ({ dcid, ...props }: SourceLinkProps) => (
-    <Link href={`${SOURCE_PAGE_PREFIX}${dcid}`} prefetch={false} {...props} />
+    <Link href={siteHref(`${SOURCE_PAGE_PREFIX}${dcid}`)} prefetch={false} {...props} />
 );
 
 export default SourceLink;

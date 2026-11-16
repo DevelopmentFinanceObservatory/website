@@ -230,6 +230,10 @@ The services run in the `dev-fin-observatory` GCP project, region `northamerica-
 
 The `apis`, `ai` and `dcp` repositories run their own dev services. `apis` and `ai` return 404 at the root and serve Swagger UI at `/docs`. `deploy/README.md` lists the GitHub variables, secrets and GCP prerequisites.
 
+### Prototypes
+
+`prototypes/` builds and deploys apart from the website: `deploy-prototypes.yml` publishes it to `developmentfinance.org/prototypes*`, and `deploy.yml` and `deploy-prod.yml` ignore it. `prototypes/README.md` covers adding a prototype, building and previewing locally, and the deploy secrets.
+
 ## Scripts
 
 | Script                  | What it does                                     |

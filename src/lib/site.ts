@@ -8,6 +8,16 @@ export const SITE_ORIGIN = 'https://developmentfinance.org';
 
 export const SITE_NAME = 'Development Finance Observatory';
 
+/**
+ * A link to a page of the main site. The website leaves
+ * NEXT_PUBLIC_SITE_LINK_ORIGIN unset and gets the path back unchanged. The
+ * prototypes app (prototypes/next.config.ts) sets it to the production
+ * origin, because next/link would prefix its basePath, /prototypes, to a
+ * root-relative path.
+ */
+export const siteHref = (path: string): string =>
+    (process.env.NEXT_PUBLIC_SITE_LINK_ORIGIN ?? '') + path;
+
 /** The size and type of every link-preview card the site draws. */
 export const CARD_SIZE = { width: 1200, height: 630 };
 export const CARD_TYPE = 'image/png';

@@ -2,7 +2,8 @@ name: Deploy
 
 # Auto-deploys on every push to dev that touches the website image's
 # inputs: the app source, its manifest/lockfile, deploy/Dockerfile, or the
-# deploy workflows themselves. The steps live in build-migrate-deploy.yml,
+# deploy workflows themselves. prototypes/ is not among them and ships from
+# deploy-prototypes.yml. The steps live in build-migrate-deploy.yml,
 # which deploy-prod.yml also runs, so dev exercises exactly the steps
 # production runs. The deploy goes to the `dev` GitHub Environment, which
 # targets the dev-fin-observatory GCP project.
