@@ -30,3 +30,7 @@ npm-debug.log*
 
 # wrangler dev state (prototypes/)
 .wrangler/
+
+# python
+__pycache__/
+.pytest_cache/
