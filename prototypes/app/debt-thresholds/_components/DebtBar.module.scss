@@ -1,0 +1,46 @@
+.bar {
+    display: block;
+    overflow: visible;
+}
+
+.track {
+    fill: #f7f7ee;
+}
+
+.range {
+    fill: #efefe2;
+}
+
+.value {
+    fill: #6467de;
+}
+
+.arrow {
+    fill: none;
+    stroke: #f7f7ee;
+    stroke-width: 1.2;
+}
+
+.threshold {
+    stroke: #484842;
+    stroke-width: 1.5;
+}
+
+.tick {
+    font: 400 11px var(--font-outfit);
+    fill: #5e5e52;
+}
+
+.tickActive {
+    font: 400 11px var(--font-outfit);
+    fill: #484842;
+}
+
+.valueLabel {
+    font: 500 11px var(--font-outfit);
+    fill: #484842;
+    paint-order: stroke;
+    stroke: #fff;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+}

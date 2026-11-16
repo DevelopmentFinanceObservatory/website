@@ -1,0 +1,1800 @@
+{
+  "provenance": {
+    "sdk": "development-finance==0.2.0",
+    "query": "Synthetic fixture for developing the debt-thresholds components; not real data",
+    "retrieved": "2026-11-16T00:00:00.000Z"
+  },
+  "data": {
+    "baseYears": [
+      2024,
+      2025
+    ],
+    "defaultYear": 2025,
+    "measure": "face",
+    "vintages": {
+      "2024": {
+        "ids": "October 2026",
+        "weo": "October 2026",
+        "capacityAsOf": "2026-03-14",
+        "archived": false
+      },
+      "2025": {
+        "ids": "October 2026",
+        "weo": "October 2026",
+        "capacityAsOf": "2026-10-31",
+        "archived": true
+      }
+    },
+    "fdlMatch": {
+      "matched": 4,
+      "total": 4
+    },
+    "countries": [
+      {
+        "iso3": "KEN",
+        "name": "Kenya",
+        "fdl2024": "illiquid",
+        "bases": {
+          "2024": {
+            "year": 2024,
+            "debtFace": 33000000000,
+            "gdp": 110000000000,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2024-10-01",
+            "riskRating": "high",
+            "years": [
+              {
+                "year": 2016,
+                "projected": false,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 10000000000
+              },
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 393750000,
+                  "imf": 131250000,
+                  "bilateral": 196875000,
+                  "china": 328125000,
+                  "private": 262500000
+                },
+                "revenue": 10500000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 429000000,
+                  "imf": 143000000,
+                  "bilateral": 214500000,
+                  "china": 357500000,
+                  "private": 286000000
+                },
+                "revenue": 11000000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 465750000,
+                  "imf": 155250000,
+                  "bilateral": 232875000,
+                  "china": 388125000,
+                  "private": 310500000
+                },
+                "revenue": 11500000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 504000000,
+                  "imf": 168000000,
+                  "bilateral": 252000000,
+                  "china": 420000000,
+                  "private": 336000000
+                },
+                "revenue": 12000000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 543750000,
+                  "imf": 181250000,
+                  "bilateral": 271875000,
+                  "china": 453125000,
+                  "private": 362500000
+                },
+                "revenue": 12500000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 577200000,
+                  "imf": 192400000,
+                  "bilateral": 288600000,
+                  "china": 481000000,
+                  "private": 384800000
+                },
+                "revenue": 13000000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 607500000,
+                  "imf": 202500000,
+                  "bilateral": 303750000,
+                  "china": 506250000,
+                  "private": 405000000
+                },
+                "revenue": 13500000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 630000000,
+                  "imf": 210000000,
+                  "bilateral": 315000000,
+                  "china": 525000000,
+                  "private": 420000000
+                },
+                "revenue": 14000000000
+              },
+              {
+                "year": 2025,
+                "projected": true,
+                "service": {
+                  "multilateral": 717750000,
+                  "imf": 239250000,
+                  "bilateral": 358875000,
+                  "china": 598125000,
+                  "private": 478500000
+                },
+                "revenue": 14500000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 787500000,
+                  "imf": 262500000,
+                  "bilateral": 393750000,
+                  "china": 656250000,
+                  "private": 525000000
+                },
+                "revenue": 15000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 906750000,
+                  "imf": 302250000,
+                  "bilateral": 453375000,
+                  "china": 755625000,
+                  "private": 604500000
+                },
+                "revenue": 15500000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 1008000000,
+                  "imf": 336000000,
+                  "bilateral": 504000000,
+                  "china": 840000000,
+                  "private": 672000000
+                },
+                "revenue": 16000000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 990000000,
+                  "imf": 330000000,
+                  "bilateral": 495000000,
+                  "china": 825000000,
+                  "private": 660000000
+                },
+                "revenue": 16500000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 943500000,
+                  "imf": 314500000,
+                  "bilateral": 471750000,
+                  "china": 786250000,
+                  "private": 629000000
+                },
+                "revenue": 17000000000
+              }
+            ]
+          },
+          "2025": {
+            "year": 2025,
+            "debtFace": 34000000000,
+            "gdp": 115000000000,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2025-06-01",
+            "riskRating": "high",
+            "years": [
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 393750000,
+                  "imf": 131250000,
+                  "bilateral": 196875000,
+                  "china": 328125000,
+                  "private": 262500000
+                },
+                "revenue": 10500000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 429000000,
+                  "imf": 143000000,
+                  "bilateral": 214500000,
+                  "china": 357500000,
+                  "private": 286000000
+                },
+                "revenue": 11000000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 465750000,
+                  "imf": 155250000,
+                  "bilateral": 232875000,
+                  "china": 388125000,
+                  "private": 310500000
+                },
+                "revenue": 11500000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 504000000,
+                  "imf": 168000000,
+                  "bilateral": 252000000,
+                  "china": 420000000,
+                  "private": 336000000
+                },
+                "revenue": 12000000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 543750000,
+                  "imf": 181250000,
+                  "bilateral": 271875000,
+                  "china": 453125000,
+                  "private": 362500000
+                },
+                "revenue": 12500000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 577200000,
+                  "imf": 192400000,
+                  "bilateral": 288600000,
+                  "china": 481000000,
+                  "private": 384800000
+                },
+                "revenue": 13000000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 607500000,
+                  "imf": 202500000,
+                  "bilateral": 303750000,
+                  "china": 506250000,
+                  "private": 405000000
+                },
+                "revenue": 13500000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 630000000,
+                  "imf": 210000000,
+                  "bilateral": 315000000,
+                  "china": 525000000,
+                  "private": 420000000
+                },
+                "revenue": 14000000000
+              },
+              {
+                "year": 2025,
+                "projected": false,
+                "service": {
+                  "multilateral": 717750000,
+                  "imf": 239250000,
+                  "bilateral": 358875000,
+                  "china": 598125000,
+                  "private": 478500000
+                },
+                "revenue": 14500000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 787500000,
+                  "imf": 262500000,
+                  "bilateral": 393750000,
+                  "china": 656250000,
+                  "private": 525000000
+                },
+                "revenue": 15000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 906750000,
+                  "imf": 302250000,
+                  "bilateral": 453375000,
+                  "china": 755625000,
+                  "private": 604500000
+                },
+                "revenue": 15500000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 1008000000,
+                  "imf": 336000000,
+                  "bilateral": 504000000,
+                  "china": 840000000,
+                  "private": 672000000
+                },
+                "revenue": 16000000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 990000000,
+                  "imf": 330000000,
+                  "bilateral": 495000000,
+                  "china": 825000000,
+                  "private": 660000000
+                },
+                "revenue": 16500000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 943500000,
+                  "imf": 314500000,
+                  "bilateral": 471750000,
+                  "china": 786250000,
+                  "private": 629000000
+                },
+                "revenue": 17000000000
+              },
+              {
+                "year": 2031,
+                "projected": true,
+                "service": {
+                  "multilateral": 943500000,
+                  "imf": 314500000,
+                  "bilateral": 471750000,
+                  "china": 786250000,
+                  "private": 629000000
+                },
+                "revenue": 17000000000
+              }
+            ]
+          }
+        }
+      },
+      {
+        "iso3": "ZMB",
+        "name": "Zambia",
+        "fdl2024": "insolvent",
+        "bases": {
+          "2024": {
+            "year": 2024,
+            "debtFace": 17000000000,
+            "gdp": 28000000000,
+            "capacity": "weak",
+            "capacitySource": "dsa",
+            "dsaDate": "2025-03-01",
+            "riskRating": "in debt distress",
+            "years": [
+              {
+                "year": 2016,
+                "projected": false,
+                "service": {
+                  "multilateral": 225000000,
+                  "imf": 75000000,
+                  "bilateral": 112500000,
+                  "china": 187500000,
+                  "private": 150000000
+                },
+                "revenue": 5000000000
+              },
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 252000000,
+                  "imf": 84000000,
+                  "bilateral": 126000000,
+                  "china": 210000000,
+                  "private": 168000000
+                },
+                "revenue": 5250000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 280500000,
+                  "imf": 93500000,
+                  "bilateral": 140250000,
+                  "china": 233750000,
+                  "private": 187000000
+                },
+                "revenue": 5500000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 310500000,
+                  "imf": 103500000,
+                  "bilateral": 155250000,
+                  "china": 258750000,
+                  "private": 207000000
+                },
+                "revenue": 5750000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 6000000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 393750000,
+                  "imf": 131250000,
+                  "bilateral": 196875000,
+                  "china": 328125000,
+                  "private": 262500000
+                },
+                "revenue": 6250000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 390000000,
+                  "imf": 130000000,
+                  "bilateral": 195000000,
+                  "china": 325000000,
+                  "private": 260000000
+                },
+                "revenue": 6500000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 384750000,
+                  "imf": 128250000,
+                  "bilateral": 192375000,
+                  "china": 320625000,
+                  "private": 256500000
+                },
+                "revenue": 6750000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 378000000,
+                  "imf": 126000000,
+                  "bilateral": 189000000,
+                  "china": 315000000,
+                  "private": 252000000
+                },
+                "revenue": 7000000000
+              },
+              {
+                "year": 2025,
+                "projected": true,
+                "service": {
+                  "multilateral": 369750000,
+                  "imf": 123250000,
+                  "bilateral": 184875000,
+                  "china": 308125000,
+                  "private": 246500000
+                },
+                "revenue": 7250000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 7500000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 348750000,
+                  "imf": 116250000,
+                  "bilateral": 174375000,
+                  "china": 290625000,
+                  "private": 232500000
+                },
+                "revenue": 7750000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 8000000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 346500000,
+                  "imf": 115500000,
+                  "bilateral": 173250000,
+                  "china": 288750000,
+                  "private": 231000000
+                },
+                "revenue": 8250000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 357000000,
+                  "imf": 119000000,
+                  "bilateral": 178500000,
+                  "china": 297500000,
+                  "private": 238000000
+                },
+                "revenue": 8500000000
+              }
+            ]
+          },
+          "2025": {
+            "year": 2025,
+            "debtFace": 17500000000,
+            "gdp": 30000000000,
+            "capacity": "weak",
+            "capacitySource": "dsa",
+            "dsaDate": "2026-07-01",
+            "riskRating": "high",
+            "years": [
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 252000000,
+                  "imf": 84000000,
+                  "bilateral": 126000000,
+                  "china": 210000000,
+                  "private": 168000000
+                },
+                "revenue": 5250000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 280500000,
+                  "imf": 93500000,
+                  "bilateral": 140250000,
+                  "china": 233750000,
+                  "private": 187000000
+                },
+                "revenue": 5500000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 310500000,
+                  "imf": 103500000,
+                  "bilateral": 155250000,
+                  "china": 258750000,
+                  "private": 207000000
+                },
+                "revenue": 5750000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 6000000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 393750000,
+                  "imf": 131250000,
+                  "bilateral": 196875000,
+                  "china": 328125000,
+                  "private": 262500000
+                },
+                "revenue": 6250000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 390000000,
+                  "imf": 130000000,
+                  "bilateral": 195000000,
+                  "china": 325000000,
+                  "private": 260000000
+                },
+                "revenue": 6500000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 384750000,
+                  "imf": 128250000,
+                  "bilateral": 192375000,
+                  "china": 320625000,
+                  "private": 256500000
+                },
+                "revenue": 6750000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 378000000,
+                  "imf": 126000000,
+                  "bilateral": 189000000,
+                  "china": 315000000,
+                  "private": 252000000
+                },
+                "revenue": 7000000000
+              },
+              {
+                "year": 2025,
+                "projected": false,
+                "service": {
+                  "multilateral": 369750000,
+                  "imf": 123250000,
+                  "bilateral": 184875000,
+                  "china": 308125000,
+                  "private": 246500000
+                },
+                "revenue": 7250000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 7500000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 348750000,
+                  "imf": 116250000,
+                  "bilateral": 174375000,
+                  "china": 290625000,
+                  "private": 232500000
+                },
+                "revenue": 7750000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 360000000,
+                  "imf": 120000000,
+                  "bilateral": 180000000,
+                  "china": 300000000,
+                  "private": 240000000
+                },
+                "revenue": 8000000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 346500000,
+                  "imf": 115500000,
+                  "bilateral": 173250000,
+                  "china": 288750000,
+                  "private": 231000000
+                },
+                "revenue": 8250000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 357000000,
+                  "imf": 119000000,
+                  "bilateral": 178500000,
+                  "china": 297500000,
+                  "private": 238000000
+                },
+                "revenue": 8500000000
+              },
+              {
+                "year": 2031,
+                "projected": true,
+                "service": {
+                  "multilateral": 357000000,
+                  "imf": 119000000,
+                  "bilateral": 178500000,
+                  "china": 297500000,
+                  "private": 238000000
+                },
+                "revenue": 8500000000
+              }
+            ]
+          }
+        }
+      },
+      {
+        "iso3": "SEN",
+        "name": "Senegal",
+        "fdl2024": "insolvent",
+        "bases": {
+          "2024": {
+            "year": 2024,
+            "debtFace": 20000000000,
+            "gdp": 31000000000,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2023-06-01",
+            "riskRating": "moderate",
+            "years": [
+              {
+                "year": 2016,
+                "projected": false,
+                "service": {
+                  "multilateral": 216000000,
+                  "imf": 72000000,
+                  "bilateral": 108000000,
+                  "china": 180000000,
+                  "private": 144000000
+                },
+                "revenue": 4000000000
+              },
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 237600000,
+                  "imf": 79200000,
+                  "bilateral": 118800000,
+                  "china": 198000000,
+                  "private": 158400000
+                },
+                "revenue": 4400000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 273600000,
+                  "imf": 91200000,
+                  "bilateral": 136800000,
+                  "china": 228000000,
+                  "private": 182400000
+                },
+                "revenue": 4800000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 312000000,
+                  "imf": 104000000,
+                  "bilateral": 156000000,
+                  "china": 260000000,
+                  "private": 208000000
+                },
+                "revenue": 5200000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 352800000,
+                  "imf": 117600000,
+                  "bilateral": 176400000,
+                  "china": 294000000,
+                  "private": 235200000
+                },
+                "revenue": 5600000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 396000000,
+                  "imf": 132000000,
+                  "bilateral": 198000000,
+                  "china": 330000000,
+                  "private": 264000000
+                },
+                "revenue": 6000000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 441600000,
+                  "imf": 147200000,
+                  "bilateral": 220800000,
+                  "china": 368000000,
+                  "private": 294400000
+                },
+                "revenue": 6400000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 489600000,
+                  "imf": 163200000,
+                  "bilateral": 244800000,
+                  "china": 408000000,
+                  "private": 326400000
+                },
+                "revenue": 6800000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 540000000,
+                  "imf": 180000000,
+                  "bilateral": 270000000,
+                  "china": 450000000,
+                  "private": 360000000
+                },
+                "revenue": 7200000000
+              },
+              {
+                "year": 2025,
+                "projected": true,
+                "service": {
+                  "multilateral": 592800000,
+                  "imf": 197600000,
+                  "bilateral": 296400000,
+                  "china": 494000000,
+                  "private": 395200000
+                },
+                "revenue": 7600000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 648000000,
+                  "imf": 216000000,
+                  "bilateral": 324000000,
+                  "china": 540000000,
+                  "private": 432000000
+                },
+                "revenue": 8000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 655200000,
+                  "imf": 218400000,
+                  "bilateral": 327600000,
+                  "china": 546000000,
+                  "private": 436800000
+                },
+                "revenue": 8400000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 660000000,
+                  "imf": 220000000,
+                  "bilateral": 330000000,
+                  "china": 550000000,
+                  "private": 440000000
+                },
+                "revenue": 8800000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 662400000,
+                  "imf": 220800000,
+                  "bilateral": 331200000,
+                  "china": 552000000,
+                  "private": 441600000
+                },
+                "revenue": 9200000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 662400000,
+                  "imf": 220800000,
+                  "bilateral": 331200000,
+                  "china": 552000000,
+                  "private": 441600000
+                },
+                "revenue": 9600000000
+              }
+            ]
+          },
+          "2025": {
+            "year": 2025,
+            "debtFace": 22000000000,
+            "gdp": 32000000000,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2026-05-01",
+            "riskRating": "high",
+            "years": [
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 237600000,
+                  "imf": 79200000,
+                  "bilateral": 118800000,
+                  "china": 198000000,
+                  "private": 158400000
+                },
+                "revenue": 4400000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 273600000,
+                  "imf": 91200000,
+                  "bilateral": 136800000,
+                  "china": 228000000,
+                  "private": 182400000
+                },
+                "revenue": 4800000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 312000000,
+                  "imf": 104000000,
+                  "bilateral": 156000000,
+                  "china": 260000000,
+                  "private": 208000000
+                },
+                "revenue": 5200000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 352800000,
+                  "imf": 117600000,
+                  "bilateral": 176400000,
+                  "china": 294000000,
+                  "private": 235200000
+                },
+                "revenue": 5600000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 396000000,
+                  "imf": 132000000,
+                  "bilateral": 198000000,
+                  "china": 330000000,
+                  "private": 264000000
+                },
+                "revenue": 6000000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 441600000,
+                  "imf": 147200000,
+                  "bilateral": 220800000,
+                  "china": 368000000,
+                  "private": 294400000
+                },
+                "revenue": 6400000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 489600000,
+                  "imf": 163200000,
+                  "bilateral": 244800000,
+                  "china": 408000000,
+                  "private": 326400000
+                },
+                "revenue": 6800000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 540000000,
+                  "imf": 180000000,
+                  "bilateral": 270000000,
+                  "china": 450000000,
+                  "private": 360000000
+                },
+                "revenue": 7200000000
+              },
+              {
+                "year": 2025,
+                "projected": false,
+                "service": {
+                  "multilateral": 592800000,
+                  "imf": 197600000,
+                  "bilateral": 296400000,
+                  "china": 494000000,
+                  "private": 395200000
+                },
+                "revenue": 7600000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 648000000,
+                  "imf": 216000000,
+                  "bilateral": 324000000,
+                  "china": 540000000,
+                  "private": 432000000
+                },
+                "revenue": 8000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 655200000,
+                  "imf": 218400000,
+                  "bilateral": 327600000,
+                  "china": 546000000,
+                  "private": 436800000
+                },
+                "revenue": 8400000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 660000000,
+                  "imf": 220000000,
+                  "bilateral": 330000000,
+                  "china": 550000000,
+                  "private": 440000000
+                },
+                "revenue": 8800000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 662400000,
+                  "imf": 220800000,
+                  "bilateral": 331200000,
+                  "china": 552000000,
+                  "private": 441600000
+                },
+                "revenue": 9200000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 662400000,
+                  "imf": 220800000,
+                  "bilateral": 331200000,
+                  "china": 552000000,
+                  "private": 441600000
+                },
+                "revenue": 9600000000
+              },
+              {
+                "year": 2031,
+                "projected": true,
+                "service": {
+                  "multilateral": 662400000,
+                  "imf": 220800000,
+                  "bilateral": 331200000,
+                  "china": 552000000,
+                  "private": 441600000
+                },
+                "revenue": 9600000000
+              }
+            ]
+          }
+        }
+      },
+      {
+        "iso3": "XAA",
+        "name": "Testland",
+        "fdl2024": "lower risk",
+        "bases": {
+          "2024": {
+            "year": 2024,
+            "debtFace": 6000000000,
+            "gdp": 20000000000,
+            "capacity": "strong",
+            "capacitySource": "assumed",
+            "dsaDate": null,
+            "riskRating": null,
+            "years": [
+              {
+                "year": 2016,
+                "projected": false,
+                "service": {
+                  "multilateral": 72000000,
+                  "imf": 24000000,
+                  "bilateral": 36000000,
+                  "china": 60000000,
+                  "private": 48000000
+                },
+                "revenue": 3000000000
+              },
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 74400000,
+                  "imf": 24800000,
+                  "bilateral": 37200000,
+                  "china": 62000000,
+                  "private": 49600000
+                },
+                "revenue": 3100000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 76800000,
+                  "imf": 25600000,
+                  "bilateral": 38400000,
+                  "china": 64000000,
+                  "private": 51200000
+                },
+                "revenue": 3200000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 79200000,
+                  "imf": 26400000,
+                  "bilateral": 39600000,
+                  "china": 66000000,
+                  "private": 52800000
+                },
+                "revenue": 3300000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 86700000,
+                  "imf": 28900000,
+                  "bilateral": 43350000,
+                  "china": 72250000,
+                  "private": 57800000
+                },
+                "revenue": 3400000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 94500000,
+                  "imf": 31500000,
+                  "bilateral": 47250000,
+                  "china": 78750000,
+                  "private": 63000000
+                },
+                "revenue": 3500000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 97200000,
+                  "imf": 32400000,
+                  "bilateral": 48600000,
+                  "china": 81000000,
+                  "private": 64800000
+                },
+                "revenue": 3600000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 99900000,
+                  "imf": 33300000,
+                  "bilateral": 49950000,
+                  "china": 83250000,
+                  "private": 66600000
+                },
+                "revenue": 3700000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 102600000,
+                  "imf": 34200000,
+                  "bilateral": 51300000,
+                  "china": 85500000,
+                  "private": 68400000
+                },
+                "revenue": 3800000000
+              },
+              {
+                "year": 2025,
+                "projected": true,
+                "service": {
+                  "multilateral": 105300000,
+                  "imf": 35100000,
+                  "bilateral": 52650000,
+                  "china": 87750000,
+                  "private": 70200000
+                },
+                "revenue": 3900000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 108000000,
+                  "imf": 36000000,
+                  "bilateral": 54000000,
+                  "china": 90000000,
+                  "private": 72000000
+                },
+                "revenue": 4000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 116850000,
+                  "imf": 38950000,
+                  "bilateral": 58425000,
+                  "china": 97375000,
+                  "private": 77900000
+                },
+                "revenue": 4100000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 113400000,
+                  "imf": 37800000,
+                  "bilateral": 56700000,
+                  "china": 94500000,
+                  "private": 75600000
+                },
+                "revenue": 4200000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 116100000,
+                  "imf": 38700000,
+                  "bilateral": 58050000,
+                  "china": 96750000,
+                  "private": 77400000
+                },
+                "revenue": 4300000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 112200000,
+                  "imf": 37400000,
+                  "bilateral": 56100000,
+                  "china": 93500000,
+                  "private": 74800000
+                },
+                "revenue": 4400000000
+              }
+            ]
+          },
+          "2025": {
+            "year": 2025,
+            "debtFace": 6200000000,
+            "gdp": 21000000000,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2026-04-01",
+            "riskRating": "low",
+            "years": [
+              {
+                "year": 2017,
+                "projected": false,
+                "service": {
+                  "multilateral": 74400000,
+                  "imf": 24800000,
+                  "bilateral": 37200000,
+                  "china": 62000000,
+                  "private": 49600000
+                },
+                "revenue": 3100000000
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": {
+                  "multilateral": 76800000,
+                  "imf": 25600000,
+                  "bilateral": 38400000,
+                  "china": 64000000,
+                  "private": 51200000
+                },
+                "revenue": 3200000000
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": {
+                  "multilateral": 79200000,
+                  "imf": 26400000,
+                  "bilateral": 39600000,
+                  "china": 66000000,
+                  "private": 52800000
+                },
+                "revenue": 3300000000
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": {
+                  "multilateral": 86700000,
+                  "imf": 28900000,
+                  "bilateral": 43350000,
+                  "china": 72250000,
+                  "private": 57800000
+                },
+                "revenue": 3400000000
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": {
+                  "multilateral": 94500000,
+                  "imf": 31500000,
+                  "bilateral": 47250000,
+                  "china": 78750000,
+                  "private": 63000000
+                },
+                "revenue": 3500000000
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": {
+                  "multilateral": 97200000,
+                  "imf": 32400000,
+                  "bilateral": 48600000,
+                  "china": 81000000,
+                  "private": 64800000
+                },
+                "revenue": 3600000000
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": {
+                  "multilateral": 99900000,
+                  "imf": 33300000,
+                  "bilateral": 49950000,
+                  "china": 83250000,
+                  "private": 66600000
+                },
+                "revenue": 3700000000
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": {
+                  "multilateral": 102600000,
+                  "imf": 34200000,
+                  "bilateral": 51300000,
+                  "china": 85500000,
+                  "private": 68400000
+                },
+                "revenue": 3800000000
+              },
+              {
+                "year": 2025,
+                "projected": false,
+                "service": {
+                  "multilateral": 105300000,
+                  "imf": 35100000,
+                  "bilateral": 52650000,
+                  "china": 87750000,
+                  "private": 70200000
+                },
+                "revenue": 3900000000
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": {
+                  "multilateral": 108000000,
+                  "imf": 36000000,
+                  "bilateral": 54000000,
+                  "china": 90000000,
+                  "private": 72000000
+                },
+                "revenue": 4000000000
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": {
+                  "multilateral": 116850000,
+                  "imf": 38950000,
+                  "bilateral": 58425000,
+                  "china": 97375000,
+                  "private": 77900000
+                },
+                "revenue": 4100000000
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": {
+                  "multilateral": 113400000,
+                  "imf": 37800000,
+                  "bilateral": 56700000,
+                  "china": 94500000,
+                  "private": 75600000
+                },
+                "revenue": 4200000000
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": {
+                  "multilateral": 116100000,
+                  "imf": 38700000,
+                  "bilateral": 58050000,
+                  "china": 96750000,
+                  "private": 77400000
+                },
+                "revenue": 4300000000
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": {
+                  "multilateral": 112200000,
+                  "imf": 37400000,
+                  "bilateral": 56100000,
+                  "china": 93500000,
+                  "private": 74800000
+                },
+                "revenue": 4400000000
+              },
+              {
+                "year": 2031,
+                "projected": true,
+                "service": {
+                  "multilateral": 112200000,
+                  "imf": 37400000,
+                  "bilateral": 56100000,
+                  "china": 93500000,
+                  "private": 74800000
+                },
+                "revenue": 4400000000
+              }
+            ]
+          }
+        }
+      },
+      {
+        "iso3": "XBB",
+        "name": "Datalessland",
+        "fdl2024": null,
+        "bases": {
+          "2024": {
+            "year": 2024,
+            "debtFace": null,
+            "gdp": null,
+            "capacity": "medium",
+            "capacitySource": "dsa",
+            "dsaDate": "2024-11-01",
+            "riskRating": "moderate",
+            "years": [
+              {
+                "year": 2016,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2017,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2025,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              }
+            ]
+          },
+          "2025": {
+            "year": 2025,
+            "debtFace": null,
+            "gdp": null,
+            "capacity": null,
+            "capacitySource": null,
+            "dsaDate": null,
+            "riskRating": null,
+            "years": [
+              {
+                "year": 2017,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2018,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2019,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2020,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2021,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2022,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2023,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2024,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2025,
+                "projected": false,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2026,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2027,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2028,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2029,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2030,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              },
+              {
+                "year": 2031,
+                "projected": true,
+                "service": null,
+                "revenue": null
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

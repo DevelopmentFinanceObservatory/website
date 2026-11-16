@@ -212,23 +212,3 @@ button.leftOut {
         outline-offset: 2px;
     }
 }
-
-.builtWith {
-    @include flex(row, flex-start, flex-end);
-    @include font-size(8px, 1.1);
-
-    // Never wraps or shrinks: the source line gives way instead.
-    flex-shrink: 0;
-    gap: rem(4);
-    font-family: var(--font-outfit);
-    font-weight: 300;
-    color: var(--th-caption, var(--color-gray-1500));
-    text-align: right;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-
-    svg {
-        width: rem(26);
-        height: auto;
-    }
-}

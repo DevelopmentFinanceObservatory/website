@@ -4,6 +4,15 @@
 
 // The site's type scale for MDX pages (mdx-components.tsx maps the elements).
 
+// The site's root font size grows with the window inside each breakpoint band, so near
+// the top of the tablet band rem type runs a third larger than on desktop while the
+// charts' px type stays put. Prose type is held at its desktop size at most.
+
+@mixin type($size, $line) {
+    font-size: min(#{rem($size)}, #{$size});
+    line-height: $line;
+}
+
 .prose {
     @include page-band(var(--page-gutter));
 
@@ -15,7 +24,7 @@
 }
 
 .h1 {
-    @include font-size(64px, 1);
+    @include type(64px, 1);
 
     max-width: rem(900);
     margin-bottom: rem(24);
@@ -24,21 +33,22 @@
     letter-spacing: -0.02em;
 
     @include breakpoint(phone) {
-        @include font-size(40px, 1.05);
+        @include type(40px, 1.05);
     }
 }
 
 .h2 {
-    @include font-size(32px, 1.1);
+    @include type(32px, 1.1);
 
     margin-top: rem(64);
     margin-bottom: rem(16);
     font-family: var(--font-outfit);
     font-weight: 500;
+    scroll-margin-top: rem(32);
 }
 
 .h3 {
-    @include font-size(20px, 1.3);
+    @include type(20px, 1.3);
 
     margin-top: rem(32);
     margin-bottom: rem(8);
@@ -46,7 +56,7 @@
 }
 
 .p {
-    @include font-size(18px, 1.5);
+    @include type(18px, 1.5);
 
     max-width: rem(720);
     margin-bottom: rem(16);
@@ -60,7 +70,7 @@
 }
 
 .list {
-    @include font-size(18px, 1.5);
+    @include type(18px, 1.5);
 
     max-width: rem(720);
     margin-bottom: rem(16);
