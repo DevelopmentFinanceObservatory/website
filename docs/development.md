@@ -61,8 +61,9 @@ The scripts below reach the APIs the same way.
 
 `just stack` runs the dev apis proxy (8083) and the Studio harness (8080)
 from an `ai` checkout beside this one, plus the dev server, in one terminal.
-Each output line starts with its service's name (`apis`, `ai`, `web`), and
-Ctrl-C stops all three:
+Each output line starts with its service's name (`apis`, `ai`, `web`), in
+its own color on a terminal, with lines that look like errors in red
+(`NO_COLOR=1` turns color off). Ctrl-C stops all three:
 
 ```bash
 gcloud auth login   # the proxy cannot prompt for it under `stack`
