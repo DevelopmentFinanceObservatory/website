@@ -113,7 +113,7 @@ const AccountApiKeys = ({
         </pre>
         <p className={styles.copy}>For example:</p>
         <pre className={styles.code}>
-            {`curl -H "Authorization: Bearer $DFO_API_KEY" \\\n  https://developmentfinance.org/api/search/catalogue`}
+            {`curl -fsS -H "Authorization: Bearer $DFO_API_KEY" \\\n  https://developmentfinance.org/api/v1/graph/capabilities`}
         </pre>
         <p className={styles.copy}>
             Keep a key secret, like a password. If one leaks, delete it here and make another. Never
