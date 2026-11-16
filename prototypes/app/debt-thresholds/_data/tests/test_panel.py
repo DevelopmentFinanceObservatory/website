@@ -1,36 +1,25 @@
-from datetime import date
-
 import pytest
 
-from pipeline.config import views
 from pipeline.countries import ISO3
-from pipeline.panel import Panel, amount_of, cross_check, merge_panels, span, whole
-
-VIEW = views(date(2026, 1, 1), current_ids="November 2026")[1]
-
-
-def empty() -> Panel:
-    return {iso3: {} for iso3 in ISO3}
+from pipeline.errors import DataError
+from pipeline.panel import amount_of, check_actuals, span, whole
 
 
-def test_merge_primary_wins_and_fill_supplies_gaps():
-    primary = {"KEN": {"ppg_stock": {2024: 1.0}}}
-    fill = {"KEN": {"ppg_stock": {2023: 5.0, 2024: 9.0}, "gdp": {2024: 3.0}}}
-    merged = merge_panels(primary, fill)
-    assert merged["KEN"] == {"ppg_stock": {2023: 5.0, 2024: 1.0}, "gdp": {2024: 3.0}}
-    assert set(merged) == set(ISO3)
-    assert fill["KEN"]["ppg_stock"][2024] == 9.0  # inputs are not mutated
-
-
-def test_cross_check_counts_values_beyond_tolerance():
-    dfo, bulk = empty(), empty()
-    dfo["KEN"] = {"ppg_service": {2024: 100.0, 2025: 100.5, 2026: 50.0, 2040: 1.0}}
-    bulk["KEN"] = {"ppg_service": {2024: 100.5, 2025: 100.0, 2026: 100.0, 2040: 9.0}}
-    result = cross_check(dfo, bulk, VIEW)
-    # 2024 and 2025 are within 1%; 2026 differs; 2040 is past the view's end.
-    assert result["compared"] == 3
-    assert result["differ"] == 1
-    assert result["examples"] == ["KEN ppg_service 2026: DFO 50, bulk 100"]
+@pytest.mark.parametrize(
+    ("stocks", "ok"),
+    [
+        ({2025: 1.0}, True),  # actuals end in the base year
+        ({2025: 1.0, 2026: 1.0}, False),  # a later actual: a newer release
+        ({2024: 1.0}, False),  # no base-year stock: an older release
+    ],
+)
+def test_check_actuals_needs_a_release_ending_in_the_base_year(stocks, ok):
+    panel = {iso3: {"ppg_stock": dict(stocks)} for iso3 in ISO3}
+    if ok:
+        check_actuals(panel, 2025, source="the test release")
+    else:
+        with pytest.raises(DataError, match="the test release does not end its actuals in 2025"):
+            check_actuals(panel, 2025, source="the test release")
 
 
 def test_amount_of_reads_missing_and_none_as_zero():

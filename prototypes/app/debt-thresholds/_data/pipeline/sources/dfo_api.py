@@ -15,7 +15,7 @@ from typing import Any
 from pipeline.config import FIRST_FLOW_YEAR, View
 from pipeline.countries import ISO3
 from pipeline.errors import DataError
-from pipeline.panel import Panel, Series
+from pipeline.panel import Panel, Series, check_actuals
 from pipeline.provenance import Ledger
 
 log = logging.getLogger("pipeline")
@@ -23,6 +23,7 @@ log = logging.getLogger("pipeline")
 PINNED_ORIGIN = {
     "imf_stock": ("InternationalMonetaryFund",),
     "imf_flows": ("InternationalMonetaryFund",),
+    "imf_principal": ("InternationalMonetaryFund",),
     "imf_interest": ("InternationalMonetaryFund",),
 }
 DFO_KEYS = {
@@ -38,7 +39,29 @@ DFO_KEYS = {
     "stock": "ppg_stock",
     "imf_stock": "imf_stock",
     "imf_interest": "imf_interest",
+    "imf_principal": "imf_principal",
+    "service_private": "prvt_service",
     "gdp": "gdp",
+    "concessional_stock": "ppg_concessional_stock",
+    "grant_element": "ppg_grant_element",
+    "rate_official": "inr_offt",
+    "rate_private": "inr_prvt",
+    "maturity_official": "mat_offt",
+    "maturity_private": "mat_prvt",
+    "grace_official": "gpa_offt",
+    "grace_private": "gpa_prvt",
+    "commitments_official": "com_offt",
+    "commitments_private": "com_prvt",
+}
+# Readings by single creditor, kept for China's part: all Chinese creditors, and the
+# bilateral (official) part.
+CHINA_KEYS = {
+    "service_by_creditor": "china_service",
+    "principal_by_creditor": "china_principal",
+    "disbursements_by_creditor": "china_disb",
+    "service_bilateral_by_creditor": "china_blat_service",
+    "principal_bilateral_by_creditor": "china_blat_principal",
+    "disbursements_bilateral_by_creditor": "china_blat_disb",
 }
 IDS_NODE = "provenance/WorldBankInternationalDebtStatistics"
 
@@ -60,7 +83,8 @@ def fetch_dfo(view: View, *, ledger: Ledger) -> tuple[Panel, dict[str, Series]]:
     """Return the current IDS release and WEO GDP through the DFO, one call per pinned reading.
 
     The result is the panel and, per ISO3, the sum of debt service over single
-    creditors, for the guard. Each reading is recorded in `ledger`.
+    creditors, for the guard. Each reading is recorded in `ledger`. Raises
+    `DataError` when the release's actual debt stocks do not end in the base year.
     """
     # Imported here so the parsing helpers load without the SDK installed.
     import dfo
@@ -114,26 +138,26 @@ def fetch_dfo(view: View, *, ledger: Ledger) -> tuple[Panel, dict[str, Series]]:
             frame["year"] = frame["time_period"].astype(int)
             frame = frame[frame["iso3"].isin(ISO3) & frame["value"].notna()]
 
-            if key.endswith("_by_creditor"):
-                flow = key.removesuffix("_by_creditor")
+            if key in CHINA_KEYS:
                 if "InternationalMonetaryFund" in set(frame["financingProvider"]):
                     raise DataError(f"the IMF is among the creditors in {key}.")
-                if flow == "service":
+                if key == "service_by_creditor":
                     sums = frame.groupby(["iso3", "year"])["value"].sum()
                     for (iso3, year), total in sums.items():
                         creditor_sums[iso3][int(year)] = float(total)
                 china = frame[frame["financingProvider"] == "country/CHN"]
-                put(collected, _rows(china), f"china_{flow}")
+                put(collected, _rows(china), CHINA_KEYS[key])
             elif key == "imf_flows":
-                for word, target in (
-                    ("Disbursement", "imf_disb"),
-                    ("PrincipalRepayment", "imf_principal"),
-                ):
-                    put(collected, _rows(frame[frame["stat_var"].str.contains(word)]), target)
+                # Repurchases come from the `imf_principal` reading, which runs to the
+                # end of the projection; the ones in this reading stop at the base year.
+                disbursed = frame[frame["stat_var"].str.contains("Disbursement")]
+                put(collected, _rows(disbursed), "imf_disb")
             else:
                 put(collected, _rows(frame), DFO_KEYS[key])
 
-    return {iso3: dict(keys) for iso3, keys in collected.items()}, dict(creditor_sums)
+    panel = {iso3: dict(keys) for iso3, keys in collected.items()}
+    check_actuals(panel, view.base, source=f"the DFO's IDS {view.ids} release")
+    return panel, dict(creditor_sums)
 
 
 def _rows(frame) -> Iterable[tuple[str, int, float]]:

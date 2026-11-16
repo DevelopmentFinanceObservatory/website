@@ -1,7 +1,7 @@
 """The coverage report: which series each country has in each base year.
 
 `coverage.md` lists the 58 countries by series for both base years, then the
-creditor-group guard and the DFO-against-bulk check. The run fails when more than
+creditor-group guard and the lending-terms fallback. The run fails when more than
 `MAX_MISSING` countries lack a core series (debt stock, debt service, GDP,
 revenue) in the default year.
 """
@@ -63,11 +63,7 @@ def render_coverage(
     ]
     for view in views:
         rows, check = coverage[view.base], checks[view.base]
-        source = (
-            "archived bulk files"
-            if view.archived
-            else "DFO API, filled from the current bulk files"
-        )
+        source = "DFO API" if view.use_dfo else "archived bulk files"
         lines += [
             f"## Base year {view.base}",
             "",
@@ -94,13 +90,6 @@ def render_coverage(
         lines += [f"  - {failure}" for failure in guard["failures"][:20]]
         if guard["failed"] > 20:
             lines.append(f"  - and {guard['failed'] - 20} more")
-        if check["cross"]:
-            cross = check["cross"]
-            lines.append(
-                f"- DFO against the IDS bulk files, 1%: {cross['compared'] - cross['differ']} "
-                f"of {cross['compared']} values agree"
-            )
-            lines += [f"  - {example}" for example in cross["examples"]]
         if check["terms_fallback"]:
             lines.append(
                 "- No 2015-19 commitments from a source, so the 58-country average "

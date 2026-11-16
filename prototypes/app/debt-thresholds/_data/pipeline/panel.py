@@ -2,43 +2,29 @@
 
 from collections.abc import Mapping
 
-from pipeline.config import TOLERANCE, View
+from pipeline.config import MAX_MISSING
 from pipeline.countries import ISO3
+from pipeline.errors import DataError
 
 type Series = dict[int, float]
 type Panel = dict[str, dict[str, Series]]  # ISO3 -> panel key -> year -> value
 
 
-def merge_panels(primary: Panel, fill: Panel) -> Panel:
-    """Return a panel where `primary` wins and `fill` supplies the keys and years it lacks."""
-    merged: Panel = {}
-    for iso3 in ISO3:
-        keys = {key: dict(series) for key, series in fill.get(iso3, {}).items()}
-        for key, series in primary.get(iso3, {}).items():
-            keys.setdefault(key, {}).update(series)
-        merged[iso3] = keys
-    return merged
+def check_actuals(panel: Panel, base: int, *, source: str, hint: str = "") -> None:
+    """Raise `DataError` unless the release's actual debt stocks end in `base`.
 
-
-def cross_check(from_dfo: Panel, bulk: Panel, view: View) -> dict:
-    """Count the values where the DFO and the bulk files differ by more than 1%."""
-    keys = ("ppg_service", "ppg_stock", "mlat_service", "blat_service", "china_service")
-    compared = differ = 0
-    examples = []
-    for iso3 in ISO3:
-        for key in keys:
-            for year, amount in from_dfo[iso3].get(key, {}).items():
-                other = bulk[iso3].get(key, {}).get(year)
-                if other is None or year > view.end:
-                    continue
-                compared += 1
-                if abs(amount - other) > TOLERANCE * max(abs(other), 1.0):
-                    differ += 1
-                    if len(examples) < 10:
-                        examples.append(
-                            f"{iso3} {key} {year}: DFO {amount:,.0f}, bulk {other:,.0f}"
-                        )
-    return {"compared": compared, "differ": differ, "examples": examples}
+    At most `MAX_MISSING` countries may lack a `base` stock, and none may have one
+    for the year after. `source` names the release in the message, and `hint`
+    follows it.
+    """
+    stocks = [keys.get("ppg_stock", {}) for keys in panel.values()]
+    actual = sum(1 for s in stocks if base in s)
+    later = sum(1 for s in stocks if base + 1 in s)
+    if actual < len(ISO3) - MAX_MISSING or later > 0:
+        raise DataError(
+            f"{source} does not end its actuals in {base}: {actual} countries have a "
+            f"{base} debt stock and {later} one for {base + 1}.{hint}"
+        )
 
 
 def amount_of(keys: Mapping[str, Series], key: str, year: int) -> float:

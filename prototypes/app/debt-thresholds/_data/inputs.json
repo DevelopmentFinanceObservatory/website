@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "External public debt (PPG, and IMF credit for service): stock, service, principal and disbursements by creditor group, and GDP, for the 58 countries in FDL's March 2026 note, 2015 to 2031",
-    "retrieved": "2026-11-16T22:41:58.439Z",
+    "retrieved": "2026-11-16T22:57:50.786Z",
     "citation": "World Bank International Debt Statistics (December 2025 and November 2026 releases; November 2026 read through the Development Finance Observatory) and IMF World Economic Outlook (October 2025 and October 2026)",
     "dfo": [
       {
@@ -2650,6 +2650,2230 @@
         "citation": "IMF World Economic Outlook (WEO) (2026), via the Development Finance Observatory",
         "rows": 975,
         "warnings": []
+      },
+      {
+        "key": "disbursements_by_creditor",
+        "question": "DT.DIS.DPPG.CD for Kenya by creditor, 2015 to 2030",
+        "sentence": "Disbursements on public or publicly guaranteed external debt, by creditor to 58 debtors from 163 creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_8f00e017e889015579768535308a2982",
+        "versions": [
+          "cv_5d93b52a44ddd9ab63e7022c6f6d9ecc"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Disbursements on public or publicly guaranteed external debt, by creditor to 58 debtors from 163 creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_084e5b3313e3b0296fbb589b84022d3d",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_084e5b3313e3b0296fbb589b84022d3d",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Disbursement",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "PublicOrPubliclyGuaranteed",
+                          "state": "value"
+                        },
+                        "property": "guaranteeStatus"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "open_roles": [
+                      "origin"
+                    ],
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_5d93b52a44ddd9ab63e7022c6f6d9ecc",
+              "artifact": {
+                "digest": "sha256:0d45340ed0a5cfadf303ab29cfe413472ba57618a9b66d3810d9fcbde1047102",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:34+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 29105,
+        "warnings": []
+      },
+      {
+        "key": "service_bilateral_by_creditor",
+        "question": "DT.TDS.BLAT.CD for Kenya by creditor, 2015 to 2030",
+        "sentence": "External debt service of 58 debtors owed to 68 creditors owed to bilateral creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_4a6d10df33fcf83b15ec3cf7d761112d",
+        "versions": [
+          "cv_45406ec2db6dcbdb1f7b0dc6e2fef7d6"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "External debt service of 58 debtors owed to 68 creditors owed to bilateral creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_667cd38f67bac08950cf1f4e3d9c54e6",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_667cd38f67bac08950cf1f4e3d9c54e6",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "ServicingPayment",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeBLAT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "open_roles": [
+                      "origin"
+                    ],
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_45406ec2db6dcbdb1f7b0dc6e2fef7d6",
+              "artifact": {
+                "digest": "sha256:79579941d3763e2fe153e33264ade4f140528db13828625f921b7c3889a10244",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:37+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 9469,
+        "warnings": []
+      },
+      {
+        "key": "principal_bilateral_by_creditor",
+        "question": "DT.AMT.BLAT.CD for Kenya by creditor, 2015 to 2030",
+        "sentence": "Principal repayments on external debt of 58 debtors owed to 68 creditors owed to bilateral creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_8f45d053b17f9d8f6c92ec4fd24e9feb",
+        "versions": [
+          "cv_a99ee4029b564dd8eecde997012a1750"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Principal repayments on external debt of 58 debtors owed to 68 creditors owed to bilateral creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_0f9826911ec0b96505727e016cce945c",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_0f9826911ec0b96505727e016cce945c",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "PrincipalRepayment",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeBLAT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "open_roles": [
+                      "origin"
+                    ],
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_a99ee4029b564dd8eecde997012a1750",
+              "artifact": {
+                "digest": "sha256:4173384c01ce1eb7d43fbb8d1426f25e13383fea54faecb71336acf3f63f2e21",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:40+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 8819,
+        "warnings": []
+      },
+      {
+        "key": "disbursements_bilateral_by_creditor",
+        "question": "DT.DIS.BLAT.CD for Kenya by creditor, 2015 to 2030",
+        "sentence": "Disbursements on external debt to bilateral creditors, by creditor to 58 debtors from 87 creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_3f4190a11f0c8e07403588347a6abcb2",
+        "versions": [
+          "cv_b20ab3ac6518def44a79cedd9705f9fd"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Disbursements on external debt to bilateral creditors, by creditor to 58 debtors from 87 creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_8721d01a2a41f1d4c120f3592ee97023",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_8721d01a2a41f1d4c120f3592ee97023",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Disbursement",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeBLAT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "open_roles": [
+                      "origin"
+                    ],
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_b20ab3ac6518def44a79cedd9705f9fd",
+              "artifact": {
+                "digest": "sha256:2c287c3e02e1b01912791053d2b82009cf9e5d2e7303c638c84b8d437d267000",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:44+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 15721,
+        "warnings": []
+      },
+      {
+        "key": "concessional_stock",
+        "question": "DT.DOD.ALLC.CD for Kenya, 2015 to 2030",
+        "sentence": "Outstanding external debt of 58 debtors for concessional, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_ce50414a383998cb186bda9eba6c9427",
+        "versions": [
+          "cv_ae07a7f9844222679405b9550618110e"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Outstanding external debt of 58 debtors for concessional, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_41ec6db6e7f84ba3c1b5eedfd2930ded",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_41ec6db6e7f84ba3c1b5eedfd2930ded",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialPosition",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "AmountOutstanding",
+                          "state": "value"
+                        },
+                        "property": "financialPositionType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "financingResource"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSConcessional",
+                          "state": "value"
+                        },
+                        "property": "idsConcessionality"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "idsCreditorType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "idsDebtorType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "includesIMFCredit"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "interestRateVariability"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "maturityBand"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_ae07a7f9844222679405b9550618110e",
+              "artifact": {
+                "digest": "sha256:140a40b92b434627e44cdddb70e343ca2ec04ccf4594a044daf761790ce753af",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:46+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 638,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "grant_element",
+        "question": "DT.GRE.DPPG for Kenya, 2015 to 2030",
+        "sentence": "Grant element mean value in percent to 58 recipients for commitment for public or publicly guaranteed, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_7f143da71cea59b211308c6b923a971d",
+        "versions": [
+          "cv_8cc45b66f625fa6e36439a641361a1c6"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Grant element mean value in percent to 58 recipients for commitment for public or publicly guaranteed, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_e4d4423e8865a961f1ac2b913a449409",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_e4d4423e8865a961f1ac2b913a449409",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "grantElement"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "PublicOrPubliclyGuaranteed",
+                          "state": "value"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_8cc45b66f625fa6e36439a641361a1c6",
+              "artifact": {
+                "digest": "sha256:f4c64b7c8eddd36d0428b4197088c0ec122405e305fa6b58ee8041b226089b16",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:47+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 609,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "rate_official",
+        "question": "DT.INR.OFFT for Kenya, 2015 to 2030",
+        "sentence": "Interest rate mean value in percent to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_e96476aa6dc0d193dc360a928dee199a",
+        "versions": [
+          "cv_63f48f58250051c3a90f02b7381b9da9"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Interest rate mean value in percent to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_0dbd404f27545191ec8d21af052c225f",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_0dbd404f27545191ec8d21af052c225f",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "interestRate"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeOFFT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_63f48f58250051c3a90f02b7381b9da9",
+              "artifact": {
+                "digest": "sha256:b91eaf6ab5f38c1c37f9d9e643c3e81656d3b8ef7949f724f64e64c3ae0be97f",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:49+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 609,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "rate_private",
+        "question": "DT.INR.PRVT for Kenya, 2015 to 2030",
+        "sentence": "Interest rate mean value in percent to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_3f0710e7c717f505f0002990ff56fc0e",
+        "versions": [
+          "cv_ca114fc553dfdfedf72b2212c8203eed"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Interest rate mean value in percent to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_6ddc625841c482c698a8614316a111eb",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_6ddc625841c482c698a8614316a111eb",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "interestRate"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypePRVT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_ca114fc553dfdfedf72b2212c8203eed",
+              "artifact": {
+                "digest": "sha256:e6a1a8fbc6ef6b5cb7edd69e49f1de0dc83d9559ae6c062d4e0634a52203d4ee",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:50+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 279,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. No observations were served for 16 requested entities. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "maturity_official",
+        "question": "DT.MAT.OFFT for Kenya, 2015 to 2030",
+        "sentence": "Maturity mean value to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_6d9499d79d16227061d9e3a00f732128",
+        "versions": [
+          "cv_22db82cd4fb229da356c10f045d75b41"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Maturity mean value to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_963816c32bc63fef5da9385e72c7af2f",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_963816c32bc63fef5da9385e72c7af2f",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "maturity"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeOFFT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_22db82cd4fb229da356c10f045d75b41",
+              "artifact": {
+                "digest": "sha256:cf0826a09f5d2a86c1c6cfe55a1d75a190d683fda1861c1cc28a9bed23b0a149",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:52+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 609,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "maturity_private",
+        "question": "DT.MAT.PRVT for Kenya, 2015 to 2030",
+        "sentence": "Maturity mean value to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_e0013e39b2107467c65df1454433f51b",
+        "versions": [
+          "cv_4e30a90cb4aa5b887d43b6611c802d8f"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Maturity mean value to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_3058d1b6d1bcb700ee96005ee32f89f4",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_3058d1b6d1bcb700ee96005ee32f89f4",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "maturity"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypePRVT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_4e30a90cb4aa5b887d43b6611c802d8f",
+              "artifact": {
+                "digest": "sha256:3268b39a7875968f43afffd0231d075f41dce04a12fc558da828b04a59da87fa",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:53+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 279,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. No observations were served for 16 requested entities. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "grace_official",
+        "question": "DT.GPA.OFFT for Kenya, 2015 to 2030",
+        "sentence": "Grace period mean value to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_a46f61118557f91f0d3c2b68165dbe12",
+        "versions": [
+          "cv_aee0d7c8063531ab23712dcef0a734ab"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Grace period mean value to 58 recipients for commitment from official creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_0bde7b892606c20386c41bc4466baef3",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_0bde7b892606c20386c41bc4466baef3",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "gracePeriod"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeOFFT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_aee0d7c8063531ab23712dcef0a734ab",
+              "artifact": {
+                "digest": "sha256:1c6df1ee76e4ba7c4f95d0577c6fe267d7f2a4e571061bbfa23f97ea9fb9f620",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:54+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 609,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "grace_private",
+        "question": "DT.GPA.PRVT for Kenya, 2015 to 2030",
+        "sentence": "Grace period mean value to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+        "specId": "spec_f1aa54b8115c9fd98ccb8580b3a28500",
+        "versions": [
+          "cv_f9c2079172429473867f5c9e70c78eaa"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Grace period mean value to 58 recipients for commitment from private creditors, 2015 to 2025. World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_480908c64b2f9c58965aa3a55c4a4fe6",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_480908c64b2f9c58965aa3a55c4a4fe6",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "meanValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "gracePeriod"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "state": "unbound"
+                        },
+                        "property": "guaranteeStatus"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypePRVT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_f9c2079172429473867f5c9e70c78eaa",
+              "artifact": {
+                "digest": "sha256:3cbd30e03b738c04bcfdc4f27751e77ce6ce6b41296c4b059387efd7cbfeaa59",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:56+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 279,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. No observations were served for 16 requested entities. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "commitments_official",
+        "question": "DT.COM.OFFT.CD for Kenya, 2015 to 2030",
+        "sentence": "Commitments of external debt (debt instrument) to official creditors to 58 recipients, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_e48c1e9841106b4f6018211a612ab1d2",
+        "versions": [
+          "cv_d9483a908b86b48556e1568917f6b4b5"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Commitments of external debt (debt instrument) to official creditors to 58 recipients, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_153cf557a7fa9709c40373e46043e757",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_153cf557a7fa9709c40373e46043e757",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "DebtInstrument",
+                          "state": "value"
+                        },
+                        "property": "financingResource"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypeOFFT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_d9483a908b86b48556e1568917f6b4b5",
+              "artifact": {
+                "digest": "sha256:e3e0c2350a1ee7818d5a66fb9435c4133868848d5d319aa027610cfc6de1615a",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:57+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 628,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "commitments_private",
+        "question": "DT.COM.PRVT.CD for Kenya, 2015 to 2030",
+        "sentence": "Commitments of external debt (debt instrument) to private creditors to 58 recipients, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_8eb7985ceb582c96d038db35557af0d4",
+        "versions": [
+          "cv_fc8a543dc123d3e929004c555e592eb5"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Commitments of external debt (debt instrument) to private creditors to 58 recipients, 2015 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_a841d4992e6594edcc80505644560149",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_a841d4992e6594edcc80505644560149",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialObligation",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "Commitment",
+                          "state": "value"
+                        },
+                        "property": "financialObligationType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "DebtInstrument",
+                          "state": "value"
+                        },
+                        "property": "financingResource"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypePRVT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_fc8a543dc123d3e929004c555e592eb5",
+              "artifact": {
+                "digest": "sha256:51e6e1f4e7d265d606ceca86d9cb512f09ebd647b6b2d87281564fbc7715297e",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:52:58+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 355,
+        "warnings": [
+          "The served coverage falls short of the requested scope. Requested 2015 to 2031; the data covers 2015 to 2025. No observations were served for 14 requested entities. [coverage_below_scope]"
+        ]
+      },
+      {
+        "key": "imf_principal",
+        "question": "DT.AMT.DIMF.CD for Kenya from the IMF, 2015 to 2030",
+        "sentence": "Principal repayments on external debt of 58 debtors owed to International Monetary Fund for debt instrument, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_92fe956734b081dc6c19369a503d8818",
+        "versions": [
+          "cv_85698a37ff5f90053ce48337f3d7dca0"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "Principal repayments on external debt of 58 debtors owed to International Monetary Fund for debt instrument, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_9973126bf6c31759175294b5ee122483",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_9973126bf6c31759175294b5ee122483",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "PrincipalRepayment",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "DebtInstrument",
+                          "state": "value"
+                        },
+                        "property": "financingResource"
+                      }
+                    ],
+                    "entities": {
+                      "origin": [
+                        "InternationalMonetaryFund"
+                      ],
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_85698a37ff5f90053ce48337f3d7dca0",
+              "artifact": {
+                "digest": "sha256:8a241538c80679845b274430d9347f312dca53952ccccbb62793ab9480c4a22f",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:56:29+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 896,
+        "warnings": []
+      },
+      {
+        "key": "service_private",
+        "question": "DT.TDS.PRVT.CD for Kenya, 2015 to 2030",
+        "sentence": "External debt service of 58 debtors owed to private creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+        "specId": "spec_3ac8d286e89a615162dc56e0a1ed177d",
+        "versions": [
+          "cv_945b54d2c5fa83353e5559faf5f35c31"
+        ],
+        "ref": {
+          "format_version": 1,
+          "members": [
+            {
+              "parts": [],
+              "sentence": "External debt service of 58 debtors owed to private creditors, 2015 to 2031. Current US dollars · World Bank International Debt Statistics (IDS).",
+              "spec": {
+                "spec_id": "spec_3141d43cbdc9501b37bb7ad317706f86",
+                "definition": {
+                  "schema_version": 1,
+                  "spec_id": "spec_3141d43cbdc9501b37bb7ad317706f86",
+                  "identity": {
+                    "shape": {
+                      "kind": "statvar_schema",
+                      "stat_type": "measuredValue",
+                      "population_type": "FinancialFlow",
+                      "measured_property": "amount",
+                      "measurement_qualifier": "Nominal"
+                    },
+                    "slots": [
+                      {
+                        "binding": {
+                          "ref": "ServicingPayment",
+                          "state": "value"
+                        },
+                        "property": "financialFlowType"
+                      },
+                      {
+                        "binding": {
+                          "ref": "IDSCreditorTypePRVT",
+                          "state": "value"
+                        },
+                        "property": "idsCreditorType"
+                      }
+                    ],
+                    "entities": {
+                      "destination": [
+                        "country/AGO",
+                        "country/BDI",
+                        "country/BEN",
+                        "country/BFA",
+                        "country/BGD",
+                        "country/BTN",
+                        "country/CAF",
+                        "country/CIV",
+                        "country/CMR",
+                        "country/COD",
+                        "country/COG",
+                        "country/COM",
+                        "country/DJI",
+                        "country/EGY",
+                        "country/ETH",
+                        "country/GHA",
+                        "country/GIN",
+                        "country/GMB",
+                        "country/GNB",
+                        "country/HND",
+                        "country/HTI",
+                        "country/IND",
+                        "country/JOR",
+                        "country/KEN",
+                        "country/KGZ",
+                        "country/KHM",
+                        "country/LAO",
+                        "country/LBR",
+                        "country/LSO",
+                        "country/MAR",
+                        "country/MDG",
+                        "country/MLI",
+                        "country/MMR",
+                        "country/MOZ",
+                        "country/MRT",
+                        "country/MWI",
+                        "country/NER",
+                        "country/NGA",
+                        "country/NIC",
+                        "country/NPL",
+                        "country/PAK",
+                        "country/PHL",
+                        "country/PNG",
+                        "country/RWA",
+                        "country/SEN",
+                        "country/SLB",
+                        "country/SLE",
+                        "country/STP",
+                        "country/SWZ",
+                        "country/TCD",
+                        "country/TJK",
+                        "country/TUN",
+                        "country/TZA",
+                        "country/UGA",
+                        "country/UZB",
+                        "country/VNM",
+                        "country/VUT",
+                        "country/ZMB"
+                      ]
+                    },
+                    "identity_version": "spec1",
+                    "requested_window": {
+                      "kind": "range",
+                      "end_year": 2031,
+                      "start_year": 2015
+                    }
+                  }
+                }
+              },
+              "content_version": "cv_945b54d2c5fa83353e5559faf5f35c31",
+              "artifact": {
+                "digest": "sha256:c70f9e22325a242050a8b9b44ec1cc57c742b372b82739840cb5beb624206e41",
+                "rendering": {
+                  "format": "parquet",
+                  "bundle": false,
+                  "without_party_totals": true
+                }
+              }
+            }
+          ]
+        },
+        "fetchedAt": "2026-11-16T22:56:31+00:00",
+        "citation": "World Bank International Debt Statistics (IDS) (2026), via the Development Finance Observatory",
+        "rows": 755,
+        "warnings": [
+          "The served coverage falls short of the requested scope. No observations were served for 5 requested entities. [coverage_below_scope]"
+        ]
       }
     ],
     "preloads": [
@@ -2738,70 +4962,6 @@
           "GGXWDG_NGDP"
         ],
         "source": "https://www.imf.org/en/Publications/WEO, read with bblocks-data-importers 0.5.0 and imf-reader 2.3.0"
-      },
-      {
-        "name": "World Bank International Debt Statistics, November 2026 release, bulk files",
-        "baseYear": 2025,
-        "vintage": "November 2026",
-        "series": [
-          "DT.AMT.BLAT.CD",
-          "DT.AMT.DIMF.CD",
-          "DT.AMT.DPPG.CD",
-          "DT.AMT.MLAT.CD",
-          "DT.AMT.PRVT.CD",
-          "DT.COM.OFFT.CD",
-          "DT.COM.PRVT.CD",
-          "DT.DIS.BLAT.CD",
-          "DT.DIS.DIMF.CD",
-          "DT.DIS.DPPG.CD",
-          "DT.DIS.MLAT.CD",
-          "DT.DIS.PRVT.CD",
-          "DT.DOD.ALLC.CD",
-          "DT.DOD.DIMF.CD",
-          "DT.DOD.DPPG.CD",
-          "DT.GPA.OFFT",
-          "DT.GPA.PRVT",
-          "DT.GRE.DPPG",
-          "DT.INR.OFFT",
-          "DT.INR.PRVT",
-          "DT.INT.DIMF.CD",
-          "DT.MAT.OFFT",
-          "DT.MAT.PRVT",
-          "DT.TDS.BLAT.CD",
-          "DT.TDS.DPPG.CD",
-          "DT.TDS.MLAT.CD",
-          "DT.TDS.PRVT.CD"
-        ],
-        "counterparts": [
-          "World",
-          "China"
-        ],
-        "files": [
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0092201/A_D.xlsx",
-            "bytes": 134537761
-          },
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0092202/E_K.xlsx",
-            "bytes": 161753053
-          },
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0092203/L_M.xlsx",
-            "bytes": 173315697
-          },
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0093225/N_Q.xlsx",
-            "bytes": 46330567
-          },
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0092204/R_U.xlsx",
-            "bytes": 198269062
-          },
-          {
-            "url": "https://datacatalogfiles.worldbank.org/ddh-published/0038015/DR0092205/V_Z.xlsx",
-            "bytes": 37045610
-          }
-        ]
       },
       {
         "name": "IMF World Economic Outlook, October 2026",

@@ -62,10 +62,9 @@ def test_render_coverage_structure() -> None:
     missing = {b: [r["iso3"] for r in rows if r["missing"]] for b, rows in coverage.items()}
     guard = {"checked": 10, "failed": 22, "failures": [f"f{i}" for i in range(22)]}
     checks = {
-        VIEWS[0].base: {"guard": guard, "cross": None, "terms_fallback": []},
+        VIEWS[0].base: {"guard": guard, "terms_fallback": []},
         VIEWS[1].base: {
             "guard": {"checked": 4, "failed": 0, "failures": []},
-            "cross": {"compared": 5, "differ": 1, "examples": ["KEN x 2024"]},
             "terms_fallback": ["AAA", "BBB"],
         },
     }
@@ -90,8 +89,6 @@ def test_render_coverage_structure() -> None:
     assert "  - f19" in lines
     assert "  - f20" not in lines
     assert "  - and 2 more" in lines
-    assert "- DFO against the IDS bulk files, 1%: 4 of 5 values agree" in lines
-    assert "  - KEN x 2024" in lines
     assert (
         "- No 2015-19 commitments from a source, so the 58-country average terms stand in: AAA, BBB"
     ) in lines

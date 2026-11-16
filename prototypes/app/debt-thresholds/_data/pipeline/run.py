@@ -4,7 +4,7 @@
 logging or exits. It writes, into the output folder:
 
 - `coverage.md`: the countries by series for both base years, the creditor-group
-  guard and the DFO-against-bulk check. The run returns 1 when more than
+  guard and the lending-terms fallback. The run returns 1 when more than
   `MAX_MISSING` countries lack a core series in the default year.
 - `inputs.json`: an envelope whose `data` maps base year, then ISO3 code, to the
   `inputs` dict `pipeline.project.project_service` takes, shaped as that module's
@@ -38,7 +38,7 @@ from pipeline.coverage import coverage_rows, render_coverage
 from pipeline.creditors import estimate_imf_charges, guard_groups
 from pipeline.errors import DataError
 from pipeline.output import write_envelope, write_text
-from pipeline.panel import Series, cross_check, merge_panels
+from pipeline.panel import Series
 from pipeline.provenance import Ledger, citation, envelope_provenance
 from pipeline.sources.dfo_api import fetch_dfo, ids_release
 from pipeline.sources.ids_bulk import load_ids
@@ -101,13 +101,11 @@ def build_thresholds(out: Path, *, client: httpx.Client, now: datetime, ids: str
     inputs: dict[str, dict[str, dict]] = {}
     checks: dict[int, dict] = {}
     for view in both:
-        panel = load_ids(view, paths=paths, client=client, ledger=ledger)
         creditor_sums: dict[str, Series] = {}
-        cross = None
         if view.use_dfo:
-            from_dfo, creditor_sums = fetch_dfo(view, ledger=ledger)
-            cross = cross_check(from_dfo, panel, view)
-            panel = merge_panels(from_dfo, panel)
+            panel, creditor_sums = fetch_dfo(view, ledger=ledger)
+        else:
+            panel = load_ids(view, paths=paths, client=client, ledger=ledger)
         weo = load_weo(view, ledger=ledger)
         panel = estimate_imf_charges(panel, view)
         terms, fallback = lending_terms(panel)
@@ -122,7 +120,6 @@ def build_thresholds(out: Path, *, client: httpx.Client, now: datetime, ids: str
         )
         checks[view.base] = {
             "guard": guard_groups(panel, view, creditor_sums),
-            "cross": cross,
             "terms_fallback": fallback,
         }
 

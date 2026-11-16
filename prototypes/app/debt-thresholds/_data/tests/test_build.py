@@ -37,6 +37,7 @@ def test_build_view_shapes_records_and_inputs_for_every_country() -> None:
         "imf_stock": {2024: 20.0},
         "ppg_concessional_stock": {2024: 50.0},
         "ppg_grant_element": {2024: 40.0},
+        "com_offt": {2024: 10.0},
     }
     built, inputs = build_view(
         VIEW,

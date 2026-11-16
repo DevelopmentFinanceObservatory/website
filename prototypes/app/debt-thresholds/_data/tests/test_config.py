@@ -10,13 +10,7 @@ def test_views_stamp_current_capacity_with_today():
     assert old.capacity_as_of == "2026-03-14"
     assert current.capacity_as_of == "2026-11-16"
     assert (old.use_dfo, current.use_dfo) == (False, True)
-
-
-def test_current_cache_folder_follows_the_release():
-    _, november = views(date(2026, 11, 16), current_ids="November 2026")
-    _, april = views(date(2027, 4, 20), current_ids="April 2027")
-    assert november.ids_dir == "ids-2026-11"
-    assert april.ids_dir == "ids-2027-04"
+    assert (old.ids_dir, current.ids_dir) == ("ids-2025-12", None)
 
 
 def test_view_end_adds_horizon():
