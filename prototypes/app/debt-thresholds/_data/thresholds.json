@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "External public debt (PPG, and IMF credit for service): stock, service, principal and disbursements by creditor group, and GDP, for the 58 countries in FDL's March 2026 note, 2015 to 2031",
-    "retrieved": "2026-11-16T21:27:35.508Z",
+    "retrieved": "2026-11-16T22:14:58.151Z",
     "citation": "World Bank International Debt Statistics (December 2025 and November 2026 releases; November 2026 read through the Development Finance Observatory) and IMF World Economic Outlook (October 2025 and October 2026)",
     "dfo": [
       {
@@ -7479,7 +7479,7 @@
             "capacity": "weak",
             "capacitySource": "dsa",
             "dsaDate": "2026-01-01",
-            "riskRating": "in debt distress",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -7669,7 +7669,7 @@
             "gdp": 126350980000,
             "capacity": "weak",
             "capacitySource": "dsa",
-            "dsaDate": "2026-01-01",
+            "dsaDate": "2026-07-01",
             "riskRating": "in debt distress",
             "years": [
               {
@@ -7868,7 +7868,7 @@
             "capacity": "medium",
             "capacitySource": "dsa",
             "dsaDate": "2025-12-01",
-            "riskRating": "high",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -8056,9 +8056,9 @@
             "year": 2025,
             "debtFace": 1047496099,
             "gdp": 2783092000,
-            "capacity": "medium",
+            "capacity": "strong",
             "capacitySource": "dsa",
-            "dsaDate": "2025-12-01",
+            "dsaDate": "2026-07-01",
             "riskRating": "high",
             "years": [
               {
@@ -14409,7 +14409,7 @@
             "capacity": "medium",
             "capacitySource": "dsa",
             "dsaDate": "2025-10-01",
-            "riskRating": "low",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -14599,7 +14599,7 @@
             "gdp": 50658773000,
             "capacity": "medium",
             "capacitySource": "dsa",
-            "dsaDate": "2025-10-01",
+            "dsaDate": "2026-09-01",
             "riskRating": "low",
             "years": [
               {
@@ -15187,7 +15187,7 @@
             "capacity": "weak",
             "capacitySource": "dsa",
             "dsaDate": "2025-09-01",
-            "riskRating": "moderate",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -15377,7 +15377,7 @@
             "gdp": 92901030000,
             "capacity": "weak",
             "capacitySource": "dsa",
-            "dsaDate": "2025-09-01",
+            "dsaDate": "2026-09-01",
             "riskRating": "moderate",
             "years": [
               {
@@ -16743,7 +16743,7 @@
             "capacity": "medium",
             "capacitySource": "dsa",
             "dsaDate": "2025-05-01",
-            "riskRating": "moderate",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -16931,9 +16931,9 @@
             "year": 2025,
             "debtFace": 5140959288,
             "gdp": 22625108000,
-            "capacity": "medium",
+            "capacity": "strong",
             "capacitySource": "dsa",
-            "dsaDate": "2025-05-01",
+            "dsaDate": "2026-07-01",
             "riskRating": "moderate",
             "years": [
               {
@@ -18687,7 +18687,7 @@
             "gdp": 22789000000,
             "capacity": "medium",
             "capacitySource": "dsa",
-            "dsaDate": "2025-04-01",
+            "dsaDate": "2025-09-01",
             "riskRating": "moderate",
             "years": [
               {
@@ -18878,7 +18878,7 @@
             "gdp": 31231985000,
             "capacity": "medium",
             "capacitySource": "dsa",
-            "dsaDate": "2025-04-01",
+            "dsaDate": "2025-09-01",
             "riskRating": "moderate",
             "years": [
               {
@@ -19076,8 +19076,8 @@
             "gdp": 11003000000,
             "capacity": "medium",
             "capacitySource": "dsa",
-            "dsaDate": "2024-12-01",
-            "riskRating": "moderate",
+            "dsaDate": "2026-02-01",
+            "riskRating": null,
             "years": [
               {
                 "year": 2016,
@@ -19267,7 +19267,7 @@
             "gdp": 12603024000,
             "capacity": "medium",
             "capacitySource": "dsa",
-            "dsaDate": "2024-12-01",
+            "dsaDate": "2026-06-01",
             "riskRating": "moderate",
             "years": [
               {

@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "Net transfers on external debt for Kenya",
-    "retrieved": "2026-11-16T19:00:52.866Z",
+    "retrieved": "2026-11-16T22:14:58.151Z",
     "ids": "November 2026",
     "indicator": "DT.NTR.DECT.CD",
     "sentence": "Net transfers on external debt to 75 debtors from all creditors, 1970 to 2025. Current US dollars · World Bank International Debt Statistics (IDS).",
