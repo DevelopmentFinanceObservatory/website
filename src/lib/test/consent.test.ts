@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { hasServiceConsent, onServiceConsent, USAGE_STATS_SERVICE } from '../consent.ts';
+import {
+    hasServiceConsent,
+    onServiceConsent,
+    showPrivacySettings,
+    USAGE_STATS_SERVICE,
+} from '../consent.ts';
 
 const details = (given: boolean) => ({
     services: { [USAGE_STATS_SERVICE]: { consent: { given } } },
@@ -65,4 +70,15 @@ test('UC_CONSENT events report the service consent until unsubscribed', () => {
     fire(details(true));
 
     assert.deepEqual(heard, [true, false, false]);
+});
+
+test('on the website, privacy settings open the loaded CMP and load none of their own', () => {
+    // No document stub: loading a CMP here would throw.
+    stubWindow();
+    showPrivacySettings();
+
+    let opened = 0;
+    stubWindow({ showSecondLayer: async () => void (opened += 1) });
+    showPrivacySettings();
+    assert.equal(opened, 1);
 });
