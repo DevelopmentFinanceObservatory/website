@@ -20,7 +20,15 @@ export type Prototype = {
 };
 
 /** Every prototype, newest first. */
-export const prototypes: Prototype[] = [];
+export const prototypes: Prototype[] = [
+    {
+        slug: 'debt-thresholds',
+        title: 'Debt solvency and liquidity',
+        summary:
+            "FDL's test for risk of insolvency and illiquidity, run on the World Bank's latest debt data for 58 low and lower-middle-income countries.",
+        date: '2026-11-16',
+    },
+];
 
 /** The entry for a slug. Throws when the slug has none, so a page cannot
  *  build without its registry entry. */

@@ -1,0 +1,168 @@
+// The scatter draws at the container's pixel width, so these sizes are real pixels.
+
+// Motion. A capacity change moves the threshold lines first; dots that change group
+// cross-fade colour just after, so the eye sees the line pass and the colours follow.
+// A view change glides dots and labels to their new positions. Everything is done
+// within 300ms. Strong curves from the house motion standard (review-animations).
+$ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+$ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+$line-ms: 240ms;
+$move-ms: 280ms;
+$colour-ms: 200ms;
+$colour-delay: 60ms;
+$fade-ms: 180ms;
+
+.wrap {
+    position: relative;
+
+    // Set while the width settles (first draw, window resize): redraws do not glide.
+    &[data-still] * {
+        transition: none;
+    }
+}
+
+.svg {
+    display: block;
+    overflow: visible;
+}
+
+.range {
+    fill: #efefe2;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.threshold {
+    stroke: #484842;
+    stroke-width: 1;
+    transition:
+        transform $line-ms $ease-move,
+        opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+.tick {
+    font: 400 11px var(--font-outfit);
+    fill: #5e5e52;
+}
+
+.label,
+.labelSelected {
+    font: 400 11px var(--font-outfit);
+    fill: #484842;
+    paint-order: stroke;
+    stroke: #fff;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+    transition:
+        transform $move-ms $ease-move,
+        opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+.labelSelected {
+    font-weight: 600;
+}
+
+.dot,
+.dotSelected,
+.dotOverlay {
+    transition:
+        transform $move-ms $ease-move,
+        fill $colour-ms ease $colour-delay;
+}
+
+.dot,
+.dotSelected {
+    cursor: pointer;
+    stroke: #fff;
+    stroke-width: 1;
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+}
+
+.dotSelected {
+    stroke: #484842;
+    stroke-width: 2;
+}
+
+.dotOverlay {
+    pointer-events: none;
+    stroke: #484842;
+    stroke-width: 2;
+}
+
+.tip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    max-width: 190px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: #e8e8d5;
+    color: #484842;
+    font-family: var(--font-outfit);
+    font-size: 12px;
+    line-height: 1.35;
+    pointer-events: none;
+}
+
+.tipTitle {
+    margin-bottom: 3px;
+    font: 500 11px var(--font-dm-mono);
+}
+
+.tipRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+
+    b {
+        font-weight: 600;
+    }
+}
+
+.tipThresholds {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #d2d2c5;
+}
+
+.tipNote {
+    margin: 4px 0 0;
+    padding-top: 4px;
+    border-top: 1px solid #d2d2c5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    // Nothing moves: lines and dots jump to place. Colour and opacity still cross-fade,
+    // which shows the change without movement.
+    .threshold,
+    .label,
+    .labelSelected {
+        transition: opacity $fade-ms $ease-out;
+    }
+
+    .dot,
+    .dotSelected,
+    .dotOverlay {
+        transition: fill $colour-ms ease;
+    }
+}

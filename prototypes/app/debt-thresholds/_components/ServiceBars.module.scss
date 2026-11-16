@@ -1,0 +1,56 @@
+.wrap {
+    position: relative;
+}
+
+.bars {
+    display: block;
+    overflow: visible;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.tick {
+    font: 400 11px var(--font-outfit);
+    fill: #5e5e52;
+}
+
+.threshold {
+    stroke: #484842;
+    stroke-width: 1;
+}
+
+.label {
+    font: 400 11px var(--font-outfit);
+    fill: #484842;
+}
+
+.labelBacking {
+    fill: #fff;
+    fill-opacity: 0.92;
+}
+
+// The column under the pointer, a faint band behind its bar.
+.hoverBand {
+    fill: #f3f3e8;
+}
+
+.hit {
+    fill: transparent;
+    cursor: default;
+}
+
+.tipLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tipSwatch {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
