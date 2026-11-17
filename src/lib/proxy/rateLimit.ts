@@ -93,11 +93,11 @@ export const createLimiter = (
             const key = `${surface}:${callerKey}`;
 
             try {
-                return { ...(await countHit(db, key, limit, windowS)), counted: true };
+                return await countHit(db, key, limit, windowS);
             } catch (error) {
                 warn('rate limit unavailable, counting in memory', error);
 
-                return { ...fallback.hit(key, limit), counted: true };
+                return fallback.hit(key, limit);
             }
         },
     };

@@ -112,7 +112,6 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 };
 const verdictOf = (limit: number): RateVerdict => ({
     allowed: true,
-    counted: true,
     limit,
     remaining: limit - 1,
     reset: 60,

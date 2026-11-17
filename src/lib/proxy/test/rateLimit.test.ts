@@ -54,12 +54,12 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         }
 
         assert.deepEqual(
-            account.map(({ allowed, remaining, counted }) => [allowed, remaining, counted]),
+            account.map(({ allowed, remaining }) => [allowed, remaining]),
             [
-                [true, 2, true],
-                [true, 1, true],
-                [true, 0, true],
-                [false, 0, true],
+                [true, 2],
+                [true, 1],
+                [true, 0],
+                [false, 0],
             ],
         );
         assert.equal(account[0]!.limit, 3);
@@ -92,12 +92,12 @@ test('limiter: a count that fails is counted in memory instead of passing, and w
     }
 
     assert.deepEqual(
-        verdicts.map(({ allowed, remaining, counted }) => [allowed, remaining, counted]),
+        verdicts.map(({ allowed, remaining }) => [allowed, remaining]),
         [
-            [true, 2, true],
-            [true, 1, true],
-            [true, 0, true],
-            [false, 0, true],
+            [true, 2],
+            [true, 1],
+            [true, 0],
+            [false, 0],
         ],
     );
     assert.equal(warned.length, 4);

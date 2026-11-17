@@ -32,7 +32,6 @@ const VALID: ValidKey = {
 
 const verdict = (limit: number, used: number): RateVerdict => ({
     allowed: used <= limit,
-    counted: true,
     limit,
     remaining: Math.max(0, limit - used),
     reset: 30,
