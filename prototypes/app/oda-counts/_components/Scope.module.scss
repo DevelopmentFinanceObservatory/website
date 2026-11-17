@@ -1,3 +1,5 @@
+@use "motion" as *;
+
 .section {
     margin-top: 16px;
     padding-top: 24px;
@@ -22,10 +24,12 @@
 
 .card {
     min-width: 0;
-    padding: 16px;
+    padding: 18px 20px 16px;
     border: 1px solid #ececdb;
     border-radius: 6px;
     background: #fff;
+
+    @include still;
 }
 
 .cardTitle {
@@ -37,17 +41,11 @@
     letter-spacing: -0.01em;
 }
 
-// Three blocks side by side from 901px, stacked below.
+// The blocks stack in the chart column beside the side column.
 .blocks {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
+    gap: 20px;
     margin-bottom: 8px;
-
-    @media (max-width: 900px) {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
-    }
 }
 
 .block {
@@ -69,6 +67,8 @@
     font-variant-numeric: tabular-nums;
     font-weight: 500;
     line-height: 1.2;
+
+    @include fade-in;
 }
 
 .missing {
@@ -92,6 +92,7 @@
 .segment {
     display: block;
     height: 100%;
+    transition: width $move-ms $ease-out;
 }
 
 .marker {
@@ -147,4 +148,12 @@
     font-size: 12px;
     font-weight: 300;
     line-height: 1.45;
+}
+
+// Bars switch at once under reduced motion; figures still fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .segment {
+        transition: none;
+    }
 }

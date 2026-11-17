@@ -1,3 +1,5 @@
+@use "motion" as *;
+
 // The chart draws at the container's pixel width, so these sizes are real pixels.
 
 .section {
@@ -22,28 +24,18 @@
     font-size: 15px;
 }
 
-// The plot and its key side by side from 901px, stacked below.
 .card {
     position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px;
-    column-gap: 24px;
-    align-items: start;
     min-width: 0;
     margin: 0;
-    padding: 16px;
+    padding: 18px 20px 16px;
     border: 1px solid #ececdb;
     border-radius: 6px;
     background: #fff;
-
-    @media (max-width: 900px) {
-        grid-template-columns: minmax(0, 1fr);
-    }
 }
 
 .title {
-    grid-column: 1 / -1;
-    margin: 0 0 12px;
+    margin: 0 0 14px;
     color: #484842;
     font-size: 17px;
     font-weight: 500;
@@ -51,14 +43,11 @@
     letter-spacing: -0.01em;
 }
 
-.foot {
-    grid-column: 1 / -1;
-    padding-top: 8px;
-}
-
 .wrap {
     position: relative;
     min-width: 0;
+
+    @include still;
 }
 
 .svg {
@@ -116,6 +105,7 @@
 .band,
 .line {
     fill: none;
+    transition: d $move-ms $ease-out;
     stroke-linejoin: round;
     stroke-linecap: round;
 }
@@ -131,6 +121,7 @@
 .point {
     stroke: #fff;
     stroke-width: 1;
+    transition: transform $move-ms $ease-out;
 }
 
 .hit {
@@ -140,10 +131,7 @@
 
 .key {
     min-width: 0;
-
-    @media (max-width: 900px) {
-        margin-top: 10px;
-    }
+    margin-bottom: 12px;
 }
 
 .keyYear {
@@ -204,14 +192,6 @@
     text-align: right;
 }
 
-.keyNote {
-    margin: 8px 0 0;
-    color: #5e5e52;
-    font-size: 12px;
-    font-weight: 300;
-    line-height: 1.45;
-}
-
 .srOnly {
     position: absolute;
     width: 1px;
@@ -219,4 +199,14 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+// Nothing glides under reduced motion.
+
+@media (prefers-reduced-motion: reduce) {
+    .band,
+    .line,
+    .point {
+        transition: none;
+    }
 }

@@ -181,7 +181,7 @@ export const possessive = (name: string): string => (name.endsWith('s') ? `${nam
 const DISBURSED: readonly CountKey[] = ['gross', 'net', 'grantEquivalent', 'headline'];
 
 /**
- * "<Donor>'s ODA in <year> was $X to $Y, depending on the count.", over the counts of
+ * "<Donor>'s ODA in <year> was $X to $Y, depending on the definition.", over the counts of
  * money paid out, or null with none published.
  */
 export const rangeSentence = (name: string, year: number, counts: CountValue[]): string | null => {
@@ -195,7 +195,9 @@ export const rangeSentence = (name: string, year: number, counts: CountValue[]):
     const high = formatUsd(range.high.value);
     const lead = `${possessive(name)} ODA in ${year} was`;
 
-    return low === high ? `${lead} ${low}.` : `${lead} ${low} to ${high}, depending on the count.`;
+    return low === high
+        ? `${lead} ${low}.`
+        : `${lead} ${low} to ${high}, depending on the definition.`;
 };
 
 export type Bridge = {
@@ -274,56 +276,38 @@ export const riseNote = (key: BridgeKey, steps: Bridge): string | null => {
 };
 
 /**
- * One row of a one-step waterfall, in millions. A total runs from 0 to its value. The
- * step spans the gap between the two totals, and `value` is the change, negative for
- * a fall.
+ * One bridge as a single bar: the count it leads to, gross disbursements, and the step
+ * between them, in millions. `step.value` is the change from gross, negative for a fall.
  */
-export type StepRow = {
-    kind: 'total' | 'step';
-    label: string;
+export type BridgeBar = {
+    target: 'net' | 'grantEquivalent';
+    gross: number;
     value: number;
-    start: number;
-    end: number;
+    step: { label: string; value: number };
 };
 
-/** The three rows of a bridge from one total to another, in the order from, step, to. */
-export const stepRows = (
-    from: { label: string; value: number },
-    step: string,
-    to: { label: string; value: number },
-): StepRow[] => [
-    { kind: 'total', label: from.label, value: from.value, start: 0, end: from.value },
-    {
-        kind: 'step',
-        label: step,
-        value: to.value - from.value,
-        start: Math.min(from.value, to.value),
-        end: Math.max(from.value, to.value),
-    },
-    { kind: 'total', label: to.label, value: to.value, start: 0, end: to.value },
-];
+const bridgeBar = (
+    key: BridgeKey,
+    target: BridgeBar['target'],
+    gross: number,
+    value: number,
+): BridgeBar => ({
+    target,
+    gross,
+    value,
+    step: { label: stepLabel(key, gross, value), value: value - gross },
+});
 
-/** Each bridge as waterfall rows, or null where the bridge has no figure. */
-export const bridgeRows = (
-    steps: Bridge,
-): { toNet: StepRow[] | null; toGrantEquivalent: StepRow[] | null } => ({
-    toNet:
-        steps.toNet &&
-        stepRows(
-            { label: COUNT_LABELS.gross, value: steps.toNet.gross },
-            stepLabel('toNet', steps.toNet.gross, steps.toNet.net),
-            { label: COUNT_LABELS.net, value: steps.toNet.net },
-        ),
+/** Each bridge as one bar, or null where the bridge has no figure. */
+export const bridgeBars = (steps: Bridge): Record<BridgeKey, BridgeBar | null> => ({
+    toNet: steps.toNet && bridgeBar('toNet', 'net', steps.toNet.gross, steps.toNet.net),
     toGrantEquivalent:
         steps.toGrantEquivalent &&
-        stepRows(
-            { label: COUNT_LABELS.gross, value: steps.toGrantEquivalent.gross },
-            stepLabel(
-                'toGrantEquivalent',
-                steps.toGrantEquivalent.gross,
-                steps.toGrantEquivalent.grantEquivalent,
-            ),
-            { label: COUNT_LABELS.grantEquivalent, value: steps.toGrantEquivalent.grantEquivalent },
+        bridgeBar(
+            'toGrantEquivalent',
+            'grantEquivalent',
+            steps.toGrantEquivalent.gross,
+            steps.toGrantEquivalent.grantEquivalent,
         ),
 });
 
@@ -509,4 +493,278 @@ export const odaGniSentence = (percent: number): string => {
     const points = `${Math.abs(gap).toFixed(2)} percentage points`;
 
     return gap < 0 ? `${points} short of ${target}.` : `${points} above ${target}.`;
+};
+
+/** A label to place beside a dot plot's axis: its dot's x and its box width, in pixels. */
+export type LabelBox = { id: string; x: number; width: number };
+
+/**
+ * A placed label: above or below the axis, in a tier counted outward from the axis,
+ * with its box's left edge in pixels. `leaderX` is where its leader from the dot meets
+ * the box, or null for a label drawn without one.
+ */
+export type PlacedLabel = LabelBox & {
+    side: 'above' | 'below';
+    tier: number;
+    left: number;
+    leaderX: number | null;
+};
+
+const SIDES = ['above', 'below'] as const;
+
+type Side = PlacedLabel['side'];
+
+type Spacing = { width: number; gap: number; inset: number; shift: number };
+
+/** A label's place while the layout runs. A loose label has no leader. */
+type Slot = { box: LabelBox; side: Side; tier: number; loose: boolean };
+
+/**
+ * The range of left edges a box may take. A box in the first tier may sit up to `shift`
+ * from its dot, joined by a slanted leader across the empty strip next to the axis. A
+ * box further out spans its dot with `inset` to spare, so its leader runs straight out.
+ * Either way the box keeps clear of each leader in `clear`, which runs past it to a tier
+ * further out. Null when no left edge does all that.
+ */
+const boundsOf = (
+    { x, width: w }: LabelBox,
+    tier: number,
+    clear: number[],
+    { width, gap, inset, shift }: Spacing,
+): { lo: number; hi: number } | null => {
+    let lo = tier === 0 ? x - w - shift : x - w + inset;
+    let hi = tier === 0 ? x + shift : x - inset;
+
+    lo = Math.max(lo, 0);
+    hi = Math.min(hi, width - w);
+
+    for (const leader of clear) {
+        // A box on the dot of a leader passing it goes to the side with more room.
+        const leftOf = leader > x || (leader === x && x > width / 2);
+
+        if (leftOf) {
+            hi = Math.min(hi, leader - gap / 2 - w);
+        } else {
+            lo = Math.max(lo, leader + gap / 2);
+        }
+    }
+
+    return lo > hi ? null : { lo, hi };
+};
+
+/**
+ * Left edges for one row of boxes, sorted by x, so no two overlap and each stays within
+ * its bounds. Each sits as near centred on its dot as that allows. Null when the row
+ * cannot hold them all.
+ */
+const packRow = (
+    row: { box: LabelBox; lo: number; hi: number }[],
+    gap: number,
+): number[] | null => {
+    // The leftmost each box can sit; past its upper bound, the row cannot fit.
+    let least = Number.NEGATIVE_INFINITY;
+    let previousWidth = 0;
+
+    for (const { box, lo, hi } of row) {
+        least = Math.max(lo, least + previousWidth + gap);
+        previousWidth = box.width;
+
+        if (least > hi) {
+            return null;
+        }
+    }
+
+    // Forward from the centred positions, pushing right past each neighbour; then
+    // backward, pulling left inside each box's bounds. The pass above proves this fits.
+    const forward: number[] = [];
+    let reach = Number.NEGATIVE_INFINITY;
+
+    for (const { box, lo, hi } of row) {
+        const left = Math.max(Math.min(Math.max(box.x - box.width / 2, lo), hi), reach);
+
+        forward.push(left);
+        reach = left + box.width + gap;
+    }
+
+    const lefts: number[] = [];
+    let next = Number.POSITIVE_INFINITY;
+
+    for (let index = row.length - 1; index >= 0; index -= 1) {
+        const { box, hi } = row[index] ?? { box: { width: 0 }, hi: 0 };
+        const left = Math.min(forward[index] ?? hi, hi, next - gap - box.width);
+
+        lefts.unshift(left);
+        next = left;
+    }
+
+    return lefts;
+};
+
+/** One side's boxes placed tier by tier, or null when a tier cannot hold its boxes. */
+const packSide = (side: Side, slots: Slot[], spacing: Spacing): PlacedLabel[] | null => {
+    const tiers = [...new Set(slots.map(({ tier }) => tier))].toSorted((a, b) => a - b);
+    const placed: PlacedLabel[] = [];
+
+    for (const tier of tiers) {
+        const clear = slots
+            .filter((slot) => slot.tier > tier && !slot.loose)
+            .map(({ box }) => box.x);
+        const row: { box: LabelBox; loose: boolean; lo: number; hi: number }[] = [];
+
+        for (const slot of slots.filter((each) => each.tier === tier)) {
+            const bounds = boundsOf(slot.box, slot.loose ? 0 : tier, clear, spacing);
+
+            if (bounds === null) {
+                return null;
+            }
+
+            row.push({ box: slot.box, loose: slot.loose, ...bounds });
+        }
+
+        row.sort((a, b) => a.box.x - b.box.x || a.box.id.localeCompare(b.box.id));
+
+        const lefts = packRow(row, spacing.gap);
+
+        if (lefts === null) {
+            return null;
+        }
+
+        row.forEach(({ box, loose }, index) => {
+            const left = lefts[index] ?? 0;
+            const leaderX = Math.min(
+                Math.max(box.x, left + spacing.inset),
+                left + box.width - spacing.inset,
+            );
+
+            placed.push({ ...box, side, tier, left, leaderX: loose ? null : leaderX });
+        });
+    }
+
+    return placed;
+};
+
+/** How far a side's boxes sit from their dots, in pixels. */
+const displacement = (placed: PlacedLabel[]): number =>
+    placed.reduce((sum, { x, left, width }) => sum + Math.abs(left + width / 2 - x), 0);
+
+/**
+ * Places labels above and below a horizontal axis so no two boxes overlap, every box
+ * stays inside [0, width], and no leader from a dot to its box crosses another box.
+ * Labels go in order of x, each to the nearest tier that holds it, on the side where it
+ * moves the boxes least, above on a tie. A label no tier holds, which takes several dots
+ * nearly at one x on a narrow plot, goes alone to a new tier above without a leader.
+ * The result is in input order.
+ */
+export const layoutLabels = ({
+    labels,
+    width,
+    gap = 8,
+    inset = 4,
+    shift = 160,
+}: {
+    labels: LabelBox[];
+    width: number;
+    gap?: number;
+    inset?: number;
+    shift?: number;
+}): PlacedLabel[] => {
+    const spacing: Spacing = { width, gap, inset, shift };
+    const slots = new Map<string, Slot>();
+    const pack = (side: Side, extra?: Slot): PlacedLabel[] | null =>
+        packSide(
+            side,
+            [
+                ...[...slots.values()].filter((slot) => slot.side === side),
+                ...(extra ? [extra] : []),
+            ],
+            spacing,
+        );
+    const ordered = labels.toSorted((a, b) => a.x - b.x || a.id.localeCompare(b.id));
+
+    for (const box of ordered) {
+        let choice: Slot | undefined;
+
+        for (let tier = 0; tier < labels.length && choice === undefined; tier += 1) {
+            let best = Number.POSITIVE_INFINITY;
+
+            for (const side of SIDES) {
+                const slot: Slot = { box, side, tier, loose: false };
+                const after = pack(side, slot);
+
+                if (after !== null) {
+                    const moved = displacement(after) - displacement(pack(side) ?? []);
+
+                    if (moved < best) {
+                        best = moved;
+                        choice = slot;
+                    }
+                }
+            }
+        }
+
+        const outer = Math.max(-1, ...[...slots.values()].map(({ tier }) => tier)) + 1;
+
+        slots.set(box.id, choice ?? { box, side: 'above', tier: outer, loose: true });
+    }
+
+    const placed = SIDES.flatMap((side) => pack(side) ?? []);
+
+    return labels.flatMap(({ id }) => placed.filter((label) => label.id === id));
+};
+
+/** Estimated widths of a dot label's two lines, in pixels, at the chart's type sizes. */
+export const DOT_LABEL_TYPE = { name: 12.5, value: 18 } as const;
+
+/** A generous estimate of a line's width: about 0.56 em per character in Outfit. */
+const textWidth = (text: string, size: number): number => Math.ceil(text.length * size * 0.56);
+
+/** The headline's own label in the dot plot. */
+export const headlineLabel = (year: number): string => `OECD headline in ${year}`;
+
+/**
+ * The labels of a dot plot of `counts`: each published count's name over its value, and
+ * the OECD headline's one-line label, each at its dot's x from `xOf`.
+ */
+export const dotLabelBoxes = (
+    counts: CountValue[],
+    year: number,
+    xOf: (value: number) => number,
+): LabelBox[] =>
+    counts.flatMap(({ key, value }) => {
+        if (value === null) {
+            return [];
+        }
+
+        const width =
+            key === 'headline'
+                ? textWidth(headlineLabel(year), DOT_LABEL_TYPE.name)
+                : Math.max(
+                      textWidth(COUNT_LABELS[key], DOT_LABEL_TYPE.name),
+                      textWidth(formatCompact(value), DOT_LABEL_TYPE.value),
+                  );
+
+        return [{ id: key, x: xOf(value), width }];
+    });
+
+/** The counts the dot plot draws. */
+export const DOT_PLOT_COUNTS: readonly CountKey[] = COUNTS;
+/** The counts the bridge draws. */
+export const BRIDGE_COUNTS: readonly CountKey[] = ['gross', 'net', 'grantEquivalent'];
+
+/**
+ * Axis ticks for a donor's chart of `keys`, over every year and both price bases, so
+ * changing the year or the prices never rescales the chart. Only another donor does.
+ */
+export const donorTicks = (
+    data: CountsData,
+    donor: Donor,
+    keys: readonly SeriesKey[],
+): number[] => {
+    const values = keys.flatMap((key) =>
+        (['current', 'constant'] as const).flatMap((prices) =>
+            donor.series[key][prices].filter((value) => value !== null),
+        ),
+    );
+
+    return valueTicks(Math.min(0, ...values), Math.max(0, ...values));
 };

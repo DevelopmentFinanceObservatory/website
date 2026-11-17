@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { Bridges } from './Bridge';
 import { Controls } from './Controls';
-import { CountBars } from './CountBars';
+import { CountDots } from './CountDots';
 import styles from './OdaCounts.module.scss';
 import { Scope } from './Scope';
 import { Trend } from './Trend';
@@ -21,8 +21,8 @@ import {
 } from '../_lib/counts.ts';
 
 /**
- * The interactive part of the page: the controls, the headline sentence, the counts side
- * by side and the bridges between them, all for one donor, year and price basis.
+ * The interactive part of the page: the controls, the headline sentence, the counts on one
+ * axis and the bridges between them, all for one donor, year and price basis.
  */
 export const OdaCounts = ({
     data,
@@ -69,7 +69,7 @@ export const OdaCounts = ({
                 )}
             </div>
 
-            <CountBars
+            <CountDots
                 data={data}
                 definitions={definitions}
                 donor={donor}

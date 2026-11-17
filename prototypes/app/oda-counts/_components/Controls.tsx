@@ -33,6 +33,9 @@ const Segmented = <TValue extends string>({
     </span>
 );
 
+const yearText = (year: number): string =>
+    year === PRELIMINARY_YEAR ? `${year} (preliminary)` : String(year);
+
 /** The donor, year and price basis every panel on the page follows. */
 export const Controls = ({
     donors,
@@ -62,18 +65,22 @@ export const Controls = ({
             <DonorSearch donors={donors} selected={donor} onChoose={onDonor} />
             <span className={styles.control}>
                 <label htmlFor={yearId}>Year</label>
-                <select
-                    id={yearId}
-                    className={styles.select}
-                    value={year}
-                    onChange={(event) => onYear(Number(event.target.value))}
-                >
-                    {years.toReversed().map((option) => (
-                        <option key={option} value={option}>
-                            {option === PRELIMINARY_YEAR ? `${option} (preliminary)` : option}
-                        </option>
-                    ))}
-                </select>
+                <span className={styles.slider}>
+                    <input
+                        id={yearId}
+                        type="range"
+                        className={styles.range}
+                        min={years[0]}
+                        max={years.at(-1)}
+                        step={1}
+                        value={year}
+                        aria-valuetext={yearText(year)}
+                        onChange={(event) => onYear(Number(event.target.value))}
+                    />
+                </span>
+                <output htmlFor={yearId} className={styles.year}>
+                    {yearText(year)}
+                </output>
             </span>
             <Segmented
                 label="Prices"

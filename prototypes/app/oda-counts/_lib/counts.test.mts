@@ -6,16 +6,21 @@ import type { CountsData, Definition, Donor } from '../_data/types.ts';
 
 import {
     bridge,
-    bridgeRows,
+    bridgeBars,
     countDefinition,
     countsFor,
     definitionParts,
+    dotLabelBoxes,
+    DOT_PLOT_COUNTS,
+    donorTicks,
     findDonor,
     formatCompact,
     formatShare,
     formatTick,
     formatUsd,
     headlineSegments,
+    layoutLabels,
+    type LabelBox,
     matchDonors,
     missingText,
     priceDefinition,
@@ -48,7 +53,7 @@ const france = (): Donor => donorById('country/FRA');
 test('rangeSentence gives France 2025 from net to gross disbursements', () => {
     assert.equal(
         rangeSentence('France', 2025, countsFor(counts, france(), 2025, 'current')),
-        "France's ODA in 2025 was $13.9bn to $17.5bn, depending on the count.",
+        "France's ODA in 2025 was $13.9bn to $17.5bn, depending on the definition.",
     );
 });
 
@@ -58,7 +63,7 @@ test('rangeSentence leaves out commitments, which fall below every disbursed cou
     assert.equal(formatUsd(uk.find(({ key }) => key === 'commitments')?.value ?? 0), '$16.2bn');
     assert.equal(
         rangeSentence('the United Kingdom', 2024, uk),
-        "the United Kingdom's ODA in 2024 was $16.3bn to $18.0bn, depending on the count.",
+        "the United Kingdom's ODA in 2024 was $16.3bn to $18.0bn, depending on the definition.",
     );
 });
 
@@ -91,19 +96,19 @@ test('bridge steps France 2024 from gross to grant equivalents and to net', () =
     );
 });
 
-test('bridgeRows labels a step above gross as a rise and adds a note, for UK 2024 and Finland 2020', () => {
+test('bridgeBars labels a step above gross as a rise and adds a note, for UK 2024 and Finland 2020', () => {
     const uk = bridge(counts, donorById('country/GBR'), 2024, 'current');
-    const ukStep = bridgeRows(uk).toGrantEquivalent?.[1];
+    const ukStep = bridgeBars(uk).toGrantEquivalent?.step;
 
     assert.equal(ukStep?.label, STEP_LABELS.toGrantEquivalent.rise);
     assert.equal(ukStep && formatCompact(ukStep.value), '1.4B');
     assert.equal(nonGrantSentence(uk.toGrantEquivalent), null);
     assert.equal(riseNote('toGrantEquivalent', uk), RISE_NOTES.toGrantEquivalent);
     assert.equal(riseNote('toNet', uk), null);
-    assert.equal(bridgeRows(uk).toNet?.[1]?.label, STEP_LABELS.toNet.fall);
+    assert.equal(bridgeBars(uk).toNet?.step.label, STEP_LABELS.toNet.fall);
 
     const finland = bridge(counts, donorById('country/FIN'), 2020, 'current');
-    const finlandStep = bridgeRows(finland).toNet?.[1];
+    const finlandStep = bridgeBars(finland).toNet?.step;
 
     assert.equal(finlandStep?.label, STEP_LABELS.toNet.rise);
     assert.ok(finlandStep && finlandStep.value > 0);
@@ -111,7 +116,7 @@ test('bridgeRows labels a step above gross as a rise and adds a note, for UK 202
 
     const franceSteps = bridge(counts, france(), 2024, 'current');
     assert.equal(
-        bridgeRows(franceSteps).toGrantEquivalent?.[1]?.label,
+        bridgeBars(franceSteps).toGrantEquivalent?.step.label,
         STEP_LABELS.toGrantEquivalent.fall,
     );
     assert.equal(riseNote('toGrantEquivalent', franceSteps), null);
@@ -236,23 +241,126 @@ test('matchDonors lists countries before group totals, prefix matches first', ()
     assert.deepEqual(matchDonors(counts.donors, 'zzz'), []);
 });
 
-test('bridgeRows steps France 2024 down to net and grant equivalents', () => {
-    const rows = bridgeRows(bridge(counts, france(), 2024, 'current'));
+test('bridgeBars steps France 2024 down from gross to net and grant equivalents', () => {
+    const bars = bridgeBars(bridge(counts, france(), 2024, 'current'));
 
-    assert.ok(rows.toNet && rows.toGrantEquivalent);
+    assert.ok(bars.toNet && bars.toGrantEquivalent);
     assert.deepEqual(
-        rows.toGrantEquivalent.map(({ kind, value }) => [kind, formatCompact(value)]),
         [
-            ['total', '18.1B'],
-            ['step', '-2.6B'],
-            ['total', '15.4B'],
-        ],
+            bars.toGrantEquivalent.gross,
+            bars.toGrantEquivalent.step.value,
+            bars.toGrantEquivalent.value,
+        ].map(formatCompact),
+        ['18.1B', '-2.6B', '15.4B'],
     );
-    const [gross, step, net] = rows.toNet;
-    assert.ok(gross && step && net);
-    assert.equal(step.start, net.end);
-    assert.equal(step.end, gross.end);
-    assert.equal(bridgeRows(bridge(counts, france(), 2017, 'current')).toGrantEquivalent, null);
+    assert.equal(bars.toNet.target, 'net');
+    assert.equal(bars.toNet.gross + bars.toNet.step.value, bars.toNet.value);
+    assert.equal(bridgeBars(bridge(counts, france(), 2017, 'current')).toGrantEquivalent, null);
+});
+
+/** Overlaps, escapes and crossed or missing leaders in a layout; empty when clean. */
+const layoutFaults = (boxes: LabelBox[], width: number): string[] => {
+    const placed = layoutLabels({ labels: boxes, width });
+    const faults: string[] = [];
+
+    assert.deepEqual(
+        placed.map(({ id }) => id),
+        boxes.map(({ id }) => id),
+    );
+
+    for (const label of placed) {
+        const right = label.left + label.width;
+
+        if (label.left < 0 || right > width) {
+            faults.push(`${label.id} leaves the plot`);
+        }
+
+        if (label.leaderX === null || label.leaderX < label.left || label.leaderX > right) {
+            faults.push(`${label.id} has no leader into its box`);
+        }
+
+        if (label.tier > 0 && label.leaderX !== label.x) {
+            faults.push(`${label.id} is out a tier but its leader is not straight`);
+        }
+
+        for (const other of placed.filter(({ side }) => side === label.side)) {
+            const otherRight = other.left + other.width;
+
+            if (
+                other.tier === label.tier &&
+                other.id > label.id &&
+                other.left < right &&
+                label.left < otherRight
+            ) {
+                faults.push(`${label.id} overlaps ${other.id}`);
+            }
+
+            if (other.tier < label.tier && label.x >= other.left && label.x <= otherRight) {
+                faults.push(`${label.id}'s leader crosses ${other.id}`);
+            }
+        }
+    }
+
+    return faults;
+};
+
+test('layoutLabels keeps close dots legible for crowded donor-years at desktop and phone widths', () => {
+    const cases = [
+        ['country/FRA', 2025],
+        ['country/AUS', 2025],
+        ['country/GBR', 2024],
+        ['DACCountriesTotal', 2024],
+    ] as const;
+
+    for (const [id, year] of cases) {
+        const yearCounts = countsFor(counts, donorById(id), year, 'current');
+        const values = yearCounts.flatMap(({ value }) => (value === null ? [] : [value]));
+        const top = valueTicks(0, Math.max(...values)).at(-1) ?? 1;
+
+        for (const width of [560, 330, 300]) {
+            const boxes = dotLabelBoxes(yearCounts, year, (value) => (value / top) * width);
+
+            assert.ok(boxes.length >= 4, `${id} ${year} has a label per count and the headline`);
+            assert.deepEqual(layoutFaults(boxes, width), [], `${id} ${year} at ${width}px`);
+        }
+    }
+});
+
+test('layoutLabels clamps a label at the edge inside the plot and drops the leader of a label no tier holds', () => {
+    const [edge] = layoutLabels({ labels: [{ id: 'gross', x: 398, width: 120 }], width: 400 });
+
+    assert.equal(edge?.left, 280);
+    assert.equal(edge?.leaderX, 396);
+    assert.deepEqual(layoutLabels({ labels: [], width: 400 }), []);
+
+    const pile = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, x: 100, width: 150 }));
+    const placed = layoutLabels({ labels: pile, width: 200 });
+
+    assert.equal(placed.length, pile.length);
+    assert.ok(placed.some(({ leaderX }) => leaderX === null));
+    assert.ok(placed.every(({ left, width }) => left >= 0 && left + width <= 200));
+});
+
+test('donorTicks keeps France on one dot-plot scale across years and price bases', () => {
+    const ticks = donorTicks(counts, france(), DOT_PLOT_COUNTS);
+    const top = ticks.at(-1) ?? 0;
+    const views = [
+        [2015, 'current'],
+        [2025, 'current'],
+        [2025, 'constant'],
+    ] as const;
+
+    for (const [year, prices] of views) {
+        const values = countsFor(counts, france(), year, prices).flatMap(({ value }) =>
+            value === null ? [] : [value],
+        );
+
+        assert.ok(Math.max(...values) <= top, `${year} ${prices} fits the scale`);
+    }
+
+    // 2025 alone would stop at 20B; the scale stays wide enough for France's largest year.
+    assert.equal(valueTicks(0, 17508.38).at(-1), 20000);
+    assert.equal(top, 30000);
 });
 
 test('countDefinition and priceDefinition split definitionParts', () => {

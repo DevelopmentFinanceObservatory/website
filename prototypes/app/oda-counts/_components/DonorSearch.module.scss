@@ -1,7 +1,7 @@
 // The donor box: the segmented controls' border and type, a tooltip-like face for the list.
 .search {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px 10px;
     align-items: center;
     color: #5e5e52;
@@ -15,14 +15,15 @@
 
 .field {
     position: relative;
-    flex: 1 1 200px;
-    max-width: 280px;
+    flex: 0 1 200px;
+    min-width: 0;
 }
 
 .input {
     box-sizing: border-box;
     width: 100%;
-    padding: 5px 10px;
+    height: 32px;
+    padding: 0 10px;
     border: 1px solid #cfcfbf;
     border-radius: 4px;
     background: #fff;

@@ -1,3 +1,5 @@
+@use "motion" as *;
+
 .bridges {
     margin-top: 16px;
     padding-top: 24px;
@@ -20,45 +22,103 @@
     font-size: 15px;
 }
 
-// Side by side from 901px, stacked below; equal heights so the feet line up.
-.cards {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-    align-items: stretch;
-
-    @media (max-width: 900px) {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
 .card {
-    display: flex;
-    flex-direction: column;
     min-width: 0;
-    padding: 16px;
+    padding: 18px 20px 16px;
     border: 1px solid #ececdb;
     border-radius: 6px;
     background: #fff;
 
-    > :last-child {
-        margin-top: auto;
-        padding-top: 8px;
-    }
+    @include still;
 }
 
 .title {
-    margin: 0 0 12px;
+    margin: 0 0 14px;
     color: #484842;
-    font-size: 15px;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+// Grid lines and the gross line run behind the rows, from the gross label to the ticks.
+.chart {
+    position: relative;
+    font-variant-numeric: tabular-nums;
+}
+
+// The moving parts span the plot and translate by a share of its width, so the plot
+// clips what they push past its right edge.
+.lines {
+    position: absolute;
+    inset: 0 0 22px;
+    overflow: clip;
+    overflow-clip-margin: 2px;
+}
+
+.grid,
+.gross {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.grid {
+    border-left: 1px solid #ececdb;
+}
+
+// The gross line spans the plot and moves by a share of that width.
+.gross {
+    right: 0;
+    left: 0;
+    border-left: 1.5px solid #484842;
+    transition: transform $move-ms $ease-out;
+}
+
+.grossRow {
+    position: relative;
+    overflow: clip;
+    height: 20px;
+    margin: 0;
+    color: #484842;
+    font-size: 12.5px;
     font-weight: 500;
     line-height: 1.3;
 }
 
+.grossAt {
+    position: absolute;
+    inset: 0;
+    transition: transform $move-ms $ease-out;
+}
+
+.grossLeft,
+.grossRight {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: #fff;
+    white-space: nowrap;
+
+    b {
+        font-size: 14px;
+        font-weight: 500;
+    }
+}
+
+.grossLeft {
+    transform: translateX(calc(-100% - 6px));
+}
+
+.grossRight {
+    transform: translateX(6px);
+}
+
 .rows {
+    position: relative;
     display: grid;
-    gap: 12px;
-    margin: 0;
+    gap: 14px;
+    margin: 6px 0 0;
     padding: 0;
     list-style: none;
 }
@@ -69,41 +129,89 @@
 
 .head {
     display: flex;
-    gap: 12px;
-    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 12px;
     justify-content: space-between;
+    max-width: 100%;
     margin-bottom: 4px;
+    font-size: 12.5px;
+    line-height: 1.3;
+    transition: width $move-ms $ease-out;
+
+    b {
+        color: #484842;
+        font-size: 14px;
+        font-weight: 500;
+    }
 }
 
-.label {
+// The labels sit over the gross line, which passes behind them.
+.target,
+.step {
+    position: relative;
+    background: #fff;
+}
+
+.target {
     color: #484842;
-    font-size: 13px;
     font-weight: 500;
 }
 
-.stepLabel {
+.step {
+    margin-left: auto;
     color: #5e5e52;
-    font-size: 13px;
-}
+    text-align: right;
 
-.value {
-    flex: none;
-    color: #484842;
-    font-size: 14px;
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
+    @include fade-in;
 }
 
 .track {
     position: relative;
-    height: 18px;
-    background: #f7f7ee;
+    height: 22px;
+
+    span {
+        position: absolute;
+        inset: 0;
+        transform-origin: left;
+        transition: transform $move-ms $ease-out;
+    }
 }
 
-.bar {
+.figure {
+    @include fade-in;
+}
+
+.missing {
+    margin: 0;
+    padding: 4px 0;
+    color: #5e5e52;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.ticks {
+    position: relative;
+    height: 22px;
+    margin-top: 8px;
+}
+
+.tick,
+.tickFirst,
+.tickLast {
     position: absolute;
-    top: 0;
-    bottom: 0;
+    top: 6px;
+    color: #5e5e52;
+    font-size: 11px;
+    line-height: 1.2;
+    transform: translateX(-50%);
+}
+
+.tickFirst {
+    transform: none;
+}
+
+.tickLast {
+    transform: translateX(-100%);
 }
 
 .note {
@@ -111,4 +219,15 @@
     color: #5e5e52;
     font-size: 13px;
     line-height: 1.45;
+}
+
+// Nothing glides; figures still fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .gross,
+    .grossAt,
+    .head,
+    .track span {
+        transition: none;
+    }
 }

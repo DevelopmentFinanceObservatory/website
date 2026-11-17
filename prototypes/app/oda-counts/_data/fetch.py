@@ -67,21 +67,33 @@ WRITTEN = [
         "id": "oecdHeadline",
         "label": "OECD headline ODA",
         "description": (
-            "The figure the OECD reports as a donor's ODA: net disbursements up to 2017 "
-            "and grant equivalents from 2018, so years either side of the 2018 change "
-            "are not comparable."
+            "Starting with 2018 data, the new grant equivalent measure of ODA became the "
+            "standard for reporting, with the headline ODA figures published on that basis."
+        ),
+        "url": (
+            "https://www.oecd.org/en/topics/sub-issues/oda-eligibility-and-conditions/"
+            "official-development-assistance--definition-and-coverage.html"
         ),
     },
     {
         "id": "constantPrices",
-        "label": f"constant {BASE_YEAR} prices",
+        "label": "constant dollars",
         "description": (
-            f"Every year valued at {BASE_YEAR} prices and exchange rates, using the "
-            "OECD DAC deflators, from ONE's conversion tables, so a change over time "
-            "is not inflation or a currency movement."
+            "In DAC publications, flow data are expressed in US dollars (USD). To give a "
+            "truer idea of the volume of flows over time, data can be presented in constant "
+            "prices and exchange rates, with a reference year specified. This means that "
+            "adjustment has been made to cover both inflation in the donor\u2019s currency "
+            "between the year in question and the reference year, and changes in the "
+            "exchange rate between that currency and the United States dollar over the "
+            "same period."
+        ),
+        "url": (
+            "https://www.oecd.org/en/topics/sub-issues/oda-standards/"
+            "glossary-of-statistical-terms-and-concepts-of-development-finance.html"
         ),
     },
 ]
+
 
 # Group totals that repeat a provider's own figures, and the provider they repeat.
 # The EU institutions are the only multilateral that reports to DAC1.
@@ -279,7 +291,7 @@ def fetch_definitions() -> list[dict]:
         }
         for ref in NODE_IDS
     ]
-    return graph + [{**entry, "source": "page"} for entry in WRITTEN]
+    return graph + [{**entry, "source": "oecd"} for entry in WRITTEN]
 
 
 def by_year(values: Values, provider: str, *, scale: float, digits: int) -> list:

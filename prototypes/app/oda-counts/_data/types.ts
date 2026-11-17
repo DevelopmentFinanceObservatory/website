@@ -46,6 +46,7 @@ export type Definition = {
     id: string;
     label: string;
     description: string;
-    /** `graph` for a DFO graph node, `page` for text written in the data step */
-    source: 'graph' | 'page';
+    /** `graph` for a DFO graph node, `oecd` for the OECD's own wording, quoted from `url` */
+    source: 'graph' | 'oecd';
+    url?: string;
 };

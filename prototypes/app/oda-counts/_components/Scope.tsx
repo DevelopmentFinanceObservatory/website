@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { CardFoot } from './CardFoot';
+import { CardFoot, SourceLine } from './CardFoot';
 import { COUNT_COLOURS } from './colours';
-import { SourceLine } from './CountBars';
 import styles from './Scope.module.scss';
+import { SideDetails, WithSide } from './SideColumn';
+import { useStill } from './useWidth';
 
 import type { CountsData, Donor, Prices } from '../_data/types.ts';
 import {
@@ -83,6 +84,7 @@ export const Scope = ({
     year: number;
     prices: Prices;
 }) => {
+    const still = useStill();
     // A donor-year has one deflator, so shares are the same at either price basis. Current
     // prices supply them where a constant-price figure is missing.
     const shares = scope(data, donor, year, 'current');
@@ -90,7 +92,7 @@ export const Scope = ({
     const { bilateralShare, multilateralShare, refugeeShare, odaGni } = shares;
     const refugeeNote =
         amounts.refugeeCosts === null
-            ? `The amount: ${missingText(data, donor, 'refugeeCosts', year, prices)}.`
+            ? `Amount ${missingText(data, donor, 'refugeeCosts', year, prices)}.`
             : `${formatUsd(amounts.refugeeCosts)} spent on refugees in the donor country, ` +
               'for up to a year after they arrive.';
     const gniScale = Math.max(1, Math.ceil((odaGni ?? 0) * 4) / 4);
@@ -102,94 +104,126 @@ export const Scope = ({
                 What is inside
             </h2>
             <p className={styles.lede}>
-                Some ODA never leaves the donor country, and some goes through multilateral agencies
-                the donor does not run. These figures show how much, and how the headline compares
-                with the UN target of {ODA_GNI_TARGET}% of gross national income.
+                Gross disbursements split between bilateral aid and core multilateral contributions.
+                Part of the OECD headline stays in the donor country as in-donor refugee costs, and
+                the total is measured against the UN target of {ODA_GNI_TARGET}% of gross national
+                income.
             </p>
 
-            <div className={styles.card}>
+            <div ref={still} className={styles.card}>
                 <h3 className={styles.cardTitle}>
                     What is inside {possessive(donor.name)} ODA in {year}
                 </h3>
-                <div className={styles.blocks}>
-                    <Block title="Bilateral and core multilateral, share of gross disbursements">
-                        {bilateralShare === null || multilateralShare === null ? (
-                            <p className={styles.missing}>{NOT_PUBLISHED}</p>
-                        ) : (
-                            <>
-                                <Track
-                                    segments={[
-                                        { share: bilateralShare, colour: SCOPE_COLOURS.bilateral },
-                                        {
-                                            share: multilateralShare,
-                                            colour: SCOPE_COLOURS.multilateral,
-                                        },
-                                    ]}
-                                />
-                                <ul className={styles.legend}>
-                                    <li>
-                                        <span
-                                            className={styles.swatch}
-                                            style={{ background: SCOPE_COLOURS.bilateral }}
-                                        />
-                                        Bilateral <b>{formatShare(bilateralShare)}</b>
-                                    </li>
-                                    <li>
-                                        <span
-                                            className={styles.swatch}
-                                            style={{ background: SCOPE_COLOURS.multilateral }}
-                                        />
-                                        Core multilateral <b>{formatShare(multilateralShare)}</b>
-                                    </li>
-                                </ul>
-                            </>
-                        )}
-                    </Block>
+                <WithSide
+                    side={
+                        <SideDetails title="How to read this">
+                            <p>
+                                The first bar splits gross disbursements between bilateral aid and
+                                core multilateral contributions, so the two shares add to 100%.
+                            </p>
+                            <p>
+                                In-donor refugee costs are a share of the OECD headline, the count
+                                they are reported on.
+                            </p>
+                            <p>
+                                The line on the last bar marks the UN target of {ODA_GNI_TARGET}% of
+                                gross national income.
+                            </p>
+                            <p>Shares are the same in current and constant prices.</p>
+                        </SideDetails>
+                    }
+                >
+                    <div className={styles.blocks}>
+                        <Block title="Bilateral and core multilateral, share of gross disbursements">
+                            {bilateralShare === null || multilateralShare === null ? (
+                                <p className={styles.missing}>{NOT_PUBLISHED}</p>
+                            ) : (
+                                <>
+                                    <Track
+                                        segments={[
+                                            {
+                                                share: bilateralShare,
+                                                colour: SCOPE_COLOURS.bilateral,
+                                            },
+                                            {
+                                                share: multilateralShare,
+                                                colour: SCOPE_COLOURS.multilateral,
+                                            },
+                                        ]}
+                                    />
+                                    <ul className={styles.legend}>
+                                        <li>
+                                            <span
+                                                className={styles.swatch}
+                                                style={{ background: SCOPE_COLOURS.bilateral }}
+                                            />
+                                            Bilateral <b>{formatShare(bilateralShare)}</b>
+                                        </li>
+                                        <li>
+                                            <span
+                                                className={styles.swatch}
+                                                style={{ background: SCOPE_COLOURS.multilateral }}
+                                            />
+                                            Core multilateral{' '}
+                                            <b>{formatShare(multilateralShare)}</b>
+                                        </li>
+                                    </ul>
+                                </>
+                            )}
+                        </Block>
 
-                    <Block title="In-donor refugee costs, share of the OECD headline">
-                        {refugeeShare === null ? (
-                            <p className={styles.missing}>{NOT_PUBLISHED}</p>
-                        ) : (
-                            <>
-                                <p className={styles.figure}>{formatShare(refugeeShare)}</p>
-                                <Track
-                                    segments={[
-                                        { share: refugeeShare, colour: SCOPE_COLOURS.refugeeCosts },
-                                    ]}
-                                />
-                                <p className={styles.note}>{refugeeNote}</p>
-                            </>
-                        )}
-                    </Block>
+                        <Block title="In-donor refugee costs, share of the OECD headline">
+                            {refugeeShare === null ? (
+                                <p className={styles.missing}>{NOT_PUBLISHED}</p>
+                            ) : (
+                                <>
+                                    <p key={refugeeShare} className={styles.figure}>
+                                        {formatShare(refugeeShare)}
+                                    </p>
+                                    <Track
+                                        segments={[
+                                            {
+                                                share: refugeeShare,
+                                                colour: SCOPE_COLOURS.refugeeCosts,
+                                            },
+                                        ]}
+                                    />
+                                    <p className={styles.note}>{refugeeNote}</p>
+                                </>
+                            )}
+                        </Block>
 
-                    <Block title="OECD headline, share of gross national income">
-                        {odaGni === null ? (
-                            <p className={styles.missing}>{NOT_PUBLISHED}</p>
-                        ) : (
-                            <>
-                                <p className={styles.figure}>{odaGni.toFixed(2)}%</p>
-                                <Track
-                                    segments={[
-                                        {
-                                            share: odaGni / gniScale,
-                                            colour: COUNT_COLOURS.headline,
-                                        },
-                                    ]}
-                                    marker={{
-                                        share: ODA_GNI_TARGET / gniScale,
-                                        label: `${ODA_GNI_TARGET}% target`,
-                                    }}
-                                />
-                                <p className={styles.note}>{odaGniSentence(odaGni)}</p>
-                            </>
-                        )}
-                    </Block>
-                </div>
-                {anyMissing && year === PRELIMINARY_YEAR && (
-                    <p className={styles.note}>
-                        The OECD publishes these splits for {year} with its final figures.
-                    </p>
-                )}
+                        <Block title="OECD headline, share of gross national income">
+                            {odaGni === null ? (
+                                <p className={styles.missing}>{NOT_PUBLISHED}</p>
+                            ) : (
+                                <>
+                                    <p key={odaGni} className={styles.figure}>
+                                        {odaGni.toFixed(2)}%
+                                    </p>
+                                    <Track
+                                        segments={[
+                                            {
+                                                share: odaGni / gniScale,
+                                                colour: COUNT_COLOURS.headline,
+                                            },
+                                        ]}
+                                        marker={{
+                                            share: ODA_GNI_TARGET / gniScale,
+                                            label: `${ODA_GNI_TARGET}% target`,
+                                        }}
+                                    />
+                                    <p className={styles.note}>{odaGniSentence(odaGni)}</p>
+                                </>
+                            )}
+                        </Block>
+                    </div>
+                    {anyMissing && year === PRELIMINARY_YEAR && (
+                        <p className={styles.note}>
+                            The OECD publishes these splits for {year} with its final figures.
+                        </p>
+                    )}
+                </WithSide>
                 <CardFoot>
                     <SourceLine />
                 </CardFoot>
