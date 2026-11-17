@@ -207,6 +207,26 @@ test('API key service', async (t) => {
         assert.equal(await service.deleteOwn(await as(alice), made.id), 'deleted');
     });
 
+    await t.test('creates in parallel cannot pass the cap', async () => {
+        const jill = await account('jill@j.example');
+
+        assert.ok((await service.createOwn(jill, 'first')).ok);
+
+        const results = await Promise.all(
+            Array.from({ length: 8 }, (_, i) => service.createOwn(jill, `racing ${i}`)),
+        );
+        const held = await service.listOwn(await as(jill));
+
+        assert.equal(held.length, cap);
+        assert.equal(results.filter((r) => r.ok).length, cap - 1);
+        // Every key a create reported is one the account holds.
+        for (const r of results) {
+            if (r.ok) {
+                assert.ok(held.some((k) => k.id === r.id));
+            }
+        }
+    });
+
     await t.test('a bad label is refused and makes no key', async () => {
         const before = (await service.listOwn(await as(alice))).length;
 

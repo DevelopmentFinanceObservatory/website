@@ -25,7 +25,7 @@
  * Kept apart from the Next.js code, with the auth instance and database
  * passed in, so `node --test` can drive it on a test database.
  */
-import { count, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apikey, user } from '../../../db/schema.ts';
@@ -185,6 +185,26 @@ export const createKeyService = ({
             }
 
             const created = await mint(userId, name);
+
+            // The count and the insert are apart, so creates in parallel can
+            // all pass the count. The account's oldest `max` keys stand, and a
+            // new key past them is taken back. A lock would not do: the
+            // plugin's insert takes a second connection from the same pool.
+            const max = maxPerAccount();
+            const standing = await db
+                .select({ id: apikey.id })
+                .from(apikey)
+                .where(eq(apikey.referenceId, userId))
+                .orderBy(asc(apikey.createdAt), asc(apikey.id))
+                .limit(max);
+
+            if (!standing.some(({ id }) => id === created.id)) {
+                await db
+                    .delete(apikey)
+                    .where(and(eq(apikey.id, created.id), eq(apikey.referenceId, userId)));
+
+                return { ok: false, reason: 'cap_reached' };
+            }
 
             log({ message: 'api key created', by: 'owner', keyId: created.id, accountId: userId });
 
