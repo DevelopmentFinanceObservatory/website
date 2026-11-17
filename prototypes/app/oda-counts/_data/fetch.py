@@ -81,8 +81,8 @@ WRITTEN = [
         "label": f"constant {BASE_YEAR} prices",
         "description": (
             f"Every year valued at {BASE_YEAR} prices and exchange rates, using the "
-            "OECD DAC deflator for each donor, so a change over time is not inflation "
-            "or a currency movement."
+            "OECD DAC deflators, from ONE's conversion tables, so a change over time "
+            "is not inflation or a currency movement."
         ),
     },
 ]

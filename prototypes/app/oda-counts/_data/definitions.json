@@ -100,7 +100,7 @@
     {
       "id": "constantPrices",
       "label": "constant 2024 prices",
-      "description": "Every year valued at 2024 prices and exchange rates, using the OECD DAC deflator for each donor, so a change over time is not inflation or a currency movement.",
+      "description": "Every year valued at 2024 prices and exchange rates, using the OECD DAC deflators, from ONE's conversion tables, so a change over time is not inflation or a currency movement.",
       "source": "page"
     }
   ]

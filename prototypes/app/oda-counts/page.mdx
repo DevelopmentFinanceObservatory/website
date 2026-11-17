@@ -16,6 +16,8 @@ export default ({ children }) => (
         sections={[
             { id: 'counts', title: 'Counts' },
             { id: 'why-they-differ', title: 'Why they differ' },
+            { id: 'over-time', title: 'Over time' },
+            { id: 'what-is-inside', title: 'What is inside' },
             { id: 'how-to-read-this', title: 'How to read this' },
             { id: 'notes', title: 'Notes' },
         ]}
@@ -51,6 +53,10 @@ Each bar is one count of the same donor's ODA in the same year, on one scale. Th
 
 The two bridges show where the gaps between gross disbursements and the other two disbursement counts come from.
 
+The chart over time draws each count from 2015, with the chosen year shaded. The OECD headline is the pale band under the line it follows: net disbursements to 2017, grant equivalents from 2018.
+
+The last panel splits gross disbursements into bilateral aid and core contributions to multilateral agencies, gives in-donor refugee costs as a share of the headline, and sets the headline against the UN target of 0.7% of gross national income.
+
 To compare donors, or a donor against the target of 0.7% of gross national income, use the OECD headline. To see how much a donor paid out in a year, use gross disbursements, or net disbursements to take off what came back. Do not compare the headline across 2018, when its basis changed.
 
 ## Notes
@@ -58,7 +64,7 @@ To compare donors, or a donor against the target of 0.7% of gross national incom
 - Amounts received, the step from gross to net disbursements, are computed as gross minus net disbursements. The DFO publishes no separate series for them.
 - In 2018 the OECD switched its headline from net disbursements to grant equivalents. The headline bar shows net disbursements to 2017 and grant equivalents from 2018, so its figures either side of the switch are not comparable. The grant-equivalent bridge starts in 2018 for the same reason.
 - The sentence under the grant-equivalent bridge uses gross non-grant disbursements, which run from 2018 to 2024.
-- Constant prices are in 2024 US dollars. The DFO converts each count with ONE's DAC deflators, which take out each donor's inflation and its exchange-rate movements against the dollar. In 2024 the two price bases give the same figures. A donor with no deflator for a year shows "no constant-price figure".
+- Constant prices are in 2024 US dollars. The DFO converts each count with the OECD DAC deflators, from ONE's conversion tables. The deflators take out each donor's inflation and its exchange-rate movements against the dollar. In 2024 the two price bases give the same figures. A donor with no deflator for a year shows "no constant-price figure".
 - 2025 figures are the OECD's preliminary data. Most donors have no 2025 commitments or splits yet. The OECD adds them with the final figures.
 - A group total, such as DAC countries, shows no figure in a year when only some of its members reported a series, so that it never sums part of the group. In 2025 group totals have no commitments, splits or refugee costs, because only two countries reported them.
 

@@ -12,14 +12,20 @@ import {
     definitionParts,
     findDonor,
     formatCompact,
+    formatShare,
+    formatTick,
     formatUsd,
+    headlineSegments,
     matchDonors,
     missingText,
     priceDefinition,
     headlineBasis,
     nonGrantSentence,
+    odaGniSentence,
     rangeSentence,
     scope,
+    trendLines,
+    valueTicks,
 } from './counts.ts';
 
 const read = <T,>(name: string): T =>
@@ -201,4 +207,45 @@ test('countDefinition and priceDefinition split definitionParts', () => {
         ...countDefinition('gross', definitions),
         priceDefinition('constant', definitions),
     ]);
+});
+
+test('trendLines keeps a missing year as a gap, not zero', () => {
+    const lines = trendLines(counts, france(), 'current');
+    const commitments = lines.find(({ key }) => key === 'commitments');
+
+    assert.deepEqual(
+        lines.map(({ key }) => key),
+        ['gross', 'grantEquivalent', 'net', 'commitments'],
+    );
+    assert.equal(commitments?.values.length, counts.years.length);
+    assert.equal(commitments?.values.at(-1), null);
+});
+
+test('headlineSegments splits the headline at 2018 so the two bases never join', () => {
+    const [before, after] = headlineSegments(counts, france(), 'current');
+    const at = (values: (number | null)[], year: number) => values[counts.years.indexOf(year)];
+
+    assert.equal(before?.basis, 'net');
+    assert.equal(after?.basis, 'grantEquivalent');
+    assert.equal(at(before?.values ?? [], 2017), 11330.86);
+    assert.equal(at(before?.values ?? [], 2018), null);
+    assert.equal(at(after?.values ?? [], 2017), null);
+    assert.equal(at(after?.values ?? [], 2018), 12136.17);
+});
+
+test('valueTicks starts at zero and covers the highest value', () => {
+    assert.deepEqual(valueTicks(9000, 24910), [0, 10000, 20000, 30000]);
+    assert.deepEqual(valueTicks(-30, 90), [-50, 0, 50, 100]);
+    assert.deepEqual(valueTicks(0, 0), [0, 0.25, 0.5, 0.75, 1]);
+});
+
+test('formatTick drops a trailing .0 and formatShare keeps one decimal', () => {
+    assert.deepEqual([0, 500, 2500, 20000].map(formatTick), ['0', '500M', '2.5B', '20B']);
+    assert.equal(formatShare(0.62664), '62.7%');
+});
+
+test('odaGniSentence measures the gap to the 0.7% target', () => {
+    assert.equal(odaGniSentence(0.478), '0.22 percentage points short of the 0.7% target.');
+    assert.equal(odaGniSentence(1.02), '0.32 percentage points above the 0.7% target.');
+    assert.equal(odaGniSentence(0.7), 'At the 0.7% target.');
 });

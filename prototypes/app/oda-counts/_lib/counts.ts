@@ -357,3 +357,94 @@ export const scope = (data: CountsData, donor: Donor, year: number, prices: Pric
         odaGni: index === -1 ? null : (donor.odaGni[index] ?? null),
     };
 };
+
+/** The counts drawn as lines over time; the OECD headline follows two of them. */
+export const TREND_COUNTS: readonly CountKey[] = ['gross', 'grantEquivalent', 'net', 'commitments'];
+
+export type TrendLine = { key: CountKey; values: (number | null)[] };
+
+/** One line per count in `TREND_COUNTS`, aligned to `data.years`, nulls left as gaps. */
+export const trendLines = (data: CountsData, donor: Donor, prices: Prices): TrendLine[] =>
+    TREND_COUNTS.map((key) => ({
+        key,
+        values: data.years.map((year) => valueAt(data, donor, key, year, prices)),
+    }));
+
+export type HeadlineSegment = { basis: 'net' | 'grantEquivalent'; values: (number | null)[] };
+
+/**
+ * The OECD headline as two segments aligned to `data.years`: net disbursements before
+ * 2018 and grant equivalents from 2018, each null outside its own years, so a chart
+ * never joins the two across the switch. A segment with no value is left out.
+ */
+export const headlineSegments = (
+    data: CountsData,
+    donor: Donor,
+    prices: Prices,
+): HeadlineSegment[] =>
+    (['net', 'grantEquivalent'] as const)
+        .map((basis) => ({
+            basis,
+            values: data.years.map((year) =>
+                headlineBasis(year) === basis
+                    ? valueAt(data, donor, 'headline', year, prices)
+                    : null,
+            ),
+        }))
+        .filter(({ values }) => values.some((value) => value !== null));
+
+/**
+ * Axis ticks from the lower of 0 and `low` to at least `high`, on a step of 1, 2, 2.5
+ * or 5 times a power of ten that gives about `count` intervals.
+ */
+export const valueTicks = (low: number, high: number, count = 4): number[] => {
+    const from = Math.min(0, low);
+    // With nothing above the floor, the axis still spans one unit, so it never divides by zero.
+    const to = Math.max(0, high) > from ? Math.max(0, high) : from + 1;
+    const span = to - from;
+    const raw = span / count;
+    const magnitude = 10 ** Math.floor(Math.log10(raw));
+    const norm = raw / magnitude;
+    const step =
+        (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * magnitude;
+    const ticks: number[] = [];
+
+    for (let index = Math.floor(from / step); index * step < to + step * 0.999; index += 1) {
+        ticks.push(index * step);
+    }
+
+    return ticks;
+};
+
+/** An axis tick in millions of US dollars: "0", "500M", "2.5B", "20B". */
+export const formatTick = (millions: number): string => {
+    if (millions === 0) {
+        return '0';
+    }
+
+    return formatCompact(millions).replace(/\.0(?=[KMBT]$)/, '');
+};
+
+/** A fraction from 0 to 1 as a percentage with one decimal: "62.7%". */
+export const formatShare = (fraction: number): string => `${(fraction * 100).toFixed(1)}%`;
+
+/** The UN target for ODA, as a percentage of gross national income. */
+export const ODA_GNI_TARGET = 0.7;
+
+/**
+ * How far ODA/GNI, in percent, sits from the 0.7% target: "0.22 percentage points
+ * short of the 0.7% target.", "0.32 percentage points above the 0.7% target." or
+ * "At the 0.7% target."
+ */
+export const odaGniSentence = (percent: number): string => {
+    const gap = Math.round((percent - ODA_GNI_TARGET) * 100) / 100;
+    const target = `the ${ODA_GNI_TARGET}% target`;
+
+    if (gap === 0) {
+        return `At ${target}.`;
+    }
+
+    const points = `${Math.abs(gap).toFixed(2)} percentage points`;
+
+    return gap < 0 ? `${points} short of ${target}.` : `${points} above ${target}.`;
+};

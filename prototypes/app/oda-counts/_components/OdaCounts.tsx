@@ -6,6 +6,8 @@ import { Bridges } from './Bridge';
 import { Controls } from './Controls';
 import { CountBars } from './CountBars';
 import styles from './OdaCounts.module.scss';
+import { Scope } from './Scope';
+import { Trend } from './Trend';
 
 import type { CountsData, Definition, Prices } from '../_data/types.ts';
 import {
@@ -77,11 +79,9 @@ export const OdaCounts = ({
 
             <Bridges data={data} donor={donor} year={year} prices={prices} />
 
-            {/* The trend panel's mount point: "Over time", one line per count with the
-                2018 switch marked (_components/Trend*.tsx). */}
+            <Trend data={data} donor={donor} year={year} prices={prices} />
 
-            {/* The scope panel's mount point: "What is inside", bilateral and multilateral
-                shares, in-donor refugee costs and ODA/GNI (_components/Scope*.tsx). */}
+            <Scope data={data} donor={donor} year={year} prices={prices} />
         </div>
     );
 };
