@@ -22,6 +22,13 @@ export type Prototype = {
 /** Every prototype, newest first. */
 export const prototypes: Prototype[] = [
     {
+        slug: 'oda-counts',
+        title: 'One donor, many ODA numbers',
+        summary:
+            "Every OECD count of a donor's aid side by side: gross disbursements, net disbursements, grant equivalents, commitments, and the OECD headline.",
+        date: '2026-11-17',
+    },
+    {
         slug: 'debt-thresholds',
         title: 'Debt solvency and liquidity',
         summary:

@@ -35,7 +35,7 @@ Folders starting with `_` become no route. `template/` sits outside `app/`, so i
 
 ## Write the data step
 
-The browser makes no API calls. A data step runs by hand, writes JSON, and the page imports that JSON at build time:
+A data step runs by hand, writes JSON, and the page imports that JSON at build time, so a page opens on committed data. A page may also call the site's API from the browser on the same origin, as `oda-counts` does to convert figures to a currency the reader picks; `pnpm dev` rewrites `/api/v1` to developmentfinance.org for that:
 
 ```sh
 pnpm data debt-diagnostic
