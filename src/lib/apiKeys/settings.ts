@@ -114,3 +114,17 @@ export const parseEmailInput = (value: unknown): string | null => {
 
     return email.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(email) ? email : null;
 };
+
+const LIMIT_NOTICES: Record<string, string> = {
+    saved: 'The limit was saved.',
+    cleared: 'The limit was cleared. The account is on the default.',
+    'no-account': 'No account has that email, so nothing changed.',
+    invalid: 'Enter an account email and a positive whole number, or leave the limit empty.',
+};
+
+/**
+ * The admin page's notice for its `?limit=` code, or none. Only the table's
+ * own entries count, so `?limit=__proto__` finds nothing instead of throwing.
+ */
+export const limitNotice = (code: string): string | undefined =>
+    Object.hasOwn(LIMIT_NOTICES, code) ? LIMIT_NOTICES[code] : undefined;

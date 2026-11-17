@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
     adminFrom,
     isAdmin,
+    limitNotice,
     maxKeysPerAccount,
     parseAdminEmails,
     parseEmailInput,
@@ -88,4 +89,12 @@ test('parseEmailInput: trimmed, lowercased, address-shaped', () => {
     assert.equal(parseEmailInput('no at sign'), null);
     assert.equal(parseEmailInput('a b@c.d'), null);
     assert.equal(parseEmailInput(null), null);
+});
+
+test('limitNotice: a known code, and nothing for anything else', () => {
+    assert.equal(limitNotice('saved'), 'The limit was saved.');
+
+    for (const code of ['', 'nope', '__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+        assert.equal(limitNotice(code), undefined, code);
+    }
 });

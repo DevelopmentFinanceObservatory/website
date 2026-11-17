@@ -4,19 +4,13 @@ import { adminCreateKey, adminDeleteKey, adminSetLimit } from './actions';
 
 import AdminApiKeys from '@/components/organisms/ApiKeys/AdminApiKeys';
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
+import { limitNotice } from '@/lib/apiKeys/settings';
 import { keysEnabled } from '@/lib/proxy/forward';
 import { KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 export const metadata: Metadata = {
     title: 'API keys: admin — DFO',
     robots: { index: false, follow: false },
-};
-
-const NOTICES: Record<string, string> = {
-    saved: 'The limit was saved.',
-    cleared: 'The limit was cleared. The account is on the default.',
-    'no-account': 'No account has that email, so nothing changed.',
-    invalid: 'Enter an account email and a positive whole number, or leave the limit empty.',
 };
 
 const one = (value: string | string[] | undefined): string =>
@@ -43,7 +37,7 @@ const AdminApiKeysPage = async ({
             filter={filter}
             defaultLimit={KEYED_LIMIT}
             keysEnabled={keysEnabled()}
-            notice={NOTICES[one(query.limit)]}
+            notice={limitNotice(one(query.limit))}
             createAction={adminCreateKey}
             deleteAction={adminDeleteKey}
             limitAction={adminSetLimit}
