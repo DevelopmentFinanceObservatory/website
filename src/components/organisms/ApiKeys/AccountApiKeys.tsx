@@ -46,36 +46,38 @@ const AccountApiKeys = ({
         {keys.length === 0 ? (
             <p className={styles.note}>You have no keys yet.</p>
         ) : (
-            <table className={styles.table}>
-                <thead>
-                    <tr>
-                        <th>Label</th>
-                        <th>Key</th>
-                        <th>Created</th>
-                        <th>Last used</th>
-                        <th />
-                    </tr>
-                </thead>
-                <tbody>
-                    {keys.map((key) => (
-                        <tr key={key.id}>
-                            <td>{key.name || 'Unnamed'}</td>
-                            <td>
-                                <code>{key.start ? `${key.start}…` : '—'}</code>
-                            </td>
-                            <td>{formatDate(key.createdAt)}</td>
-                            <td>{key.lastRequest ? formatDate(key.lastRequest) : 'Not yet'}</td>
-                            <td className={styles.actions}>
-                                <DeleteKeyButton
-                                    action={deleteAction}
-                                    keyId={key.id}
-                                    label={key.name || 'Unnamed'}
-                                />
-                            </td>
+            <div className={styles.scroll}>
+                <table className={styles.table}>
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Key</th>
+                            <th>Created</th>
+                            <th>Last used</th>
+                            <th />
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {keys.map((key) => (
+                            <tr key={key.id}>
+                                <td>{key.name || 'Unnamed'}</td>
+                                <td>
+                                    <code>{key.start ? `${key.start}…` : '—'}</code>
+                                </td>
+                                <td>{formatDate(key.createdAt)}</td>
+                                <td>{key.lastRequest ? formatDate(key.lastRequest) : 'Not yet'}</td>
+                                <td className={styles.actions}>
+                                    <DeleteKeyButton
+                                        action={deleteAction}
+                                        keyId={key.id}
+                                        label={key.name || 'Unnamed'}
+                                    />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         )}
         <p className={styles.note}>
             A deleted key stops working within about a minute. “Last used” is approximate, up to a
