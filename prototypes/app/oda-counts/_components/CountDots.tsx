@@ -341,10 +341,11 @@ export const CountDots = ({
                             </p>
                             {currency !== COMMITTED_CURRENCY && (
                                 <p>
-                                    {sentenceCase(currencyNoun(offer, currency))} figures convert
-                                    the US-dollar figures at the{' '}
-                                    {prices === 'constant' ? `${unit.baseYear} ` : 'same year’s '}
-                                    exchange rate, from ONE&apos;s conversion tables.
+                                    {prices === 'constant'
+                                        ? `Figures in constant ${unit.baseYear} ${currencyNoun(offer, currency)} take the constant ${unit.baseYear} US-dollar figures, which use the donor's own deflator, and convert them to ${currencyNoun(offer, currency)} at the ${unit.baseYear} exchange rate.`
+                                        : `Figures in current ${currencyNoun(offer, currency)} are each year's US-dollar figures converted at that year's exchange rate.`}{' '}
+                                    Deflators and exchange rates come from ONE&apos;s conversion
+                                    tables.
                                 </p>
                             )}
                         </SideDetails>
