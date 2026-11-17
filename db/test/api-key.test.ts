@@ -8,6 +8,7 @@ import { makeSignature } from 'better-auth/crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { API_KEY_PATHS, API_KEY_PREFIX, apiKeyPlugin } from '../../src/lib/auth/apiKeyOptions.ts';
+import { hasValidTag } from '../../src/lib/auth/keyTag.ts';
 import { applyMigrations } from '../apply-migrations.ts';
 import * as schema from '../schema.ts';
 import { createTestDatabase } from './harness.ts';
@@ -15,6 +16,7 @@ import { createTestDatabase } from './harness.ts';
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../migrations');
 const BASE = 'http://localhost:3000';
 const SECRET = 'a-test-secret-long-enough-for-better-auth';
+const TAG_SECRET = 'a-key-tag-secret-for-the-tests-0000';
 
 /**
  * The API key tables and the plugin's setup (src/lib/auth/apiKeyOptions), on
@@ -45,7 +47,7 @@ test('API key table and plugin setup', async (t) => {
                 apiRateLimit: { type: 'number', required: false, input: false, returned: false },
             },
         },
-        plugins: [apiKeyPlugin()],
+        plugins: [apiKeyPlugin({}, { secrets: () => [TAG_SECRET] })],
     });
     const context = await auth.$context;
 
@@ -80,12 +82,13 @@ test('API key table and plugin setup', async (t) => {
     });
 
     await t.test(
-        'a key is stored as its SHA-256, base64url, with the dfo_live_ prefix',
+        'a key is stored as its SHA-256, base64url, with the dfo_live_ prefix and a signed tag',
         async () => {
             const created = await auth.api.createApiKey({ body: { userId: alice.user.id } });
 
-            assert.match(created.key, /^dfo_live_[A-Za-z0-9]{32}$/);
+            assert.match(created.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
             assert.equal(created.key.startsWith(API_KEY_PREFIX), true);
+            assert.equal(hasValidTag(created.key, [TAG_SECRET]), true);
 
             const [row] = await db
                 .select()

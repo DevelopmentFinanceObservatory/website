@@ -5,6 +5,8 @@ import type { NextRequest } from 'next/server';
 import { apisFetch } from '@/lib/apisAuth';
 import { keyDb } from '@/lib/db';
 
+import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
+
 import { decideAccess, type Access, type AccessDeps } from './access';
 import { API_KEY_HEADER, bearerKey } from './apiKey';
 import {
@@ -87,10 +89,26 @@ const limiterKey = limiterKeyFor(trustedHops(process.env));
 export const clientIp = (req: NextRequest): string =>
     limiterKey(req.headers.get('x-forwarded-for'));
 
+// The tag secrets, read per call so a test can set them. Unset, no key is
+// accepted: src/instrumentation.ts refuses to start in production without
+// them, and in dev every key is a 401.
+const keyTagValid = (key: string): boolean => {
+    let secrets: string[];
+
+    try {
+        secrets = tagSecrets();
+    } catch {
+        return false;
+    }
+
+    return hasValidTag(key, secrets);
+};
+
 // The accounts' counts and key lookups, as forward() reaches them. A test
 // swaps a field for a fake.
 export const accessDeps: AccessDeps = {
     verifier: createKeyVerifier(keyDb),
+    tagValid: keyTagValid,
     hitAddress: hit,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
     defaultLimit: KEYED_LIMIT,

@@ -53,7 +53,7 @@ test('API key service', async (t) => {
                 apiRateLimit: { type: 'number', required: false, input: false, returned: false },
             },
         },
-        plugins: [apiKeyPlugin()],
+        plugins: [apiKeyPlugin({}, { secrets: () => ['a-key-tag-secret-for-the-tests-0000'] })],
     });
     const context = await auth.$context;
     const lines: Record<string, unknown>[] = [];
@@ -82,7 +82,7 @@ test('API key service', async (t) => {
         const made = await service.createOwn(alice, 'notebook');
 
         assert.ok(made.ok);
-        assert.match(made.key, /^dfo_live_[A-Za-z0-9]{32}$/);
+        assert.match(made.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
         assert.ok(made.key.startsWith(API_KEY_PREFIX));
 
         const row = await rowOf(made.id);
@@ -273,7 +273,7 @@ test('API key service', async (t) => {
         const made = await service.adminCreate('ops@example.org', 'GINA@g.example', 'for partner');
 
         assert.ok(made.ok);
-        assert.match(made.key, /^dfo_live_[A-Za-z0-9]{32}$/);
+        assert.match(made.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
         assert.equal((await rowOf(made.id))?.referenceId, gina);
 
         const verdict = await createKeyVerifier(db).verify(made.key);

@@ -2,21 +2,26 @@
  * `access.ts`: the decision for a call to the platform proxy, with a fake
  * limiter and key verifier so the order of counts and lookups can be seen.
  * An anonymous call is counted by address as before; a call with a key is
- * counted against its account, after the address when the key was not in
- * the cache.
+ * checked for its signed tag, then counted against its account and never
+ * its address. Only a key with a good tag that the store does not hold is
+ * counted against the address.
  */
 import '../../test/serverModules.ts';
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { hasValidTag, signKey } from '../../auth/keyTag.ts';
 import type { AccessDeps } from '../access.ts';
 import type { KeyVerdict, KeyVerifier, ValidKey } from '../keyVerifier.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 
 const { decideAccess } = await import('../access.ts');
 
-const KEY = `dfo_live_${'a'.repeat(32)}`;
+const SECRET = 'a-key-tag-secret-for-the-tests-0000';
+const KEY = signKey(`dfo_live_${'a'.repeat(32)}`, [SECRET]);
+// The right shape, but a tag no secret of ours made.
+const FORGED = `dfo_live_${'a'.repeat(32)}AAAAAAAA`;
 const VALID: ValidKey = {
     kind: 'valid',
     keyId: 'key-1',
@@ -66,6 +71,7 @@ const world = ({
     };
     const deps: AccessDeps = {
         verifier,
+        tagValid: (key) => hasValidTag(key, [SECRET]),
         defaultLimit,
         hitAddress: async (surface, ip) => {
             calls.push(`address:${surface}:${ip}`);
@@ -155,16 +161,11 @@ test('an account with a limit of its own is counted at that limit, on each surfa
     );
 });
 
-test('a key not in the cache is counted against the address first, then looked up, then the account', async () => {
+test('a key not in the cache is looked up and counted against its account, not its address', async () => {
     const { calls, deps } = world();
     const access = await decide(deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(calls, [
-        'cache',
-        'address:api:203.0.113.7',
-        'lookup',
-        'account:api:acct-1:600',
-    ]);
+    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600']);
     assert.equal(access.outcome, 'allowed');
     // The headers describe the account's allowance, not the address's.
     assert.equal(access.verdict?.limit, 600);
@@ -181,13 +182,43 @@ test('an account past its limit is a 429 that names the account', async () => {
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
 });
 
-test('an address past its limit is refused before any lookup', async () => {
+test('a valid key from an address past its anonymous limit is served on a cache miss', async () => {
+    // Claude connectors share Anthropic's addresses: a busy address must not
+    // hold back a keyed caller each time the cache entry lapses.
     const { calls, deps } = world({ addressUsed: 120 });
+    const access = await decide(deps, { 'x-api-key': KEY });
+
+    assert.equal(access.refusal, undefined);
+    assert.equal(access.outcome, 'allowed');
+    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600']);
+});
+
+test('a key with a bad tag is a 401 with no lookup and no count', async () => {
+    const { calls, deps } = world();
+    const access = await decide(deps, { authorization: `Bearer ${FORGED}` });
+
+    assert.equal(access.refusal?.status, 401);
+    assert.equal((await access.refusal!.json()).code, 'invalid_api_key');
+    assert.equal(access.outcome, 'forged');
+    assert.deepEqual(access.identity, { kind: 'anonymous' });
+    assert.deepEqual(calls, []);
+});
+
+test('an untagged key of the old form is refused as forged', async () => {
+    const { calls, deps } = world();
+    const access = await decide(deps, { 'x-api-key': `dfo_live_${'a'.repeat(32)}` });
+
+    assert.equal(access.outcome, 'forged');
+    assert.deepEqual(calls, []);
+});
+
+test('a key with a good tag that the store lacks, from an address past its limit, is a 429', async () => {
+    const { calls, deps } = world({ answer: { kind: 'invalid' }, addressUsed: 120 });
     const access = await decide(deps, { 'x-api-key': KEY });
 
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
-    assert.deepEqual(calls, ['cache', 'address:api:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
     assert.match((await access.refusal!.json()).detail, /per address/);
 });
 
@@ -202,12 +233,13 @@ test('an invalid key is a 401 problem document and does not fall back to anonymo
     assert.equal(body.type, '/codes/invalid_api_key');
     assert.equal(access.outcome, 'invalid');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
-    // No account count, and the 401 carries no limit headers.
-    assert.deepEqual(calls, ['cache', 'address:api:203.0.113.7', 'lookup']);
+    // A deleted key keeps a good tag, so a miss costs its address a call;
+    // no account count, and the 401 carries no limit headers.
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), null);
 });
 
-test('an unavailable key store lets the call through as anonymous on the address count already made', async () => {
+test('an unavailable key store lets the call through as anonymous, counted by address', async () => {
     const { calls, deps } = world({ answer: { kind: 'unavailable' } });
     const access = await decide(deps, { 'x-api-key': KEY });
 
@@ -215,7 +247,7 @@ test('an unavailable key store lets the call through as anonymous on the address
     assert.equal(access.outcome, 'unavailable');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.verdict?.limit, 120);
-    assert.deepEqual(calls, ['cache', 'address:api:203.0.113.7', 'lookup']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
 });
 
 test('two different keys are a 400 before anything is counted', async () => {

@@ -13,7 +13,7 @@
 /** The prefix every key carries (API_KEY_PREFIX in src/lib/auth/apiKeyOptions). */
 const KEY_PREFIX = 'dfo_';
 
-/** Keys are `dfo_live_` and 32 characters; this leaves room and no more. */
+/** Keys are `dfo_live_`, 32 letters and an 8-character tag; this leaves room and no more. */
 export const MAX_KEY_LENGTH = 128;
 
 export const API_KEY_HEADER = 'x-api-key';

@@ -6,17 +6,21 @@
  *
  * A call is anonymous, counted against its address as before, or keyed,
  * counted against the account that owns the key at the account's limit
- * (docs/design/api-keys.md, "The Proxy Check"):
+ * (docs/design/api-keys.md, "The Proxy Check"). Every key carries a tag
+ * signed by a server secret (src/lib/auth/keyTag), checked first, so a
+ * made-up key costs no read and no count:
  *
  *   no key                       anonymous
- *   valid key in the cache       counted against the account
- *   any other key                counted against the address first, so a
- *                                made-up key cannot cost more lookups than the
- *                                address could make calls, and refused with 429
- *                                when over; then looked up:
- *     invalid                    401, not anonymous
- *     store unavailable          anonymous, on the address count just made
- *     valid                      counted against the account as well
+ *   bad tag                      401, no lookup, no count (outcome `forged`)
+ *   good tag, valid in the cache counted against the account
+ *   good tag, otherwise looked up:
+ *     valid                      counted against the account, never the
+ *                                address, so keyed callers behind a shared
+ *                                address are not held to its limit
+ *     invalid                    counted against the address, as a deleted
+ *                                key still has a good tag, then 401 (429 when
+ *                                the address is over its limit)
+ *     store unavailable          anonymous, counted against the address
  *
  * A key sent on a surface that does not honor keys, or with keys switched
  * off (API_KEYS_ENABLED), is ignored: the call is anonymous and the key is
@@ -32,7 +36,7 @@ import { rateHeaders } from './rateHeaders.ts';
 export type Identity = { kind: 'anonymous' } | { kind: 'keyed'; keyId: string; accountId: string };
 
 /** What the usage line says happened to a keyed call. */
-export type KeyOutcome = 'allowed' | 'limited' | 'invalid' | 'unavailable';
+export type KeyOutcome = 'allowed' | 'limited' | 'invalid' | 'forged' | 'unavailable';
 
 /**
  * The decision. `refusal` is the answer when the call is not forwarded.
@@ -49,6 +53,8 @@ export type Access = {
 
 export type AccessDeps = {
     verifier: KeyVerifier;
+    // Whether the key's tag is one a server secret made (src/lib/auth/keyTag).
+    tagValid: (key: string) => boolean;
     // Count a call from an address against the surface's anonymous allowance.
     hitAddress: (surface: Surface, ip: string) => Promise<RateVerdict>;
     // Count a call from an account against `limit`.
@@ -122,16 +128,14 @@ export const decideAccess = async (
               };
     };
 
+    if (!deps.tagValid(read.key)) {
+        return { refusal: invalidKeyProblem(), identity: anonymous, outcome: 'forged' };
+    }
+
     const cached = await deps.verifier.cachedValid(read.key);
 
     if (cached) {
         return countAccount(cached);
-    }
-
-    const address = await countAddress();
-
-    if (address.refusal) {
-        return { ...address, outcome: 'limited' };
     }
 
     const found = await deps.verifier.verify(read.key);
@@ -140,9 +144,11 @@ export const decideAccess = async (
         return countAccount(found);
     }
 
-    if (found.kind === 'invalid') {
-        return { refusal: invalidKeyProblem(), identity: anonymous, outcome: 'invalid' };
+    const address = await countAddress();
+
+    if (found.kind === 'unavailable' || address.refusal) {
+        return { ...address, outcome: address.refusal ? 'limited' : 'unavailable' };
     }
 
-    return { ...address, outcome: 'unavailable' };
+    return { refusal: invalidKeyProblem(), identity: anonymous, outcome: 'invalid' };
 };

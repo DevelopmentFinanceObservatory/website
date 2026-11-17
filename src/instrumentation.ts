@@ -58,6 +58,21 @@ export async function register(): Promise<void> {
         console.warn(error instanceof Error ? error.message : String(error));
     }
 
+    const { tagSecrets } = await import('./lib/auth/keyTag');
+
+    try {
+        tagSecrets();
+    } catch (error) {
+        // Without the key tag secrets no key can be made or checked, so every
+        // keyed call would be a 401; a production server refuses to start. In
+        // dev, keys are refused and the rest of the site works.
+        if (process.env.NODE_ENV === 'production') {
+            throw error;
+        }
+
+        console.warn(error instanceof Error ? error.message : String(error));
+    }
+
     const { resolveRuntimeConnection, connectCloudSqlRuntime, setCloudSqlRuntimeStream } =
         await import('../db/connection');
 

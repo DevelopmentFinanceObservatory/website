@@ -23,6 +23,7 @@ import { applyMigrations } from '../../../../db/apply-migrations.ts';
 import { buildCounterPool, buildKeyPool } from '../../../../db/connection.ts';
 import * as schema from '../../../../db/schema.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
+import { signKey } from '../../auth/keyTag.ts';
 import type { KeyVerdict } from '../keyVerifier.ts';
 import type { RateVerdict } from '../rateHeaders.ts';
 
@@ -30,12 +31,16 @@ import type { RateVerdict } from '../rateHeaders.ts';
 process.env.CALLER_HMAC_KEY = 'test-hmac-key';
 process.env.DFO_CALLER_PRINCIPAL = 'test-principal';
 process.env.TRUSTED_PROXY_HOPS = '0';
+// Read per call by forward's tag check.
+const SECRET = 'a-key-tag-secret-for-the-tests-0000';
+process.env.API_KEY_TAG_SECRETS = SECRET;
 
 const { forward, accessDeps } = await import('../forward.ts');
 const { createKeyVerifier } = await import('../keyVerifier.ts');
 const { createLimiter } = await import('../rateLimit.ts');
 
-const KEY = `dfo_live_${'k'.repeat(32)}`;
+const KEY = signKey(`dfo_live_${'k'.repeat(32)}`, [SECRET]);
+const FORGED = `dfo_live_${'k'.repeat(32)}AAAAAAAA`;
 const ACCOUNT = 'acct-1';
 const accountCaller = `user:${createHmac('sha256', 'test-hmac-key')
     .update(`user:${ACCOUNT}`)
@@ -162,7 +167,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'address:api', 'lookup']);
+    assert.deepEqual(log, ['cache', 'lookup', 'address:api']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -313,6 +318,8 @@ test('forward: logs one line per keyed call with the key id, account, surface an
     fakes({ kind: 'unavailable' });
     await call({ 'x-api-key': KEY });
 
+    await call({ 'x-api-key': FORGED });
+
     await call({});
 
     assert.deepEqual(
@@ -339,6 +346,14 @@ test('forward: logs one line per keyed call with the key id, account, surface an
                 message: 'api key call',
                 surface: 'api',
                 outcome: 'unavailable',
+                keyId: null,
+                accountId: null,
+            },
+            {
+                severity: 'INFO',
+                message: 'api key call',
+                surface: 'api',
+                outcome: 'forged',
                 keyId: null,
                 accountId: null,
             },
@@ -377,6 +392,7 @@ test('forward on a real key store and counter', async (t) => {
     for (const [id, limit] of [
         ['own', 3],
         ['default', null],
+        ['spare', 10],
     ] as const) {
         await admin.query(
             `insert into "user" (id, name, email, email_verified, created_at, updated_at, api_rate_limit)
@@ -384,7 +400,7 @@ test('forward on a real key store and counter', async (t) => {
             [id, limit],
         );
 
-        keys[id] = `dfo_live_${id.padEnd(32, '0')}`;
+        keys[id] = signKey(`dfo_live_${id.padEnd(32, 'z')}`, [SECRET]);
         await admin.query(
             `insert into apikey (id, reference_id, key, created_at, updated_at)
              values ($1, $3, $2, now(), now())`,
@@ -434,18 +450,47 @@ test('forward on a real key store and counter', async (t) => {
     });
 
     await t.test(
-        'an unknown key is a 401, and a key lookup costs the address a count first',
+        'a key with a good tag but no row, as a deleted key has, is a 401 that costs the address a count',
         async () => {
-            const bogus = `dfo_live_${'q'.repeat(32)}`;
+            const deleted = signKey(`dfo_live_${'q'.repeat(32)}`, [SECRET]);
             const fresh = { 'x-forwarded-for': '198.51.100.9' };
             const statuses = [];
 
-            // The address's own allowance (3 here) bounds the lookups it can cause.
             for (let i = 0; i < 4; i++) {
-                statuses.push((await call({ ...fresh, 'x-api-key': bogus })).status);
+                statuses.push((await call({ ...fresh, 'x-api-key': deleted })).status);
             }
 
             assert.deepEqual(statuses, [401, 401, 401, 429]);
+        },
+    );
+
+    await t.test('a key with a bad tag is a 401 that costs nothing', async () => {
+        const fresh = { 'x-forwarded-for': '198.51.100.12' };
+        const statuses = [];
+
+        for (let i = 0; i < 5; i++) {
+            statuses.push((await call({ ...fresh, 'x-api-key': FORGED })).status);
+        }
+
+        assert.deepEqual(statuses, [401, 401, 401, 401, 401]);
+        // The address still has its whole anonymous allowance.
+        assert.equal((await call(fresh)).headers.get('x-ratelimit-remaining'), '2');
+    });
+
+    await t.test(
+        'a valid key from an address past its anonymous limit is served, cache or not',
+        async () => {
+            const busy = { 'x-forwarded-for': '198.51.100.13' };
+
+            for (let i = 0; i < 3; i++) {
+                await call(busy);
+            }
+
+            assert.equal((await call(busy)).status, 429);
+
+            // A fresh verifier, so the key is not in the cache.
+            wire(keyPool);
+            assert.equal((await call({ ...busy, 'x-api-key': keys.spare! })).status, 200);
         },
     );
 
