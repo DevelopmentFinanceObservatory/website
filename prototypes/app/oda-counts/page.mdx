@@ -22,9 +22,8 @@ export default ({ children }) => (
         ]}
         lede={
             <>
-                The OECD counts each donor's official development assistance (ODA) in five ways, and
-                one donor's figures for a single year can differ by billions of dollars. Data come
-                from{' '}
+                The OECD counts official development assistance (ODA) in different ways. This page
+                shows the different totals and definitions for every provider. Data come from{' '}
                 <a href="https://developmentfinance.org/data/sources/provenance/OECDDAC1">
                     the OECD's DAC1 table
                 </a>
@@ -40,12 +39,9 @@ export default ({ children }) => (
 
 ## Notes
 
-- Grant equivalents can exceed gross disbursements (as for the United Kingdom from 2023) because private sector instruments and debt relief are counted on a different basis. Net disbursements can also sit above gross (as for Finland in 2020).
-- The note on non-grant instruments in How the steps are computed uses gross non-grant disbursements, published from 2018 to 2024, and appears only when the gap does not exceed them.
-- Constant prices are in 2024 US dollars, converted with OECD DAC deflators from ONE's conversion tables to remove donor inflation and exchange-rate movements against the dollar.
-- 2025 figures are preliminary. Most donors lack 2025 commitments and breakdowns until the OECD publishes final figures.
-- Group totals, such as DAC countries, omit any year where fewer than half of the usual reporting countries reported a series. Group totals also omit grant equivalents before 2018, which only some members reported, and 2025 commitments, breakdowns, and in-donor refugee costs, which only two countries reported.
+- Constant prices use the OECD DAC deflators, from ONE's conversion tables.
+- Group totals, such as DAC countries, are blank in any year where fewer than half of their usual reporters reported a series.
 
 ## Sources
 
-{counts.provenance.citation}. Definitions come from the DFO graph. The definitions of the OECD headline and constant dollars quote the OECD. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)} with {counts.provenance.sdk}.
+{counts.provenance.citation}. Definitions come from the DFO graph. The definitions of the OECD headline and constant dollars quote the OECD. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)}.
