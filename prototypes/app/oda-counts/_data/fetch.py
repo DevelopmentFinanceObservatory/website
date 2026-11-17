@@ -44,6 +44,27 @@ GRAPH_NODES = "https://developmentfinance.org/api/v1/graph/nodes"
 RESOLVE = "https://developmentfinance.org/api/v1/search/resolve"
 # The most entries one resolve request takes.
 RESOLVE_ENTRIES = 6
+
+# The currencies of the 32 DAC members, the only currencies the page converts to. DAC1
+# publishes their exchange rates itself; ONE's tables take every other rate from the IMF.
+DAC_CURRENCIES = (
+    "USD",  # United States
+    "EUR",  # 20 members, among them the EU institutions
+    "GBP",  # United Kingdom
+    "JPY",  # Japan
+    "CAD",  # Canada
+    "AUD",  # Australia
+    "NZD",  # New Zealand
+    "CHF",  # Switzerland
+    "NOK",  # Norway
+    "SEK",  # Sweden
+    "DKK",  # Denmark
+    "ISK",  # Iceland
+    "KRW",  # Korea
+    "CZK",  # Czechia
+    "HUF",  # Hungary
+    "PLN",  # Poland
+)
 # A spec id no definition hashes to. The server's refusal names the id it computed.
 PLACEHOLDER_ID = "spec_" + "0" * 32
 RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
@@ -202,8 +223,10 @@ SERIES = [
            "amount", flow("1015", "Gross")),
     Series("multilateral", "Gross multilateral ODA disbursements by provider",
            "FinancialFlow", "amount", flow("2000", "Gross")),
-    Series("refugeeCosts", "In-donor refugee costs in OECD headline ODA by provider",
-           "FinancialFlow", "amount", flow("1820", "Net"), provenance=HEADLINE),
+    # Net disbursements: refugee costs are grants, so these match the headline's grant
+    # equivalents to within 0.2% for 2018-2024, and they reach the preliminary year.
+    Series("refugeeCosts", "In-donor refugee costs, net ODA disbursements by provider",
+           "FinancialFlow", "amount", flow("1820", "Net")),
     Series("grossNonGrants", "Gross ODA non-grant disbursements by provider",
            "FinancialFlow", "amount", flow("1010", "Gross", "DACTypeOfFinanceNonGrants")),
     Series("odaGni", "OECD headline ODA as a share of GNI by provider", "FinancialFlow",
@@ -310,8 +333,9 @@ def fetch_offer() -> dict:
     """Return the conversion offer every monetary series shares, failing when they differ.
 
     Each series is resolved with every provider open, so the offer covers each currency
-    any provider converts to. The offer keeps each currency's code, noun, years and base
-    years, and the base year a constant-price request completes to.
+    any provider converts to; the page keeps only the DAC members' currencies. The offer
+    keeps each currency's code, noun, years and base years, and the base year a
+    constant-price request completes to.
     """
     monetary = [series for series in SERIES if series.constant]
     offers = {}
@@ -346,7 +370,17 @@ def fetch_offer() -> dict:
     differ = [key for key, offer in offers.items() if offer != first]
     if differ:
         raise SystemExit(f"The conversion offers of {differ} differ from {monetary[0].key}'s.")
-    return first
+    return dac_only(first)
+
+
+def dac_only(offer: dict) -> dict:
+    """Return `offer` cut to the DAC members' currencies, failing if Search lacks one."""
+    held = {currency["code"] for currency in offer["currencies"]}
+    missing = [code for code in DAC_CURRENCIES if code not in held]
+    if missing:
+        raise SystemExit(f"Search offers no conversion to {missing}.")
+    currencies = [c for c in offer["currencies"] if c["code"] in DAC_CURRENCIES]
+    return {**offer, "currencies": currencies}
 
 
 def by_year(values: Values, provider: str, *, scale: float, digits: int) -> list:

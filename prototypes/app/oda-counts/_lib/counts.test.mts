@@ -93,7 +93,7 @@ test('bridge steps France 2024 from gross to grant equivalents and to net', () =
     assert.equal(formatAmount(steps.toGrantEquivalent.grantEquivalent, 'USD'), '$15.4bn');
     assert.equal(
         nonGrantSentence(steps.toGrantEquivalent, 'USD'),
-        'Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only their concessional part removes $2.6bn.',
+        'Of $18.1bn gross, $4.7bn was loans and other non-grant instruments, which grant equivalents count only for their concessional part.',
     );
     assert.ok(
         Math.abs(steps.toNet.gross - steps.toNet.received - steps.toNet.net) < 1e-9,

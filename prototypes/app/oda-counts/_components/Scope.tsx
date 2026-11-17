@@ -227,7 +227,8 @@ export const Scope = ({
                     </div>
                     {anyMissing && year === PRELIMINARY_YEAR && (
                         <p className={styles.note}>
-                            The OECD publishes these splits for {year} with its final figures.
+                            The OECD&rsquo;s preliminary {year} release leaves out these splits for
+                            most donors.
                         </p>
                     )}
                 </WithSide>

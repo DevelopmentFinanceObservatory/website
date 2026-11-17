@@ -341,10 +341,10 @@ test('the picker offers each currency at the bases and base years Search convert
     assert.equal(validBaseYear('20', euro), null);
 
     // A pick keeps the basis and moves the base year inside the currency's run.
-    assert.deepEqual(pickCurrency({ ...EUR_2023, baseYear: 1965 }, 'BRL', offer), {
-        currency: 'BRL',
+    assert.deepEqual(pickCurrency({ ...EUR_2023, baseYear: 1965 }, 'HUF', offer), {
+        currency: 'HUF',
         prices: 'constant',
-        baseYear: 1986,
+        baseYear: 2003,
     });
     assert.deepEqual(pickCurrency({ ...EUR_2023, prices: 'current' }, 'GBP', offer), {
         currency: 'GBP',
@@ -352,10 +352,19 @@ test('the picker offers each currency at the bases and base years Search convert
         baseYear: 2023,
     });
 
-    // Syrian pounds convert only at constant prices, so a current-price pick moves there.
-    assert.equal(priceBases(offer, 'SYP').current, false);
+    // A currency that converts only at constant prices moves a current-price pick there.
+    const krona = offer.currencies.find(({ code }) => code === 'SEK');
+
+    assert.ok(krona);
+
+    const constantOnly = {
+        ...offer,
+        currencies: [...offer.currencies, { ...krona, code: 'XCO', current_years: null }],
+    };
+
+    assert.equal(priceBases(constantOnly, 'XCO').current, false);
     assert.equal(
-        pickCurrency({ ...EUR_2023, prices: 'current' }, 'SYP', offer)?.prices,
+        pickCurrency({ ...EUR_2023, prices: 'current' }, 'XCO', constantOnly)?.prices,
         'constant',
     );
     assert.equal(pickCurrency(EUR_2023, 'XYZ', offer), null);
@@ -363,7 +372,7 @@ test('the picker offers each currency at the bases and base years Search convert
 
 test('currencyMatches finds a currency by name or code, by name', () => {
     assert.deepEqual(currencyMatches(offer, 'eur')[0], { code: 'EUR', name: 'Euros' });
-    assert.ok(currencyMatches(offer, 'reais').some(({ code }) => code === 'BRL'));
+    assert.ok(currencyMatches(offer, 'kronur').some(({ code }) => code === 'ISK'));
     assert.equal(currencyMatches(offer, '').length, offer.currencies.length);
     assert.deepEqual(currencyMatches(offer, 'zzzz'), []);
 
