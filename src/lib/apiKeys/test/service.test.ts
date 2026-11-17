@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { makeSignature } from 'better-auth/crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
@@ -26,9 +27,9 @@ const SECRET = 'a-test-secret-long-enough-for-better-auth';
 /**
  * The API key service (src/lib/apiKeys/service) on a migrated database, as
  * the runtime role and through a real Better Auth instance set up as the
- * site's is: ownership, the forced prefix, the key shown once, the cap, and
- * the operator functions, with a key made here verified by the proxy's own
- * verifier.
+ * site's is: ownership (the plugin's own, on a signed-in session), the forced
+ * prefix, the key shown once, the cap, and the operator functions, with a
+ * key made here verified by the proxy's own verifier.
  */
 test('API key service', async (t) => {
     const database = await createTestDatabase();
@@ -73,6 +74,19 @@ test('API key service', async (t) => {
             )
         ).id;
 
+    // A signed-in request for the account, as the account page makes one.
+    const as = async (userId: string) => {
+        const session = await context.internalAdapter.createSession(userId);
+        const signature = await makeSignature(session.token, SECRET);
+
+        return {
+            userId,
+            headers: new Headers({
+                cookie: `better-auth.session_token=${encodeURIComponent(`${session.token}.${signature}`)}`,
+            }),
+        };
+    };
+
     const alice = await account('alice@a.example');
     const bob = await account('bob@b.example');
     const rowOf = async (id: string) =>
@@ -99,7 +113,7 @@ test('API key service', async (t) => {
 
         const row = await rowOf(made.id);
 
-        await service.deleteOwn(bob, made.id);
+        await service.deleteOwn(await as(bob), made.id);
         assert.equal(row?.enabled, true);
         assert.equal(row?.expiresAt, null);
         // The plugin's own per-key limiter is off (apiKeyOptions), so its stored
@@ -115,7 +129,7 @@ test('API key service', async (t) => {
 
         assert.ok(made.ok);
 
-        const listed = await service.listOwn(bob);
+        const listed = await service.listOwn(await as(bob));
         const row = await rowOf(made.id);
 
         assert.deepEqual(Object.keys(listed[0]!).sort(), [
@@ -136,7 +150,7 @@ test('API key service', async (t) => {
         assert.equal(listed[0]!.start?.length, 12);
         assert.match(listed[0]!.start ?? '', /^dfo_live_[A-Za-z0-9]{3}$/);
 
-        await service.deleteOwn(bob, made.id);
+        await service.deleteOwn(await as(bob), made.id);
     });
 
     await t.test('a user lists only their own keys', async () => {
@@ -144,8 +158,8 @@ test('API key service', async (t) => {
 
         assert.ok(mine.ok);
 
-        const aliceSees = await service.listOwn(alice);
-        const bobSees = await service.listOwn(bob);
+        const aliceSees = await service.listOwn(await as(alice));
+        const bobSees = await service.listOwn(await as(bob));
 
         assert.ok(aliceSees.length >= 1);
         assert.equal(
@@ -159,11 +173,11 @@ test('API key service', async (t) => {
     });
 
     await t.test("a user cannot delete another's key, and it stays", async () => {
-        const bobs = (await service.listOwn(bob))[0]!;
+        const bobs = (await service.listOwn(await as(bob)))[0]!;
 
-        assert.equal(await service.deleteOwn(alice, bobs.id), false);
+        assert.equal(await service.deleteOwn(await as(alice), bobs.id), 'not_found');
         assert.ok(await rowOf(bobs.id));
-        assert.equal(await service.deleteOwn(alice, 'no-such-key'), false);
+        assert.equal(await service.deleteOwn(await as(alice), 'no-such-key'), 'not_found');
     });
 
     await t.test('deleting removes the row, and the key stops verifying', async () => {
@@ -175,13 +189,26 @@ test('API key service', async (t) => {
         const verifier = createKeyVerifier(db, { validMs: 0, invalidMs: 0 });
 
         assert.equal((await verifier.verify(made.key)).kind, 'valid');
-        assert.equal(await service.deleteOwn(alice, made.id), true);
+        assert.equal(await service.deleteOwn(await as(alice), made.id), 'deleted');
         assert.equal(await rowOf(made.id), undefined);
         assert.equal((await verifier.verify(made.key)).kind, 'invalid');
     });
 
+    await t.test('a delete without a session is refused and the key stays', async () => {
+        const made = await service.createOwn(alice, 'kept');
+
+        assert.ok(made.ok);
+        assert.equal(
+            await service.deleteOwn({ userId: alice, headers: new Headers() }, made.id),
+            'signed_out',
+        );
+        assert.ok(await rowOf(made.id));
+        await assert.rejects(service.listOwn({ userId: alice, headers: new Headers() }));
+        assert.equal(await service.deleteOwn(await as(alice), made.id), 'deleted');
+    });
+
     await t.test('a bad label is refused and makes no key', async () => {
-        const before = (await service.listOwn(alice)).length;
+        const before = (await service.listOwn(await as(alice))).length;
 
         for (const label of ['', '   ', 'x'.repeat(33), 'a\u0000b', undefined, 7]) {
             const result = await service.createOwn(alice, label);
@@ -189,7 +216,7 @@ test('API key service', async (t) => {
             assert.deepEqual(result, { ok: false, reason: 'label_invalid' });
         }
 
-        assert.equal((await service.listOwn(alice)).length, before);
+        assert.equal((await service.listOwn(await as(alice))).length, before);
     });
 
     await t.test('the per-account cap is enforced, and a deletion frees a place', async () => {
@@ -207,14 +234,14 @@ test('API key service', async (t) => {
             ok: false,
             reason: 'cap_reached',
         });
-        assert.equal((await service.listOwn(carol)).length, 3);
+        assert.equal((await service.listOwn(await as(carol))).length, 3);
 
         // The cap is another account's business: Dave is not held by Carol's keys.
         const dave = await account('dave@d.example');
 
         assert.ok((await service.createOwn(dave, 'mine')).ok);
 
-        assert.equal(await service.deleteOwn(carol, made[0]!.id), true);
+        assert.equal(await service.deleteOwn(await as(carol), made[0]!.id), 'deleted');
         assert.ok((await service.createOwn(carol, 'fits now')).ok);
 
         // Changing the setting applies to the next call.
@@ -298,7 +325,7 @@ test('API key service', async (t) => {
             assert.ok((await service.adminCreate('ops@example.org', 'hank@h.example', `k${i}`)).ok);
         }
 
-        assert.equal((await service.listOwn(hank)).length, cap + 1);
+        assert.equal((await service.listOwn(await as(hank))).length, cap + 1);
         assert.equal((await service.createOwn(hank, 'self')).ok, false);
     });
 
@@ -321,7 +348,7 @@ test('API key service', async (t) => {
     });
 
     await t.test('admin: delete any key, and report one that is not there', async () => {
-        const victim = (await service.listOwn(bob))[0]!;
+        const victim = (await service.listOwn(await as(bob)))[0]!;
 
         assert.equal(await service.adminDelete('ops@example.org', victim.id), true);
         assert.equal(await rowOf(victim.id), undefined);
@@ -366,6 +393,9 @@ test('API key service', async (t) => {
 
         assert.ok((await service.createOwn(ivy, 'gone soon')).ok);
         await context.internalAdapter.deleteUser(ivy);
-        assert.deepEqual(await service.listOwn(ivy), []);
+        assert.deepEqual(
+            await db.select().from(schema.apikey).where(eq(schema.apikey.referenceId, ivy)),
+            [],
+        );
     });
 });

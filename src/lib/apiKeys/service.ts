@@ -2,10 +2,16 @@
  * What the API key pages do with keys: a signed-in user's own (src/app/(site)/account/api-keys) and
  * an operator's over every account (src/app/(site)/admin/api-keys). The plugin's own HTTP
  * endpoints for keys stay closed (src/lib/auth/apiKeyOptions), so this is the
- * only way in. It decides nothing about who may call: the caller has already
- * checked the session or the admin gate (adminGate) and passes the user id or
- * the actor in. A user's functions take the user id and never a key's owner,
- * so a key is found only under its owner.
+ * only way in.
+ *
+ * A user's own keys are listed and deleted by the plugin's server methods
+ * (`listApiKeys`, `deleteApiKey`) on the request's session, so the plugin
+ * decides which keys are whose, and checks a ban on delete. Creating takes
+ * the session's user id, since the plugin refuses a create with a session
+ * unless every server-only field is left unset. The operator functions read
+ * and delete across accounts, which the plugin offers only to a key's owner,
+ * so they query the plugin's table themselves; the caller has passed the
+ * admin gate and passes the actor in.
  *
  * Rules, from docs/design/api-keys.md ("How It Would Fit"):
  *   - the prefix is ours (`dfo_live_`), never taken from a request
@@ -19,7 +25,7 @@
  * Kept apart from the Next.js code, with the auth instance and database
  * passed in, so `node --test` can drive it on a test database.
  */
-import { and, count, desc, eq, ilike, sql } from 'drizzle-orm';
+import { count, desc, eq, ilike, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apikey, user } from '../../../db/schema.ts';
@@ -32,6 +38,11 @@ export type KeyAuth = {
         createApiKey(args: {
             body: { userId: string; name?: string; prefix?: string };
         }): Promise<{ id: string; key: string }>;
+        listApiKeys(args: {
+            headers: Headers;
+            query?: { sortBy?: string; sortDirection?: 'asc' | 'desc' };
+        }): Promise<{ apiKeys: PluginKey[] }>;
+        deleteApiKey(args: { headers: Headers; body: { keyId: string } }): Promise<unknown>;
     };
     $context: PromiseLike<{
         internalAdapter: {
@@ -39,6 +50,20 @@ export type KeyAuth = {
         };
     }>;
 };
+
+/** A key as the plugin lists it; only these fields are read. */
+type PluginKey = {
+    id: string;
+    name: string | null;
+    start: string | null;
+    createdAt: Date;
+    lastRequest: Date | null;
+};
+
+/** The signed-in request a user's own key functions act for. */
+export type Owner = { userId: string; headers: Headers };
+
+export type DeleteResult = 'deleted' | 'not_found' | 'signed_out';
 
 export type KeyDb = Pick<NodePgDatabase, 'select' | 'delete'>;
 
@@ -93,6 +118,13 @@ const ADMIN_LIST_LIMIT = 500;
 /** `value` as a LIKE pattern's literal text. */
 const likeLiteral = (value: string): string => value.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+/** The HTTP status of a Better Auth APIError, or undefined for any other throw. */
+const statusOf = (error: unknown): number | undefined => {
+    const status = (error as { statusCode?: unknown } | null)?.statusCode;
+
+    return typeof status === 'number' ? status : undefined;
+};
+
 export const createKeyService = ({
     auth,
     db,
@@ -115,13 +147,20 @@ export const createKeyService = ({
     };
 
     return {
-        /** The user's keys, newest first. */
-        async listOwn(userId: string): Promise<OwnKey[]> {
-            return db
-                .select(ownKeyColumns)
-                .from(apikey)
-                .where(eq(apikey.referenceId, userId))
-                .orderBy(desc(apikey.createdAt));
+        /** The session user's keys, newest first, as the plugin lists them. */
+        async listOwn({ headers }: Owner): Promise<OwnKey[]> {
+            const { apiKeys } = await auth.api.listApiKeys({
+                headers,
+                query: { sortBy: 'createdAt', sortDirection: 'desc' },
+            });
+
+            return apiKeys.map(({ id, name, start, createdAt, lastRequest }) => ({
+                id,
+                name,
+                start,
+                createdAt: new Date(createdAt),
+                lastRequest: lastRequest ? new Date(lastRequest) : null,
+            }));
         },
 
         /**
@@ -152,20 +191,30 @@ export const createKeyService = ({
             return { ok: true, id: created.id, key: created.key };
         },
 
-        /** Deletes the user's key. False when it is not theirs, or not there. */
-        async deleteOwn(userId: string, keyId: string): Promise<boolean> {
-            const gone = await db
-                .delete(apikey)
-                .where(and(eq(apikey.id, keyId), eq(apikey.referenceId, userId)))
-                .returning({ id: apikey.id });
+        /**
+         * Deletes one of the session user's keys through the plugin, which
+         * finds it only under its owner and refuses a banned user.
+         */
+        async deleteOwn({ userId, headers }: Owner, keyId: string): Promise<DeleteResult> {
+            try {
+                await auth.api.deleteApiKey({ headers, body: { keyId } });
+            } catch (error) {
+                const status = statusOf(error);
 
-            if (gone.length === 0) {
-                return false;
+                if (status === 404) {
+                    return 'not_found';
+                }
+
+                if (status === 401) {
+                    return 'signed_out';
+                }
+
+                throw error;
             }
 
             log({ message: 'api key deleted', by: 'owner', keyId, accountId: userId });
 
-            return true;
+            return 'deleted';
         },
 
         /** The account's own limit, or null for the default. */

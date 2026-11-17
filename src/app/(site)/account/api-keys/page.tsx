@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 
 import { createKey, deleteKey } from './actions';
 
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 const AccountApiKeysPage = async () => {
     const user = await requireUser('/account/api-keys');
     const [keys, ownLimit] = await Promise.all([
-        keyService.listOwn(user.id),
+        keyService.listOwn({ userId: user.id, headers: await headers() }),
         keyService.accountLimit(user.id),
     ]);
 
