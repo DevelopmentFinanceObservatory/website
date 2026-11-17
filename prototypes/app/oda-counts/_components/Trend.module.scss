@@ -88,8 +88,8 @@
 .tick,
 .tickSelected,
 .switchLabel {
-    font: 400 11px var(--font-outfit);
-    fill: #5e5e52;
+    font: 400 10.5px var(--font-outfit);
+    fill: #8a8a7c;
 }
 
 .tickSelected {
@@ -98,8 +98,9 @@
 }
 
 .switch {
-    stroke: #484842;
-    stroke-width: 1.5;
+    stroke: #b8b8a8;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
 }
 
 .band,
