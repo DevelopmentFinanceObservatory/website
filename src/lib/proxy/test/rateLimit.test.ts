@@ -70,6 +70,36 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         assert.equal((await limiter.hitKey('mcp', 'acct:a', 3)).remaining, 2);
         assert.equal((await limiter.hitKey('api', 'acct:b', 3)).remaining, 2);
     });
+
+    await t.test(
+        'a caller refused on the shared count stays refused when it then fails',
+        async () => {
+            // Postgres answers, then stops answering, within one window.
+            let down = false;
+            const real = drizzle(pool);
+            const flaky = {
+                execute: (...args: Parameters<typeof real.execute>) =>
+                    down ? Promise.reject(new Error('database is down')) : real.execute(...args),
+            };
+            const limiter = createLimiter(flaky as never, {
+                windowS: 3600,
+                warn: () => {},
+                prune: false,
+            });
+
+            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, true);
+            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
+
+            down = true;
+            assert.equal((await limiter.hitKey('api', 'acct:flaky', 1)).allowed, false);
+
+            // A caller with room left goes on from its shared count, not from zero.
+            down = false;
+            assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 2);
+            down = true;
+            assert.equal((await limiter.hitKey('api', 'acct:room', 3)).remaining, 1);
+        },
+    );
 });
 
 test('limiter: a count that fails is counted in memory instead of passing, and warns', async () => {

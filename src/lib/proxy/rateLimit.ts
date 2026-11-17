@@ -16,8 +16,9 @@ import type { RateVerdict } from './rateHeaders';
  * counterDb), which gives up after 400 ms in Postgres, 500 ms in the client,
  * or 2 s waiting for a connection. A database error or a timed-out count does
  * not let the call through uncounted: this instance counts it in memory
- * instead (./limitFallback), so a burst is held near its limit on each
- * instance while the database is slow, and the proxy stays available.
+ * instead (./limitFallback), going on from the last shared count it saw for
+ * that caller, so a burst is held near its limit on each instance while the
+ * database is slow, and the proxy stays available.
  *
  * The window and the allowance per surface are env-tunable:
  *   RATE_LIMIT_WINDOW_S   (default 60)
@@ -93,7 +94,12 @@ export const createLimiter = (
             const key = `${surface}:${callerKey}`;
 
             try {
-                return await countHit(db, key, limit, windowS);
+                const sentAt = Date.now();
+                const verdict = await countHit(db, key, limit, windowS);
+
+                fallback.record(key, verdict, sentAt);
+
+                return verdict;
             } catch (error) {
                 warn('rate limit unavailable, counting in memory', error);
 

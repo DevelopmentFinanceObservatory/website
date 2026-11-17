@@ -6,6 +6,11 @@
  * uncounted. A caller served by several instances can reach the limit times
  * the instance count at worst, which is far under no limit.
  *
+ * Each shared count that succeeds is recorded here too, so a fallback goes on
+ * from the caller's shared count in the current window rather than from zero:
+ * a caller already refused in the window stays refused when the database
+ * then fails.
+ *
  * Windows are aligned to the Unix epoch, as the shared counters' are. The
  * memory is bounded: a full map first drops the windows that have ended and
  * then its oldest keys. An evicted key starts over, which is the same
@@ -17,6 +22,15 @@ export const FALLBACK_MAX_KEYS = 10_000;
 
 export type FallbackCounter = {
     hit(key: string, limit: number): Verdict;
+    /**
+     * Takes the shared count's verdict for `key` as its count so far in the
+     * window in effect at `sentAt`, when the count was sent. A count that
+     * crosses a window boundary on its way back is filed under the window it
+     * was sent in: a count the database made in the later window then lapses
+     * early, which errs lenient, and never carries a spent allowance into a
+     * fresh window.
+     */
+    record(key: string, verdict: Verdict, sentAt: number): void;
     size(): number;
 };
 
@@ -28,6 +42,25 @@ export const createFallbackCounter = (
     // The window a key was last counted in, and how many calls it held.
     const counts = new Map<string, { window: number; count: number }>();
 
+    // Re-inserted, so insertion order stays the order of last use.
+    const store = (key: string, window: number, count: number): void => {
+        counts.delete(key);
+
+        if (counts.size >= maxKeys) {
+            for (const [other, entry] of counts) {
+                if (entry.window < window) {
+                    counts.delete(other);
+                }
+            }
+        }
+
+        while (counts.size >= maxKeys) {
+            counts.delete(counts.keys().next().value!);
+        }
+
+        counts.set(key, { window, count });
+    };
+
     return {
         hit(key, limit) {
             const at = now();
@@ -35,22 +68,7 @@ export const createFallbackCounter = (
             const known = counts.get(key);
             const count = known && known.window === window ? known.count + 1 : 1;
 
-            // Re-inserted, so insertion order stays the order of last use.
-            counts.delete(key);
-
-            if (counts.size >= maxKeys) {
-                for (const [other, entry] of counts) {
-                    if (entry.window < window) {
-                        counts.delete(other);
-                    }
-                }
-            }
-
-            while (counts.size >= maxKeys) {
-                counts.delete(counts.keys().next().value!);
-            }
-
-            counts.set(key, { window, count });
+            store(key, window, count);
 
             return {
                 allowed: count <= limit,
@@ -58,6 +76,24 @@ export const createFallbackCounter = (
                 remaining: Math.max(0, limit - count),
                 reset: Math.max(1, Math.ceil(((window + 1) * windowMs - at) / 1000)),
             };
+        },
+        record(key, { allowed, limit, remaining }, sentAt) {
+            const window = Math.floor(sentAt / windowMs);
+            const known = counts.get(key);
+
+            // A count from a window already over says nothing about this one,
+            // and leaves any newer count alone.
+            if (window < Math.floor(now() / windowMs) || (known && known.window > window)) {
+                return;
+            }
+
+            // A refusal carries no count past the limit, and one past it is
+            // enough to keep refusing. Replies can arrive out of order, and
+            // between them this instance may have counted in memory, so a
+            // count never goes down within a window.
+            const count = allowed ? limit - remaining : limit + 1;
+
+            store(key, window, known?.window === window ? Math.max(known.count, count) : count);
         },
         size: () => counts.size,
     };
