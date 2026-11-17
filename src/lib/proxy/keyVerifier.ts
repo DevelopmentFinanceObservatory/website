@@ -28,7 +28,7 @@ import { hasKeyPrefix } from './apiKey.ts';
  * effect on an instance within that time even while the store is down. An
  * invalid entry lives CACHE_INVALID_MS. An unavailable answer is not cached.
  * Neither the key nor its hash leaves this module except as the cache key
- * (hash only, in memory).
+ * (hash only, in memory). A failed read or write logs only its error code.
  *
  * A lookup that finds a valid key also records its use: `apikey.last_request`
  * is set to the time of the lookup, which the key pages show as "last used".
@@ -114,6 +114,26 @@ const boundedCache = (max: number, now: () => number) => {
     };
 };
 
+/**
+ * What went wrong, as a code and nothing more: the first `code` down the
+ * error's cause chain (Postgres's SQLSTATE, Node's ECONNREFUSED), else its
+ * name. Drizzle's DrizzleQueryError puts the query's parameters, the key's
+ * hash among them, in its message, so the error itself is never logged.
+ */
+export const errorCode = (error: unknown): string => {
+    for (let e: unknown = error, depth = 0; e && depth < 5; depth += 1) {
+        const code = (e as { code?: unknown }).code;
+
+        if (typeof code === 'string' && code) {
+            return code;
+        }
+
+        e = (e as { cause?: unknown }).cause;
+    }
+
+    return error instanceof Error ? error.name : typeof error;
+};
+
 /** A positive whole number is an account's own limit; anything else is the default. */
 const ownLimit = (value: number | null): number | null =>
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 ? value : null;
@@ -137,13 +157,13 @@ export const createKeyVerifier = (
         validMs = CACHE_VALID_MS,
         invalidMs = CACHE_INVALID_MS,
         maxEntries = CACHE_MAX_ENTRIES,
-        log = console.warn,
+        log = (message, code) => console.warn(message, { code }),
     }: {
         now?: () => number;
         validMs?: number;
         invalidMs?: number;
         maxEntries?: number;
-        log?: (message: string, error: unknown) => void;
+        log?: (message: string, code: string) => void;
     } = {},
 ): KeyVerifier => {
     // Apart, so a flood of made-up keys cannot push real ones out.
@@ -161,7 +181,7 @@ export const createKeyVerifier = (
                     .set({ lastRequest: new Date(now()) })
                     .where(eq(apikey.id, keyId));
             } catch (error) {
-                log('api key last use not recorded', error);
+                log('api key last use not recorded', errorCode(error));
             }
         })();
     };
@@ -183,7 +203,7 @@ export const createKeyVerifier = (
                 .where(eq(apikey.key, hash))
                 .limit(1);
         } catch (error) {
-            log('api key store unavailable, treating the call as anonymous', error);
+            log('api key store unavailable, treating the call as anonymous', errorCode(error));
 
             return { kind: 'unavailable' };
         }

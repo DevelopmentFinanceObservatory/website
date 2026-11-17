@@ -378,6 +378,35 @@ test('keyVerifier on the key store', async (t) => {
         assert.doesNotMatch(logged.join(), /dfo_/);
     });
 
+    await t.test(
+        'a failed read logs its error code, never the query or its parameters',
+        async () => {
+            const logged: [string, string][] = [];
+            const hash = await defaultKeyHasher(live);
+            // Drizzle's DrizzleQueryError: the query and its parameters in the
+            // message, the driver's error as the cause.
+            const failing = {
+                select: () => {
+                    throw new Error(`Failed query: select ... where key = $1\nparams: ${hash}`, {
+                        cause: Object.assign(new Error('terminating connection'), {
+                            code: '57P01',
+                        }),
+                    });
+                },
+                update: db.update.bind(db),
+            } as unknown as typeof db;
+            const verifier = createKeyVerifier(failing, {
+                log: (message, code) => logged.push([message, code]),
+            });
+
+            assert.deepEqual(await verifier.verify(live), { kind: 'unavailable' });
+            assert.deepEqual(logged, [
+                ['api key store unavailable, treating the call as anonymous', '57P01'],
+            ]);
+            assert.equal(JSON.stringify(logged).includes(hash), false);
+        },
+    );
+
     await t.test('a read that outlasts the statement timeout is unavailable', async () => {
         const verifier = createKeyVerifier(db, { log: () => {} });
         const blocker = database.adminPool();
