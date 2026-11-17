@@ -128,8 +128,8 @@ const listAt = (value: unknown, key: string): unknown[] => {
  * Each series in `keys` by year of `years`, in millions, from one resolve stream's events.
  * A part Search answers with no data is null in every year. Throws on an error event, on
  * a part that is neither definite nor no data, on a part served in another currency than
- * `currency`, and on a definite part with no observations, so a stream the page cannot
- * read never shows as figures.
+ * `currency`, and on a definite part with no or truncated observations, so a stream the
+ * page cannot read never shows as figures.
  */
 export const seriesFromEvents = (
     events: unknown[],
@@ -189,6 +189,10 @@ export const seriesFromEvents = (
 
         if (series === undefined) {
             throw new Error(`Search sent no observations for ${key}.`);
+        }
+
+        if (series.some((each) => isRecord(each) && each.truncated === true)) {
+            throw new Error(`Search sent a truncated series for ${key}.`);
         }
 
         // The OECD headline arrives as two series, net flows to 2017 and grant

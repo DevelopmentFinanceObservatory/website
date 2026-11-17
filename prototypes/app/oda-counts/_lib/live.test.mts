@@ -162,6 +162,17 @@ test('seriesFromEvents refuses an error, another currency, a missing part or obs
         () => seriesFromEvents(noObservations, [...keys], years, 'EUR'),
         /no observations for gross/,
     );
+
+    const truncated = streamEvents(stream()).map((event) =>
+        (event as { kind: string }).kind === 'observations'
+            ? { ...(event as object), observations: { series: [{ points: [], truncated: true }] } }
+            : event,
+    );
+
+    assert.throws(
+        () => seriesFromEvents(truncated, [...keys], years, 'EUR'),
+        /truncated series for gross/,
+    );
 });
 
 test('maskTo and liveDonor keep every null counts.json holds, at each price basis', () => {

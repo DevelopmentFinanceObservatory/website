@@ -119,12 +119,12 @@ export const LiveUnitsProvider = ({
             return running.promise;
         }
 
+        // One controller aborts both a newer pick's cancellation and the timeout, so the page
+        // needs no AbortSignal.any, which older browsers lack.
         const controller = new AbortController();
-        const signal = AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        ]);
-        const promise = Promise.all(
+        const { signal } = controller;
+        const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const promise: Promise<LiveBasis> = Promise.all(
             resolveRequests(live, donorId, unit).map(async ({ keys, body }) => {
                 const response = await fetch(live.resolve, {
                     method: 'POST',
@@ -156,7 +156,15 @@ export const LiveUnitsProvider = ({
 
                 return basis;
             })
-            .finally(() => inflight.current.delete(key));
+            .finally(() => {
+                window.clearTimeout(timer);
+
+                // An aborted request settles after a newer one for the same key may have
+                // taken its place, so it removes only its own entry.
+                if (inflight.current.get(key)?.promise === promise) {
+                    inflight.current.delete(key);
+                }
+            });
 
         inflight.current.set(key, { promise, controller });
 

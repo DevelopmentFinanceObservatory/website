@@ -25,7 +25,13 @@ import {
     possessive,
     priceDefinition,
 } from '../_lib/counts.ts';
-import { unitPhrase, unitTitle, type Unit } from '../_lib/live.ts';
+import {
+    COMMITTED_CURRENCY,
+    currencyNoun,
+    unitPhrase,
+    unitTitle,
+    type Unit,
+} from '../_lib/live.ts';
 
 /** The plot's inner margin, so a dot at either end of the axis is drawn whole. */
 const PAD = 12;
@@ -330,6 +336,14 @@ export const CountDots = ({
                             <p>
                                 <Quote part={price} bare />
                             </p>
+                            {currency !== COMMITTED_CURRENCY && (
+                                <p>
+                                    {sentenceCase(currencyNoun(offer, currency))} figures convert
+                                    the US-dollar figures at the{' '}
+                                    {prices === 'constant' ? `${unit.baseYear} ` : 'same year’s '}
+                                    exchange rate, from ONE&apos;s conversion tables.
+                                </p>
+                            )}
                         </SideDetails>
                     </>
                 }

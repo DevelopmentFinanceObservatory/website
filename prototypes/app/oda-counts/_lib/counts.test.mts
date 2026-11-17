@@ -193,7 +193,13 @@ test('formatAmount writes billions with one decimal and small amounts in million
 });
 
 test('formatAmount and formatCompact pick the unit after rounding', () => {
-    assert.deepEqual([999.96, 9.96, -999.7].map(usd), ['$1.0bn', '$10m', '-$1.0bn']);
+    assert.deepEqual([999.96, 9.96, -999.7, 999_960, 2_625_000].map(usd), [
+        '$1.0bn',
+        '$10m',
+        '-$1.0bn',
+        '$1.0tn',
+        '$2.6tn',
+    ]);
     assert.deepEqual([999.96, 999_960, 0.99996].map(compact), ['$1.0B', '$1.0T', '$1.0M']);
 });
 

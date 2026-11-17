@@ -109,13 +109,17 @@ export const currencyPrefix = (currency: string): string => {
 };
 
 /**
- * An amount in millions of `currency` as "$17.5bn", "€350m" or "CHF 4.2m". The unit
- * follows the rounded amount, so 999.96 prints as "$1.0bn".
+ * An amount in millions of `currency` as "$17.5bn", "€350m", "CHF 4.2m" or "JP¥2.6tn".
+ * The unit follows the rounded amount, so 999.96 prints as "$1.0bn".
  */
 export const formatAmount = (millions: number, currency: string): string => {
     const sign = millions < 0 ? '-' : '';
     const size = Math.abs(millions);
     const prefix = currencyPrefix(currency);
+
+    if (rounded(size / 1000, 1) >= 1000) {
+        return `${sign}${prefix}${(size / 1_000_000).toFixed(1)}tn`;
+    }
 
     if (rounded(size, 0) >= 1000) {
         return `${sign}${prefix}${(size / 1000).toFixed(1)}bn`;
@@ -204,7 +208,7 @@ export const matchDonors = (donors: Donor[], query: string): Donor[] => {
 /** "France's", or "DAC countries'" for a name ending in s. */
 export const possessive = (name: string): string => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 
-/** The counts of money paid out. Commitments are promises, so the range leaves them out. */
+/** The disbursed counts. The range leaves out commitments, which are obligations to provide aid. */
 const DISBURSED: readonly CountKey[] = ['gross', 'net', 'grantEquivalent', 'headline'];
 
 /**
