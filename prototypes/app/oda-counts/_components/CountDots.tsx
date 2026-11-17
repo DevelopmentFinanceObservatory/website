@@ -342,7 +342,7 @@ export const CountDots = ({
                             {currency !== COMMITTED_CURRENCY && (
                                 <p>
                                     {prices === 'constant'
-                                        ? `Figures in constant ${unit.baseYear} ${currencyNoun(offer, currency)} take the constant ${unit.baseYear} US-dollar figures, which use the donor's own deflator, and convert them to ${currencyNoun(offer, currency)} at the ${unit.baseYear} exchange rate.`
+                                        ? `Figures in constant ${unit.baseYear} ${currencyNoun(offer, currency)} convert each year's US-dollar figure to the donor's own currency at that year's exchange rate, deflate it to ${unit.baseYear} prices with the donor's price deflator, and convert it to ${currencyNoun(offer, currency)} at the ${unit.baseYear} exchange rate.`
                                         : `Figures in current ${currencyNoun(offer, currency)} are each year's US-dollar figures converted at that year's exchange rate.`}{' '}
                                     Deflators and exchange rates come from ONE&apos;s conversion
                                     tables.
