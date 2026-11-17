@@ -1,0 +1,107 @@
+{
+  "provenance": {
+    "sdk": "development-finance==0.2.0",
+    "query": "POST https://developmentfinance.org/api/v1/graph/nodes",
+    "retrieved": "2026-11-17T16:48:15.778Z",
+    "nodes": [
+      "Gross",
+      "Net",
+      "Disbursement",
+      "Commitment",
+      "grantEquivalent",
+      "grantElement",
+      "Nominal",
+      "RealValue",
+      "DAC1AidType1015",
+      "DAC1AidType2000",
+      "DAC1AidType1820",
+      "DACTypeOfFinanceNonGrants"
+    ]
+  },
+  "data": [
+    {
+      "id": "Gross",
+      "label": "gross",
+      "description": "An amount counted in full, with nothing offset.",
+      "source": "graph"
+    },
+    {
+      "id": "Net",
+      "label": "net",
+      "description": "An amount counted after offsetting amounts are subtracted.",
+      "source": "graph"
+    },
+    {
+      "id": "Disbursement",
+      "label": "disbursement",
+      "description": "The placing of resources at the recipient's disposal.",
+      "source": "graph"
+    },
+    {
+      "id": "Commitment",
+      "label": "commitment",
+      "description": "A firm, written promise to provide specified resources.",
+      "source": "graph"
+    },
+    {
+      "id": "grantEquivalent",
+      "label": "grant equivalent",
+      "description": "A measure of the provider's effort: the amount effectively given through a transaction, equal to its face value multiplied by its grant element. A grant is given in full; a loan gives only the portion extended by lending below market rates, so more concessional terms yield a higher grant equivalent.",
+      "source": "graph"
+    },
+    {
+      "id": "grantElement",
+      "label": "grant element",
+      "description": "The gift portion of a loan, as a percentage of the amount committed. It is the face value less the discounted present value of the contractual debt service, over the face value.",
+      "source": "graph"
+    },
+    {
+      "id": "Nominal",
+      "label": "current prices",
+      "description": "Measurement is evaluated at current market prices, without adjusting for inflation.",
+      "source": "graph"
+    },
+    {
+      "id": "RealValue",
+      "label": "constant prices",
+      "description": "Measurement is evaluated against the price of goods or services at a different time to adjust for inflation. This adjustment could be via a chained volume series (https://en.wikipedia.org/wiki/Chained_volume_series) or a fixed-weight method.",
+      "source": "graph"
+    },
+    {
+      "id": "DAC1AidType1015",
+      "label": "bilateral ODA (DAC 1 aid type)",
+      "description": "Official development assistance whose use the provider controls, whether it is extended directly to developing countries, earmarked through another organisation, or spent on development-related activities in the provider country.",
+      "source": "graph"
+    },
+    {
+      "id": "DAC1AidType2000",
+      "label": "multilateral ODA (DAC 1 aid type)",
+      "description": "Official development assistance contributed to a multilateral institution active in development and pooled so that it loses its identity and becomes an integral part of the institution's financial assets.",
+      "source": "graph"
+    },
+    {
+      "id": "DAC1AidType1820",
+      "label": "in-donor refugee cost (DAC 1 aid type)",
+      "description": "Other in-donor expenditure by the official sector on the sustenance of refugees and asylum seekers from developing countries hosted in the provider country.",
+      "source": "graph"
+    },
+    {
+      "id": "DACTypeOfFinanceNonGrants",
+      "label": "non-grant (DAC type of finance)",
+      "description": "Finance that DAC statistics record as a non-grant, a convention that covers loans, reimbursable grants, debt rescheduling, debt securities, mezzanine finance, equity and guarantees.",
+      "source": "graph"
+    },
+    {
+      "id": "oecdHeadline",
+      "label": "OECD headline ODA",
+      "description": "The figure the OECD reports as a donor's ODA: net disbursements up to 2017 and grant equivalents from 2018, so years either side of the 2018 change are not comparable.",
+      "source": "page"
+    },
+    {
+      "id": "constantPrices",
+      "label": "constant 2024 prices",
+      "description": "Every year valued at 2024 prices and exchange rates, using the OECD DAC deflator for each donor, so a change over time is not inflation or a currency movement.",
+      "source": "page"
+    }
+  ]
+}

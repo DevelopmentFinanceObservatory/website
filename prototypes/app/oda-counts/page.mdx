@@ -1,0 +1,13 @@
+import { prototype, prototypeMetadata } from '../../registry';
+
+import counts from './_data/counts.json';
+
+export const entry = prototype('oda-counts');
+
+export const metadata = prototypeMetadata(entry);
+
+# {entry.title}
+
+{entry.summary}
+
+Source: {counts.provenance.citation}. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)} with {counts.provenance.sdk}.

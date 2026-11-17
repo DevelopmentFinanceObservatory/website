@@ -1,0 +1,220 @@
+// Pure functions over _data/counts.json and _data/definitions.json, so the controls,
+// the headline sentence, the bars, the bridge and the tests read the same numbers.
+// Only type imports, which keeps the module loadable by `node --test`.
+import type { CountKey, CountsData, Definition, Donor, Prices, SeriesKey } from '../_data/types.ts';
+
+/** The counts in the order the page shows them. */
+export const COUNTS: readonly CountKey[] = [
+    'gross',
+    'grantEquivalent',
+    'net',
+    'commitments',
+    'headline',
+];
+
+export const COUNT_LABELS: Record<CountKey, string> = {
+    gross: 'Gross disbursements',
+    grantEquivalent: 'Grant equivalents',
+    net: 'Net disbursements',
+    commitments: 'Commitments',
+    headline: 'OECD headline',
+};
+
+export const DEFAULT_DONOR = 'country/FRA';
+/** The DAC's preliminary year; 2024 is the latest year with every count. */
+export const DEFAULT_YEAR = 2025;
+/** The first year the OECD headline counts grant equivalents rather than net flows. */
+export const GRANT_EQUIVALENT_FROM = 2018;
+
+/** The donor with this id, or undefined. */
+export const findDonor = (data: CountsData, id: string): Donor | undefined =>
+    data.donors.find((donor) => donor.id === id);
+
+/** A series' value in millions of US dollars, or null where none is published. */
+export const valueAt = (
+    data: CountsData,
+    donor: Donor,
+    key: SeriesKey,
+    year: number,
+    prices: Prices,
+): number | null => {
+    const index = data.years.indexOf(year);
+
+    return index === -1 ? null : (donor.series[key][prices][index] ?? null);
+};
+
+/** The count the OECD headline follows in a year. */
+export const headlineBasis = (year: number): 'net' | 'grantEquivalent' =>
+    year < GRANT_EQUIVALENT_FROM ? 'net' : 'grantEquivalent';
+
+export type CountValue = { key: CountKey; value: number | null };
+
+/** Every count for a donor and year, in `COUNTS` order; null where none is published. */
+export const countsFor = (
+    data: CountsData,
+    donor: Donor,
+    year: number,
+    prices: Prices,
+): CountValue[] => COUNTS.map((key) => ({ key, value: valueAt(data, donor, key, year, prices) }));
+
+export type Range = { low: CountValue & { value: number }; high: CountValue & { value: number } };
+
+/** The smallest and largest published count, or null when none is published. */
+export const countRange = (counts: CountValue[]): Range | null => {
+    const published = counts.filter(
+        (count): count is CountValue & { value: number } => count.value !== null,
+    );
+
+    if (published.length === 0) {
+        return null;
+    }
+
+    const low = published.reduce((min, count) => (count.value < min.value ? count : min));
+    const high = published.reduce((max, count) => (count.value > max.value ? count : max));
+
+    return { low, high };
+};
+
+/** An amount in millions of US dollars as "$17.5bn", "$350m" or "$4.2m". */
+export const formatUsd = (millions: number): string => {
+    const sign = millions < 0 ? '-' : '';
+    const size = Math.abs(millions);
+
+    if (size >= 1000) {
+        return `${sign}$${(size / 1000).toFixed(1)}bn`;
+    }
+
+    return `${sign}$${size >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
+};
+
+/** "France's", or "DAC countries'" for a name ending in s. */
+export const possessive = (name: string): string => (name.endsWith('s') ? `${name}'` : `${name}'s`);
+
+/** "<Donor>'s ODA in <year> was $X to $Y, depending on the count.", or null with no counts. */
+export const rangeSentence = (name: string, year: number, counts: CountValue[]): string | null => {
+    const range = countRange(counts);
+
+    if (range === null) {
+        return null;
+    }
+
+    const low = formatUsd(range.low.value);
+    const high = formatUsd(range.high.value);
+    const lead = `${possessive(name)} ODA in ${year} was`;
+
+    return low === high ? `${lead} ${low}.` : `${lead} ${low} to ${high}, depending on the count.`;
+};
+
+export type Bridge = {
+    /** gross minus net: loan repayments and other amounts received */
+    toNet: { gross: number; net: number; received: number } | null;
+    /**
+     * gross minus grant equivalents: the part of non-grant instruments not counted
+     * as concessional; null before 2018. `nonGrants` is gross non-grant disbursements
+     * where published.
+     */
+    toGrantEquivalent: {
+        gross: number;
+        grantEquivalent: number;
+        notCounted: number;
+        nonGrants: number | null;
+    } | null;
+};
+
+/** The steps from gross disbursements to net disbursements and to grant equivalents. */
+export const bridge = (data: CountsData, donor: Donor, year: number, prices: Prices): Bridge => {
+    const at = (key: SeriesKey) => valueAt(data, donor, key, year, prices);
+    const gross = at('gross');
+    const net = at('net');
+    const grantEquivalent = at('grantEquivalent');
+
+    return {
+        toNet: gross === null || net === null ? null : { gross, net, received: gross - net },
+        toGrantEquivalent:
+            gross === null || grantEquivalent === null || year < GRANT_EQUIVALENT_FROM
+                ? null
+                : {
+                      gross,
+                      grantEquivalent,
+                      notCounted: gross - grantEquivalent,
+                      nonGrants: at('grossNonGrants'),
+                  },
+    };
+};
+
+/**
+ * "Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only
+ * their concessional part removes $2.6bn.", or null without a non-grant figure.
+ */
+export const nonGrantSentence = (step: Bridge['toGrantEquivalent']): string | null => {
+    if (step === null || step.nonGrants === null) {
+        return null;
+    }
+
+    return (
+        `Of ${formatUsd(step.gross)} gross, ${formatUsd(step.nonGrants)} was loans and other ` +
+        `non-grant instruments; counting only their concessional part removes ` +
+        `${formatUsd(step.notCounted)}.`
+    );
+};
+
+/** The definitions a count's own definition is composed from, keyed by id. */
+const PARTS: Record<CountKey, string[]> = {
+    gross: ['Gross', 'Disbursement'],
+    net: ['Net', 'Disbursement'],
+    grantEquivalent: ['grantEquivalent', 'grantElement', 'Disbursement'],
+    commitments: ['Commitment'],
+    headline: ['oecdHeadline'],
+};
+
+/** The price basis' definition: the graph's for current prices, the page's for constant. */
+const PRICE_PART: Record<Prices, string> = { current: 'Nominal', constant: 'constantPrices' };
+
+/** A count's definition as its parts, each a graph node or a written entry, prices last. */
+export const definitionParts = (
+    key: CountKey,
+    prices: Prices,
+    definitions: Definition[],
+): Definition[] =>
+    [...PARTS[key], PRICE_PART[prices]].map((id) => {
+        const found = definitions.find((definition) => definition.id === id);
+
+        if (!found) {
+            throw new Error(`definitions.json has no entry for "${id}"`);
+        }
+
+        return found;
+    });
+
+export type Scope = {
+    /** shares of gross bilateral plus multilateral disbursements, from 0 to 1 */
+    bilateralShare: number | null;
+    multilateralShare: number | null;
+    /** in-donor refugee costs in millions, and their share of the headline count */
+    refugeeCosts: number | null;
+    refugeeShare: number | null;
+    /** OECD headline ODA as a percentage of GNI */
+    odaGni: number | null;
+};
+
+/** What is inside a donor's ODA in a year. */
+export const scope = (data: CountsData, donor: Donor, year: number, prices: Prices): Scope => {
+    const at = (key: SeriesKey) => valueAt(data, donor, key, year, prices);
+    const bilateral = at('bilateral');
+    const multilateral = at('multilateral');
+    const refugeeCosts = at('refugeeCosts');
+    const headline = at('headline');
+    const split =
+        bilateral === null || multilateral === null || bilateral + multilateral === 0
+            ? null
+            : { bilateral, multilateral, total: bilateral + multilateral };
+    const index = data.years.indexOf(year);
+
+    return {
+        bilateralShare: split && split.bilateral / split.total,
+        multilateralShare: split && split.multilateral / split.total,
+        refugeeCosts,
+        refugeeShare: refugeeCosts !== null && headline ? refugeeCosts / headline : null,
+        odaGni: index === -1 ? null : (donor.odaGni[index] ?? null),
+    };
+};
