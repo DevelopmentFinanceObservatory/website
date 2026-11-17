@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "POST https://developmentfinance.org/api/v1/graph/nodes",
-    "retrieved": "2026-11-17T16:48:15.778Z",
+    "retrieved": "2026-11-17T17:12:33.087Z",
     "nodes": [
       "Gross",
       "Net",
@@ -10,12 +10,7 @@
       "Commitment",
       "grantEquivalent",
       "grantElement",
-      "Nominal",
-      "RealValue",
-      "DAC1AidType1015",
-      "DAC1AidType2000",
-      "DAC1AidType1820",
-      "DACTypeOfFinanceNonGrants"
+      "Nominal"
     ]
   },
   "data": [
@@ -59,36 +54,6 @@
       "id": "Nominal",
       "label": "current prices",
       "description": "Measurement is evaluated at current market prices, without adjusting for inflation.",
-      "source": "graph"
-    },
-    {
-      "id": "RealValue",
-      "label": "constant prices",
-      "description": "Measurement is evaluated against the price of goods or services at a different time to adjust for inflation. This adjustment could be via a chained volume series (https://en.wikipedia.org/wiki/Chained_volume_series) or a fixed-weight method.",
-      "source": "graph"
-    },
-    {
-      "id": "DAC1AidType1015",
-      "label": "bilateral ODA (DAC 1 aid type)",
-      "description": "Official development assistance whose use the provider controls, whether it is extended directly to developing countries, earmarked through another organisation, or spent on development-related activities in the provider country.",
-      "source": "graph"
-    },
-    {
-      "id": "DAC1AidType2000",
-      "label": "multilateral ODA (DAC 1 aid type)",
-      "description": "Official development assistance contributed to a multilateral institution active in development and pooled so that it loses its identity and becomes an integral part of the institution's financial assets.",
-      "source": "graph"
-    },
-    {
-      "id": "DAC1AidType1820",
-      "label": "in-donor refugee cost (DAC 1 aid type)",
-      "description": "Other in-donor expenditure by the official sector on the sustenance of refugees and asylum seekers from developing countries hosted in the provider country.",
-      "source": "graph"
-    },
-    {
-      "id": "DACTypeOfFinanceNonGrants",
-      "label": "non-grant (DAC type of finance)",
-      "description": "Finance that DAC statistics record as a non-grant, a convention that covers loans, reimbursable grants, debt rescheduling, debt securities, mezzanine finance, equity and guarantees.",
       "source": "graph"
     },
     {

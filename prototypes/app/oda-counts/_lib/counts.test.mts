@@ -23,7 +23,10 @@ import {
     nonGrantSentence,
     odaGniSentence,
     rangeSentence,
+    riseNote,
+    RISE_NOTES,
     scope,
+    STEP_LABELS,
     trendLines,
     valueTicks,
 } from './counts.ts';
@@ -34,16 +37,28 @@ const read = <T,>(name: string): T =>
 const counts = read<CountsData>('counts.json');
 const definitions = read<Definition[]>('definitions.json');
 
-const france = (): Donor => {
-    const donor = findDonor(counts, 'country/FRA');
-    assert.ok(donor);
+const donorById = (id: string): Donor => {
+    const donor = findDonor(counts, id);
+    assert.ok(donor, id);
     return donor;
 };
+
+const france = (): Donor => donorById('country/FRA');
 
 test('rangeSentence gives France 2025 from net to gross disbursements', () => {
     assert.equal(
         rangeSentence('France', 2025, countsFor(counts, france(), 2025, 'current')),
         "France's ODA in 2025 was $13.9bn to $17.5bn, depending on the count.",
+    );
+});
+
+test('rangeSentence leaves out commitments, which fall below every disbursed count for the UK in 2024', () => {
+    const uk = countsFor(counts, donorById('country/GBR'), 2024, 'current');
+
+    assert.equal(formatUsd(uk.find(({ key }) => key === 'commitments')?.value ?? 0), '$16.2bn');
+    assert.equal(
+        rangeSentence('the United Kingdom', 2024, uk),
+        "the United Kingdom's ODA in 2024 was $16.3bn to $18.0bn, depending on the count.",
     );
 });
 
@@ -74,6 +89,39 @@ test('bridge steps France 2024 from gross to grant equivalents and to net', () =
         Math.abs(steps.toNet.gross - steps.toNet.received - steps.toNet.net) < 1e-9,
         'gross minus amounts received is net',
     );
+});
+
+test('bridgeRows labels a step above gross as a rise and adds a note, for UK 2024 and Finland 2020', () => {
+    const uk = bridge(counts, donorById('country/GBR'), 2024, 'current');
+    const ukStep = bridgeRows(uk).toGrantEquivalent?.[1];
+
+    assert.equal(ukStep?.label, STEP_LABELS.toGrantEquivalent.rise);
+    assert.equal(ukStep && formatCompact(ukStep.value), '1.4B');
+    assert.equal(nonGrantSentence(uk.toGrantEquivalent), null);
+    assert.equal(riseNote('toGrantEquivalent', uk), RISE_NOTES.toGrantEquivalent);
+    assert.equal(riseNote('toNet', uk), null);
+    assert.equal(bridgeRows(uk).toNet?.[1]?.label, STEP_LABELS.toNet.fall);
+
+    const finland = bridge(counts, donorById('country/FIN'), 2020, 'current');
+    const finlandStep = bridgeRows(finland).toNet?.[1];
+
+    assert.equal(finlandStep?.label, STEP_LABELS.toNet.rise);
+    assert.ok(finlandStep && finlandStep.value > 0);
+    assert.equal(riseNote('toNet', finland), RISE_NOTES.toNet);
+
+    const franceSteps = bridge(counts, france(), 2024, 'current');
+    assert.equal(
+        bridgeRows(franceSteps).toGrantEquivalent?.[1]?.label,
+        STEP_LABELS.toGrantEquivalent.fall,
+    );
+    assert.equal(riseNote('toGrantEquivalent', franceSteps), null);
+});
+
+test('nonGrantSentence is null when the gap exceeds non-grants, as for Spain in 2018', () => {
+    const spain = bridge(counts, donorById('country/ESP'), 2018, 'current').toGrantEquivalent;
+
+    assert.ok(spain && spain.nonGrants !== null && spain.notCounted > spain.nonGrants);
+    assert.equal(nonGrantSentence(spain), null);
 });
 
 test('bridge has no grant-equivalent step before 2018, and 2025 has no non-grant figure', () => {
@@ -129,6 +177,11 @@ test('formatUsd writes billions with one decimal and small amounts in millions',
         '$4.2m',
         '-$2.6bn',
     ]);
+});
+
+test('formatUsd and formatCompact pick the unit after rounding', () => {
+    assert.deepEqual([999.96, 9.96, -999.7].map(formatUsd), ['$1.0bn', '$10m', '-$1.0bn']);
+    assert.deepEqual([999.96, 999_960, 0.99996].map(formatCompact), ['1.0B', '1.0T', '1.0M']);
 });
 
 test('scope splits gross ODA into bilateral and multilateral shares', () => {
@@ -209,7 +262,7 @@ test('countDefinition and priceDefinition split definitionParts', () => {
     ]);
 });
 
-test('trendLines keeps a missing year as a gap, not zero', () => {
+test('trendLines leaves a gap for a missing year', () => {
     const lines = trendLines(counts, france(), 'current');
     const commitments = lines.find(({ key }) => key === 'commitments');
 

@@ -13,13 +13,16 @@ import {
     GRANT_EQUIVALENT_FROM,
     nonGrantSentence,
     possessive,
+    riseNote,
     type StepRow,
 } from '../_lib/counts.ts';
 
 /** A one-step waterfall: the first total, the step between, the second total, on one scale. */
 const Waterfall = ({ rows, from, to }: { rows: StepRow[]; from: CountKey; to: CountKey }) => {
     const max = Math.max(0, ...rows.map(({ end }) => end));
-    const percent = (amount: number) => `${max > 0 ? (Math.max(amount, 0) / max) * 100 : 0}%`;
+    // Clamp both ends to [0, max], so a bar crossing zero starts at 0 and shows its part above it.
+    const clamp = (amount: number) => Math.min(Math.max(amount, 0), max);
+    const percent = (amount: number) => `${max > 0 ? (amount / max) * 100 : 0}%`;
     const colour = (index: number) => (index === 0 ? COUNT_COLOURS[from] : COUNT_COLOURS[to]);
 
     return (
@@ -39,8 +42,8 @@ const Waterfall = ({ rows, from, to }: { rows: StepRow[]; from: CountKey; to: Co
                         <span
                             className={styles.bar}
                             style={{
-                                left: percent(row.start),
-                                width: percent(row.end - row.start),
+                                left: percent(clamp(row.start)),
+                                width: percent(clamp(row.end) - clamp(row.start)),
                                 background: colour(index),
                                 opacity: row.kind === 'step' ? STEP_OPACITY : 1,
                             }}
@@ -63,9 +66,9 @@ const BridgeCard = ({ title, children }: { title: string; children: ReactNode })
 );
 
 /**
- * Why the counts differ, as two one-step bridges from gross disbursements: to net, by
- * repayments and other amounts received, and to grant equivalents, by the part not
- * counted as concessional. A bridge without its figures says why in one line.
+ * Why the counts differ, as two one-step bridges from gross disbursements: to net and
+ * to grant equivalents. A step that rises above gross gets its own label and a note,
+ * and a bridge without its figures says why in one line.
  */
 export const Bridges = ({
     data,
@@ -81,6 +84,8 @@ export const Bridges = ({
     const steps = bridge(data, donor, year, prices);
     const rows = bridgeRows(steps);
     const nonGrants = nonGrantSentence(steps.toGrantEquivalent);
+    const netRise = riseNote('toNet', steps);
+    const grantEquivalentRise = riseNote('toGrantEquivalent', steps);
     const whose = possessive(donor.name);
 
     return (
@@ -90,8 +95,10 @@ export const Bridges = ({
             </h2>
             <p className={styles.lede}>
                 Each count starts from the same gross disbursements. Net disbursements take off what
-                the donor received back. Grant equivalents count loans and other non-grant
-                instruments only for their concessional part.
+                the donor received back. Grant equivalents count loans only for their concessional
+                part, and count private sector instruments and debt relief on a different basis from
+                gross disbursements. So the gap between gross disbursements and grant equivalents is
+                mostly loans, but it can be larger, or negative.
             </p>
             <div className={styles.cards}>
                 <BridgeCard title="Gross to net disbursements">
@@ -102,6 +109,7 @@ export const Bridges = ({
                     ) : (
                         <>
                             <Waterfall rows={rows.toNet} from="gross" to="net" />
+                            {netRise !== null && <p className={styles.note}>{netRise}</p>}
                             <p className={styles.note}>
                                 Amounts received are gross minus net disbursements. The DFO
                                 publishes no separate series for them.
@@ -124,6 +132,9 @@ export const Bridges = ({
                                 to="grantEquivalent"
                             />
                             {nonGrants !== null && <p className={styles.note}>{nonGrants}</p>}
+                            {grantEquivalentRise !== null && (
+                                <p className={styles.note}>{grantEquivalentRise}</p>
+                            )}
                         </>
                     )}
                 </BridgeCard>

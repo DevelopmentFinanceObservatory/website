@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "Every OECD DAC1 count of ODA by provider, 2015 to 2025: gross and net disbursements, grant equivalents, commitments and the OECD headline, with gross bilateral, multilateral and non-grant disbursements, in-donor refugee costs and ODA/GNI, in current and constant 2024 US dollars",
-    "retrieved": "2026-11-17T16:48:15.768Z",
+    "retrieved": "2026-11-17T17:12:33.077Z",
     "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
     "dfo": [
       {
@@ -2664,7 +2664,7 @@
         "odaGni": [0.27, 0.3, 0.3, 0.29, 0.28, 0.31, 0.33, 0.36, 0.36, 0.33, 0.23]
       },
       {
-        "name": "non-DAC countries (DAC)",
+        "name": "Non-DAC countries reporting to the DAC",
         "isGroup": true,
         "id": "DACNonDACCountries",
         "series": {

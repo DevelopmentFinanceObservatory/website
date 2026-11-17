@@ -43,7 +43,7 @@ export const OdaCounts = ({
 
     const sentence =
         rangeSentence(donor.name, year, countsFor(data, donor, year, prices)) ??
-        `No count of ${possessive(donor.name)} ODA in ${year} is published.`;
+        `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
         <div className={styles.island}>

@@ -37,7 +37,7 @@ DAC1 = "provenance/OECDDAC1"
 HEADLINE = "provenance/ONEOECDHeadlineODA"
 GNI = "PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal"
 GRAPH_NODES = "https://developmentfinance.org/api/v1/graph/nodes"
-# A spec id no definition hashes to; the server's refusal names the id it computed.
+# A spec id no definition hashes to. The server's refusal names the id it computed.
 PLACEHOLDER_ID = "spec_" + "0" * 32
 RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
 
@@ -48,7 +48,8 @@ QUERY = (
     "in current and constant 2024 US dollars"
 )
 
-# Graph nodes the page composes definitions from.
+# Graph nodes the page composes definitions from (`PARTS` and `PRICE_PART` in
+# _lib/counts.ts). Fetching only these means a node the page never shows cannot fail the run.
 NODE_IDS = [
     "Gross",
     "Net",
@@ -57,15 +58,10 @@ NODE_IDS = [
     "grantEquivalent",
     "grantElement",
     "Nominal",
-    "RealValue",
-    "DAC1AidType1015",
-    "DAC1AidType2000",
-    "DAC1AidType1820",
-    "DACTypeOfFinanceNonGrants",
 ]
 # Labels for the graph nodes that carry none.
-FALLBACK_LABELS = {"Nominal": "current prices", "RealValue": "constant prices"}
-# No graph node exists for these two; the text follows the DFO's oda-measures skill.
+FALLBACK_LABELS = {"Nominal": "current prices"}
+# No graph node exists for these two. The text follows the DFO's oda-measures skill.
 WRITTEN = [
     {
         "id": "oecdHeadline",
@@ -90,6 +86,14 @@ WRITTEN = [
 # Group totals that repeat a provider's own figures, and the provider they repeat.
 # The EU institutions are the only multilateral that reports to DAC1.
 DUPLICATES = {"DACMultilaterals": "EuropeanUnionInstitutions"}
+
+# Plain names for group totals whose DFO label reads badly on the page. The graph
+# describes DACNonDACCountries as the countries that provide official flows in DAC
+# statistics without being members or associates of the DAC.
+GROUP_NAMES = {"DACNonDACCountries": "Non-DAC countries reporting to the DAC"}
+
+# Providers whose group flag the run must reproduce: a group total and a country.
+KNOWN_KINDS = {"DACCountriesTotal": True, "country/FRA": False}
 
 # Known values in current US dollars that the run must reproduce within 0.5%.
 KNOWN = [
@@ -152,7 +156,7 @@ class Series:
 
 
 def flow(aid: str, netting: str, finance: str | None = None) -> dict[str, str | None]:
-    """Return the slots of a disbursement series; None leaves a slot unbound."""
+    """Return the slots of a disbursement series. None leaves a slot unbound."""
     return {
         "dac1AidType": f"DAC1AidType{aid}",
         "dacTypeOfFinance": finance,
@@ -218,6 +222,10 @@ def fetch_series(client: dfo.Client, series: Series, *, constant: bool):
                 raise
             spec_id = match.group(1)
 
+    served = {member.spec.spec_id for member in data.members}
+    if len(served) != 1:
+        raise SystemExit(f"{series.key}: the fetch served {sorted(served)}, not one spec.")
+
     frame = data.to_pandas()
     frame = frame[frame["value"].notna()]
     prices = "constant" if constant else "current"
@@ -232,7 +240,7 @@ def fetch_series(client: dfo.Client, series: Series, *, constant: bool):
             raise SystemExit(f"{series.key}: several rows for {key}.")
         values[key] = float(row.value)
         providers[key[0]] = {
-            "name": row.financingProvider_label,
+            "name": GROUP_NAMES.get(key[0], row.financingProvider_label),
             "isGroup": row.financingProvider_kind == "total",
         }
 
@@ -240,7 +248,7 @@ def fetch_series(client: dfo.Client, series: Series, *, constant: bool):
         "key": series.key,
         "prices": prices if series.constant else "ratio",
         "sentence": series.sentence,
-        "specId": spec_id,
+        "specId": served.pop(),
         "versions": [member.content_version for member in data.members],
         "citation": data.citation.text,
         "rows": len(frame),
@@ -257,10 +265,15 @@ def fetch_definitions() -> list[dict]:
     missing = [ref for ref in NODE_IDS if not nodes.get(ref, {}).get("description")]
     if missing:
         raise SystemExit(f"The graph returned no description for {missing}.")
+    unlabelled = [
+        ref for ref in NODE_IDS if not nodes[ref].get("label") and ref not in FALLBACK_LABELS
+    ]
+    if unlabelled:
+        raise SystemExit(f"The graph returned no label for {unlabelled}, and none is written.")
     graph = [
         {
             "id": ref,
-            "label": nodes[ref]["label"] or FALLBACK_LABELS[ref],
+            "label": nodes[ref].get("label") or FALLBACK_LABELS[ref],
             "description": nodes[ref]["description"],
             "source": "graph",
         }
@@ -270,7 +283,7 @@ def fetch_definitions() -> list[dict]:
 
 
 def by_year(values: Values, provider: str, *, scale: float, digits: int) -> list:
-    """Return a provider's values for YEARS, divided by `scale`; null where missing."""
+    """Return a provider's values for YEARS, divided by `scale`, with null where missing."""
     out = []
     for year in YEARS:
         value = values.get((provider, year))
@@ -298,7 +311,7 @@ def partial_years(values: Values, countries: set[str], *, key: str) -> set[int]:
 
 
 def build(fetched: Fetched, providers: dict[str, dict]) -> dict:
-    """Return counts.json's `data`: the years and, per provider, every series by year.
+    """Return counts.json's `data`, with the years and, per provider, every series by year.
 
     Amounts are in millions of US dollars and ODA/GNI is a percentage. Countries come
     first by name, then the group totals, which are null in a year they sum only some
@@ -332,12 +345,14 @@ def build(fetched: Fetched, providers: dict[str, dict]) -> dict:
     return {"years": YEARS, "baseYear": BASE_YEAR, "donors": donors}
 
 
-def check(fetched: Fetched) -> list[str]:
-    """Return every check the run fails; empty when all hold.
+def check(fetched: Fetched, providers: dict[str, dict]) -> list[str]:
+    """Return every check the run fails, empty when all hold.
 
-    The checks: the known values; each duplicate group equal to its provider; the OECD
-    headline equal to net disbursements before 2018 and to grant equivalents from
-    2018; and constant prices equal to current prices in the base year.
+    The run checks the known values and group flags, that every renamed group is
+    present, that each duplicate group is present and equals its provider in every
+    year, that the OECD headline equals net disbursements before 2018 and grant
+    equivalents from 2018, and that constant prices equal current prices in the
+    base year.
     """
     problems = []
     for provider, key, year, known in KNOWN:
@@ -345,11 +360,23 @@ def check(fetched: Fetched) -> list[str]:
         if found is None or abs(found / known - 1) > 0.005:
             problems.append(f"{provider} {key} {year}: {found} where {known:.0f} is known")
 
+    for provider, is_group in KNOWN_KINDS.items():
+        found = providers.get(provider, {}).get("isGroup")
+        if found is not is_group:
+            problems.append(f"{provider}: isGroup is {found}, where {is_group} is known")
+
+    problems.extend(
+        f"{group}: no figures, so its name {name!r} is unused"
+        for group, name in GROUP_NAMES.items()
+        if group not in providers
+    )
+
     gross = fetched["gross", False]
     for group, provider in DUPLICATES.items():
         for year in YEARS:
-            if gross.get((group, year)) != gross.get((provider, year)):
-                problems.append(f"gross {year}: {group} no longer equals {provider}")
+            repeated, own = gross.get((group, year)), gross.get((provider, year))
+            if repeated is None or own is None or repeated != own:
+                problems.append(f"gross {year}: {group} {repeated} does not equal {provider} {own}")
 
     for (provider, year), headline in fetched["headline", False].items():
         basis = "net" if year < GRANT_EQUIVALENT_FROM else "grantEquivalent"
@@ -419,7 +446,7 @@ def main() -> int:
                 reads.append(record)
                 log.info("%s %s: %d rows", series.key, record["prices"], record["rows"])
 
-    problems = check(fetched)
+    problems = check(fetched, providers)
     if problems:
         raise SystemExit("Known values differ:\n  " + "\n  ".join(problems))
 

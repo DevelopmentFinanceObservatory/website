@@ -21,9 +21,9 @@ export const COUNT_LABELS: Record<CountKey, string> = {
 };
 
 export const DEFAULT_DONOR = 'country/FRA';
-/** The DAC's preliminary year; 2024 is the latest year with every count. */
+/** The DAC's preliminary year. 2024 is the latest year with every count. */
 export const DEFAULT_YEAR = 2025;
-/** The first year the OECD headline counts grant equivalents rather than net flows. */
+/** The first year the OECD headline counts grant equivalents. Earlier years count net flows. */
 export const GRANT_EQUIVALENT_FROM = 2018;
 /** The year whose figures the DAC publishes as preliminary. */
 export const PRELIMINARY_YEAR = 2025;
@@ -79,32 +79,44 @@ export const countRange = (counts: CountValue[]): Range | null => {
     return { low, high };
 };
 
-/** An amount in millions of US dollars as "$17.5bn", "$350m" or "$4.2m". */
+/** `value` rounded to `digits` decimals, as a label prints it. */
+const rounded = (value: number, digits: number): number => Number(value.toFixed(digits));
+
+/**
+ * An amount in millions of US dollars as "$17.5bn", "$350m" or "$4.2m". The unit
+ * follows the rounded amount, so 999.96 prints as "$1.0bn".
+ */
 export const formatUsd = (millions: number): string => {
     const sign = millions < 0 ? '-' : '';
     const size = Math.abs(millions);
 
-    if (size >= 1000) {
+    if (rounded(size, 0) >= 1000) {
         return `${sign}$${(size / 1000).toFixed(1)}bn`;
     }
 
-    return `${sign}$${size >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
+    return `${sign}$${rounded(size, 1) >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
 };
 
-/** An amount in millions of US dollars as a chart label: "17.5B", "350.0M", "1.2T". */
+/** Chart label units, largest first, each with its size in millions. */
+const COMPACT_UNITS = [
+    [1_000_000, 'T'],
+    [1000, 'B'],
+    [1, 'M'],
+] as const;
+
+/**
+ * An amount in millions of US dollars as a chart label: "17.5B", "350.0M", "1.2T".
+ * The unit follows the rounded amount, so 999.96 prints as "1.0B".
+ */
 export const formatCompact = (millions: number): string => {
     const sign = millions < 0 ? '-' : '';
     const size = Math.abs(millions);
-    const [scaled, unit] =
-        size >= 1_000_000
-            ? [size / 1_000_000, 'T']
-            : size >= 1000
-              ? [size / 1000, 'B']
-              : size >= 1
-                ? [size, 'M']
-                : [size * 1000, 'K'];
+    const [factor, unit] = COMPACT_UNITS.find(([factor]) => rounded(size / factor, 1) >= 1) ?? [
+        0.001,
+        'K',
+    ];
 
-    return `${sign}${scaled.toFixed(1)}${unit}`;
+    return `${sign}${(size / factor).toFixed(1)}${unit}`;
 };
 
 /**
@@ -130,9 +142,9 @@ const fold = (text: string): string =>
         .toLowerCase();
 
 /**
- * Donors matching `query`, countries before group totals; within each, names that
- * start with it, then names with a word that starts with it, then names that contain
- * it, each by name. An empty query matches every donor.
+ * Donors matching `query`, countries before group totals. Within each, names that
+ * start with it come first, then names with a word that starts with it, then names
+ * that contain it, each by name. An empty query matches every donor.
  */
 export const matchDonors = (donors: Donor[], query: string): Donor[] => {
     const q = fold(query.trim());
@@ -165,9 +177,15 @@ export const matchDonors = (donors: Donor[], query: string): Donor[] => {
 /** "France's", or "DAC countries'" for a name ending in s. */
 export const possessive = (name: string): string => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 
-/** "<Donor>'s ODA in <year> was $X to $Y, depending on the count.", or null with no counts. */
+/** The counts of money paid out. Commitments are promises, so the range leaves them out. */
+const DISBURSED: readonly CountKey[] = ['gross', 'net', 'grantEquivalent', 'headline'];
+
+/**
+ * "<Donor>'s ODA in <year> was $X to $Y, depending on the count.", over the counts of
+ * money paid out, or null with none published.
+ */
 export const rangeSentence = (name: string, year: number, counts: CountValue[]): string | null => {
-    const range = countRange(counts);
+    const range = countRange(counts.filter(({ key }) => DISBURSED.includes(key)));
 
     if (range === null) {
         return null;
@@ -181,12 +199,16 @@ export const rangeSentence = (name: string, year: number, counts: CountValue[]):
 };
 
 export type Bridge = {
-    /** gross minus net: loan repayments and other amounts received */
+    /**
+     * gross minus net, which is loan repayments and other amounts received. Negative in
+     * a year net disbursements are above gross.
+     */
     toNet: { gross: number; net: number; received: number } | null;
     /**
-     * gross minus grant equivalents: the part of non-grant instruments not counted
-     * as concessional; null before 2018. `nonGrants` is gross non-grant disbursements
-     * where published.
+     * gross minus grant equivalents, null before 2018. Mostly the part of loans not
+     * counted as concessional, but grant equivalents count private sector instruments
+     * and debt relief on a different basis, so it can exceed the loans or be negative.
+     * `nonGrants` is gross non-grant disbursements where published.
      */
     toGrantEquivalent: {
         gross: number;
@@ -217,14 +239,42 @@ export const bridge = (data: CountsData, donor: Donor, year: number, prices: Pri
     };
 };
 
-/** The label of each bridge's one step. */
+export type BridgeKey = keyof Bridge;
+
+/** The label of each bridge's one step, for a fall from gross and for a rise. */
 export const STEP_LABELS = {
-    toNet: 'Repayments and other amounts received',
-    toGrantEquivalent: 'Not counted as grant equivalent',
-} as const;
+    toNet: { fall: 'Repayments and other amounts received', rise: 'Net above gross disbursements' },
+    toGrantEquivalent: {
+        fall: 'Not counted as grant equivalent',
+        rise: 'Counted above gross disbursements',
+    },
+} as const satisfies Record<BridgeKey, { fall: string; rise: string }>;
+
+/** A bridge's step label: the rise label when the second total is above gross. */
+export const stepLabel = (key: BridgeKey, gross: number, to: number): string =>
+    to > gross ? STEP_LABELS[key].rise : STEP_LABELS[key].fall;
+
+/** Why the second total can sit above gross, shown under a bridge whose step is a rise. */
+export const RISE_NOTES: Record<BridgeKey, string> = {
+    toNet:
+        'Net disbursements are above gross this year, so the step adds to gross. ' +
+        'Both figures are as the OECD publishes them.',
+    toGrantEquivalent:
+        'Grant equivalents are above gross disbursements this year. Grant equivalents ' +
+        'count private sector instruments and debt relief on a different basis from ' +
+        'gross disbursements, so they can exceed them.',
+};
+
+/** The note for a bridge whose step is a rise, or null for a fall or no figure. */
+export const riseNote = (key: BridgeKey, steps: Bridge): string | null => {
+    const to = key === 'toNet' ? steps.toNet?.net : steps.toGrantEquivalent?.grantEquivalent;
+    const gross = steps[key]?.gross;
+
+    return to !== undefined && gross !== undefined && to > gross ? RISE_NOTES[key] : null;
+};
 
 /**
- * One row of a one-step waterfall, in millions: a total runs from 0 to its value; the
+ * One row of a one-step waterfall, in millions. A total runs from 0 to its value. The
  * step spans the gap between the two totals, and `value` is the change, negative for
  * a fall.
  */
@@ -236,7 +286,7 @@ export type StepRow = {
     end: number;
 };
 
-/** The three rows of a bridge from one total to another: from, the step, to. */
+/** The three rows of a bridge from one total to another, in the order from, step, to. */
 export const stepRows = (
     from: { label: string; value: number },
     step: string,
@@ -259,25 +309,37 @@ export const bridgeRows = (
 ): { toNet: StepRow[] | null; toGrantEquivalent: StepRow[] | null } => ({
     toNet:
         steps.toNet &&
-        stepRows({ label: COUNT_LABELS.gross, value: steps.toNet.gross }, STEP_LABELS.toNet, {
-            label: COUNT_LABELS.net,
-            value: steps.toNet.net,
-        }),
+        stepRows(
+            { label: COUNT_LABELS.gross, value: steps.toNet.gross },
+            stepLabel('toNet', steps.toNet.gross, steps.toNet.net),
+            { label: COUNT_LABELS.net, value: steps.toNet.net },
+        ),
     toGrantEquivalent:
         steps.toGrantEquivalent &&
         stepRows(
             { label: COUNT_LABELS.gross, value: steps.toGrantEquivalent.gross },
-            STEP_LABELS.toGrantEquivalent,
+            stepLabel(
+                'toGrantEquivalent',
+                steps.toGrantEquivalent.gross,
+                steps.toGrantEquivalent.grantEquivalent,
+            ),
             { label: COUNT_LABELS.grantEquivalent, value: steps.toGrantEquivalent.grantEquivalent },
         ),
 });
 
 /**
  * "Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only
- * their concessional part removes $2.6bn.", or null without a non-grant figure.
+ * their concessional part removes $2.6bn.", or null without a non-grant figure. Also
+ * null unless the gap is a fall no larger than the non-grants, since only then can
+ * the loans' non-concessional part account for it.
  */
 export const nonGrantSentence = (step: Bridge['toGrantEquivalent']): string | null => {
-    if (step === null || step.nonGrants === null) {
+    if (
+        step === null ||
+        step.nonGrants === null ||
+        step.notCounted <= 0 ||
+        step.notCounted > step.nonGrants
+    ) {
         return null;
     }
 
@@ -297,7 +359,7 @@ const PARTS: Record<CountKey, string[]> = {
     headline: ['oecdHeadline'],
 };
 
-/** The price basis' definition: the graph's for current prices, the page's for constant. */
+/** The price basis' definition, from the graph for current prices and from the page for constant. */
 const PRICE_PART: Record<Prices, string> = { current: 'Nominal', constant: 'constantPrices' };
 
 const definitionOf = (id: string, definitions: Definition[]): Definition => {

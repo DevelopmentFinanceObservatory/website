@@ -17,7 +17,7 @@ import {
     scope,
 } from '../_lib/counts.ts';
 
-/** House-palette colours (theme.ts DEFAULT_SERIES) no count uses, so a share never reads as a count. */
+/** House-palette colours (theme.ts DEFAULT_SERIES) no count uses, so a share is not mistaken for a count. */
 const SCOPE_COLOURS = {
     bilateral: '#662d6e',
     multilateral: '#c9a227',
@@ -83,8 +83,8 @@ export const Scope = ({
     year: number;
     prices: Prices;
 }) => {
-    // A donor-year has one deflator, so shares are the same at either price basis; the
-    // current-price shares stay readable where a constant-price figure is missing.
+    // A donor-year has one deflator, so shares are the same at either price basis. Current
+    // prices supply them where a constant-price figure is missing.
     const shares = scope(data, donor, year, 'current');
     const amounts = scope(data, donor, year, prices);
     const { bilateralShare, multilateralShare, refugeeShare, odaGni } = shares;
