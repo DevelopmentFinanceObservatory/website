@@ -1,6 +1,6 @@
 // The live half of the page: the unit a reader picks, the Search requests that fetch one
-// donor in it, the parsing of their event streams into the page's series, and the picker's
-// offer. Pure functions, with only type imports, so `node --test` loads the module.
+// donor in it, the reading of their event streams into the page's series, and the picker's
+// offer. Only type imports and web APIs Node also has, so `node --test` loads the module.
 import type { BaseIdentity, IdentityUnitRequest } from '@developmentfinance/client/wire';
 
 import type {
@@ -57,15 +57,23 @@ const boundIdentity = (identity: BaseIdentity, donorId: string, unit: Unit): Bas
 export type ResolveRequest = { keys: SeriesKey[]; body: unknown };
 
 /**
- * The resolve requests that fetch every monetary series for one donor in one unit, as few
- * as `live.maxEntries` allows (two for nine series), each entry a series' identity with
- * the donor bound as provider and the unit as its unit request.
+ * The resolve requests that fetch every monetary series for one donor in one unit, each
+ * entry a series' identity with the donor bound as provider and the unit as its unit
+ * request. Each request carries `perRequest` entries, at most `live.maxEntries` (two
+ * requests for nine series by default). Search answers one-entry requests sent together
+ * sooner than a full one, so the page fetches the basis a reader waits for that way.
  */
-export const resolveRequests = (live: LiveData, donorId: string, unit: Unit): ResolveRequest[] => {
+export const resolveRequests = (
+    live: LiveData,
+    donorId: string,
+    unit: Unit,
+    perRequest = live.maxEntries,
+): ResolveRequest[] => {
+    const size = Math.max(1, Math.min(perRequest, live.maxEntries));
     const requests: ResolveRequest[] = [];
 
-    for (let start = 0; start < live.identities.length; start += live.maxEntries) {
-        const batch = live.identities.slice(start, start + live.maxEntries);
+    for (let start = 0; start < live.identities.length; start += size) {
+        const batch = live.identities.slice(start, start + size);
 
         requests.push({
             keys: batch.map(({ key }) => key),
@@ -87,23 +95,62 @@ export const resolveRequests = (live: LiveData, donorId: string, unit: Unit): Re
     return requests;
 };
 
+/** The data of one server-sent event frame, or '' for a comment (": ping") or empty frame. */
+const frameData = (frame: string): string =>
+    frame
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).replace(/^ /, ''))
+        .join('\n');
+
+/** A server-sent event stream read in chunks of text. */
+export type SseParser = {
+    /** The data of each event `chunk` completes, parsed as JSON, in order. */
+    push: (chunk: string) => unknown[];
+    /** The data of the event the stream ended in without a blank line, if any. */
+    end: () => unknown[];
+};
+
 /**
- * The data of each event in a server-sent event stream, parsed as JSON, in order. Comment
- * lines (": ping") and frames with no data are skipped, and several data lines join with
- * a newline, as the SSE format has it.
+ * Parses a server-sent event stream as it arrives. A frame split across chunks, even
+ * between the two newlines that end it, waits for its end. Comment lines and frames with
+ * no data are skipped, and several data lines join with a newline, as the SSE format has it.
  */
-export const streamEvents = (text: string): unknown[] =>
-    text
-        .split(/\r?\n\r?\n/)
-        .map((frame) =>
-            frame
-                .split(/\r?\n/)
-                .filter((line) => line.startsWith('data:'))
-                .map((line) => line.slice(5).replace(/^ /, ''))
-                .join('\n'),
-        )
-        .filter((data) => data !== '')
-        .map((data) => JSON.parse(data) as unknown);
+export const sseParser = (): SseParser => {
+    let buffer = '';
+    const parse = (frames: string[]): unknown[] =>
+        frames
+            .map(frameData)
+            .filter((data) => data !== '')
+            .map((data) => JSON.parse(data) as unknown);
+
+    return {
+        push: (chunk) => {
+            buffer += chunk;
+
+            const frames = buffer.split(/\r?\n\r?\n/);
+
+            // The last piece waits for the blank line that ends it.
+            buffer = frames.pop() ?? '';
+
+            return parse(frames);
+        },
+        end: () => {
+            const rest = buffer;
+
+            buffer = '';
+
+            return parse([rest]);
+        },
+    };
+};
+
+/** The data of each event in a whole server-sent event stream, parsed as JSON, in order. */
+export const streamEvents = (text: string): unknown[] => {
+    const parser = sseParser();
+
+    return [...parser.push(text), ...parser.end()];
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -124,98 +171,164 @@ const listAt = (value: unknown, key: string): unknown[] => {
     return Array.isArray(list) ? list : [];
 };
 
+/** The page's series from one resolve stream, read an event at a time. */
+export type SeriesReader = {
+    /** Takes in one event as it arrives. Throws on an error event. */
+    apply: (event: unknown) => void;
+    /** The series once the stream is complete, with the refusals `seriesFromEvents` lists. */
+    finish: () => Partial<Record<SeriesKey, ByYear>>;
+};
+
 /**
- * Each series in `keys` by year of `years`, in millions, from one resolve stream's events.
- * A part Search answers with no data is null in every year. Throws on an error event, on
- * a part that is neither definite nor no data, on a part served in another currency than
+ * Reads each series in `keys` by year of `years`, in millions, from one resolve stream's
+ * events as they arrive. Throws at once on an error event. Once the stream is complete,
+ * a part Search answers with no data is null in every year, and `finish` throws on a part
+ * that is neither definite nor no data, on a part served in another currency than
  * `currency`, and on a definite part with no or truncated observations, so a stream the
  * page cannot read never shows as figures.
  */
+export const seriesReader = (
+    keys: SeriesKey[],
+    years: number[],
+    currency: string,
+): SeriesReader => {
+    let parts: unknown[] = [];
+    const observations = new Map<string, unknown[]>();
+
+    const apply = (event: unknown): void => {
+        if (!isRecord(event)) {
+            return;
+        }
+
+        if (event.kind === 'error') {
+            const detail = event.detail;
+
+            throw new Error(`Search failed: ${typeof detail === 'string' ? detail : 'no detail'}`);
+        }
+
+        if (event.kind === 'response') {
+            parts = listAt(recordAt(event, 'response'), 'parts');
+        }
+
+        if (event.kind === 'observations' && typeof event.spec_id === 'string') {
+            observations.set(event.spec_id, listAt(recordAt(event, 'observations'), 'series'));
+        }
+    };
+
+    const finish = (): Partial<Record<SeriesKey, ByYear>> => {
+        if (parts.length !== keys.length) {
+            throw new Error(`Search answered ${parts.length} parts for ${keys.length} series.`);
+        }
+
+        const out: Partial<Record<SeriesKey, ByYear>> = {};
+
+        keys.forEach((key, index) => {
+            const part = recordAt(parts[index]);
+            const values: ByYear = years.map(() => null);
+
+            out[key] = values;
+
+            if (part?.status === 'no_data') {
+                return;
+            }
+
+            const spec = recordAt(part, 'spec');
+            const specId = spec?.spec_id;
+
+            if (part?.status !== 'definite' || typeof specId !== 'string') {
+                throw new Error(`Search answered ${String(part?.status)} for ${key}.`);
+            }
+
+            const served = recordAt(spec, 'resolved', 'facets', 'unit')?.currency;
+
+            if (served !== currency) {
+                throw new Error(`Search served ${key} in ${String(served)}, not ${currency}.`);
+            }
+
+            const series = observations.get(specId);
+
+            if (series === undefined) {
+                throw new Error(`Search sent no observations for ${key}.`);
+            }
+
+            if (series.some((each) => isRecord(each) && each.truncated === true)) {
+                throw new Error(`Search sent a truncated series for ${key}.`);
+            }
+
+            // The OECD headline arrives as two series, net flows to 2017 and grant
+            // equivalents from 2018, whose years never overlap.
+            for (const points of series.map((each) => listAt(each, 'points'))) {
+                for (const point of points) {
+                    const at = years.indexOf(Number(recordAt(point)?.date));
+                    const value = recordAt(point)?.value;
+
+                    if (at === -1 || typeof value !== 'number') {
+                        continue;
+                    }
+
+                    if (values[at] != null) {
+                        throw new Error(`Search sent two values for ${key} in ${years[at]}.`);
+                    }
+
+                    values[at] = value / 1e6;
+                }
+            }
+        });
+
+        return out;
+    };
+
+    return { apply, finish };
+};
+
+/** Each series in `keys` from a complete stream's events, as `seriesReader` reads them. */
 export const seriesFromEvents = (
     events: unknown[],
     keys: SeriesKey[],
     years: number[],
     currency: string,
 ): Partial<Record<SeriesKey, ByYear>> => {
-    const failure = events.find((event) => isRecord(event) && event.kind === 'error');
+    const reader = seriesReader(keys, years, currency);
 
-    if (failure !== undefined) {
-        const detail = recordAt(failure)?.detail;
+    events.forEach(reader.apply);
 
-        throw new Error(`Search failed: ${typeof detail === 'string' ? detail : 'no detail'}`);
-    }
+    return reader.finish();
+};
 
-    const response = events.find((event) => isRecord(event) && event.kind === 'response');
-    const parts = listAt(recordAt(response, 'response'), 'parts');
+/**
+ * Each series in `keys` from a resolve response's event stream, read chunk by chunk as it
+ * arrives, so an error event stops the read at once. Rejects as `seriesReader` refuses,
+ * and when the stream is aborted.
+ */
+export const readSeries = async (
+    body: ReadableStream<Uint8Array>,
+    keys: SeriesKey[],
+    years: number[],
+    currency: string,
+): Promise<Partial<Record<SeriesKey, ByYear>>> => {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    const parser = sseParser();
+    const series = seriesReader(keys, years, currency);
 
-    if (parts.length !== keys.length) {
-        throw new Error(`Search answered ${parts.length} parts for ${keys.length} series.`);
-    }
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
 
-    const observations = new Map<string, unknown[]>();
-
-    for (const event of events) {
-        if (isRecord(event) && event.kind === 'observations' && typeof event.spec_id === 'string') {
-            observations.set(event.spec_id, listAt(recordAt(event, 'observations'), 'series'));
-        }
-    }
-
-    const out: Partial<Record<SeriesKey, ByYear>> = {};
-
-    keys.forEach((key, index) => {
-        const part = recordAt(parts[index]);
-        const values: ByYear = years.map(() => null);
-
-        out[key] = values;
-
-        if (part?.status === 'no_data') {
-            return;
-        }
-
-        const spec = recordAt(part, 'spec');
-        const specId = spec?.spec_id;
-
-        if (part?.status !== 'definite' || typeof specId !== 'string') {
-            throw new Error(`Search answered ${String(part?.status)} for ${key}.`);
-        }
-
-        const served = recordAt(spec, 'resolved', 'facets', 'unit')?.currency;
-
-        if (served !== currency) {
-            throw new Error(`Search served ${key} in ${String(served)}, not ${currency}.`);
-        }
-
-        const series = observations.get(specId);
-
-        if (series === undefined) {
-            throw new Error(`Search sent no observations for ${key}.`);
-        }
-
-        if (series.some((each) => isRecord(each) && each.truncated === true)) {
-            throw new Error(`Search sent a truncated series for ${key}.`);
-        }
-
-        // The OECD headline arrives as two series, net flows to 2017 and grant
-        // equivalents from 2018, whose years never overlap.
-        for (const points of series.map((each) => listAt(each, 'points'))) {
-            for (const point of points) {
-                const at = years.indexOf(Number(recordAt(point)?.date));
-                const value = recordAt(point)?.value;
-
-                if (at === -1 || typeof value !== 'number') {
-                    continue;
-                }
-
-                if (values[at] != null) {
-                    throw new Error(`Search sent two values for ${key} in ${years[at]}.`);
-                }
-
-                values[at] = value / 1e6;
+            if (done) {
+                break;
             }
-        }
-    });
 
-    return out;
+            parser.push(decoder.decode(value, { stream: true })).forEach(series.apply);
+        }
+
+        [...parser.push(decoder.decode()), ...parser.end()].forEach(series.apply);
+    } finally {
+        // Stops the download when a refusal ends the read early.
+        reader.cancel().catch(() => {});
+    }
+
+    return series.finish();
 };
 
 /** A donor's live series at one price basis, each by year. */

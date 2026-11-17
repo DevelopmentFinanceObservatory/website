@@ -4,7 +4,7 @@ import { COUNT_COLOURS, STEP_OPACITY } from './colours';
 import { SideDetails, WithSide } from './SideColumn';
 import { useStill } from './useWidth';
 
-import type { CountsData, Donor } from '../_data/types.ts';
+import type { CountsData, Donor, Prices } from '../_data/types.ts';
 import {
     bridge,
     type BridgeBar,
@@ -85,11 +85,14 @@ export const Bridges = ({
     donor,
     year,
     unit,
+    lead,
 }: {
     data: CountsData;
     donor: Donor;
     year: number;
     unit: Unit;
+    /** the price basis the axes hold to, or null for both */
+    lead: Prices | null;
 }) => {
     const { prices, currency } = unit;
     const steps = bridge(data, donor, year, prices);
@@ -107,7 +110,7 @@ export const Bridges = ({
 
     const gross = BRIDGES.flatMap((key) => bars[key]?.gross ?? [])[0] ?? null;
     const still = useStill();
-    const ticks = donorTicks(data, donor, BRIDGE_COUNTS);
+    const ticks = donorTicks(data, donor, BRIDGE_COUNTS, lead);
     const top = ticks.at(-1) ?? 1;
     const percent = (amount: number): number => (Math.min(Math.max(amount, 0), top) / top) * 100;
 

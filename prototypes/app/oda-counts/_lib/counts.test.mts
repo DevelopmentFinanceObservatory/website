@@ -439,6 +439,48 @@ test('dotTicks covers both price bases, never goes below zero, and falls back to
     assert.deepEqual(dotTicks(counts, bare, 2020), [5000, 6000, 7000, 8000, 9000, 10000]);
 });
 
+test('a lead basis holds the axes when the other basis lands inside them, and widens them once', () => {
+    /** France with its current-price figures `scale` times its constant ones, or none. */
+    const withCurrent = (scale: number | null): Donor => ({
+        ...france(),
+        series: Object.fromEntries(
+            Object.entries(france().series).map(([key, { constant }]) => [
+                key,
+                {
+                    constant,
+                    current: constant.map((value) =>
+                        value === null || scale === null ? null : value * scale,
+                    ),
+                },
+            ]),
+        ) as Donor['series'],
+    });
+    const charts = [
+        (donor: Donor, lead: 'constant' | null) => donorTicks(counts, donor, DOT_PLOT_COUNTS, lead),
+        (donor: Donor, lead: 'constant' | null) => dotTicks(counts, donor, 2024, lead),
+    ];
+
+    // The dot plot's floor follows its smallest count, so both bases alone would move it.
+    assert.notDeepEqual(
+        dotTicks(counts, withCurrent(0.95), 2024, null),
+        dotTicks(counts, withCurrent(null), 2024, 'constant'),
+    );
+
+    for (const ticks of charts) {
+        const drawn = ticks(withCurrent(null), 'constant');
+
+        // Before the other basis lands, and after it lands inside the axes, they hold.
+        assert.deepEqual(ticks(withCurrent(null), null), drawn);
+        assert.deepEqual(ticks(withCurrent(0.95), 'constant'), drawn);
+
+        // A figure that would fall off the axes widens them to both bases.
+        const wide = withCurrent(3);
+
+        assert.deepEqual(ticks(wide, 'constant'), ticks(wide, null));
+        assert.notDeepEqual(ticks(wide, 'constant'), drawn);
+    }
+});
+
 test('countDefinition and priceDefinition split definitionParts', () => {
     assert.deepEqual(definitionParts('gross', 'constant', definitions), [
         ...countDefinition('gross', definitions),

@@ -4,7 +4,7 @@ import { COUNT_COLOURS } from './colours';
 import { Caret, SideDetails, WithSide } from './SideColumn';
 import { useStill, useWidth } from './useWidth';
 
-import type { CountKey, CountsData, Definition, Donor, Offer } from '../_data/types.ts';
+import type { CountKey, CountsData, Definition, Donor, Offer, Prices } from '../_data/types.ts';
 import {
     COUNT_LABELS,
     countDefinition,
@@ -277,6 +277,7 @@ export const CountDots = ({
     donor,
     year,
     unit,
+    lead,
     offer,
 }: {
     data: CountsData;
@@ -284,11 +285,13 @@ export const CountDots = ({
     donor: Donor;
     year: number;
     unit: Unit;
+    /** the price basis the axes hold to, or null for both */
+    lead: Prices | null;
     offer: Offer;
 }) => {
     const { prices, currency } = unit;
     const counts = countsFor(data, donor, year, prices);
-    const ticks = dotTicks(data, donor, year);
+    const ticks = dotTicks(data, donor, year, lead);
     const still = useStill<HTMLElement>();
     const phrase = unitPhrase(unit, offer);
     const price = priceDefinition(prices, definitions);

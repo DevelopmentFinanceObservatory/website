@@ -8,7 +8,7 @@ import { SideDetails, WithSide } from './SideColumn';
 import styles from './Trend.module.scss';
 import { useWidth } from './useWidth';
 
-import type { CountKey, CountsData, Donor, Offer } from '../_data/types.ts';
+import type { CountKey, CountsData, Donor, Offer, Prices } from '../_data/types.ts';
 import {
     COUNT_LABELS,
     donorTicks,
@@ -53,12 +53,15 @@ export const Trend = ({
     donor,
     year,
     unit,
+    lead,
     offer,
 }: {
     data: CountsData;
     donor: Donor;
     year: number;
     unit: Unit;
+    /** the price basis the axes hold to, or null for both */
+    lead: Prices | null;
     offer: Offer;
 }) => {
     const { prices, currency } = unit;
@@ -74,8 +77,8 @@ export const Trend = ({
 
     const lines = trendLines(data, donor, prices);
     const headline = headlineSegments(data, donor, prices);
-    // Every year at both price bases, so switching prices never rescales the chart.
-    const ticks = donorTicks(data, donor, [...TREND_COUNTS, 'headline']);
+    // Every year at both price bases, or the lead one, so switching prices never rescales.
+    const ticks = donorTicks(data, donor, [...TREND_COUNTS, 'headline'], lead);
     const yMin = ticks[0] ?? 0;
     const yMax = ticks.at(-1) ?? 1;
 

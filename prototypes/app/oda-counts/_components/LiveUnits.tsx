@@ -9,9 +9,8 @@ import {
     committedUnit,
     isCommitted,
     liveDonor,
+    readSeries,
     resolveRequests,
-    seriesFromEvents,
-    streamEvents,
     withPrices,
     type LiveBasis,
     type Unit,
@@ -19,6 +18,14 @@ import {
 
 /** How long one resolve request may take before the page gives up on it. */
 const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Entries per request for the basis a reader waits for. Nine one-entry requests sent
+ * together answer in about 2.3 s cold, against 3.3 s for one six-entry and one three-entry
+ * request. The other basis loads afterwards at the most entries a request takes, so a
+ * pick costs 11 requests of the 120 a minute the API allows each reader.
+ */
+const PICKED_PER_REQUEST = 1;
 
 /** What the page shows: one donor in one unit. */
 type Shown = { donorId: string; unit: Unit };
@@ -31,6 +38,8 @@ type LiveUnits = {
     shown: Shown;
     /** the shown donor, its series in the shown unit */
     donor: Donor;
+    /** the price basis the axes hold to, or null when they span both (see `donorTicks`) */
+    lead: Prices | null;
     /** true while the picked figures are being fetched */
     pending: boolean;
     /** true when the last pick could not be fetched */
@@ -64,15 +73,21 @@ const committedBasis = (donor: Donor, prices: Prices): LiveBasis =>
         Object.entries(donor.series).map(([key, byPrices]) => [key, byPrices[prices]]),
     ) as Record<SeriesKey, (number | null)[]>;
 
+/** The key a donor's pair of price bases in one currency and base year shares. */
+const pairKey = ({ donorId, unit }: Shown): string =>
+    `${donorId} ${unit.currency} ${unit.baseYear}`;
+
 /**
  * Holds the donor and the unit the page shows, and fetches a donor's figures from Search
  * in any unit counts.json does not hold. A pick shows at once when its figures are at
  * hand. Otherwise the previous figures stay on screen while the picked price basis loads
- * in as few requests as Search takes, after which the other basis of the same currency
- * loads in the background, so switching prices never waits or rescales. Figures are
- * cached per donor and unit for the session. A newer pick aborts every request it does
- * not need. A failed pick returns to the figures on screen, or to the new donor in US
- * dollars, and sets `failed`.
+ * in one-entry requests sent together, the fastest shape Search answers, after which the
+ * other basis of the same currency loads in the background, so switching prices never
+ * waits. A pick drawn before its other basis is in becomes the pair's `lead`: the axes
+ * hold to it, and move once when the other basis lands only if a figure would fall off
+ * them. Figures are cached per donor and unit for the session. A newer pick aborts every
+ * request it does not need. A failed pick returns to the figures on screen, or to the new
+ * donor in US dollars, and sets `failed`.
  */
 export const LiveUnitsProvider = ({
     data,
@@ -87,6 +102,8 @@ export const LiveUnitsProvider = ({
     const [picked, setPicked] = useState<Shown>(start);
     const [shown, setShown] = useState<Shown>(start);
     const [cache, setCache] = useState<ReadonlyMap<string, LiveBasis>>(new Map());
+    // The lead basis of each pair drawn before its other basis was in, by `pairKey`.
+    const [leads, setLeads] = useState<ReadonlyMap<string, Prices>>(new Map());
     const [failed, setFailed] = useState(false);
     // Requests in flight, by the cache key they fill.
     const inflight = useRef(
@@ -111,7 +128,7 @@ export const LiveUnitsProvider = ({
     const available = (donorId: string, unit: Unit): boolean =>
         isCommitted(unit, data) || cached.current.has(basisKey(donorId, unit));
 
-    const fetchBasis = (donorId: string, unit: Unit): Promise<LiveBasis> => {
+    const fetchBasis = (donorId: string, unit: Unit, perRequest: number): Promise<LiveBasis> => {
         const key = basisKey(donorId, unit);
         const running = inflight.current.get(key);
 
@@ -125,7 +142,7 @@ export const LiveUnitsProvider = ({
         const { signal } = controller;
         const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         const promise: Promise<LiveBasis> = Promise.all(
-            resolveRequests(live, donorId, unit).map(async ({ keys, body }) => {
+            resolveRequests(live, donorId, unit, perRequest).map(async ({ keys, body }) => {
                 const response = await fetch(live.resolve, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
@@ -135,17 +152,13 @@ export const LiveUnitsProvider = ({
 
                 if (
                     !response.ok ||
+                    response.body === null ||
                     !response.headers.get('content-type')?.includes('event-stream')
                 ) {
                     throw new Error(`Search answered ${response.status}`);
                 }
 
-                return seriesFromEvents(
-                    streamEvents(await response.text()),
-                    keys,
-                    data.years,
-                    unit.currency,
-                );
+                return readSeries(response.body, keys, data.years, unit.currency);
             }),
         )
             .then((parts) => {
@@ -171,21 +184,30 @@ export const LiveUnitsProvider = ({
         return promise;
     };
 
+    /** The other price basis of `target`'s currency. */
+    const siblingOf = (target: Shown): Unit =>
+        withPrices(target.unit, target.unit.prices === 'current' ? 'constant' : 'current');
+
     /** Loads the other price basis of the shown unit's currency, quietly. */
     const prefetchSibling = (target: Shown) => {
-        const sibling = withPrices(
-            target.unit,
-            target.unit.prices === 'current' ? 'constant' : 'current',
-        );
+        const sibling = siblingOf(target);
 
         if (!available(target.donorId, sibling)) {
-            fetchBasis(target.donorId, sibling).catch(() => {
+            fetchBasis(target.donorId, sibling, live.maxEntries).catch(() => {
                 // A sibling that fails loads again when the reader picks it.
             });
         }
     };
 
     const show = (target: Shown) => {
+        const pair = pairKey(target);
+
+        if (!available(target.donorId, siblingOf(target))) {
+            setLeads((current) =>
+                current.has(pair) ? current : new Map(current).set(pair, target.unit.prices),
+            );
+        }
+
         onScreen.current = target;
         setShown(target);
     };
@@ -216,7 +238,7 @@ export const LiveUnitsProvider = ({
             return;
         }
 
-        fetchBasis(target.donorId, target.unit).then(
+        fetchBasis(target.donorId, target.unit, PICKED_PER_REQUEST).then(
             () => {
                 if (sameShown(latest.current, target)) {
                     show(target);
@@ -269,6 +291,7 @@ export const LiveUnitsProvider = ({
                 picked,
                 shown,
                 donor: view,
+                lead: leads.get(pairKey(shown)) ?? null,
                 pending: !sameShown(picked, shown),
                 failed,
                 pickDonor: (donorId) => choose({ donorId, unit: picked.unit }),

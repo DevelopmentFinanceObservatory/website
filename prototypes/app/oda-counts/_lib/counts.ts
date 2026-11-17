@@ -793,24 +793,58 @@ export const DOT_PLOT_COUNTS: readonly CountKey[] = COUNTS;
 /** The counts the bridge draws. */
 export const BRIDGE_COUNTS: readonly CountKey[] = ['gross', 'net', 'grantEquivalent'];
 
+/** Both price bases, which the axes span unless a live unit's lead basis holds them. */
+const BOTH_PRICES: readonly Prices[] = ['current', 'constant'];
+
+/**
+ * The ticks `ticksOver` gives for the `lead` price basis alone, or for both bases when
+ * `lead` is null or a value of the other basis falls outside them. A live unit draws its
+ * picked basis before the other one loads, so its axes hold when the other basis lands
+ * and move once only if a figure would otherwise fall off them.
+ */
+const heldTicks = (
+    lead: Prices | null,
+    ticksOver: (bases: readonly Prices[]) => number[],
+    valuesOver: (bases: readonly Prices[]) => number[],
+): number[] => {
+    if (lead === null) {
+        return ticksOver(BOTH_PRICES);
+    }
+
+    const ticks = ticksOver([lead]);
+    const low = ticks[0] ?? 0;
+    const high = ticks.at(-1) ?? 0;
+    const fits = valuesOver(BOTH_PRICES).every((value) => value >= low && value <= high);
+
+    return fits ? ticks : ticksOver(BOTH_PRICES);
+};
+
+/** Every published value of a donor's `keys` in every year, at each of `bases`. */
+const seriesValues = (donor: Donor, keys: readonly SeriesKey[], bases: readonly Prices[]) =>
+    keys.flatMap((key) =>
+        bases.flatMap((prices) => donor.series[key][prices].filter((value) => value !== null)),
+    );
+
 /**
  * Axis ticks for a donor's chart of `keys`, over every year and both price bases, so
  * changing the year or the prices never rescales the chart. Only another donor or
- * currency does.
+ * currency does. With a `lead` basis, the ticks hold to it as `heldTicks` has it.
  */
 export const donorTicks = (
     data: CountsData,
     donor: Donor,
     keys: readonly SeriesKey[],
-): number[] => {
-    const values = keys.flatMap((key) =>
-        (['current', 'constant'] as const).flatMap((prices) =>
-            donor.series[key][prices].filter((value) => value !== null),
-        ),
-    );
+    lead: Prices | null = null,
+): number[] =>
+    heldTicks(
+        lead,
+        (bases) => {
+            const values = seriesValues(donor, keys, bases);
 
-    return valueTicks(Math.min(0, ...values), Math.max(0, ...values));
-};
+            return valueTicks(Math.min(0, ...values), Math.max(0, ...values));
+        },
+        (bases) => seriesValues(donor, keys, bases),
+    );
 
 /** About how many intervals the dot plot's axis divides into. */
 const DOT_INTERVALS = 5;
@@ -821,32 +855,47 @@ const DOT_INTERVALS = 5;
  * at zero. It starts at a tick at or below the smaller of half the OECD headline (half
  * gross disbursements where the headline is missing) and the smallest count, never
  * below zero unless a count is, and ends at a tick at or above the largest count. With
- * no count published that year, the axis spans the donor's counts over every year.
+ * no count published that year, the axis spans the donor's counts over every year. With
+ * a `lead` basis, the ticks hold to it as `heldTicks` has it.
  */
-export const dotTicks = (data: CountsData, donor: Donor, year: number): number[] => {
-    const both = (key: CountKey): number[] =>
-        (['current', 'constant'] as const).flatMap(
-            (prices) => valueAt(data, donor, key, year, prices) ?? [],
-        );
-    const values = DOT_PLOT_COUNTS.flatMap(both);
+export const dotTicks = (
+    data: CountsData,
+    donor: Donor,
+    year: number,
+    lead: Prices | null = null,
+): number[] => {
+    const over =
+        (bases: readonly Prices[]) =>
+        (key: CountKey): number[] =>
+            bases.flatMap((prices) => valueAt(data, donor, key, year, prices) ?? []);
+    const valuesOver = (bases: readonly Prices[]): number[] => DOT_PLOT_COUNTS.flatMap(over(bases));
 
-    if (values.length === 0) {
-        return donorTicks(data, donor, DOT_PLOT_COUNTS);
-    }
+    const ticksOver = (bases: readonly Prices[]): number[] => {
+        const valuesOf = over(bases);
+        const values = valuesOver(bases);
 
-    const anchor = both('headline').length > 0 ? both('headline') : both('gross');
-    const half = anchor.length > 0 ? Math.min(...anchor) / 2 : 0;
-    const smallest = Math.min(...values);
-    const largest = Math.max(...values);
-    const low = Math.min(Math.max(0, half), smallest);
-    const span = largest > low ? largest - low : Math.abs(largest) || 1;
-    const raw = span / DOT_INTERVALS;
-    const magnitude = 10 ** Math.floor(Math.log10(raw));
-    const norm = raw / magnitude;
-    const step =
-        (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * magnitude;
-    const first = Math.floor(low / step);
-    const last = Math.max(Math.ceil(largest / step), first + 1);
+        if (values.length === 0) {
+            const all = seriesValues(donor, DOT_PLOT_COUNTS, bases);
 
-    return Array.from({ length: last - first + 1 }, (_, index) => (first + index) * step);
+            return valueTicks(Math.min(0, ...all), Math.max(0, ...all));
+        }
+
+        const anchor = valuesOf('headline').length > 0 ? valuesOf('headline') : valuesOf('gross');
+        const half = anchor.length > 0 ? Math.min(...anchor) / 2 : 0;
+        const smallest = Math.min(...values);
+        const largest = Math.max(...values);
+        const low = Math.min(Math.max(0, half), smallest);
+        const span = largest > low ? largest - low : Math.abs(largest) || 1;
+        const raw = span / DOT_INTERVALS;
+        const magnitude = 10 ** Math.floor(Math.log10(raw));
+        const norm = raw / magnitude;
+        const step =
+            (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * magnitude;
+        const first = Math.floor(low / step);
+        const last = Math.max(Math.ceil(largest / step), first + 1);
+
+        return Array.from({ length: last - first + 1 }, (_, index) => (first + index) * step);
+    };
+
+    return heldTicks(lead, ticksOver, valuesOver);
 };

@@ -13,8 +13,10 @@ import {
     maskTo,
     pickCurrency,
     priceBases,
+    readSeries,
     resolveRequests,
     seriesFromEvents,
+    sseParser,
     streamEvents,
     unitPhrase,
     validBaseYear,
@@ -74,6 +76,14 @@ test('resolveRequests binds the donor and the unit on every series, six entries 
             assert.ok(entry.identity.facets.provenance, 'keeps the provenance facet');
         }
     }
+
+    // One entry a request for the basis a reader waits for, and never more than Search takes.
+    assert.deepEqual(
+        resolveRequests(live, 'country/FRA', EUR_2023, 1).flatMap(({ keys }) => keys),
+        live.identities.map(({ key }) => key),
+    );
+    assert.equal(resolveRequests(live, 'country/FRA', EUR_2023, 1).length, 9);
+    assert.equal(resolveRequests(live, 'country/FRA', EUR_2023, 50).length, 2);
 
     const [current] = resolveRequests(live, 'DACCountriesTotal', {
         ...EUR_2023,
@@ -172,6 +182,108 @@ test('seriesFromEvents refuses an error, another currency, a missing part or obs
     assert.throws(
         () => seriesFromEvents(truncated, [...keys], years, 'EUR'),
         /truncated series for gross/,
+    );
+});
+
+/** `text` as a byte stream in chunks of `size` bytes, closed after the last unless `open`. */
+const byteStream = (text: string, size: number, open = false): ReadableStream<Uint8Array> => {
+    const bytes = new TextEncoder().encode(text);
+
+    return new ReadableStream({
+        start: (controller) => {
+            for (let at = 0; at < bytes.length; at += size) {
+                controller.enqueue(bytes.slice(at, at + size));
+            }
+
+            if (!open) {
+                controller.close();
+            }
+        },
+    });
+};
+
+test('sseParser reads frames split anywhere across chunks, with LF or CRLF line ends', () => {
+    // A sentence with a euro sign, so a chunk can also split a multibyte character.
+    const lf = frame({ kind: 'sentence', text: 'Aide publique, €' }) + stream();
+    const crlf = lf.replaceAll('\n', '\r\n');
+
+    for (const text of [lf, crlf]) {
+        const whole = streamEvents(text);
+
+        assert.equal(whole.length, 5);
+
+        for (let cut = 0; cut <= text.length; cut += 1) {
+            const parser = sseParser();
+            const events = [...parser.push(text.slice(0, cut)), ...parser.push(text.slice(cut))];
+
+            assert.deepEqual([...events, ...parser.end()], whole, `cut at ${cut}`);
+        }
+
+        const parser = sseParser();
+        const oneByOne = [...text].flatMap((char) => parser.push(char));
+
+        assert.deepEqual([...oneByOne, ...parser.end()], whole);
+    }
+});
+
+test('sseParser hands over each event as soon as its frame ends', () => {
+    const parser = sseParser();
+    const text = stream();
+    const end = text.indexOf('\n\n', text.indexOf('"response"')) + 2;
+
+    const first = parser.push(text.slice(0, end - 1));
+    const second = parser.push(text.slice(end - 1, end));
+
+    assert.deepEqual(
+        first.map((event) => (event as { kind: string }).kind),
+        ['sentence'],
+    );
+    assert.deepEqual(
+        second.map((event) => (event as { kind: string }).kind),
+        ['response'],
+    );
+});
+
+test('readSeries applies a byte stream as it arrives, in any chunk size', async () => {
+    const keys = ['gross', 'refugeeCosts'] as const;
+    const years = [2015, 2016, 2017, 2018];
+    // The euro sign is three bytes, which small chunks split.
+    const text = frame({ kind: 'sentence', text: 'Aide publique, €' }) + stream();
+    const expected = seriesFromEvents(streamEvents(text), [...keys], years, 'EUR');
+
+    for (const size of [1, 2, 7, 64, 100_000]) {
+        assert.deepEqual(
+            await readSeries(byteStream(text, size), [...keys], years, 'EUR'),
+            expected,
+            `chunks of ${size}`,
+        );
+    }
+});
+
+test('readSeries refuses an error event before the stream ends, and an incomplete stream', async () => {
+    const keys = ['gross', 'refugeeCosts'] as const;
+    const years = [2016];
+
+    // The stream never closes, so only reading the error as it arrives settles the read.
+    await assert.rejects(
+        readSeries(
+            byteStream(frame({ kind: 'error', detail: 'stalled' }), 5, true),
+            [...keys],
+            years,
+            'EUR',
+        ),
+        /stalled/,
+    );
+
+    const cut = stream().slice(0, stream().indexOf('event: observations'));
+
+    await assert.rejects(
+        readSeries(byteStream(cut, 16), [...keys], years, 'EUR'),
+        /no observations for gross/,
+    );
+    await assert.rejects(
+        readSeries(byteStream(stream('USD'), 16), [...keys], years, 'EUR'),
+        /in USD, not EUR/,
     );
 });
 

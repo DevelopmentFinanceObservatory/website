@@ -33,7 +33,8 @@ export const OdaCounts = ({
     definitions: Definition[];
 }) => {
     const [year, setYear] = useState(DEFAULT_YEAR);
-    const { offer, picked, shown, donor, pending, failed, pickDonor, pickUnit } = useLiveUnits();
+    const { offer, picked, shown, donor, lead, pending, failed, pickDonor, pickUnit } =
+        useLiveUnits();
     const { unit } = shown;
     const pickedDonor = findDonor(data, picked.donorId) ?? donor;
 
@@ -73,12 +74,20 @@ export const OdaCounts = ({
                     donor={donor}
                     year={year}
                     unit={unit}
+                    lead={lead}
                     offer={offer}
                 />
 
-                <Bridges data={data} donor={donor} year={year} unit={unit} />
+                <Bridges data={data} donor={donor} year={year} unit={unit} lead={lead} />
 
-                <Trend data={data} donor={donor} year={year} unit={unit} offer={offer} />
+                <Trend
+                    data={data}
+                    donor={donor}
+                    year={year}
+                    unit={unit}
+                    lead={lead}
+                    offer={offer}
+                />
 
                 <Scope data={data} donor={donor} year={year} unit={unit} />
             </div>
