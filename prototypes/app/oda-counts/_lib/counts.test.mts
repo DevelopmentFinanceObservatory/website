@@ -6,10 +6,16 @@ import type { CountsData, Definition, Donor } from '../_data/types.ts';
 
 import {
     bridge,
+    bridgeRows,
+    countDefinition,
     countsFor,
     definitionParts,
     findDonor,
+    formatCompact,
     formatUsd,
+    matchDonors,
+    missingText,
+    priceDefinition,
     headlineBasis,
     nonGrantSentence,
     rangeSentence,
@@ -127,4 +133,72 @@ test('scope splits gross ODA into bilateral and multilateral shares', () => {
     assert.ok(inside.refugeeShare !== null && inside.refugeeShare > 0 && inside.refugeeShare < 1);
     assert.ok(inside.odaGni !== null && inside.odaGni > 0);
     assert.equal(scope(counts, france(), 2025, 'current').bilateralShare, null);
+});
+
+test('formatCompact labels bars with one decimal and a K, M, B or T suffix', () => {
+    assert.deepEqual([17508.38, 350.4, 0.42, 1_234_567, -2633.6].map(formatCompact), [
+        '17.5B',
+        '350.4M',
+        '420.0K',
+        '1.2T',
+        '-2.6B',
+    ]);
+});
+
+test('missingText says "not published" unless only the constant-price figure is missing', () => {
+    const donor = france();
+    const year = 2022;
+    const index = counts.years.indexOf(year);
+    const gap = counts.donors.find(
+        ({ series }) =>
+            series.grantEquivalent.current[index] !== null &&
+            series.grantEquivalent.constant[index] === null,
+    );
+
+    assert.equal(missingText(counts, donor, 'commitments', 2025, 'current'), 'not published');
+    assert.equal(missingText(counts, donor, 'commitments', 2025, 'constant'), 'not published');
+    assert.ok(gap, 'some donor has a current but no constant grant-equivalent figure in 2022');
+    assert.equal(
+        missingText(counts, gap, 'grantEquivalent', year, 'constant'),
+        'no constant-price figure',
+    );
+});
+
+test('matchDonors lists countries before group totals, prefix matches first', () => {
+    const all = matchDonors(counts.donors, '');
+    const firstGroup = all.findIndex((donor) => donor.isGroup);
+
+    assert.equal(all.length, counts.donors.length);
+    assert.ok(firstGroup > 0 && all.slice(firstGroup).every((donor) => donor.isGroup));
+    assert.equal(matchDonors(counts.donors, 'fra')[0]?.name, 'France');
+
+    const dac = matchDonors(counts.donors, 'dac').map((donor) => donor.name);
+    assert.ok(dac.length > 0 && dac.every((name) => name.toLowerCase().includes('dac')));
+    assert.deepEqual(matchDonors(counts.donors, 'zzz'), []);
+});
+
+test('bridgeRows steps France 2024 down to net and grant equivalents', () => {
+    const rows = bridgeRows(bridge(counts, france(), 2024, 'current'));
+
+    assert.ok(rows.toNet && rows.toGrantEquivalent);
+    assert.deepEqual(
+        rows.toGrantEquivalent.map(({ kind, value }) => [kind, formatCompact(value)]),
+        [
+            ['total', '18.1B'],
+            ['step', '-2.6B'],
+            ['total', '15.4B'],
+        ],
+    );
+    const [gross, step, net] = rows.toNet;
+    assert.ok(gross && step && net);
+    assert.equal(step.start, net.end);
+    assert.equal(step.end, gross.end);
+    assert.equal(bridgeRows(bridge(counts, france(), 2017, 'current')).toGrantEquivalent, null);
+});
+
+test('countDefinition and priceDefinition split definitionParts', () => {
+    assert.deepEqual(definitionParts('gross', 'constant', definitions), [
+        ...countDefinition('gross', definitions),
+        priceDefinition('constant', definitions),
+    ]);
 });

@@ -49,6 +49,3 @@ export type Definition = {
     /** `graph` for a DFO graph node, `page` for text written in the data step */
     source: 'graph' | 'page';
 };
-
-/** One year of the template's series. TODO: delete with _components/SeriesChart.tsx. */
-export type Point = { year: number; value: number };

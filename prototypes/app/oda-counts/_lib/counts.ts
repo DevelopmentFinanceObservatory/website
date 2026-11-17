@@ -25,6 +25,10 @@ export const DEFAULT_DONOR = 'country/FRA';
 export const DEFAULT_YEAR = 2025;
 /** The first year the OECD headline counts grant equivalents rather than net flows. */
 export const GRANT_EQUIVALENT_FROM = 2018;
+/** The year whose figures the DAC publishes as preliminary. */
+export const PRELIMINARY_YEAR = 2025;
+/** The DFO's page for the OECD DAC1 table every count comes from. */
+export const DAC1_SOURCE_URL = 'https://developmentfinance.org/data/sources/provenance/OECDDAC1';
 
 /** The donor with this id, or undefined. */
 export const findDonor = (data: CountsData, id: string): Donor | undefined =>
@@ -87,6 +91,77 @@ export const formatUsd = (millions: number): string => {
     return `${sign}$${size >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
 };
 
+/** An amount in millions of US dollars as a chart label: "17.5B", "350.0M", "1.2T". */
+export const formatCompact = (millions: number): string => {
+    const sign = millions < 0 ? '-' : '';
+    const size = Math.abs(millions);
+    const [scaled, unit] =
+        size >= 1_000_000
+            ? [size / 1_000_000, 'T']
+            : size >= 1000
+              ? [size / 1000, 'B']
+              : size >= 1
+                ? [size, 'M']
+                : [size * 1000, 'K'];
+
+    return `${sign}${scaled.toFixed(1)}${unit}`;
+};
+
+/**
+ * What a bar says in place of a value: "no constant-price figure" where only the
+ * current-price value exists, otherwise "not published".
+ */
+export const missingText = (
+    data: CountsData,
+    donor: Donor,
+    key: SeriesKey,
+    year: number,
+    prices: Prices,
+): string =>
+    prices === 'constant' && valueAt(data, donor, key, year, 'current') !== null
+        ? 'no constant-price figure'
+        : 'not published';
+
+/** Lower case without accents, so "turk" finds Türkiye. */
+const fold = (text: string): string =>
+    text
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+
+/**
+ * Donors matching `query`, countries before group totals; within each, names that
+ * start with it, then names with a word that starts with it, then names that contain
+ * it, each by name. An empty query matches every donor.
+ */
+export const matchDonors = (donors: Donor[], query: string): Donor[] => {
+    const q = fold(query.trim());
+    const rank = (name: string): number => {
+        const folded = fold(name);
+
+        if (folded.startsWith(q)) {
+            return 0;
+        }
+
+        if (folded.split(/[\s()-]+/).some((word) => word.startsWith(q))) {
+            return 1;
+        }
+
+        return folded.includes(q) ? 2 : 3;
+    };
+
+    return donors
+        .map((donor) => ({ donor, score: rank(donor.name) }))
+        .filter(({ score }) => score < 3)
+        .toSorted(
+            (a, b) =>
+                Number(a.donor.isGroup) - Number(b.donor.isGroup) ||
+                a.score - b.score ||
+                a.donor.name.localeCompare(b.donor.name),
+        )
+        .map(({ donor }) => donor);
+};
+
 /** "France's", or "DAC countries'" for a name ending in s. */
 export const possessive = (name: string): string => (name.endsWith('s') ? `${name}'` : `${name}'s`);
 
@@ -142,6 +217,61 @@ export const bridge = (data: CountsData, donor: Donor, year: number, prices: Pri
     };
 };
 
+/** The label of each bridge's one step. */
+export const STEP_LABELS = {
+    toNet: 'Repayments and other amounts received',
+    toGrantEquivalent: 'Not counted as grant equivalent',
+} as const;
+
+/**
+ * One row of a one-step waterfall, in millions: a total runs from 0 to its value; the
+ * step spans the gap between the two totals, and `value` is the change, negative for
+ * a fall.
+ */
+export type StepRow = {
+    kind: 'total' | 'step';
+    label: string;
+    value: number;
+    start: number;
+    end: number;
+};
+
+/** The three rows of a bridge from one total to another: from, the step, to. */
+export const stepRows = (
+    from: { label: string; value: number },
+    step: string,
+    to: { label: string; value: number },
+): StepRow[] => [
+    { kind: 'total', label: from.label, value: from.value, start: 0, end: from.value },
+    {
+        kind: 'step',
+        label: step,
+        value: to.value - from.value,
+        start: Math.min(from.value, to.value),
+        end: Math.max(from.value, to.value),
+    },
+    { kind: 'total', label: to.label, value: to.value, start: 0, end: to.value },
+];
+
+/** Each bridge as waterfall rows, or null where the bridge has no figure. */
+export const bridgeRows = (
+    steps: Bridge,
+): { toNet: StepRow[] | null; toGrantEquivalent: StepRow[] | null } => ({
+    toNet:
+        steps.toNet &&
+        stepRows({ label: COUNT_LABELS.gross, value: steps.toNet.gross }, STEP_LABELS.toNet, {
+            label: COUNT_LABELS.net,
+            value: steps.toNet.net,
+        }),
+    toGrantEquivalent:
+        steps.toGrantEquivalent &&
+        stepRows(
+            { label: COUNT_LABELS.gross, value: steps.toGrantEquivalent.gross },
+            STEP_LABELS.toGrantEquivalent,
+            { label: COUNT_LABELS.grantEquivalent, value: steps.toGrantEquivalent.grantEquivalent },
+        ),
+});
+
 /**
  * "Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only
  * their concessional part removes $2.6bn.", or null without a non-grant figure.
@@ -170,21 +300,30 @@ const PARTS: Record<CountKey, string[]> = {
 /** The price basis' definition: the graph's for current prices, the page's for constant. */
 const PRICE_PART: Record<Prices, string> = { current: 'Nominal', constant: 'constantPrices' };
 
+const definitionOf = (id: string, definitions: Definition[]): Definition => {
+    const found = definitions.find((definition) => definition.id === id);
+
+    if (!found) {
+        throw new Error(`definitions.json has no entry for "${id}"`);
+    }
+
+    return found;
+};
+
+/** What a count counts, as its parts, each a graph node or a written entry. */
+export const countDefinition = (key: CountKey, definitions: Definition[]): Definition[] =>
+    PARTS[key].map((id) => definitionOf(id, definitions));
+
+/** What the price basis means, shared by every count. */
+export const priceDefinition = (prices: Prices, definitions: Definition[]): Definition =>
+    definitionOf(PRICE_PART[prices], definitions);
+
 /** A count's definition as its parts, each a graph node or a written entry, prices last. */
 export const definitionParts = (
     key: CountKey,
     prices: Prices,
     definitions: Definition[],
-): Definition[] =>
-    [...PARTS[key], PRICE_PART[prices]].map((id) => {
-        const found = definitions.find((definition) => definition.id === id);
-
-        if (!found) {
-            throw new Error(`definitions.json has no entry for "${id}"`);
-        }
-
-        return found;
-    });
+): Definition[] => [...countDefinition(key, definitions), priceDefinition(prices, definitions)];
 
 export type Scope = {
     /** shares of gross bilateral plus multilateral disbursements, from 0 to 1 */

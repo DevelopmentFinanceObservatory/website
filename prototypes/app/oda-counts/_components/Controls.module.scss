@@ -1,0 +1,68 @@
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    align-items: center;
+    padding-block: 12px;
+    color: #5e5e52;
+    font-family: var(--font-outfit);
+    font-size: 13px;
+}
+
+.control {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.select {
+    padding: 4px 8px;
+    border: 1px solid #cfcfbf;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+
+    // 16px keeps phones from zooming the page on focus.
+    font: 400 16px var(--font-outfit);
+
+    @media (min-width: 901px) {
+        font-size: 13px;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+}
+
+.seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    overflow: hidden;
+    border: 1px solid #cfcfbf;
+    border-radius: 4px;
+    background: #fff;
+
+    button {
+        padding: 4px 10px;
+        border: 0;
+        background: transparent;
+        color: #484842;
+        font: 400 12.5px var(--font-outfit);
+        cursor: pointer;
+
+        + button {
+            border-left: 1px solid #cfcfbf;
+        }
+
+        &[aria-pressed="true"] {
+            background: #484842;
+            color: #fff;
+        }
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+}

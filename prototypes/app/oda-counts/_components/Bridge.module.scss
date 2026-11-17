@@ -1,0 +1,114 @@
+.bridges {
+    margin-top: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #d2d2c5;
+    scroll-margin-top: 32px;
+}
+
+.heading {
+    margin: 0 0 6px;
+    color: #484842;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.lede {
+    max-width: 900px;
+    margin: 0 0 14px;
+    color: #484842;
+    font-size: 15px;
+}
+
+// Side by side from 901px, stacked below; equal heights so the feet line up.
+.cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+
+    @media (max-width: 900px) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #ececdb;
+    border-radius: 6px;
+    background: #fff;
+
+    > :last-child {
+        margin-top: auto;
+        padding-top: 8px;
+    }
+}
+
+.title {
+    margin: 0 0 12px;
+    color: #484842;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.rows {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    margin: 0;
+}
+
+.head {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.label {
+    color: #484842;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.stepLabel {
+    color: #5e5e52;
+    font-size: 13px;
+}
+
+.value {
+    flex: none;
+    color: #484842;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.track {
+    position: relative;
+    height: 18px;
+    background: #f7f7ee;
+}
+
+.bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.note {
+    margin: 12px 0 0;
+    color: #5e5e52;
+    font-size: 13px;
+    line-height: 1.45;
+}

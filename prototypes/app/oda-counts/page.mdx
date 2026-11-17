@@ -1,13 +1,67 @@
 import { prototype, prototypeMetadata } from '../../registry';
 
+import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
+
+import { OdaCounts } from './_components/OdaCounts';
 import counts from './_data/counts.json';
+import definitions from './_data/definitions.json';
 
 export const entry = prototype('oda-counts');
 
 export const metadata = prototypeMetadata(entry);
 
-# {entry.title}
+export default ({ children }) => (
+    <PrototypePage
+        title="How much aid does a donor give?"
+        sections={[
+            { id: 'counts', title: 'Counts' },
+            { id: 'why-they-differ', title: 'Why they differ' },
+            { id: 'how-to-read-this', title: 'How to read this' },
+            { id: 'notes', title: 'Notes' },
+        ]}
+        lede={
+            <>
+                The OECD counts each donor's official development assistance (ODA) in five ways, and
+                one donor's figures for one year can differ by billions of dollars. This page sets
+                them side by side, with what each one counts, from{' '}
+                <a href="https://developmentfinance.org/data/sources/provenance/OECDDAC1">
+                    the OECD's DAC1 table
+                </a>
+                .
+            </>
+        }
+    >
+        {children}
+    </PrototypePage>
+);
 
-{entry.summary}
+<OdaCounts data={counts.data} definitions={definitions.data} />
 
-Source: {counts.provenance.citation}. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)} with {counts.provenance.sdk}.
+## How to read this
+
+Pick a donor, a year and a price basis above the chart, and every panel follows them. Group totals, such as DAC countries, come after the countries in the donor list.
+
+Each bar is one count of the same donor's ODA in the same year, on one scale. The text under a bar says what the count counts, put together from the terms in the DFO's graph.
+
+- Gross disbursements are what the donor paid out, with nothing taken off.
+- Net disbursements take off loan repayments and other amounts the donor received.
+- Grant equivalents count a grant in full and a loan only for its concessional part.
+- Commitments are firm promises to pay. They can run ahead of or behind disbursements.
+- The OECD headline is the figure the OECD reports as a donor's ODA.
+
+The two bridges show where the gaps between gross disbursements and the other two disbursement counts come from.
+
+To compare donors, or a donor against the target of 0.7% of gross national income, use the OECD headline. To see how much a donor paid out in a year, use gross disbursements, or net disbursements to take off what came back. Do not compare the headline across 2018, when its basis changed.
+
+## Notes
+
+- Amounts received, the step from gross to net disbursements, are computed as gross minus net disbursements. The DFO publishes no separate series for them.
+- In 2018 the OECD switched its headline from net disbursements to grant equivalents. The headline bar shows net disbursements to 2017 and grant equivalents from 2018, so its figures either side of the switch are not comparable. The grant-equivalent bridge starts in 2018 for the same reason.
+- The sentence under the grant-equivalent bridge uses gross non-grant disbursements, which run from 2018 to 2024.
+- Constant prices are in 2024 US dollars. The DFO converts each count with ONE's DAC deflators, which take out each donor's inflation and its exchange-rate movements against the dollar. In 2024 the two price bases give the same figures. A donor with no deflator for a year shows "no constant-price figure".
+- 2025 figures are the OECD's preliminary data. Most donors have no 2025 commitments or splits yet. The OECD adds them with the final figures.
+- A group total, such as DAC countries, shows no figure in a year when only some of its members reported a series, so that it never sums part of the group. In 2025 group totals have no commitments, splits or refugee costs, because only two countries reported them.
+
+## Sources
+
+{counts.provenance.citation}. Definitions from the DFO graph, except the OECD headline and constant prices, which are written for this page. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)} with {counts.provenance.sdk}.
