@@ -81,7 +81,8 @@ expires, leaves the others running. Postgres runs outside `stack` (see
 
 Mailpit catches the site's mail locally (`brew install mailpit`); `just
 stack` starts it when it is installed and port 1025 is free, and its inbox
-is at <http://localhost:8025>. Point the site at it in `.env.local`:
+is at <http://localhost:8025>. Like the dev server, it listens on every
+interface, so another machine on the network can open the inbox too. Point the site at it in `.env.local`:
 
 ```bash
 SMTP_HOST=localhost
