@@ -9,6 +9,10 @@ constant 2024 US dollars, and the graph definitions the page composes each count
 definition from. Checks known values, failing loudly when one differs, then writes
 `counts.json` and `definitions.json` beside this file.
 
+Also writes `live.json`: the identity of each monetary series, which the page posts to
+Search with one provider and a unit bound to fetch that provider in any currency and
+price basis, and the conversion offer the series share.
+
 Each series is a DFO spec built here from its StatVar parts with the provider role
 left open, so one fetch returns every provider and the DAC group totals. The server
 recomputes a spec's id from its definition, and its first refusal names that id.
@@ -37,6 +41,9 @@ DAC1 = "provenance/OECDDAC1"
 HEADLINE = "provenance/ONEOECDHeadlineODA"
 GNI = "PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal"
 GRAPH_NODES = "https://developmentfinance.org/api/v1/graph/nodes"
+RESOLVE = "https://developmentfinance.org/api/v1/search/resolve"
+# The most entries one resolve request takes.
+RESOLVE_ENTRIES = 6
 # A spec id no definition hashes to. The server's refusal names the id it computed.
 PLACEHOLDER_ID = "spec_" + "0" * 32
 RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
@@ -294,6 +301,54 @@ def fetch_definitions() -> list[dict]:
     return graph + [{**entry, "source": "oecd"} for entry in WRITTEN]
 
 
+def live_identity(series: Series) -> dict:
+    """Return the identity the page posts for a series, before it binds a provider and unit."""
+    return series.definition(constant=False)["identity"]
+
+
+def fetch_offer() -> dict:
+    """Return the conversion offer every monetary series shares, failing when they differ.
+
+    Each series is resolved with every provider open, so the offer covers each currency
+    any provider converts to. The offer keeps each currency's code, noun, years and base
+    years, and the base year a constant-price request completes to.
+    """
+    monetary = [series for series in SERIES if series.constant]
+    offers = {}
+    for start in range(0, len(monetary), RESOLVE_ENTRIES):
+        batch = monetary[start : start + RESOLVE_ENTRIES]
+        entries = [
+            {
+                "entry_kind": "identity",
+                "variable_text": series.sentence,
+                "identity": {**live_identity(series), "open_roles": ["origin"]},
+            }
+            for series in batch
+        ]
+        body = {
+            "schema_version": 1,
+            "input": {"kind": "dataset_resubmit", "entries": entries},
+            "response_options": {"include_option_coverage": False, "include_observations": False},
+        }
+        response = httpx.post(RESOLVE, json=body, timeout=120)
+        response.raise_for_status()
+        for series, part in zip(batch, response.json()["parts"], strict=True):
+            if part["status"] != "definite":
+                raise SystemExit(f"{series.key}: Search answered {part['status']}, not definite.")
+            conversion = part["spec"]["resolved"].get("unit_conversion") or {}
+            offers[series.key] = {
+                "defaultBaseYear": conversion.get("default_base_year"),
+                "currencies": conversion.get("currencies", []),
+            }
+    first = offers[monetary[0].key]
+    if not first["currencies"]:
+        raise SystemExit("Search offers no currency to convert the series to.")
+    differ = [key for key, offer in offers.items() if offer != first]
+    if differ:
+        raise SystemExit(f"The conversion offers of {differ} differ from {monetary[0].key}'s.")
+    return first
+
+
 def by_year(values: Values, provider: str, *, scale: float, digits: int) -> list:
     """Return a provider's values for YEARS, divided by `scale`, with null where missing."""
     out = []
@@ -476,6 +531,25 @@ def main() -> int:
         definitions,
     )
 
+    offer = fetch_offer()
+    write(
+        here / "live.json",
+        provenance(
+            f"POST {RESOLVE}",
+            note="Identities with the provider role and the unit left for the page to bind.",
+        ),
+        {
+            "resolve": "/api/v1/search/resolve",
+            "maxEntries": RESOLVE_ENTRIES,
+            "identities": [
+                {"key": series.key, "sentence": series.sentence, "identity": live_identity(series)}
+                for series in SERIES
+                if series.constant
+            ],
+            "offer": offer,
+        },
+    )
+
     no_constant = [
         donor["name"]
         for donor in data["donors"]
@@ -489,7 +563,7 @@ def main() -> int:
         "Wrote %d donors over %d years from %d fetches in %.0fs. Missing constant prices: %s",
         len(data["donors"]),
         len(YEARS),
-        len(reads) + 1,
+        len(reads) + 3,
         time.monotonic() - started,
         ", ".join(no_constant) or "none",
     )

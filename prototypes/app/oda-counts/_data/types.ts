@@ -1,6 +1,7 @@
-// The shape of _data/counts.json's and _data/definitions.json's `data`, written by
-// _data/fetch.py and read by _lib/counts.ts and the page's components. Both import it
+// The shape of the `data` of _data/counts.json, _data/definitions.json and _data/live.json,
+// written by _data/fetch.py and read by _lib and the page's components. Both import it
 // with `import type`, so it never reaches the bundle.
+import type { BaseIdentity, ConversionCurrency } from '@developmentfinance/client/wire';
 
 /** The OECD counts of a donor's ODA the page sets side by side. */
 export type CountKey = 'gross' | 'grantEquivalent' | 'net' | 'commitments' | 'headline';
@@ -49,4 +50,23 @@ export type Definition = {
     /** `graph` for a DFO graph node, `oecd` for the OECD's own wording, quoted from `url` */
     source: 'graph' | 'oecd';
     url?: string;
+};
+
+/** A monetary series' Search identity, with no provider and no unit bound. */
+export type LiveIdentity = { key: SeriesKey; sentence: string; identity: BaseIdentity };
+
+/** The currencies and base years Search converts every monetary series to. */
+export type Offer = {
+    /** the base year a constant-price request that names none completes to */
+    defaultBaseYear: number;
+    currencies: ConversionCurrency[];
+};
+
+export type LiveData = {
+    /** the same-origin path the page posts resolve requests to */
+    resolve: string;
+    /** the most entries one resolve request takes */
+    maxEntries: number;
+    identities: LiveIdentity[];
+    offer: Offer;
 };

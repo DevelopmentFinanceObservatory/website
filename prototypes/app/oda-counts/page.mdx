@@ -2,9 +2,12 @@ import { prototype, prototypeMetadata } from '../../registry';
 
 import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 
+import { LiveUnitsProvider } from './_components/LiveUnits';
 import { OdaCounts } from './_components/OdaCounts';
+import { PricesNote } from './_components/PricesNote';
 import counts from './_data/counts.json';
 import definitions from './_data/definitions.json';
+import live from './_data/live.json';
 
 export const entry = prototype('oda-counts');
 
@@ -12,7 +15,7 @@ export const metadata = prototypeMetadata(entry);
 
 export default ({ children }) => (
     <PrototypePage
-        title="How much aid does a donor give?"
+        title="How much aid does a donor provide?"
         sections={[
             { id: 'counts', title: 'Counts' },
             { id: 'why-they-differ', title: 'Why they differ' },
@@ -31,7 +34,9 @@ export default ({ children }) => (
             </>
         }
     >
-        {children}
+        <LiveUnitsProvider data={counts.data} live={live.data}>
+            {children}
+        </LiveUnitsProvider>
     </PrototypePage>
 );
 
@@ -39,9 +44,9 @@ export default ({ children }) => (
 
 ## Notes
 
-- Constant prices use the OECD DAC deflators, from ONE's conversion tables.
+- <PricesNote />
 - Group totals, such as DAC countries, are blank in any year where fewer than half of their usual reporters reported a series.
 
 ## Sources
 
-{counts.provenance.citation}. Definitions come from the DFO graph. The definitions of the OECD headline and constant dollars quote the OECD. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)}.
+{counts.provenance.citation}. Definitions come from the DFO graph. The definitions of the OECD headline and constant dollars quote the OECD. Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {counts.provenance.retrieved.slice(0, 10)}. Figures in any other currency or base year are fetched from it when picked.

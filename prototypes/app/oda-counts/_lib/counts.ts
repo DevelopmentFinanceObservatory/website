@@ -34,7 +34,7 @@ export const DAC1_SOURCE_URL = 'https://developmentfinance.org/data/sources/prov
 export const findDonor = (data: CountsData, id: string): Donor | undefined =>
     data.donors.find((donor) => donor.id === id);
 
-/** A series' value in millions of US dollars, or null where none is published. */
+/** A series' value in millions of the unit's currency, or null where none is published. */
 export const valueAt = (
     data: CountsData,
     donor: Donor,
@@ -83,18 +83,45 @@ export const countRange = (counts: CountValue[]): Range | null => {
 const rounded = (value: number, digits: number): number => Number(value.toFixed(digits));
 
 /**
- * An amount in millions of US dollars as "$17.5bn", "$350m" or "$4.2m". The unit
- * follows the rounded amount, so 999.96 prints as "$1.0bn".
+ * The prefix an amount in `currency` takes: "$" for US dollars, otherwise the British
+ * English symbol, which names a currency that shares a sign by its country ("A$", "JP¥").
+ * A symbol ending in a letter takes a space ("CHF 17.5bn"). An unknown code prints as itself.
  */
-export const formatUsd = (millions: number): string => {
-    const sign = millions < 0 ? '-' : '';
-    const size = Math.abs(millions);
-
-    if (rounded(size, 0) >= 1000) {
-        return `${sign}$${(size / 1000).toFixed(1)}bn`;
+export const currencyPrefix = (currency: string): string => {
+    if (currency === 'USD') {
+        return '$';
     }
 
-    return `${sign}$${rounded(size, 1) >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
+    let symbol = currency;
+
+    try {
+        symbol =
+            new Intl.NumberFormat('en-GB', { style: 'currency', currency })
+                .formatToParts(1)
+                .find((part) => part.type === 'currency')?.value ?? currency;
+    } catch (error) {
+        if (!(error instanceof RangeError)) {
+            throw error;
+        }
+    }
+
+    return /\p{L}$/u.test(symbol) ? `${symbol} ` : symbol;
+};
+
+/**
+ * An amount in millions of `currency` as "$17.5bn", "€350m" or "CHF 4.2m". The unit
+ * follows the rounded amount, so 999.96 prints as "$1.0bn".
+ */
+export const formatAmount = (millions: number, currency: string): string => {
+    const sign = millions < 0 ? '-' : '';
+    const size = Math.abs(millions);
+    const prefix = currencyPrefix(currency);
+
+    if (rounded(size, 0) >= 1000) {
+        return `${sign}${prefix}${(size / 1000).toFixed(1)}bn`;
+    }
+
+    return `${sign}${prefix}${rounded(size, 1) >= 10 ? size.toFixed(0) : size.toFixed(1)}m`;
 };
 
 /** Chart label units, largest first, each with its size in millions. */
@@ -105,10 +132,10 @@ const COMPACT_UNITS = [
 ] as const;
 
 /**
- * An amount in millions of US dollars as a chart label: "17.5B", "350.0M", "1.2T".
- * The unit follows the rounded amount, so 999.96 prints as "1.0B".
+ * An amount in millions of `currency` as a chart label: "$17.5B", "€350.0M", "SEK 1.2T".
+ * The unit follows the rounded amount, so 999.96 prints as "$1.0B".
  */
-export const formatCompact = (millions: number): string => {
+export const formatCompact = (millions: number, currency: string): string => {
     const sign = millions < 0 ? '-' : '';
     const size = Math.abs(millions);
     const [factor, unit] = COMPACT_UNITS.find(([factor]) => rounded(size / factor, 1) >= 1) ?? [
@@ -116,7 +143,7 @@ export const formatCompact = (millions: number): string => {
         'K',
     ];
 
-    return `${sign}${(size / factor).toFixed(1)}${unit}`;
+    return `${sign}${currencyPrefix(currency)}${(size / factor).toFixed(1)}${unit}`;
 };
 
 /**
@@ -182,17 +209,22 @@ const DISBURSED: readonly CountKey[] = ['gross', 'net', 'grantEquivalent', 'head
 
 /**
  * "<Donor>'s ODA in <year> was $X to $Y, depending on the definition.", over the counts of
- * money paid out, or null with none published.
+ * money paid out in `currency`, or null with none published.
  */
-export const rangeSentence = (name: string, year: number, counts: CountValue[]): string | null => {
+export const rangeSentence = (
+    name: string,
+    year: number,
+    counts: CountValue[],
+    currency: string,
+): string | null => {
     const range = countRange(counts.filter(({ key }) => DISBURSED.includes(key)));
 
     if (range === null) {
         return null;
     }
 
-    const low = formatUsd(range.low.value);
-    const high = formatUsd(range.high.value);
+    const low = formatAmount(range.low.value, currency);
+    const high = formatAmount(range.high.value, currency);
     const lead = `${possessive(name)} ODA in ${year} was`;
 
     return low === high
@@ -317,7 +349,10 @@ export const bridgeBars = (steps: Bridge): Record<BridgeKey, BridgeBar | null> =
  * null unless the gap is a fall no larger than the non-grants, since only then can
  * the loans' non-concessional part account for it.
  */
-export const nonGrantSentence = (step: Bridge['toGrantEquivalent']): string | null => {
+export const nonGrantSentence = (
+    step: Bridge['toGrantEquivalent'],
+    currency: string,
+): string | null => {
     if (
         step === null ||
         step.nonGrants === null ||
@@ -327,10 +362,12 @@ export const nonGrantSentence = (step: Bridge['toGrantEquivalent']): string | nu
         return null;
     }
 
+    const amount = (millions: number): string => formatAmount(millions, currency);
+
     return (
-        `Of ${formatUsd(step.gross)} gross, ${formatUsd(step.nonGrants)} was loans and other ` +
+        `Of ${amount(step.gross)} gross, ${amount(step.nonGrants)} was loans and other ` +
         `non-grant instruments; counting only their concessional part removes ` +
-        `${formatUsd(step.notCounted)}.`
+        `${amount(step.notCounted)}.`
     );
 };
 
@@ -462,13 +499,13 @@ export const valueTicks = (low: number, high: number, count = 4): number[] => {
     return ticks;
 };
 
-/** An axis tick in millions of US dollars: "0", "500M", "2.5B", "20B". */
-export const formatTick = (millions: number): string => {
+/** An axis tick in millions of `currency`: "0", "$500M", "€2.5B", "$20B". */
+export const formatTick = (millions: number, currency: string): string => {
     if (millions === 0) {
         return '0';
     }
 
-    return formatCompact(millions).replace(/\.0(?=[KMBT]$)/, '');
+    return formatCompact(millions, currency).replace(/\.0(?=[KMBT]$)/, '');
 };
 
 /** A fraction from 0 to 1 as a percentage with one decimal: "62.7%". */
@@ -722,13 +759,14 @@ const textWidth = (text: string, size: number): number => Math.ceil(text.length 
 export const headlineLabel = (year: number): string => `OECD headline in ${year}`;
 
 /**
- * The labels of a dot plot of `counts`: each published count's name over its value, and
- * the OECD headline's one-line label, each at its dot's x from `xOf`.
+ * The labels of a dot plot of `counts`: each published count's name over its value in
+ * `currency`, and the OECD headline's one-line label, each at its dot's x from `xOf`.
  */
 export const dotLabelBoxes = (
     counts: CountValue[],
     year: number,
     xOf: (value: number) => number,
+    currency: string,
 ): LabelBox[] =>
     counts.flatMap(({ key, value }) => {
         if (value === null) {
@@ -740,7 +778,7 @@ export const dotLabelBoxes = (
                 ? textWidth(headlineLabel(year), DOT_LABEL_TYPE.name)
                 : Math.max(
                       textWidth(COUNT_LABELS[key], DOT_LABEL_TYPE.name),
-                      textWidth(formatCompact(value), DOT_LABEL_TYPE.value),
+                      textWidth(formatCompact(value, currency), DOT_LABEL_TYPE.value),
                   );
 
         return [{ id: key, x: xOf(value), width }];
@@ -753,7 +791,8 @@ export const BRIDGE_COUNTS: readonly CountKey[] = ['gross', 'net', 'grantEquival
 
 /**
  * Axis ticks for a donor's chart of `keys`, over every year and both price bases, so
- * changing the year or the prices never rescales the chart. Only another donor does.
+ * changing the year or the prices never rescales the chart. Only another donor or
+ * currency does.
  */
 export const donorTicks = (
     data: CountsData,
@@ -767,4 +806,43 @@ export const donorTicks = (
     );
 
     return valueTicks(Math.min(0, ...values), Math.max(0, ...values));
+};
+
+/** About how many intervals the dot plot's axis divides into. */
+const DOT_INTERVALS = 5;
+
+/**
+ * Axis ticks for the dot plot of a donor's counts in a year, over both price bases, so
+ * switching prices never rescales it. Dots encode position, so the axis need not start
+ * at zero. It starts at a tick at or below the smaller of half the OECD headline (half
+ * gross disbursements where the headline is missing) and the smallest count, never
+ * below zero unless a count is, and ends at a tick at or above the largest count. With
+ * no count published that year, the axis spans the donor's counts over every year.
+ */
+export const dotTicks = (data: CountsData, donor: Donor, year: number): number[] => {
+    const both = (key: CountKey): number[] =>
+        (['current', 'constant'] as const).flatMap(
+            (prices) => valueAt(data, donor, key, year, prices) ?? [],
+        );
+    const values = DOT_PLOT_COUNTS.flatMap(both);
+
+    if (values.length === 0) {
+        return donorTicks(data, donor, DOT_PLOT_COUNTS);
+    }
+
+    const anchor = both('headline').length > 0 ? both('headline') : both('gross');
+    const half = anchor.length > 0 ? Math.min(...anchor) / 2 : 0;
+    const smallest = Math.min(...values);
+    const largest = Math.max(...values);
+    const low = Math.min(Math.max(0, half), smallest);
+    const span = largest > low ? largest - low : Math.abs(largest) || 1;
+    const raw = span / DOT_INTERVALS;
+    const magnitude = 10 ** Math.floor(Math.log10(raw));
+    const norm = raw / magnitude;
+    const step =
+        (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * magnitude;
+    const first = Math.floor(low / step);
+    const last = Math.max(Math.ceil(largest / step), first + 1);
+
+    return Array.from({ length: last - first + 1 }, (_, index) => (first + index) * step);
 };

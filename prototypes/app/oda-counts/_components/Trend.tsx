@@ -8,7 +8,7 @@ import { SideDetails, WithSide } from './SideColumn';
 import styles from './Trend.module.scss';
 import { useWidth } from './useWidth';
 
-import type { CountKey, CountsData, Donor, Prices } from '../_data/types.ts';
+import type { CountKey, CountsData, Donor, Offer } from '../_data/types.ts';
 import {
     COUNT_LABELS,
     donorTicks,
@@ -23,6 +23,7 @@ import {
     valueAt,
     TREND_COUNTS,
 } from '../_lib/counts.ts';
+import { unitPhrase, type Unit } from '../_lib/live.ts';
 
 import { PLOT_RATIO } from '@/lib/studio/chartFit';
 
@@ -51,13 +52,16 @@ export const Trend = ({
     data,
     donor,
     year,
-    prices,
+    unit,
+    offer,
 }: {
     data: CountsData;
     donor: Donor;
     year: number;
-    prices: Prices;
+    unit: Unit;
+    offer: Offer;
 }) => {
+    const { prices, currency } = unit;
     const [wrapRef, width] = useWidth();
     const [index, setIndex] = useState<number | null>(null);
     const [focus, setFocus] = useState<CountKey | null>(null);
@@ -138,16 +142,17 @@ export const Trend = ({
     const valueText = (key: CountKey, at: number): string => {
         const value = valueAt(data, donor, key, at, prices);
 
-        return value === null ? missingText(data, donor, key, at, prices) : formatCompact(value);
+        return value === null
+            ? missingText(data, donor, key, at, prices)
+            : formatCompact(value, currency);
     };
     const reading = KEY_ORDER.map(
         (key) => `${COUNT_LABELS[key]} ${valueText(key, shownYear)}`,
     ).join('; ');
-    const unit =
-        prices === 'current' ? 'current US dollars' : `constant ${data.baseYear} US dollars`;
+    const phrase = unitPhrase(unit, offer);
     const summary =
         `Line chart of ${possessive(donor.name)} ODA by count, ${years[0]} to ${lastYear}, in ` +
-        `${unit}. The OECD headline follows net disbursements to ${GRANT_EQUIVALENT_FROM - 1} ` +
+        `${phrase}. The OECD headline follows net disbursements to ${GRANT_EQUIVALENT_FROM - 1} ` +
         `and grant equivalents from ${GRANT_EQUIVALENT_FROM}. In ${shownYear}: ${reading}. ` +
         'Use the left and right arrow keys to read each year.';
     const dim = (key: CountKey) => (focus !== null && focus !== key ? 0.25 : 1);
@@ -198,7 +203,7 @@ export const Trend = ({
 
             <figure className={styles.card}>
                 <figcaption className={styles.title}>
-                    {possessive(donor.name)} ODA by count, {years[0]} to {lastYear}, {unit}
+                    {possessive(donor.name)} ODA by count, {years[0]} to {lastYear}, {phrase}
                 </figcaption>
 
                 <WithSide
@@ -263,7 +268,7 @@ export const Trend = ({
                                                 textAnchor="end"
                                                 className={styles.tick}
                                             >
-                                                {formatTick(tick)}
+                                                {formatTick(tick, currency)}
                                             </text>
                                         </g>
                                     ))}

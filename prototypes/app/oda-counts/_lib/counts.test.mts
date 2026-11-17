@@ -9,15 +9,17 @@ import {
     bridgeBars,
     countDefinition,
     countsFor,
+    currencyPrefix,
     definitionParts,
     dotLabelBoxes,
     DOT_PLOT_COUNTS,
     donorTicks,
+    dotTicks,
     findDonor,
+    formatAmount,
     formatCompact,
     formatShare,
     formatTick,
-    formatUsd,
     headlineSegments,
     layoutLabels,
     type LabelBox,
@@ -52,7 +54,7 @@ const france = (): Donor => donorById('country/FRA');
 
 test('rangeSentence gives France 2025 from net to gross disbursements', () => {
     assert.equal(
-        rangeSentence('France', 2025, countsFor(counts, france(), 2025, 'current')),
+        rangeSentence('France', 2025, countsFor(counts, france(), 2025, 'current'), 'USD'),
         "France's ODA in 2025 was $13.9bn to $17.5bn, depending on the definition.",
     );
 });
@@ -60,9 +62,12 @@ test('rangeSentence gives France 2025 from net to gross disbursements', () => {
 test('rangeSentence leaves out commitments, which fall below every disbursed count for the UK in 2024', () => {
     const uk = countsFor(counts, donorById('country/GBR'), 2024, 'current');
 
-    assert.equal(formatUsd(uk.find(({ key }) => key === 'commitments')?.value ?? 0), '$16.2bn');
     assert.equal(
-        rangeSentence('the United Kingdom', 2024, uk),
+        formatAmount(uk.find(({ key }) => key === 'commitments')?.value ?? 0, 'USD'),
+        '$16.2bn',
+    );
+    assert.equal(
+        rangeSentence('the United Kingdom', 2024, uk, 'USD'),
         "the United Kingdom's ODA in 2024 was $16.3bn to $18.0bn, depending on the definition.",
     );
 });
@@ -74,20 +79,20 @@ test('rangeSentence handles one count, no counts and a plural name', () => {
     ];
 
     assert.equal(
-        rangeSentence('DAC countries', 2020, one),
+        rangeSentence('DAC countries', 2020, one, 'USD'),
         "DAC countries' ODA in 2020 was $1.2bn.",
     );
-    assert.equal(rangeSentence('France', 2020, [{ key: 'net', value: null }]), null);
+    assert.equal(rangeSentence('France', 2020, [{ key: 'net', value: null }], 'USD'), null);
 });
 
 test('bridge steps France 2024 from gross to grant equivalents and to net', () => {
     const steps = bridge(counts, france(), 2024, 'current');
 
     assert.ok(steps.toGrantEquivalent && steps.toNet);
-    assert.equal(formatUsd(steps.toGrantEquivalent.gross), '$18.1bn');
-    assert.equal(formatUsd(steps.toGrantEquivalent.grantEquivalent), '$15.4bn');
+    assert.equal(formatAmount(steps.toGrantEquivalent.gross, 'USD'), '$18.1bn');
+    assert.equal(formatAmount(steps.toGrantEquivalent.grantEquivalent, 'USD'), '$15.4bn');
     assert.equal(
-        nonGrantSentence(steps.toGrantEquivalent),
+        nonGrantSentence(steps.toGrantEquivalent, 'USD'),
         'Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only their concessional part removes $2.6bn.',
     );
     assert.ok(
@@ -101,8 +106,8 @@ test('bridgeBars labels a step above gross as a rise and adds a note, for UK 202
     const ukStep = bridgeBars(uk).toGrantEquivalent?.step;
 
     assert.equal(ukStep?.label, STEP_LABELS.toGrantEquivalent.rise);
-    assert.equal(ukStep && formatCompact(ukStep.value), '1.4B');
-    assert.equal(nonGrantSentence(uk.toGrantEquivalent), null);
+    assert.equal(ukStep && formatCompact(ukStep.value, 'USD'), '$1.4B');
+    assert.equal(nonGrantSentence(uk.toGrantEquivalent, 'USD'), null);
     assert.equal(riseNote('toGrantEquivalent', uk), RISE_NOTES.toGrantEquivalent);
     assert.equal(riseNote('toNet', uk), null);
     assert.equal(bridgeBars(uk).toNet?.step.label, STEP_LABELS.toNet.fall);
@@ -126,7 +131,7 @@ test('nonGrantSentence is null when the gap exceeds non-grants, as for Spain in 
     const spain = bridge(counts, donorById('country/ESP'), 2018, 'current').toGrantEquivalent;
 
     assert.ok(spain && spain.nonGrants !== null && spain.notCounted > spain.nonGrants);
-    assert.equal(nonGrantSentence(spain), null);
+    assert.equal(nonGrantSentence(spain, 'USD'), null);
 });
 
 test('bridge has no grant-equivalent step before 2018, and 2025 has no non-grant figure', () => {
@@ -137,7 +142,7 @@ test('bridge has no grant-equivalent step before 2018, and 2025 has no non-grant
     assert.ok(early.toNet);
     assert.ok(preliminary.toGrantEquivalent);
     assert.equal(preliminary.toGrantEquivalent.nonGrants, null);
-    assert.equal(nonGrantSentence(preliminary.toGrantEquivalent), null);
+    assert.equal(nonGrantSentence(preliminary.toGrantEquivalent, 'USD'), null);
 });
 
 test('the headline follows net flows to 2017 and grant equivalents from 2018', () => {
@@ -175,8 +180,11 @@ test('definitionParts composes a count from graph nodes and the price basis', ()
     assert.throws(() => definitionParts('gross', 'current', []), /no entry for "Gross"/);
 });
 
-test('formatUsd writes billions with one decimal and small amounts in millions', () => {
-    assert.deepEqual([17508.38, 350.4, 4.21, -2633.6].map(formatUsd), [
+const usd = (millions: number): string => formatAmount(millions, 'USD');
+const compact = (millions: number): string => formatCompact(millions, 'USD');
+
+test('formatAmount writes billions with one decimal and small amounts in millions', () => {
+    assert.deepEqual([17508.38, 350.4, 4.21, -2633.6].map(usd), [
         '$17.5bn',
         '$350m',
         '$4.2m',
@@ -184,9 +192,22 @@ test('formatUsd writes billions with one decimal and small amounts in millions',
     ]);
 });
 
-test('formatUsd and formatCompact pick the unit after rounding', () => {
-    assert.deepEqual([999.96, 9.96, -999.7].map(formatUsd), ['$1.0bn', '$10m', '-$1.0bn']);
-    assert.deepEqual([999.96, 999_960, 0.99996].map(formatCompact), ['1.0B', '1.0T', '1.0M']);
+test('formatAmount and formatCompact pick the unit after rounding', () => {
+    assert.deepEqual([999.96, 9.96, -999.7].map(usd), ['$1.0bn', '$10m', '-$1.0bn']);
+    assert.deepEqual([999.96, 999_960, 0.99996].map(compact), ['$1.0B', '$1.0T', '$1.0M']);
+});
+
+test('currencyPrefix marks each currency by a symbol that names it, spaced after letters', () => {
+    assert.deepEqual(['USD', 'EUR', 'AUD', 'JPY', 'SEK', 'ZZZ'].map(currencyPrefix), [
+        '$',
+        '€',
+        'A$',
+        'JP¥',
+        'SEK ',
+        'ZZZ ',
+    ]);
+    assert.equal(formatAmount(-2633.6, 'EUR'), '-€2.6bn');
+    assert.equal(formatCompact(350.4, 'SEK'), 'SEK 350.4M');
 });
 
 test('scope splits gross ODA into bilateral and multilateral shares', () => {
@@ -200,12 +221,12 @@ test('scope splits gross ODA into bilateral and multilateral shares', () => {
 });
 
 test('formatCompact labels bars with one decimal and a K, M, B or T suffix', () => {
-    assert.deepEqual([17508.38, 350.4, 0.42, 1_234_567, -2633.6].map(formatCompact), [
-        '17.5B',
-        '350.4M',
-        '420.0K',
-        '1.2T',
-        '-2.6B',
+    assert.deepEqual([17508.38, 350.4, 0.42, 1_234_567, -2633.6].map(compact), [
+        '$17.5B',
+        '$350.4M',
+        '$420.0K',
+        '$1.2T',
+        '-$2.6B',
     ]);
 });
 
@@ -250,8 +271,8 @@ test('bridgeBars steps France 2024 down from gross to net and grant equivalents'
             bars.toGrantEquivalent.gross,
             bars.toGrantEquivalent.step.value,
             bars.toGrantEquivalent.value,
-        ].map(formatCompact),
-        ['18.1B', '-2.6B', '15.4B'],
+        ].map(compact),
+        ['$18.1B', '-$2.6B', '$15.4B'],
     );
     assert.equal(bars.toNet.target, 'net');
     assert.equal(bars.toNet.gross + bars.toNet.step.value, bars.toNet.value);
@@ -314,11 +335,14 @@ test('layoutLabels keeps close dots legible for crowded donor-years at desktop a
 
     for (const [id, year] of cases) {
         const yearCounts = countsFor(counts, donorById(id), year, 'current');
-        const values = yearCounts.flatMap(({ value }) => (value === null ? [] : [value]));
-        const top = valueTicks(0, Math.max(...values)).at(-1) ?? 1;
+        const ticks = dotTicks(counts, donorById(id), year);
+        const low = ticks[0] ?? 0;
+        const high = ticks.at(-1) ?? 1;
 
         for (const width of [560, 330, 300]) {
-            const boxes = dotLabelBoxes(yearCounts, year, (value) => (value / top) * width);
+            // As CountDots draws it: the axis inset by 12px at each end, so an end dot is whole.
+            const xOf = (value: number) => 12 + ((value - low) / (high - low)) * (width - 24);
+            const boxes = dotLabelBoxes(yearCounts, year, xOf, 'USD');
 
             assert.ok(boxes.length >= 4, `${id} ${year} has a label per count and the headline`);
             assert.deepEqual(layoutFaults(boxes, width), [], `${id} ${year} at ${width}px`);
@@ -341,7 +365,7 @@ test('layoutLabels clamps a label at the edge inside the plot and drops the lead
     assert.ok(placed.every(({ left, width }) => left >= 0 && left + width <= 200));
 });
 
-test('donorTicks keeps France on one dot-plot scale across years and price bases', () => {
+test('donorTicks keeps France on one scale from zero across years and price bases', () => {
     const ticks = donorTicks(counts, france(), DOT_PLOT_COUNTS);
     const top = ticks.at(-1) ?? 0;
     const views = [
@@ -361,6 +385,52 @@ test('donorTicks keeps France on one dot-plot scale across years and price bases
     // 2025 alone would stop at 20B; the scale stays wide enough for France's largest year.
     assert.equal(valueTicks(0, 17508.38).at(-1), 20000);
     assert.equal(top, 30000);
+});
+
+test('dotTicks starts France 2024 near half the headline, above zero, and ends at 20B', () => {
+    for (const prices of ['current', 'constant'] as const) {
+        const values = countsFor(counts, france(), 2024, prices).flatMap(({ value }) =>
+            value === null ? [] : [value],
+        );
+        assert.ok(Math.min(...values) > 15000 && Math.max(...values) < 18600, prices);
+    }
+
+    assert.deepEqual(dotTicks(counts, france(), 2024), [7500, 10000, 12500, 15000, 17500, 20000]);
+});
+
+test('dotTicks covers both price bases, never goes below zero, and falls back to gross', () => {
+    for (const donor of counts.donors) {
+        for (const year of counts.years) {
+            const ticks = dotTicks(counts, donor, year);
+            const values = (['current', 'constant'] as const).flatMap((prices) =>
+                countsFor(counts, donor, year, prices).flatMap(({ value }) =>
+                    value === null ? [] : [value],
+                ),
+            );
+            const where = `${donor.id} ${year}`;
+
+            assert.ok((ticks[0] ?? -1) >= 0, `${where} starts at or above zero`);
+            assert.ok(Math.min(...values) >= (ticks[0] ?? 0), `${where} covers the smallest`);
+            assert.ok(Math.max(...values) <= (ticks.at(-1) ?? 0), `${where} covers the largest`);
+        }
+    }
+
+    // With no headline, half of gross disbursements sets the floor: 10000 / 2 = 5000.
+    const empty = counts.years.map(() => null);
+    const only = (value: number) => counts.years.map((year) => (year === 2020 ? value : null));
+    const bare: Donor = {
+        ...france(),
+        series: {
+            ...france().series,
+            gross: { current: only(10000), constant: only(10000) },
+            net: { current: only(9000), constant: only(9000) },
+            grantEquivalent: { current: empty, constant: empty },
+            commitments: { current: empty, constant: empty },
+            headline: { current: empty, constant: empty },
+        },
+    };
+
+    assert.deepEqual(dotTicks(counts, bare, 2020), [5000, 6000, 7000, 8000, 9000, 10000]);
 });
 
 test('countDefinition and priceDefinition split definitionParts', () => {
@@ -401,7 +471,11 @@ test('valueTicks starts at zero and covers the highest value', () => {
 });
 
 test('formatTick drops a trailing .0 and formatShare keeps one decimal', () => {
-    assert.deepEqual([0, 500, 2500, 20000].map(formatTick), ['0', '500M', '2.5B', '20B']);
+    assert.deepEqual(
+        [0, 500, 2500, 20000].map((millions) => formatTick(millions, 'USD')),
+        ['0', '$500M', '$2.5B', '$20B'],
+    );
+    assert.equal(formatTick(2500, 'EUR'), '€2.5B');
     assert.equal(formatShare(0.62664), '62.7%');
 });
 

@@ -4,7 +4,7 @@ import { COUNT_COLOURS, STEP_OPACITY } from './colours';
 import { SideDetails, WithSide } from './SideColumn';
 import { useStill } from './useWidth';
 
-import type { CountsData, Donor, Prices } from '../_data/types.ts';
+import type { CountsData, Donor } from '../_data/types.ts';
 import {
     bridge,
     type BridgeBar,
@@ -20,15 +20,26 @@ import {
     possessive,
     riseNote,
 } from '../_lib/counts.ts';
+import type { Unit } from '../_lib/live.ts';
 
 const BRIDGES: readonly BridgeKey[] = ['toNet', 'toGrantEquivalent'];
 
-/** A step's change with its sign, as the chart prints it: "+1.4B", "−3.6B". */
-const signed = (millions: number): string =>
-    millions > 0 ? `+${formatCompact(millions)}` : formatCompact(millions).replace('-', '−');
+/** A step's change with its sign, as the chart prints it: "+$1.4B", "−€3.6B". */
+const signed = (millions: number, currency: string): string =>
+    millions > 0
+        ? `+${formatCompact(millions, currency)}`
+        : formatCompact(millions, currency).replace('-', '−');
 
 /** One bridge as one bar: the count solid, the step to gross disbursements pale. */
-const BarRow = ({ bar, percent }: { bar: BridgeBar; percent: (amount: number) => number }) => {
+const BarRow = ({
+    bar,
+    percent,
+    currency,
+}: {
+    bar: BridgeBar;
+    percent: (amount: number) => number;
+    currency: string;
+}) => {
     const solid = percent(Math.min(bar.value, bar.gross));
     const end = percent(Math.max(bar.value, bar.gross));
     const colour = COUNT_COLOURS[bar.target];
@@ -39,13 +50,13 @@ const BarRow = ({ bar, percent }: { bar: BridgeBar; percent: (amount: number) =>
                 <span className={styles.target}>
                     {COUNT_LABELS[bar.target]}{' '}
                     <b key={bar.value} className={styles.figure}>
-                        {formatCompact(bar.value)}
+                        {formatCompact(bar.value, currency)}
                     </b>
                 </span>
                 <span key={bar.step.label} className={styles.step}>
                     {bar.step.label}{' '}
                     <b key={bar.step.value} className={styles.figure}>
-                        {signed(bar.step.value)}
+                        {signed(bar.step.value, currency)}
                     </b>
                 </span>
             </div>
@@ -73,16 +84,17 @@ export const Bridges = ({
     data,
     donor,
     year,
-    prices,
+    unit,
 }: {
     data: CountsData;
     donor: Donor;
     year: number;
-    prices: Prices;
+    unit: Unit;
 }) => {
+    const { prices, currency } = unit;
     const steps = bridge(data, donor, year, prices);
     const bars = bridgeBars(steps);
-    const nonGrants = nonGrantSentence(steps.toGrantEquivalent);
+    const nonGrants = nonGrantSentence(steps.toGrantEquivalent, currency);
     const rises = BRIDGES.flatMap((key) => riseNote(key, steps) ?? []);
     const whose = possessive(donor.name);
     const missing: Record<BridgeKey, string> = {
@@ -173,7 +185,7 @@ export const Bridges = ({
                                     >
                                         {COUNT_LABELS.gross}{' '}
                                         <b key={gross} className={styles.figure}>
-                                            {formatCompact(gross)}
+                                            {formatCompact(gross, currency)}
                                         </b>
                                     </span>
                                 </span>
@@ -188,7 +200,11 @@ export const Bridges = ({
                                         {bar === null ? (
                                             <p className={styles.missing}>{missing[key]}</p>
                                         ) : (
-                                            <BarRow bar={bar} percent={percent} />
+                                            <BarRow
+                                                bar={bar}
+                                                percent={percent}
+                                                currency={currency}
+                                            />
                                         )}
                                     </li>
                                 );
@@ -208,7 +224,7 @@ export const Bridges = ({
                                         }
                                         style={{ left: `${percent(tick)}%` }}
                                     >
-                                        {formatTick(tick)}
+                                        {formatTick(tick, currency)}
                                     </span>
                                 ))}
                             </div>

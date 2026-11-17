@@ -6,10 +6,10 @@ import styles from './Scope.module.scss';
 import { SideDetails, WithSide } from './SideColumn';
 import { useStill } from './useWidth';
 
-import type { CountsData, Donor, Prices } from '../_data/types.ts';
+import type { CountsData, Donor } from '../_data/types.ts';
 import {
     formatShare,
-    formatUsd,
+    formatAmount,
     missingText,
     ODA_GNI_TARGET,
     odaGniSentence,
@@ -17,6 +17,7 @@ import {
     PRELIMINARY_YEAR,
     scope,
 } from '../_lib/counts.ts';
+import type { Unit } from '../_lib/live.ts';
 
 /** House-palette colours (theme.ts DEFAULT_SERIES) no count uses, so a share is not mistaken for a count. */
 const SCOPE_COLOURS = {
@@ -77,23 +78,29 @@ export const Scope = ({
     data,
     donor,
     year,
-    prices,
+    unit,
 }: {
     data: CountsData;
     donor: Donor;
     year: number;
-    prices: Prices;
+    unit: Unit;
 }) => {
+    const { prices, currency } = unit;
     const still = useStill();
-    // A donor-year has one deflator, so shares are the same at either price basis. Current
-    // prices supply them where a constant-price figure is missing.
-    const shares = scope(data, donor, year, 'current');
+    // A donor-year has one deflator and one exchange rate, so shares are the same at either
+    // price basis. Current prices supply them, and constant prices where a current-price
+    // figure is missing, as while a live current basis loads.
     const amounts = scope(data, donor, year, prices);
-    const { bilateralShare, multilateralShare, refugeeShare, odaGni } = shares;
+    const current = scope(data, donor, year, 'current');
+    const constant = scope(data, donor, year, 'constant');
+    const split = current.bilateralShare === null ? constant : current;
+    const { bilateralShare, multilateralShare } = split;
+    const refugeeShare = current.refugeeShare ?? constant.refugeeShare;
+    const { odaGni } = amounts;
     const refugeeNote =
         amounts.refugeeCosts === null
             ? `Amount ${missingText(data, donor, 'refugeeCosts', year, prices)}.`
-            : `${formatUsd(amounts.refugeeCosts)} spent on refugees in the donor country, ` +
+            : `${formatAmount(amounts.refugeeCosts, currency)} spent on refugees in the donor country, ` +
               'for up to a year after they arrive.';
     const gniScale = Math.max(1, Math.ceil((odaGni ?? 0) * 4) / 4);
     const anyMissing = bilateralShare === null || refugeeShare === null || odaGni === null;

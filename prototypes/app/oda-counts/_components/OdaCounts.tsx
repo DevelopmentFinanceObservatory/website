@@ -5,14 +5,14 @@ import { useState } from 'react';
 import { Bridges } from './Bridge';
 import { Controls } from './Controls';
 import { CountDots } from './CountDots';
+import { useLiveUnits } from './LiveUnits';
 import styles from './OdaCounts.module.scss';
 import { Scope } from './Scope';
 import { Trend } from './Trend';
 
-import type { CountsData, Definition, Prices } from '../_data/types.ts';
+import type { CountsData, Definition } from '../_data/types.ts';
 import {
     countsFor,
-    DEFAULT_DONOR,
     DEFAULT_YEAR,
     findDonor,
     possessive,
@@ -22,7 +22,8 @@ import {
 
 /**
  * The interactive part of the page: the controls, the headline sentence, the counts on one
- * axis and the bridges between them, all for one donor, year and price basis.
+ * axis and the bridges between them, all for one donor, year and unit. While the picked
+ * donor or unit loads, the panels keep the previous figures, dimmed.
  */
 export const OdaCounts = ({
     data,
@@ -31,57 +32,56 @@ export const OdaCounts = ({
     data: CountsData;
     definitions: Definition[];
 }) => {
-    const [donorId, setDonorId] = useState(DEFAULT_DONOR);
     const [year, setYear] = useState(DEFAULT_YEAR);
-    const [prices, setPrices] = useState<Prices>('current');
-
-    const donor = findDonor(data, donorId) ?? data.donors[0];
-
-    if (donor === undefined) {
-        throw new Error('counts.json holds no donors');
-    }
+    const { offer, picked, shown, donor, pending, failed, pickDonor, pickUnit } = useLiveUnits();
+    const { unit } = shown;
+    const pickedDonor = findDonor(data, picked.donorId) ?? donor;
 
     const sentence =
-        rangeSentence(donor.name, year, countsFor(data, donor, year, prices)) ??
+        rangeSentence(donor.name, year, countsFor(data, donor, year, unit.prices), unit.currency) ??
         `No disbursement figure of ${possessive(donor.name)} ODA in ${year} is published.`;
 
     return (
         <div className={styles.island}>
             <Controls
                 donors={data.donors}
-                donor={donor}
-                onDonor={setDonorId}
+                donor={pickedDonor}
+                onDonor={pickDonor}
                 years={data.years}
                 year={year}
                 onYear={setYear}
-                baseYear={data.baseYear}
-                prices={prices}
-                onPrices={setPrices}
+                offer={offer}
+                unit={picked.unit}
+                onUnit={pickUnit}
+                failed={failed}
             />
 
-            <div className={styles.headline} aria-live="polite">
-                <p className={styles.sentence}>{sentence}</p>
-                {year === PRELIMINARY_YEAR && (
-                    <p className={styles.caveat}>
-                        {year} figures are preliminary. The OECD revises them when it publishes the
-                        final figures.
-                    </p>
-                )}
+            <div className={styles.figures} data-pending={pending} aria-busy={pending}>
+                <div className={styles.headline} aria-live="polite">
+                    <p className={styles.sentence}>{sentence}</p>
+                    {year === PRELIMINARY_YEAR && (
+                        <p className={styles.caveat}>
+                            {year} figures are preliminary. The OECD revises them when it publishes
+                            the final figures.
+                        </p>
+                    )}
+                </div>
+
+                <CountDots
+                    data={data}
+                    definitions={definitions}
+                    donor={donor}
+                    year={year}
+                    unit={unit}
+                    offer={offer}
+                />
+
+                <Bridges data={data} donor={donor} year={year} unit={unit} />
+
+                <Trend data={data} donor={donor} year={year} unit={unit} offer={offer} />
+
+                <Scope data={data} donor={donor} year={year} unit={unit} />
             </div>
-
-            <CountDots
-                data={data}
-                definitions={definitions}
-                donor={donor}
-                year={year}
-                prices={prices}
-            />
-
-            <Bridges data={data} donor={donor} year={year} prices={prices} />
-
-            <Trend data={data} donor={donor} year={year} prices={prices} />
-
-            <Scope data={data} donor={donor} year={year} prices={prices} />
         </div>
     );
 };

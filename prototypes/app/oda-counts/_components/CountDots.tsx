@@ -4,18 +4,17 @@ import { COUNT_COLOURS } from './colours';
 import { Caret, SideDetails, WithSide } from './SideColumn';
 import { useStill, useWidth } from './useWidth';
 
-import type { CountKey, CountsData, Definition, Donor, Prices } from '../_data/types.ts';
+import type { CountKey, CountsData, Definition, Donor, Offer } from '../_data/types.ts';
 import {
     COUNT_LABELS,
     countDefinition,
     countsFor,
     type CountValue,
     dotLabelBoxes,
-    DOT_PLOT_COUNTS,
-    donorTicks,
+    dotTicks,
+    formatAmount,
     formatCompact,
     formatTick,
-    formatUsd,
     GRANT_EQUIVALENT_FROM,
     headlineBasis,
     headlineLabel,
@@ -26,6 +25,7 @@ import {
     possessive,
     priceDefinition,
 } from '../_lib/counts.ts';
+import { unitPhrase, unitTitle, type Unit } from '../_lib/live.ts';
 
 /** The plot's inner margin, so a dot at either end of the axis is drawn whole. */
 const PAD = 12;
@@ -81,20 +81,23 @@ const Swatch = ({ count, hollow = false }: { count: CountKey; hollow?: boolean }
 );
 
 /**
- * One dot per published count on one axis from zero, the disbursement counts' range as
- * a pale band, and the OECD headline as a ring on the count it follows. Each dot's label
- * sits above or below the axis where `layoutLabels` puts it, joined by a leader.
+ * One dot per published count on one axis, which starts above zero where the counts sit
+ * well above it, the disbursement counts' range as a pale band, and the OECD headline as
+ * a ring on the count it follows. Each dot's label sits above or below the axis where
+ * `layoutLabels` puts it, joined by a leader.
  */
 const DotPlot = ({
     counts,
     ticks,
     year,
+    currency,
     description,
 }: {
     counts: CountValue[];
-    /** the donor's ticks over every year and both price bases, so the scale holds still */
+    /** the donor-year's ticks over both price bases, so switching prices holds the scale */
     ticks: number[];
     year: number;
+    currency: string;
     description: string;
 }) => {
     const [ref, width] = useWidth();
@@ -104,7 +107,9 @@ const DotPlot = ({
         PAD + ((value - low) / (high - low)) * Math.max(0, width - 2 * PAD);
 
     const placed =
-        width > 0 ? layoutLabels({ labels: dotLabelBoxes(counts, year, xOf), width }) : [];
+        width > 0
+            ? layoutLabels({ labels: dotLabelBoxes(counts, year, xOf, currency), width })
+            : [];
     const tiers = (side: PlacedLabel['side']) =>
         Math.max(0, ...placed.filter((label) => label.side === side).map(({ tier }) => tier + 1));
     const span = (count: number) =>
@@ -226,7 +231,7 @@ const DotPlot = ({
                                     <>
                                         <span className={styles.name}>{COUNT_LABELS[key]}</span>
                                         <span key={value ?? 'none'} className={styles.value}>
-                                            {value === null ? '' : formatCompact(value)}
+                                            {value === null ? '' : formatCompact(value, currency)}
                                         </span>
                                     </>
                                 )}
@@ -247,7 +252,7 @@ const DotPlot = ({
                             style={{ left: xOf(tick), top: tickY }}
                             aria-hidden="true"
                         >
-                            {formatTick(tick)}
+                            {formatTick(tick, currency)}
                         </span>
                     ))}
                 </>
@@ -265,26 +270,28 @@ export const CountDots = ({
     definitions,
     donor,
     year,
-    prices,
+    unit,
+    offer,
 }: {
     data: CountsData;
     definitions: Definition[];
     donor: Donor;
     year: number;
-    prices: Prices;
+    unit: Unit;
+    offer: Offer;
 }) => {
+    const { prices, currency } = unit;
     const counts = countsFor(data, donor, year, prices);
-    const ticks = donorTicks(data, donor, DOT_PLOT_COUNTS);
+    const ticks = dotTicks(data, donor, year);
     const still = useStill<HTMLElement>();
-    const unit =
-        prices === 'current' ? 'current US dollars' : `constant ${data.baseYear} US dollars`;
+    const phrase = unitPhrase(unit, offer);
     const price = priceDefinition(prices, definitions);
     const description =
-        `Dot plot of ${possessive(donor.name)} ODA in ${year} by count, in ${unit}. ` +
+        `Dot plot of ${possessive(donor.name)} ODA in ${year} by count, in ${phrase}. ` +
         counts
             .map(
                 ({ key, value }) =>
-                    `${COUNT_LABELS[key]} ${value === null ? missingText(data, donor, key, year, prices) : formatUsd(value)}`,
+                    `${COUNT_LABELS[key]} ${value === null ? missingText(data, donor, key, year, prices) : formatAmount(value, currency)}`,
             )
             .join('; ') +
         `. The OECD headline follows ${COUNT_LABELS[headlineBasis(year)].toLowerCase()} in ${year}.`;
@@ -292,17 +299,17 @@ export const CountDots = ({
     return (
         <section ref={still} id="counts" className={styles.card} aria-labelledby="counts-title">
             <h2 id="counts-title" className={styles.title}>
-                {possessive(donor.name)} ODA in {year} by count, {unit}
+                {possessive(donor.name)} ODA in {year} by count, {phrase}
             </h2>
             <WithSide
                 side={
                     <>
-                        <SideDetails title="How to read this" open>
+                        <SideDetails title="How to read this">
                             <p>
                                 Each dot is one count of the same donor&apos;s ODA in the same year,
-                                on one scale. The band spans the disbursement counts. The ring marks
-                                the count the OECD headline follows. Open a row for the count&apos;s
-                                full definition.
+                                on one scale, which need not start at zero. The band spans the
+                                disbursement counts. The ring marks the count the OECD headline
+                                follows. Open a row for the count&apos;s full definition.
                             </p>
                             <p>
                                 To compare donors, or to test a donor against the UN target of{' '}
@@ -319,13 +326,7 @@ export const CountDots = ({
                                 of or behind disbursements.
                             </p>
                         </SideDetails>
-                        <SideDetails
-                            title={
-                                prices === 'current'
-                                    ? 'Current US dollars'
-                                    : `Constant ${data.baseYear} US dollars`
-                            }
-                        >
+                        <SideDetails title={unitTitle(unit, offer)}>
                             <p>
                                 <Quote part={price} bare />
                             </p>
@@ -333,7 +334,13 @@ export const CountDots = ({
                     </>
                 }
             >
-                <DotPlot counts={counts} ticks={ticks} year={year} description={description} />
+                <DotPlot
+                    counts={counts}
+                    ticks={ticks}
+                    year={year}
+                    currency={currency}
+                    description={description}
+                />
                 <div className={styles.rows}>
                     {counts.map(({ key, value }) => {
                         const parts = countDefinition(key, definitions);
@@ -364,7 +371,7 @@ export const CountDots = ({
                                     >
                                         {value === null
                                             ? missingText(data, donor, key, year, prices)
-                                            : formatCompact(value)}
+                                            : formatCompact(value, currency)}
                                     </span>
                                 </summary>
                                 <div className={styles.rowBody}>
