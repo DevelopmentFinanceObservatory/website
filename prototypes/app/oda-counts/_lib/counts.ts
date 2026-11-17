@@ -348,10 +348,10 @@ export const bridgeBars = (steps: Bridge): Record<BridgeKey, BridgeBar | null> =
 });
 
 /**
- * "Of $18.1bn gross, $4.7bn was loans and other non-grant instruments; counting only
- * their concessional part removes $2.6bn.", or null without a non-grant figure. Also
- * null unless the gap is a fall no larger than the non-grants, since only then can
- * the loans' non-concessional part account for it.
+ * "Of $18.1bn gross, $4.7bn was loans and other non-grant instruments, which grant
+ * equivalents count only for their concessional part.", or null without a non-grant
+ * figure. Also null unless the gap is a fall no larger than the non-grants, since
+ * otherwise the non-grants cannot be what the gap is mostly about.
  */
 export const nonGrantSentence = (
     step: Bridge['toGrantEquivalent'],
@@ -370,8 +370,7 @@ export const nonGrantSentence = (
 
     return (
         `Of ${amount(step.gross)} gross, ${amount(step.nonGrants)} was loans and other ` +
-        `non-grant instruments; counting only their concessional part removes ` +
-        `${amount(step.notCounted)}.`
+        `non-grant instruments, which grant equivalents count only for their concessional part.`
     );
 };
 

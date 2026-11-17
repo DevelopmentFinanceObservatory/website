@@ -105,7 +105,7 @@ export const Bridges = ({
         toGrantEquivalent:
             year < GRANT_EQUIVALENT_FROM
                 ? `The OECD's headline counts grant equivalents from ${GRANT_EQUIVALENT_FROM}, so this bridge starts then.`
-                : `${whose} grant-equivalent figure for ${year} is not published.`,
+                : `${whose} gross or grant-equivalent figure for ${year} is not published.`,
     };
 
     const gross = BRIDGES.flatMap((key) => bars[key]?.gross ?? [])[0] ?? null;

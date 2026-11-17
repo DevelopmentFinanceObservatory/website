@@ -2,7 +2,7 @@
   "provenance": {
     "sdk": "development-finance==0.2.0",
     "query": "POST https://developmentfinance.org/api/v1/graph/nodes",
-    "retrieved": "2026-11-17T18:50:51.115Z",
+    "retrieved": "2026-11-17T20:07:37.236Z",
     "nodes": [
       "Gross",
       "Net",

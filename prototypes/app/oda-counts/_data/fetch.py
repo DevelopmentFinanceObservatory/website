@@ -223,8 +223,10 @@ SERIES = [
            "amount", flow("1015", "Gross")),
     Series("multilateral", "Gross multilateral ODA disbursements by provider",
            "FinancialFlow", "amount", flow("2000", "Gross")),
-    Series("refugeeCosts", "In-donor refugee costs in OECD headline ODA by provider",
-           "FinancialFlow", "amount", flow("1820", "Net"), provenance=HEADLINE),
+    # Net disbursements: refugee costs are grants, so these match the headline's grant
+    # equivalents to within 0.2% for 2018-2024, and they reach the preliminary year.
+    Series("refugeeCosts", "In-donor refugee costs, net ODA disbursements by provider",
+           "FinancialFlow", "amount", flow("1820", "Net")),
     Series("grossNonGrants", "Gross ODA non-grant disbursements by provider",
            "FinancialFlow", "amount", flow("1010", "Gross", "DACTypeOfFinanceNonGrants")),
     Series("odaGni", "OECD headline ODA as a share of GNI by provider", "FinancialFlow",
