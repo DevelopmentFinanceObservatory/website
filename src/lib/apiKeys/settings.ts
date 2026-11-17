@@ -114,6 +114,3 @@ export const parseEmailInput = (value: unknown): string | null => {
 
     return email.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(email) ? email : null;
 };
-
-/** The rate-limit window in seconds, from `RATE_LIMIT_WINDOW_S` as the limiter reads it. */
-export const rateWindowSeconds = (value: string | undefined): number => Number(value) || 60;

@@ -30,6 +30,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apikey, user } from '../../../db/schema.ts';
 import { API_KEY_PREFIX } from '../auth/apiKeyOptions.ts';
+import { likeContaining } from '../likePattern.ts';
 import { parseLabel } from './settings.ts';
 
 /** The parts of the Better Auth instance this module uses. */
@@ -114,9 +115,6 @@ const ownKeyColumns = {
 
 // The most keys one operator list returns.
 const ADMIN_LIST_LIMIT = 500;
-
-/** `value` as a LIKE pattern's literal text. */
-const likeLiteral = (value: string): string => value.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 /** The HTTP status of a Better Auth APIError, or undefined for any other throw. */
 const statusOf = (error: unknown): number | undefined => {
@@ -262,7 +260,7 @@ export const createKeyService = ({
                 })
                 .from(apikey)
                 .innerJoin(user, eq(user.id, apikey.referenceId))
-                .where(needle ? ilike(user.email, `%${likeLiteral(needle)}%`) : undefined)
+                .where(needle ? ilike(user.email, likeContaining(needle)) : undefined)
                 .orderBy(desc(apikey.createdAt))
                 .limit(ADMIN_LIST_LIMIT);
 

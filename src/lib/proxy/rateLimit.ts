@@ -31,7 +31,8 @@ import type { RateVerdict } from './rateHeaders';
  *                         and MCP surfaces, for an account with no limit of
  *                         its own (default 600)
  */
-const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
+/** The rate-limit window in seconds, which the key pages show too. */
+export const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
 
 // How often each instance deletes dead counters.
 const PRUNE_EVERY_MS = 60 * 60 * 1000;

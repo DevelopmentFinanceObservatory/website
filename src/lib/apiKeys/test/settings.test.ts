@@ -9,7 +9,6 @@ import {
     parseEmailInput,
     parseLabel,
     parseLimitInput,
-    rateWindowSeconds,
 } from '../settings.ts';
 
 const user = (email: string, emailVerified = true) => ({ id: 'u1', email, emailVerified });
@@ -89,10 +88,4 @@ test('parseEmailInput: trimmed, lowercased, address-shaped', () => {
     assert.equal(parseEmailInput('no at sign'), null);
     assert.equal(parseEmailInput('a b@c.d'), null);
     assert.equal(parseEmailInput(null), null);
-});
-
-test('rateWindowSeconds: the env value, else 60', () => {
-    assert.equal(rateWindowSeconds(undefined), 60);
-    assert.equal(rateWindowSeconds('30'), 30);
-    assert.equal(rateWindowSeconds('x'), 60);
 });

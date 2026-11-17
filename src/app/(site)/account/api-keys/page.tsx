@@ -5,9 +5,9 @@ import { createKey, deleteKey } from './actions';
 
 import AccountApiKeys from '@/components/organisms/ApiKeys/AccountApiKeys';
 import { keyService, requireUser } from '@/lib/apiKeys/server';
-import { maxKeysPerAccount, rateWindowSeconds } from '@/lib/apiKeys/settings';
+import { maxKeysPerAccount } from '@/lib/apiKeys/settings';
 import { keysEnabled } from '@/lib/proxy/forward';
-import { KEYED_LIMIT } from '@/lib/proxy/rateLimit';
+import { KEYED_LIMIT, WINDOW_S } from '@/lib/proxy/rateLimit';
 
 export const metadata: Metadata = {
     title: 'API keys — DFO',
@@ -28,7 +28,7 @@ const AccountApiKeysPage = async () => {
             max={maxKeysPerAccount(process.env.API_KEYS_MAX_PER_ACCOUNT)}
             limit={ownLimit ?? KEYED_LIMIT}
             ownLimit={ownLimit !== null}
-            windowSeconds={rateWindowSeconds(process.env.RATE_LIMIT_WINDOW_S)}
+            windowSeconds={WINDOW_S}
             keysEnabled={keysEnabled()}
             createAction={createKey}
             deleteAction={deleteKey}
