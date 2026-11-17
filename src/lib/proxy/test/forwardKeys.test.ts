@@ -325,6 +325,37 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
+test('forward: while keys are off, a call with X-API-Key is logged without its value', async () => {
+    fresh();
+    process.env.API_KEYS_ENABLED = 'false';
+    fakes(VALID);
+
+    await call({ 'x-api-key': 'another-service-secret' });
+    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
+    await call({ authorization: `Bearer ${KEY}` });
+    // The Studio ignores keys whatever the switch says.
+    await call({ 'x-api-key': KEY }, { keys: false });
+
+    assert.deepEqual(
+        lines.map((line) => JSON.parse(line)),
+        [
+            {
+                severity: 'INFO',
+                message: 'api key header while keys are off',
+                surface: 'api',
+                ours: false,
+            },
+            {
+                severity: 'INFO',
+                message: 'api key header while keys are off',
+                surface: 'mcp',
+                ours: true,
+            },
+        ],
+    );
+    assert.doesNotMatch(lines.join('\n'), /another-service-secret|dfo_live/);
+});
+
 test('forward: logs one line per keyed call with the key id, account, surface and outcome, never the key', async () => {
     fresh();
     fakes(VALID);

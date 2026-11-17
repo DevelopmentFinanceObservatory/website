@@ -8,7 +8,7 @@ import { keyDb } from '@/lib/db';
 import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
 
 import { decideAccess, type Access, type AccessDeps } from './access';
-import { API_KEY_HEADER, carriesKey } from './apiKey';
+import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
 import {
     accountCaller,
     limiterKeyFor,
@@ -140,6 +140,27 @@ const logKeyUse = (surface: Surface | undefined, { identity, outcome }: Access):
     );
 };
 
+// While keys are off, one line per call on a keyed surface that sends an
+// X-API-Key header, so the callers who would get a 401 once keys are on (any
+// X-API-Key value is read as a key) can be counted first. It says whether the
+// value has our prefix, and nothing else of it.
+const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
+    const value = headers.get(API_KEY_HEADER);
+
+    if (value === null) {
+        return;
+    }
+
+    console.log(
+        JSON.stringify({
+            severity: 'INFO',
+            message: 'api key header while keys are off',
+            surface,
+            ours: hasKeyPrefix(value.trim()),
+        }),
+    );
+};
+
 type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
@@ -212,12 +233,18 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
+    const honorsKeys = options.surface !== undefined && options.keys !== false;
+    const keysOn = keysEnabled();
     const access = await decideAccess(accessDeps, {
         surface: options.surface,
-        keys: options.keys !== false && keysEnabled(),
+        keys: honorsKeys && keysOn,
         headers: req.headers,
         ip: clientIp(req),
     });
+
+    if (honorsKeys && !keysOn) {
+        logKeyHeaderWhileOff(options.surface!, req.headers);
+    }
 
     logKeyUse(options.surface, access);
 
