@@ -1,8 +1,6 @@
 # API Keys for the Platform Proxy
 
-Sef Kloninger <<sef@ode.partners>> with Claude Code and Codex \
-[Issue #142][issue] \
-Last Update: Nov 16, 2026
+[Issue #142][issue]
 
 ## Contents
 
@@ -31,6 +29,7 @@ Last Update: Nov 16, 2026
     - [Phase 3: Enforce][]
 - [Testing][]
     - [Local Test Results][]
+- [Runbook][]
 - [Work by Repository][]
 - [Alternatives Considered][]
 - [Future Features][]
@@ -57,7 +56,7 @@ Requirements:
 **Recommendation.** Use Better Auth's API key plugin from Phase 1, with keys in our own Postgres. The site already uses Better Auth for sign-in and sessions, so the plugin gives us key generation, hashing, storage, and the create, list and delete operations with ownership checks, without writing them, and it makes self-service possible from the start. We keep our own limiter, which anonymous traffic needs anyway, and we own the key lookup on the request path, with its caching and outage handling. A spike confirmed the plugin fits, with workarounds. If that changes, we fall back to building a small key table of our own behind the same verifier.
 See [Use: Better Auth API Key Plugin][], [Build][] and [Alternatives Considered][].
 
-We'll take a phased approach. Initially we'll prove the concept with hand-provisioned keys and limited features. Once this is proven in production, follow-on work will enable more features, self-service provisioning, and admin interfaces to adjust access and limits.
+We'll take a phased approach. Phase 1 ships the proxy check, an admin page for operators and a self-service page in the account menu. It proves keys in production with a few callers we choose before self-service is announced. Follow-on work lowers the anonymous limits once heavy users are on keys.
 
 ## How It Works Today
 
@@ -79,8 +78,9 @@ A key is optional on every call. A call with a valid key is counted against the 
 
 ### Key Format and Communication
 
-- Format: a recognizable prefix, an environment marker and random characters, for example `dfo_live_<32+ random chars>`. The prefix lets secret scanners and our own logs spot a leaked key.
-- Shown once, when it is created. We store only a SHA-256 hash, so a database leak exposes no usable key.
+- Format: `dfo_live_`, 32 random letters, then an 8-character signed tag, 49 characters in all. The prefix lets secret scanners and our own logs spot a leaked key.
+- The tag is the first 8 base64url characters of an HMAC-SHA-256 over the rest of the key, keyed by a server secret. It proves the key was minted here, so the proxy turns a made-up key away before any database read (see [The Proxy Check][]). A plain checksum would not do: the repository is public, and anyone could compute one. Partners hold keys in this format, so it is fixed before the first key is issued; changing it later would mean two admission paths until every old key is replaced.
+- Shown once, when it is created. We store only a SHA-256 hash of the whole key, so a database leak exposes no usable key.
 
 How the key is sent is a design choice. We propose sending the key as a bearer token in a standard header, `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. We don't plan to accept the key in a query string, as that's an outmoded style, although some people like it for ease of use and debuggability.
 
@@ -88,7 +88,8 @@ How the key is sent is a design choice. We propose sending the key as a bearer t
 - The `dfo_` prefix lets the proxy tell our key from any other bearer token.
 - The alias costs a few lines. It leaves `Authorization` free if `/mcp` later gains sign-in, where one call could carry a user's token and an application's key.
 - A call that sends both headers with different keys is refused with a 400.
-- The proxy strips the key before forwarding, so it never reaches a backend or its logs.
+- The proxy strips the key before forwarding, so it never reaches a backend or its logs. A `dfo_` value in `Authorization` under any scheme (`Token dfo_live_…`, a bare key) is stripped too, though only `Bearer` is read as a key.
+- Request headers are kept off Sentry events and transactions, since Sentry otherwise copies every request header but cookies and IP headers onto each event (`src/lib/sentryOptions.ts`).
 
 **Comparables: How Other Services Do It**
 
@@ -118,7 +119,7 @@ So a key on `/mcp` serves programmatic and developer use, and Claude connector u
 
 | Path                                               | What happens to `Authorization` today                           | Effect of a key there                                                                                 |
 | -------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `/api/v1/*`                                        | Passed upstream, where dfo-apis does not use it to name callers | No conflict                                                                                           |
+| `/api/v1/*`                                        | Not passed upstream: dfo-apis reads no caller's `Authorization` | No conflict                                                                                           |
 | `/mcp`, proxy holds the harness token (production) | Overwritten with the harness token                              | No conflict. The proxy reads the key first, then replaces the header as it does now                   |
 | `/mcp`, proxy holds no token                       | The caller's value is passed through to the harness             | The only conflict. The `dfo_` prefix resolves it: our key is consumed, any other token passes through |
 
@@ -137,7 +138,7 @@ The number applies to each surface separately. An account with a limit of 200 ca
 - Empty means the default for keyed callers, set per deployment in env (for example `RATE_LIMIT_KEYED`). Most accounts store nothing, and raising the default moves them all at once.
 - A number overrides the default for that account.
 - The window stays global at 60 seconds (`RATE_LIMIT_WINDOW_S`). There is no per-account window.
-- A slow counter must not let a burst through. Today a slow or failed count lets the call through uncounted. Instead, each instance keeps a small in-memory count per caller and falls back to it when the shared count is slow, so the proxy stays available but one caller is still held near its limit on each instance.
+- A slow counter must not let a burst through. Today a slow or failed count lets the call through uncounted. Instead, each instance keeps a small in-memory count per caller and falls back to it when the shared count is slow, so the proxy stays available but one caller is still held near its limit on each instance. The fallback goes on from the last shared count it saw for the caller in the window, so a caller already refused stays refused.
 
 One number is simpler to explain to a key holder and simpler to administer. The anonymous limits differ by surface because chat vendors send many users from one address. That does not apply to an account, which is one caller.
 
@@ -199,19 +200,19 @@ Below Enterprise, a rate limiting rule's own match expression cannot reference r
 | `/api/v1/studio/*`                                                               | No           | The Studio is the site's own chat UI. A key never replaces or bypasses its daily prompt allowance. A key sent there is removed and otherwise ignored                                                                 |
 | `/api/download-pin`, MCP theme stylesheets                                       | No           | These do not pass through the key check today and stay as they are                                                                                                                                                   |
 
-On every surface, a `dfo_` bearer is consumed by the proxy and never copied upstream, including when verification fails. Other `Authorization` values are handled as they are today.
+On every surface, a `dfo_` value is consumed by the proxy and never copied upstream, including when verification fails. dfo-apis gets no caller `Authorization` at all. Other upstreams get any other value as they do today.
 
 ### Identity, Failure and Abuse
 
 - **One identity per request.** The proxy resolves the caller once, as an address or a key, before the limiter runs. That one identity is used for counting, for `x-dfo-caller` to both dfo-apis and dfo-ai, and for logging. Today the MCP route, the dfo-apis path and the request log each work out the caller separately.
-- **Invalid keys.** An unknown or revoked key gets a 401 and does not fall back to anonymous. There is no separate budget for bad keys. Any key that is not already in the cache is counted against its address's normal limit before the store is looked up, so made-up keys cannot force more lookups than the address could make calls anyway. Keys over a maximum length are refused unread, and unknown keys are cached briefly as unknown.
+- **Invalid keys.** An unknown or revoked key gets a 401 and does not fall back to anonymous. There is no separate budget for bad keys. A key whose tag no server secret made is refused before any read or count, and logged with its own outcome (`forged`) so made-up keys can be counted. A valid key is never charged to its address, so keyed callers behind a busy shared address, such as Claude connector users on Anthropic's addresses, are not held to that address's anonymous limit, and a later cut to the anonymous limits does not touch them. A deleted key keeps a good tag, so a good tag that finds no key is charged to its address, as every cache miss once was: deleted keys cost what made-up keys used to, and made-up keys cost nothing. Keys over a maximum length are refused unread, and unknown keys are cached briefly as unknown.
 - **Revocation.** Revoking a key deletes it. The plugin lets a key's owner switch a disabled key back on, so disabling is not revocation. Logs keep the key's public id, so its history survives. A deleted key stops being admitted within the cache lifetime, about a minute per instance. The lifetime is absolute and is not extended when the store is unreachable. Revoking stops new calls. It does not cut a stream that is already open. Lowering an account's limit takes effect on the same delay.
-- **Emergency switch.** An operator can delete one key, or turn off all keyed access, without a deploy. How quickly that reaches every instance has to be stated when it is built.
+- **Emergency switch.** An operator can delete one key from the admin page without a deploy. Turning off all keyed access sets `API_KEYS_ENABLED=false`, an environment variable, which takes a new Cloud Run revision. It stays an environment variable because the switch exists for a faulty key path, and it must still work when Postgres is down. See [Runbook][].
 - **Key store unavailable.** The check fails open. A key already in the cache keeps working until its entry expires. A key that is not in the cache is treated as anonymous while the store cannot be reached: the call goes through at the anonymous limit for its address. Rate limiting is not a mission-critical part of the system, so staying available matters more than enforcing an account's own limit during an outage. The plugin reports a database outage as an invalid key, so the verifier has to tell the two apart itself rather than answer 401 to every uncached key during an outage. The lookup gets its own bounded pool and timeout, as the counter has, so a slow store does not slow the proxy.
 
 ### Logs and Docs
 
-- Key usage is logged in `forward()`, where the key is checked. The line carries the key's public id, its account, the surface and the outcome, and never the key or its hash. The existing request log works the caller out from raw headers when the response closes, apart from `forward()`, so it cannot see which key was used. Per-key and per-account usage metrics come from this line, and the Phase 1 exit criterion and Phase 3's search for high-volume callers rely on it.
+- Key usage is logged in `forward()`, where the key is checked. The line carries the key's public id, its account, the surface and the outcome (`allowed`, `limited`, `invalid`, `forged` or `unavailable`), and never the key or its hash. A failed key lookup logs only its error code, since the database error's message carries the query's parameters. While keys are off, a call carrying `X-API-Key` logs a line saying whether the value has our prefix, so callers who send another service's key there, and would get a 401 once keys are on, can be counted first. The existing request log works the caller out from raw headers when the response closes, apart from `forward()`, so it cannot see which key was used. Per-key and per-account usage metrics come from this line, and the Phase 1 exit criterion and Phase 3's search for high-volume callers rely on it.
 - `/openapi.json` gains an optional security scheme, and the API and MCP docs explain keys. The API quickstart in the docs repository, which says no key is needed, is updated.
 
 ## Build
@@ -242,10 +243,11 @@ Postgres rather than Redis: the limiter already counts there, key volume is smal
 Before the rate limit, on the surfaces in [Where Keys Apply][]:
 
 1. Read the key header. No header: carry on as an anonymous caller.
-2. Hash the key and look it up in a short in-process cache (about 60 seconds), so a keyed call adds no query in the common case. On a cache miss, count the call against the address's normal limit first, then look the key up in the store. Lookup is by the hash, so no secret is compared by hand.
-3. Unknown or revoked key: answer 401 with a problem document.
-4. Valid key: count the call against the owning account at the account's limit, using the existing counter, which already counts each surface separately. The counter's entry point takes an address and a fixed limit today and needs to accept a caller and a limit.
-5. Log the key's public id, its account, the surface and the outcome.
+2. Check the key's signed tag against each server secret. A bad tag: answer 401, with no read and no count.
+3. Hash the key and look it up in a short in-process cache (about 60 seconds), so a keyed call adds no query in the common case. On a cache miss, look the key up in the store. Lookup is by the hash, so no secret is compared by hand.
+4. Unknown or revoked key: count the call against the address's normal limit, then answer 401 with a problem document (429 when the address is over its limit).
+5. Valid key: count the call against the owning account at the account's limit, and never against the address, using the existing counter, which already counts each surface separately.
+6. Log the key's public id, its account, the surface and the outcome.
 
 [Identity, Failure and Abuse][] covers revocation delay and failing open when the store is unavailable.
 
@@ -257,11 +259,11 @@ Operators work from an admin page (see [Admin System][]). Later phases need more
 
 - Self-service pages in the account menu to create, label and revoke keys and see last use, with the endpoints and ownership checks behind them (Phase 2).
 - An operator view to find a key, see its usage, and raise or cut its limits (Phase 3).
-- Expiry and multiple keys per account, if we take them up from [Future Features][].
+- Expiry, and several keys per account, which the plugin gives us and the Build store would need too.
 
 ## Use: Better Auth API Key Plugin
 
-In this option the key store is the [API key plugin][better-auth-api-key] of Better Auth, the library that already handles sign-in on the site. It is a separate package, `@better-auth/api-key`, and is not installed today (the site has `better-auth` 1.7.7). Keys live in our own Postgres, in a table the plugin defines. No third-party service is involved. This is the recommended option from Phase 1, behind the same verifier the Build store would use.
+In this option the key store is the [API key plugin][better-auth-api-key] of Better Auth, the library that already handles sign-in on the site. It is a separate package, `@better-auth/api-key`, whose version tracks `better-auth` exactly. Keys live in our own Postgres, in a table the plugin defines. No third-party service is involved. This is the recommended option from Phase 1, behind the same verifier the Build store would use.
 
 ### What the Plugin Provides
 
@@ -282,12 +284,14 @@ In this option the key store is the [API key plugin][better-auth-api-key] of Bet
 
 The spike (below) shaped these. The plugin generates, hashes, stores and manages keys. Our code owns the request path.
 
-- **Proxy check.** The proxy does not call `verifyApiKey`. That call writes to the key's row on every verification, with no way to turn the writes off, and it reports a database outage as an invalid key. Instead our verifier hashes the key with the plugin's own hasher (`base64url(SHA-256(key))`) and reads the plugin's `apikey` table with Drizzle, on its own bounded pool and timeout. It checks `enabled` and `expiresAt` itself. A throw or timeout means "store unavailable", so failing open works as in [Identity, Failure and Abuse][]. The read is behind the short in-process cache, and the cache stores `expiresAt` so an expired key is not admitted from the cache.
+- **Proxy check.** The proxy does not call `verifyApiKey`. That call writes to the key's row on every verification, with no way to turn the writes off, and it reports a database outage as an invalid key. Instead our verifier hashes the key with the plugin's own hasher (`base64url(SHA-256(key))`) and reads the plugin's `apikey` table with Drizzle, on its own bounded pool and timeout. It checks `enabled` and `expiresAt` itself, after the signed tag. A throw or timeout means "store unavailable", so failing open works as in [Identity, Failure and Abuse][]. The read is behind the short in-process cache, and the cache stores `expiresAt` so an expired key is not admitted from the cache.
 - **Header.** The proxy parses `Authorization: Bearer dfo_…` and `X-API-Key` itself. The plugin's option to turn a key into a session (`enableSessionForAPIKeys`) stays off: with it on, a key acts as its owner on every `/api/auth/*` endpoint, account deletion included.
 - **Limits.** The plugin's limiter is off. We count in `limit_counter`: ours lets verification sit behind the cache, emits the `X-RateLimit-*` headers, and is the limiter anonymous traffic uses anyway. The account's limit is an extra field on the Better Auth user record (`apiRateLimit`, not settable by the user).
-- **Endpoints.** The plugin's HTTP endpoints for keys are disabled. A user could otherwise create a key with any prefix, re-enable a key an operator disabled, or remove an expiry. Our own thin routes call the plugin's server methods, force the `dfo_live_` prefix, and always use the signed-in user as owner.
-- **Revocation.** Revoking deletes the key. The plugin's server-side delete needs the owner's session, so operator deletes go through its adapter or Drizzle.
-- **Ownership.** Every key belongs to an account. A hand-provisioned key belongs to an account we create for the partner, or to ourselves on their behalf.
+- **Key format.** The plugin mints keys through its `customKeyGenerator` option: its own random letters, then the signed tag. The stored hash covers the whole key and works as before.
+- **Endpoints.** The plugin's HTTP endpoints for keys are disabled. A user could otherwise create a key with any prefix and expiry. Better Auth checks `disabledPaths` only in its HTTP router, so our server actions still reach the server methods. The account page lists and deletes keys with the plugin's `listApiKeys` and `deleteApiKey` on the request's session, so the plugin alone decides which keys are whose and checks a ban on delete. Creating passes the signed-in user's id and forces the `dfo_live_` prefix.
+- **Revocation.** Revoking deletes the key. The plugin lists and deletes keys only for their owner, so the admin page's queries over other accounts' keys read and delete the plugin's table with Drizzle.
+- **Ownership.** Every key belongs to an account, and is deleted with it. A partner's keys belong to a role mailbox account, such as a team address, set up before the first partner key, so a key does not leave with the person who made it.
+- **Schema coupling.** The proxy's key check and the admin queries read the plugin's table directly, which ties them to its schema. A known-answer test pins the hash, and the tests of the columns they read run on every plugin upgrade.
 - **Caller name.** The key's account names the caller to the backends as `user:<32 hex>`, a keyed digest of the account id. The plugin's key id, a 32-character random string, is the public id in logs.
 - **Schema.** The plugin's table is added through our existing migrations, as the auth tables were, with two changes: a unique index on the key hash, and a foreign key to the user that deletes an account's keys with the account. The plugin has neither.
 
@@ -301,11 +305,11 @@ There is no admin interface to leverage. This was checked in three places:
 | [Better Auth admin plugin][better-auth-admin]            | User administration: list and edit users, roles, bans, sessions, impersonation                                       | No. It has no pages either, only methods, and it does not cover API keys                                                                               |
 | [Better Auth Infrastructure dashboard][better-auth-dash] | A hosted dashboard from the Better Auth company, fed by a plugin that sends user and session events to their service | Not documented. It would also send account activity to a third party                                                                                   |
 
-So the operator view is ours to write in either option. With the plugin, it is a thin wrapper over its server methods instead of our own queries.
+So the operator view is ours to write in either option. With the plugin, it still queries the table directly, since the plugin lists and deletes keys only for their owner.
 
-Phase 1 ships it as a proof of concept at `/admin/api-keys`. It is open to signed-in users whose verified email is in `ADMIN_EMAILS`, and answers 404 to everyone else, checked on the page and in every action. An operator can list every key with its owner and last use, filter by email, create a key for an account, delete any key, and set or clear an account's limit. Each change writes a log line naming the operator. A Cloud Run Job running an admin command is no longer needed for Phase 1, though one could still be added for scripted changes.
+Phase 1 ships it as a proof of concept at `/admin/api-keys`. It is open to signed-in users whose verified email is in `ADMIN_EMAILS`, and answers 404 to everyone else, checked on the page and in every action. An operator can list every key with its owner and last use, filter by email, create a key for an account, delete any key, and set or clear an account's limit. Each change writes a log line naming the operator. A Cloud Run Job running an admin command is no longer needed for Phase 1, though one could still be added for scripted changes. Setting an account's limit to 1 holds all its keys, new ones included, to one call a minute. Shutting an account out entirely needs a ban, which waits for Better Auth's `admin()` plugin and its roles; that plugin is worth adding once there is more than one admin task to gate. Anonymous access stays open either way.
 
-The self-service page, `/account/api-keys`, is built the same way: our own server actions over the plugin's server methods, since the plugin's HTTP endpoints are disabled.
+The self-service page, `/account/api-keys`, is our own server actions over the plugin's server methods, since the plugin's HTTP endpoints are disabled. Its five-key cap is checked again after each insert, so creates in parallel cannot pass it.
 
 ### What It Saves and What It Costs
 
@@ -313,7 +317,7 @@ Saves:
 
 - Key generation, hashing and comparison, which are the security-sensitive parts.
 - The create, list, update and delete endpoints with ownership checks, which Phase 2 needs.
-- Expiry and multiple keys per account, both listed under [Future Features][].
+- Several keys per account, and expiry, listed under [Future Features][].
 
 Costs:
 
@@ -326,7 +330,7 @@ Every key needing an owning account is not a cost here: limits are per account a
 
 ### Spike Before Deciding
 
-Run on Nov 16, 2026 against `better-auth` 1.7.7 and `@better-auth/api-key` 1.7.7 on Postgres. Verdict: fits, with the workarounds in [How It Would Fit][].
+Run against `better-auth` 1.7.7 and `@better-auth/api-key` 1.7.7 on Postgres. Verdict: fits, with the workarounds in [How It Would Fit][].
 
 - [x] Works with `better-auth` 1.7.7 and our Drizzle migrations. The plugin's version tracks `better-auth` exactly, so the two are upgraded together.
 - [x] Verification writes on every call (a read and two updates), and the writes cannot be turned off. The proxy reads the table itself instead.
@@ -348,13 +352,15 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Who gets a key:** A few callers we choose
 
-**Provisioning:** Manual: operators create and revoke keys on the admin page, `/admin/api-keys`
+**Provisioning:** Operators create and revoke keys on the admin page, `/admin/api-keys`. The self-service page is built but not yet announced
 
-**Limits:** Set per account by hand
+**Limits:** The keyed default, or an account's own limit set on the admin page
 
 **Anonymous access:** Unchanged
 
-**Also needed:** Proxy check behind a verifier, the plugin's key table, the admin page, the `API_KEYS_ENABLED` switch that turns all keyed access off, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
+**Also needed:** Proxy check behind a verifier, the signed key tag and its secret, the plugin's key table, the admin page, the `API_KEYS_ENABLED` switch that turns all keyed access off, a burst-safe fallback when the counter is slow, dfo-apis and dfo-ai accept and pass on keyed callers, key usage logged in `forward()`, and the API docs and quickstart
+
+**Before release to production:** on dev, a keyed MCP call reaches dfo-apis as `user:` and spends the same account allowance as a keyed API call
 
 **Exit criteria:** The first partner runs on a key in production without incident, and per-key counts in the logs match what they report sending.
 
@@ -370,7 +376,7 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 **Anonymous access:** Unchanged; docs start recommending a key
 
-**Also needed:** A transition notice for current users, usage shown to key owners, and caps for keyed MCP use if MCP usage calls for them (see [Future Features][])
+**Also needed:** A transition notice for current users, a way to ask for a higher limit, usage shown to key owners, and a decision on caps for keyed MCP use before keys are announced for MCP (see [Future Features][])
 
 **Exit criteria:** The transition notice has been out for an agreed period, and the callers who would be hit by lower anonymous limits have been identified and contacted where we can reach them.
 
@@ -394,7 +400,7 @@ Phase 1 should avoid choices that Phase 2 has to undo. Every key has an owning a
 
 ### Local Test Results
 
-Run on Nov 16, 2026 against the local stack: the website on the implementation branch, the ai harness, and the dev apis proxy. Sign-in used an emailed code caught by a local mail catcher, and the key was created on the account's API keys page. The key went in as `Authorization: Bearer dfo_live_…`.
+Run against the local stack: the website on the implementation branch, the ai harness, and the dev apis proxy. These runs predate the signed tag; keys made then have no tag and are now refused. Sign-in used an emailed code caught by a local mail catcher, and the key was created on the account's API keys page. The key went in as `Authorization: Bearer dfo_live_…`.
 
 | Test                              | How                                                                                                                                                          | Result                                                                                                                                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -428,17 +434,29 @@ Observations:
 - **Backends not exercised.** The local stack sends no caller to the backends, because the caller key and the shared secret are unset there. dfo-apis and dfo-ai seeing the account as a `user:` caller has to be tested on dev, after their changes are deployed.
 - **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests so far.
 
+## Runbook
+
+**Turn all keyed access off.** Set `API_KEYS_ENABLED=false` on the service, which rolls out a new revision; keys are then stripped and every call is counted by address. Set it back to `true` to turn keys on. The rollout time is to be measured on dev and recorded here before release.
+
+```
+gcloud run services update <service> --region <region> --update-env-vars API_KEYS_ENABLED=false
+```
+
+**Before keys are first switched on in an environment,** run a week with `API_KEYS_ENABLED=false` and count the `api key header while keys are off` lines with `ours: false`: those callers send another service's key in `X-API-Key` and would get a 401.
+
+**Rotate the key tag secret.** `API_KEY_TAG_SECRETS` is a comma-separated list, one per environment and never derived from `BETTER_AUTH_SECRET`, so rotating the auth secret leaves keys alone. The first entry signs new keys; every entry verifies. To rotate, add the new secret at the end in one revision, then move it first in the next, so no instance meets a key it cannot check. Removing a secret voids every key it signed, and keys do not expire, so a secret is removed only after its keys are replaced. A production instance refuses to start without the list.
+
 ## Work by Repository
 
-Most of the work is in the website. This split holds for both options: Use and Build differ only in the website row, in where keys are stored and how they are looked up. The other rows are the same either way, since those systems see only the caller name and the key header. Codex's review corrected the dfo-ai row, which first read "little or none". The Phase 1 pieces:
+Most of the work is in the website. This split holds for both options: Use and Build differ only in the website row, in where keys are stored and how they are looked up. The other rows are the same either way, since those systems see only the caller name and the key header. The Phase 1 pieces:
 
 | Where      | Size       | What                                                                                                                                                                                                                                                        |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | website    | Most of it | The plugin and its table migration (or our own `api_key`); key check, per-account limit, burst-safe counter fallback and key usage logging in `forward()`; the self-service and admin pages; OpenAPI security scheme; tests beside the existing proxy tests |
 | dfo-apis   | Small      | Accept a keyed caller in `x-dfo-caller` beside the website's shared secret, so allowances count per account. Today only `ip:<digest>` is accepted, and anything else gets a 400                                                                             |
 | dfo-ai     | Small      | Pass a keyed caller on to dfo-apis. Its data, presentation and analysis clients forward only `ip:<digest>` today and drop anything else, which would count a keyed caller's allowances against dfo-ai itself                                                |
-| infra      | Optional   | The admin page covers operator changes in production. A Cloud Run Job for a scripted admin command is optional                                                                                                                                              |
-| docs       | Small      | The API quickstart, which says no key is needed, and a page on keys                                                                                                                                                                                         |
+| infra      | Small      | `API_KEY_TAG_SECRETS`, a dedicated secret list per environment, before the first key is issued. The admin page covers operator changes in production; a Cloud Run Job for a scripted admin command is optional                                              |
+| docs       | Small      | The API quickstart, which says no key is needed, and a page on keys that gives the 49-character key length                                                                                                                                                  |
 | Cloudflare | None today | The Pro plan's per-address rules (600 a minute on the data API) sit well above the proxy's limits. Revisit if an account is granted more than that from one address                                                                                         |
 
 Order matters. dfo-apis refuses a caller form it does not recognize with a 400 when it arrives with the shared secret. So dfo-apis ships first, then dfo-ai, and the website starts sending keyed callers last. An end-to-end test should show a keyed call through `/mcp` spending the account's own allowance in dfo-apis.
@@ -449,7 +467,7 @@ Besides [Build][] and [Use][Use: Better Auth API Key Plugin] above, we looked at
 
 | Option                                         | What it is                                                                                            | What it would give us                                                                                                      | Why not, or not yet                                                                                                                                                      |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Static list in a secret                        | No table in Phase 1: a list of hashed keys and limits in deploy configuration, changed by redeploying | The least to build for one partner. Suggested by Codex                                                                     | Revoking a key or changing a limit would need a redeploy, and the emergency switch depends on not needing one. A small table costs one migration                         |
+| Static list in a secret                        | No table in Phase 1: a list of hashed keys and limits in deploy configuration, changed by redeploying | The least to build for one partner                                                                                         | Revoking a key or changing a limit would need a redeploy, and the emergency switch depends on not needing one. A small table costs one migration                         |
 | Hosted key service, for example [Unkey][unkey] | A service that issues and verifies keys; the proxy calls it on each request                           | Key management, per-key limits and usage analytics with no tables of our own. A free tier of 150,000 verifications a month | A network call to a third party on every keyed request, and a new vendor holding our callers' keys. Cost grows with traffic, which is the thing we are trying to control |
 | Hosted API gateway, for example [Zuplo][zuplo] | A managed gateway in front of the APIs, with keys, rate limits and a developer portal                 | The whole feature, including self-service sign-up and docs                                                                 | It replaces the proxy we already have. Streaming (SSE and MCP), caller naming and the harness token would all need to be rebuilt in its terms                            |
 | Google Cloud API Gateway or Apigee             | Google's gateways, in the cloud the backends already run in                                           | API Gateway: keys and quotas. Apigee: a full product with developer portal and monetization                                | API Gateway keys are Google Cloud API keys, which suits internal consumers more than outside sign-ups. Apigee is priced and sized for a larger API program than ours     |
@@ -462,8 +480,10 @@ If monetization becomes real, the calculation changes: metering, billing and a d
 Not planned for any phase yet. The design should not rule them out.
 
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
-- **Multiple keys per account.** An account holds several keys at once, for example one per application or to rotate a key without downtime.
-- **Caps for keyed MCP use.** MCP calls can cost much more than API calls, and all outside MCP calls share one dfo-ai bucket of about 2,400 calls a minute, so this is the first refinement we expect to want. Candidates are a separate per-minute MCP limit per account, or a daily cap per account. Keys are not required on `/mcp`, and there is no plan to require them yet. Accounts without a cap keep using their one limit on both surfaces.
+- **Caps for keyed MCP use.** MCP calls can cost much more than API calls, and all outside MCP calls share one dfo-ai bucket of about 2,400 calls a minute. Today eight addresses at 300 a minute fill it; at the keyed default of 600, four accounts do, and an email address is cheaper to get than an IP address. Candidates are a separate per-minute MCP limit per account, or a daily cap per account, to be settled before keys are announced for MCP. Keys are not required on `/mcp`, and there is no plan to require them yet.
+- **Keys owned by an organization.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0025_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organization.
+- **Usage shown to owners.** Per-key counts exist only in log lines today.
+- **Terms of use at key creation.**
 - **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future:
     - Soft vs. hard limits (warnings)
     - Hourly vs. weekly limits, like how modern chat interfaces work. This protects against spiky workloads while mitigating the impact of hitting a limit ("try again in a few hours").
@@ -472,6 +492,8 @@ Not planned for any phase yet. The design should not rule them out.
 
 None of these block Phase 1.
 
+- [ ] **How does a key holder ask for a higher limit?** Probably a contact address, before self-service is announced.
+- [ ] **Who else should be an admin** (`ADMIN_EMAILS`)?
 - [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
 - [ ] **Should a signed-in site session be named by its account too,** so a user's key and their Studio session share allowances in the backends? A key already names its account to the backends as `user:<digest>`, and the Studio still names its callers by address.
 
@@ -508,6 +530,7 @@ None of these block Phase 1.
 [Phase 3: Enforce]: #phase-3-enforce
 [Testing]: #testing
 [Local Test Results]: #local-test-results
+[Runbook]: #runbook
 [Work by Repository]: #work-by-repository
 [Alternatives Considered]: #alternatives-considered
 [Future Features]: #future-features
