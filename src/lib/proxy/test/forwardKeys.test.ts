@@ -197,15 +197,27 @@ test('forward: two different keys are a 400, and an over-long key a 401, with no
     assert.equal(seen.length, 0);
 });
 
-test('forward: another bearer passes through to dfo-apis as before, and is no key', async () => {
+test('forward: another bearer is no key, and dfo-apis gets no caller Authorization', async () => {
     fresh();
     const log = fakes(VALID);
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
     assert.deepEqual(log, ['address:api']);
-    assert.equal(seen[0]!.authorization, 'Bearer some-other-token');
+    assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
+});
+
+test('forward: a key in another scheme, or bare, is anonymous and never reaches dfo-apis', async () => {
+    for (const authorization of [`Token ${KEY}`, KEY]) {
+        fresh();
+        const log = fakes(VALID);
+        const res = await call({ authorization });
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(log, ['address:api']);
+        assert.equal(seen[0]!.authorization, undefined);
+    }
 });
 
 test('forward: a call with no key is anonymous, and a client-sent caller is dropped', async () => {
@@ -253,6 +265,13 @@ test('forward: /mcp names the account to dfo-ai, and the harness token replaces 
         await mcp({ authorization: `Bearer ${KEY}` }, { target });
         assert.equal(seen[0]!.authorization, undefined);
         assert.equal(seen[0]!['x-api-key'], undefined);
+
+        // Another scheme or a bare key is no key, and goes no further either.
+        for (const authorization of [`Token ${KEY}`, KEY]) {
+            seen.length = 0;
+            await mcp({ authorization }, { target });
+            assert.equal(seen[0]!.authorization, undefined);
+        }
 
         // The key in X-API-Key, the harness token as the bearer: both work.
         seen.length = 0;

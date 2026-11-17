@@ -8,7 +8,7 @@ import { keyDb } from '@/lib/db';
 import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
 
 import { decideAccess, type Access, type AccessDeps } from './access';
-import { API_KEY_HEADER, bearerKey } from './apiKey';
+import { API_KEY_HEADER, carriesKey } from './apiKey';
 import {
     accountCaller,
     limiterKeyFor,
@@ -40,7 +40,8 @@ import { hit, hitKey, KEYED_LIMIT, type Surface } from './rateLimit';
  * `Authorization: Bearer dfo_…` or `X-API-Key` (src/lib/proxy/apiKey), and is
  * then counted against the key's account at the account's limit, or refused
  * with a 401 when the key is not valid (src/lib/proxy/access). The key is
- * never forwarded, on any route, and the Studio ignores it. A call is forwarded with its
+ * never forwarded, on any route, in any header or scheme, and the Studio
+ * ignores it. dfo-apis gets no caller Authorization at all. A call is forwarded with its
  * method, query, body, content headers, user-agent, x-dfo-client and every
  * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
@@ -235,12 +236,15 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     const headers = upstreamRequestHeaders(req.headers, new Headers(), options.pass?.request);
 
     const callerAuth = req.headers.get('authorization');
+    const apisTarget = isApisTarget(options.target);
 
     if (options.bearer) {
         headers.set('authorization', `Bearer ${options.bearer}`);
-    } else if (callerAuth && bearerKey(callerAuth) === undefined) {
-        // Any bearer but one of our keys passes through as it always did.
-        // A key is the proxy's own and goes no further, verified or not.
+    } else if (callerAuth && !apisTarget && !carriesKey(callerAuth)) {
+        // Any other credential passes through as it always did, to the MCP
+        // harness say. dfo-apis reads no caller's Authorization on a route
+        // the proxy serves, so it gets none. A value holding one of our keys,
+        // in any scheme, goes no further, verified or not.
         headers.set('authorization', callerAuth);
     }
 
@@ -249,7 +253,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
     const accountName =
         access.identity.kind === 'keyed' ? accountCaller(access.identity.accountId) : undefined;
 
-    if (isApisTarget(options.target)) {
+    if (apisTarget) {
         setApisCaller(headers, req.headers, accountName);
     } else {
         setCaller(

@@ -54,5 +54,11 @@ export const readApiKey = (headers: Headers): KeyRead => {
     return key.length > MAX_KEY_LENGTH ? { kind: 'too-long' } : { kind: 'key', key };
 };
 
+/**
+ * Whether a header value holds one of our keys anywhere, whatever the scheme
+ * (`Token dfo_live_…`, a bare key), so the proxy never passes it on.
+ */
+export const carriesKey = (value: string): boolean => /(?:^|[^A-Za-z0-9_])dfo_/.test(value);
+
 /** Whether `key` has the shape of one of ours, so a lookup could find it. */
 export const hasKeyPrefix = (key: string): boolean => key.startsWith(KEY_PREFIX);

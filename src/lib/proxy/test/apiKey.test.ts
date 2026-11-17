@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { bearerKey, MAX_KEY_LENGTH, readApiKey } from '../apiKey.ts';
+import { bearerKey, carriesKey, MAX_KEY_LENGTH, readApiKey } from '../apiKey.ts';
 
 const KEY = `dfo_live_${'a'.repeat(32)}`;
 const read = (headers: Record<string, string>) => readApiKey(new Headers(headers));
@@ -76,4 +76,13 @@ test('bearerKey: names the key in an Authorization value, or nothing', () => {
     assert.equal(bearerKey(`Bearer ${KEY}`), KEY);
     assert.equal(bearerKey('Bearer abc'), undefined);
     assert.equal(bearerKey(null), undefined);
+});
+
+test('carriesKey: a dfo_ token anywhere in a header value, in any scheme', () => {
+    assert.equal(carriesKey(`Bearer ${KEY}`), true);
+    assert.equal(carriesKey(`Token ${KEY}`), true);
+    assert.equal(carriesKey(KEY), true);
+    assert.equal(carriesKey(`Basic x, ${KEY}`), true);
+    assert.equal(carriesKey('Bearer harness-token'), false);
+    assert.equal(carriesKey('Bearer notdfo_x'), false);
 });
