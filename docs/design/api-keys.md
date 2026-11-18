@@ -1,6 +1,6 @@
 # API Keys for the Platform Proxy
 
-[Issue #142][issue]
+[Issue #142][issue] · [User stories][stories]
 
 ## Contents
 
@@ -56,7 +56,7 @@ Requirements:
 **Recommendation.** Use Better Auth's API key plugin from Phase 1, with keys in our own Postgres. The site already uses Better Auth for sign-in and sessions, so the plugin gives us key generation, hashing, storage, and the create, list and delete operations with ownership checks, without writing them, and it makes self-service possible from the start. We keep our own limiter, which anonymous traffic needs anyway, and we own the key lookup on the request path, with its caching and outage handling. A spike confirmed the plugin fits, with workarounds. If that changes, we fall back to building a small key table of our own behind the same verifier.
 See [Use: Better Auth API Key Plugin][], [Build][] and [Alternatives Considered][].
 
-We'll take a phased approach. Phase 1 ships the proxy check, an admin page for operators and a self-service page in the account menu. It proves keys in production with a few callers we choose before self-service is announced. Follow-on work lowers the anonymous limits once heavy users are on keys.
+We'll take a phased approach. Phase 1 ships the proxy check, an admin page for operators and a self-service page in the account menu. It proves keys in production with a few callers we choose before self-service is announced. Keys are for prospective partners who want or need higher access, offered as we talk to them. No current caller is near an unsustainable level, so there is no plan to move existing users onto keys. Lowering the anonymous limits is possible later work, if usage calls for it.
 
 ## How It Works Today
 
@@ -152,6 +152,34 @@ Not covered by an account's limit:
 - The Studio's daily prompt allowance is for the site's own chat UI.
 - dfo-apis keeps its own daily allowances per caller: 10 shares and 500 presentation cards, plus pins. A keyed caller gets these at the default values. Raising them for a partner would be a dfo-apis setting, not part of the account's limit.
 
+**Refusals on MCP**
+
+The proxy enforces the limit before a call reaches the MCP harness, so as built every MCP refusal is an HTTP 429 with a problem document. That rarely reaches the person using an MCP client. The official TypeScript SDK client, which many clients are built on, has [no special handling for 429][ts-sdk-transport]: any non-OK POST throws `Error POSTing to endpoint: <body text>`, with no retry and no reading of `Retry-After`. A 429 on a tool call reaches the model, if at all, as a transport failure carrying the problem document as raw text, and a 429 on `initialize` fails the connection.
+
+The MCP spec has [two kinds of error][mcp-spec-errors]. Protocol errors are JSON-RPC errors, for unknown tools, invalid arguments and server errors. Tool execution errors are a normal result with `isError: true`, for API failures and business logic errors, and the model sees them. The spec's own example of a tool execution error is `"Failed to fetch weather data: API rate limit exceeded"`. It says servers must rate-limit tool calls, and nothing about HTTP status codes for limits.
+
+We propose answering by method:
+
+- **`tools/call` over the limit:** HTTP 200 with a JSON-RPC result, `isError: true`, and one short text block the model can act on: the account's limit was reached, wait N seconds, don't retry sooner, and how to ask for more. The model can then explain it to the user. `Retry-After` and `X-RateLimit-*` stay on the response for programmatic clients.
+- **Anything else over the limit** (`initialize`, `tools/list`, notifications, GET streams): the 429 and problem document, with a one-sentence `detail`. There is no tool result to put it in, and clients show the body text as is.
+- **Not JSON-RPC errors.** The spec keeps them for protocol problems, and clients do not pass them to the model reliably.
+
+What it costs:
+
+- The proxy streams `/mcp` request bodies upstream unread. To answer a refused `tools/call`, it reads the body for the method and the JSON-RPC `id`, only on the refused path, where nothing is forwarded anyway.
+- A refused tool call shows as a 200 in request metrics. Limit counts come from the usage log's `limited` outcome (see [Logs and Docs][]), which is already the source of truth.
+- Client behaviour changes often, and none of this is tested against our server yet. The [user stories][stories] (U3) include a hand check in Claude Code and a Claude connector.
+
+**Comparables: How Other MCP Servers Do It**
+
+| Server                                               | How a limit is reported                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [GitHub MCP server][github-mcp-errors]               | A failed tool call (`isError`). Its guide calls rate limits "user-actionable errors" and keeps Go and JSON-RPC errors for developer errors. An [open issue][github-mcp-issue] asks for a clean message with the wait ("Retry after 47s"), because agents could not act on a raw HTTP string |
+| [Buildkite remote MCP server][buildkite-mcp]         | HTTP 429 with `RateLimit-*` headers and a JSON body: "Please wait 28 seconds before making more requests." It does not document what the client shows                                                                                                                                       |
+| Smaller servers ([Veeva Vault][vault-mcp], Telebugs) | A JSON-RPC error, code -32000                                                                                                                                                                                                                                                               |
+
+The tool-result form follows the spec's own example and the largest of these servers.
+
 ### Cloudflare Integration
 
 Cloudflare sits in front of the site and rate-limits by address. The proxy stays the per-account limiter, and Cloudflare is a coarse backstop against floods, set above the highest limit any account will have.
@@ -246,7 +274,7 @@ Before the rate limit, on the surfaces in [Where Keys Apply][]:
 2. Check the key's signed tag against each server secret. A bad tag: answer 401, with no read and no count.
 3. Hash the key and look it up in a short in-process cache (about 60 seconds), so a keyed call adds no query in the common case. On a cache miss, look the key up in the store. Lookup is by the hash, so no secret is compared by hand.
 4. Unknown or revoked key: count the call against the address's normal limit, then answer 401 with a problem document (429 when the address is over its limit).
-5. Valid key: count the call against the owning account at the account's limit, and never against the address, using the existing counter, which already counts each surface separately.
+5. Valid key: count the call against the owning account at the account's limit, and never against the address, using the existing counter, which already counts each surface separately. Over the limit: answer 429 with a problem document, except a `tools/call` on `/mcp`, which gets a tool result with `isError: true` (see [Refusals on MCP][Limits]).
 6. Log the key's public id, its account, the surface and the outcome.
 
 [Identity, Failure and Abuse][] covers revocation delay and failing open when the store is unavailable.
@@ -342,7 +370,7 @@ Run against `better-auth` 1.7.7 and `@better-auth/api-key` 1.7.7 on Postgres. Ve
 
 ## Phases
 
-Three phases take keys from an optional test feature to the normal way heavy users reach the API. Anonymous access stays open throughout.
+Two phases take keys from an optional test feature to something any partner can get for themselves. A third, lowering the anonymous limits, is held until usage calls for it. Anonymous access stays open throughout, and existing users are not asked to move to keys.
 
 ### Phase 1: Validate
 
@@ -366,25 +394,27 @@ Three phases take keys from an optional test feature to the normal way heavy use
 
 ### Phase 2: Provision
 
-**Goal:** Anyone can get a key; existing users have a path to move
+**Goal:** Any partner who needs more than the anonymous limits can get a key for themselves
 
 **Who gets a key:** Any signed-in account
 
 **Provisioning:** Self-service from the account menu, `/account/api-keys`: create, label, revoke, see last use, up to `API_KEYS_MAX_PER_ACCOUNT` keys (5 by default). The page was built alongside Phase 1, so Phase 2 is when it is announced rather than when it is written.
 
-**Limits:** A default for self-service accounts, with higher limits granted by an operator. We will examine current usage and tune the default and the anonymous thresholds at that time, as part of the transition plan.
+**Limits:** A default for self-service accounts, with higher limits granted by an operator. We will look at usage and tune the keyed default at that time.
 
-**Anonymous access:** Unchanged; docs start recommending a key
+**Anonymous access:** Unchanged; docs explain keys for callers who need more
 
-**Also needed:** A transition notice for current users, a way to ask for a higher limit, usage shown to key owners, and a decision on caps for keyed MCP use before keys are announced for MCP (see [Future Features][])
+**Also needed:** A way to ask for a higher limit, usage shown to key owners, and a decision on caps for keyed MCP use before keys are announced for MCP (see [Future Features][]). No outreach to current users: they are not asked to move (see [user stories][stories], Stories: Out-Of-Scope)
 
-**Exit criteria:** The transition notice has been out for an agreed period, and the callers who would be hit by lower anonymous limits have been identified and contacted where we can reach them.
+**Exit criteria:** Self-service is announced in the docs, and partners we talk to can get a key and a higher limit without an operator creating the key.
 
 ### Phase 3: Enforce
 
-**Goal:** High-volume users are on keys; anonymous limits can come down safely
+Not scheduled. Taken up only if anonymous usage approaches unsustainable levels, which it does not today.
 
-**Who gets a key:** Same, plus outreach to heavy anonymous callers
+**Goal:** Anonymous limits can come down safely
+
+**Who gets a key:** Same. If lowering the limits would hit identifiable heavy callers, reaching them is planned then
 
 **Provisioning:** Self-service, plus operator tools to raise or cut an account's limit
 
@@ -494,10 +524,16 @@ None of these block Phase 1.
 
 - [ ] **How does a key holder ask for a higher limit?** Probably a contact address, before self-service is announced.
 - [ ] **Who else should be an admin** (`ADMIN_EMAILS`)?
-- [ ] **How do we reach current anonymous users** for the Phase 2 transition, given we know them only as hashed addresses? Candidates: docs, response headers, the SDK's `x-dfo-client` header.
 - [ ] **Should a signed-in site session be named by its account too,** so a user's key and their Studio session share allowances in the backends? A key already names its account to the backends as `user:<digest>`, and the Studio still names its callers by address.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
+[stories]: api-keys-stories.md
+[mcp-spec-errors]: https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling
+[ts-sdk-transport]: https://github.com/modelcontextprotocol/typescript-sdk/blob/main/packages/client/src/client/streamableHttp.ts
+[github-mcp-errors]: https://github.com/github/github-mcp-server/blob/main/docs/error-handling.md
+[github-mcp-issue]: https://github.com/github/github-mcp-server/issues/2385
+[buildkite-mcp]: https://buildkite.com/docs/apis/mcp-server/remote/rate-limits
+[vault-mcp]: https://limited.veevavault.dev/mcp/vault-mcp-server/reference/errors/
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
 [better-auth-api-key]: https://www.better-auth.com/docs/plugins/api-key
