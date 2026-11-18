@@ -10,6 +10,7 @@ The site runs Next.js 16, whose APIs changed after most training data. Read the 
 - `just check` runs what CI runs, in CI's order: the client provenance check, lint (ESLint and Stylelint), typecheck, test and build.
 - CI skips draft pull requests. Marking one ready starts the run.
 - The repository is public, so commits, pull requests and comments carry no credentials, private repository names or internal links.
+- That includes links to agent sessions, such as `claude.ai/code/session_…` URLs. Leave them out of pull request bodies and comments, and drop `Claude-Session:` trailers from squash-merge messages.
 
 ## Traps
 
