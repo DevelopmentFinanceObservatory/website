@@ -1,9 +1,10 @@
 /**
  * How tall a chart card is. The height follows the chart's shape: a ranking
  * of horizontal bars gives every category one grid cell, and every other
- * chart holds its plot box at a ratio against its own width: 16:9 until the
- * user drags the card's height, which sets the card's own ratio (plotRatio),
- * kept with the conversation. The card adds its own chrome (title, legend,
+ * chart holds its plot box at a ratio against its own width: near square for
+ * a line (QA-86), 16:9 for vertical bars, until the user drags the card's
+ * height, which sets the card's own ratio (plotRatio), kept with the
+ * conversation. The card adds its own chrome (title, legend,
  * source line) and takes the sum in whole cells.
  *
  * Every length here is either a count of cells or a px figure that scales
@@ -23,9 +24,13 @@ export const BAR_THICKNESS = 12;
 /** The share of the plot's width a ranking's category names may take. */
 export const GUTTER_SHARE = 0.34;
 
-/** Width over height of the plot box of a line or vertical bar chart, until
- *  the user sets the card's own. */
+/** Width over height of the plot box of a vertical bar chart, until the user
+ *  sets the card's own. */
 export const PLOT_RATIO = 16 / 9;
+
+/** The same for a line chart: close to square, a little wider than tall, so
+ *  the slope of a line is not flattened by a wide plot (QA-86). */
+export const LINE_PLOT_RATIO = 1.2;
 
 /** The least plot height, in cells, a dragged height may leave: below it the
  *  height is not a ratio the plot can hold, and the drag sets none. */
@@ -66,11 +71,11 @@ type Shaped = Pick<ChartWidget, 'categories' | 'horizontal'>;
 
 /** The plot's shape for a chart and its view. The bar view of a horizontal
  *  chart is rows, and a line or vertical bars take a ratio: the card's own
- *  when the user has set one, else the default. */
-export const plotShape = (chart: Shaped, line: boolean, ratio = PLOT_RATIO): PlotShape =>
+ *  when the user has set one, else the view's default. */
+export const plotShape = (chart: Shaped, line: boolean, ratio?: number): PlotShape =>
     chart.horizontal && !line
         ? { kind: 'rows', rows: chart.categories.length }
-        : { kind: 'ratio', ratio };
+        : { kind: 'ratio', ratio: ratio ?? (line ? LINE_PLOT_RATIO : PLOT_RATIO) };
 
 /** The plot ratio a card's dragged height stands for: the plot's width over
  *  what the height leaves it under the chrome, in px that scale with the

@@ -12,6 +12,7 @@ import {
     FIT_SLACK,
     LABEL_LINE_HEIGHT,
     LABEL_LINES,
+    LINE_PLOT_RATIO,
     PLOT_RATIO,
     PLOT_ROWS_MIN,
     ROW_PITCH,
@@ -50,8 +51,15 @@ test('the view decides the shape: rows for the bars of a horizontal chart only',
     const ranking = chart(24, 1, true);
 
     assert.deepEqual(plotShape(ranking, false), { kind: 'rows', rows: 24 });
-    assert.deepEqual(plotShape(ranking, true), { kind: 'ratio', ratio: PLOT_RATIO });
+    assert.deepEqual(plotShape(ranking, true), { kind: 'ratio', ratio: LINE_PLOT_RATIO });
     assert.deepEqual(plotShape(chart(24, 1, false), false), { kind: 'ratio', ratio: PLOT_RATIO });
+});
+
+test('a line plot defaults near square, vertical bars to 16:9 (QA-86)', () => {
+    const series = chart(22, 4, false);
+
+    assert.deepEqual(plotShape(series, true), { kind: 'ratio', ratio: 1.2 });
+    assert.deepEqual(plotShape(series, false), { kind: 'ratio', ratio: 16 / 9 });
 });
 
 test("a card's own ratio replaces the default in a ratio view and not in rows", () => {
@@ -103,7 +111,7 @@ const MEASURED: [
 ][] = [
     ['24-row ranking', chart(24, 1, true), false, 169.703125, 60, 34],
     ['10-row ranking', chart(10, 1, true), false, 169.703125, 60, 20],
-    ['four-series line chart', chart(22, 4, false), true, 195.4375, 0, 20],
+    ['four-series line chart', chart(22, 4, false), true, 195.4375, 0, 25],
 ];
 
 for (const [name, widget, line, chrome, band, cells] of MEASURED) {
