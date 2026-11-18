@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import styles from './Docs.module.scss';
 import DocsScroll from './DocsScroll';
 import DocsTree from './DocsTree';
@@ -19,6 +21,7 @@ const CONTENT_ID = 'docs-content';
 
 const Docs = ({ page }: { page: DocsPage }) => {
     const markdown = markdownHref(page);
+    const trail = docsTrail(page.id);
 
     return (
         <section className={styles.section}>
@@ -32,8 +35,20 @@ const Docs = ({ page }: { page: DocsPage }) => {
                 <DocsTree nav={DOCS_NAV} currentId={page.id} />
 
                 <article id={CONTENT_ID} className={styles.content}>
-                    {docsTrail(page.id).length > 0 && (
-                        <p className={styles.crumbs}>{docsTrail(page.id).join(' / ')}</p>
+                    {trail.length > 0 && (
+                        <nav aria-label="Breadcrumb">
+                            <ol className={styles.crumbs}>
+                                {trail.map((crumb) => (
+                                    <li key={crumb.title}>
+                                        {crumb.href ? (
+                                            <Link href={crumb.href}>{crumb.title}</Link>
+                                        ) : (
+                                            crumb.title
+                                        )}
+                                    </li>
+                                ))}
+                            </ol>
+                        </nav>
                     )}
                     <h1 className={styles.sectionTitle}>{page.title}</h1>
 
