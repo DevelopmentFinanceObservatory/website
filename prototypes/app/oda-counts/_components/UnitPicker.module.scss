@@ -1,0 +1,154 @@
+// The unit picker: the donor box's field and list, and a two-way switch for the prices.
+.control {
+    display: inline-flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.field {
+    position: relative;
+    width: 150px;
+}
+
+.input,
+.year {
+    box-sizing: border-box;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid #cfcfbf;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+
+    // 16px keeps phones from zooming the page on focus.
+    font: 400 16px var(--font-outfit);
+
+    @media (min-width: 901px) {
+        font-size: 13px;
+    }
+
+    &::placeholder {
+        color: #8c8c80;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+}
+
+.input {
+    width: 100%;
+}
+
+.year {
+    width: 64px;
+    font-variant-numeric: tabular-nums;
+
+    &[aria-invalid="true"] {
+        border-color: #b4503c;
+    }
+}
+
+.range {
+    color: #75756b;
+    font-size: 12px;
+}
+
+.list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 5;
+    box-sizing: border-box;
+    width: 240px;
+    max-height: 300px;
+    margin: 0;
+    padding: 4px 0;
+    overflow-y: auto;
+    border: 1px solid #ececdb;
+    border-radius: 4px;
+    background: #fff;
+    list-style: none;
+    box-shadow: 0 6px 16px rgb(72 72 66 / 12%);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.option {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 5px 10px;
+    color: #484842;
+    font-size: 13px;
+    cursor: pointer;
+
+    &[aria-selected="true"] {
+        background: #f7f7ee;
+    }
+
+    &[data-checked="true"] {
+        font-weight: 500;
+    }
+
+    // The rest of the currencies follow the pinned ones, below a rule.
+    &[data-after-pinned="true"] {
+        margin-top: 4px;
+        border-top: 1px solid #ececdb;
+        padding-top: 9px;
+    }
+}
+
+.code {
+    flex: none;
+    color: #75756b;
+    font-size: 11px;
+}
+
+.none {
+    padding: 5px 10px;
+    color: #5e5e52;
+    font-size: 13px;
+}
+
+.seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    overflow: hidden;
+    border: 1px solid #cfcfbf;
+    border-radius: 4px;
+    background: #fff;
+
+    button {
+        height: 30px;
+        padding: 0 10px;
+        border: 0;
+        background: transparent;
+        color: #484842;
+        font: 400 12.5px var(--font-outfit);
+        cursor: pointer;
+
+        + button {
+            border-left: 1px solid #cfcfbf;
+        }
+
+        &[aria-pressed="true"] {
+            background: #484842;
+            color: #fff;
+        }
+
+        &:disabled {
+            color: #a8a89c;
+            cursor: not-allowed;
+        }
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+}

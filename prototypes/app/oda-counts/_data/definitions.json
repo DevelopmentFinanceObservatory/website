@@ -1,0 +1,74 @@
+{
+  "provenance": {
+    "sdk": "development-finance==0.2.0",
+    "query": "POST https://developmentfinance.org/api/v1/graph/nodes",
+    "retrieved": "2026-11-17T20:07:37.236Z",
+    "nodes": [
+      "Gross",
+      "Net",
+      "Disbursement",
+      "Commitment",
+      "grantEquivalent",
+      "grantElement",
+      "Nominal"
+    ]
+  },
+  "data": [
+    {
+      "id": "Gross",
+      "label": "gross",
+      "description": "An amount counted in full, with nothing offset.",
+      "source": "graph"
+    },
+    {
+      "id": "Net",
+      "label": "net",
+      "description": "An amount counted after offsetting amounts are subtracted.",
+      "source": "graph"
+    },
+    {
+      "id": "Disbursement",
+      "label": "disbursement",
+      "description": "The placing of resources at the recipient's disposal.",
+      "source": "graph"
+    },
+    {
+      "id": "Commitment",
+      "label": "commitment",
+      "description": "A firm, written promise to provide specified resources.",
+      "source": "graph"
+    },
+    {
+      "id": "grantEquivalent",
+      "label": "grant equivalent",
+      "description": "A measure of the provider's effort: the amount effectively given through a transaction, equal to its face value multiplied by its grant element. A grant is given in full; a loan gives only the portion extended by lending below market rates, so more concessional terms yield a higher grant equivalent.",
+      "source": "graph"
+    },
+    {
+      "id": "grantElement",
+      "label": "grant element",
+      "description": "The gift portion of a loan, as a percentage of the amount committed. It is the face value less the discounted present value of the contractual debt service, over the face value.",
+      "source": "graph"
+    },
+    {
+      "id": "Nominal",
+      "label": "current prices",
+      "description": "Measurement is evaluated at current market prices, without adjusting for inflation.",
+      "source": "graph"
+    },
+    {
+      "id": "oecdHeadline",
+      "label": "OECD headline ODA",
+      "description": "Starting with 2018 data, the new grant equivalent measure of ODA became the standard for reporting, with the headline ODA figures published on that basis.",
+      "url": "https://www.oecd.org/en/topics/sub-issues/oda-eligibility-and-conditions/official-development-assistance--definition-and-coverage.html",
+      "source": "oecd"
+    },
+    {
+      "id": "constantPrices",
+      "label": "constant dollars",
+      "description": "In DAC publications, flow data are expressed in US dollars (USD). To give a truer idea of the volume of flows over time, data can be presented in constant prices and exchange rates, with a reference year specified. This means that adjustment has been made to cover both inflation in the donor’s currency between the year in question and the reference year, and changes in the exchange rate between that currency and the United States dollar over the same period.",
+      "url": "https://www.oecd.org/en/topics/sub-issues/oda-standards/glossary-of-statistical-terms-and-concepts-of-development-finance.html",
+      "source": "oecd"
+    }
+  ]
+}

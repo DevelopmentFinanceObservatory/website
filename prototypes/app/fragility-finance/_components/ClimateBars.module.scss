@@ -1,0 +1,97 @@
+// Two 100% bars. Segments and labels glide to their new shares when the scope changes;
+// names, totals and labels fade in (_motion.scss).
+@use "motion" as *;
+
+.bars {
+    @include still;
+}
+
+.row + .row {
+    margin-top: 12px;
+}
+
+.head {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 4px;
+    color: #484842;
+    font-size: 13px;
+}
+
+.name {
+    font-weight: 500;
+
+    @include fade-in;
+}
+
+.total {
+    font-variant-numeric: tabular-nums;
+
+    @include fade-in;
+}
+
+.fade {
+    @include fade-in;
+}
+
+// Segments and labels span the bar and are moved and scaled into place, so nothing reflows.
+.bar {
+    position: relative;
+    overflow: hidden;
+    height: 28px;
+    border-radius: 3px;
+    background: #f4f4ea;
+}
+
+.part,
+.partLabel {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 50%;
+    transition: transform $move-ms $ease-out;
+}
+
+.partLabel {
+    display: flex;
+    align-items: center;
+    padding-left: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+
+    // The white rule between segments rides on the label, which is never scaled.
+    &[data-rule="true"] {
+        border-left: 2px solid #fff;
+    }
+}
+
+.empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    color: #5e5e52;
+    font-size: 12px;
+
+    @include fade-in;
+}
+
+.method {
+    margin: 14px 0 0;
+    color: #5e5e52;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+// Bars switch at once under reduced motion; text still fades in.
+
+@media (prefers-reduced-motion: reduce) {
+    .part,
+    .partLabel {
+        transition: none;
+    }
+}

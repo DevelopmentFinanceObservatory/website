@@ -25,6 +25,20 @@ const nextConfig: NextConfig = {
         // since next/link would prefix /prototypes to a root-relative path.
         NEXT_PUBLIC_SITE_LINK_ORIGIN: 'https://developmentfinance.org',
     },
+    // The ODA counts page posts to the site's same-origin Search API, which the dev server
+    // lacks, so in development it goes to the live site. The site redirects
+    // /api/v1/search/resolve/ to the path without the slash, so the dev server must not
+    // add one. A static export takes no rewrites, so the build leaves this out.
+    ...(process.env.NODE_ENV === 'development' && {
+        skipTrailingSlashRedirect: true,
+        rewrites: async () => [
+            {
+                source: '/api/v1/:path*',
+                destination: 'https://developmentfinance.org/api/v1/:path*',
+                basePath: false,
+            },
+        ],
+    }),
     sassOptions: {
         loadPaths: [path.join(repoRoot, 'src/styles')],
     },

@@ -87,16 +87,27 @@ export const docsLink = (page: DocsPage, href: string): string => {
     return target ? `${docsHref(target.path)}${match[2] ?? ''}` : href;
 };
 
-/** The breadcrumb for a page: the titles of the nav groups above it, walked
- *  from the manifest's nav tree (a group's own index page stops at itself). */
-export const docsTrail = (id: string): string[] => {
-    const find = (nodes: DocsNavNode[], trail: string[]): string[] | null => {
+export type DocsCrumb = { title: string; href?: string };
+
+/** The breadcrumb for a page: Docs, then the nav groups above it, walked
+ *  from the manifest's nav tree (a group's own index page stops at itself).
+ *  A crumb links only when it has a page of its own — Docs (the hub) and a
+ *  group with an index page; the rest are names in the nav. The hub itself
+ *  has none. */
+export const docsTrail = (id: string): DocsCrumb[] => {
+    const crumb = (node: DocsNavNode): DocsCrumb => {
+        const page = node.page_id === undefined ? undefined : byId.get(node.page_id);
+
+        return page ? { title: node.title, href: docsHref(page.path) } : { title: node.title };
+    };
+
+    const find = (nodes: DocsNavNode[], trail: DocsCrumb[]): DocsCrumb[] | null => {
         for (const node of nodes) {
             if (node.id === id || node.page_id === id) {
                 return trail;
             }
 
-            const hit = find(node.children ?? [], [...trail, node.title]);
+            const hit = find(node.children ?? [], [...trail, crumb(node)]);
 
             if (hit) {
                 return hit;
@@ -106,7 +117,11 @@ export const docsTrail = (id: string): string[] => {
         return null;
     };
 
-    return find(DOCS_NAV, []) ?? [];
+    const hub = byPath.get('');
+
+    return !hub || id === hub.id
+        ? []
+        : [{ title: 'Docs', href: docsHref(hub.path) }, ...(find(DOCS_NAV, []) ?? [])];
 };
 
 /** GitHub-style heading anchor, so in-page links written against GitHub keep working. */

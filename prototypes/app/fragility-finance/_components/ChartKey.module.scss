@@ -1,0 +1,72 @@
+// A chart's key. A value, label or note remounts when it changes and fades in.
+@use "motion" as *;
+
+.key {
+    min-width: 0;
+}
+
+.year {
+    margin: 0 0 4px;
+    color: #5e5e52;
+    font: 500 12px var(--font-dm-mono);
+}
+
+.list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.item {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 3px 0;
+    color: #484842;
+    font-size: 12px;
+    line-height: 1.35;
+    transition: opacity 200ms ease;
+
+    &[data-dimmed="true"] {
+        opacity: 0.55;
+    }
+}
+
+.swatch,
+.swatchDashed {
+    box-sizing: border-box;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+// A dashed line's swatch: a short dashed stroke on white.
+.swatchDashed {
+    height: 0;
+    border-top: 2px dashed;
+    border-radius: 0;
+}
+
+.name {
+    min-width: 0;
+}
+
+.value {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+
+    @include fade-in;
+}
+
+.fade {
+    @include fade-in;
+}
+
+.note {
+    color: #75756b;
+    font-size: 11px;
+    white-space: nowrap;
+
+    @include fade-in;
+}

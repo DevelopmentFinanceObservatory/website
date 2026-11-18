@@ -1,0 +1,124 @@
+// The charts draw at the container's pixel width, so these sizes are real pixels. Marks
+// that move with the data are placed by CSS transforms from the SVG origin, so a change
+// of scope glides them (_motion.scss).
+@use "motion" as *;
+
+.wrap {
+    position: relative;
+    min-width: 0;
+
+    @include still;
+}
+
+.svg {
+    display: block;
+    overflow: visible;
+    touch-action: pan-y;
+    cursor: crosshair;
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 4px;
+    }
+}
+
+.mark,
+.bar,
+.point,
+.band {
+    transform-box: view-box;
+    transform-origin: 0 0;
+    transition: transform $move-ms $ease-out;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.zero,
+.axis {
+    stroke: #8a8a7c;
+    stroke-width: 1;
+}
+
+.guide {
+    stroke: #b8b8a8;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.band {
+    fill: #f4f4ea;
+}
+
+// The pale column behind the year being read follows the pointer at once.
+.column {
+    fill: #f4f4ea;
+    transform-box: view-box;
+    transform-origin: 0 0;
+}
+
+.empty {
+    font: 400 13px var(--font-outfit);
+    fill: #5e5e52;
+
+    @include fade-in;
+}
+
+// A tick's text remounts when the scale changes and fades in.
+.bandLabel,
+.tick,
+.tickShown {
+    font: 400 10.5px var(--font-outfit);
+    fill: #75756b;
+
+    @include fade-in;
+}
+
+.tickShown {
+    fill: #484842;
+    font-weight: 500;
+}
+
+.line {
+    fill: none;
+    stroke-width: 2;
+    transition: d $move-ms $ease-out;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.dashed {
+    stroke-dasharray: 5 4;
+}
+
+.point {
+    stroke: #fff;
+    stroke-width: 1;
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// Nothing glides under reduced motion; values still fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .mark,
+    .bar,
+    .point,
+    .band,
+    .line {
+        transition: none;
+    }
+}
