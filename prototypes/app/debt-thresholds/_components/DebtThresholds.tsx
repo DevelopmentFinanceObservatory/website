@@ -8,7 +8,7 @@ import { CountrySearch } from './CountrySearch';
 import styles from './DebtThresholds.module.scss';
 import { NetTransfers } from './NetTransfers';
 import { Summary } from './Summary';
-import { subscribeSelection, readSelection, writeSelection } from './selection';
+import { urlSelectionStore } from './selection';
 import { GROUP_COLOURS, ThresholdScatter, type ScatterPoint } from './ThresholdScatter';
 
 import type { Capacity, Country, ThresholdsData } from '../_data/types.ts';
@@ -226,8 +226,9 @@ const scatterTicks = (data: ThresholdsData): { x: number[]; y: number[] } => {
  * The interactive part of the page: group counts and the view switch, the scatter with
  * the capacity what-if, the selected country's card, and net transfers by group. FDL's
  * view (base year 2024) shows FDL's published groups; the latest view applies FDL's test
- * to the newest base year. The selection is kept in the query string as the country's
- * ISO3 code; with none, the card asks the reader to pick a country.
+ * to the newest base year. The page opens on the country in the query string (?country=,
+ * an ISO3 code), and later picks stay in state (selection.ts); with none, the card asks
+ * the reader to pick a country.
  */
 export const DebtThresholds = ({
     data,
@@ -240,7 +241,10 @@ export const DebtThresholds = ({
     const ticks = scatterTicks(data);
     const [year, setYear] = useState(data.defaultYear);
     const [override, setOverride] = useState<CapacityOverride>('assessed');
-    const selection = useSyncExternalStore(subscribeSelection, readSelection, () => '');
+    // null until the visitor picks; a pick of '' clears the URL's country.
+    const [picked, setPicked] = useState<string | null>(null);
+    const urlSelection = useSyncExternalStore(...urlSelectionStore);
+    const selection = picked ?? urlSelection;
 
     const groups = new Map(
         countries.map((country) => [country.iso3, shownGroup(country, year, override)]),
@@ -292,13 +296,13 @@ export const DebtThresholds = ({
             }
         });
     const choose = (iso3: string) => {
-        writeSelection(iso3);
+        setPicked(iso3);
         reveal();
     };
     const select = (iso3: string) => {
         const next = iso3 === selected?.iso3 ? '' : iso3;
 
-        writeSelection(next);
+        setPicked(next);
         if (next !== '') {
             reveal();
         }

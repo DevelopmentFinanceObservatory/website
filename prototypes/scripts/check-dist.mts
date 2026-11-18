@@ -4,6 +4,8 @@
 // /prototypes*, so a root-relative link elsewhere (a shared component's
 // /data/... path without siteHref) reaches the main site or a 404, and a
 // missing file under /prototypes/ (a font, the WorldMap mask) breaks the page.
+// Every page must also carry the site's consent scripts (src/components/atoms/
+// Analytics), since its GA4 tag relies on their Consent Mode defaults.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -11,6 +13,8 @@ import { decodeEntities } from './html.mts';
 
 const DIST = path.join(import.meta.dirname, '..', 'dist');
 const BASE = '/prototypes/';
+// The ids of the Analytics component's beforeInteractive scripts.
+const CONSENT_SCRIPTS = ['consent-defaults', 'usercentrics-cmp-loader'];
 
 const HTML_TAG = /<[a-z][\w-]*\b[^>]*>/gi;
 const HTML_ATTRIBUTE = /\s(href|src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
@@ -82,6 +86,14 @@ for (const file of files(DIST)) {
     const text = readFileSync(file, 'utf8');
 
     if (file.endsWith('.html')) {
+        const missing = CONSENT_SCRIPTS.filter((id) => !text.includes(id));
+
+        if (missing.length > 0) {
+            failures.push(
+                `${path.relative(DIST, file)}: no ${missing.join(' or ')} script; render Analytics in the root layout.`,
+            );
+        }
+
         for (const [tag] of text.matchAll(HTML_TAG)) {
             if (CONNECTION_HINT.test(tag)) {
                 continue;
