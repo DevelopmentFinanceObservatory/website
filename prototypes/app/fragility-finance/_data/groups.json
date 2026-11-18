@@ -1,0 +1,205 @@
+{
+ "provenance": {
+  "sdk": "development-finance==0.3.0",
+  "query": "The six largest providers of gross ODA disbursements in 2024 (OECD CRS) to the OECD's 62 fragile contexts in 2026, to the 20 in extreme fragility and to the 42 in high fragility, with each provider's change in total ODA from 2024 to 2025 (OECD DAC1)",
+  "retrieved": "2026-11-18T18:20:19.472Z",
+  "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory; OECD DAC1 (2026), via the Development Finance Observatory",
+  "classification": "OECD, States of Fragility 2026 update",
+  "dfo": [
+   {
+    "key": "aid",
+    "sentence": "Gross ODA disbursements to 16 recipients from 97 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_041819d768f2b88ff603a40eaae21982"
+    ],
+    "versions": [
+     "cv_fe0208db017440d8d01932e8264fe6df"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 134323,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
+    "key": "aid",
+    "sentence": "Gross ODA disbursements to 16 recipients from 100 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_041819d768f2b88ff603a40eaae21982"
+    ],
+    "versions": [
+     "cv_1979c0f136117b554bda3cad23878de6"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 163516,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
+    "key": "aid",
+    "sentence": "Gross ODA disbursements to 16 recipients from 101 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_041819d768f2b88ff603a40eaae21982"
+    ],
+    "versions": [
+     "cv_02e561c8e1ea0d1ab99c05f7e47e209d"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 173471,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
+    "key": "aid",
+    "sentence": "Gross ODA disbursements to 14 recipients from 98 providers, 2010 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_041819d768f2b88ff603a40eaae21982"
+    ],
+    "versions": [
+     "cv_bde1ede10956d44c9e707b9a165b9f1b"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 131480,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
+    "key": "donors2025",
+    "sentence": "Grant equivalents from the 32 DAC members for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+    "specIds": [
+     "spec_655ba7e5f4a4780661347a726ef01cef"
+    ],
+    "versions": [
+     "cv_eba1cfff8716860572dcdc224df654bd"
+    ],
+    "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+    "rows": 64,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
+    "key": "donors2025-eu",
+    "sentence": "European Union institutions' grant equivalents for official development assistance, 2024 to 2025. Current US dollars · OECD DAC1.",
+    "specIds": [
+     "spec_655ba7e5f4a4780661347a726ef01cef"
+    ],
+    "versions": [
+     "cv_fae1d85e15de231ca3fabb33f623a8af"
+    ],
+    "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+    "rows": 2,
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   }
+  ]
+ },
+ "data": {
+  "all": {
+   "donors": [
+    {
+     "name": "International Development Association",
+     "value": 22626974967,
+     "change2025": null
+    },
+    {
+     "name": "United States of America",
+     "value": 17810430777,
+     "change2025": -0.5578
+    },
+    {
+     "name": "European Union institutions",
+     "value": 6273581434,
+     "change2025": -0.0614
+    },
+    {
+     "name": "Turkey",
+     "value": 6249640380,
+     "change2025": null
+    },
+    {
+     "name": "Japan",
+     "value": 5008008703,
+     "change2025": -0.0167
+    },
+    {
+     "name": "IMF Concessional Trust Funds",
+     "value": 4794571883,
+     "change2025": null
+    }
+   ]
+  },
+  "extreme": {
+   "donors": [
+    {
+     "name": "United States of America",
+     "value": 7482763994,
+     "change2025": -0.5578
+    },
+    {
+     "name": "Turkey",
+     "value": 6088829226,
+     "change2025": null
+    },
+    {
+     "name": "International Development Association",
+     "value": 4823078546,
+     "change2025": null
+    },
+    {
+     "name": "European Union institutions",
+     "value": 2471400243,
+     "change2025": -0.0614
+    },
+    {
+     "name": "Germany",
+     "value": 1518875291,
+     "change2025": -0.1141
+    },
+    {
+     "name": "United Kingdom",
+     "value": 1500833628,
+     "change2025": -0.0454
+    }
+   ]
+  },
+  "high": {
+   "donors": [
+    {
+     "name": "International Development Association",
+     "value": 17803896421,
+     "change2025": null
+    },
+    {
+     "name": "United States of America",
+     "value": 10327666783,
+     "change2025": -0.5578
+    },
+    {
+     "name": "IMF Concessional Trust Funds",
+     "value": 4227334394,
+     "change2025": null
+    },
+    {
+     "name": "Japan",
+     "value": 4027961616,
+     "change2025": -0.0167
+    },
+    {
+     "name": "European Union institutions",
+     "value": 3802181191,
+     "change2025": -0.0614
+    },
+    {
+     "name": "Saudi Arabia",
+     "value": 3502413580,
+     "change2025": null
+    }
+   ]
+  }
+ }
+}

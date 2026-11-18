@@ -1,0 +1,110 @@
+// Six donor rows, keyed by slot. Bars scale to the new amounts when the scope changes;
+// names and figures fade in (_motion.scss).
+@use "motion" as *;
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #484842;
+    font-size: 13px;
+    table-layout: fixed;
+
+    th,
+    td {
+        height: 20px;
+        padding: 6px 0;
+        border-bottom: 1px solid #ececdb;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    thead th {
+        color: #5e5e52;
+        font: 400 11px var(--font-dm-mono);
+    }
+
+    thead th:first-child {
+        width: 40%;
+    }
+
+    thead th:last-child {
+        width: 26%;
+    }
+}
+
+.name {
+    padding-right: 10px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+// A name takes one line, two on a phone, and ends in an ellipsis past that, so a long
+// name never makes its row taller than the others.
+.donor {
+    --lines: 1;
+
+    display: -webkit-box;
+    overflow: hidden;
+    height: calc(var(--lines) * 1.3em);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--lines);
+    overflow-wrap: anywhere;
+
+    @media (max-width: 600px) {
+        --lines: 2;
+    }
+
+    @include fade-in;
+}
+
+.amount {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-right: 10px;
+}
+
+.track {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+// Full width at the largest donor, scaled down for the rest.
+.bar {
+    display: block;
+    height: 10px;
+    border-radius: 1px;
+    background: #6467de;
+    transform-origin: 0 50%;
+    transition: transform $move-ms $ease-out;
+}
+
+.value {
+    flex: none;
+    min-width: 3.6em;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+
+    @include fade-in;
+}
+
+.fade {
+    @include fade-in;
+}
+
+.table .change {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+
+    &[data-falling="true"] {
+        color: #a3461d;
+    }
+}
+
+// Bars switch at once under reduced motion; text still fades in.
+
+@media (prefers-reduced-motion: reduce) {
+    .bar {
+        transition: none;
+    }
+}

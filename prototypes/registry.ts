@@ -22,6 +22,13 @@ export type Prototype = {
 /** Every prototype, newest first. */
 export const prototypes: Prototype[] = [
     {
+        slug: 'fragility-finance',
+        title: 'What external finance reaches fragile contexts?',
+        summary:
+            "ODA, other official flows, remittances, and FDI flowing into the OECD's 62 fragile contexts, debt service flowing out, and who gives the aid, for all 62, either tier, or one context.",
+        date: '2026-11-18',
+    },
+    {
         slug: 'oda-counts',
         title: 'One donor, many ODA numbers',
         summary:

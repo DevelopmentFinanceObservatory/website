@@ -1,0 +1,27 @@
+// Motion for the fragility-finance charts, copied from the oda-counts prototype
+// (_motion.scss there) so both prototypes move alike. A change of scope glides bars,
+// points, lines, rings and gridlines to their new places, with value text cross-fading,
+// all within 300ms on one strong ease-out curve. Nothing moves on first draw or on
+// resize (`data-still`, set by useWidth and useStill). Under reduced motion nothing
+// glides; values still fade in.
+$ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+$move-ms: 280ms;
+$fade-ms: 180ms;
+
+// Transitions off while the container settles.
+
+@mixin still {
+    &[data-still] * {
+        transition: none;
+    }
+}
+
+// A value's text, remounted when it changes, fades in.
+
+@mixin fade-in {
+    transition: opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}

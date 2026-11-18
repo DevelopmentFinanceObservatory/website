@@ -1,0 +1,203 @@
+// The 62-dot strip. Marks that move are placed by CSS transforms from the SVG origin.
+// Dots stay put whatever the scope; the median tick and the chosen context's ring glide,
+// and labels fade in (_motion.scss).
+@use "motion" as *;
+
+.strip + .strip {
+    margin-top: 14px;
+}
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 2px;
+    color: #484842;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.label {
+    font-weight: 500;
+}
+
+// How many contexts hold a value, beside the label; the dots never change with the scope, so
+// neither does this.
+.count {
+    margin-left: 8px;
+    color: #5e5e52;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+// The median label sits at the right of the room the widest group's label takes.
+.median {
+    justify-items: end;
+    color: #5e5e52;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.medianText {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.medianSwatch {
+    width: 2px;
+    height: 11px;
+    background: #484842;
+}
+
+.plot {
+    position: relative;
+    min-width: 0;
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 4px;
+    }
+
+    @include still;
+}
+
+.svg {
+    display: block;
+    overflow: visible;
+    touch-action: pan-y;
+
+    &[data-pointing="true"] {
+        cursor: pointer;
+    }
+}
+
+.mark,
+.dot,
+.ring {
+    transform-box: view-box;
+    transform-origin: 0 0;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.reference {
+    stroke: #8a8a7c;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.medianTick {
+    stroke: #484842;
+    stroke-width: 2;
+    transition:
+        transform $move-ms $ease-out,
+        opacity $fade-ms $ease-out;
+}
+
+.tick,
+.tickReference {
+    font: 400 10.5px var(--font-outfit);
+    fill: #75756b;
+}
+
+.tickReference {
+    fill: #484842;
+    font-weight: 500;
+}
+
+.dot {
+    stroke: #fff;
+    stroke-width: 0.75;
+    transition: opacity 200ms ease;
+
+    &[data-dimmed="true"] {
+        opacity: 0.25;
+    }
+
+    &[data-active="true"] {
+        stroke: #484842;
+        stroke-width: 1.5;
+        opacity: 1;
+    }
+}
+
+.ring {
+    fill: none;
+    stroke: #484842;
+    stroke-width: 2;
+    transition:
+        transform $move-ms $ease-out,
+        opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+// The chosen context's label, or "No data" when it has no dot, remounts with its text and
+// fades in where it lands.
+.chosen,
+.noData {
+    font: 500 12px var(--font-outfit);
+    fill: #484842;
+
+    @include fade-in;
+}
+
+.noData {
+    fill: #75756b;
+    font-weight: 400;
+}
+
+// The hover reading, the scatter tooltip's face from debt-thresholds.
+.tip {
+    position: absolute;
+    z-index: 2;
+    margin: 0;
+    padding: 4px 8px;
+    border: 1px solid #ececdb;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+    font-size: 12px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgb(72 72 66 / 12%);
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// Nothing glides under reduced motion; labels and the ring still fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .medianTick {
+        transition: opacity $fade-ms $ease-out;
+    }
+
+    .ring {
+        transition: opacity $fade-ms $ease-out;
+    }
+}
