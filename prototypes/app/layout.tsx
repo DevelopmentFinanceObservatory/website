@@ -2,8 +2,7 @@ import type { Metadata, Viewport } from 'next';
 
 import { CARD } from '../registry';
 
-import ConsentScripts from '@/components/atoms/ConsentScripts/ConsentScripts';
-import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
+import Analytics from '@/components/atoms/Analytics/Analytics';
 import Footer from '@/components/organisms/Footer/Footer';
 import Header from '@/components/organisms/Header/Header';
 import { pageOpenGraph, SITE_NAME, SITE_ORIGIN } from '@/lib/site';
@@ -19,9 +18,9 @@ import '@fontsource/dm-mono/500.css';
 
 import '@/styles/main.scss';
 
-// The same fonts, global styles, consent scripts, analytics, header and footer
-// as the site (src/app/layout.tsx and src/app/(site)/layout.tsx). The app
-// shares the site's origin, so the consent manager shows and stores the
+// The same fonts, global styles, consent scripts and GA4 tag, header and
+// footer as the site (src/app/layout.tsx and src/app/(site)/layout.tsx). The
+// app shares the site's origin, so the consent manager shows and stores the
 // visitor's site-wide choices, and GA4 reports its pages under /prototypes/.
 // The header and footer link to the site through siteHref (src/lib/site.ts).
 const DESCRIPTION = `Tools and apps built on the ${SITE_NAME} infrastructure.`;
@@ -49,11 +48,10 @@ export const viewport: Viewport = {
 const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => (
     <html lang="en">
         <body className="page">
-            <ConsentScripts />
+            <Analytics />
             <Header />
             <main>{children}</main>
             <Footer />
-            <GoogleAnalytics />
         </body>
     </html>
 );

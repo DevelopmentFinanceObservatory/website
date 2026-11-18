@@ -1,15 +1,16 @@
 /* eslint-disable @next/next/no-before-interactive-script-outside-document -- the rule targets the Pages Router; this component renders only in App Router root layouts */
 import Script from 'next/script';
 
+import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
 import { CMP_LOADER_SRC, CMP_SETTINGS_ID } from '@/lib/consent';
 import { EMBED_PREFIX } from '@/lib/embed';
 
-// The consent scripts every root layout renders before its content: the
-// website's (src/app/layout.tsx) and the prototypes app's
-// (prototypes/app/layout.tsx), which shares the site's origin and so its
-// visitors' choices. beforeInteractive scripts must sit in a root layout and
-// run in source order.
-const ConsentScripts = () => (
+// The consent scripts and GA4 tag every root layout renders: the website's
+// (src/app/layout.tsx) and the prototypes app's (prototypes/app/layout.tsx),
+// which shares the site's origin and so its visitors' choices. GA4 renders only
+// here, so it never runs without the Consent Mode defaults. beforeInteractive
+// scripts must sit in a root layout and run in source order.
+const Analytics = () => (
     <>
         {/* Google Consent Mode v2 defaults, all denied until the visitor
             chooses and Usercentrics sends the update. Runs on every host and
@@ -47,7 +48,8 @@ gtag('consent', 'default', {
     document.head.appendChild(cmp);
 }`}
         </Script>
+        <GoogleAnalytics />
     </>
 );
 
-export default ConsentScripts;
+export default Analytics;

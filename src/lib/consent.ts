@@ -1,6 +1,6 @@
 /**
- * Consent as the Usercentrics CMP (loaded by
- * src/components/atoms/ConsentScripts) reports it,
+ * Consent as the Usercentrics CMP (loaded by src/components/atoms/Analytics)
+ * reports it,
  * through its public v3 browser API: `window.__ucCmp` and the `UC_CONSENT`
  * window event (usercentrics.com/docs/web/features/api/control-functionality,
  * …/events/uc-consent). Do not read Usercentrics' own localStorage keys, which
@@ -64,10 +64,30 @@ export const onServiceConsent = (templateId: string, listener: (given: boolean) 
     return () => window.removeEventListener('UC_CONSENT', handle);
 };
 
+// How long a click made before the CMP loaded waits for it.
+const CMP_WAIT_MS = 10_000;
+
 /**
  * Open the CMP's settings layer so the visitor can change their choices after
- * the first banner. Does nothing while the CMP hasn't loaded.
+ * the first banner. A click before the CMP has loaded opens the layer once its
+ * interface is up (the `UC_UI_INITIALIZED` event), or is dropped after
+ * CMP_WAIT_MS, as when a blocker stops the loader.
  */
 export const showPrivacySettings = () => {
-    void window.__ucCmp?.showSecondLayer().catch(() => {});
+    if (window.__ucCmp) {
+        void window.__ucCmp.showSecondLayer().catch(() => {});
+
+        return;
+    }
+
+    const open = () => {
+        window.clearTimeout(timer);
+        void window.__ucCmp?.showSecondLayer().catch(() => {});
+    };
+    const timer = window.setTimeout(
+        () => window.removeEventListener('UC_UI_INITIALIZED', open),
+        CMP_WAIT_MS,
+    );
+
+    window.addEventListener('UC_UI_INITIALIZED', open, { once: true });
 };

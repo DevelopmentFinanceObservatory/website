@@ -72,13 +72,24 @@ test('UC_CONSENT events report the service consent until unsubscribed', () => {
     assert.deepEqual(heard, [true, false, false]);
 });
 
-test('privacy settings open the loaded CMP and load none of their own', () => {
-    // No document stub: loading a CMP here would throw.
-    stubWindow();
-    showPrivacySettings();
-
+test('privacy settings open the loaded CMP', () => {
     let opened = 0;
+
     stubWindow({ showSecondLayer: async () => void (opened += 1) });
     showPrivacySettings();
+    assert.equal(opened, 1);
+});
+
+test('privacy settings clicked before the CMP loads open it once its interface is up', async () => {
+    let opened = 0;
+
+    stubWindow();
+    Object.assign(window, { setTimeout, clearTimeout });
+    showPrivacySettings();
+    assert.equal(opened, 0);
+
+    Object.assign(window, { __ucCmp: { showSecondLayer: async () => void (opened += 1) } });
+    window.dispatchEvent(new Event('UC_UI_INITIALIZED'));
+    window.dispatchEvent(new Event('UC_UI_INITIALIZED'));
     assert.equal(opened, 1);
 });

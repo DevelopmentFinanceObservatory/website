@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 
-import ConsentScripts from '@/components/atoms/ConsentScripts/ConsentScripts';
-import GoogleAnalytics from '@/components/atoms/GoogleAnalytics/GoogleAnalytics';
+import Analytics from '@/components/atoms/Analytics/Analytics';
 import { SITE_NAME, SITE_ORIGIN } from '@/lib/site';
 
 import '@fontsource/outfit/300.css';
@@ -50,9 +49,8 @@ const RootLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => {
     return (
         <html lang="en">
             <body className="page">
-                <ConsentScripts />
+                <Analytics />
                 {children}
-                <GoogleAnalytics />
             </body>
         </html>
     );
