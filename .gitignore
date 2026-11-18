@@ -25,7 +25,9 @@ dist/
 *.pem
 npm-debug.log*
 
-/.claude
+/.claude/*
+!/.claude/CLAUDE.md
+/CLAUDE.local.md
 /.idea
 
 # wrangler dev state (prototypes/)
