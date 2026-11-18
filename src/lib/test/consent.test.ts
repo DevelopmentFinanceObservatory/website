@@ -72,7 +72,7 @@ test('UC_CONSENT events report the service consent until unsubscribed', () => {
     assert.deepEqual(heard, [true, false, false]);
 });
 
-test('on the website, privacy settings open the loaded CMP and load none of their own', () => {
+test('privacy settings open the loaded CMP and load none of their own', () => {
     // No document stub: loading a CMP here would throw.
     stubWindow();
     showPrivacySettings();
