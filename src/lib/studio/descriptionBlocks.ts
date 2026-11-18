@@ -172,7 +172,13 @@ const sameSide = (left: UnitSide, right: UnitSide): boolean => {
     }
 
     const identity = (unit: SimpleUnit): string =>
-        JSON.stringify([unit.ref, unit.currency, unit.prices, unit.base_year]);
+        JSON.stringify([
+            unit.ref,
+            unit.currency,
+            unit.prices,
+            unit.base_year,
+            unit.deflation_basis,
+        ]);
 
     return identity(left) === identity(right);
 };
@@ -180,8 +186,9 @@ const sameSide = (left: UnitSide, right: UnitSide): boolean => {
 const sideWords = (side: UnitSide): string => ('stat_var' in side ? side.label : unitWords(side));
 
 /** A unit in words: its label with its price basis ("US dollars, constant
- *  2021 prices"), a composed unit's sides ("US dollars per population"), or
- *  "Ratio" for a unit divided by itself. */
+ *  2021 prices") and whose prices deflated it where the unit says ("Nigerian
+ *  naira, constant 2024 prices, donor prices"), a composed unit's sides ("US
+ *  dollars per population"), or "Ratio" for a unit divided by itself. */
 export const unitWords = (unit: DescriptionUnit): string => {
     if ('numerator' in unit) {
         return sameSide(unit.numerator, unit.denominator)
@@ -189,11 +196,18 @@ export const unitWords = (unit: DescriptionUnit): string => {
             : `${sideWords(unit.numerator)} per ${sideWords(unit.denominator)}`;
     }
 
-    if (unit.prices === 'constant' && unit.base_year !== undefined) {
-        return `${unit.label}, constant ${unit.base_year} prices`;
+    if (!unit.prices) {
+        return unit.label;
     }
 
-    return unit.prices ? `${unit.label}, ${unit.prices} prices` : unit.label;
+    const prices =
+        unit.prices === 'constant' && unit.base_year !== undefined
+            ? `constant ${unit.base_year} prices`
+            : `${unit.prices} prices`;
+
+    return [unit.label, prices, unit.deflation_basis && `${unit.deflation_basis} prices`]
+        .filter(Boolean)
+        .join(', ');
 };
 
 /** The licence of the description's source at `index` in words: as
