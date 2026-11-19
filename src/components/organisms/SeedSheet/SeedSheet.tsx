@@ -41,6 +41,7 @@ import {
     textFilter,
 } from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
+import type { PatternGroup } from '@/lib/graphExplorer/sentence';
 import {
     columnName,
     constraintBoxes,
@@ -48,6 +49,7 @@ import {
     defaultDrops,
     dropsOutside,
     formulaRows,
+    keptThenMatches,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -329,6 +331,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const [picksOpen, setPicksOpen] = useState(false);
     const [boxesOpen, setBoxesOpen] = useState(false);
     const [moreFilter, setMoreFilter] = useState('');
+    // The tick boxes the reader toggled since picking a dataset or a set of columns, kept on show.
+    const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
     const picksId = useId();
     const boxesId = useId();
     // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
@@ -432,22 +436,42 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const added = new Set(choice.added);
     const write = (next: Partial<SeedQuery>) =>
         writeQuery({ dataset: dataset.id, ...choice, ...next }, carried);
-    const toggle = (list: 'dropped' | 'added', property: string) =>
+    const toggle = (list: 'dropped' | 'added', property: string) => {
+        setTouched((was) => new Set(was).add(property));
         write({
             [list]: choice[list].includes(property)
                 ? choice[list].filter((id) => id !== property)
                 : [...choice[list], property],
         });
+    };
     const chooseColumns = (split: readonly string[]) => {
         setOpen(null);
+        setTouched(new Set());
         write({ dropped: dropsOutside(dataset, split) });
     };
+    const keepAllColumns = () => {
+        setTouched(new Set());
+        write({ dropped: [] });
+    };
+    const anyDropped = own.some((property) => dropped.has(property));
+    // Several groups can share a split; the first of them carries the pressed state.
+    const pressed = (group: PatternGroup, groups: readonly PatternGroup[]): boolean =>
+        choice.added.length === 0 &&
+        groups.find((each) => sameMembers(each.split, group.split)) === group &&
+        sameMembers(choice.dropped, dropsOutside(dataset, group.split));
     const pickHead = listHead(picks, {
         open: picksOpen,
         keep: (each) => each.ref === dataset.id,
     });
-    const boxes = constraintBoxes(dataset, { dropped: choice.dropped, open: boxesOpen });
-    const moreShown = firstMatches(others, termFilter(model, moreFilter));
+    const boxes = constraintBoxes(dataset, {
+        dropped: choice.dropped,
+        touched: [...touched],
+        open: boxesOpen,
+    });
+    const more = keptThenMatches(others, {
+        keep: (property) => added.has(property) || touched.has(property),
+        matches: termFilter(model, moreFilter),
+    });
     const shownOpen = columns.some((column) => column.property !== null && column.property === open)
         ? open
         : null;
@@ -488,6 +512,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             aria-pressed={each.ref === dataset.id}
                             onClick={() => {
                                 setOpen(null);
+                                setTouched(new Set());
                                 writeQuery(
                                     { dataset: each.ref, dropped: null, added: [] },
                                     carried,
@@ -515,16 +540,14 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 {/* The full model holds a dataset the URL names from outside the switches' scope. */}
                 <ModelProvider value={full}>
                     <PatternGroups
+                        key={dataset.id}
                         datasetId={dataset.id}
                         action={(group, groups) =>
                             groups.length > 1 && (
                                 <Button
                                     variant="bordered"
                                     small
-                                    aria-pressed={sameMembers(
-                                        choice.dropped,
-                                        dropsOutside(dataset, group.split),
-                                    )}
+                                    aria-pressed={pressed(group, groups)}
                                     onClick={() => chooseColumns(group.split)}
                                 >
                                     Use These Columns
@@ -575,6 +598,13 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         open={boxesOpen}
                         onToggle={() => setBoxesOpen((was) => !was)}
                     />
+                    {anyDropped && (
+                        <div>
+                            <Button variant="bordered" small onClick={keepAllColumns}>
+                                Use All Columns
+                            </Button>
+                        </div>
+                    )}
                     {others.length > 0 && (
                         <details
                             className={styles.more}
@@ -590,7 +620,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                 label="Filter the other datasets' constraints by name or dcid"
                             />
                             <div className={styles.checks}>
-                                {moreShown.hits.map((property) => (
+                                {[...more.kept, ...more.rest.hits].map((property) => (
                                     <ConstraintBox
                                         key={property}
                                         property={property}
@@ -599,7 +629,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                     />
                                 ))}
                             </div>
-                            <FilterNoteLine text={moreFilter} matches={moreShown} />
+                            <FilterNoteLine text={moreFilter} matches={more.rest} />
                         </details>
                     )}
                 </fieldset>
@@ -632,7 +662,12 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     </p>
                 )}
                 {shownOpen !== null && (
-                    <ValuePanel id={panelId} property={shownOpen} onClose={() => setOpen(null)} />
+                    <ValuePanel
+                        key={shownOpen}
+                        id={panelId}
+                        property={shownOpen}
+                        onClose={() => setOpen(null)}
+                    />
                 )}
                 <div className={styles.exports}>
                     <Button variant="dark" onClick={download}>

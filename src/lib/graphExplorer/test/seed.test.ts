@@ -13,6 +13,7 @@ import {
     constraintsByShare,
     defaultDrops,
     dropsOutside,
+    keptThenMatches,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -289,6 +290,73 @@ test('the constraint boxes run by StatVar share and keep every ticked box past t
     assert.equal(chosen.long, true);
     assert.equal(chosen.total, 11);
     assert.deepEqual(constraintBoxes(who, { dropped, open: true }).shown, WHO_BY_SHARE);
+
+    const allDropped = dropsOutside(who, []);
+    assert.deepEqual(
+        constraintBoxes(who, { dropped: allDropped, open: false }).shown,
+        WHO_BY_SHARE.slice(0, 8),
+    );
+    assert.deepEqual(
+        constraintBoxes(who, {
+            dropped: allDropped,
+            touched: ['undataEducationLevel'],
+            open: false,
+        }).shown,
+        [...WHO_BY_SHARE.slice(0, 8), 'undataEducationLevel'],
+    );
+});
+
+test('the more constraints list keeps ticked and toggled entries first, past the filter and ceiling', () => {
+    const items = Array.from({ length: 70 }, (_, at) => `p${at}`);
+    const keep = (item: string) => item === 'p69';
+    const blank = keptThenMatches(items, { keep, matches: null });
+    assert.deepEqual(blank.kept, ['p69']);
+    assert.equal(blank.rest.hits.length, 60);
+    assert.equal(blank.rest.total, 69);
+    const filtered = keptThenMatches(items, { keep, matches: (item) => item === 'p1' });
+    assert.deepEqual(filtered.kept, ['p69']);
+    assert.deepEqual(filtered.rest.hits, ['p1']);
+});
+
+test('the default columns are the non-empty constraint set with the most StatVars', () => {
+    // Thirteen one-StatVar patterns put each dataset past ALL_CONSTRAINTS_UP_TO.
+    const filler = Array.from({ length: 13 }, (_, at) =>
+        pattern({ constraint_properties: [`filler${at}`], stat_var_count: 1 }),
+    );
+    const startsWith = (patterns: SchemaPattern[]) => {
+        const dataset = { patterns: [...patterns, ...filler] };
+        return activeConstraints(dataset, {
+            dropped: defaultDrops(dataset),
+            added: [],
+        }).toSorted();
+    };
+
+    assert.deepEqual(
+        startsWith([
+            pattern({ constraint_properties: [], stat_var_count: 1000 }),
+            pattern({ constraint_properties: ['a', 'b'], stat_var_count: 50 }),
+        ]),
+        ['a', 'b'],
+    );
+    assert.deepEqual(
+        startsWith([
+            pattern({ constraint_properties: ['c'], stat_var_count: 100 }),
+            pattern({
+                measurement_qualifier: 'Nominal',
+                constraint_properties: ['a', 'b'],
+                stat_var_count: 60,
+            }),
+            pattern({
+                observation_properties: ['x'],
+                constraint_properties: ['b', 'a'],
+                stat_var_count: 60,
+            }),
+        ]),
+        ['a', 'b'],
+    );
+    assert.deepEqual(defaultDrops({ patterns: [] }), []);
+    const one = Array.from({ length: 13 }, (_, at) => `one${at}`);
+    assert.deepEqual(defaultDrops({ patterns: [pattern({ constraint_properties: one })] }), []);
 });
 
 test('a seed starts with the largest combination only past 12 constraints, unless the URL names a drop list', () => {

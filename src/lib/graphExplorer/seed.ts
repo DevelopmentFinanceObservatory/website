@@ -36,9 +36,8 @@ import {
     type QueryReader,
 } from './explore.ts';
 import { scan } from './delimited.ts';
-import { listHead, type ListHead } from './lists.ts';
+import { firstMatches, listHead, type ListHead, type Matches } from './lists.ts';
 import { SEED_PATH } from './paths.ts';
-import { patternGroups } from './sentence.ts';
 import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
 
@@ -120,17 +119,27 @@ export const constraintsByShare = (dataset: Pick<SeedDataset, 'patterns'>): read
 
 /**
  * The dataset's constraint tick boxes on show, as constraintsByShare orders
- * them: the head, plus every ticked box (one not in `dropped`) past it, or
- * every box when `open`. A list whose head and ticked boxes already hold
- * every box reads as short, so it offers no "All N".
+ * them: the head, plus every box past it that is ticked (not in `dropped`)
+ * or that the reader toggled (`touched`), or every box when `open`. A
+ * toggled box therefore stays under the pointer once unticked. A list whose
+ * head and kept boxes already hold every box reads as short, so it offers
+ * no "All N".
  */
 export const constraintBoxes = (
     dataset: Pick<SeedDataset, 'patterns'>,
-    { dropped, open }: { dropped: readonly string[]; open: boolean },
+    {
+        dropped,
+        touched = [],
+        open,
+    }: { dropped: readonly string[]; touched?: readonly string[]; open: boolean },
 ): ListHead<string> => {
     const ordered = constraintsByShare(dataset);
     const unticked = new Set(dropped);
-    const closed = listHead(ordered, { open: false, keep: (property) => !unticked.has(property) });
+    const toggled = new Set(touched);
+    const closed = listHead(ordered, {
+        open: false,
+        keep: (property) => !unticked.has(property) || toggled.has(property),
+    });
     if (closed.shown.length === ordered.length) return { ...closed, long: false };
     return open ? listHead(ordered, { open: true }) : closed;
 };
@@ -145,13 +154,48 @@ export const ALL_CONSTRAINTS_UP_TO = 12;
 /**
  * The constraint properties a seed drops when the URL names none: nothing
  * for a dataset with at most ALL_CONSTRAINTS_UP_TO, else every one outside
- * its largest split combination (patternGroups' first).
+ * the non-empty constraint set its patterns' StatVars use most, summed over
+ * every pattern with that set (ties to the set met first).
  */
 export const defaultDrops = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => {
     if (datasetConstraints(dataset).length <= ALL_CONSTRAINTS_UP_TO) return [];
-    const [largest] = patternGroups(dataset.patterns);
+    const sets = new Map<string, { split: readonly string[]; statVars: number }>();
+    for (const pattern of dataset.patterns) {
+        if (pattern.constraint_properties.length === 0) continue;
+        const key = JSON.stringify(pattern.constraint_properties.toSorted());
+        const held = sets.get(key);
+        if (held === undefined) {
+            sets.set(key, {
+                split: pattern.constraint_properties,
+                statVars: pattern.stat_var_count,
+            });
+        } else held.statVars += pattern.stat_var_count;
+    }
+    let largest: { split: readonly string[]; statVars: number } | undefined;
+    for (const set of sets.values()) {
+        if (largest === undefined || set.statVars > largest.statVars) largest = set;
+    }
     return largest === undefined ? [] : dropsOutside(dataset, largest.split);
 };
+
+/**
+ * The "more constraints" boxes on show: every entry `keep` names (ticked
+ * or toggled this visit), first and whatever the filter, then the first
+ * LIST_CEILING others that `matches` keeps.
+ */
+export const keptThenMatches = (
+    items: readonly string[],
+    {
+        keep,
+        matches,
+    }: { keep: (item: string) => boolean; matches: ((item: string) => boolean) | null },
+): { readonly kept: readonly string[]; readonly rest: Matches<string> } => ({
+    kept: items.filter(keep),
+    rest: firstMatches(
+        items.filter((item) => !keep(item)),
+        matches,
+    ),
+});
 
 /** The constraint properties the seed holds: the dataset's, minus dropped, plus added. */
 export const activeConstraints = (
