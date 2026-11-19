@@ -35,17 +35,6 @@ test('the lede names the two channels and the majority split; the channel note c
         channelNote(DATA),
         "On this page's measure, the United States and the Global Fund paid out 99% of the HIV aid that official donors recorded for countries in 2024. In 1 of the 2 countries where the United States paid out more than half, the Global Fund also gave multi-disease grants recorded under other codes.",
     );
-
-    const gfOnly = country({
-        iso3: 'ZZZ',
-        name: 'Zeta',
-        aid: { us: [0, 0], globalFund: [0, 5e6], other: [0, 0] },
-    });
-
-    assert.match(
-        ledeSentence({ ...DATA, countries: [...DATA.countries, gfOnly] }),
-        /Of the 5 countries that received more than \$1m, the Global Fund paid out more than half in 2 and the United States in 2, and the United States paid out nothing in 1\.$/,
-    );
 });
 
 test('the all-countries sentence: allocated, recipients and table count, others now and then, the largest falls', () => {

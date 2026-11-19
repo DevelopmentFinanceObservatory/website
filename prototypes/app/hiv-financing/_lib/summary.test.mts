@@ -26,7 +26,6 @@ test("the lede's split counts US and Global Fund majorities, flagged US majoriti
         gfMajority: 2,
         usMajority: 2,
         usMajorityGfMulti: 1,
-        usNothing: 1,
     });
 });
 

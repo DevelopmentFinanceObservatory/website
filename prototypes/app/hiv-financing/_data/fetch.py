@@ -121,7 +121,6 @@ PINNED_COUNTS = {
     "countries over $1m in 2024": 94,
     "countries over $1m where the Global Fund gives over half": 64,
     "countries over $1m where the United States gives over half": 27,
-    "countries over $1m where the United States gives nothing": 31,
     "of the US-majority countries, those with Global Fund multi-disease grants": 10,
 }
 # (what, value, expected, tolerance as a fraction)
@@ -466,9 +465,6 @@ def check(data: dict, multi: pd.DataFrame) -> None:
             1 for aid, _ in big if aid["globalFund"] > 0.5 * sum(aid.values())
         ),
         "countries over $1m where the United States gives over half": len(us_majority),
-        "countries over $1m where the United States gives nothing": sum(
-            1 for aid, _ in big if aid["us"] == 0
-        ),
         "of the US-majority countries, those with Global Fund multi-disease grants": sum(
             1 for multi in us_majority if multi > 0
         ),

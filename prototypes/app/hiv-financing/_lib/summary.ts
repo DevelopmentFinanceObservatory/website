@@ -82,8 +82,6 @@ export type LedeFigures = {
     usMajority: number;
     /** of the US-majority countries, those with Global Fund multi-disease grants (`gfMultiFlag`) */
     usMajorityGfMulti: number;
-    /** of the countries over $1m, those where the United States gave nothing */
-    usNothing: number;
 };
 
 export const ledeFigures = (data: HivData): LedeFigures => {
@@ -99,6 +97,5 @@ export const ledeFigures = (data: HivData): LedeFigures => {
         gfMajority: funded.filter(({ shares }) => shares.globalFund > 0.5).length,
         usMajority: usMajority.length,
         usMajorityGfMulti: usMajority.filter(({ country }) => gfMultiFlag(country)).length,
-        usNothing: funded.filter(({ shares }) => shares.us === 0).length,
     };
 };

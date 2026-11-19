@@ -100,7 +100,7 @@ export const plhivGapNote = (data: HivData): string => {
 const ALMOST_ALL = 0.95;
 
 export const ledeSentence = (data: HivData): string => {
-    const { usGfShare, over1m, gfMajority, usMajority, usNothing } = ledeFigures(data);
+    const { usGfShare, over1m, gfMajority, usMajority } = ledeFigures(data);
 
     if (usGfShare < ALMOST_ALL) {
         throw new Error(
@@ -108,13 +108,9 @@ export const ledeSentence = (data: HivData): string => {
         );
     }
 
-    const split = `Of the ${over1m} countries that received more than $1m, the Global Fund paid out more than half in ${gfMajority} and the United States in ${usMajority}`;
-
     return [
         `In ${lastYear(data)} almost all HIV aid recorded for countries was paid out through two channels: the US government and the Global Fund.`,
-        usNothing > 0
-            ? `${split}, and the United States paid out nothing in ${usNothing}.`
-            : `${split}.`,
+        `Of the ${over1m} countries that received more than $1m, the Global Fund paid out more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };
 
