@@ -205,7 +205,6 @@ export type Model = {
     hasValueList(id: string): boolean;
     /** The name, else a dataset's `datasetName`, else the dcid. */
     label(id: string): string;
-    isBase(id: string): boolean;
     /** `sub_class_of`, `sub_property_of` and `specialization_of`. */
     broader(id: string): readonly string[];
     /** Nodes whose broader terms include `id`, by label. */
@@ -841,7 +840,6 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         kind: (id: string) => kinds.get(id),
         hasValueList: (id: string) => lists.has(id),
         label,
-        isBase: (id: string) => byId.get(id)?.declared_by === 'base',
         broader: (id: string) => broaderOf.get(id) ?? EMPTY,
         narrower: (id: string) => narrowerIndex.get(id) ?? EMPTY,
         ancestors,

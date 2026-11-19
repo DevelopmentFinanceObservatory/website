@@ -16,7 +16,7 @@ import {
     readExplore,
     moveHref,
     sameView,
-    switchBase,
+    switchOrigin,
     type ExploreState,
 } from '../explore.ts';
 import { buildModel, type ListScope } from '../model.ts';
@@ -26,7 +26,7 @@ import { schemaBody, usageBody } from './fixtures.ts';
 const read = (query: string) => readExplore(new URLSearchParams(query));
 
 test('nothing set is the start screen with no dataset filter', () => {
-    const start = { view: { kind: 'start' }, show: { kind: 'none' }, base: false };
+    const start = { view: { kind: 'start' }, show: { kind: 'none' }, base: false, un: false };
     assert.deepEqual(read(''), start);
     assert.deepEqual(read('?list=&show=&base='), start);
 });
@@ -59,24 +59,38 @@ test('show reads as one dataset or every dataset', () => {
 
 test('every state writes a query that reads back as the same state', () => {
     const states: ExploreState[] = [
-        { view: { kind: 'start' }, show: { kind: 'none' }, base: false },
-        { view: { kind: 'start' }, show: { kind: 'all' }, base: false },
+        { view: { kind: 'start' }, show: { kind: 'none' }, base: false, un: false },
+        { view: { kind: 'start' }, show: { kind: 'all' }, base: false, un: false },
         {
             view: { kind: 'list', scope: { kind: 'dfo' } },
             show: { kind: 'none' },
             base: false,
+            un: false,
         },
         {
             view: { kind: 'list', scope: { kind: 'class', id: 'FinancialFlow' } },
             show: { kind: 'dataset', id: 'provenance/OECDDAC1' },
             base: true,
+            un: false,
         },
-        { view: { kind: 'node', id: 'dc/base/odd id&x=1' }, show: { kind: 'none' }, base: true },
-        { view: { kind: 'node', id: 'dc/base/odd id&x=1' }, show: { kind: 'none' }, base: false },
+        {
+            view: { kind: 'node', id: 'dc/base/odd id&x=1' },
+            show: { kind: 'none' },
+            base: true,
+            un: false,
+        },
+        {
+            view: { kind: 'node', id: 'dc/base/odd id&x=1' },
+            show: { kind: 'none' },
+            base: false,
+            un: true,
+        },
+        { view: { kind: 'node', id: 'undata/AGE' }, show: { kind: 'all' }, base: true, un: true },
         {
             view: { kind: 'dataset', id: 'provenance/OECDDAC2A' },
             show: { kind: 'all' },
             base: false,
+            un: false,
         },
     ];
     for (const state of states) {
@@ -86,7 +100,7 @@ test('every state writes a query that reads back as the same state', () => {
 
 test('the start screen with no filter has a bare path', () => {
     assert.equal(
-        exploreHref({ view: { kind: 'start' }, show: { kind: 'none' }, base: false }),
+        exploreHref({ view: { kind: 'start' }, show: { kind: 'none' }, base: false, un: false }),
         '/graph-explorer',
     );
     assert.equal(
@@ -94,22 +108,30 @@ test('the start screen with no filter has a bare path', () => {
             view: { kind: 'list', scope: { kind: 'dfo' } },
             show: { kind: 'all' },
             base: false,
+            un: false,
         }),
         '/graph-explorer?list=dfo&show=all',
     );
 });
 
-test('base reads as on only for 1', () => {
-    assert.equal(read('base=1').base, true);
-    for (const query of ['', 'base=', 'base=0', 'base=true']) {
-        assert.equal(read(query).base, false, query);
+test('each origin switch reads as on only for 1', () => {
+    for (const name of ['base', 'un'] as const) {
+        assert.equal(read(`${name}=1`)[name], true, name);
+        for (const value of ['', '0', 'true']) {
+            assert.equal(read(`${name}=${value}`)[name], false, `${name}=${value}`);
+        }
     }
+    assert.deepEqual([read('un=1').base, read('base=1').un], [false, false]);
 });
 
 test('every carried parameter rides on a sheet screen link and reads back', () => {
-    const carried = { show: { kind: 'dataset', id: 'provenance/OECDDAC1' }, base: true } as const;
+    const carried = {
+        show: { kind: 'dataset', id: 'provenance/OECDDAC1' },
+        base: true,
+        un: true,
+    } as const;
     const href = carriedHref('/graph-explorer/new-sheet', carried);
-    assert.equal(href, '/graph-explorer/new-sheet?show=provenance%2FOECDDAC1&base=1');
+    assert.equal(href, '/graph-explorer/new-sheet?show=provenance%2FOECDDAC1&base=1&un=1');
     assert.deepEqual(readCarried(new URL(href, 'https://x.invalid').searchParams), carried);
     assert.equal(
         carriedHref('/graph-explorer/check-sheet', NO_CARRIED),
@@ -134,6 +156,7 @@ test('a move to the view on show adds no history entry; any other keeps the carr
         view: { kind: 'node', id: 'crsPurpose' },
         show: { kind: 'dataset', id: 'provenance/OECDDAC1' },
         base: true,
+        un: false,
     };
     assert.equal(moveHref(state, { kind: 'node', id: 'crsPurpose' }), null);
     assert.equal(
@@ -172,26 +195,69 @@ test('a list scope exists for every DFO property, a class or a value list', () =
     );
 });
 
-test('a term the model lacks waits on the terms list only while base is on and it is not in', () => {
+test('a term the model lacks waits while any switched-on terms list is not yet in', () => {
     const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
     const outside = { kind: 'node', id: 'Count_Thing' } as const;
-    assert.equal(awaitsTerms(model, outside, true, false), true);
-    assert.equal(awaitsTerms(model, outside, true, true), false);
-    assert.equal(awaitsTerms(model, outside, false, false), false);
-    assert.equal(awaitsTerms(model, { kind: 'node', id: 'FinancialFlow' }, true, false), false);
+    const waits = (base: boolean, un: boolean, settled: { base: boolean; un: boolean }) =>
+        awaitsTerms(model, outside, { base, un }, settled, []);
+    const none = { base: false, un: false };
+
+    assert.equal(waits(true, false, none), true);
+    assert.equal(waits(true, false, { base: true, un: false }), false);
+    assert.equal(waits(false, false, none), false);
+    // Both on: it waits until both are in, either order.
+    assert.equal(waits(true, true, { base: true, un: false }), true);
+    assert.equal(waits(true, true, { base: false, un: true }), true);
+    assert.equal(waits(true, true, { base: true, un: true }), false);
+    // A list whose switch is off never holds the view.
+    assert.equal(waits(false, true, { base: false, un: true }), false);
+
     assert.equal(
-        awaitsTerms(model, { kind: 'dataset', id: 'provenance/Gone' }, true, false),
+        awaitsTerms(
+            model,
+            { kind: 'node', id: 'FinancialFlow' },
+            { base: true, un: true },
+            none,
+            [],
+        ),
+        false,
+    );
+    assert.equal(
+        awaitsTerms(
+            model,
+            { kind: 'dataset', id: 'provenance/Gone' },
+            { base: true, un: true },
+            none,
+            [],
+        ),
         false,
     );
 });
 
-test('the base switch sets or clears base and keeps every other parameter', () => {
+test('a term a loaded list holds does not wait on the lists still loading', () => {
+    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
+    const age = { kind: 'node', id: 'undata/AGE' } as const;
+    const unLoaded = [{ ref: 'undata/AGE' }];
+    const switches = { base: true, un: true };
+    const unReady = { base: false, un: true };
+
+    assert.equal(awaitsTerms(model, age, switches, unReady, unLoaded), false);
+    assert.equal(awaitsTerms(model, age, switches, unReady, []), true);
     assert.equal(
-        switchBase('?node=FinancialFlow&show=all', true),
+        awaitsTerms(model, { kind: 'node', id: 'undata/Other' }, switches, unReady, unLoaded),
+        true,
+    );
+});
+
+test('an origin switch sets or clears its own parameter and keeps every other parameter', () => {
+    assert.equal(
+        switchOrigin('?node=FinancialFlow&show=all', 'base', true),
         '?node=FinancialFlow&show=all&base=1',
     );
-    assert.equal(switchBase('?class=X&base=1&split=a', false), '?class=X&split=a');
-    assert.equal(switchBase('?base=1', false), '');
-    assert.equal(switchBase('', true), '?base=1');
-    assert.equal(switchBase('?base=1', true), '?base=1');
+    assert.equal(switchOrigin('?class=X&base=1&split=a', 'base', false), '?class=X&split=a');
+    assert.equal(switchOrigin('?base=1', 'base', false), '');
+    assert.equal(switchOrigin('', 'base', true), '?base=1');
+    assert.equal(switchOrigin('?base=1', 'base', true), '?base=1');
+    assert.equal(switchOrigin('?base=1', 'un', true), '?base=1&un=1');
+    assert.equal(switchOrigin('?base=1&un=1', 'un', false), '?base=1');
 });

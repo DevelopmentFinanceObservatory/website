@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
 import { useCarried, useModel } from './ExploreContext';
-import { BaseTag, TermLink } from './ExploreLink';
+import { OriginTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
 import ValueTree from './ValueTree';
@@ -358,8 +358,12 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 };
 
 /**
- * A term the DFO model does not hold, such as a base Data Commons term
- * reached from search: its name, the base tag and a link to the graph's browser.
+ * A term the DFO model does not hold, such as a base Data Commons or UN
+ * System Data Commons term reached from search: its name, its origin tag,
+ * and, for a base term, a link to the base Data Commons browser. A UN System
+ * or unknown term gets no link, since the base browser does not hold it and
+ * the UN System Data Commons serves no browser page (its /browser/ path
+ * answers 404).
  */
 export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | undefined }) => (
     <>
@@ -367,26 +371,23 @@ export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | unde
             <Label>{outsideKind(term)}</Label>
             <h2 className={styles.name}>
                 {term?.label ?? id}
-                {term?.declared_by === 'base' && (
-                    <>
-                        {' '}
-                        <BaseTag />
-                    </>
-                )}
+                <OriginTag declaredBy={term?.declared_by} />
             </h2>
             <IdLine id={id} />
         </div>
         <p>The DFO model does not use it, so no dataset here draws on it.</p>
-        <p className={styles.line}>
-            <a
-                className={styles.external}
-                href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                Open in the Data Commons browser
-            </a>
-        </p>
+        {term?.declared_by === 'base' && (
+            <p className={styles.line}>
+                <a
+                    className={styles.external}
+                    href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Open in the Data Commons browser
+                </a>
+            </p>
+        )}
     </>
 );
 

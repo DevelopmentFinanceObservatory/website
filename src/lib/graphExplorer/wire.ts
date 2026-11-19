@@ -92,10 +92,34 @@ export type SchemaTerm = {
     declared_by: string | null;
 };
 
-/** GET /api/graph/schema/terms: every Class and Property on the graph. */
+/**
+ * GET /api/graph/schema/terms: every Class and Property on the graph. GET
+ * /api/graph/schema/terms/un_system has the same shape and lists the terms
+ * the UN System Data Commons declares.
+ */
 export type SchemaTerms = {
     generation: string | null;
     terms: SchemaTerm[];
+};
+
+/** The terms lists searched beside the model, each present once loaded. */
+export type OutsideTerms = {
+    /** The base terms list. */
+    readonly base?: SchemaTerms;
+    /** The UN System Data Commons terms list. */
+    readonly un?: SchemaTerms;
+};
+
+/**
+ * Every term of the outside lists, one per ref. The UN System redeclares
+ * some base classes (`Dataset`, `Topic`), and on a ref both lists hold the
+ * base row wins.
+ */
+export const outsideTermList = ({ base, un }: OutsideTerms): readonly SchemaTerm[] => {
+    const baseTerms = base?.terms ?? [];
+    if (un === undefined) return baseTerms;
+    const seen = new Set(baseTerms.map((term) => term.ref));
+    return [...baseTerms, ...un.terms.filter((term) => !seen.has(term.ref))];
 };
 
 /** One distinct way a provenance's StatVars use the model. */
@@ -477,6 +501,18 @@ export const readTerms = (body: unknown): SchemaTerms => {
     const document = body as SchemaTerms;
     onePerRef(document.terms, 'terms.terms');
     return document;
+};
+
+/**
+ * The UN System Data Commons terms list, as readTerms reads it, keeping only
+ * the rows whose `declared_by` is `un_system`.
+ */
+export const readUnTerms = (body: unknown): SchemaTerms => {
+    const document = readTerms(body);
+    return {
+        ...document,
+        terms: document.terms.filter((term) => term.declared_by === 'un_system'),
+    };
 };
 
 /**

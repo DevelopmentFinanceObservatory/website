@@ -1,11 +1,11 @@
 /**
  * Search over the model: terms, values and datasets by label, dcid,
  * alternate name, classification code, and the names and values of each
- * node's open properties. With the terms list it also
+ * node's open properties. With the base or UN System terms lists it also
  * reaches classes and properties the model does not hold.
  */
 import { kindOfTerm, openNames, type Kind, type Model } from './model.ts';
-import type { SchemaTerms } from './wire.ts';
+import type { SchemaTerm } from './wire.ts';
 
 /** How a query matched a hit's best field. */
 export type MatchRank = 'exact' | 'prefix' | 'substring';
@@ -15,8 +15,12 @@ export type SearchHit = {
     readonly kind: Kind | 'dataset';
     readonly label: string;
     readonly match: MatchRank;
-    /** Declared by base Data Commons. */
-    readonly base: boolean;
+    /**
+     * The origin declaring the hit, as a node's `declared_by`: `dfo`,
+     * `base`, `un_system`, another origin, or null when the graph names
+     * none. Null for a dataset.
+     */
+    readonly declaredBy: string | null;
     /** False for a term found only in the terms list. */
     readonly inModel: boolean;
 };
@@ -29,8 +33,8 @@ export type SearchResult = {
 };
 
 export type SearchOptions = {
-    /** The terms list. When given, terms outside the model are searched too. */
-    readonly baseTerms?: SchemaTerms;
+    /** The loaded terms lists merged by `outsideTermList`. Terms outside the model are searched in it. */
+    readonly outside?: readonly SchemaTerm[];
     readonly limit?: number;
 };
 
@@ -49,15 +53,18 @@ const bestMatch = (query: string, fields: readonly (string | null)[]): MatchRank
     return best === undefined ? undefined : RANKS[best];
 };
 
-/** DFO terms and datasets, then base terms in the model, then terms outside it. */
-const tier = (hit: SearchHit): number => (!hit.inModel ? 2 : hit.base ? 1 : 0);
+/** DFO terms and datasets, then other terms in the model, then terms outside it. */
+const tier = (hit: SearchHit): number => {
+    if (!hit.inModel) return 2;
+    return hit.kind === 'dataset' || hit.declaredBy === 'dfo' ? 0 : 1;
+};
 
 /**
  * Hits for `query`, case-insensitive, ranked exact, then prefix, then
- * substring. Within a rank, DFO terms come before base terms, then by label.
+ * substring. Within a rank, DFO terms and datasets come before other origins' terms, then by label.
  */
 export function search(model: Model, query: string, options: SearchOptions = {}): SearchResult {
-    const { baseTerms, limit = 12 } = options;
+    const { outside = [], limit = 12 } = options;
     const needle = query.trim().toLowerCase();
     if (needle === '') return { hits: [], total: 0 };
 
@@ -76,7 +83,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             kind: model.kind(node.ref) ?? 'value',
             label: model.label(node.ref),
             match,
-            base: node.declared_by === 'base',
+            declaredBy: node.declared_by,
             inModel: true,
         });
     }
@@ -88,11 +95,11 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             kind: 'dataset',
             label: model.label(dataset.ref),
             match,
-            base: false,
+            declaredBy: null,
             inModel: true,
         });
     }
-    for (const term of baseTerms?.terms ?? []) {
+    for (const term of outside) {
         if (term.declared_by === 'dfo' || model.node(term.ref)) continue;
         const match = bestMatch(needle, [term.label, term.ref]);
         if (match === undefined) continue;
@@ -101,7 +108,7 @@ export function search(model: Model, query: string, options: SearchOptions = {})
             kind: kindOfTerm(term),
             label: term.label ?? term.ref,
             match,
-            base: term.declared_by === 'base',
+            declaredBy: term.declared_by,
             inModel: false,
         });
     }

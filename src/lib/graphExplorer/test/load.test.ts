@@ -7,17 +7,22 @@ import test from 'node:test';
 
 import {
     LoadError,
+    LOADING,
     loadDocument,
     loadFailure,
+    loadServed,
+    NOT_SERVED,
     RETRY_WAIT_MS,
     retryDelay,
+    settled as isSettled,
     sharedLoad,
     waitText,
-    type Loadable,
+    type NotServed,
+    type Servable,
     type WaitCause,
 } from '../load.ts';
-import { readSchema } from '../wire.ts';
-import { schemaBody } from './fixtures.ts';
+import { readSchema, readTerms } from '../wire.ts';
+import { schemaBody, termsBody } from './fixtures.ts';
 
 test('a 503 with Retry-After in seconds waits that long', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: '5', waitedMs: 0, nowMs: 0 }), 5000);
@@ -112,6 +117,57 @@ test('the loader waits out a build and a spent allowance, then reads the documen
     assert.deepEqual(waits, [5000, 12_000]);
     assert.deepEqual(causes, ['schema_building', 'busy']);
     assert.equal(urls.length, 3);
+});
+
+test('a 404 from a document the Graph API may not serve reads as not served, with no retry', async () => {
+    const refusal = () =>
+        json(
+            {
+                code: 'not_found',
+                title: 'Not found',
+                retryable: false,
+                cause: { code: 'origin_not_served' },
+            },
+            404,
+        );
+    // An API without the route answers a bare 404, which fails closed the same way.
+    const bare = () => new Response('Not Found', { status: 404 });
+    for (const answer of [refusal, bare]) {
+        const { options, waits, urls } = rig([answer]);
+        const terms = await loadServed(
+            'UN terms',
+            '/api/graph/schema/terms/un_system',
+            readTerms,
+            options,
+        );
+        assert.equal(terms, NOT_SERVED);
+        assert.deepEqual(waits, []);
+        assert.equal(urls.length, 1);
+    }
+
+    const { options } = rig([() => json(termsBody())]);
+    const terms = await loadServed(
+        'UN terms',
+        '/api/graph/schema/terms/un_system',
+        readTerms,
+        options,
+    );
+    assert.notEqual(terms, NOT_SERVED);
+
+    await assert.rejects(
+        loadServed(
+            'UN terms',
+            '/x',
+            readTerms,
+            rig([() => json({ title: 'Bad gateway' }, 502)]).options,
+        ),
+        { name: 'LoadError', reason: 'status', status: 502 },
+    );
+    await assert.rejects(loadDocument('The model', '/x', readSchema, rig([refusal]).options), {
+        name: 'LoadError',
+        reason: 'status',
+        status: 404,
+    });
 });
 
 test('each wait cause reads as its own line, and an unknown cause as a neutral wait', () => {
@@ -269,8 +325,12 @@ test('a load that outlasts its overall bound fails as a timeout', async () => {
 
 /** A shared load over a load the test settles by hand, and every state it published. */
 const sharedRig = () => {
-    const runs: { signal: AbortSignal; settle: (value: string) => void; fail: () => void }[] = [];
-    const states: (Loadable<string> | null)[] = [];
+    const runs: {
+        signal: AbortSignal;
+        settle: (value: string | NotServed) => void;
+        fail: () => void;
+    }[] = [];
+    const states: (Servable<string> | null)[] = [];
     const shared = sharedLoad<string>({
         load: ({ signal }) =>
             new Promise((resolve, reject) => {
@@ -327,4 +387,28 @@ test('a finished shared load survives an abort, and only a retry restarts a fail
     assert.equal(runs.length, 1);
     shared.start(true);
     assert.equal(runs.length, 2);
+});
+
+test('a shared load answered not served publishes it, and a retry leaves it alone', async () => {
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    runs[0]?.settle(NOT_SERVED);
+    await settled();
+    assert.deepEqual(states.at(-1), { status: 'notServed' });
+    shared.start(true);
+    assert.equal(runs.length, 1);
+});
+
+test('a terms list is settled once loaded or not served, and not while absent, loading or failed', () => {
+    const rows: [Servable<unknown> | null, boolean][] = [
+        [null, false],
+        [LOADING, false],
+        [{ status: 'ready', value: {} }, true],
+        [NOT_SERVED, true],
+        [{ status: 'failed', reason: 'unexpected', message: 'm', explanation: 'e' }, false],
+    ];
+    assert.deepEqual(
+        rows.map(([state]) => isSettled(state)),
+        rows.map(([, expected]) => expected),
+    );
 });

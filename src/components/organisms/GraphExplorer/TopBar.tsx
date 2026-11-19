@@ -11,47 +11,76 @@ import { useExplorerData } from './useExplorerData';
 
 import Button from '@/components/atoms/Button/Button';
 import Spinner from '@/components/atoms/Spinner/Spinner';
-import { carriedHref, START_VIEW, switchBase } from '@/lib/graphExplorer/explore';
-import { waitText, type Loadable } from '@/lib/graphExplorer/load';
+import {
+    carriedHref,
+    ORIGIN_SWITCHES,
+    START_VIEW,
+    switchOrigin,
+    type OriginSwitch,
+} from '@/lib/graphExplorer/explore';
+import { waitText, type Servable } from '@/lib/graphExplorer/load';
 import {
     CHECK_SHEET_PATH,
     screenOf,
     SEED_PATH,
     type GraphExplorerScreen,
 } from '@/lib/graphExplorer/paths';
-import type { SchemaTerms } from '@/lib/graphExplorer/wire';
 
 const SHEET_LINKS: { screen: GraphExplorerScreen; path: string; label: string }[] = [
     { screen: 'seed', path: SEED_PATH, label: 'Seed a dataset' },
     { screen: 'check-sheet', path: CHECK_SHEET_PATH, label: 'Check a sheet' },
 ];
 
-/** Turns the base switch on or off in place and keeps the rest of the URL. The back button skips it. */
-const writeBase = (on: boolean) =>
+/** What each origin switch adds to search, as its checkbox and its terms line name it. */
+const ORIGIN_NAMES: Readonly<Record<OriginSwitch, string>> = {
+    base: 'base Data Commons',
+    un: 'UN System Data Commons',
+};
+
+/** Turns one origin switch on or off in place and keeps the rest of the URL. The back button skips it. */
+const writeOrigin = (name: OriginSwitch, on: boolean) =>
     window.history.replaceState(
         null,
         '',
-        `${window.location.pathname}${switchBase(window.location.search, on)}`,
+        `${window.location.pathname}${switchOrigin(window.location.search, name, on)}`,
     );
 
-/** The terms list's progress or failure, on a line of its own under the bar. */
+const capitalise = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/**
+ * One terms list's progress, failure, or absence, on a line of its own under
+ * the bar. A list this Graph API does not serve says so, with no retry,
+ * since asking again gets the same answer.
+ */
 const TermsLine = ({
+    origin,
     terms,
     onRetry,
 }: {
-    terms: Exclude<Loadable<SchemaTerms>, { status: 'ready' }>;
+    origin: OriginSwitch;
+    terms: Exclude<Servable<unknown>, { status: 'ready' }>;
     onRetry: () => void;
-}) =>
-    terms.status === 'loading' ? (
-        <p className={styles.terms} role="status">
-            <Spinner size={14} label="Loading" />
-            <span className={styles.termsText}>
-                {terms.waiting === null
-                    ? 'Loading base Data Commons terms.'
-                    : waitText(terms.waiting.retryInMs, terms.waiting.cause)}
-            </span>
-        </p>
-    ) : (
+}) => {
+    if (terms.status === 'notServed') {
+        return (
+            <p className={styles.terms} role="status">
+                {`${capitalise(ORIGIN_NAMES[origin])} terms are not served here.`}
+            </p>
+        );
+    }
+    if (terms.status === 'loading') {
+        return (
+            <p className={styles.terms} role="status">
+                <Spinner size={14} label="Loading" />
+                <span className={styles.termsText}>
+                    {terms.waiting === null
+                        ? `Loading ${ORIGIN_NAMES[origin]} terms.`
+                        : waitText(terms.waiting.retryInMs, terms.waiting.cause)}
+                </span>
+            </p>
+        );
+    }
+    return (
         <div className={styles.terms} role="alert">
             <span>{terms.message}</span>
             <Button small onClick={onRetry}>
@@ -59,15 +88,17 @@ const TermsLine = ({
             </Button>
         </div>
     );
+};
 
 /**
- * The wordmark, the search box, the base Data Commons switch and the three
- * screens, over the section's loaded documents. Every link keeps the carried
- * parameters, and the switch writes the carried `base` parameter. The terms
- * list's progress or failure shows under the bar unless `termsInMain`, when
- * the main area shows it.
+ * The wordmark, the search box, the origin switches under "Also search",
+ * and the three screens, over the section's loaded documents. Every link
+ * keeps the carried parameters, and each switch writes its carried
+ * parameter. Each switched-on terms list's progress, failure, or absence
+ * shows under the bar, except the list `termsInMain` names, which the main
+ * area shows.
  */
-const TopBar = ({ termsInMain = false }: { termsInMain?: boolean }) => {
+const TopBar = ({ termsInMain = null }: { termsInMain?: OriginSwitch | null }) => {
     const screen = screenOf(usePathname());
     const carried = useCarried();
     const data = useExplorerData();
@@ -78,15 +109,20 @@ const TopBar = ({ termsInMain = false }: { termsInMain?: boolean }) => {
             <ExploreLink view={START_VIEW} className={styles.wordmark}>
                 Graph Explorer
             </ExploreLink>
-            <SearchBox model={model} modelStatus={data.model.status} baseTerms={data.baseTerms} />
-            <label className={styles.switch}>
-                <input
-                    type="checkbox"
-                    checked={carried.base}
-                    onChange={(event) => writeBase(event.target.checked)}
-                />
-                Search base Data Commons
-            </label>
+            <SearchBox model={model} modelStatus={data.model.status} outside={data.outside} />
+            <fieldset className={styles.switches}>
+                <legend className={styles.legend}>Also search</legend>
+                {ORIGIN_SWITCHES.map((name) => (
+                    <label key={name} className={styles.switch}>
+                        <input
+                            type="checkbox"
+                            checked={carried[name]}
+                            onChange={(event) => writeOrigin(name, event.target.checked)}
+                        />
+                        {ORIGIN_NAMES[name]}
+                    </label>
+                ))}
+            </fieldset>
             <nav className={styles.links} aria-label="Screens">
                 <ExploreLink
                     view={START_VIEW}
@@ -107,9 +143,20 @@ const TopBar = ({ termsInMain = false }: { termsInMain?: boolean }) => {
                     </Link>
                 ))}
             </nav>
-            {!termsInMain && data.terms !== null && data.terms.status !== 'ready' && (
-                <TermsLine terms={data.terms} onRetry={data.retryTerms} />
-            )}
+            {ORIGIN_SWITCHES.map((name) => {
+                const terms = data.terms[name];
+                if (name === termsInMain || terms === null || terms.status === 'ready') {
+                    return null;
+                }
+                return (
+                    <TermsLine
+                        key={name}
+                        origin={name}
+                        terms={terms}
+                        onRetry={() => data.retryTerms(name)}
+                    />
+                );
+            })}
         </header>
     );
 };

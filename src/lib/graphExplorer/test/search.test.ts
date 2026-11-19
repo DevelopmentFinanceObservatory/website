@@ -1,13 +1,13 @@
 /**
  * `search.ts` over the test documents: fields, ranking, datasets, the cap,
- * and base terms outside the model when the terms list is given.
+ * and base and UN System terms outside the model when their lists are given.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
 import { enterChoice, escapeAction, search, searchPlaceholder, stepActive } from '../search.ts';
-import { readSchema, readUsage, readTerms } from '../wire.ts';
+import { outsideTermList, readSchema, readUsage, readTerms, readUnTerms } from '../wire.ts';
 import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
@@ -65,6 +65,25 @@ test('within a rank, DFO terms and datasets come before base terms', () => {
     ]);
 });
 
+test('a model node declared by the UN System ranks after a DFO node, as base does', () => {
+    const schema = readSchema(schemaBody());
+    const declare = (ref: string, declaredBy: string) => {
+        const node = schema.nodes.find((entry) => entry.ref === ref);
+        assert.ok(node);
+        node.declared_by = declaredBy;
+    };
+    // measuredValue is the shortest label, so label length alone would rank it first.
+    declare('measuredValue', 'un_system');
+    declare('measurementQualifier', 'dfo');
+    const hits = search(buildModel(schema, readUsage(usageBody())), 'measure').hits.map((hit) => [
+        hit.id,
+        hit.declaredBy,
+    ]);
+    const un = hits.findIndex(([, by]) => by === 'un_system');
+    const dfo = hits.findIndex(([, by]) => by === 'dfo');
+    assert.ok(dfo >= 0 && un > dfo);
+});
+
 test('datasets are found by label and dcid', () => {
     const hits = search(model, 'oecd dac2', { limit: 50 }).hits;
     assert.deepEqual(
@@ -92,12 +111,14 @@ test('with the terms list, base terms outside the model follow those inside', ()
                 kind: 'property',
                 label: 'amount',
                 match: 'exact',
-                base: true,
+                declaredBy: 'base',
                 inModel: true,
             },
         ],
     );
-    const hits = search(model, 'amount', { baseTerms }).hits.filter((hit) => hit.match === 'exact');
+    const hits = search(model, 'amount', {
+        outside: outsideTermList({ base: baseTerms }),
+    }).hits.filter((hit) => hit.match === 'exact');
     assert.deepEqual(
         hits.map((hit) => [hit.id, hit.kind, hit.inModel]),
         [
@@ -112,30 +133,36 @@ test('a term with no declaring provenance outside the model is found', () => {
     const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
     assert.ok(term);
     term.declared_by = null;
-    const hits = search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) }).hits;
+    const hits = search(model, 'AdministrativeArea1', {
+        outside: outsideTermList({ base: readTerms(body) }),
+    }).hits;
     assert.deepEqual(
         hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
         [['AdministrativeArea1', false]],
     );
 });
 
-test('a term outside the model carries the base tag only when base Data Commons declares it', () => {
+test('a term outside the model carries the origin declaring it, and a DFO row is skipped', () => {
     const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
     const term = body.terms.find((entry) => entry.ref === 'AdministrativeArea1');
     assert.ok(term);
     const exact = () =>
-        search(model, 'AdministrativeArea1', { baseTerms: readTerms(body) })
+        search(model, 'AdministrativeArea1', {
+            outside: outsideTermList({ base: readTerms(body) }),
+        })
             .hits.filter((hit) => hit.match === 'exact')
-            .map((hit) => [hit.id, hit.inModel, hit.base]);
-    assert.deepEqual(exact(), [['AdministrativeArea1', false, true]]);
+            .map((hit) => [hit.id, hit.inModel, hit.declaredBy]);
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, 'base']]);
     term.declared_by = 'un_system';
-    assert.deepEqual(exact(), [['AdministrativeArea1', false, false]]);
+    assert.deepEqual(exact(), [['AdministrativeArea1', false, 'un_system']]);
     term.declared_by = 'dfo';
     assert.deepEqual(exact(), []);
 });
 
 test('a base term the model holds is found once, as part of the model', () => {
-    const hits = search(model, 'AdministrativeArea', { baseTerms }).hits;
+    const hits = search(model, 'AdministrativeArea', {
+        outside: outsideTermList({ base: baseTerms }),
+    }).hits;
     assert.deepEqual(
         hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
         [['AdministrativeArea', true]],
@@ -147,6 +174,41 @@ test('a base term the model holds is found once, as part of the model', () => {
             ['AdministrativeArea1', 'prefix', false],
             ['AdministrativeArea2', 'prefix', false],
         ],
+    );
+});
+
+/** A UN System terms body, where every row is a Class under the UN provenance. */
+const unBody = (rows: { ref: string; label: string; declared_by: string }[]) => ({
+    generation: null,
+    terms: rows.map((row) => ({ ...row, types: ['Class'], provenances: ['undata/p/UNData'] })),
+});
+
+test('UN System terms are found beside base terms, and the base row wins on a ref both lists hold', () => {
+    const un = readUnTerms(
+        unBody([
+            { ref: 'undata/AGE', label: 'Age', declared_by: 'un_system' },
+            // The UN System redeclares base classes. The list's AdministrativeArea1 row is UN's.
+            { ref: 'AdministrativeArea1', label: 'AdministrativeArea1', declared_by: 'un_system' },
+            // A row the UN body declares under another origin is ignored.
+            { ref: 'undata/Stray', label: 'Age stray', declared_by: 'base' },
+        ]),
+    );
+    const found = (query: string) =>
+        search(model, query, { outside: outsideTermList({ base: baseTerms, un }), limit: 50 })
+            .hits.filter((hit) => !hit.inModel)
+            .map((hit) => [hit.id, hit.declaredBy]);
+
+    assert.deepEqual(found('undata/'), [['undata/AGE', 'un_system']]);
+    assert.deepEqual(
+        found('AdministrativeArea1').filter(([id]) => id === 'AdministrativeArea1'),
+        [['AdministrativeArea1', 'base']],
+    );
+    // With the base list missing, as after its load failed, UN hits stay.
+    assert.deepEqual(
+        search(model, 'AdministrativeArea1', { outside: outsideTermList({ un }) })
+            .hits.filter((hit) => !hit.inModel)
+            .map((hit) => [hit.id, hit.declaredBy]),
+        [['AdministrativeArea1', 'un_system']],
     );
 });
 

@@ -24,7 +24,7 @@ import {
     type Role,
     type ValuesUsed,
 } from './model.ts';
-import type { SchemaNode, SchemaPattern, SchemaTerm, SchemaTerms } from './wire.ts';
+import type { SchemaNode, SchemaPattern, SchemaTerm } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -692,9 +692,12 @@ export type CentreHeading = {
     readonly kind: string;
     readonly name: string;
     readonly sub: CentreSub | null;
-    /** Whether the base tag follows the name. */
-    readonly base: boolean;
-    /** The term on the graph outside the model, when the terms list holds it. */
+    /**
+     * The origin declaring the centre, as a node's `declared_by`, for the tag
+     * after its name. Null for a dataset and for a term no list holds.
+     */
+    readonly declaredBy: string | null;
+    /** The term outside the model, when a terms list holds it. */
     readonly term: SchemaTerm | undefined;
 };
 
@@ -706,12 +709,12 @@ const termOrigin = (term: SchemaTerm): string => {
 
 /**
  * The heading for a centred dataset, model term, or term outside the model
- * (found in `baseTerms` when given). Null for a dataset the model lacks.
+ * (found in the merged `outside` list). Null for a dataset the model lacks.
  */
 export function centreHeading(
     model: Model,
     centre: Centre,
-    baseTerms?: SchemaTerms,
+    outside: readonly SchemaTerm[] = [],
 ): CentreHeading | null {
     if (centre.kind === 'dataset') {
         const view = model.datasetView(centre.id);
@@ -720,7 +723,7 @@ export function centreHeading(
             kind: KIND_WORDS.dataset,
             name: view.label,
             sub: { kind: 'statVars', count: view.statVarCount },
-            base: false,
+            declaredBy: null,
             term: undefined,
         };
     }
@@ -731,23 +734,31 @@ export function centreHeading(
             kind: KIND_WORDS[kind],
             name: model.label(centre.id),
             sub: codes.length > 0 ? { kind: 'codes', codes } : null,
-            base: model.isBase(centre.id),
+            declaredBy: model.node(centre.id)?.declared_by ?? null,
             term: undefined,
         };
     }
-    const term = baseTerms?.terms.find((entry) => entry.ref === centre.id);
+    const term = outside.find((entry) => entry.ref === centre.id);
     return {
         kind: term ? termOrigin(term) : 'Not in the DFO model',
         name: term?.label ?? centre.id,
         sub: { kind: 'dcid', id: centre.id },
-        base: term?.declared_by === 'base',
+        declaredBy: term?.declared_by ?? null,
         term,
     };
 }
 
-/** What a term outside the model is, for its panel's label. */
-export const outsideKind = (term: SchemaTerm | undefined): string =>
-    term ? `${KIND_WORDS[kindOfTerm(term)]} on the graph` : 'Not in the DFO model';
+/**
+ * What a term outside the model is, for its panel's label: "Property on the
+ * graph", or "Property in the UN System Data Commons" for a UN System term,
+ * since the UN System is a graph of its own.
+ */
+export const outsideKind = (term: SchemaTerm | undefined): string => {
+    if (!term) return 'Not in the DFO model';
+    const where =
+        term.declared_by === 'un_system' ? 'in the UN System Data Commons' : 'on the graph';
+    return `${KIND_WORDS[kindOfTerm(term)]} ${where}`;
+};
 
 /**
  * The dataset whose use the picture marks: the filtered dataset, except on

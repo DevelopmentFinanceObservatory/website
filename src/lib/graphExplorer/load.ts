@@ -401,12 +401,46 @@ export async function loadDocument<TDocument>(
     read: (body: unknown) => TDocument,
     options: LoadOptions = {},
 ): Promise<TDocument> {
+    return load(what, { url, read }, options);
+}
+
+/** A document this Graph API does not serve, because its URL answered 404. */
+export type NotServed = { readonly status: 'notServed' };
+
+export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
+
+/** True for the NOT_SERVED answer of loadServed. */
+export const isNotServed = (value: unknown): value is NotServed => value === NOT_SERVED;
+
+/**
+ * As loadDocument, for a document the Graph API may not serve. Any 404 from
+ * `url` gives NOT_SERVED, with no wait and no retry. An API without the
+ * route answers 404 too, so the page fails closed on either.
+ */
+export async function loadServed<TDocument>(
+    what: string,
+    url: string,
+    read: (body: unknown) => TDocument,
+    options: LoadOptions = {},
+): Promise<TDocument | NotServed> {
+    return load<TDocument | NotServed>(
+        what,
+        { url, read, refusal: (status) => (status === 404 ? NOT_SERVED : null) },
+        options,
+    );
+}
+
+async function load<TAnswer>(
+    what: string,
+    request: Omit<GraphRequest<TAnswer>, 'init'>,
+    options: LoadOptions,
+): Promise<TAnswer> {
     const bounds = bounded(options.signal, {
         limitMs: options.limitMs ?? LOAD_LIMIT_MS,
         requestMs: options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
     });
     return requestGraph(
-        { url, init: { headers: { accept: 'application/json' } }, read },
+        { ...request, init: { headers: { accept: 'application/json' } } },
         {
             ...options,
             bounds,
@@ -437,6 +471,13 @@ export type Loadable<TValue> =
       };
 
 export const LOADING = { status: 'loading', waiting: null } as const;
+
+/** A Loadable for a document the Graph API may not serve, as loadServed reads it. */
+export type Servable<TValue> = Loadable<TValue> | NotServed;
+
+/** Whether a document's load has come to rest, by loading or by not being served here. */
+export const settled = (state: Servable<unknown> | null): boolean =>
+    state?.status === 'ready' || state?.status === 'notServed';
 
 /** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
 export const loadFailure = (error: unknown): Loadable<never> => {
@@ -470,6 +511,7 @@ export type SharedLoad = {
  * it passes through. `abort` forgets a load still running, publishing null,
  * so a caller that aborts and starts again (as React's StrictMode does with
  * an effect) gets a fresh load. A finished or failed load stays as it is.
+ * A load that answers NOT_SERVED publishes it, and `retry` leaves it alone.
  */
 export function sharedLoad<TValue>({
     load,
@@ -478,12 +520,12 @@ export function sharedLoad<TValue>({
     load: (options: {
         signal: AbortSignal;
         onWait: (retryInMs: number, cause: WaitCause) => void;
-    }) => Promise<TValue>;
-    publish: (state: Loadable<TValue> | null) => void;
+    }) => Promise<TValue | NotServed>;
+    publish: (state: Servable<TValue> | null) => void;
 }): SharedLoad {
-    let state: Loadable<TValue> | null = null;
+    let state: Servable<TValue> | null = null;
     let running: AbortController | null = null;
-    const set = (next: Loadable<TValue> | null) => {
+    const set = (next: Servable<TValue> | null) => {
         state = next;
         publish(next);
     };
@@ -493,7 +535,7 @@ export function sharedLoad<TValue>({
             if (state !== null && !(retry && state.status === 'failed')) return;
             const controller = new AbortController();
             running = controller;
-            const update = (next: Loadable<TValue>) => {
+            const update = (next: Servable<TValue>) => {
                 if (controller.signal.aborted) return;
                 if (next.status !== 'loading') running = null;
                 set(next);
@@ -504,7 +546,7 @@ export function sharedLoad<TValue>({
                 onWait: (retryInMs, cause) =>
                     update({ status: 'loading', waiting: { retryInMs, cause } }),
             }).then(
-                (value) => update({ status: 'ready', value }),
+                (value) => update(isNotServed(value) ? value : { status: 'ready', value }),
                 (error: unknown) => update(loadFailure(error)),
             );
         },

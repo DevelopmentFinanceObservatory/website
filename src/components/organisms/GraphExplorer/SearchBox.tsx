@@ -6,11 +6,11 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { useCarried, useOptionalExplore } from './ExploreContext';
-import { BaseTag } from './ExploreLink';
+import { OriginTag } from './ExploreLink';
 import styles from './SearchBox.module.scss';
 
 import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
-import { KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
+import { declarerWords, KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
 import {
     enterChoice,
     escapeAction,
@@ -19,11 +19,18 @@ import {
     stepActive,
     type SearchHit,
 } from '@/lib/graphExplorer/search';
-import type { SchemaTerms } from '@/lib/graphExplorer/wire';
+import type { SchemaTerm } from '@/lib/graphExplorer/wire';
 
-/** What a hit is, in a few words: its kind, the list a value sits in, or that it is outside the model. */
+/**
+ * What a hit is, in a few words: its kind, the list a value sits in, or the
+ * Data Commons outside the model that holds it.
+ */
 const describe = (model: Model, hit: SearchHit): string => {
-    if (!hit.inModel) return `${KIND_WORDS[hit.kind]} in base Data Commons, outside the DFO model`;
+    if (!hit.inModel) {
+        const words = declarerWords(hit.declaredBy);
+        const where = words === null ? 'on the graph' : `in ${words}`;
+        return `${KIND_WORDS[hit.kind]} ${where}, outside the DFO model`;
+    }
     if (hit.kind === 'value') {
         const list = model.valueListOf(hit.id);
         if (list !== undefined) return `Value in ${model.label(list)}`;
@@ -36,8 +43,8 @@ type SearchBoxProps = {
     model: Model | null;
     /** Whether the model is loading or failed to load, for the disabled box's placeholder. */
     modelStatus: 'loading' | 'ready' | 'failed';
-    /** The terms list when the base Data Commons switch is on and it has loaded. */
-    baseTerms?: SchemaTerms;
+    /** The terms lists whose switches are on and that have loaded. */
+    outside?: readonly SchemaTerm[];
 };
 
 /**
@@ -45,7 +52,7 @@ type SearchBoxProps = {
  * reachable by keyboard (arrows move, Enter opens, Escape closes, then
  * clears). Choosing a dataset opens `?dataset=`, anything else `?node=`.
  */
-const SearchBox = ({ model, modelStatus, baseTerms }: SearchBoxProps) => {
+const SearchBox = ({ model, modelStatus, outside }: SearchBoxProps) => {
     const navigation = useOptionalExplore();
     const carried = useCarried();
     const router = useRouter();
@@ -58,8 +65,8 @@ const SearchBox = ({ model, modelStatus, baseTerms }: SearchBoxProps) => {
     const listId = `${id}-results`;
 
     const result = useMemo(
-        () => (model ? search(model, query, { baseTerms }) : { hits: [], total: 0 }),
-        [model, query, baseTerms],
+        () => (model ? search(model, query, { outside }) : { hits: [], total: 0 }),
+        [model, query, outside],
     );
     const shown = open && query.trim() !== '' && model !== null;
 
@@ -156,12 +163,7 @@ const SearchBox = ({ model, modelStatus, baseTerms }: SearchBoxProps) => {
                             >
                                 <span className={styles.name}>
                                     {hit.label}
-                                    {hit.base && (
-                                        <>
-                                            {' '}
-                                            <BaseTag />
-                                        </>
-                                    )}
+                                    <OriginTag declaredBy={hit.declaredBy} />
                                 </span>
                                 <span className={styles.meta}>
                                     {describe(model, hit)}
