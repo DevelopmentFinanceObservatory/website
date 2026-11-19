@@ -112,6 +112,13 @@ export const DATA: HivData = {
         { name: 'France', first: 8e6, last: 10e6 },
         { name: 'Norway', first: 7e6, last: 3e6 },
     ],
+    loans: {
+        total: 467e6,
+        lenders: [
+            { name: 'International Development Association', value: 303e6 },
+            { name: 'Asian Development Bank', value: 164e6 },
+        ],
+    },
     // The 5 table countries with 2024 aid and 3 outside the table.
     recipients: 8,
     countries: COUNTRIES,

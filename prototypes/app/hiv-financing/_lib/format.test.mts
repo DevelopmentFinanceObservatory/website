@@ -72,6 +72,6 @@ test('wholePercents rounds by largest remainder to sum to 100, with "<1%" for a 
         b: '33%',
         c: '33%',
     });
-    assert.deepEqual(wholePercents({ a: 0.996, b: 0.004, c: 0 }), { a: '100%', b: '<1%', c: '0%' });
+    assert.deepEqual(wholePercents({ a: 0.996, b: 0.004, c: 0 }), { a: '>99%', b: '<1%', c: '0%' });
     assert.deepEqual(wholePercents({ a: 0, b: 0 }), { a: '0%', b: '0%' });
 });

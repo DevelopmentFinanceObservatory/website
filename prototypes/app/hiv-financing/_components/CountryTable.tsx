@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { hatchBackground } from './ChartKey';
+import { hatchSwatch } from './ChartKey';
 import styles from './CountryTable.module.scss';
 
 import type { Country } from '../_data/types.ts';
@@ -85,10 +85,7 @@ const FlagMark = ({ row, year }: { row: TableRow; year: number }) => (
     <>
         <span
             className={styles.flag}
-            style={{
-                background: hatchBackground(GF_MULTI.colour),
-                boxShadow: `inset 0 0 0 1px ${GF_MULTI.colour}`,
-            }}
+            style={hatchSwatch(GF_MULTI.colour)}
             title={`Global Fund multi-disease grants, ${money(row.globalFundMulti)} in ${year}, not in this row`}
             aria-hidden="true"
         />
@@ -208,10 +205,7 @@ export const CountryTable = ({
             <p className={styles.legend}>
                 <span
                     className={styles.flag}
-                    style={{
-                        background: hatchBackground(GF_MULTI.colour),
-                        boxShadow: `inset 0 0 0 1px ${GF_MULTI.colour}`,
-                    }}
+                    style={hatchSwatch(GF_MULTI.colour)}
                     aria-hidden="true"
                 />
                 Marked rows: the Global Fund also gave the country multi-disease grants in {year},

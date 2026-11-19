@@ -78,7 +78,8 @@ export const perPerson = (dollars: number): string => {
 /**
  * Shares as whole percentages that sum to 100, by the largest-remainder method: each share
  * rounds down, then the points left over go to the largest remainders, ties to the earlier
- * key. A share above 0 that ends at 0 prints "<1%". Shares that sum to 0 print "0%" each.
+ * key. A share above 0 that ends at 0 prints "<1%", and a share below the whole that ends at
+ * 100 prints ">99%". Shares that sum to 0 print "0%" each.
  */
 export const wholePercents = <TKey extends string>(
     shares: Record<TKey, number>,
@@ -102,7 +103,16 @@ export const wholePercents = <TKey extends string>(
         keys.map((key, index) => {
             const value = whole[index] ?? 0;
 
-            return [key, value === 0 && shares[key] > 0 ? '<1%' : `${value}%`];
+            const exactly = exact[index] ?? 0;
+            let printed = `${value}%`;
+
+            if (value === 0 && exactly > 0) {
+                printed = '<1%';
+            } else if (value === 100 && exactly < 100) {
+                printed = '>99%';
+            }
+
+            return [key, printed];
         }),
     ) as Record<TKey, string>;
 };

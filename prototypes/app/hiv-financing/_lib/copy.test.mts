@@ -7,6 +7,7 @@ import {
     countrySentence,
     ledeSentence,
     largestOtherFalls,
+    loansSentence,
     plhivGapNote,
     stripCaption,
     tableRule,
@@ -52,7 +53,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024 donors assigned $6.45bn of HIV aid to 8 countries, 6 in the table. Providers other than the United States and the Global Fund gave $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+        'In 2024 donors assigned $6.45bn of HIV aid to 8 countries, 5 of them in the table. Providers other than the United States and the Global Fund gave $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -100,7 +101,17 @@ test('the unallocated note compares the US total with KFF and gives the range to
             allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
             unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
         }),
-        'Donors also reported $4.60bn of HIV aid in 2024 for regions or no country, which the chart leaves out. US money under this code, for countries and for regions or no country together, was $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US money to countries held at $3.20bn to $3.90bn a year from 2020 to 2024, so the extra sits in money reported for regions or no country.',
+        'Donors also reported $4.60bn of HIV aid in 2024 for regions or no country, which the chart leaves out. US money under this code, for countries and for regions or no country together, was $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US money to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024. The rest of the US total was reported for regions or no country.',
+    );
+    // With no year from 2020 the range sentence is left out.
+    assert.match(
+        unallocatedNote({
+            ...DATA,
+            years: [2016, 2017, 2018, 2019],
+            allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
+            unallocated: us([0, 0, 0.1e9, 4.5e9]),
+        }),
+        /at \$5\.4bn in 2024\.$/,
     );
 });
 
@@ -138,7 +149,7 @@ test('missing data leaves its clause out', () => {
         // All US under 13040, with Global Fund multi-disease grants under other codes.
         [
             countrySentence(NAMIBIA, YEARS),
-            "In 2024 Namibia received $71m in HIV aid, $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund's multi-disease grants to Namibia, $16m in 2024, are recorded under other codes and are not in this figure. 95% of its 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.",
+            "In 2024 Namibia received $71m in HIV aid, $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund's multi-disease grants to Namibia, $16m in 2024, are recorded under other codes, so this figure excludes them. 95% of its 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.",
         ],
         // Under 5,000 people living with HIV: no per-person figure.
         [
@@ -187,7 +198,7 @@ test('the mix prints largest-remainder percentages that sum to 100', () => {
     );
 });
 
-test('a share under half a point is not named', () => {
+test('a small share is named as the table prints it', () => {
     const mostlyUs = country({
         name: 'Beta',
         aid: { us: [0, 996e3], globalFund: [0, 4e3], other: [0, 0] },
@@ -195,8 +206,37 @@ test('a share under half a point is not named', () => {
 
     assert.equal(
         countrySentence(mostlyUs, YEARS),
-        'In 2024 Beta received $1.0m in HIV aid. Of that, 100% came from the United States.',
+        'In 2024 Beta received $1.0m in HIV aid. Of that, >99% came from the United States and <1% from the Global Fund.',
     );
+});
+
+test('the lede throws when the two channels no longer pay out almost all', () => {
+    assert.throws(
+        () => ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
+        /almost all/,
+    );
+});
+
+test('the fall sentence drops its share when the named falls exceed the net fall', () => {
+    // Others fell by $142m net while the five named fell by $237m, so others rose elsewhere.
+    const allocated = { ...DATA.allocated, other: [342e6, 200e6] };
+
+    assert.match(
+        allSentence({ ...DATA, allocated }),
+        /Five providers account for \$237m of that fall:/,
+    );
+});
+
+test('the loans sentence names the lenders, with "from" only when they make up the total', () => {
+    assert.equal(
+        loansSentence(DATA),
+        'It also holds $467m of ODA loans to countries from 2015 to 2024, from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
+    );
+    assert.match(
+        loansSentence({ ...DATA, loans: { ...DATA.loans, total: 500e6 } }) ?? '',
+        /, including World Bank IDA/,
+    );
+    assert.equal(loansSentence({ ...DATA, loans: { total: 0, lenders: [] } }), null);
 });
 
 test('the Notes line names the countries with no estimate of people living with HIV', () => {

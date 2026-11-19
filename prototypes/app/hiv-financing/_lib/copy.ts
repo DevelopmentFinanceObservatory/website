@@ -60,11 +60,11 @@ export const SOURCES = {
 
 /** The line under the lede on where the Global Fund's money comes from. Source: `SOURCES.globalFundUsCap`. */
 export const UNDER_LEDE =
-    "The page shows who pays out HIV aid, not who pays for it. The Global Fund spends money that governments and foundations give it. By US law, the United States cannot give more than a third of the Global Fund's contributions, and most other donors' HIV money reaches countries through the Global Fund.";
+    "The page shows who pays out HIV aid, not who pays for it. The Global Fund spends money that governments and foundations give it. By US law, the United States cannot give more than a third of the Global Fund's contributions.";
 
 /** The scope note under the lede. Source: `SOURCES.unaids2026`. */
 export const SCOPE_NOTE =
-    "Governments in low- and middle-income countries paid for 52% of their HIV responses in 2024, by UNAIDS's estimate. That spending is not in this data.";
+    "Governments in low- and middle-income countries paid for 52% of their HIV responses in 2024, by UNAIDS's estimate. This data omits that spending.";
 
 /** The dated line under the chart on funding after the data end. Source: `SOURCES.kff2025`. */
 export const FUNDING_2025 = {
@@ -96,11 +96,18 @@ export const plhivGapNote = (data: HivData): string => {
         : `Estimates of people living with HIV for ${listOf(names)} are missing from the DFO's UNAIDS source, so the page gives no aid per person for ${them} and leaves ${them} off the dot strip.`;
 };
 
-/** A provider's share is named in the country sentence from half a percentage point up. */
-const NAMED_SHARE = 0.005;
+/** The lede says "almost all" from this US and Global Fund share up; below it the lede throws. */
+const ALMOST_ALL = 0.95;
 
 export const ledeSentence = (data: HivData): string => {
-    const { over1m, gfMajority, usMajority, usNothing } = ledeFigures(data);
+    const { usGfShare, over1m, gfMajority, usMajority, usNothing } = ledeFigures(data);
+
+    if (usGfShare < ALMOST_ALL) {
+        throw new Error(
+            `The lede says "almost all", but the US and Global Fund share is ${pct(usGfShare)}`,
+        );
+    }
+
     const split = `Of the ${over1m} countries that received more than $1m, the Global Fund paid out more than half in ${gfMajority} and the United States in ${usMajority}`;
 
     return [
@@ -134,6 +141,7 @@ export const OTHER_PROVIDER_LABELS: Readonly<Record<string, string>> = {
     'International Development Association': 'World Bank IDA',
     'Joint United Nations Programme on HIV/AIDS': 'UNAIDS',
     'United Kingdom': 'the United Kingdom',
+    'Asian Development Bank': 'the Asian Development Bank',
     Netherlands: 'the Netherlands',
 };
 
@@ -190,9 +198,16 @@ const fallSentence = (data: HivData): string | null => {
         ? `${items.slice(0, -1).join('; ')}; and ${items.at(-1) ?? ''}`
         : listOf(items);
     const subject = `${NUMBER_WORDS[named.length] ?? named.length} ${named.length === 1 ? 'provider accounts' : 'providers account'}`;
+    // Where other providers rose, the named falls can exceed the net fall, and the sentence then gives no share.
+    const share = part <= fall ? `, or ${pct(part / fall)},` : '';
 
-    return `${subject} for ${money(part)}, or ${pct(part / fall)}, of that fall: ${list}.`;
+    return `${subject} for ${money(part)}${share} of that fall: ${list}.`;
 };
+
+/** The table's countries that received some aid in the last year, which `data.recipients`
+ *  counts; the table also lists countries with none. */
+const tableRecipients = (data: HivData): Country[] =>
+    data.countries.filter((country) => lastAid(country) > 0);
 
 /** The summary sentence with no country selected. */
 export const allSentence = (data: HivData): string => {
@@ -201,7 +216,7 @@ export const allSentence = (data: HivData): string => {
     const others = data.allocated.other;
 
     return [
-        `In ${last} donors assigned ${money(lastTotal(data.allocated))} of HIV aid to ${data.recipients} countries, ${data.countries.length} in the table.`,
+        `In ${last} donors assigned ${money(lastTotal(data.allocated))} of HIV aid to ${data.recipients} countries, ${tableRecipients(data).length} of them in the table.`,
         `Providers other than the United States and the Global Fund gave ${money(others.at(-1) ?? 0)} to countries in ${last}, against ${money(others[0] ?? 0)} in ${first}.`,
         fallSentence(data),
     ]
@@ -228,13 +243,41 @@ export const unallocatedNote = (data: HivData): string => {
     const steady = data.allocated.us.filter(
         (_, index) => (data.years[index] ?? 0) >= US_STEADY_FROM,
     );
+    const range =
+        steady.length === 0
+            ? null
+            : `US money to countries ranged from ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}. The rest of the US total was reported for regions or no country.`;
 
     return [
         `Donors also reported ${money(lastTotal(data.unallocated))} of HIV aid in ${last} for regions or no country, which the chart leaves out.`,
         `US money under this code, for countries and for regions or no country together, was ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
         `KFF puts US bilateral HIV spending at ${KFF_US_BILATERAL_2024} in 2024.`,
-        `US money to countries held at ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}, so the extra sits in money reported for regions or no country.`,
-    ].join(' ');
+        range,
+    ]
+        .filter((sentence) => sentence !== null)
+        .join(' ');
+};
+
+/** A lender is named in the loans sentence from this share of the loans up. */
+const LENDER_NAMED_SHARE = 0.05;
+
+/** The How to interpret sentence on ODA loans inside code 13040; null with none. */
+export const loansSentence = (data: HivData): string | null => {
+    const { total, lenders } = data.loans;
+
+    if (total <= 0) {
+        return null;
+    }
+
+    const named = lenders.filter(({ value }) => value >= LENDER_NAMED_SHARE * total);
+    const covered = named.reduce((sum, { value }) => sum + value, 0);
+    const items = named.map(
+        ({ name, value }) => `${OTHER_PROVIDER_LABELS[name] ?? name} (${money(value)})`,
+    );
+    // "from" when the named lenders make up the printed total, else "including".
+    const from = money(covered) === money(total) ? 'from' : 'including';
+
+    return `It also holds ${money(total)} of ODA loans to countries from ${data.years[0] ?? 0} to ${lastYear(data)}, ${from} ${listOf(items)}.`;
 };
 
 /** The strip's caption: how many countries it holds and the rule that picks them. */
@@ -247,7 +290,7 @@ export const stripCaption = (data: HivData): string => {
 /** The line under the table's heading: the inclusion rule and the money outside the table. */
 export const tableRule = (data: HivData): string => {
     const year = lastYear(data);
-    const inTable = data.countries.filter((country) => lastAid(country) > 0);
+    const inTable = tableRecipients(data);
     const outside = data.recipients - inTable.length;
     const outsideMoney =
         lastTotal(data.allocated) - inTable.reduce((sum, country) => sum + lastAid(country), 0);
@@ -262,7 +305,8 @@ const mixClause = (country: Country): string | null => {
     const shares = lastShares(country.aid);
     const printed = wholePercents(shares);
     // The first item carries the verb: "66% came from the United States, 33% from ...".
-    const named = PROVIDERS.filter(({ key }) => shares[key] >= NAMED_SHARE).map(
+    // Every provider with a share above 0 is named, as the table prints it ("<1%" for a small one).
+    const named = PROVIDERS.filter(({ key }) => shares[key] > 0).map(
         ({ key, label }, index) =>
             `${printed[key]} ${index === 0 ? 'came from' : 'from'} ${key === 'other' ? 'all other providers' : `the ${label}`}`,
     );
@@ -280,7 +324,7 @@ const multiClause = (country: Country, year: number): string | null => {
     const multi = country.globalFundMulti.at(-1) ?? 0;
 
     return multi > 0 && (country.aid.globalFund.at(-1) ?? 0) === 0
-        ? `The Global Fund's multi-disease grants to ${country.name}, ${money(multi)} in ${year}, are recorded under other codes and are not in this figure.`
+        ? `The Global Fund's multi-disease grants to ${country.name}, ${money(multi)} in ${year}, are recorded under other codes, so this figure excludes them.`
         : null;
 };
 

@@ -18,14 +18,18 @@ export type KeyRow = {
 export const hatchBackground = (colour: string): string =>
     `repeating-linear-gradient(-45deg, ${colour} 0 2px, #fff 2px 5px)`;
 
+/** A hatched swatch's style: the hatch and a hairline outline in `colour`. */
+export const hatchSwatch = (colour: string): CSSProperties => ({
+    background: hatchBackground(colour),
+    boxShadow: `inset 0 0 0 1px ${colour}`,
+});
+
 const swatchStyle = (row: KeyRow): CSSProperties | undefined => {
     if (row.colour === undefined) {
         return undefined;
     }
 
-    return row.hatched === true
-        ? { background: hatchBackground(row.colour), boxShadow: `inset 0 0 0 1px ${row.colour}` }
-        : { background: row.colour };
+    return row.hatched === true ? hatchSwatch(row.colour) : { background: row.colour };
 };
 
 const rowClass = (row: KeyRow): string | undefined => {

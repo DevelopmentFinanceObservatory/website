@@ -31,6 +31,9 @@ export type Country = {
  *  last years. */
 export type OtherProvider = { name: string; first: number; last: number };
 
+/** A lender of ODA loans under code 13040 to countries, with its total over the years. */
+export type Lender = { name: string; value: number };
+
 export type HivData = {
     /** the years every series covers, ascending, 2015 to 2024 */
     years: number[];
@@ -45,10 +48,13 @@ export type HivData = {
     /** the providers inside "all other providers" that gave $1m or more to countries in the
      *  first or last year, in descending order of first-year money */
     otherProviders: OtherProvider[];
+    /** ODA loans inside the money to countries over all the years: the total, and each lender
+     *  in descending order of value */
+    loans: { total: number; lenders: Lender[] };
     /** the number of countries that received any HIV aid in the last year */
     recipients: number;
-    /** countries the CRS records as HIV aid recipients in any year, that received $1m or
-     *  more in the last year or have 50,000 or more people living with HIV, in descending
+    /** countries the CRS records as HIV aid recipients in any year, that received more than
+     *  $1m in the last year or have 50,000 or more people living with HIV, in descending
      *  order of last-year aid */
     countries: Country[];
 };

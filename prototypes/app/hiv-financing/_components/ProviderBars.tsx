@@ -226,6 +226,9 @@ export const ProviderBars = ({
                                                 width={Math.max(0, barWidth - 1)}
                                                 fill={`url(#${hatchId})`}
                                                 stroke={tall > 0.5 ? segment.colour : 'none'}
+                                                // The attribute draws the rect where CSS
+                                                // geometry is unsupported; the style animates it.
+                                                height={Math.max(0, tall - 0.5)}
                                                 style={{ height: Math.max(0, tall - 0.5) }}
                                             />
                                         </g>
