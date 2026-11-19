@@ -225,11 +225,6 @@ const fallSentence = (data: HivData): string | null => {
     return `${subject} for ${money(part)}${share} of that fall: ${list}.`;
 };
 
-/** The table's countries that received some aid in the last year, which `data.recipients`
- *  counts; the table also lists countries with none. */
-const tableRecipients = (data: HivData): Country[] =>
-    data.countries.filter((country) => lastAid(country) > 0);
-
 /** The summary sentence with no country selected. */
 export const allSentence = (data: HivData): string => {
     const first = data.years[0] ?? 0;
@@ -237,7 +232,7 @@ export const allSentence = (data: HivData): string => {
     const others = data.allocated.other;
 
     return [
-        `In ${last}, donors disbursed ${money(lastTotal(data.allocated))} in HIV aid to ${data.recipients} countries, ${tableRecipients(data).length} of them in the table.`,
+        `In ${last}, donors disbursed ${money(lastTotal(data.allocated))} in HIV aid to ${data.recipients} countries.`,
         `Providers other than the United States and the Global Fund disbursed ${money(others.at(-1) ?? 0)} to countries in ${last}, against ${money(others[0] ?? 0)} in ${first}.`,
         fallSentence(data),
     ]
@@ -308,19 +303,16 @@ export const stripCaption = (data: HivData): string => {
     return `${count} ${count === 1 ? 'country' : 'countries'} that received aid in ${lastYear(data)} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
 };
 
-/** The line under the table's heading: the inclusion rule and the money outside the table. */
-export const tableRule = (data: HivData): string => {
-    const year = lastYear(data);
-    const inTable = tableRecipients(data);
-    const outside = data.recipients - inTable.length;
-    const outsideMoney =
-        lastTotal(data.allocated) - inTable.reduce((sum, country) => sum + lastAid(country), 0);
-    const rule = `The table lists the ${data.countries.length} countries that received more than $1m in HIV aid in ${year} or have at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV.`;
+/** The line under the table's heading: which countries it lists. */
+export const tableRule = (data: HivData): string =>
+    `The table lists every country that received HIV aid in ${lastYear(data)}.`;
 
-    return outside > 0
-        ? `${rule} Another ${outside} ${outside === 1 ? 'country' : 'countries'} received ${money(outsideMoney)} in total.`
-        : rule;
-};
+/** Countries whose name takes "the" in running text, by ISO3 code. */
+const WITH_ARTICLE: ReadonlySet<string> = new Set(['CAF', 'COG', 'DOM', 'PHL']);
+
+/** A country's name as a sentence uses it: "the Philippines", "Kenya". */
+const nameInText = (country: Country): string =>
+    WITH_ARTICLE.has(country.iso3) ? `the ${country.name}` : country.name;
 
 const mixClause = (country: Country): string | null => {
     const shares = lastShares(country.aid);
@@ -345,7 +337,7 @@ const multiClause = (country: Country, year: number): string | null => {
     const multi = country.globalFundMulti.at(-1) ?? 0;
 
     return multi > 0 && (country.aid.globalFund.at(-1) ?? 0) === 0
-        ? `The Global Fund disbursed ${money(multi)} in multi-disease grants to ${country.name} in ${year}, recorded under other codes and excluded from the HIV aid total.`
+        ? `The Global Fund disbursed ${money(multi)} in multi-disease grants to ${nameInText(country)} in ${year}, recorded under other codes and excluded from the HIV aid total.`
         : null;
 };
 
@@ -381,11 +373,11 @@ export const countrySentence = (country: Country, years: readonly number[]): str
     let opening: string;
 
     if (aid === 0) {
-        opening = `In ${year}, ${country.name} received no HIV aid.`;
+        opening = `In ${year}, ${nameInText(country)} received no HIV aid.`;
     } else if (ratio === null) {
-        opening = `In ${year}, ${country.name} received ${money(aid)} in HIV aid.`;
+        opening = `In ${year}, ${nameInText(country)} received ${money(aid)} in HIV aid.`;
     } else {
-        opening = `In ${year}, ${country.name} received ${money(aid)} in HIV aid, or ${perPerson(ratio)} per person living with HIV.`;
+        opening = `In ${year}, ${nameInText(country)} received ${money(aid)} in HIV aid, or ${perPerson(ratio)} per person living with HIV.`;
     }
 
     return [

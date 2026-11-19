@@ -53,8 +53,7 @@ export type HivData = {
     loans: { total: number; lenders: Lender[] };
     /** the number of countries that received any HIV aid in the last year */
     recipients: number;
-    /** countries the CRS records as HIV aid recipients in any year, that received more than
-     *  $1m in the last year or have 50,000 or more people living with HIV, in descending
-     *  order of last-year aid */
+    /** every country that received HIV aid in the last year, one per `recipients`, in
+     *  descending order of last-year aid */
     countries: Country[];
 };

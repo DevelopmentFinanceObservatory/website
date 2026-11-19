@@ -42,7 +42,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries, 5 of them in the table. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -104,16 +104,12 @@ test('the unallocated note compares the US total with KFF and gives the range to
     );
 });
 
-test('the strip caption and the table rule count from the data', () => {
+test('the strip caption counts from the data, and the table rule names the year', () => {
     assert.equal(
         stripCaption(DATA),
         '3 countries that received aid in 2024 and have at least 50,000 people living with HIV',
     );
-    // Five table countries had 2024 aid, so 3 of the 8 recipients sit outside the table.
-    assert.equal(
-        tableRule(DATA),
-        'The table lists the 6 countries that received more than $1m in HIV aid in 2024 or have at least 50,000 people living with HIV. Another 3 countries received $5.99bn in total.',
-    );
+    assert.equal(tableRule(DATA), 'The table lists every country that received HIV aid in 2024.');
 });
 
 test('a country sentence with every clause', () => {
@@ -162,6 +158,16 @@ test('missing data leaves its clause out', () => {
     for (const [actual, expected] of cases) {
         assert.equal(actual, expected);
     }
+});
+
+test('a name that takes "the" gets it in the sentence', () => {
+    const philippines = country({
+        iso3: 'PHL',
+        name: 'Philippines',
+        aid: { us: [0, 2e6], globalFund: [0, 0], other: [0, 0] },
+    });
+
+    assert.match(countrySentence(philippines, YEARS), /^In 2024, the Philippines received \$2\.0m/);
 });
 
 test('the deaths verb compares the printed figures', () => {

@@ -21,10 +21,9 @@ Fetches, for 2015 to 2024:
   recipient in groups, because a search for the phrase without a place matches OECD regional data.
 
 Checks known values, failing loudly when one differs, then writes `hiv.json` beside this
-file. The page covers aid recipients, so a country is kept only when it appears as a CRS
-recipient of HIV aid in some year of the window, which leaves out donors such as Germany
-that have UNAIDS estimates and receive no HIV aid. Of those, it is kept when it received
-$1m or more in the last year or has 50,000 or more people living with HIV.
+file. The page covers aid recipients, so a country is kept when it received HIV aid in the
+last year, which leaves out donors such as Germany that have UNAIDS estimates and receive
+no HIV aid.
 """
 
 import json
@@ -71,10 +70,12 @@ PROVENANCE_PAGES = {
 
 # The names the page prints, where the DFO's label is dated or clumsy.
 NAMES = {
+    "CHN": "China",
     "CIV": "Côte d'Ivoire",
     "COD": "DR Congo",
     "MMR": "Myanmar",
     "SWZ": "Eswatini",
+    "TUR": "Türkiye",
 }
 
 # Expected values from the DFO. A refetch that moves one fails here, so a change in the
@@ -86,11 +87,10 @@ KNOWN_RECIPIENTS = 113
 # runs only. A refusal for any other place would blank a country the page keeps, so it fails
 # the step.
 KNOWN_UN_GAPS = {"GRC", "SVN", "ESH"}
-KNOWN_COUNTRIES = 98
 # Kept countries with no UNAIDS people-living-with-HIV figure in the DFO's UNAIDS source.
 # UNAIDS publishes estimates for some of them, so the page says the figure is missing from
 # the DFO's source. The set fails the step when it changes.
-KNOWN_UNAIDS_GAPS = {"UKR", "UZB", "NIC", "XKS", "MUS"}
+KNOWN_UNAIDS_GAPS = {"CHN", "GNQ", "KIR", "MUS", "NIC", "TKL", "TON", "TUR", "UKR", "UZB", "XKS"}
 # Printed figures, pinned to within half of the last digit printed: (what, value, unit of
 # the last printed digit).
 PINNED_MONEY = {
@@ -348,7 +348,8 @@ def build(
         )
         last = sum(values[-1] for values in series.values())
 
-        if last <= MIN_AID and (people.get(LAST_YEAR) or 0) < MIN_PLHIV:
+        # The same rounding as `recipients`, so the two counts agree.
+        if round(last) <= 0:
             continue
 
         countries.append(
@@ -535,8 +536,11 @@ def check(data: dict, multi: pd.DataFrame) -> None:
     ):
         problems.append("the Global Fund multi-disease series are missing or of the wrong length")
 
-    if len(data["countries"]) != KNOWN_COUNTRIES:
-        problems.append(f"countries: expected {KNOWN_COUNTRIES}, found {len(data['countries'])}")
+    if len(data["countries"]) != data["recipients"]:
+        problems.append(
+            f"countries: expected one per recipient, {data['recipients']}, "
+            f"found {len(data['countries'])}"
+        )
 
     if data["recipients"] != KNOWN_RECIPIENTS:
         problems.append(f"recipients: expected {KNOWN_RECIPIENTS}, found {data['recipients']}")
