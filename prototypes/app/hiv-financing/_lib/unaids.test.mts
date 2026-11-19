@@ -40,22 +40,43 @@ test('unaidsByCountry matches places exactly and leaves a country without rows a
     });
 });
 
+test('unaidsByCountry reads a row with a null value as no figure, as fetch.py does', () => {
+    // The same case as test_unaids_by_country_reads_a_row_with_no_value_as_no_figure in
+    // _data/tests/test_fetch.py.
+    const rows = [
+        { observationAbout: 'country/KEN', time_period: 2015, value: 2.5 },
+        { observationAbout: 'country/KEN', time_period: 2024, value: null },
+        { observationAbout: 'country/UGA', time_period: 2015, value: Number.NaN },
+    ];
+
+    assert.deepEqual(
+        unaidsByCountry(['KEN', 'UGA'], { plhiv: rows, art: rows, deaths: rows }, [2015, 2024]),
+        {
+            KEN: { plhiv: null, art: null, deaths: [2, null] },
+            UGA: { plhiv: null, art: null, deaths: [null, null] },
+        },
+    );
+});
+
 test('unaidsByCountry refuses two rows for one year and a row it cannot read', () => {
     const row = { observationAbout: 'country/KEN', time_period: 2024, value: 1 };
 
     assert.throws(
         () => unaidsByCountry(['KEN'], { plhiv: [row, row], art: [], deaths: [] }, [2024]),
-        /more than one row for 2024/,
+        { code: 'unaids_repeated_year' },
     );
-    assert.throws(
-        () =>
-            unaidsByCountry(
-                ['KEN'],
-                { plhiv: [{ ...row, value: null }], art: [], deaths: [] },
-                [2024],
-            ),
-        /a row with time_period 2024 and value null/,
-    );
+
+    for (const unreadable of [{ value: '1' }, { time_period: '2024' }, { time_period: null }]) {
+        assert.throws(
+            () =>
+                unaidsByCountry(
+                    ['KEN'],
+                    { plhiv: [{ ...row, ...unreadable }], art: [], deaths: [] },
+                    [2024],
+                ),
+            { code: 'unaids_unreadable_row' },
+        );
+    }
 });
 
 test('pythonRound rounds an exact half to even, as Python round does', () => {

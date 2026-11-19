@@ -21,7 +21,7 @@ Reads, for 2015 to 2024:
   OECD regional data.
 
 The page reads the UNAIDS data in the browser from the pinned refs in `live-refs.json`, so
-`hiv.json` holds the aid figures only. The step still checks the UNAIDS reads and writes
+`hiv.json` holds the aid figures only. The step checks the UNAIDS reads and writes
 `unaids-fixture.json`: real rows for a few countries with the values `unaids_by_country`
 gives for them, for the page's parity test.
 
@@ -30,12 +30,15 @@ Three modes:
 - plain (no flag): fetch each pinned ref in `refs.json` and rewrite every output, copying
   provenance and the retrieval time from `refs.json`, so the outputs reproduce byte for byte;
 - `--refresh`: fetch the newest versions of each committed ref, pin them, rewrite
-  `refs.json`;
+  `refs.json`. A ref keeps its places, so the run fails when a kept country lies outside
+  the deaths read's places, or when the newest versions lose a UNAIDS figure the committed
+  versions gave a kept country; `--search` reads the places afresh;
 - `--search`: search for each read afresh, pin, rewrite `refs.json`. A ref keeps its
   window and reading, so a change to either takes this mode.
 
-`--no-pin` skips the pins in the last two modes, for trial runs; a plain run refuses the
-unpinned refs that leaves.
+The last two modes pin once every check passes, since each pin counts against a daily
+allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the fixture
+and leaves `refs.json` and `live-refs.json` as they are.
 
 Checks that the data are what the page assumes (the right datasets and units, every
 provider present, countries summing to the totals, and the claims fixed in the page's
@@ -215,34 +218,36 @@ def fetch_refs(records: dict[str, dict], *, latest: bool) -> dict[str, dfo.Datas
     return {key: dfo.fetch(ref_of(entry), latest=latest) for key, entry in records.items()}
 
 
-def read_all(
-    mode: str, *, pin: bool
-) -> tuple[dict[str, dfo.Dataset], dict[str, dict], str, dict[str, set[str]] | None]:
-    """The datasets of every read, their refs.json records, the retrieval time, and the
-    places the UN source refused by read key, which only a search reports."""
+def read_all(mode: str) -> tuple[dict[str, dfo.Dataset], dict[str, set[str]] | None]:
+    """The datasets of every read, unpinned outside plain mode, and the places the UN
+    source refused by read key, which only a search reports."""
+    if mode == "search":
+        return search_reads()
+
+    reads = fetch_refs(committed_records()[0], latest=mode == "refresh")
+
     if mode == "plain":
-        records, retrieved = committed_records()
-        reads = fetch_refs(records, latest=False)
         unpinned = sorted(key for key, data in reads.items() if not data.pinned)
 
         if unpinned:
             raise SystemExit(f"refs.json holds unpinned reads: {', '.join(unpinned)}")
 
-        return reads, records, retrieved, None
+    return reads, None
 
-    if mode == "search":
-        reads, refused = search_reads()
-    else:
-        reads, refused = fetch_refs(committed_records()[0], latest=True), None
 
-    if pin:
-        reads = {key: dfo.pin(data) for key, data in reads.items()}
-        log.info("Pinned %d members.", sum(len(data.members) for data in reads.values()))
+def keep(reads: dict[str, dfo.Dataset], *, pin: bool) -> dict[str, dfo.Dataset]:
+    """The reads, each pinned when `pin`. Run once the checks pass: each new pin counts
+    against a daily allowance."""
+    if not pin:
+        return reads
 
-    return reads, {key: record(data) for key, data in reads.items()}, now(), refused
+    reads = {key: dfo.pin(data) for key, data in reads.items()}
+    log.info("Pinned %d members.", sum(len(data.members) for data in reads.values()))
+    return reads
 
 
 def notices(records: dict[str, dict]) -> dict[str, list[dfo.types.Notice]]:
+    """The warnings of each committed read, as `refs.json` keeps them."""
     return {
         key: list(dfo.Provenance.from_json(entry["provenance"]).warnings)
         for key, entry in records.items()
@@ -319,7 +324,9 @@ def countries_only(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def yearly(frame: pd.DataFrame, place: str) -> dict[int, float]:
-    rows = frame[frame["observationAbout"] == place]
+    """A read's values by year for `place`. A row with no value counts as no figure, as
+    `yearly` in the page's `_lib/unaids.ts` reads it."""
+    rows = frame[(frame["observationAbout"] == place) & frame["value"].notna()]
     years = [int(year) for year in rows["time_period"]]
 
     if len(years) != len(set(years)):
@@ -348,6 +355,72 @@ def unaids_by_country(
         }
 
     return found
+
+
+def bound_places(data: dfo.Dataset) -> set[str]:
+    """The places a read's specs bind."""
+    return {place for member in data.members for place in member.spec.roles.get("place") or ()}
+
+
+def outside_places(iso3s: list[str], places: set[str]) -> list[str]:
+    """The kept countries a read with `places` cannot answer for."""
+    return [iso3 for iso3 in iso3s if COUNTRY + iso3 not in places]
+
+
+def lost_figures(before: dict[str, dict], after: dict[str, dict]) -> list[tuple[str, str]]:
+    """Each kept country's UNAIDS figure that `before` gives and `after` lacks, as
+    (iso3, field), with the year for a deaths figure."""
+    lost = []
+
+    for iso3, figures in after.items():
+        was = before[iso3]
+        lost.extend(
+            (iso3, field)
+            for field in ("plhiv", "art")
+            if was[field] is not None and figures[field] is None
+        )
+        lost.extend(
+            (iso3, f"deaths {year}")
+            for year, old, new in zip(YEARS, was["deaths"], figures["deaths"], strict=True)
+            if old is not None and new is None
+        )
+
+    return lost
+
+
+def check_places(iso3s: list[str], deaths: dfo.Dataset) -> None:
+    """Fail when a kept country lies outside the deaths read's places, which a ref keeps
+    from the search that built it."""
+    outside = outside_places(iso3s, bound_places(deaths))
+
+    if outside:
+        raise SystemExit(
+            f"Kept countries outside the deaths read's places: {', '.join(outside)}. "
+            "Run with --search to read them."
+        )
+
+
+def check_kept_figures(before: dict[str, dict], after: dict[str, dict]) -> None:
+    """Fail when the newest UNAIDS versions lose a figure the committed versions gave a
+    kept country, which would blank it on the page."""
+    lost = lost_figures(before, after)
+
+    if lost:
+        raise SystemExit(
+            "The newest UNAIDS versions lose figures the committed refs give: "
+            + ", ".join(f"{iso3} {field}" for iso3, field in lost)
+            + ". Run with --search to read them afresh."
+        )
+
+
+def unaids_frames(reads: dict[str, dfo.Dataset]) -> dict[str, pd.DataFrame]:
+    """The country rows of each UNAIDS read, each read checked for one statistical variable."""
+    frames = {key: one_stat_var(key, reads[key].to_pandas()) for key in UNAIDS_KEYS}
+    return {
+        **frames,
+        "plhiv": countries_only(frames["plhiv"]),
+        "art": countries_only(frames["art"]),
+    }
 
 
 def multi_series(rows: pd.DataFrame) -> list[int]:
@@ -691,7 +764,11 @@ def fixture(frames: dict[str, pd.DataFrame], unaids: dict[str, dict]) -> dict:
         picked = frame[frame["observationAbout"].isin(places)]
         picked = picked.sort_values(["observationAbout", "time_period"])
         return [
-            {"observationAbout": str(place), "time_period": int(period), "value": float(value)}
+            {
+                "observationAbout": str(place),
+                "time_period": int(period),
+                "value": None if pd.isna(value) else float(value),
+            }
             for place, period, value in picked[list(FIXTURE_COLUMNS)].itertuples(index=False)
         ]
 
@@ -717,38 +794,59 @@ def live_refs(reads: dict[str, dfo.Dataset]) -> dict[str, dict]:
     return {key: json.loads(reads[key].ref.to_json()) for key in UNAIDS_KEYS}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--refresh", action="store_true", help="read the newest versions")
     modes.add_argument("--search", action="store_true", help="search for every read afresh")
-    parser.add_argument("--no-pin", action="store_true", help="skip pinning, for trial runs")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--no-pin",
+        action="store_true",
+        help="with --refresh or --search, pin nothing and leave refs.json and live-refs.json",
+    )
+    args = parser.parse_args(argv)
     mode = "refresh" if args.refresh else "search" if args.search else "plain"
 
+    if args.no_pin and mode == "plain":
+        parser.error("--no-pin needs --refresh or --search")
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    reads, records, retrieved, refused = read_all(mode, pin=not args.no_pin)
+    reads, refused = read_all(mode)
 
     for key, data in reads.items():
         log.info("%s: %s (%d rows)", key, data.sentence, len(data))
 
-    frames = {key: data.to_pandas() for key, data in reads.items()}
-    frames["plhiv"] = countries_only(one_stat_var("plhiv", frames["plhiv"]))
-    frames["art"] = countries_only(one_stat_var("art", frames["art"]))
-    frames["deaths"] = one_stat_var("deaths", frames["deaths"])
-
+    frames = {key: data.to_pandas() for key, data in reads.items()} | unaids_frames(reads)
     aid = read_aid(frames["aid"])
     multi = read_gf_multi(frames)
     data = build(aid, multi)
     log_left_out(aid, frames["plhiv"])
-    unaids = unaids_by_country(
-        [country["iso3"] for country in data["countries"]],
-        frames["plhiv"],
-        frames["art"],
-        frames["deaths"],
-    )
-    check_warnings(notices(records), refused, unaids)
+    kept = [country["iso3"] for country in data["countries"]]
+    unaids = unaids_by_country(kept, frames["plhiv"], frames["art"], frames["deaths"])
+
+    if mode == "plain":
+        records, retrieved = committed_records()
+        warned = notices(records)
+    else:
+        warned = {key: list(read.provenance.warnings) for key, read in reads.items()}
+
+    check_warnings(warned, refused, unaids)
     check(data, multi, unaids)
+    check_places(kept, reads["deaths"])
+
+    if mode == "refresh":
+        committed = fetch_refs(
+            {key: committed_records()[0][key] for key in UNAIDS_KEYS}, latest=False
+        )
+        before = unaids_frames(committed)
+        check_kept_figures(
+            unaids_by_country(kept, before["plhiv"], before["art"], before["deaths"]), unaids
+        )
+
+    if mode != "plain":
+        reads = keep(reads, pin=not args.no_pin)
+        records, retrieved = {key: record(read) for key, read in reads.items()}, now()
+
     old = json.loads(TARGET.read_text())["data"] if TARGET.exists() else None
     report(old, data)
 
@@ -765,13 +863,18 @@ def main() -> int:
         citation=citation,
         refs=REFS.name,
     )
-    write(REFS, "hiv-financing pinned reads", retrieved, records)
-    write(
-        LIVE_REFS,
-        "hiv-financing pinned UNAIDS reads, read in the browser",
-        retrieved,
-        live_refs(reads),
-    )
+
+    if args.no_pin:
+        log.info("Trial run (--no-pin): left %s and %s alone.", REFS.name, LIVE_REFS.name)
+    else:
+        write(REFS, "hiv-financing pinned reads", retrieved, records)
+        write(
+            LIVE_REFS,
+            "hiv-financing pinned UNAIDS reads, read in the browser",
+            retrieved,
+            live_refs(reads),
+        )
+
     write(
         FIXTURE,
         "UNAIDS rows from the reads in live-refs.json, and the figures the step derives "

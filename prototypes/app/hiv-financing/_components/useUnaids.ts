@@ -6,7 +6,7 @@ import liveRefs from '../_data/live-refs.json';
 import type { Country, UnaidsFigures } from '../_data/types.ts';
 import { unaidsByCountry, type UnaidsRows } from '../_lib/unaids.ts';
 
-import { readPinnedRef } from '../../../lib/pinnedRef.ts';
+import { readPinnedRef } from '#lib/pinnedRef.ts';
 
 export type UnaidsState =
     | { status: 'loading' }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CountrySearch } from './CountrySearch';
-import { CountryTable } from './CountryTable';
+import { CountryTable, FAILED } from './CountryTable';
 import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
@@ -11,7 +11,7 @@ import { Reserved } from './Reserved';
 import { UnaidsStatus } from './UnaidsStatus';
 import { useUnaids } from './useUnaids';
 
-import type { HivData } from '../_data/types.ts';
+import type { HivData, UnaidsFigures } from '../_data/types.ts';
 import {
     allSentence,
     countrySentence,
@@ -20,12 +20,26 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
-import { lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
+import { lastYear, PER_PERSON_MIN_PLHIV, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 import { joinUnaids } from '../_lib/unaids.ts';
 
 export type Section = { id: string; title: string };
 
 const ALL_COUNTRIES = 'All countries';
+
+/**
+ * Stand-in UNAIDS figures that print each clause of a country's sentence in its longest form:
+ * treatment coverage, deaths over 100,000, and a head count in millions. The opening's ratio
+ * is longest at the fewest people the page gives a ratio for, so a second stand-in takes that
+ * head count. The sentence reserves their room before the reads land, so the page below stays
+ * put when the figures arrive.
+ */
+const standIns = (years: readonly number[]): UnaidsFigures[] =>
+    [8_888_888, PER_PERSON_MIN_PLHIV].map((plhiv) => ({
+        plhiv,
+        art: 100,
+        deaths: years.map((_, index) => (index === 0 ? 888_888 : 999_888)),
+    }));
 
 const chartTitle = (name: string, data: HivData) =>
     `${name}, ${data.years[0]} to ${data.years.at(-1)}, constant ${data.priceBase} US dollars`;
@@ -42,7 +56,8 @@ const scrollBehaviour = (): ScrollBehavior =>
  *
  * The UNAIDS figures come from the pinned reads in the browser (useUnaids). Until they arrive,
  * or when they fail, a country's sentence leaves out its per-person, treatment and deaths
- * clauses, the strip gives way to a status line, and the table's UNAIDS columns wait.
+ * clauses, the strip gives way to a status line in the strip's room, and the table's UNAIDS
+ * columns wait. The sentence reserves room for those clauses from the first paint.
  */
 export const HivFinancing = ({
     data,
@@ -80,6 +95,11 @@ export const HivFinancing = ({
             sentences: [
                 allSentence(data),
                 ...countries.map((country) => countrySentence(country, data.years)),
+                ...standIns(data.years).flatMap((figures) =>
+                    data.countries.map((country) =>
+                        countrySentence({ ...country, ...figures }, data.years),
+                    ),
+                ),
             ],
             titles: [ALL_COUNTRIES, ...countries.map((country) => country.name)].map((name) =>
                 chartTitle(name, data),
@@ -153,7 +173,7 @@ export const HivFinancing = ({
                     scope={selected ?? ALL_COUNTRIES}
                 />
                 <p className={styles.note}>{unallocatedCaption(data)}</p>
-                <div className={styles.below}>
+                <div className={styles.below} data-waiting={unaids.status !== 'ready'}>
                     {unaids.status === 'ready' ? (
                         <PerPersonStrip
                             countries={countries}
@@ -177,7 +197,12 @@ export const HivFinancing = ({
                     {tableSection.title}
                 </h2>
                 <p className={styles.rule}>{tableRule(data)}</p>
-                <UnaidsStatus state={unaids} what="the UNAIDS columns" />
+                <UnaidsStatus
+                    state={unaids}
+                    what="the UNAIDS columns"
+                    announce
+                    failed={`The table marks their figures "${FAILED}".`}
+                />
                 <CountryTable
                     countries={countries}
                     unaids={unaids.status}

@@ -9,7 +9,8 @@ import { joinUnaids } from '../_lib/unaids.ts';
 
 /**
  * The Notes items on the UNAIDS figures the table lacks, as list items. They derive from the
- * reads in the browser, so they show a loading line first, or the failure.
+ * reads in the browser, so they show a loading line first, or the failure, which the table's
+ * line announces.
  */
 export const UnaidsNotes = ({
     countries,

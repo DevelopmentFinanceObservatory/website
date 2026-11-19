@@ -1,6 +1,6 @@
 // How a page reads a committed ref in the browser: a ref object from a step's
-// `_data/live-refs.json` goes in, and the Dataset with its rows comes out. The
-// gateway answers a pinned file from a shared cache, so no key is needed and
+// `_data/live-refs.json` goes in, and the Dataset with its rows comes out. A
+// pinned file is a fixed version that anyone may read, so no key is needed and
 // the numbers match what the step committed. Errors reach the caller as the
 // client raises them; there is no fallback to other data. Pages own the React
 // hook that calls this.

@@ -10,3 +10,9 @@
 .error {
     color: #a3262b;
 }
+
+// The failed read's code, for a report of the fault.
+.code {
+    color: #5e5e52;
+    font: 400 11px var(--font-dm-mono);
+}

@@ -77,10 +77,8 @@ test('the falls throw when a provider with a fixed fact is missing from the data
         ({ name }) => name !== 'International Development Association',
     );
 
-    assert.throws(
-        () => allSentence({ ...DATA, otherProviders }),
-        /"International Development Association"/,
-    );
+    assert.doesNotThrow(() => allSentence(DATA));
+    assert.throws(() => allSentence({ ...DATA, otherProviders }));
 });
 
 test('the unallocated note compares the US total with KFF and places the excess', () => {
@@ -242,9 +240,9 @@ test('a small share is named as the table prints it', () => {
 });
 
 test('the lede throws when the two providers no longer disburse almost all', () => {
-    assert.throws(
-        () => ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
-        /almost all/,
+    assert.doesNotThrow(() => ledeSentence(DATA));
+    assert.throws(() =>
+        ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
     );
 });
 

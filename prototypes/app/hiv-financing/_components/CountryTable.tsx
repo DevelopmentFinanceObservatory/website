@@ -28,6 +28,9 @@ const MISSING = '–';
 /** A UNAIDS cell while the reads run. */
 const LOADING = '…';
 
+/** A UNAIDS cell after the reads fail, apart from MISSING, which means UNAIDS holds no figure. */
+export const FAILED = '?';
+
 type Column = {
     key: SortKey;
     label: string;
@@ -127,8 +130,9 @@ const download = (rows: readonly TableRow[], year: number) => {
  * Every country's last-year HIV aid, who provides it, and the UNAIDS figures beside it.
  * Header buttons sort; each Country cell holds a button that selects the row. Shows the
  * top rows of the current sort, plus the selected country wherever it ranks. The CSV holds
- * every row in the current sort order. The UNAIDS columns show "…" until `unaids` is ready,
- * and the CSV waits for them.
+ * every row in the current sort order. The UNAIDS columns show "…" while `unaids` loads, and
+ * the CSV waits for them; after a failure the columns show FAILED and the CSV leaves their
+ * cells empty.
  */
 export const CountryTable = ({
     countries,
@@ -229,7 +233,7 @@ export const CountryTable = ({
                                                 unaids === 'loading' ? (
                                                     LOADING
                                                 ) : (
-                                                    MISSING
+                                                    FAILED
                                                 )
                                             ) : (
                                                 column.cell(row)
@@ -270,7 +274,7 @@ export const CountryTable = ({
                 </button>
                 <button
                     type="button"
-                    disabled={unaids !== 'ready'}
+                    disabled={unaids === 'loading'}
                     onClick={() => download(rows, year)}
                 >
                     Download CSV

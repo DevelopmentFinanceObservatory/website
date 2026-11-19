@@ -3,3 +3,7 @@ line-length = 100
 
 [lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[lint.isort]
+# The tests import the step as `fetch`, from _data/ on the path (tests/conftest.py).
+known-first-party = ["fetch"]

@@ -47,8 +47,23 @@ export const pythonRound = (value: number, digits = 0): number => {
     return sign * (lastDigit % 2 === 0 ? up : Number((up - 10 ** -digits).toFixed(digits)));
 };
 
-/** A read's values by year for one place. Throws on a second row for a year, or on a year or
- *  value that is not a number. */
+/** Why the rows of a read gave no figures: a second row for one place and year, or a row whose
+ *  year or value is neither a number nor, for the value, null. */
+export type UnaidsRowsErrorCode = 'unaids_repeated_year' | 'unaids_unreadable_row';
+
+/** The rows of a read break what `unaidsByCountry` assumes. */
+export class UnaidsRowsError extends Error {
+    readonly code: UnaidsRowsErrorCode;
+
+    constructor(code: UnaidsRowsErrorCode, message: string) {
+        super(message);
+        this.name = 'UnaidsRowsError';
+        this.code = code;
+    }
+}
+
+/** A read's values by year for one place. A row with a null or NaN value counts as no figure,
+ *  as `yearly` in fetch.py reads it. */
 const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> => {
     const values = new Map<number, number>();
 
@@ -59,14 +74,22 @@ const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> 
 
         const { time_period: year, value } = row;
 
+        if (value === null || Number.isNaN(value)) {
+            continue;
+        }
+
         if (typeof year !== 'number' || typeof value !== 'number') {
-            throw new Error(
+            throw new UnaidsRowsError(
+                'unaids_unreadable_row',
                 `${place}: a row with time_period ${String(year)} and value ${String(value)}`,
             );
         }
 
         if (values.has(year)) {
-            throw new Error(`${place}: more than one row for ${year}`);
+            throw new UnaidsRowsError(
+                'unaids_repeated_year',
+                `${place}: more than one row for ${year}`,
+            );
         }
 
         values.set(year, value);
@@ -81,6 +104,8 @@ const yearly = (rows: readonly UnaidsRow[], place: string): Map<number, number> 
  * regions and other places in the reads drop out. People living with HIV and treatment
  * coverage are the last year's, rounded to a whole number and to one decimal; deaths are one
  * per year of `years`, rounded to a whole number. A missing figure is null.
+ *
+ * @throws {UnaidsRowsError} A place has two rows for one year, or a row it cannot read.
  */
 export const unaidsByCountry = (
     iso3s: readonly string[],
