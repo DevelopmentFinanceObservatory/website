@@ -71,11 +71,11 @@ export default ({ children }) => (
 
 HIV aid here is gross ODA disbursements under CRS purpose code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. The code covers all sexually transmitted diseases. {loansSentence(hiv.data)} These totals exclude HIV work recorded under other codes, such as health systems or reproductive health.
 
-The Global Fund reports to the CRS as a provider in its own right, so contributions from donors appear once, under the Global Fund. It also records part of its HIV funding under other codes, with combined HIV and tuberculosis grants mostly under 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Both codes are tracked in every year. Because these grants are only partly for HIV, the chart shows them as a hatched layer above the bars, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. {codeChangeSentence(hiv.data)}
+The Global Fund records part of its HIV funding under other codes, with combined HIV and tuberculosis grants mostly under 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Both codes are tracked in every year. Because these grants are only partly for HIV, the chart shows them as a hatched layer above the bars, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. {codeChangeSentence(hiv.data)}
 
-Figures are in constant {hiv.data.priceBase} US dollars at donor prices: the OECD's deflators adjust each donor's money for inflation and exchange rates, so {hiv.data.priceBase} figures equal current dollars and earlier years are expressed in {hiv.data.priceBase} prices. The Global Fund's multi-disease grants use the Global Fund's own deflator. Figures follow the timing of donors' reports. {usSwingSentence(hiv.data)}
+Constant {hiv.data.priceBase} US dollars use donor prices. The OECD's deflators adjust each donor's money for inflation and exchange rates, so {hiv.data.priceBase} figures equal current dollars and earlier years are in {hiv.data.priceBase} prices. The Global Fund's multi-disease grants use its own deflator. Disbursements appear in the year donors report them, so single-year swings can reflect reporting timing. {usSwingSentence(hiv.data)}
 
-The data cover official donors and exclude private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from the totals here. KFF's figures are in current dollars.
+The data cover official donors and exclude private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending in current dollars, including their contributions to the Global Fund, so its totals differ from those here.
 
 <p className={prose.p}>{PER_PERSON_NOTE}</p>
 

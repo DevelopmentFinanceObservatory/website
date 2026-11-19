@@ -35,7 +35,7 @@ test('the lede names the two providers and the majority split; the share note ca
     );
     assert.equal(
         shareNote(DATA),
-        'In these CRS figures, the United States and the Global Fund disbursed 99% of the HIV aid official donors recorded for countries in 2024. In 1 of the 2 countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.',
+        'In these CRS figures, the United States and the Global Fund disbursed 99% of the HIV aid that official donors recorded for countries in 2024. In 1 of the 2 countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.',
     );
 });
 
@@ -44,7 +44,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS, which reports most of its HIV money under another CRS code; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -92,7 +92,7 @@ test('the unallocated note compares the US total with KFF and gives the range to
             allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
             unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
         }),
-        'The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under this code were $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US disbursements to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024, with the remainder reported as regional or unallocated.',
+        'The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under the CRS HIV code were $4.00bn in 2023 and $8.00bn in 2024. For comparison, KFF puts US bilateral HIV spending at $5.4bn in 2024. In the CRS, US disbursements to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024, with the rest reported as regional or unallocated.',
     );
     // With no year from 2020 the range sentence is left out.
     assert.match(
@@ -109,7 +109,7 @@ test('the unallocated note compares the US total with KFF and gives the range to
 test('the strip caption counts from the data, and the table rule names the year', () => {
     assert.equal(
         stripCaption(DATA),
-        '3 countries that received aid in 2024 and have at least 50,000 people living with HIV',
+        '3 countries that received HIV aid in 2024 and have at least 50,000 people living with HIV',
     );
     assert.equal(tableRule(DATA), 'The table lists every country that received HIV aid in 2024.');
 });
@@ -136,7 +136,7 @@ test('missing data leaves its clause out', () => {
         // All US under 13040, with Global Fund multi-disease grants under other codes.
         [
             countrySentence(NAMIBIA, YEARS),
-            'In 2024, Namibia received $71m in HIV aid, or $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund disbursed $16m in multi-disease grants to Namibia in 2024, recorded under other codes and excluded from the HIV aid total. 95% of the 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.',
+            'In 2024, Namibia received $71m in HIV aid, or $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund disbursed $16m in multi-disease grants to Namibia in 2024, recorded under other CRS codes and excluded from the HIV aid total. 95% of the 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.',
         ],
         // Under 5,000 people living with HIV: no per-person figure.
         [
@@ -227,7 +227,7 @@ test('the fall sentence drops its share when the named falls exceed the net fall
 test('the loans sentence names the lenders, with "from" only when they make up the total', () => {
     assert.equal(
         loansSentence(DATA),
-        'It also includes $467m in ODA loans to countries from 2015 to 2024, from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
+        'Between 2015 and 2024, gross disbursements to countries included $467m in ODA loans, all from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
     );
     assert.match(
         loansSentence({ ...DATA, loans: { ...DATA.loans, total: 500e6 } }) ?? '',
@@ -239,7 +239,7 @@ test('the loans sentence names the lenders, with "from" only when they make up t
 test('the Notes line names the countries with no estimate of people living with HIV', () => {
     assert.equal(
         plhivGapNote(DATA),
-        "Estimates of people living with HIV for Ukraine are missing from the Development Finance Observatory's UNAIDS data, so aid per person is blank for it and the dot strip excludes it.",
+        "The Development Finance Observatory's UNAIDS data have no estimate of people living with HIV for Ukraine, so aid per person is blank for it and the dot strip excludes it.",
     );
 });
 
@@ -249,7 +249,7 @@ test('the code-change sentence reads the jump only when the multi-disease fall e
 
     assert.equal(
         codeChangeSentence({ ...around, globalFundMulti: [742e6, 108e6] }),
-        'Between 2019 and 2020, Global Fund multi-disease grants to countries fell from $742m to $108m, while its disbursements under the HIV code rose from $1.06bn to $2.10bn. Much of the jump in its bars reflects that reclassification, marked by the dashed line.',
+        "Between 2019 and 2020, the Global Fund's multi-disease grants to countries fell from $742m to $108m, while its disbursements under the HIV code rose from $1.06bn to $2.10bn. Much of the jump in its bars reflects that reclassification, marked by the dashed line.",
     );
     assert.doesNotMatch(
         codeChangeSentence({ ...around, globalFundMulti: [742e6, 600e6] }) ?? '',
@@ -269,7 +269,7 @@ test('the US swing sentence appears only for a dip or spike in 2019, with verbs 
 
     assert.equal(
         usSwingSentence(us([3.65e9, 2.11e9, 3.72e9])),
-        'US disbursements to countries fell from $3.65bn in 2018 to $2.11bn in 2019, then rose to $3.72bn in 2020, so single-year swings can reflect reporting timing.',
+        'For example, US disbursements to countries fell from $3.65bn in 2018 to $2.11bn in 2019, then rose to $3.72bn in 2020.',
     );
     assert.match(
         usSwingSentence(us([2e9, 3e9, 2e9])) ?? '',

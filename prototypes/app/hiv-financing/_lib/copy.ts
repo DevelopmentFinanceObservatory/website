@@ -86,7 +86,7 @@ export const SOURCES = {
 
 /** The line under the lede on where the Global Fund's money comes from. Source: `SOURCES.globalFundUsCap`. */
 export const UNDER_LEDE =
-    'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.';
+    'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts once, as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.';
 
 /** The scope note under the lede. Source: `SOURCES.unaids2026`. */
 export const SCOPE_NOTE =
@@ -119,7 +119,7 @@ export const plhivGapNote = (data: HivData): string => {
 
     return names.length === 0
         ? "The Development Finance Observatory's UNAIDS data include an estimate of people living with HIV for every country in the table."
-        : `Estimates of people living with HIV for ${listOf(names)} are missing from the Development Finance Observatory's UNAIDS data, so aid per person is blank for ${them} and the dot strip excludes ${them}.`;
+        : `The Development Finance Observatory's UNAIDS data have no estimate of people living with HIV for ${listOf(names)}, so aid per person is blank for ${them} and the dot strip excludes ${them}.`;
 };
 
 /** The lede says "almost all" from this US and Global Fund share up; below it the lede throws. */
@@ -149,7 +149,7 @@ export const shareNote = (data: HivData): string => {
     const { usGfShare, usMajority, usMajorityGfMulti } = ledeFigures(data);
 
     return [
-        `In these CRS figures, the United States and the Global Fund disbursed ${pct(usGfShare)} of the HIV aid official donors recorded for countries in ${lastYear(data)}.`,
+        `In these CRS figures, the United States and the Global Fund disbursed ${pct(usGfShare)} of the HIV aid that official donors recorded for countries in ${lastYear(data)}.`,
         usMajorityGfMulti > 0
             ? `In ${usMajorityGfMulti} of the ${usMajority} countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.`
             : null,
@@ -178,7 +178,7 @@ export const OTHER_PROVIDER_FACTS: Readonly<
     'International Development Association': (provider, year) =>
         `which lent ${money(provider.last)} in ${year}`,
     'Joint United Nations Programme on HIV/AIDS': () =>
-        'which reports most of its HIV money under another code',
+        'which reports most of its HIV money under another CRS code',
 };
 
 /** How many providers the summary sentence names. */
@@ -266,12 +266,12 @@ export const unallocatedNote = (data: HivData): string => {
     const range =
         steady.length === 0
             ? null
-            : `US disbursements to countries ranged from ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}, with the remainder reported as regional or unallocated.`;
+            : `In the CRS, US disbursements to countries ranged from ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}, with the rest reported as regional or unallocated.`;
 
     return [
         `The chart excludes ${money(lastTotal(data.unallocated))} of ${last} HIV aid reported for regions or with no country specified.`,
-        `Including those flows, total US disbursements under this code were ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
-        `KFF puts US bilateral HIV spending at ${KFF_US_BILATERAL_2024} in 2024.`,
+        `Including those flows, total US disbursements under the CRS HIV code were ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
+        `For comparison, KFF puts US bilateral HIV spending at ${KFF_US_BILATERAL_2024} in 2024.`,
         range,
     ]
         .filter((sentence) => sentence !== null)
@@ -315,7 +315,7 @@ export const codeChangeSentence = (data: HivData): string | null => {
         return null;
     }
 
-    const moves = `Between ${before} and ${after}, Global Fund multi-disease grants to countries fell from ${money(multi[0])} to ${money(multi[1])}, while its disbursements under the HIV code rose from ${money(hiv[0])} to ${money(hiv[1])}.`;
+    const moves = `Between ${before} and ${after}, the Global Fund's multi-disease grants to countries fell from ${money(multi[0])} to ${money(multi[1])}, while its disbursements under the HIV code rose from ${money(hiv[0])} to ${money(hiv[1])}.`;
 
     return fall >= CODE_CHANGE_SHARE * rise
         ? `${moves} Much of the jump in its bars reflects that reclassification, marked by the dashed line.`
@@ -345,7 +345,7 @@ export const usSwingSentence = (data: HivData): string | null => {
 
     const [first, second] = dip ? ['fell', 'rose'] : ['rose', 'fell'];
 
-    return `US disbursements to countries ${first} from ${money(a)} in 2018 to ${money(b)} in 2019, then ${second} to ${money(c)} in 2020, so single-year swings can reflect reporting timing.`;
+    return `For example, US disbursements to countries ${first} from ${money(a)} in 2018 to ${money(b)} in 2019, then ${second} to ${money(c)} in 2020.`;
 };
 
 /** A lender is named in the loans sentence from this share of the loans up. */
@@ -365,16 +365,16 @@ export const loansSentence = (data: HivData): string | null => {
         ({ name, value }) => `${OTHER_PROVIDER_LABELS[name] ?? name} (${money(value)})`,
     );
     // "from" when the named lenders make up the printed total, else "including".
-    const from = money(covered) === money(total) ? 'from' : 'including';
+    const from = money(covered) === money(total) ? 'all from' : 'including';
 
-    return `It also includes ${money(total)} in ODA loans to countries from ${data.years[0] ?? 0} to ${lastYear(data)}, ${from} ${listOf(items)}.`;
+    return `Between ${data.years[0] ?? 0} and ${lastYear(data)}, gross disbursements to countries included ${money(total)} in ODA loans, ${from} ${listOf(items)}.`;
 };
 
 /** The strip's caption: how many countries it holds and the rule that picks them. */
 export const stripCaption = (data: HivData): string => {
     const count = perPersonPoints(data.countries).length;
 
-    return `${count} ${count === 1 ? 'country' : 'countries'} that received aid in ${lastYear(data)} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
+    return `${count} ${count === 1 ? 'country' : 'countries'} that received HIV aid in ${lastYear(data)} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
 };
 
 /** The line under the table's heading: which countries it lists. */
@@ -411,7 +411,7 @@ const multiClause = (country: Country, year: number): string | null => {
     const multi = country.globalFundMulti.at(-1) ?? 0;
 
     return multi > 0 && (country.aid.globalFund.at(-1) ?? 0) === 0
-        ? `The Global Fund disbursed ${money(multi)} in multi-disease grants to ${nameInText(country)} in ${year}, recorded under other codes and excluded from the HIV aid total.`
+        ? `The Global Fund disbursed ${money(multi)} in multi-disease grants to ${nameInText(country)} in ${year}, recorded under other CRS codes and excluded from the HIV aid total.`
         : null;
 };
 
