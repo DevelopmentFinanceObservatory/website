@@ -1,0 +1,63 @@
+import { prototype, prototypeMetadata } from '../../registry';
+
+import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
+
+import { HivFinancing } from './_components/HivFinancing';
+import { ledeSentence, SCOPE_NOTE } from './_lib/copy';
+import { money } from './_lib/format';
+import { LAST_YEAR } from './_lib/summary';
+import hiv from './_data/hiv.json';
+
+export const entry = prototype('hiv-financing');
+
+export const metadata = prototypeMetadata(entry);
+
+export const SECTIONS = [
+    { id: 'by-provider', title: 'HIV aid by provider' },
+    { id: 'every-country', title: `Every country, ${LAST_YEAR}` },
+];
+
+export const years = hiv.data.years;
+
+export const usUnallocated = hiv.data.unallocated.us;
+
+export default ({ children }) => (
+    <PrototypePage
+        title={entry.title}
+        sections={[
+            ...SECTIONS,
+            { id: 'how-to-interpret', title: 'How to interpret' },
+            { id: 'notes', title: 'Notes' },
+            { id: 'sources', title: 'Sources' },
+        ]}
+        lede={ledeSentence(hiv.data)}
+    >
+        {children}
+    </PrototypePage>
+);
+
+{SCOPE_NOTE}
+
+<HivFinancing data={hiv.data} sections={SECTIONS} />
+
+## How to interpret
+
+HIV aid is gross ODA disbursements under CRS purpose code 13040, STD control including HIV/AIDS, in current US dollars. HIV work recorded under other codes, such as health systems or reproductive health, is left out.
+
+The Global Fund reports to the CRS as a provider. Money donors give the Global Fund is counted once, under the Global Fund, and not under the donor.
+
+People living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths are UNAIDS estimates.
+
+The table lists countries the CRS records as HIV aid recipients from {years[0]} to {LAST_YEAR} that received $1m or more in {LAST_YEAR} or have 50,000 or more people living with HIV. The dot strip holds those with 50,000 or more people living with HIV and some aid in {LAST_YEAR}.
+
+## Notes
+
+- Governments' own spending on HIV is not in the DFO, so the page shows external financing only.
+- The United States reports a varying amount without a country: {money(usUnallocated.at(-2))} in {years.at(-2)} and {money(usUnallocated.at(-1))} in {years.at(-1)}. A country's US figure moves with that reporting as well as with spending.
+
+## Sources
+
+- [OECD Creditor Reporting System](https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem), purpose code 13040
+- [UNAIDS](https://aidsinfo.unaids.org), people living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths
+
+Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {hiv.provenance.retrieved.slice(0, 10)}.

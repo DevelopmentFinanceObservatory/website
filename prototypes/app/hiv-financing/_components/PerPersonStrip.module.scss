@@ -1,0 +1,179 @@
+// The per-person dot strip. Dots stay put; the selected country's ring glides from dot to
+// dot, and its label fades in where it lands (_motion.scss).
+@use "motion" as *;
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 2px;
+    color: #484842;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.label {
+    font-weight: 500;
+}
+
+// How many countries the strip holds, under the label.
+.count {
+    display: block;
+    color: #5e5e52;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.median {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: #5e5e52;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.medianSwatch {
+    width: 2px;
+    height: 11px;
+    background: #484842;
+}
+
+.plot {
+    position: relative;
+    min-width: 0;
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 4px;
+    }
+
+    @include still;
+}
+
+.svg {
+    display: block;
+    overflow: visible;
+    touch-action: pan-y;
+
+    &[data-pointing="true"] {
+        cursor: pointer;
+    }
+}
+
+.mark,
+.dot,
+.ring {
+    transform-box: view-box;
+    transform-origin: 0 0;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.medianTick {
+    stroke: #484842;
+    stroke-width: 2;
+}
+
+.tick {
+    font: 400 10.5px var(--font-outfit);
+    fill: #75756b;
+}
+
+// The dots carry no provider colour: each is a country's aid from every provider.
+.dot {
+    fill: #8a8a7c;
+    stroke: #fff;
+    stroke-width: 0.75;
+    transition: opacity 200ms ease;
+
+    &[data-dimmed="true"] {
+        opacity: 0.35;
+    }
+
+    &[data-selected="true"] {
+        fill: #484842;
+    }
+
+    &[data-active="true"] {
+        stroke: #484842;
+        stroke-width: 1.5;
+        opacity: 1;
+    }
+}
+
+.ring {
+    fill: none;
+    stroke: #484842;
+    stroke-width: 2;
+    transition:
+        transform $move-ms $ease-out,
+        opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+// The selected country's label, or a line saying it is not on the strip, remounts with its
+// text and fades in where it lands.
+.chosen,
+.offStrip {
+    font: 500 12px var(--font-outfit);
+    fill: #484842;
+
+    @include fade-in;
+}
+
+.offStrip {
+    fill: #75756b;
+    font-weight: 400;
+}
+
+// The hover reading, the scatter tooltip's face from debt-thresholds.
+.tip {
+    position: absolute;
+    z-index: 2;
+    margin: 0;
+    padding: 4px 8px;
+    border: 1px solid #ececdb;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+    font-size: 12px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgb(72 72 66 / 12%);
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// Under reduced motion the ring does not glide; it and the labels still fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .ring {
+        transition: opacity $fade-ms $ease-out;
+    }
+}

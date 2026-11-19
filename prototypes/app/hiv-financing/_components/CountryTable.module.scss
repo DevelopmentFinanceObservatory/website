@@ -1,0 +1,132 @@
+// The country table. It scrolls sideways inside its own box so the page never does.
+.table {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    color: #484842;
+    font-family: var(--font-outfit);
+}
+
+.scroll {
+    overflow-x: auto;
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+
+    table {
+        width: 100%;
+        min-width: 720px;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    th,
+    td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #ececdb;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+    thead th {
+        color: #5e5e52;
+        font: 400 11px var(--font-dm-mono);
+        white-space: nowrap;
+    }
+
+    thead th[aria-sort] {
+        color: #484842;
+    }
+
+    th:first-child {
+        text-align: left;
+    }
+
+    tbody th {
+        font-weight: 400;
+    }
+
+    td {
+        font-variant-numeric: tabular-nums;
+    }
+
+    tbody tr {
+        transition: background-color 150ms ease-out;
+
+        &:hover {
+            background: rgb(100 103 222 / 7%);
+        }
+
+        &[data-selected="true"] {
+            background: rgb(100 103 222 / 14%);
+        }
+    }
+
+    // Header and row buttons look like their text.
+    th button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: inherit;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+
+    tbody th button {
+        font-size: 13px;
+    }
+}
+
+// The three providers' shares of the row's aid, side by side.
+.mix {
+    display: inline-flex;
+    width: 60px;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #ececdb;
+    vertical-align: middle;
+
+    span {
+        flex-basis: 0;
+        min-width: 0;
+    }
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    button {
+        padding: 4px 10px;
+        border: 1px solid #cfcfbf;
+        border-radius: 4px;
+        background: #fff;
+        color: #484842;
+        font: 400 12.5px var(--font-outfit);
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: 2px solid #6467de;
+            outline-offset: 2px;
+        }
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scroll tbody tr {
+        transition: none;
+    }
+}

@@ -1,0 +1,99 @@
+.island {
+    margin-block: 0 36px;
+    color: #484842;
+    font-family: var(--font-outfit);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.top {
+    margin-bottom: 8px;
+
+    // Clears the site's fixed header, 68px tall, which slides back in on the scroll up
+    // from the table.
+    scroll-margin-top: 80px;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    align-items: center;
+    padding-block: 12px;
+}
+
+// One button in the segmented control's face from the fragility-finance prototype.
+.all {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid #cfcfbf;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+    font: 400 13px var(--font-outfit);
+    cursor: pointer;
+
+    &[aria-pressed="true"] {
+        border-color: #484842;
+        background: #484842;
+        color: #fff;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 2px;
+    }
+}
+
+// The one sentence for the scope. It takes the room of the longest sentence at any width
+// (Reserved), so changing the scope never moves the page below.
+.sentence {
+    max-width: 900px;
+    margin: 4px 0 0;
+    font-size: 17px;
+    line-height: 1.45;
+
+    @media (max-width: 600px) {
+        font-size: 16px;
+    }
+}
+
+.section {
+    margin-top: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #d2d2c5;
+}
+
+.heading {
+    margin: 0 0 12px;
+    color: #484842;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.3;
+    scroll-margin-top: 32px;
+}
+
+.chartTitle {
+    margin: 0 0 10px;
+    color: #484842;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+// Kept in the layout when hidden, so the strip below stays put.
+.note {
+    margin: 10px 0 0;
+    color: #5e5e52;
+    font-size: 13px;
+
+    &[data-hidden="true"] {
+        visibility: hidden;
+    }
+}
+
+.below {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #ececdb;
+}
