@@ -14,7 +14,7 @@ import { maxKeysPerAccount } from './settings';
 // reads the session itself, and a mutating one first checks that it came
 // from a page of this site (./sameOrigin). An account only ever acts on its
 // own keys: the owner is the session's user and nothing from the caller, and
-// a delete or rotate goes through the plugin on the request's own session.
+// a delete goes through the plugin on the request's own session.
 // Every answer, a refusal included, is `no-store`, since it holds a key or
 // names an account's keys. A refusal is a problem document whose `detail` is
 // the message the panel shows.
@@ -101,29 +101,6 @@ export const createKey = async (request: Request): Promise<Response> => {
     const result = await keyService.createOwn(user.id, 'label' in body ? body.label : undefined);
 
     return result.ok ? issued(result.key) : REFUSALS[result.reason]();
-};
-
-/** Replaces one of the signed-in user's keys with a new one of the same name. */
-export const rotateKey = async (request: Request, keyId: string): Promise<Response> => {
-    const crossOrigin = refuseCrossOrigin(request);
-
-    if (crossOrigin) {
-        return crossOrigin;
-    }
-
-    const user = await getUser();
-
-    if (!user) {
-        return signedOut();
-    }
-
-    const result = await keyService.rotateOwn({ userId: user.id, headers: request.headers }, keyId);
-
-    if (!result.ok) {
-        return result.reason === 'not_found' ? notFound() : REFUSALS[result.reason]();
-    }
-
-    return issued(result.key);
 };
 
 /** Deletes one of the signed-in user's keys. Another account's is "not found". */

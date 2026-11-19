@@ -61,23 +61,6 @@ export const adminCreateKey = async (email: unknown, label: unknown): Promise<Ad
     return { ok: true, created: { id: result.id, key: result.key } };
 };
 
-/** Replaces a key with a new one for the same account and answers with it, once. */
-export const adminRotateKey = async (keyId: unknown): Promise<AdminKeyResult> => {
-    const admin = await requireAdmin();
-
-    if (typeof keyId !== 'string') {
-        return { ok: false, error: REFUSALS.not_found };
-    }
-
-    const result = await keyService.adminRotate(admin.email, keyId);
-
-    if (!result.ok) {
-        return { ok: false, error: REFUSALS[result.reason] };
-    }
-
-    return { ok: true, created: { id: result.id, key: result.key } };
-};
-
 /** Deletes any key. */
 export const adminDeleteKey = async (keyId: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { createKey, deleteKey, listKeys, rotateKey } from './accountApi';
+import { createKey, deleteKey, listKeys } from './accountApi';
 import styles from './ApiKeysPanel.module.scss';
 import KeyCard from './KeyCard';
 import NewKeyForm from './NewKeyForm';
@@ -30,7 +30,7 @@ type View = { name: 'list' } | { name: 'create' } | { name: 'reveal'; key: strin
 
 /**
  * The account's MCP keys in the house side panel, opened from the account
- * menu: list, create, rotate and delete, and the one-time view of a new key.
+ * menu: list, create and delete, and the one-time view of a new key.
  * It reads and writes through the JSON routes under /api/account/api-keys, so it
  * works on any page, the prototypes app's static export included.
  */
@@ -38,7 +38,7 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
     const [data, setData] = useState<ApiKeysData | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [view, setView] = useState<View>({ name: 'list' });
-    // The id of the key a rotate or delete is working on.
+    // The id of the key a delete is working on.
     const [busyId, setBusyId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -90,14 +90,6 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
         await load();
 
         return null;
-    };
-
-    const rotate = async (keyId: string) => {
-        setBusyId(keyId);
-        setError(null);
-
-        setError(await issued(await rotateKey(keyId)));
-        setBusyId(null);
     };
 
     const remove = async (keyId: string) => {
@@ -183,7 +175,6 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
                                 key={key.id}
                                 item={key}
                                 busy={busyId === key.id}
-                                onRotate={() => rotate(key.id)}
                                 onDelete={() => remove(key.id)}
                             />
                         ))

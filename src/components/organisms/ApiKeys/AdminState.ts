@@ -3,10 +3,10 @@ import type { AdminKey } from '@/lib/apiKeys/service';
 /** Users per page of the admin table. */
 export const ADMIN_PAGE_SIZE = 50;
 
-/** A key shown once, right after it is made or rotated. */
+/** A key shown once, right after it is made. */
 export type AdminRevealedKey = { id: string; key: string };
 
-/** What the create and rotate actions answer with: the new key, once, or why there is none. */
+/** What the create action answers with: the new key, once, or why there is none. */
 export type AdminKeyResult = { ok: true; created: AdminRevealedKey } | { ok: false; error: string };
 
 /** What the other actions answer with. */
@@ -20,7 +20,6 @@ export type AdminActions = {
     // The keys of one account, or null when the lookup fails.
     loadKeys: (userId: string) => Promise<AdminKey[] | null>;
     createKey: (email: string, label: string) => Promise<AdminKeyResult>;
-    rotateKey: (keyId: string) => Promise<AdminKeyResult>;
     deleteKey: (keyId: string) => Promise<AdminDoneResult>;
     // Empty text clears the key's own limit, which puts it back on the default.
     setKeyLimit: (keyId: string, limit: string) => Promise<AdminDoneResult>;

@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useCallback, useEffect, useState, useTransition } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
 import AdminKeyRow from './AdminKeyRow';
@@ -8,6 +8,7 @@ import AdminLimitInput from './AdminLimitInput';
 import type { AdminActions, AdminRevealedKey, AdminUserView } from './AdminState';
 
 import Button from '@/components/atoms/Button/Button';
+import Icon from '@/components/atoms/Icon/Icon';
 import type { AdminKey } from '@/lib/apiKeys/service';
 
 type AdminUserKeysProps = {
@@ -29,7 +30,8 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
     const [keys, setKeys] = useState<AdminKey[] | null>(null);
     const [failed, setFailed] = useState(false);
     const [revealed, setRevealed] = useState<Revealed | null>(null);
-    const [copied, setCopied] = useState(false);
+    const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+    const keyText = useRef<HTMLElement>(null);
     const [createError, setCreateError] = useState<string | null>(null);
     const [creating, startCreate] = useTransition();
 
@@ -56,7 +58,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
     }, [loadKeys, user.id]);
 
     const reveal = (title: string, key: AdminRevealedKey) => {
-        setCopied(false);
+        setCopyState('idle');
         setRevealed({ title, key });
     };
 
@@ -85,10 +87,11 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
     const copy = async () => {
         try {
             await navigator.clipboard.writeText(revealed?.key.key ?? '');
-            setCopied(true);
+            setCopyState('copied');
         } catch {
-            // Clipboard access can be refused; the key is selectable where it is shown.
-            setCopied(false);
+            // Clipboard access can be refused: select the key so it can be copied by hand.
+            setCopyState('failed');
+            window.getSelection()?.selectAllChildren(keyText.current as Node);
         }
     };
 
@@ -100,12 +103,22 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                         {revealed.title}. Copy it now, it is shown once.
                     </p>
                     <div className={styles.onceRow}>
-                        <code className={styles.onceKey} data-testid="new-key">
+                        <code ref={keyText} className={styles.onceKey} data-testid="new-key">
                             {revealed.key.key}
                         </code>
-                        <Button type="button" variant="dark" small onClick={copy}>
-                            {copied ? 'Copied' : 'Copy'}
-                        </Button>
+                        <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label="Copy key"
+                            title="Copy key"
+                            onClick={copy}
+                        >
+                            <Icon name="copy-small" />
+                        </button>
+                        <span className={styles.copyNote} aria-live="polite">
+                            {copyState === 'copied' && 'Copied'}
+                            {copyState === 'failed' && 'Select and copy'}
+                        </span>
                         <Button
                             type="button"
                             variant="bordered"
@@ -143,7 +156,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                                 keyData={key}
                                 actions={actions}
                                 onChanged={() => void reload()}
-                                onRevealed={reveal}
+                                onRefresh={reload}
                             />
                         ))}
                     </tbody>

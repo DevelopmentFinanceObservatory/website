@@ -4,7 +4,6 @@ import {
     adminCreateKey,
     adminDeleteKey,
     adminLoadKeys,
-    adminRotateKey,
     adminSetKeyLimit,
     adminSetLimit,
 } from './actions';
@@ -26,7 +25,6 @@ const one = (value: string | string[] | undefined): string =>
 const actions = {
     loadKeys: adminLoadKeys,
     createKey: adminCreateKey,
-    rotateKey: adminRotateKey,
     deleteKey: adminDeleteKey,
     setKeyLimit: adminSetKeyLimit,
     setAccountLimit: adminSetLimit,

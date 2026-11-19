@@ -5,10 +5,11 @@ import { useState, useTransition } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
 import AdminLimitInput from './AdminLimitInput';
-import { type AdminActions, type AdminRevealedKey, formatDay } from './AdminState';
+import { type AdminActions, formatDay } from './AdminState';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
+import Spinner from '@/components/atoms/Spinner/Spinner';
 import UsageMeter from '@/components/atoms/UsageMeter/UsageMeter';
 import type { AdminKey } from '@/lib/apiKeys/service';
 
@@ -17,11 +18,11 @@ type AdminKeyRowProps = {
     actions: AdminActions;
     // Reloads the account's keys after a change.
     onChanged: () => void;
-    // Hands the new key of a rotation up, to be shown once.
-    onRevealed: (name: string, key: AdminRevealedKey) => void;
+    // Reloads all of the account's keys from the server, usage and limits included.
+    onRefresh: () => Promise<void>;
 };
 
-const RotateIcon = () => (
+const RefreshIcon = () => (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={styles.iconSvg}>
         <path
             d="M15.5 10a5.5 5.5 0 1 1-1.8-4.07M15 3.5v3h-3"
@@ -32,38 +33,30 @@ const RotateIcon = () => (
     </svg>
 );
 
-/** One key of an account: its name, today's MCP use against its daily limit, and rotate and delete. */
-const AdminKeyRow = ({ keyData, actions, onChanged, onRevealed }: AdminKeyRowProps) => {
+/** One key of an account: its name, today's MCP use against its daily limit, with refresh and delete. */
+const AdminKeyRow = ({ keyData, actions, onChanged, onRefresh }: AdminKeyRowProps) => {
     const name = keyData.name || 'Unnamed';
-    const [asking, setAsking] = useState<'rotate' | 'delete' | null>(null);
+    const [asking, setAsking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
+    const [refreshing, startRefresh] = useTransition();
 
     const confirm = () => {
-        const kind = asking;
-
         startTransition(async () => {
-            const result =
-                kind === 'rotate'
-                    ? await actions.rotateKey(keyData.id)
-                    : await actions.deleteKey(keyData.id);
+            const result = await actions.deleteKey(keyData.id);
 
             if (!result.ok) {
                 setError(result.error);
-                setAsking(null);
+                setAsking(false);
 
                 return;
-            }
-
-            if ('created' in result) {
-                onRevealed(name, result.created);
             }
 
             onChanged();
         });
     };
 
-    const open = asking !== null || error !== null;
+    const open = asking || error !== null;
 
     return (
         <>
@@ -98,25 +91,26 @@ const AdminKeyRow = ({ keyData, actions, onChanged, onRevealed }: AdminKeyRowPro
                     <button
                         type="button"
                         className={styles.iconButton}
-                        aria-label={`Rotate ${name}`}
-                        title="Rotate: make a new key and stop this one"
-                        disabled={asking !== null}
-                        onClick={() => {
-                            setError(null);
-                            setAsking('rotate');
-                        }}
+                        aria-label={`Refresh usage for ${name}`}
+                        title="Refresh usage"
+                        disabled={refreshing}
+                        onClick={() => startRefresh(onRefresh)}
                     >
-                        <RotateIcon />
+                        {refreshing ? (
+                            <Spinner size={16} label="Refreshing usage" />
+                        ) : (
+                            <RefreshIcon />
+                        )}
                     </button>
                     <button
                         type="button"
                         className={styles.iconButtonDanger}
                         aria-label={`Delete ${name}`}
                         title="Delete this key"
-                        disabled={asking !== null}
+                        disabled={asking}
                         onClick={() => {
                             setError(null);
-                            setAsking('delete');
+                            setAsking(true);
                         }}
                     >
                         <Icon name="remove" />
@@ -135,9 +129,7 @@ const AdminKeyRow = ({ keyData, actions, onChanged, onRevealed }: AdminKeyRowPro
                                 aria-label={`Confirm for ${name}`}
                             >
                                 <span className={styles.confirmText}>
-                                    {asking === 'rotate'
-                                        ? 'Replace this key? The old one stops working.'
-                                        : 'Delete this key for good?'}
+                                    Delete this key for good?
                                 </span>
                                 <Button
                                     type="button"
@@ -146,14 +138,14 @@ const AdminKeyRow = ({ keyData, actions, onChanged, onRevealed }: AdminKeyRowPro
                                     disabled={pending}
                                     onClick={confirm}
                                 >
-                                    {asking === 'rotate' ? 'Rotate' : 'Delete'}
+                                    Delete
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="bordered"
                                     small
                                     disabled={pending}
-                                    onClick={() => setAsking(null)}
+                                    onClick={() => setAsking(false)}
                                 >
                                     Cancel
                                 </Button>

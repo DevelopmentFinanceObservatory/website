@@ -58,13 +58,6 @@ export const createKey = async (label: string): Promise<KeyIssued> =>
         'The key was not created. Try again.',
     );
 
-/** Replaces a key with a new one of the same name. */
-export const rotateKey = async (keyId: string): Promise<KeyIssued> =>
-    issued(
-        await send(`${BASE}/${encodeURIComponent(keyId)}/rotate`, { method: 'POST' }),
-        'The key was not rotated. Try again.',
-    );
-
 /** Deletes a key. */
 export const deleteKey = async (keyId: string): Promise<KeyRemoved> => {
     const reply = await send(`${BASE}/${encodeURIComponent(keyId)}`, { method: 'DELETE' });

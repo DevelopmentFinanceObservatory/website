@@ -100,7 +100,7 @@ Status: partial. The status codes and the API-surface behaviour are built; the w
 
 Patterned on GitHub's personal access tokens.
 
-Key management is the panel. The account menu's "API keys" item opens it on whatever page the user is on. It shows the user's name and email, then "API keys" with a "Create API key" button and one card per key: name, prefix, created, last used, the usage bar ([U1][Seeing Usage]), Rotate and Delete. There is no `/account/api-keys` page.
+Key management is the panel. The account menu's "API keys" item opens it on whatever page the user is on. It shows the user's name and email, then "API keys" with a "Create API key" button and one card per key: name, prefix, created, last used, the usage bar ([U1][Seeing Usage]) and Delete. There is no `/account/api-keys` page. A user replaces a key by creating a new one and deleting the old one. A new key starts its day at 0 calls.
 
 #### U6. Create a key and see it once
 
@@ -139,20 +139,6 @@ Delete is the only way to stop a key. There is no disable: the plugin lets an ow
 
 Status: built (verify confirmation wording and the "within a minute" note).
 
-#### U10. Rotate a key
-
-_As a DFO user, I want to replace a key with a new one under the same name and daily quota, so I can change a secret without rebuilding my setup._
-
-- [ ] Each key card has a Rotate action.
-- [ ] Rotating creates a new key with the same name and the same daily quota, and deletes the old key.
-- [ ] The panel shows the new key once, with Copy and Close, as in [U6][Managing Keys].
-- [ ] The old key stops working within about a minute, as in [U8][Managing Keys]. The new key works on the next call.
-- [ ] The new key's usage bar starts at "0 of N", since the count is per key.
-- [ ] Rotating leaves the account's key count unchanged, so an account at the cap can rotate.
-- [ ] A user cannot rotate another account's key, even with a crafted request.
-
-Status: partial. Rotate is built. The at-cap case and the crafted-request case are to verify.
-
 #### U9. Signed-out access
 
 _As a visitor who is not signed in, I want key management to be reachable only after I sign in._
@@ -173,7 +159,8 @@ _As a DFO admin, I want to find any user and see their keys, usage and limit, so
 
 - [ ] The page opens with a dark hero holding the total user count as a badge and an email search.
 - [ ] Below it, a table lists all users with email, created date and active key count. It is paginated and filterable by email.
-- [ ] Expanding a user shows their keys, each with name, created date, usage bar (the same counter as [U1][Seeing Usage]), an editable daily quota, Rotate and Delete. The expanded row also shows Create key and the account's per-minute limit.
+- [ ] Expanding a user shows their keys, each with name, created date, usage bar (the same counter as [U1][Seeing Usage]), an editable daily quota, Refresh usage and Delete. The expanded row also shows Create key and the account's per-minute limit.
+- [ ] The Refresh usage icon on a key row reloads all of that account's keys from the server, so the usage counts and limits are current. It asks for no confirmation and is disabled while it loads.
 - [ ] If [U11][Stories: Scope TBD] ships, the expanded row shows the same limit alerts too.
 - [ ] A non-admin gets 404 on every admin page and action, signed in or not.
 
@@ -181,15 +168,15 @@ Status: built (verify pagination and the email filter against a long user list).
 
 #### A2. Manage a user's keys
 
-_As a DFO admin, I want create, rotate and delete on any user's keys, for support and debugging._
+_As a DFO admin, I want create and delete on any user's keys, for support and debugging._
 
 - [ ] An admin can create a key for an expanded user. The key is shown once, as in [U6][Managing Keys], then never again, to the admin or the user.
 - [ ] An admin can never see an existing key's secret, only its name, prefix, dates and usage.
-- [ ] An admin can rotate any key, as in [U10][Managing Keys], and delete any key, with the same confirmations and "within a minute" note as the panel.
+- [ ] An admin can delete any key, with the same confirmations and "within a minute" note as the panel.
 - [ ] Keys an admin creates for a user appear in that user's panel like any other key.
 - [ ] Each admin change names the admin in the log line and in telemetry (T1).
 
-Status: partial. Create, rotate and delete for any account are built; the T1 events are not.
+Status: partial. Create and delete for any account are built; the T1 events are not.
 
 #### A3. Set or clear an account's per-minute limit
 
@@ -228,7 +215,7 @@ Status: partial. Editing the quota is built. Input validation and the one-minute
 
 _As a DFO admin, I want a Sentry event for every key-management operation, so I can trace what happened to a key when debugging._
 
-- [ ] Create, rotate, delete, limit and quota changes each send an event, from both the panel and the admin page.
+- [ ] Create, delete, limit and quota changes each send an event, from both the panel and the admin page.
 - [ ] Each event carries the operation, the key's public id, the owning account id, the actor's account id and whether the actor was an admin.
 - [ ] No event ever carries the key, its hash, or request headers ([design][design-key-format]). A test pins this.
 - [ ] Failed operations (not found, cap reached, not authorized) are recorded with their reason.
@@ -284,8 +271,9 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 4. **Out-of-band alerting.** No email, Slack or other notification to a user or an admin when a limit is hit. Users learn from the MCP refusal (U3), on the site through the usage bar (U1) and, if it ships, limit alerts (U11); admins learn through Sentry (T2), which is not an alert routed to anyone.
 5. **Detailed usage monitoring.** No graph of how much of the quota an account used over time, with a time-range selector (hour, day, week) and marks where limits were hit. Today's count against the daily quota is in scope (U1); history over days is not. This can be built later, on whatever store U11 settles on.
 6. **Outreach to current users.** No flow to find current anonymous callers and encourage them onto keys. Keys are for prospective partners who want or need higher access, offered as we talk to them. No current caller is near a level we'd consider unsustainable, so nobody needs to be moved yet.
-7. **Disabling a key.** Keys are created, rotated and deleted, nothing in between. A user who wants a key off deletes it and makes a new one later (U8).
+7. **Disabling a key.** Keys are created and deleted, nothing in between. A user who wants a key off deletes it and makes a new one later (U8).
 8. **Keys on the API surface.** Keys apply to MCP only. A key sent to `/api/v1/*`, `/openapi.json` or `/codes` is ignored and the call is anonymous, with no per-key or per-account allowance there.
+9. **Rotating a key.** There is no rotate action, in the panel or on the admin page. A user rotates a key by creating a new one and deleting the old one. The new key starts its day at 0, so create-and-delete can stretch the daily quota only as far as the per-account key cap allows ([design: Limits][design-limits]).
 
 ## Open Questions
 

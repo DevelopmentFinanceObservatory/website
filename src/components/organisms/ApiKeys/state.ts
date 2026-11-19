@@ -23,7 +23,7 @@ export type ApiKeysData = {
     keysEnabled: boolean;
 };
 
-/** A create or rotate answer: the new key, once, or why there is none. */
+/** A create answer: the new key, once, or why there is none. */
 export type KeyIssued = { key: string } | { error: string };
 
 /** A delete answer: why it did not delete, or null. */

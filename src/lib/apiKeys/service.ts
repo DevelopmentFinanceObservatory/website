@@ -19,8 +19,8 @@
  *   - a key's owner is the id passed in; expiry, metadata, permissions and
  *     limits are never passed on, so every key has the plugin's defaults. The
  *     account's own limit (user.api_rate_limit) is the per-minute limit, and
- *     the key's `daily_limit` column, set only by an operator or carried over
- *     by a rotation, is its daily /mcp quota (src/lib/proxy/access)
+ *     the key's `daily_limit` column, set only by an operator, is its daily
+ *     /mcp quota (src/lib/proxy/access)
  *   - revoking deletes the row: a disabled key could be switched back on
  *   - the full key is returned by the create call and nowhere else. Only its
  *     hash is stored, and neither the key nor the hash is logged
@@ -34,7 +34,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { apikey, user } from '../../../db/schema.ts';
 import { API_KEY_PREFIX } from '../auth/apiKeyOptions.ts';
 import { likeContaining } from '../likePattern.ts';
-import { copyDailyCounter, dailyUsage } from '../proxy/limitCounter.ts';
+import { dailyUsage } from '../proxy/limitCounter.ts';
 import { parseLabel } from './settings.ts';
 
 /** The parts of the Better Auth instance this module uses. */
@@ -113,8 +113,6 @@ export type AdminKey = OwnKey & {
 export type CreateResult =
     | { ok: true; id: string; key: string }
     | { ok: false; reason: 'label_invalid' | 'cap_reached' | 'no_such_account' };
-
-export type RotateResult = CreateResult | { ok: false; reason: 'not_found' };
 
 /** An account as an operator sees it in the user list. */
 export type AdminUser = {
@@ -214,67 +212,6 @@ export const createKeyService = ({
         });
     };
 
-    // A new key for the account with the label, daily limit and today's daily
-    // count of `source`, and the old one deleted. The new key is minted first, so a failure
-    // leaves the old one standing; a second rotation of the same key that
-    // loses the race for the delete takes its new key back.
-    const rotate = async (
-        source: { id: string; name: string | null; dailyLimit: number | null; accountId: string },
-        deleteOld: () => Promise<boolean>,
-    ): Promise<RotateResult> => {
-        const created = await mint(source.accountId, source.name);
-
-        if (source.dailyLimit !== null) {
-            await db
-                .update(apikey)
-                .set({ dailyLimit: source.dailyLimit })
-                .where(eq(apikey.id, created.id));
-        }
-
-        if (!(await deleteOld())) {
-            await db.delete(apikey).where(eq(apikey.id, created.id));
-
-            return { ok: false, reason: 'not_found' };
-        }
-
-        // Today's count goes with the key, so a rotation is no fresh quota.
-        await copyDailyCounter(db, source.id, created.id);
-
-        return { ok: true, id: created.id, key: created.key };
-    };
-
-    const findKey = async (keyId: string, accountId?: string) => {
-        const [row] = await db
-            .select({
-                id: apikey.id,
-                name: apikey.name,
-                dailyLimit: apikey.dailyLimit,
-                accountId: apikey.referenceId,
-            })
-            .from(apikey)
-            .where(
-                accountId === undefined
-                    ? eq(apikey.id, keyId)
-                    : and(eq(apikey.id, keyId), eq(apikey.referenceId, accountId)),
-            )
-            .limit(1);
-
-        return row;
-    };
-
-    const deleteKey = async (keyId: string, accountId?: string): Promise<boolean> => {
-        const gone = await db
-            .delete(apikey)
-            .where(
-                accountId === undefined
-                    ? eq(apikey.id, keyId)
-                    : and(eq(apikey.id, keyId), eq(apikey.referenceId, accountId)),
-            )
-            .returning({ id: apikey.id });
-
-        return gone.length > 0;
-    };
-
     return {
         /** The session user's keys, newest first, as the plugin lists them. */
         async listOwn({ headers }: Owner): Promise<OwnKey[]> {
@@ -366,34 +303,6 @@ export const createKeyService = ({
             log({ message: 'api key deleted', by: 'owner', keyId, accountId: userId });
 
             return 'deleted';
-        },
-
-        /**
-         * Replaces one of the session user's keys with a new one of the same
-         * label, daily limit and today's count, and returns the new key once. The old key is
-         * deleted, so the owner's key cap does not apply. Only the owner's
-         * own keys are found.
-         */
-        async rotateOwn({ userId }: Owner, keyId: string): Promise<RotateResult> {
-            const source = await findKey(keyId, userId);
-
-            if (!source) {
-                return { ok: false, reason: 'not_found' };
-            }
-
-            const result = await rotate(source, () => deleteKey(keyId, userId));
-
-            if (result.ok) {
-                log({
-                    message: 'api key rotated',
-                    by: 'owner',
-                    keyId: result.id,
-                    previousKeyId: keyId,
-                    accountId: userId,
-                });
-            }
-
-            return result;
         },
 
         /** The account's own limit, or null for the default. */
@@ -584,34 +493,6 @@ export const createKeyService = ({
             });
 
             return true;
-        },
-
-        /**
-         * Replaces any key with a new one for the same account, of the same
-         * label, daily limit and today's count, and returns the new key once. Not held to
-         * the account cap, since the old key is deleted.
-         */
-        async adminRotate(actor: string, keyId: string): Promise<RotateResult> {
-            const source = await findKey(keyId);
-
-            if (!source) {
-                return { ok: false, reason: 'not_found' };
-            }
-
-            const result = await rotate(source, () => deleteKey(keyId));
-
-            if (result.ok) {
-                log({
-                    message: 'api key admin',
-                    action: 'rotate',
-                    actor,
-                    keyId: result.id,
-                    previousKeyId: keyId,
-                    accountId: source.accountId,
-                });
-            }
-
-            return result;
         },
 
         /**

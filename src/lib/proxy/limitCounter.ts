@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { limitCounter } from '../../../db/schema.ts';
@@ -200,38 +200,4 @@ export const dailyUsage = async (
     }
 
     return used;
-};
-
-/**
- * Gives the key `toKeyId` the current UTC day's daily count of `fromKeyId`,
- * window and count as they are, so replacing a key carries its quota over.
- * Nothing is copied when the old key has no count today.
- */
-export const copyDailyCounter = async (
-    db: Pick<NodePgDatabase, 'select' | 'insert'>,
-    fromKeyId: string,
-    toKeyId: string,
-): Promise<void> => {
-    const [today] = await db
-        .select({ windowStart: limitCounter.windowStart, count: limitCounter.count })
-        .from(limitCounter)
-        .where(
-            and(
-                eq(limitCounter.key, dailyCounterKey(fromKeyId)),
-                sql`${limitCounter.windowStart} >= date_bin(make_interval(secs => ${DAY_S}), now(), timestamptz 'epoch')`,
-            ),
-        )
-        .limit(1);
-
-    if (!today) {
-        return;
-    }
-
-    await db
-        .insert(limitCounter)
-        .values({ key: dailyCounterKey(toKeyId), ...today })
-        .onConflictDoUpdate({
-            target: limitCounter.key,
-            set: { windowStart: today.windowStart, count: today.count },
-        });
 };

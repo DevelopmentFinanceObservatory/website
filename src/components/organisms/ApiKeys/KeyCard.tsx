@@ -11,14 +11,13 @@ import UsageMeter from '@/components/atoms/UsageMeter/UsageMeter';
 
 type KeyCardProps = {
     item: KeyView;
-    // A rotate or delete of this key is in flight.
+    // A delete of this key is in flight.
     busy: boolean;
-    onRotate: () => void;
     onDelete: () => void;
 };
 
-/** One key: name, prefix, dates, today's usage, and Rotate and Delete (confirmed in place). */
-const KeyCard = ({ item, busy, onRotate, onDelete }: KeyCardProps) => {
+/** One key: name, prefix, dates, today's usage, and Delete (confirmed in place). */
+const KeyCard = ({ item, busy, onDelete }: KeyCardProps) => {
     const [confirming, setConfirming] = useState(false);
 
     return (
@@ -69,9 +68,6 @@ const KeyCard = ({ item, busy, onRotate, onDelete }: KeyCardProps) => {
                 </div>
             ) : (
                 <div className={styles.actions}>
-                    <Button small variant="paper" disabled={busy} onClick={onRotate}>
-                        {busy ? 'Working…' : 'Rotate'}
-                    </Button>
                     <Button
                         small
                         variant="paper"

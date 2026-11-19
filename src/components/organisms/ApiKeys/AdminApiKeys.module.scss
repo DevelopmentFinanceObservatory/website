@@ -408,7 +408,7 @@
     height: rem(20);
 }
 
-// The rotate and delete question sits in its own row under the key, so
+// The delete question sits in its own row under the key, so
 // opening it moves none of the key row's columns.
 .keyTable .confirmRow td {
     padding-block: rem(8);
@@ -464,6 +464,14 @@
     user-select: all;
     background-color: var(--color-net-light);
     border-radius: rem(4);
+}
+
+// Holds its width while empty, so Done stays put when the note appears.
+.copyNote {
+    @include font-size(13px, 1.3);
+
+    min-width: rem(100);
+    color: var(--color-charcoal);
 }
 
 .tools {
