@@ -4,15 +4,17 @@ import classNames from 'classnames';
 import { useId, useMemo, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
-import { useExplore, useModel } from './ExploreContext';
-import { TermLink } from './ExploreLink';
+import { ModelProvider, useExplore, useFullModel, useModel } from './ExploreContext';
+import { OriginTag, TermLink } from './ExploreLink';
 import { downloadCsv } from './downloadCsv';
+import { ListToggle, useListOrigins } from './ListToggle';
 import { count, memberTotal, ofMembers } from '@/lib/graphExplorer/counts';
 import styles from './ScopedList.module.scss';
 import ShowPills from './ShowPills';
 
 import Button from '@/components/atoms/Button/Button';
 import { START_VIEW } from '@/lib/graphExplorer/explore';
+import { datasetsByUse, listHead } from '@/lib/graphExplorer/lists';
 import { csvFileName } from '@/lib/graphExplorer/sheet';
 import { scopedListTable } from '@/lib/graphExplorer/tables';
 import {
@@ -76,12 +78,18 @@ type ScopedListProps = {
  * grouped by what they do in a StatVar. Each row has the label, the dcid,
  * the value list it draws from and its StatVar count. The Show pills narrow
  * the count to one dataset (dimming the rows it does not use) or give each
- * dataset its own column.
+ * dataset of the scoped model its own column, most StatVars first, the first
+ * few on show with "All N". A chosen dataset the switches leave out is
+ * counted from the full model, since the reader named it.
  */
 const ScopedList = ({ scope, show }: ScopedListProps) => {
-    const model = useModel();
+    const scoped = useModel();
+    const full = useFullModel();
+    const model = show.kind === 'dataset' && !scoped.dataset(show.id) ? full : scoped;
+    const origins = useListOrigins(model);
     const { go, setShow } = useExplore();
     const [filter, setFilter] = useState('');
+    const [columnsOpen, setColumnsOpen] = useState(false);
     const titleId = useId();
 
     const list = useMemo(() => model.scopedList(scope, show), [model, scope, show]);
@@ -92,11 +100,16 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
         ? `Properties of ${model.label(scope.id)}`
         : 'Properties the DFO model defines';
 
-    const countHeads =
-        list.columns.length === 0
-            ? ['StatVars']
-            : list.columns.map((dataset) => model.label(dataset));
-    const columnCount = 2 + countHeads.length;
+    // Each count column by the index of its dataset in `list.columns`, most StatVars first.
+    const columnAt = new Map(list.columns.map((dataset, index) => [dataset, index]));
+    const columns = listHead(
+        datasetsByUse(model).flatMap((dataset) => {
+            const index = columnAt.get(dataset.ref);
+            return index === undefined ? [] : [{ dataset, index }];
+        }),
+        { open: columnsOpen },
+    );
+    const columnCount = 2 + Math.max(1, columns.shown.length);
 
     const groups = GROUPS.map((group) => ({
         group,
@@ -115,6 +128,14 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
             </div>
             <div className={styles.controls}>
                 <ShowPills value={show} onChange={setShow} withAll />
+                {show.kind === 'all' && (
+                    <ListToggle
+                        head={columns}
+                        noun="columns"
+                        open={columnsOpen}
+                        onToggle={() => setColumnsOpen((open) => !open)}
+                    />
+                )}
                 <input
                     type="search"
                     className={styles.filter}
@@ -138,67 +159,73 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
                     No property here matches “{filter.trim()}”.
                 </p>
             ) : (
-                <div className={styles.scroll}>
-                    <table className={styles.table} aria-labelledby={titleId}>
-                        <thead>
-                            <tr>
-                                <th scope="col">Property</th>
-                                <th scope="col">Value list</th>
-                                {countHeads.map((head, index) => (
-                                    <th
-                                        key={list.columns[index] ?? head}
-                                        scope="col"
-                                        className={classNames(
-                                            styles.num,
-                                            list.columns.length > 1 && styles.datasetHead,
-                                        )}
-                                    >
-                                        {head}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        {groups.map(({ group, rows }) => (
-                            <tbody key={group}>
-                                <tr className={styles.group}>
-                                    <th scope="colgroup" colSpan={columnCount}>
-                                        {GROUP_TITLES[group]} ({count(rows.length)})
-                                    </th>
+                <ModelProvider value={model}>
+                    <div className={styles.scroll}>
+                        <table className={styles.table} aria-labelledby={titleId}>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Property</th>
+                                    <th scope="col">Value list</th>
+                                    {list.columns.length === 0 ? (
+                                        <th scope="col" className={styles.num}>
+                                            StatVars
+                                        </th>
+                                    ) : (
+                                        columns.shown.map(({ dataset }) => (
+                                            <th
+                                                key={dataset.ref}
+                                                scope="col"
+                                                className={classNames(
+                                                    styles.num,
+                                                    list.columns.length > 1 && styles.datasetHead,
+                                                )}
+                                            >
+                                                {model.label(dataset.ref)}
+                                                <OriginTag declaredBy={origins.dataset(dataset)} />
+                                            </th>
+                                        ))
+                                    )}
                                 </tr>
-                                {rows.map((row) => (
-                                    <tr
-                                        key={row.id}
-                                        className={classNames(row.dimmed && styles.dim)}
-                                    >
-                                        <td>
-                                            <TermLink id={row.id} className={styles.name} />
-                                            <span className={styles.dcid}>
-                                                <BreakableId text={row.id} />
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <ValueListCell row={row} />
-                                        </td>
-                                        {list.columns.length === 0 ? (
-                                            <td className={styles.num}>
-                                                <Count n={row.usage.total} />
-                                            </td>
-                                        ) : (
-                                            row.counts.map((n, index) => (
-                                                <td
-                                                    key={list.columns[index]}
-                                                    className={styles.num}
-                                                >
-                                                    <Count n={n} />
-                                                </td>
-                                            ))
-                                        )}
+                            </thead>
+                            {groups.map(({ group, rows }) => (
+                                <tbody key={group}>
+                                    <tr className={styles.group}>
+                                        <th scope="colgroup" colSpan={columnCount}>
+                                            {GROUP_TITLES[group]} ({count(rows.length)})
+                                        </th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        ))}
-                    </table>
-                </div>
+                                    {rows.map((row) => (
+                                        <tr
+                                            key={row.id}
+                                            className={classNames(row.dimmed && styles.dim)}
+                                        >
+                                            <td>
+                                                <TermLink id={row.id} className={styles.name} />
+                                                <span className={styles.dcid}>
+                                                    <BreakableId text={row.id} />
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <ValueListCell row={row} />
+                                            </td>
+                                            {list.columns.length === 0 ? (
+                                                <td className={styles.num}>
+                                                    <Count n={row.usage.total} />
+                                                </td>
+                                            ) : (
+                                                columns.shown.map(({ dataset, index }) => (
+                                                    <td key={dataset.ref} className={styles.num}>
+                                                        <Count n={row.counts[index] ?? 0} />
+                                                    </td>
+                                                ))
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            ))}
+                        </table>
+                    </div>
+                </ModelProvider>
             )}
         </div>
     );
