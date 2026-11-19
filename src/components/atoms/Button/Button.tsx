@@ -18,7 +18,7 @@ const HOVER_INTENT_MS = 150;
 /** A Button with `href` renders Next's Link, an anchor that navigates, with
  *  the same look and hover; without it, a `<button>`. */
 export type ButtonProps = {
-    variant?: 'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper' | 'inline';
+    variant?: 'light' | 'dark' | 'outline' | 'bordered' | 'plain' | 'paper' | 'inline' | 'card';
     wide?: boolean;
     full?: boolean;
     small?: boolean;

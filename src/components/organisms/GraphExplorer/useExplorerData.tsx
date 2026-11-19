@@ -33,7 +33,7 @@ const DocumentsContext = createContext<LoadedDocuments | null>(null);
 /**
  * The schema and usage documents, built into one model, and the
  * terms list behind the base switch. It sits in the section's layout, which
- * stays mounted while the reader moves between Explore, Start a sheet and
+ * stays mounted while the reader moves between Explore, Seed a dataset and
  * Check a sheet, so each document loads once per visit.
  */
 export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }) => {

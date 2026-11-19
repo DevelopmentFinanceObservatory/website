@@ -1,37 +1,10 @@
 /**
- * Models over the test documents changed for the cases the documents do not
- * hold as read: one pattern's population type, or party classes that list
- * their instances.
+ * A model over the test documents with party classes that list their
+ * instances.
  */
 import { buildModel, type Model } from '../model.ts';
-import { patternId } from '../newSheet.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
-
-/** The id the URL names pattern `index` of `dataset` by. */
-export const patternIdAt = (model: Model, dataset: string, index: number): string => {
-    const pattern = model.dataset(dataset)?.patterns[index];
-    if (pattern === undefined) throw new Error(`no pattern ${index} in ${dataset}`);
-    return patternId(pattern);
-};
-
-/** The model with `dataset`'s patterns in the reverse order. */
-export const withReversedPatterns = (dataset: string): Model => {
-    const provenances = readUsage(usageBody());
-    const found = provenances.provenances.find((each) => each.ref === dataset);
-    if (found === undefined) throw new Error(`no dataset ${dataset}`);
-    found.patterns.reverse();
-    return buildModel(readSchema(schemaBody()), provenances);
-};
-
-/** The model with pattern `index` of `dataset` about `classId` instead. */
-export const withPatternClass = (dataset: string, index: number, classId: string | null): Model => {
-    const provenances = readUsage(usageBody());
-    const pattern = provenances.provenances.find((each) => each.ref === dataset)?.patterns[index];
-    if (pattern === undefined) throw new Error(`no pattern ${index} in ${dataset}`);
-    pattern.population_type = classId;
-    return buildModel(readSchema(schemaBody()), provenances);
-};
 
 /**
  * The model with two of `financingProvider`'s five range classes listing

@@ -259,6 +259,35 @@ const NO_USAGE: Usage = Object.freeze({ byDataset: Object.freeze([]), total: 0 }
 const listsInstances = (node: SchemaNode): boolean =>
     node.types.includes('Class') && node.instances !== null;
 
+/** A 32-bit FNV-1a hash of `text` from `seed`, as 8 hex digits. */
+const fnv1a = (text: string, seed: number): string => {
+    let hash = seed;
+    for (let at = 0; at < text.length; at += 1) {
+        hash = Math.imul(hash ^ text.charCodeAt(at), 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+/**
+ * A pattern's identity, as a React key: 16 hex digits hashed from the fields that
+ * define it (population type, measured property, stat type, qualifier,
+ * denominator, and the constraint and observation properties as sets). The
+ * StatVar count and the examples change as usage grows and the API orders
+ * patterns by count, so neither the position nor those fields enter the id.
+ */
+export const patternId = (pattern: SchemaPattern): string => {
+    const defining = JSON.stringify([
+        pattern.population_type,
+        pattern.measured_property,
+        pattern.stat_type,
+        pattern.measurement_qualifier,
+        pattern.measurement_denominator,
+        [...pattern.constraint_properties].sort(),
+        [...pattern.observation_properties].sort(),
+    ]);
+    return fnv1a(defining, 0x811c9dc5) + fnv1a(defining, 0x9747b28c);
+};
+
 /** The node ids a pattern names, each once. */
 const patternIds = (pattern: SchemaPattern): Set<string> => {
     const ids = [
@@ -908,9 +937,8 @@ export type OpenColumns = {
 };
 
 /**
- * The open property columns of `members`. The tree, the value-list CSV and
- * the Google Sheet's value-list tab all read their cells from it, so the
- * three name a reference the same way.
+ * The open property columns of `members`. The tree and the value-list CSV
+ * both read their cells from it, so the two name a reference the same way.
  */
 export function openColumns(model: Model, members: readonly string[]): OpenColumns {
     const fields = memberFields(model, members);
