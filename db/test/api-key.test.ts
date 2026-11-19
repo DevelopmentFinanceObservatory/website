@@ -103,11 +103,11 @@ test('API key table and plugin setup', async (t) => {
     );
 
     await t.test(
-        'a key is stored as its SHA-256, base64url, with the dfo_live_ prefix and a signed tag',
+        'a key is stored as its SHA-256, base64url, with the dfo_k_ prefix, a signed tag and a checksum',
         async () => {
             const created = await auth.api.createApiKey({ body: { userId: alice.user.id } });
 
-            assert.match(created.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
+            assert.match(created.key, /^dfo_k_[A-Za-z]{32}[0-9A-Za-z]{14}$/);
             assert.equal(created.key.startsWith(API_KEY_PREFIX), true);
             assert.equal(hasValidTag(created.key, [TAG_SECRET]), true);
 

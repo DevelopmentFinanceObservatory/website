@@ -8,7 +8,7 @@ import test from 'node:test';
 
 import { bearerKey, carriesKey, MAX_KEY_LENGTH, readApiKey } from '../apiKey.ts';
 
-const KEY = `dfo_live_${'a'.repeat(32)}`;
+const KEY = `dfo_k_${'a'.repeat(32)}`;
 const read = (headers: Record<string, string>) => readApiKey(new Headers(headers));
 
 test('readApiKey: no headers is no key', () => {

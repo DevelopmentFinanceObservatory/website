@@ -13,7 +13,7 @@
 /** The prefix every key carries (API_KEY_PREFIX in src/lib/auth/apiKeyOptions). */
 const KEY_PREFIX = 'dfo_';
 
-/** Keys are `dfo_live_`, 32 letters and an 8-character tag; this leaves room and no more. */
+/** Keys are 52 characters (src/lib/auth/keyTag); this leaves room and no more. */
 export const MAX_KEY_LENGTH = 128;
 
 export const API_KEY_HEADER = 'x-api-key';
@@ -56,7 +56,7 @@ export const readApiKey = (headers: Headers): KeyRead => {
 
 /**
  * Whether a header value holds one of our keys anywhere, whatever the scheme
- * (`Token dfo_live_…`, a bare key), so the proxy never passes it on.
+ * (`Token dfo_k_…`, a bare key), so the proxy never passes it on.
  */
 export const carriesKey = (value: string): boolean => /(?:^|[^A-Za-z0-9_])dfo_/.test(value);
 

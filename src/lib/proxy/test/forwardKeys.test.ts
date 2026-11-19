@@ -40,8 +40,9 @@ const { forward, accessDeps } = await import('../forward.ts');
 const { createKeyVerifier } = await import('../keyVerifier.ts');
 const { createLimiter } = await import('../rateLimit.ts');
 
-const KEY = signKey(`dfo_live_${'k'.repeat(32)}`, [SECRET]);
-const FORGED = `dfo_live_${'k'.repeat(32)}AAAAAAAA`;
+const KEY = signKey(`dfo_k_${'k'.repeat(32)}`, [SECRET]);
+// The right shape and checksum, but a tag no secret of ours made.
+const FORGED = signKey(`dfo_k_${'k'.repeat(32)}`, ['a-secret-that-is-not-one-of-ours-00']);
 const ACCOUNT = 'acct-1';
 const accountCaller = `user:${createHmac('sha256', 'test-hmac-key')
     .update(`user:${ACCOUNT}`)
@@ -396,7 +397,7 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
             },
         ],
     );
-    assert.doesNotMatch(lines.join('\n'), /another-service-secret|dfo_live/);
+    assert.doesNotMatch(lines.join('\n'), /another-service-secret|dfo_k_/);
 });
 
 test('forward: logs one line per keyed call with the key id, account, surface and outcome, never the key', async () => {
@@ -451,7 +452,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             },
         ],
     );
-    assert.doesNotMatch(lines.join('\n'), /dfo_live/);
+    assert.doesNotMatch(lines.join('\n'), /dfo_k_/);
 });
 
 test('forward on a real key store and counter', async (t) => {
@@ -493,7 +494,7 @@ test('forward on a real key store and counter', async (t) => {
             [id, limit],
         );
 
-        keys[id] = signKey(`dfo_live_${id.padEnd(32, 'z')}`, [SECRET]);
+        keys[id] = signKey(`dfo_k_${id.padEnd(32, 'z')}`, [SECRET]);
         await admin.query(
             `insert into apikey (id, reference_id, key, created_at, updated_at, daily_limit)
              values ($1, $3, $2, now(), now(), $4)`,
@@ -584,7 +585,7 @@ test('forward on a real key store and counter', async (t) => {
     await t.test(
         'a key with a good tag but no row, as a deleted key has, is a 401 that costs the address a count',
         async () => {
-            const deleted = signKey(`dfo_live_${'q'.repeat(32)}`, [SECRET]);
+            const deleted = signKey(`dfo_k_${'q'.repeat(32)}`, [SECRET]);
             const fresh = { 'x-forwarded-for': '198.51.100.9' };
             const statuses = [];
 

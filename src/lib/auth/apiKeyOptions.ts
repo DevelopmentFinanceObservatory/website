@@ -1,10 +1,10 @@
 import { apiKey } from '@better-auth/api-key';
 import { generateRandomString } from 'better-auth/crypto';
 
-import { KEY_RANDOM_LENGTH, signKey, tagSecrets } from './keyTag.ts';
+import { KEY_PREFIX, KEY_RANDOM_LENGTH, signKey, tagSecrets } from './keyTag.ts';
 
 /** The key prefix. A secret scanner and our own logs can spot it. */
-export const API_KEY_PREFIX = 'dfo_live_';
+export const API_KEY_PREFIX = KEY_PREFIX;
 
 /**
  * The plugin's HTTP endpoints for managing keys. They stay off the router:
@@ -25,15 +25,15 @@ export const API_KEY_PATHS: readonly string[] = [
 /**
  * How much of a key is stored in the clear as the row's `start`, which the
  * key pages show so an owner can tell keys apart: the prefix and three
- * random characters (`dfo_live_RCd`). Three of 32 random characters give
+ * random characters (`dfo_k_RCd`). Three of 32 random characters give
  * nothing to guess with.
  */
 export const API_KEY_START_LENGTH = API_KEY_PREFIX.length + 3;
 
 /**
  * A new key: the prefix, KEY_RANDOM_LENGTH random letters (as the plugin's
- * own generator makes them) and the signed tag (src/lib/auth/keyTag). The
- * plugin stores the hash of the whole key, tag included, as before.
+ * own generator makes them), the signed tag and the checksum
+ * (src/lib/auth/keyTag). The plugin stores the hash of the whole key.
  */
 export const generateKey =
     (secrets: () => readonly string[]) =>

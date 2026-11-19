@@ -15,7 +15,7 @@
  * admin gate and passes the actor in.
  *
  * Rules, from docs/design/api-keys.md ("How It Would Fit"):
- *   - the prefix is ours (`dfo_live_`), never taken from a request
+ *   - the prefix is ours (`dfo_k_`), never taken from a request
  *   - a key's owner is the id passed in; expiry, metadata, permissions and
  *     limits are never passed on, so every key has the plugin's defaults. The
  *     account's own limit (user.api_rate_limit) is the per-minute limit, and

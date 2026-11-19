@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/sentryEmit.ts', import.meta.url));
-const BEARER = 'dfo_live_probeBearerKey0000000000000000';
-const ALIAS = 'dfo_live_probeAliasKey00000000000000000';
+const BEARER = 'dfo_k_probeBearerKey0000000000000000';
+const ALIAS = 'dfo_k_probeAliasKey00000000000000000';
 
 type Envelope = [Record<string, unknown>, [{ type?: string }, unknown][]];
 
@@ -48,6 +48,6 @@ for (const { name, conditions } of RUNTIMES) {
     test(`${name}: the probe sees the key under Sentry's defaults`, () => {
         // Without this, a probe that stopped carrying headers would pass the
         // test above for the wrong reason.
-        assert.match(emit(conditions, true).raw, /dfo_live_probe/);
+        assert.match(emit(conditions, true).raw, /dfo_k_probe/);
     });
 }

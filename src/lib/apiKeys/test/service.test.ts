@@ -98,7 +98,7 @@ test('API key service', async (t) => {
         const made = await service.createOwn(alice, 'notebook');
 
         assert.ok(made.ok);
-        assert.match(made.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
+        assert.match(made.key, /^dfo_k_[A-Za-z]{32}[0-9A-Za-z]{14}$/);
         assert.ok(made.key.startsWith(API_KEY_PREFIX));
 
         const row = await rowOf(made.id);
@@ -152,8 +152,8 @@ test('API key service', async (t) => {
         assert.equal(everything.includes(row.key), false);
         // The start is the prefix and three random characters, nothing more.
         assert.equal(listed[0]!.start, made.key.slice(0, API_KEY_START_LENGTH));
-        assert.equal(listed[0]!.start?.length, 12);
-        assert.match(listed[0]!.start ?? '', /^dfo_live_[A-Za-z0-9]{3}$/);
+        assert.equal(listed[0]!.start?.length, 9);
+        assert.match(listed[0]!.start ?? '', /^dfo_k_[A-Za-z0-9]{3}$/);
 
         await service.deleteOwn(await as(bob), made.id);
     });
@@ -325,7 +325,7 @@ test('API key service', async (t) => {
         const made = await service.adminCreate('ops@example.org', 'GINA@g.example', 'for partner');
 
         assert.ok(made.ok);
-        assert.match(made.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
+        assert.match(made.key, /^dfo_k_[A-Za-z]{32}[0-9A-Za-z]{14}$/);
         assert.equal((await rowOf(made.id))?.referenceId, gina);
 
         const verdict = await createKeyVerifier(db).verify(made.key);
@@ -562,7 +562,7 @@ test('API key service', async (t) => {
         const stored = await db.select({ key: schema.apikey.key }).from(schema.apikey);
         const logged = JSON.stringify(lines);
 
-        assert.equal(logged.includes('dfo_live_'), false);
+        assert.equal(logged.includes('dfo_k_'), false);
 
         for (const { key } of stored) {
             assert.equal(logged.includes(key), false);

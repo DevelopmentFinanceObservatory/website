@@ -114,7 +114,7 @@ const KEY_SECURITY_SCHEMES = {
         type: 'http',
         scheme: 'bearer',
         description:
-            'An optional API key, `dfo_live_…`, as `Authorization: Bearer <key>`. Calls without a key are counted by address; a call with a valid key is counted against its account, and one with an invalid key is refused with 401.',
+            'An optional API key, `dfo_k_…`, as `Authorization: Bearer <key>`. Calls without a key are counted by address; a call with a valid key is counted against its account, and one with an invalid key is refused with 401.',
     },
     ApiKeyHeader: {
         type: 'apiKey',

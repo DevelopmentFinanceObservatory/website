@@ -29,7 +29,7 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 - **Per-minute limit.** The number of API calls an account may make per 60-second window, shared by all of the account's keys. Empty on the account means the keyed default (`RATE_LIMIT_KEYED`, 600). See [Limits][design-limits].
 - **Daily quota.** The number of API calls one key may make per day, counted from 00:00 UTC. Empty on the key means the deployment default (`API_KEY_DAILY_LIMIT`, 1,000). See [Limits][design-limits].
 - **Surface.** API (`/api/v1/*`, `/openapi.json`, `/codes`) or MCP (`/mcp`). Keys apply to the API only. A key sent to `/mcp` or the Studio is stripped and ignored, and the call is anonymous.
-- **Key.** A `dfo_live_…` secret, shown once at creation.
+- **Key.** A `dfo_k_…` secret in the client contract's key format, shown once at creation.
 - **Usage bar.** A key's API calls since 00:00 UTC against its daily quota, shown as a bar and a count such as "500 of 1,000". Refused calls are included.
 - **Panel.** The right-side drawer that the account menu's "API keys" item opens on whatever page the user is on. It is the same drawer as the Studio's Customize panel.
 - **Limit alert.** A minute in which at least one of an account's keyed calls was refused for being over a limit.

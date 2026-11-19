@@ -42,7 +42,7 @@ test('cacheLifetimes reads API_KEY_CACHE_S, with 0 turning the cache off', () =>
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
-const keyOf = (name: string) => `dfo_live_${name.padEnd(32, '0')}`;
+const keyOf = (name: string) => `dfo_k_${name.padEnd(32, '0')}`;
 
 test('keyVerifier on the key store', async (t) => {
     const database = await createTestDatabase();

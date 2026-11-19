@@ -20,9 +20,9 @@ import type { RateVerdict } from '../rateHeaders.ts';
 const { decideAccess } = await import('../access.ts');
 
 const SECRET = 'a-key-tag-secret-for-the-tests-0000';
-const KEY = signKey(`dfo_live_${'a'.repeat(32)}`, [SECRET]);
-// The right shape, but a tag no secret of ours made.
-const FORGED = `dfo_live_${'a'.repeat(32)}AAAAAAAA`;
+const KEY = signKey(`dfo_k_${'a'.repeat(32)}`, [SECRET]);
+// The right shape and checksum, but a tag no secret of ours made.
+const FORGED = signKey(`dfo_k_${'a'.repeat(32)}`, ['a-secret-that-is-not-one-of-ours-00']);
 const VALID: ValidKey = {
     kind: 'valid',
     keyId: 'key-1',
@@ -268,7 +268,7 @@ test('a key with a bad tag is a 401 with no lookup and no count', async () => {
 
 test('an untagged key of the old form is refused as forged', async () => {
     const { calls, deps } = world();
-    const access = await decide(deps, { 'x-api-key': `dfo_live_${'a'.repeat(32)}` });
+    const access = await decide(deps, { 'x-api-key': `dfo_k_${'a'.repeat(32)}` });
 
     assert.equal(access.outcome, 'forged');
     assert.deepEqual(calls, []);
