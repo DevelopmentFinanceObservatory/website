@@ -20,10 +20,28 @@ import { isIP } from 'node:net';
  *
  * dfo-apis believes x-dfo-caller only beside `x-dfo-caller-principal`
  * carrying the secret it shares with the site (DFO_CALLER_PRINCIPAL), and
- * resolves any other request from its own view of the client address.
+ * resolves any other request from its own view of the client address. Beside
+ * the secret goes `x-dfo-surface` (requestSurface), which dfo-apis logs on
+ * each data delivery.
  */
 export const CALLER_HEADER = 'x-dfo-caller';
 export const CALLER_PRINCIPAL_HEADER = 'x-dfo-caller-principal';
+export const SURFACE_HEADER = 'x-dfo-surface';
+
+/** Where a call to dfo-apis comes from: the site's own pages, or an outside caller. */
+export type ApisSurface = 'website' | 'api';
+
+/**
+ * The surface of a proxied request: `website` when the request says
+ * `Sec-Fetch-Site: same-origin`, a fetch from one of the site's own pages,
+ * and `api` for anything else, such as an SDK, a script or a page on another
+ * site. The site's pages call the same /api/v1 routes outside callers do, so
+ * the route cannot tell them apart. The header is a client claim, which any
+ * non-browser client can forge, so the surface is for counting only. The
+ * site's own share calls always send `website`.
+ */
+export const requestSurface = (incoming: Headers): ApisSurface =>
+    incoming.get('sec-fetch-site') === 'same-origin' ? 'website' : 'api';
 
 const DIGEST_LENGTH = 32;
 
@@ -246,20 +264,37 @@ export const apisCallerFor = (
 const apisCaller = apisCallerFor(process.env);
 
 /**
- * Name the caller of `incoming` on upstream headers bound for dfo-apis, from
- * this process's env (see apisCallerFor), dropping any value already there.
+ * Set what names the caller on upstream headers bound for dfo-apis, dropping
+ * any value already there. The surface goes only beside the principal, since
+ * dfo-apis believes it nowhere else.
  */
-export const setApisCaller = (headers: Headers, incoming: Headers): void => {
-    const { principal, caller } = apisCaller(incoming.get('x-forwarded-for'));
-
+export const applyApisCaller = (
+    headers: Headers,
+    { principal, caller }: ApisCaller,
+    surface: ApisSurface,
+): void => {
     headers.delete(CALLER_PRINCIPAL_HEADER);
+    headers.delete(SURFACE_HEADER);
 
     if (principal) {
         headers.set(CALLER_PRINCIPAL_HEADER, principal);
+        headers.set(SURFACE_HEADER, surface);
     }
 
     setCaller(headers, caller);
 };
+
+/**
+ * Name the caller of `incoming` on upstream headers bound for dfo-apis, from
+ * this process's env (see apisCallerFor and applyApisCaller). `surface`
+ * defaults to the one `incoming` shows (requestSurface); a call the site's
+ * server makes for a page it renders passes `website`.
+ */
+export const setApisCaller = (
+    headers: Headers,
+    incoming: Headers,
+    surface: ApisSurface = requestSurface(incoming),
+): void => applyApisCaller(headers, apisCaller(incoming.get('x-forwarded-for')), surface);
 
 const config = callerConfig(process.env);
 let warned = false;
@@ -270,7 +305,7 @@ export const requestCaller = (incoming: Headers): string | undefined => {
         if (!warned) {
             warned = true;
             console.warn(
-                `${config.problem}; MCP calls go upstream without ${CALLER_HEADER} and request logs carry no caller`,
+                `${config.problem}; calls to /mcp and the Studio go upstream without ${CALLER_HEADER} and request logs carry no caller`,
             );
         }
 
