@@ -14,6 +14,7 @@ import {
     type ColumnSwitch,
     type ReadSummary,
     type SkipReason,
+    sameReading,
 } from '../pasted.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
@@ -155,12 +156,19 @@ test('a seed copied from a UN dataset checks the UN property its column names, v
     );
     const text = seedCsv(columns, filled);
 
-    const { mapping, sheet, summary } = readPasted(full, text);
+    const outside = { outsideDataset: true };
+    const { mapping, sheet, summary } = readPasted(full, text, new Map(), outside);
     assert.deepEqual(mapping[sexAt]?.target, { kind: 'property', property: 'sex' });
     assert.deepEqual(sheet.rows[0]?.constraint_properties, { sex: 'SEX-NONE' });
     assert.equal(skips(summary).sex, undefined);
     // A model over the DFO document alone has no field for it.
-    assert.equal(skips(readPasted(model, text).summary).sex, 'no_field');
+    assert.equal(skips(readPasted(model, text, new Map(), outside).summary).sex, 'no_field');
+    // A sheet for a DFO dataset reads its headers against the schema alone, as a DFO seed always has.
+    const dfo = readPasted(full, text);
+    assert.equal(skips(dfo.summary).sex, 'no_field');
+    // A check of one reading is stale against the other, and not against a fresh copy of itself.
+    assert.equal(sameReading(dfo.mapping, mapping), false);
+    assert.equal(sameReading(readPasted(full, text, new Map(), outside).mapping, mapping), true);
 });
 
 test('rows that reuse a StatVar are skipped and named by sheet row', () => {

@@ -37,6 +37,7 @@ import { waitText, type WaitCause } from '@/lib/graphExplorer/load';
 import {
     readPasted,
     readSummaryText,
+    sameReading,
     sheetProblems,
     sheetProblemText,
     switchRead,
@@ -551,14 +552,22 @@ const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
     );
 };
 
+/** The status line for a check whose columns read differently since it ran. */
+const STALE_TEXT =
+    'The columns read differently from when this check ran, so its result is not shown. Check again to see one for them.';
+
 /**
  * The check step. A filled seed or StatVar output, pasted or chosen as a
  * `.csv` file, is read into check rows, summarised, and checked against the
- * graph.
+ * graph. A sheet for a base or UN dataset (`outsideDataset`) reads its
+ * headers against every usage document loaded, so a seed copied from it
+ * keeps its outside properties whatever the switches say. A sheet for a
+ * DFO dataset reads them against the scoped model's schema alone.
  */
-const CheckSheet = ({ title }: { title: string }) => {
+const CheckSheet = ({ title, outsideDataset }: { title: string; outsideDataset: boolean }) => {
     const model = useModel();
-    const headerModel = useExplorerData().full ?? model;
+    const full = useExplorerData().full;
+    const headerModel = outsideDataset && full !== null ? full : model;
     const textId = useId();
     const fileInput = useRef<HTMLInputElement | null>(null);
     const [text, setText] = useState('');
@@ -579,10 +588,11 @@ const CheckSheet = ({ title }: { title: string }) => {
         return () => clearTimeout(timer);
     }, [text, settled]);
 
-    // The page's own reading of each column, which a reader's switch overrides. Headers are
-    // read against every usage document loaded, so a seed copied from an outside dataset keeps
-    // its outside properties whatever the switches say.
-    const read = useMemo(() => readPasted(headerModel, settled), [headerModel, settled]);
+    // The page's own reading of each column, which a reader's switch overrides.
+    const read = useMemo(
+        () => readPasted(headerModel, settled, new Map(), { outsideDataset }),
+        [headerModel, settled, outsideDataset],
+    );
     const current = useMemo(
         () => (switches.size === 0 ? read : switchRead(headerModel, read, switches)),
         [headerModel, switches, read],
@@ -691,8 +701,12 @@ const CheckSheet = ({ title }: { title: string }) => {
     };
 
     const canCheck = sheet.rows.length > 0 && problems.length === 0;
+    // A reading that changed under a finished check, as when an outside usage document lands or
+    // the seed's dataset changes, leaves its result describing other columns, so a line replaces it.
+    const stale = run.status === 'done' && !sameReading(run.checked.mapping, mapping);
     // A check with nothing to show is its result line alone, marked as passed.
     const clean =
+        !stale &&
         run.status === 'done' &&
         flaggedRowCount(run.checked.result) === 0 &&
         run.checked.prefix.length === 0;
@@ -812,9 +826,9 @@ const CheckSheet = ({ title }: { title: string }) => {
                         )}
                         role="status"
                     >
-                        {statusText(run)}
+                        {stale ? STALE_TEXT : statusText(run)}
                     </p>
-                    {run.status === 'done' && !clean && <Results checked={run.checked} />}
+                    {run.status === 'done' && !clean && !stale && <Results checked={run.checked} />}
                 </>
             )}
         </SheetSection>

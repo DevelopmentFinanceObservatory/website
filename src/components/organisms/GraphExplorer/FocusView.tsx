@@ -31,9 +31,8 @@ import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 import {
     boxGaps,
     COMPLETE,
-    DESCENDANTS,
-    isCapped,
     needsNodeView,
+    pictureCuts,
     routeCentre,
     type CentreLine,
     type Completeness,
@@ -50,8 +49,10 @@ type FocusViewProps = {
 };
 
 type CentredProps = Omit<FocusViewProps, 'full'> & {
-    /** A line over the picture, or null. */
-    notice: React.ReactNode;
+    /** The node view's failure or refusal, for the line over the picture, or null. */
+    line: CentreLine | null;
+    /** Loads the node view again, from the failure line. */
+    onRetry: () => void;
     /** How completely the model holds the centre's links. */
     completeness: Completeness;
     /** The centre's heading, which takes focus when a retried node view lands. */
@@ -110,10 +111,11 @@ const FilterLine = ({ lens, dataset }: { lens: PanelLens; dataset: string | null
 
 /**
  * One term or dataset at the centre, drawn from the model `useModel` reads:
- * the notice, the dataset filter's line, the focus picture and the panel
- * beside it with the definition, or with a box's full list while one is open.
+ * the line over the picture (CentreNotice), the dataset filter's line, the
+ * focus picture and the panel beside it with the definition, or with a
+ * box's full list while one is open.
  */
-const Centred = ({ centre, show, notice, completeness, headingRef }: CentredProps) => {
+const Centred = ({ centre, show, line, onRetry, completeness, headingRef }: CentredProps) => {
     const model = useModel();
     const sources = useTermSources();
     const { go } = useExplore();
@@ -158,7 +160,7 @@ const Centred = ({ centre, show, notice, completeness, headingRef }: CentredProp
     const definition = datasetView ? (
         <DatasetPanel view={datasetView} />
     ) : kind ? (
-        <NodePanel id={centre.id} lens={lens} />
+        <NodePanel id={centre.id} lens={lens} completeness={completeness} />
     ) : (
         <TermPanel id={centre.id} lens={lens} />
     );
@@ -176,7 +178,14 @@ const Centred = ({ centre, show, notice, completeness, headingRef }: CentredProp
     return (
         <div className={styles.work}>
             <div className={styles.stage}>
-                {notice}
+                <CentreNotice
+                    id={centre.id}
+                    name={model.label(centre.id)}
+                    line={line}
+                    completeness={completeness}
+                    cuts={pictureCuts(model, centre.id, boxes, completeness)}
+                    onRetry={onRetry}
+                />
                 <FilterLine lens={lens} dataset={datasetView ? datasetView.id : null} />
                 {/* Keyed by the centre, so a bubble pinned open on one centre closes on the next. */}
                 <FocusPicture
@@ -249,19 +258,32 @@ export const FailedLine = ({
     </p>
 );
 
+/** Each name in quotes, joined with commas and a final "and". */
+const quotedList = (names: readonly string[]): string => {
+    const quoted = names.map((name) => `\u201c${name}\u201d`);
+    if (quoted.length <= 2) return quoted.join(' and ');
+    return `${quoted.slice(0, -1).join(', ')}, and ${quoted.at(-1)}`;
+};
+
+/** What the line over a picture says is cut, as pictureCuts reads it. */
+type PictureCuts = ReturnType<typeof pictureCuts>;
+
+const NO_CUTS: PictureCuts = { lists: [], walk: false };
+
 /**
  * The line over a picture drawn from a model that may hold less than the
- * graph: the node view loading or unavailable, listings stopped at their
- * cap, or the walk down the class tree stopped. Nothing for a complete model.
+ * graph: the node view loading or unavailable, the drawn lists a capped
+ * listing cuts (`cuts.lists`), or the walk down the class tree stopped
+ * (`cuts.walk`). Nothing for a complete model, or when no drawn list is cut.
  */
 const CompletenessLine = ({
-    id,
     name,
     completeness,
+    cuts,
 }: {
-    id: string;
     name: string;
     completeness: Completeness;
+    cuts: PictureCuts;
 }) => {
     if (completeness.state === 'complete') return null;
     if (completeness.state === 'unresolved') {
@@ -275,24 +297,34 @@ const CompletenessLine = ({
             </p>
         );
     }
-    const walk = isCapped(completeness, id, DESCENDANTS);
-    const others = completeness.capped.some(
-        (listing) => listing.ref !== id || listing.property !== DESCENDANTS,
-    );
+    if (cuts.lists.length === 0 && !cuts.walk) return null;
+    const one = cuts.lists.length === 1;
     return (
         <p className={styles.filter} role="status">
             <span>
-                {others &&
-                    'Some lists here are cut short. The graph holds more links than one view reads. '}
-                {walk &&
+                {cuts.lists.length > 0 &&
+                    `The ${one ? 'list' : 'lists'} ${quotedList(cuts.lists)} ${one ? 'is' : 'are'} cut short. The graph holds more links than one view reads. `}
+                {cuts.walk &&
                     `Counts over kinds of ${name} leave some out. The graph holds more narrower kinds than one view reads.`}
             </span>
         </p>
     );
 };
 
-/** What a refusal says about the term whose dcid is `id`. */
-const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
+/**
+ * What a refusal says about the term whose dcid is `id`: as the line over
+ * a picture or list drawn without its node view (`drawn`), or as a screen
+ * that shows nothing else.
+ */
+const RefusalText = ({
+    refusal,
+    id,
+    drawn,
+}: {
+    refusal: RefusalKind;
+    id: string;
+    drawn: boolean;
+}) => {
     const term = (
         <code>
             <BreakableId text={id} />
@@ -302,24 +334,35 @@ const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
         case 'notHeld':
             return <>{term} is not on the graph.</>;
         case 'notServed':
-            return (
+            return drawn ? (
                 <>
-                    The Graph API here does not serve term views, so {term} shows only what the
-                    lists say.
+                    The Graph API here does not serve term views, so what is shown leaves out its
+                    other links on the graph.
+                </>
+            ) : (
+                <>
+                    The Graph API here does not serve term views, and nothing else here describes{' '}
+                    {term}.
                 </>
             );
         case 'originNotServed':
             return <>The UN System Data Commons is not served here.</>;
+        case 'notAdvancing':
+            return <>The graph could not finish reading {term}.</>;
         case 'tooLarge':
-            return <>The graph&rsquo;s view of {term} is too large to show here.</>;
+            return drawn ? (
+                <>Its links on the graph are too many to load here.</>
+            ) : (
+                <>The graph&rsquo;s view of {term} is too large to show here.</>
+            );
     }
 };
 
-/** The line over a picture drawn from the usage documents alone, after its node view was refused. */
+/** The line over a picture or list drawn without its node view, after the view was refused. */
 const RefusedLine = ({ refusal, id }: { refusal: RefusalKind; id: string }) => (
     <p className={styles.filter} role="status">
         <span>
-            <RefusalText refusal={refusal} id={id} />
+            <RefusalText refusal={refusal} id={id} drawn />
         </span>
     </p>
 );
@@ -327,26 +370,29 @@ const RefusedLine = ({ refusal, id }: { refusal: RefusalKind; id: string }) => (
 /**
  * The line over a centre's picture: its node view's failure or refusal, or
  * else what its model may leave out (`completeness`, complete when not
- * given, for a screen that marks its own list).
+ * given, for a screen that marks its own list) and the drawn lists that
+ * leaves cut (`cuts`).
  */
 export const CentreNotice = ({
     id,
     name,
     line,
     completeness = COMPLETE,
+    cuts = NO_CUTS,
     onRetry,
 }: {
     id: string;
     name: string;
     line: CentreLine | null;
     completeness?: Completeness;
+    cuts?: PictureCuts;
     onRetry: () => void;
 }) => {
     if (line?.kind === 'failed') {
         return <FailedLine failure={line.failure} retrying={line.retrying} onRetry={onRetry} />;
     }
     if (line?.kind === 'refused') return <RefusedLine refusal={line.refusal} id={id} />;
-    return <CompletenessLine id={id} name={name} completeness={completeness} />;
+    return <CompletenessLine name={name} completeness={completeness} cuts={cuts} />;
 };
 
 /** The screen while the node view of a term the DFO document lacks loads, or waits before a retry. */
@@ -369,19 +415,55 @@ export const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | nu
     </div>
 );
 
-/** A term whose node view was refused for good, with a way back to the start. */
-export const Refused = ({ id, refusal }: { id: string; refusal: RefusalKind }) => {
+/**
+ * A term whose node view was refused for good, with a way back to the
+ * start. Its text takes focus through `textRef` when a retry ends here.
+ */
+export const Refused = ({
+    id,
+    refusal,
+    textRef,
+}: {
+    id: string;
+    refusal: RefusalKind;
+    textRef?: React.Ref<HTMLParagraphElement>;
+}) => {
     const { go } = useExplore();
     return (
         <div className={styles.missing} role="status">
-            <p>
-                <RefusalText refusal={refusal} id={id} />
+            <p ref={textRef} tabIndex={-1}>
+                <RefusalText refusal={refusal} id={id} drawn={false} />
             </p>
             <div>
                 <Button onClick={() => go(START_VIEW)}>Start</Button>
             </div>
         </div>
     );
+};
+
+/**
+ * Focus after Try Again, whose button unmounts once the retried node view
+ * settles: the screen's heading (`heading`) when it draws one, else the
+ * text of the refusal or missing screen it ends on (`text`). `onRetry`
+ * loads the view again through `retry`. `failing` is true while the
+ * screen shows the view's failure line.
+ */
+export const useRetryFocus = (failing: boolean, retry: () => void) => {
+    const heading = useRef<HTMLHeadingElement | null>(null);
+    const text = useRef<HTMLParagraphElement | null>(null);
+    const retried = useRef(false);
+
+    useEffect(() => {
+        if (!retried.current || failing) return;
+        retried.current = false;
+        (heading.current ?? text.current)?.focus();
+    }, [failing]);
+
+    const onRetry = () => {
+        retried.current = true;
+        retry();
+    };
+    return { heading, text, onRetry };
 };
 
 /**
@@ -393,7 +475,8 @@ export const Refused = ({ id, refusal }: { id: string; refusal: RefusalKind }) =
  * graph" or "not served here", beside the term's heading and use when the
  * usage documents name it or a loaded terms list holds it. A failed view
  * keeps what the full model shows, with a line that loads it again, and
- * the heading takes focus once a retried view lands. The line over the
+ * the heading or the refusal takes focus once a retried view settles
+ * (`useRetryFocus`). The line over the
  * picture says what the model may leave out (`Completeness`).
  */
 const FocusView = ({ centre, show, full }: FocusViewProps) => {
@@ -403,44 +486,24 @@ const FocusView = ({ centre, show, full }: FocusViewProps) => {
     );
     const listed = centre.kind === 'node' && outsideTerm(sources.terms, centre.id) !== undefined;
     const route = routeCentre(full, centre, state, { lastFailure, listed });
-    const heading = useRef<HTMLHeadingElement | null>(null);
-    // Set by Try Again, so the heading takes focus once the button it was on goes.
-    const retried = useRef(false);
     const failing = route.kind === 'draw' && route.line?.kind === 'failed';
-
-    useEffect(() => {
-        if (!retried.current || failing) return;
-        retried.current = false;
-        heading.current?.focus();
-    }, [failing]);
-
-    const onRetry = () => {
-        retried.current = true;
-        retry();
-    };
+    const { heading, text, onRetry } = useRetryFocus(failing, retry);
 
     switch (route.kind) {
         case 'loading':
             return <ViewLoading id={centre.id} waiting={route.waiting} />;
         case 'refused':
-            return <Refused id={centre.id} refusal={route.refusal} />;
+            return <Refused id={centre.id} refusal={route.refusal} textRef={text} />;
         case 'draw':
             return (
                 <ModelProvider value={route.model}>
                     <Centred
                         centre={centre}
                         show={show}
+                        line={route.line}
+                        onRetry={onRetry}
                         completeness={route.completeness}
                         headingRef={heading}
-                        notice={
-                            <CentreNotice
-                                id={centre.id}
-                                name={route.model.label(centre.id)}
-                                line={route.line}
-                                completeness={route.completeness}
-                                onRetry={onRetry}
-                            />
-                        }
                     />
                 </ModelProvider>
             );

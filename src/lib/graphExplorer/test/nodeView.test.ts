@@ -22,6 +22,8 @@ import {
     centreModel,
     centreNodes,
     classListGaps,
+    openLineCut,
+    pictureCuts,
     routeCentre,
     viewCompleteness,
     COMPLETE,
@@ -367,7 +369,12 @@ test("a box and a class's list name the gaps their listings leave", () => {
     const CLASS = 'Person';
     const view = (capped: SchemaNodeView['capped']): SchemaNodeView => ({
         generation: null,
-        centre: node(CLASS, { types: ['Class'], sub_class_of: ['Thing'], declared_by: 'base' }),
+        centre: node(CLASS, {
+            types: ['Class'],
+            sub_class_of: ['Thing'],
+            declared_by: 'base',
+            other_properties: { geoJsonCoordinates: [{ value: '[0, 0]' }] },
+        }),
         nodes: [
             node('Thing', { types: ['Class'] }),
             node('Adult', { types: ['Class'], sub_class_of: [CLASS] }),
@@ -382,6 +389,15 @@ test("a box and a class's list name the gaps their listings leave", () => {
         return Object.fromEntries(
             boxes.map((box) => [box.key, boxGaps(box, CLASS, completeness).join(' ')]),
         );
+    };
+    /** What the line over the picture names, with each cut box by its key. */
+    const cutsOn = (capped: SchemaNodeView['capped']) => {
+        const each = view(capped);
+        const model = centreModel(full, each);
+        const boxes = nodeBoxes(model, CLASS);
+        const { lists, walk } = pictureCuts(model, CLASS, boxes, viewCompleteness(each));
+        const keyOf = new Map(boxes.map((box) => [box.title, box.key]));
+        return { lists: lists.map((name) => keyOf.get(name) ?? name), walk };
     };
 
     assert.deepEqual(gapsOf([]), { up: '', measured: '', split: '', down: '' });
@@ -400,19 +416,39 @@ test("a box and a class's list name the gaps their listings leave", () => {
         ]),
         { up: '', measured: 'capped descendants', split: 'capped descendants', down: '' },
     );
-    // A cut list of another property, or a cap on another node, leaves the boxes whole.
-    assert.deepEqual(gapsOf([{ ref: CLASS, property: 'geoJsonCoordinates' }]), {
+    // The direct listing capped alone cuts the walk below it too.
+    assert.deepEqual(gapsOf([{ ref: CLASS, property: 'subClassOf' }]), {
         up: '',
-        measured: '',
-        split: '',
-        down: '',
+        measured: 'descendants',
+        split: 'descendants',
+        down: 'capped',
     });
-    assert.deepEqual(gapsOf([{ ref: 'Adult', property: DESCENDANTS }]), {
-        up: '',
-        measured: '',
-        split: '',
-        down: '',
+    assert.deepEqual(cutsOn([{ ref: CLASS, property: 'subClassOf' }]), {
+        lists: ['down'],
+        walk: true,
     });
+    assert.deepEqual(
+        cutsOn([
+            { ref: CLASS, property: 'domainIncludes' },
+            { ref: CLASS, property: DESCENDANTS },
+        ]),
+        { lists: ['measured', 'split'], walk: true },
+    );
+    // A cut open property marks its panel line and leaves the boxes whole.
+    const open = [{ ref: CLASS, property: 'geoJsonCoordinates' }];
+    assert.deepEqual(gapsOf(open), { up: '', measured: '', split: '', down: '' });
+    assert.ok(openLineCut(viewCompleteness(view(open)), CLASS, 'geoJsonCoordinates'));
+    assert.equal(openLineCut(viewCompleteness(view(open)), CLASS, 'name'), false);
+    assert.deepEqual(cutsOn(open).walk, false);
+    assert.equal(cutsOn(open).lists.length, 1);
+    // A cap no drawn listing reads, on the centre or another node, cuts nothing.
+    for (const capped of [
+        [{ ref: CLASS, property: 'containedInPlace' }],
+        [{ ref: 'Adult', property: DESCENDANTS }],
+    ]) {
+        assert.deepEqual(gapsOf(capped), { up: '', measured: '', split: '', down: '' });
+        assert.deepEqual(cutsOn(capped), { lists: [], walk: false });
+    }
     const [box] = nodeBoxes(centreModel(full, view([])), CLASS);
     assert.ok(box);
     assert.deepEqual(boxGaps(box, CLASS, LINKS_MISSING), ['unresolved']);
@@ -423,6 +459,66 @@ test("a box and a class's list name the gaps their listings leave", () => {
         classListGaps(CLASS, viewCompleteness(view(capped)));
     assert.deepEqual(listGaps([{ ref: CLASS, property: 'domainIncludes' }]), ['capped']);
     assert.deepEqual(listGaps([{ ref: CLASS, property: DESCENDANTS }]), ['descendants']);
+    assert.deepEqual(listGaps([{ ref: CLASS, property: 'subClassOf' }]), ['descendants']);
     assert.deepEqual(listGaps([{ ref: CLASS, property: 'rangeIncludes' }]), []);
     assert.deepEqual(classListGaps(CLASS, LINKS_MISSING), ['unresolved']);
+});
+
+test('a typeOf cap on the centre marks its members incomplete, and the line names them', () => {
+    const LIST = 'undata/SEX';
+    const view = (capped: SchemaNodeView['capped']): SchemaNodeView => ({
+        generation: null,
+        centre: node(LIST, {
+            types: ['Class'],
+            declared_by: 'un_system',
+            instances: { refs: ['undata/SEX-F', 'undata/SEX-M'], complete: true },
+        }),
+        nodes: [],
+        capped,
+    });
+    const read = (capped: SchemaNodeView['capped']) => {
+        const each = view(capped);
+        const model = centreModel(full, each);
+        return {
+            complete: model.membersComplete(LIST),
+            lists: pictureCuts(model, LIST, nodeBoxes(model, LIST), viewCompleteness(each)).lists,
+        };
+    };
+    assert.deepEqual(read([]), { complete: true, lists: [] });
+    const cut = read([{ ref: LIST, property: 'typeOf' }]);
+    assert.equal(cut.complete, false);
+    assert.equal(cut.lists.length, 1);
+    // On another node, typeOf cuts nothing drawn here.
+    assert.deepEqual(read([{ ref: 'Thing', property: 'typeOf' }]), { complete: true, lists: [] });
+});
+
+test("a cap on a property's range classes or a value's type classes cuts the box listing them", () => {
+    const gapsAround = (centre: SchemaNode, nodes: SchemaNode[], property: string) => {
+        const each: SchemaNodeView = {
+            generation: null,
+            centre,
+            nodes,
+            capped: [{ ref: centre.ref, property }],
+        };
+        const model = centreModel(full, each);
+        return Object.fromEntries(
+            nodeBoxes(model, centre.ref).map((box) => [
+                box.key,
+                boxGaps(box, centre.ref, viewCompleteness(each)).join(' '),
+            ]),
+        );
+    };
+    const PROPERTY = 'undata/testRange';
+    const property = node(PROPERTY, { types: ['Property'], range_includes: ['Person'] });
+    assert.equal(gapsAround(property, [], 'rangeIncludes/subClassOf+').right, 'capped');
+    assert.equal(gapsAround(property, [], 'typeOf/rangeIncludes').right, '');
+
+    const VALUE = 'undata/SEX-F';
+    const value = node(VALUE, { types: ['undata/SEX'] });
+    const list = node('undata/SEX', {
+        types: ['Class'],
+        instances: { refs: [VALUE], complete: true },
+    });
+    assert.equal(gapsAround(value, [list], 'typeOf/rangeIncludes').list, 'capped');
+    assert.equal(gapsAround(value, [list], 'rangeIncludes/subClassOf+').list, '');
 });

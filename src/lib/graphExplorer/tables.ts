@@ -14,7 +14,8 @@ import type { ProvenanceUsage } from './wire.ts';
  * column per dataset the list counts, in the table's order (columnsByUse),
  * headed by the dataset's label. Labels two columns share carry the words
  * for each dataset's origin, read by `origin` as a node's `declared_by`
- * with null for the DFO's.
+ * with null for the DFO's, and labels two columns of one origin share
+ * also carry the dataset's dcid.
  */
 export function scopedListTable(
     model: Model,
@@ -26,16 +27,23 @@ export function scopedListTable(
 ): readonly (readonly string[])[] {
     const groups = filterScopedList(model, list, filter);
     const columns = columnsByUse(model, list.columns);
-    const labels = columns.map(({ dataset }) => model.label(dataset.ref));
-    const shared = new Set(labels.filter((label, at) => labels.indexOf(label) !== at));
+    const repeated = (keys: readonly string[]) =>
+        new Set(keys.filter((key, at) => keys.indexOf(key) !== at));
+    const heads = columns.map(({ dataset }) => ({
+        ref: dataset.ref,
+        label: model.label(dataset.ref),
+        words: declarerWords(origin(dataset) ?? 'dfo'),
+    }));
+    const shared = repeated(heads.map((head) => head.label));
+    const sharedInOrigin = repeated(heads.map((head) => `${head.label}\n${head.words}`));
     const countHeads =
         list.columns.length === 0
             ? ['stat_vars']
-            : columns.map(({ dataset }, at) => {
-                  const label = labels[at] ?? dataset.ref;
-                  return shared.has(label)
-                      ? `${label} (${declarerWords(origin(dataset) ?? 'dfo')})`
-                      : label;
+            : heads.map(({ ref, label, words }) => {
+                  if (!shared.has(label)) return label;
+                  return sharedInOrigin.has(`${label}\n${words}`)
+                      ? `${label} (${words}, ${ref})`
+                      : `${label} (${words})`;
               });
     const rows = GROUPS.flatMap((group) =>
         groups[group].map((row) => [

@@ -9,12 +9,13 @@ import {
     useExploreState,
     useModel,
 } from './ExploreContext';
-import FocusView, { CentreNotice, Refused, ViewLoading } from './FocusView';
+import FocusView, { CentreNotice, Refused, useRetryFocus, ViewLoading } from './FocusView';
 import styles from './GraphExplorer.module.scss';
 import LoadStatus from './LoadStatus';
 import ScopedList from './ScopedList';
 import StartScreen from './StartScreen';
 import TopBar from './TopBar';
+import { TermSourcesProvider } from './ListToggle';
 import { useExplorerData } from './useExplorerData';
 import { useNodeView } from './useNodeView';
 
@@ -68,9 +69,17 @@ const AwaitedFilter = ({ id }: { id: string }) => (
     </p>
 );
 
-const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
+const Missing = ({
+    id,
+    onStart,
+    textRef,
+}: {
+    id: string;
+    onStart: () => void;
+    textRef?: React.Ref<HTMLParagraphElement>;
+}) => (
     <div className={styles.missing} role="status">
-        <p>
+        <p ref={textRef} tabIndex={-1}>
             The model has no kind of thing{' '}
             <code>
                 <BreakableId text={id} />
@@ -91,7 +100,8 @@ const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
  * the refusal. The list says what its node view leaves out
  * (classListGaps). A scope the model it lists from holds no class or value
  * list for reads as missing, unless the view's failure or refusal already
- * says why.
+ * says why. After Try Again, the list's title or the refusal takes focus
+ * (`useRetryFocus`).
  */
 const ListScreen = ({
     scope,
@@ -107,20 +117,22 @@ const ListScreen = ({
     const centre = scope.kind === 'class' ? ({ kind: 'node', id: scope.id } as const) : null;
     const outside = centre !== null && needsNodeView(full, centre);
     const { state, lastFailure, retry } = useNodeView(outside ? centre.id : null);
+    const route = outside ? routeCentre(full, centre, state, { lastFailure }) : null;
+    const failing = route?.kind === 'draw' && route.line?.kind === 'failed';
+    const { heading, text, onRetry } = useRetryFocus(failing, retry);
 
-    if (!outside) {
+    if (!outside || route === null) {
         return scope.kind === 'class' && !listScopeExists(scoped, scope) ? (
             <Missing id={scope.id} onStart={() => go(START_VIEW)} />
         ) : (
             <ScopedList scope={scope} show={show} />
         );
     }
-    const route = routeCentre(full, centre, state, { lastFailure });
     switch (route.kind) {
         case 'loading':
             return <ViewLoading id={centre.id} waiting={route.waiting} />;
         case 'refused':
-            return <Refused id={centre.id} refusal={route.refusal} />;
+            return <Refused id={centre.id} refusal={route.refusal} textRef={text} />;
         case 'draw': {
             const { line, model, completeness } = route;
             // The list marks what its model leaves out itself, so the notice carries only the line.
@@ -129,7 +141,7 @@ const ListScreen = ({
                     id={centre.id}
                     name={model.label(centre.id)}
                     line={line}
-                    onRetry={retry}
+                    onRetry={onRetry}
                 />
             );
             if (listScopeExists(model, scope)) {
@@ -141,13 +153,16 @@ const ListScreen = ({
                             show={show}
                             classModel={model}
                             gaps={classListGaps(centre.id, completeness)}
+                            headingRef={heading}
                         />
                     </>
                 );
             }
-            if (line?.kind === 'refused') return <Refused id={centre.id} refusal={line.refusal} />;
+            if (line?.kind === 'refused') {
+                return <Refused id={centre.id} refusal={line.refusal} textRef={text} />;
+            }
             return line === null ? (
-                <Missing id={centre.id} onStart={() => go(START_VIEW)} />
+                <Missing id={centre.id} onStart={() => go(START_VIEW)} textRef={text} />
             ) : (
                 notice
             );
@@ -197,36 +212,41 @@ const GraphExplorer = () => {
         <NavigationProvider value={navigation}>
             <ModelProvider value={model}>
                 <FullModelProvider value={data.full}>
-                    <div className={styles.explorer}>
-                        <TopBar />
-                        <main className={styles.main} key={exploreQuery({ view, ...NO_CARRIED })}>
-                            {/* The full model is in whenever the scoped one is, since both build from the DFO pair. */}
-                            {data.model.status === 'ready' && data.full !== null ? (
-                                awaited !== null ? (
-                                    <ViewLoading id={awaited} waiting={null} />
+                    <TermSourcesProvider>
+                        <div className={styles.explorer}>
+                            <TopBar />
+                            <main
+                                className={styles.main}
+                                key={exploreQuery({ view, ...NO_CARRIED })}
+                            >
+                                {/* The full model is in whenever the scoped one is, since both build from the DFO pair. */}
+                                {data.model.status === 'ready' && data.full !== null ? (
+                                    awaited !== null ? (
+                                        <ViewLoading id={awaited} waiting={null} />
+                                    ) : (
+                                        <>
+                                            {/* The start screen reads no filter, so it says nothing of one still loading. */}
+                                            {awaitedFilter !== null && view.kind !== 'start' && (
+                                                <AwaitedFilter id={awaitedFilter} />
+                                            )}
+                                            {filter.unknown !== null && (
+                                                <UnknownFilter
+                                                    id={filter.unknown}
+                                                    onClear={() => navigation.setShow(NO_FILTER)}
+                                                />
+                                            )}
+                                            {screen(data.full, view, filter.show)}
+                                        </>
+                                    )
                                 ) : (
-                                    <>
-                                        {/* The start screen reads no filter, so it says nothing of one still loading. */}
-                                        {awaitedFilter !== null && view.kind !== 'start' && (
-                                            <AwaitedFilter id={awaitedFilter} />
-                                        )}
-                                        {filter.unknown !== null && (
-                                            <UnknownFilter
-                                                id={filter.unknown}
-                                                onClear={() => navigation.setShow(NO_FILTER)}
-                                            />
-                                        )}
-                                        {screen(data.full, view, filter.show)}
-                                    </>
-                                )
-                            ) : (
-                                <LoadStatus
-                                    state={data.model.status === 'ready' ? LOADING : data.model}
-                                    onRetry={data.retryModel}
-                                />
-                            )}
-                        </main>
-                    </div>
+                                    <LoadStatus
+                                        state={data.model.status === 'ready' ? LOADING : data.model}
+                                        onRetry={data.retryModel}
+                                    />
+                                )}
+                            </main>
+                        </div>
+                    </TermSourcesProvider>
                 </FullModelProvider>
             </ModelProvider>
         </NavigationProvider>

@@ -11,7 +11,7 @@
  * holds the view's neighbours too.
  */
 import { ORIGIN_SWITCHES, type OriginSwitch } from './explore.ts';
-import type { Centre, FocusBox } from './focus.ts';
+import { openEntries, type Centre, type FocusBox } from './focus.ts';
 import {
     settled,
     type Loadable,
@@ -25,12 +25,22 @@ import type { CappedListing, SchemaNode, SchemaNodeView } from './wire.ts';
 
 /**
  * The full model's nodes, the view's centre in place of any node of the
- * same ref, and the view's neighbours the full model lacks.
+ * same ref, and the view's neighbours the full model lacks. A centre whose
+ * members listing stopped at its cap (`members` among cutsOf) lists its
+ * instances as incomplete, so every members list and its CSV say so.
  */
 export function centreNodes(full: Model, view: SchemaNodeView): readonly SchemaNode[] {
     const centre = view.centre.ref;
     const nodes = full.nodes.filter((node) => node.ref !== centre);
-    nodes.push(view.centre);
+    const { instances } = view.centre;
+    const membersCut = view.capped.some((cap) =>
+        cutsOf(cap, centre).some((listing) => listing.kind === 'members'),
+    );
+    nodes.push(
+        membersCut && instances !== null
+            ? { ...view.centre, instances: { ...instances, complete: false } }
+            : view.centre,
+    );
     for (const node of view.nodes) {
         if (node.ref !== centre && full.node(node.ref) === undefined) nodes.push(node);
     }
@@ -68,8 +78,7 @@ export function centreModel(full: Model, view: SchemaNodeView): Model {
  * - `complete`: the DFO document declares the centre, or its node view
  *   left nothing out.
  * - `partial`: the node view stopped the `capped` listings at their cap.
- *   `subClassOf+` on the centre means its walk down the class tree stopped
- *   (DESCENDANTS), so a count over kinds of the centre leaves some out.
+ *   cutsOf maps each to the listings drawn from the model that it cuts.
  * - `unresolved`: the node view has not landed, so the links shown are the
  *   DFO document's and the usage documents' alone. `loading` is true while
  *   it loads, and false once it failed or was refused.
@@ -99,15 +108,79 @@ export const viewCompleteness = (view: SchemaNodeView): Completeness =>
  */
 export type ListGap = 'capped' | 'descendants' | 'unresolved';
 
-/** True when the listing of `ref` by `property` stopped at its cap. */
-export const isCapped = (completeness: Completeness, ref: string, property: string): boolean =>
-    completeness.state === 'partial' &&
-    completeness.capped.some((listing) => listing.ref === ref && listing.property === property);
+/**
+ * A listing the page draws from a centre's model, which a capped listing of
+ * the centre's node view can cut:
+ * - `arc`: the box of the picture listed by the arc `property` into the
+ *   centre (`in`) or out of it (`out`).
+ * - `declared`: the properties declared for the centre class, which its
+ *   scoped list and role boxes read.
+ * - `descendants`: the walk down the centre's class tree, which counts over
+ *   kinds of the centre read.
+ * - `members`: the members of the centre value list.
+ * - `setWith`: the properties whose range is `list`, which a value in that
+ *   list shows as "Set with".
+ * - `open`: the panel's line for the centre's open property `property`.
+ */
+export type DrawnListing =
+    | { readonly kind: 'arc'; readonly property: string; readonly direction: 'in' | 'out' }
+    | { readonly kind: 'declared' }
+    | { readonly kind: 'descendants' }
+    | { readonly kind: 'members' }
+    | { readonly kind: 'setWith'; readonly list: string }
+    | { readonly kind: 'open'; readonly property: string };
+
+const DECLARED: DrawnListing = Object.freeze({ kind: 'declared' });
+const WALK: DrawnListing = Object.freeze({ kind: 'descendants' });
+const MEMBERS: DrawnListing = Object.freeze({ kind: 'members' });
 
 /**
- * The gaps in one box of the picture around `id`. An arc box listed by its
- * links into the centre is capped when one of its arcs is, and a value's
- * "Set with" box when its list's `rangeIncludes` is. A class's role box
+ * What a capped listing on the centre cuts, by the listing's property. A
+ * property the table lacks is one of the centre's arcs or open properties,
+ * so it cuts the box listed by that arc into the centre and the panel's
+ * line of that open property.
+ */
+const CENTRE_CUTS: ReadonlyMap<string, readonly DrawnListing[]> = new Map([
+    [DESCENDANTS, [WALK]],
+    // The walk below starts from the direct children, so cutting them cuts it too.
+    ['subClassOf', [{ kind: 'arc', property: 'subClassOf', direction: 'in' }, WALK]],
+    ['domainIncludes', [DECLARED]],
+    ['typeOf', [MEMBERS]],
+    // A Property centre's range classes past the first few, so "Takes its value from" is cut.
+    ['rangeIncludes/subClassOf+', [{ kind: 'arc', property: 'rangeIncludes', direction: 'out' }]],
+    // A value centre's type classes past the first few, so "Value list" is cut.
+    ['typeOf/rangeIncludes', [{ kind: 'arc', property: 'typeOf', direction: 'out' }]],
+]);
+
+/** What a capped listing on a node other than the centre cuts, by the listing's property. A property the table lacks cuts nothing drawn. */
+const NEIGHBOUR_CUTS: ReadonlyMap<string, (ref: string) => readonly DrawnListing[]> = new Map([
+    ['rangeIncludes', (ref: string) => [{ kind: 'setWith', list: ref } as const]],
+]);
+
+/** The listings drawn around `centre` that the capped listing `cap` cuts. */
+export const cutsOf = (cap: CappedListing, centre: string): readonly DrawnListing[] => {
+    if (cap.ref !== centre) return NEIGHBOUR_CUTS.get(cap.property)?.(cap.ref) ?? [];
+    return (
+        CENTRE_CUTS.get(cap.property) ?? [
+            { kind: 'arc', property: cap.property, direction: 'in' },
+            { kind: 'open', property: cap.property },
+        ]
+    );
+};
+
+/** True when a capped listing of a partial view cuts a listing drawn around `centre` that `match` accepts. */
+const isCut = (
+    completeness: Completeness,
+    centre: string,
+    match: (listing: DrawnListing) => boolean,
+): boolean =>
+    completeness.state === 'partial' &&
+    completeness.capped.some((cap) => cutsOf(cap, centre).some(match));
+
+/**
+ * The gaps in one box of the picture around `id`: `capped` when a capped
+ * listing cuts the arc it is listed by (cutsOf), or for a value's "Set
+ * with" box the properties whose range is its list. A class's role box
  * reads as the class's scoped list does (classListGaps).
  */
 export function boxGaps(box: FocusBox, id: string, completeness: Completeness): readonly ListGap[] {
@@ -115,12 +188,23 @@ export function boxGaps(box: FocusBox, id: string, completeness: Completeness): 
     if (completeness.state === 'unresolved') return ['unresolved'];
     const { via } = box;
     if (via.kind === 'arc') {
-        const cut =
-            via.direction === 'in' && via.properties.some((arc) => isCapped(completeness, id, arc));
+        const cut = isCut(
+            completeness,
+            id,
+            (listing) =>
+                listing.kind === 'arc' &&
+                listing.direction === via.direction &&
+                via.properties.some((arc) => arc === listing.property),
+        );
         return cut ? ['capped'] : [];
     }
     if (via.kind === 'valueList') {
-        return isCapped(completeness, via.list, 'rangeIncludes') ? ['capped'] : [];
+        const cut = isCut(
+            completeness,
+            id,
+            (listing) => listing.kind === 'setWith' && listing.list === via.list,
+        );
+        return cut ? ['capped'] : [];
     }
     const role = (ROLES as readonly string[]).includes(box.key);
     return role ? classListGaps(id, completeness) : [];
@@ -128,16 +212,51 @@ export function boxGaps(box: FocusBox, id: string, completeness: Completeness): 
 
 /**
  * The gaps in the scoped list of the class `id`, which lists the properties
- * declared for it (`domainIncludes`, capped) and those that StatVars about
- * it or a narrower class use (DESCENDANTS, whose cut leaves some kinds out).
+ * declared for it (`declared`, capped) and those that StatVars about it or
+ * a narrower class use (`descendants`, whose cut leaves some kinds out).
  */
 export function classListGaps(id: string, completeness: Completeness): readonly ListGap[] {
     if (completeness.state === 'complete') return [];
     if (completeness.state === 'unresolved') return ['unresolved'];
     const gaps: ListGap[] = [];
-    if (isCapped(completeness, id, 'domainIncludes')) gaps.push('capped');
-    if (isCapped(completeness, id, DESCENDANTS)) gaps.push('descendants');
+    if (isCut(completeness, id, (listing) => listing.kind === 'declared')) gaps.push('capped');
+    if (isCut(completeness, id, (listing) => listing.kind === 'descendants')) {
+        gaps.push('descendants');
+    }
     return gaps;
+}
+
+/** True when a capped listing cuts the panel's line for the open property `property` of `id`. */
+export const openLineCut = (completeness: Completeness, id: string, property: string): boolean =>
+    isCut(completeness, id, (listing) => listing.kind === 'open' && listing.property === property);
+
+/**
+ * What the line over the picture around `id` says is cut: the titles of
+ * the boxes a capped listing cuts, "Values" when it cuts the members of a
+ * value list, and the label of each open property whose line it cuts, in
+ * that order, with `walk` true when a box's counts over kinds of `id`
+ * leave some out. A capped listing no drawn listing reads adds nothing.
+ */
+export function pictureCuts(
+    model: Model,
+    id: string,
+    boxes: readonly FocusBox[],
+    completeness: Completeness,
+): { readonly lists: readonly string[]; readonly walk: boolean } {
+    if (completeness.state !== 'partial') return { lists: [], walk: false };
+    const gaps = boxes.map((box) => ({ box, gaps: boxGaps(box, id, completeness) }));
+    const members =
+        model.hasValueList(id) && isCut(completeness, id, (listing) => listing.kind === 'members');
+    return {
+        lists: [
+            ...gaps.filter((entry) => entry.gaps.includes('capped')).map(({ box }) => box.title),
+            ...(members ? ['Values'] : []),
+            ...openEntries(model, id)
+                .filter((entry) => openLineCut(completeness, id, entry.property))
+                .map((entry) => entry.label),
+        ],
+        walk: gaps.some((entry) => entry.gaps.includes('descendants')),
+    };
 }
 
 /** A node view's failure, for the line that offers to load it again. */

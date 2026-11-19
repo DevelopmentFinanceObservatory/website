@@ -224,8 +224,12 @@ export type SchemaNodeView = {
     /**
      * The listings that stopped at their cap, sorted by ref then property:
      * `typeOf` on the centre for a value list's members, one of the centre's
-     * own schema arcs, or `rangeIncludes` on a value's type class. Any entry
-     * means the view leaves out neighbours the graph holds.
+     * own schema arcs, `subClassOf+` on the centre while unread classes
+     * remain below it, `rangeIncludes/subClassOf+` on a Property centre
+     * for its range classes, `typeOf/rangeIncludes` on a value centre for
+     * its type classes, or `rangeIncludes` on a value's type class. Any
+     * entry means the view leaves out neighbours the graph holds. cutsOf
+     * in nodeView.ts maps each to the listings it cuts.
      */
     capped: CappedListing[];
 };

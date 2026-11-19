@@ -82,6 +82,8 @@ type ScopedListProps = {
     classModel?: Model;
     /** What the list's listings leave out (classListGaps). None for a list the DFO document holds whole. */
     gaps?: readonly ListGap[];
+    /** The title, which takes focus when a retried node view lands. */
+    headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
 /**
@@ -98,7 +100,7 @@ type ScopedListProps = {
  * which also names the CSV file `-partial`. A chosen dataset the switches
  * leave out is counted from the full model, since the reader named it.
  */
-const ScopedList = ({ scope, show, classModel, gaps = [] }: ScopedListProps) => {
+const ScopedList = ({ scope, show, classModel, gaps = [], headingRef }: ScopedListProps) => {
     const scoped = useModel();
     const full = useFullModel();
     const listed = classModel ?? scoped;
@@ -132,7 +134,7 @@ const ScopedList = ({ scope, show, classModel, gaps = [] }: ScopedListProps) => 
                 <Button onClick={() => go(isClass ? { kind: 'node', id: scope.id } : START_VIEW)}>
                     {isClass ? `Back to ${model.label(scope.id)}` : 'Start'}
                 </Button>
-                <h1 id={titleId} className={styles.title}>
+                <h1 id={titleId} className={styles.title} ref={headingRef} tabIndex={-1}>
                     {title} <span className={styles.total}>({count(list.total)})</span>
                 </h1>
             </div>

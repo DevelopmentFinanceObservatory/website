@@ -171,13 +171,6 @@ const usageTermRefs = (document: SchemaUsage): ReadonlySet<string> => {
     return refs;
 };
 
-/**
- * True when the base usage document's `terms` name the ref. Base datasets
- * use such a term, so the base Data Commons browser has a page for it.
- */
-export const inBaseUsage = (id: string, outside: OutsideUsage): boolean =>
-    outside.base !== undefined && usageTermRefs(outside.base).has(id);
-
 const termIndexes = new WeakMap<readonly SchemaTerm[], ReadonlyMap<string, SchemaTerm>>();
 
 const termIndex = (outside: readonly SchemaTerm[]): ReadonlyMap<string, SchemaTerm> => {
@@ -200,11 +193,14 @@ export type TermSources = {
 
 /**
  * The origin declaring a term, as a node's `declared_by`: the schema
- * node's, else that of the outside usage document whose `terms` name it
- * (base before UN, as the terms lists rank them), else the loaded terms
- * list's, else null. The usage documents load on every visit and name the
- * UN series StatVars are about, which no terms list holds, so a series
- * carries its tag whatever the switches say.
+ * node's, else the loaded terms lists' row's, else, for a ref no loaded
+ * terms list holds, that of the outside usage document whose `terms` name
+ * it (base before UN, as the terms lists rank them), else null. A usage
+ * document's `terms` say which datasets use a term, and a UN dataset may
+ * use a base property, so a terms list's row outranks them. The usage
+ * documents load on every visit and name the UN series StatVars are
+ * about, which no terms list holds, so a series carries its tag whatever
+ * the switches say.
  */
 export const termOrigin = (
     model: Pick<Model, 'node'>,
@@ -213,7 +209,9 @@ export const termOrigin = (
 ): string | null => {
     const declared = model.node(id)?.declared_by;
     if (declared !== undefined && declared !== null) return declared;
+    const row = outsideTerm(terms, id);
+    if (row !== undefined) return row.declared_by;
     if (usage.base !== undefined && usageTermRefs(usage.base).has(id)) return 'base';
     if (usage.un !== undefined && usageTermRefs(usage.un).has(id)) return 'un_system';
-    return outsideTerm(terms, id)?.declared_by ?? null;
+    return null;
 };

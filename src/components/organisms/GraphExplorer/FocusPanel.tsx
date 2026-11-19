@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import Link from 'next/link';
-import { useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
@@ -24,9 +24,9 @@ import {
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { datasetHead, inBaseUsage, outsideTerm } from '@/lib/graphExplorer/lists';
+import { datasetHead } from '@/lib/graphExplorer/lists';
 import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
-import type { ListGap } from '@/lib/graphExplorer/nodeView';
+import { openLineCut, type Completeness, type ListGap } from '@/lib/graphExplorer/nodeView';
 import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
@@ -226,26 +226,35 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     );
 };
 
-/** A node's open properties, each a line beside the named fields: links to nodes the model holds, the rest as text. */
-const OpenLines = ({ id }: { id: string }) => {
+/**
+ * A node's open properties, each a line beside the named fields: links to
+ * nodes the model holds, the rest as text. A line whose listing stopped at
+ * its cap (openLineCut) says so beneath it.
+ */
+const OpenLines = ({ id, completeness }: { id: string; completeness: Completeness }) => {
     const model = useModel();
 
     return openEntries(model, id).map(({ property, label, values }) => (
-        <p key={property} className={styles.line}>
-            {label}:{' '}
-            {values.map((value, index) => (
-                <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
-                    {index > 0 && ', '}
-                    {value.kind === 'node' ? (
-                        <TermLink id={value.id} name={value.name} />
-                    ) : (
-                        <span className={styles.mono}>
-                            <BreakableId text={value.text} />
-                        </span>
-                    )}
-                </span>
-            ))}
-        </p>
+        <Fragment key={property}>
+            <p className={styles.line}>
+                {label}:{' '}
+                {values.map((value, index) => (
+                    <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
+                        {index > 0 && ', '}
+                        {value.kind === 'node' ? (
+                            <TermLink id={value.id} name={value.name} />
+                        ) : (
+                            <span className={styles.mono}>
+                                <BreakableId text={value.text} />
+                            </span>
+                        )}
+                    </span>
+                ))}
+            </p>
+            {openLineCut(completeness, id, property) && (
+                <GapNote gaps={['capped']} className={styles.note} />
+            )}
+        </Fragment>
     ));
 };
 
@@ -254,7 +263,16 @@ const OpenLines = ({ id }: { id: string }) => {
  * and its use. A term the base Data Commons declares links to its browser
  * page. The UN System Data Commons serves no browser page.
  */
-export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
+export const NodePanel = ({
+    id,
+    lens,
+    completeness,
+}: {
+    id: string;
+    lens: PanelLens;
+    /** How completely the model holds the term's links, for its open lines (openLineCut). */
+    completeness: Completeness;
+}) => {
     const model = useModel();
     const node = model.node(id);
     const kind = model.kind(id);
@@ -309,7 +327,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     .
                 </p>
             )}
-            <OpenLines id={id} />
+            <OpenLines id={id} completeness={completeness} />
             {hasList && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>
@@ -428,16 +446,16 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 /**
  * A term the model knows only from the usage documents or a loaded terms
  * list, whose node view did not load: what its types say it is, its name
- * (else its dcid), and every dataset that uses it. A term base
- * datasets use, or the base terms list holds, gets a link to the base Data
- * Commons browser. Any other gets none, since the UN System Data Commons
- * serves no browser page (its /browser/ path answers 404).
+ * (else its dcid), and every dataset that uses it. A term whose origin
+ * reads as base Data Commons (`termOrigin`, as its heading's tag reads it)
+ * gets a link to the base Data Commons browser. Any other gets none, since
+ * the UN System Data Commons serves no browser page (its /browser/ path
+ * answers 404).
  */
 export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
     const sources = useTermSources();
     const heading = centreHeading(model, { kind: 'node', id }, sources);
-    const row = outsideTerm(sources.terms, id);
 
     return (
         <>
@@ -447,9 +465,7 @@ export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <IdLine id={id} />
             </div>
             <p className={styles.note}>Only its use in the datasets is known here.</p>
-            {(inBaseUsage(id, sources.usage) || row?.declared_by === 'base') && (
-                <BrowserLink id={id} />
-            )}
+            {heading?.declaredBy === 'base' && <BrowserLink id={id} />}
             <UsageBars id={id} lens={lens} />
         </>
     );

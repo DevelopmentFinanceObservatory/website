@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 
 import { useExplorerData } from './useExplorerData';
 import styles from './ListToggle.module.scss';
@@ -56,11 +56,26 @@ export type ListOrigins = {
     readonly term: (id: string) => string | null;
 };
 
-/** The outside usage documents landed and the terms lists the switches load, for termOrigin. */
-export const useTermSources = (): TermSources => {
+const TermSourcesContext = createContext<TermSources | null>(null);
+
+/**
+ * Provides the outside usage documents landed and the terms lists the
+ * switches load, merged once (`ExplorerData.outside`), to every origin tag
+ * on a screen. The merged list keeps its identity while the lists do, so
+ * outsideTerm indexes it once however many links read it.
+ */
+export const TermSourcesProvider = ({ children }: { children: React.ReactNode }) => {
     const { usage, outside } = useExplorerData();
     const { base, un } = landedUsage(usage);
-    return useMemo(() => ({ usage: { base, un }, terms: outside }), [base, un, outside]);
+    const sources = useMemo(() => ({ usage: { base, un }, terms: outside }), [base, un, outside]);
+    return <TermSourcesContext.Provider value={sources}>{children}</TermSourcesContext.Provider>;
+};
+
+/** The term sources for termOrigin. Only under TermSourcesProvider. */
+export const useTermSources = (): TermSources => {
+    const sources = useContext(TermSourcesContext);
+    if (!sources) throw new Error('useTermSources is used outside TermSourcesProvider');
+    return sources;
 };
 
 /**

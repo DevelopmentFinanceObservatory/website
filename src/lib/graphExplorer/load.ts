@@ -437,15 +437,25 @@ export type TooLarge = { readonly status: 'tooLarge' };
 
 export const TOO_LARGE: TooLarge = Object.freeze({ status: 'tooLarge' });
 
-/** An answer that ends a load for good: asking again gets the same answer. */
-export type Refusal = NotServed | NotHeld | OriginNotServed | TooLarge;
+/**
+ * A node whose view the graph could not finish reading, because the node
+ * view answered 500 with `graph_not_advancing`, which the Graph API marks
+ * not retryable.
+ */
+export type NotAdvancing = { readonly status: 'notAdvancing' };
 
-/** True for NOT_SERVED, NOT_HELD, ORIGIN_NOT_SERVED and TOO_LARGE. */
+export const NOT_ADVANCING: NotAdvancing = Object.freeze({ status: 'notAdvancing' });
+
+/** An answer that ends a load for good: asking again gets the same answer. */
+export type Refusal = NotServed | NotHeld | OriginNotServed | TooLarge | NotAdvancing;
+
+/** True for NOT_SERVED, NOT_HELD, ORIGIN_NOT_SERVED, TOO_LARGE and NOT_ADVANCING. */
 export const isRefusal = (value: unknown): value is Refusal =>
     value === NOT_SERVED ||
     value === NOT_HELD ||
     value === ORIGIN_NOT_SERVED ||
-    value === TOO_LARGE;
+    value === TOO_LARGE ||
+    value === NOT_ADVANCING;
 
 /**
  * As loadDocument, for a document the Graph API may not serve. A 404 whose
@@ -492,7 +502,8 @@ export const nodeViewName = (dcid: string): string => `The graph's view of ${dci
  * `cause.code` is `node_not_held` gives NOT_HELD, one whose `cause.code` is
  * `origin_not_served` gives ORIGIN_NOT_SERVED, and any other 404 gives
  * NOT_SERVED (the API lacks the route). A 500 whose `cause.code` is
- * `node_view_too_large` gives TOO_LARGE. None is waited on or retried. A
+ * `node_view_too_large` gives TOO_LARGE, and one whose `cause.code` is
+ * `graph_not_advancing` gives NOT_ADVANCING. None is waited on or retried. A
  * 503 is, as every load's is. A dcid no path can name gives NOT_HELD with no
  * request.
  */
@@ -509,6 +520,9 @@ export async function loadNodeView(
             read: readNodeView,
             refusal: (status, problem) => {
                 if (status === 500 && problem.cause === 'node_view_too_large') return TOO_LARGE;
+                if (status === 500 && problem.cause === 'graph_not_advancing') {
+                    return NOT_ADVANCING;
+                }
                 if (status !== 404) return null;
                 if (problem.cause === 'node_not_held') return NOT_HELD;
                 return problem.cause === ORIGIN_NOT_SERVED_CODE ? ORIGIN_NOT_SERVED : NOT_SERVED;

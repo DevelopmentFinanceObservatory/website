@@ -10,7 +10,6 @@ import {
     datasetOrigin,
     datasetsByUse,
     datasetsDfoFirst,
-    inBaseUsage,
     kindsDfoFirst,
     landedUsage,
     listHead,
@@ -159,16 +158,9 @@ test('a dataset takes the origin of the usage document the model took it from', 
     assert.equal(originOf(ECLAC), 'un_system');
     // An outside document still loading gives its datasets no origin.
     assert.equal(datasetOrigin(model.dataset(ECLAC)!, landedUsage({ base: null, un: null })), null);
-
-    // The base document's terms name the terms the base browser has a page for.
-    assert.deepEqual(
-        ['age', SERIES, 'FinancialFlow'].map((id) => inBaseUsage(id, outside)),
-        [true, false, false],
-    );
-    assert.equal(inBaseUsage('age', { un }), false);
 });
 
-test("a term takes its schema node's origin, else its usage document's, else the terms list's", () => {
+test("a term takes its schema node's origin, else the terms list's, else its usage document's", () => {
     const base = readUsage(baseUsageBody());
     const un = readUsage(unUsageBody());
     const model = buildModel(schema, readUsage(usageBody()), un);
@@ -185,6 +177,10 @@ test("a term takes its schema node's origin, else its usage document's, else the
     assert.equal(termOrigin(model, sources([]), SERIES), 'un_system');
     assert.equal(termOrigin(model, sources([]), 'gender'), 'base');
     assert.equal(termOrigin(model, sources([listed]), 'undata/AGE'), 'un_system');
+    // UN patterns name the base property `value`: its terms list row names the declarer.
+    const value: SchemaTerm = { ...listed, ref: 'value', label: 'Value', declared_by: 'base' };
+    assert.equal(termOrigin(model, sources([]), 'value'), 'un_system');
+    assert.equal(termOrigin(model, sources([value]), 'value'), 'base');
     // Neither loaded yet.
     assert.equal(termOrigin(model, { usage: {}, terms: [] }, SERIES), null);
     assert.equal(termOrigin(model, sources([]), 'undata/AGE'), null);

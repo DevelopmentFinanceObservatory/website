@@ -50,6 +50,24 @@ test("columns that share a label carry each dataset's origin", () => {
     assert.ok(heads.includes('OECD DAC1 (DFO)'));
     assert.ok(heads.includes('OECD DAC1 (base Data Commons)'));
     assert.ok(heads.includes('OECD DAC2a'));
+
+    // Two DFO datasets sharing a label within one origin also carry their dcids.
+    const dfo = readUsage(usageBody());
+    const twins = {
+        ...dfo,
+        provenances: dfo.provenances.map((dataset) =>
+            dataset.ref === 'provenance/OECDDAC2A' ? { ...dataset, label: 'OECD DAC1' } : dataset,
+        ),
+    };
+    const three = buildModel(readSchema(schemaBody()), twins, named);
+    const twinHeads =
+        scopedListTable(three, three.scopedList({ kind: 'dfo' }, { kind: 'all' }), {
+            origin: (dataset) => (fromBase.has(dataset) ? 'base' : null),
+        })[0]?.slice(4) ?? [];
+    assert.ok(twinHeads.includes('OECD DAC1 (DFO, provenance/OECDDAC1)'));
+    assert.ok(twinHeads.includes('OECD DAC1 (DFO, provenance/OECDDAC2A)'));
+    assert.ok(twinHeads.includes('OECD DAC1 (base Data Commons)'));
+    assert.equal(new Set(twinHeads).size, twinHeads.length);
 });
 
 test('only the rows the filter text keeps are written, matched on label or dcid', () => {

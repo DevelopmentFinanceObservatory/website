@@ -16,6 +16,7 @@ import {
 } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
+import { TermSourcesProvider } from '@/components/organisms/GraphExplorer/ListToggle';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
@@ -24,6 +25,7 @@ import { downloadBlob } from '@/lib/download';
 import { plural, valueCount } from '@/lib/graphExplorer/counts';
 import type { Carried } from '@/lib/graphExplorer/explore';
 import { patternId, type Model } from '@/lib/graphExplorer/model';
+import { datasetOrigin, landedUsage } from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
 import {
     columnName,
@@ -304,6 +306,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
               ? datasets[0]
               : undefined;
     const picks = usage === undefined || datasets.includes(usage) ? datasets : [...datasets, usage];
+    const outsideDataset =
+        usage !== undefined && datasetOrigin(usage, landedUsage(data.usage)) !== null;
     const dataset = useMemo(
         (): SeedDataset | null =>
             usage === undefined
@@ -351,7 +355,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
 
     const checkSection = (title: string) => (
         <div ref={scrollToCheck} className={styles.step}>
-            <CheckSheet title={title} />
+            <CheckSheet title={title} outsideDataset={outsideDataset} />
         </div>
     );
 
@@ -587,28 +591,30 @@ const SeedSheet = ({ openAt = 'start' }: { openAt?: 'start' | 'check' }) => {
 
     return (
         <ModelProvider value={model}>
-            <div className={shell.explorer}>
-                <TopBar />
-                <main className={shell.main}>
-                    <div className={styles.page}>
-                        <header className={styles.header}>
-                            <p className={styles.label}>Pipeline seeds</p>
-                            <h1 className={styles.title}>{title}</h1>
-                            <p className={styles.lead}>
-                                Start a new dataset&rsquo;s seed from the closest existing dataset
-                                and the source&rsquo;s codes, then check the filled seed against the
-                                graph. The download is the file a pipeline commits under{' '}
-                                <code>dbt/seeds/</code>.
-                            </p>
-                        </header>
-                        {data.model.status === 'ready' ? (
-                            <SeedSteps openAt={openAt} />
-                        ) : (
-                            <LoadStatus state={data.model} onRetry={data.retryModel} />
-                        )}
-                    </div>
-                </main>
-            </div>
+            <TermSourcesProvider>
+                <div className={shell.explorer}>
+                    <TopBar />
+                    <main className={shell.main}>
+                        <div className={styles.page}>
+                            <header className={styles.header}>
+                                <p className={styles.label}>Pipeline seeds</p>
+                                <h1 className={styles.title}>{title}</h1>
+                                <p className={styles.lead}>
+                                    Start a new dataset&rsquo;s seed from the closest existing
+                                    dataset and the source&rsquo;s codes, then check the filled seed
+                                    against the graph. The download is the file a pipeline commits
+                                    under <code>dbt/seeds/</code>.
+                                </p>
+                            </header>
+                            {data.model.status === 'ready' ? (
+                                <SeedSteps openAt={openAt} />
+                            ) : (
+                                <LoadStatus state={data.model} onRetry={data.retryModel} />
+                            )}
+                        </div>
+                    </main>
+                </div>
+            </TermSourcesProvider>
         </ModelProvider>
     );
 };
