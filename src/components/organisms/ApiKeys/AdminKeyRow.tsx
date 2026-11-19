@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
 import AdminLimitInput from './AdminLimitInput';
-import { type AdminActions, formatDay } from './AdminState';
+import { type AdminActions, formatDateTime, formatDay } from './AdminState';
 import { keySnippet } from './format';
 
 import Button from '@/components/atoms/Button/Button';
@@ -83,9 +83,22 @@ const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) 
                         {keySnippet(keyData.start, keyData.tail)}
                     </code>
                     <span className={styles.keyCreated}>
+                        Created{' '}
                         <time dateTime={keyData.createdAt.toISOString()}>
                             {formatDay(keyData.createdAt)}
                         </time>
+                    </span>
+                    <span className={styles.keyCreated}>
+                        {keyData.lastRequest ? (
+                            <>
+                                Last used{' '}
+                                <time dateTime={keyData.lastRequest.toISOString()}>
+                                    {formatDateTime(keyData.lastRequest)} UTC
+                                </time>
+                            </>
+                        ) : (
+                            'Never used'
+                        )}
                     </span>
                 </td>
                 <td>

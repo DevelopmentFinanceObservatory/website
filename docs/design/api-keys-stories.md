@@ -157,7 +157,7 @@ _As a DFO admin, I want to find any user and see their keys, usage and limit, so
 
 - [ ] The page opens with a dark hero holding the total user count as a badge and an email search.
 - [ ] Below it, a table lists all users with email, created date and active key count. It is paginated and filterable by email.
-- [ ] Expanding a user shows their keys, each with name, the key's snippet (so support can match a key a user reads out or pastes), created date, usage bar (the same counter as [U1][Seeing Usage]), an editable daily quota, Reset usage and Delete. The expanded row also shows Create key and the account's per-minute limit.
+- [ ] Expanding a user shows their keys, each with name, the key's snippet (so support can match a key a user reads out or pastes), created date, last used (date and time in UTC, or "Never used"), usage bar (the same counter as [U1][Seeing Usage]), an editable daily quota, Reset usage and Delete. The expanded row also shows Create key and the account's per-minute limit.
 - [ ] The Reset usage icon on a key row sets that key's API call count for the current UTC day to 0, so a key that used its daily quota works again on its next call. It asks for no confirmation, is disabled while it runs, reloads the account's keys when done so the usage bar shows 0, and writes a log line naming the operator.
 - [ ] If [U11][Stories: Scope TBD] ships, the expanded row shows the same limit alerts too.
 - [ ] A non-admin gets 404 on every admin page and action, signed in or not.
