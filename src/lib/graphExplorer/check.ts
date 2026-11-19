@@ -15,7 +15,8 @@ import {
     type WaitCause,
 } from './load.ts';
 import { KIND_WORDS, openLiterals, type Model } from './model.ts';
-import { camelCase, findingColumn, sheetRow, type Mapping } from './pasted.ts';
+import { findingColumn, sheetRow, type Mapping, type PrefixFinding } from './pasted.ts';
+import { columnName } from './seed.ts';
 import type { SentencePart } from './sentence.ts';
 import {
     CHECK_DEADLINE_MS,
@@ -325,7 +326,7 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         finding.property === null
             ? [
                   text(
-                      `This row has no ${fieldWords(finding.field)}, and every row needs one. Fill the cell, or add a ${camelCase(finding.field)} column if the sheet has none.`,
+                      `This row has no ${fieldWords(finding.field)}, and every row needs one. Fill the cell, or add a ${finding.field} column if the sheet has none.`,
                   ),
               ]
             : [
@@ -340,9 +341,9 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
     ],
     not_a_class: (context) => [
         context.term(context.value),
-        context.text(' is not a kind of thing'),
+        context.text(' is not a class'),
         ...kindAside(context),
-        context.text('. The population type must be a kind of thing.'),
+        context.text('. The population type must be a class.'),
     ],
     value_outside_range: (context) => {
         const { finding, value, valueLists, text, term } = context;
@@ -632,11 +633,12 @@ export type SheetMarks = {
     readonly flaggedRows: ReadonlySet<number>;
 };
 
-/** The marks on the pasted table: each flagged cell and each flagged row. */
+/** The marks on the pasted table: each flagged cell and each flagged row. A prefix finding marks a warning. */
 export function sheetMarks(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
     sheetRows: readonly number[],
+    prefix: readonly PrefixFinding[] = [],
 ): SheetMarks {
     const cells = new Map<string, 'error' | 'warning'>();
     const flaggedRows = new Set<number>();
@@ -650,6 +652,11 @@ export function sheetMarks(
     for (const { index } of refused) {
         const row = sheetRows[index];
         if (row !== undefined) flaggedRows.add(row);
+    }
+    for (const { row, column } of prefix) {
+        flaggedRows.add(row);
+        const key = cellKey(row, column);
+        if (!cells.has(key)) cells.set(key, 'warning');
     }
     return { cells, flaggedRows };
 }
@@ -671,31 +678,40 @@ export type ShownCounts = { readonly flagged: number; readonly quiet: number };
 
 /**
  * The rows the result table shows, in sheet order. They are the first
- * `shown.flagged` flagged rows and the first `shown.quiet` rows without a
- * finding.
- * `hiddenFlagged` and `hiddenQuiet` count the rows of each kind left out.
+ * `shown.flagged` flagged rows and the first `shown.quiet` of the other
+ * rows, which are the rows without a finding and the `skipped` rows the
+ * check was not sent. `hiddenFlagged`, `hiddenQuiet` and `hiddenSkipped`
+ * count the rows of each kind left out.
  */
 export function shownRows(
     dataRows: number,
     flaggedRows: ReadonlySet<number>,
     shown: ShownCounts,
+    skipped: ReadonlySet<number> = new Set(),
 ): {
     readonly rows: readonly ShownRow[];
     readonly hiddenFlagged: number;
     readonly hiddenQuiet: number;
+    readonly hiddenSkipped: number;
 } {
     const rows: ShownRow[] = [];
     let flagged = 0;
-    let quiet = 0;
+    let other = 0;
+    let hiddenQuiet = 0;
+    let hiddenSkipped = 0;
     for (let dataIndex = 0; dataIndex < dataRows; dataIndex += 1) {
         const row = sheetRow(dataIndex);
-        const take = flaggedRows.has(row) ? flagged++ < shown.flagged : quiet++ < shown.quiet;
-        if (take) rows.push({ dataIndex, row });
+        if (flaggedRows.has(row)) {
+            if (flagged++ < shown.flagged) rows.push({ dataIndex, row });
+        } else if (other++ < shown.quiet) rows.push({ dataIndex, row });
+        else if (skipped.has(row)) hiddenSkipped += 1;
+        else hiddenQuiet += 1;
     }
     return {
         rows,
         hiddenFlagged: Math.max(0, flagged - shown.flagged),
-        hiddenQuiet: Math.max(0, quiet - shown.quiet),
+        hiddenQuiet,
+        hiddenSkipped,
     };
 }
 
@@ -769,11 +785,16 @@ export const messageText = (parts: readonly MessagePart[]): string =>
         .join('')
         .trim();
 
-/** The findings as CSV rows under a header: row, column, value, code, message. */
+/** The line a prefix finding reads as, in the page and the findings CSV. */
+const prefixMessage = ({ value }: PrefixFinding): string =>
+    `${value} has no dcid: prefix. Write dcid:${value} if it names a node of the graph.`;
+
+/** The findings as CSV rows under a header: row, column, value, code, message. Prefix findings come last. */
 export function findingsCsvRows(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
     sheetRows: readonly number[],
+    prefix: readonly PrefixFinding[] = [],
 ): string[][] {
     return [
         ['row', 'column', 'value', 'code', 'message'],
@@ -791,6 +812,13 @@ export function findingsCsvRows(
             'request_invalid',
             detail,
         ]),
+        ...prefix.map((found) => [
+            String(found.row),
+            found.header,
+            found.value,
+            found.code,
+            prefixMessage(found),
+        ]),
     ];
 }
 
@@ -805,7 +833,7 @@ const misspell = (value: string): string | null => {
     return null;
 };
 
-/** What the example sheet is and where it came from. */
+/** What the example seed is and where it came from. */
 export type ExampleSheet = {
     /** The range as tab-separated text, header first, as a spreadsheet copies it. */
     readonly text: string;
@@ -816,11 +844,12 @@ export type ExampleSheet = {
 };
 
 /**
- * A small sheet from the first dataset pattern whose constraint properties
- * all have values in use. It holds the definition fields as the pattern
- * names them, and each property cycles through the values the dataset uses.
- * One row carries a misspelt value on a property with a value list. Null when no
- * pattern qualifies.
+ * A small seed from the first dataset pattern whose constraint properties
+ * all have values in use, in the seed layout: `source_code`, `statvar_name`,
+ * the identity columns the pattern fills and one snake_case column per
+ * constraint property, each value a `dcid:` cell. Each constraint cycles
+ * through the values the dataset uses, and one row carries a misspelt value
+ * on a constraint with a value list. Null when no pattern qualifies.
  */
 export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
     for (const dataset of model.datasets) {
@@ -836,18 +865,19 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
             if (!properties.every((id) => (used.get(id)?.length ?? 0) > 0)) continue;
 
             const definition = [
-                ['populationType', pattern.population_type],
-                ['measuredProperty', pattern.measured_property],
-                ['statType', pattern.stat_type],
-                ['measurementQualifier', pattern.measurement_qualifier],
+                ['population_type', pattern.population_type],
+                ['measured_property', pattern.measured_property],
+                ['stat_type', pattern.stat_type],
+                ['measurement_qualifier', pattern.measurement_qualifier],
             ].filter((entry): entry is [string, string] => entry[1] !== null);
             const rows = Array.from({ length: count }, (_, row) => [
-                `EX-${row + 1}`,
+                `EX${row + 1}`,
                 `Example row ${row + 1}`,
-                ...definition.map(([, value]) => value),
+                ...definition.map(([, value]) => `dcid:${value}`),
                 ...properties.map((id) => {
                     const values = used.get(id) ?? [];
-                    return values[row % values.length] ?? '';
+                    const value = values[row % values.length];
+                    return value === undefined ? '' : `dcid:${value}`;
                 }),
             ]);
 
@@ -857,7 +887,7 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
                 .map((id, at) => ({
                     id,
                     column: firstProperty + at,
-                    spelt: misspell(typoCells[firstProperty + at] ?? ''),
+                    spelt: misspell((typoCells[firstProperty + at] ?? '').replace(/^dcid:/, '')),
                 }))
                 .find(
                     ({ id, spelt }) =>
@@ -866,18 +896,18 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
                         model.node(spelt) === undefined,
                 );
             if (typo === undefined || typo.spelt === null) continue;
-            typoCells[typo.column] = typo.spelt;
+            typoCells[typo.column] = `dcid:${typo.spelt}`;
 
             const header = [
                 'source_code',
-                'source_label',
+                'statvar_name',
                 ...definition.map(([field]) => field),
-                ...properties,
+                ...properties.map(columnName),
             ];
             return {
                 text: [header, ...rows].map((cells) => cells.join('\t')).join('\n'),
                 dataset: dataset.ref,
-                misspelt: typo.id,
+                misspelt: columnName(typo.id),
             };
         }
     }
