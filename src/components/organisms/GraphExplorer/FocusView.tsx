@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { useExplore, useModel } from './ExploreContext';
-import { BaseTag } from './ExploreLink';
+import { OriginTag } from './ExploreLink';
 import { DatasetPanel, FullList, NodePanel, OutsidePanel, type PanelLens } from './FocusPanel';
 import FocusPicture from './FocusPicture';
 import styles from './FocusView.module.scss';
@@ -23,14 +23,14 @@ import {
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
 import type { DatasetFilter } from '@/lib/graphExplorer/model';
-import type { SchemaTerms } from '@/lib/graphExplorer/wire';
+import type { SchemaTerm } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
     centre: Centre;
     /** The dataset filter, already checked against the model's datasets. */
     show: DatasetFilter;
-    /** The base Data Commons terms list, when the search switch has loaded it. */
-    baseTerms?: SchemaTerms;
+    /** The terms lists whose switches are on and that have loaded. */
+    outside?: readonly SchemaTerm[];
 };
 
 /** Names the centred term in the document title while it is centred. */
@@ -50,18 +50,6 @@ const subText = (sub: CentreSub | null): string | null => {
     if (sub.kind === 'codes') return `Code ${sub.codes.join(', ')}`;
     return sub.id;
 };
-
-const WithTag = ({ name, base }: { name: string; base: boolean }) => (
-    <>
-        {name}
-        {base && (
-            <>
-                {' '}
-                <BaseTag />
-            </>
-        )}
-    </>
-);
 
 /**
  * The dataset filter as one line. While a dataset is chosen, the line says
@@ -100,7 +88,7 @@ const FilterLine = ({ lens, dataset }: { lens: PanelLens; dataset: string | null
  * and the panel beside it with the definition, or with a box's full list
  * while one is open.
  */
-const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
+const FocusView = ({ centre, show, outside }: FocusViewProps) => {
     const model = useModel();
     const { go } = useExplore();
     const [open, setOpen] = useState<string | null>(null);
@@ -114,10 +102,7 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
     const marked = pictureLens(centre, show);
     const markLens: PanelLens = marked === null ? { dataset: null, label: null } : lens;
 
-    const heading = useMemo(
-        () => centreHeading(model, centre, baseTerms),
-        [model, centre, baseTerms],
-    );
+    const heading = useMemo(() => centreHeading(model, centre, outside), [model, centre, outside]);
     useDocumentTitle(heading?.name ?? centre.id);
 
     if (heading === null) {
@@ -170,7 +155,12 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
                 <FocusPicture
                     key={`${centre.kind}:${centre.id}`}
                     kind={heading.kind}
-                    name={<WithTag name={heading.name} base={heading.base} />}
+                    name={
+                        <>
+                            {heading.name}
+                            <OriginTag declaredBy={heading.declaredBy} />
+                        </>
+                    }
                     sub={subText(heading.sub)}
                     boxes={boxes}
                     listClass={kind === 'class' ? centre.id : null}

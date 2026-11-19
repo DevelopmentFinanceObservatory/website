@@ -18,6 +18,7 @@ import {
     listScopeExists,
     NO_CARRIED,
     NO_FILTER,
+    ORIGIN_SWITCHES,
     START_VIEW,
     type ExploreView,
 } from '@/lib/graphExplorer/explore';
@@ -63,13 +64,22 @@ const GraphExplorer = () => {
     const navigation = useExploreState();
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
-    const { baseTerms } = data;
     const filter = model
         ? checkFilter(model, navigation.state.show)
         : { show: NO_FILTER, unknown: null };
+    // The terms list the main area waits on, or null when none: a switched-on list still loading
+    // comes before one that failed, since the loading one may yet hold the term.
+    // A term a loaded list holds needs no wait.
+    const unsettled = ORIGIN_SWITCHES.filter(
+        (name) => data.switches[name] && !data.termsSettled[name],
+    );
     const termsInMain =
         model !== null &&
-        awaitsTerms(model, navigation.state.view, data.base, baseTerms !== undefined);
+        awaitsTerms(model, navigation.state.view, data.switches, data.termsSettled, data.outside)
+            ? (unsettled.find((name) => data.terms[name]?.status !== 'failed') ??
+              unsettled[0] ??
+              null)
+            : null;
 
     const screen = (ready: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
@@ -84,13 +94,22 @@ const GraphExplorer = () => {
             }
             case 'node':
             case 'dataset':
-                if (termsInMain) {
+                if (termsInMain !== null) {
                     // The terms list is null for the render before its load starts.
-                    const terms =
-                        data.terms === null || data.terms.status === 'ready' ? LOADING : data.terms;
-                    return <LoadStatus state={terms} onRetry={data.retryTerms} subject="terms" />;
+                    const terms = data.terms[termsInMain];
+                    const state =
+                        terms === null || terms.status === 'ready' || terms.status === 'notServed'
+                            ? LOADING
+                            : terms;
+                    return (
+                        <LoadStatus
+                            state={state}
+                            onRetry={() => data.retryTerms(termsInMain)}
+                            subject={termsInMain}
+                        />
+                    );
                 }
-                return <FocusView centre={view} show={show} baseTerms={baseTerms} />;
+                return <FocusView centre={view} show={show} outside={data.outside} />;
         }
     };
 
