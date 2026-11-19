@@ -3,6 +3,7 @@
  * placed back on the cell it belongs to.
  */
 import { plural } from './counts.ts';
+import { scan } from './delimited.ts';
 import type { Model } from './model.ts';
 import { columnName } from './seed.ts';
 import {
@@ -16,86 +17,6 @@ import {
 export type PastedRange = {
     readonly header: readonly string[];
     readonly rows: readonly (readonly string[])[];
-};
-
-type Scan = {
-    readonly records: string[][];
-    /** The delimiters that ended a cell outside quotes. */
-    readonly split: ReadonlySet<string>;
-};
-
-/**
- * Reads `text` into records, each cell ended by any character of
- * `delimiters` or by a line end. A cell that opens with a quote may hold
- * delimiters, line breaks and doubled quotes. Its closing quote counts only
- * when a delimiter, a line end or the end of the text follows it. When
- * anything else follows, or the quote does not close, the cell is read again
- * from its opening quote as plain text, so the rows after it stay rows.
- * Stops after `limit` records.
- */
-const scan = (text: string, delimiters: string, limit = Infinity): Scan => {
-    const records: string[][] = [];
-    const split = new Set<string>();
-    let record: string[] = [];
-    let cell = '';
-    let quoted = false;
-    let cellStart = true;
-    // Where the open quoted cell began, and the records finished before it.
-    let opened = { at: 0, records: 0, record: [] as string[] };
-
-    const endCell = () => {
-        record.push(cell);
-        cell = '';
-        cellStart = true;
-    };
-    const endRecord = () => {
-        endCell();
-        records.push(record);
-        record = [];
-    };
-    const closes = (next: string): boolean =>
-        next === '' || next === '\n' || next === '\r' || delimiters.includes(next);
-
-    for (let i = 0; i <= text.length && records.length < limit; i += 1) {
-        const char = text.charAt(i);
-        const unclosed = i === text.length && quoted;
-        const stray =
-            quoted && char === '"' && text.charAt(i + 1) !== '"' && !closes(text.charAt(i + 1));
-        if (unclosed || stray) {
-            // Read the quoted cell again from its opening quote, unquoted.
-            records.length = opened.records;
-            record = [...opened.record];
-            cell = '"';
-            quoted = false;
-            cellStart = false;
-            i = opened.at;
-            continue;
-        }
-        if (i === text.length) break;
-        if (quoted) {
-            if (char !== '"') cell += char;
-            else if (text.charAt(i + 1) === '"') {
-                cell += '"';
-                i += 1;
-            } else quoted = false;
-        } else if (char === '"' && cellStart) {
-            opened = { at: i, records: records.length, record: [...record] };
-            quoted = true;
-            cellStart = false;
-        } else if (delimiters.includes(char)) {
-            split.add(char);
-            endCell();
-        } else if (char === '\n') endRecord();
-        else if (char === '\r') {
-            if (text.charAt(i + 1) === '\n') i += 1;
-            endRecord();
-        } else {
-            cell += char;
-            cellStart = false;
-        }
-    }
-    if (records.length < limit && (cell !== '' || record.length > 0)) endRecord();
-    return { records, split };
 };
 
 /**
@@ -237,18 +158,18 @@ const propertyOf = (model: Model, header: string, properties: readonly string[])
     return named.length === 1 ? named[0] : undefined;
 };
 
-/** Whether a cell is filled. */
-const filled = (cell: string | undefined): cell is string => (cell ?? '').trim() !== '';
-
 /**
  * Reads each header as a definition field, a property of the model, or
  * neither. A column naming the same property or field as an earlier one is
  * ignored, with `duplicateOf` naming the earlier column.
  *
- * In a seed (no `dcid` column), a property column with a filled cell and no
- * cell carrying the `dcid:` prefix holds source codes and is skipped. That
- * decision reads `rows`, so with none no column is skipped. StatVar output
- * checks every column that maps.
+ * In a seed (no `dcid` column), a property column holds source codes and is
+ * skipped when it has a filled cell, no cell carrying the `dcid:` prefix, and
+ * a cell that names no member of the property's value list. A column of bare
+ * members is checked, and prefixFindings flags each cell. The decision reads
+ * the rows rowsToCheck sends, so a row that reuses a StatVar does not count,
+ * and with no rows no column is skipped. StatVar output checks every column
+ * that maps.
  */
 export function mapHeaders(
     model: Model,
@@ -259,9 +180,17 @@ export function mapHeaders(
         .filter((node) => model.kind(node.ref) === 'property')
         .map((node) => node.ref);
     const seed = pastedKind(headers) === 'seed';
-    const holdsCodes = (index: number): boolean => {
-        const cells = rows.map((row) => row[index]).filter(filled);
-        return cells.length > 0 && cells.every((cell) => !cell.trim().startsWith('dcid:'));
+    // The identity columns as settle gives them out: the first column naming each field.
+    const identity = IDENTITY_FIELDS.flatMap((field) => {
+        const index = headers.findIndex((header) => fieldOf(header.trim()) === field);
+        return index === -1 ? [] : [index];
+    });
+    const sent = rows.filter((cells) => !isBlank(cells) && !reusesStatVar(identity, cells));
+    const holdsCodes = (index: number, property: string): boolean => {
+        const cells = sent.map((row) => (row[index] ?? '').trim()).filter((cell) => cell !== '');
+        if (cells.length === 0 || cells.some((cell) => cell.startsWith('dcid:'))) return false;
+        const members = new Set(model.valueListOfProperty(property)?.members);
+        return !cells.every((cell) => members.has(cell));
     };
     return settle(
         headers.map((raw, index): MappedColumn => {
@@ -275,7 +204,7 @@ export function mapHeaders(
             if (field !== undefined) wanted = { kind: 'definition', field };
             else if (never) defaultSkip = 'never_constraint';
             else if (property === undefined) defaultSkip = 'no_field';
-            else if (seed && holdsCodes(index)) defaultSkip = 'codes';
+            else if (seed && holdsCodes(index, property)) defaultSkip = 'codes';
             else wanted = { kind: 'property', property };
             return {
                 index,
@@ -356,6 +285,13 @@ const nodeRef = (cell: string): string =>
 const IDENTITY_FIELDS = ['populationType', 'measuredProperty', 'statType'] as const;
 
 /**
+ * Whether a seed row fills none of the identity columns at `identity`, so it
+ * reuses a StatVar defined elsewhere. False when the sheet has none of them.
+ */
+const reusesStatVar = (identity: readonly number[], cells: readonly string[]): boolean =>
+    identity.length > 0 && identity.every((index) => nodeRef((cells[index] ?? '').trim()) === '');
+
+/**
  * Check rows in the wire shape, with `sheetRows` naming the sheet row of
  * each. Each property or field is read from the one column the
  * mapping gives it, the column `findingColumn` places its findings on, and
@@ -372,8 +308,10 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
     const sheetRows: number[] = [];
     const skipped: number[] = [];
     const seed = pastedKind(mapping.map(({ header }) => header)) === 'seed';
-    const identity = IDENTITY_FIELDS.filter((field) =>
-        mapping.some(({ target }) => target.kind === 'definition' && target.field === field),
+    const identity = IDENTITY_FIELDS.flatMap((field) =>
+        mapping.flatMap(({ target, index }) =>
+            target.kind === 'definition' && target.field === field ? [index] : [],
+        ),
     );
     rows.forEach((cells, dataIndex) => {
         if (isBlank(cells)) return;
@@ -384,8 +322,7 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
             );
             return column === undefined ? '' : cell(column.index);
         };
-        // A row that fills none of the identity columns reuses a StatVar defined elsewhere.
-        if (seed && identity.length > 0 && identity.every((field) => definition(field) === '')) {
+        if (seed && reusesStatVar(identity, cells)) {
             skipped.push(sheetRow(dataIndex));
             return;
         }
@@ -560,7 +497,7 @@ export function findingColumn(mapping: Mapping, finding: SchemaFinding): number 
     return column?.index ?? null;
 }
 
-/** A cell of a mixed seed column that lacks the `dcid:` prefix its column's other cells carry. */
+/** A cell of a checked seed column that lacks the `dcid:` prefix. */
 export type PrefixFinding = {
     readonly code: 'missing_prefix';
     readonly column: number;
@@ -571,16 +508,18 @@ export type PrefixFinding = {
 };
 
 /**
- * The unprefixed cells of each checked property column of a seed that also
- * holds `dcid:`-prefixed cells, read from the rows `sheet` sends to the check.
- * The column is checked and each cell is sent. StatVar output carries bare
- * values and gets no findings.
+ * The unprefixed cells of each checked property column of a seed, read from
+ * the rows `sheet` sends to the check, where the column also holds
+ * `dcid:`-prefixed cells or, with `model`, every filled cell names a member
+ * of the property's value list. The column is checked and each cell is sent.
+ * StatVar output carries bare values and gets no findings.
  */
 export function prefixFindings(
     kind: PastedKind,
     mapping: Mapping,
     rows: readonly (readonly string[])[],
     sheet: SheetCheck,
+    model?: Model,
 ): PrefixFinding[] {
     if (kind !== 'seed') return [];
     const sent = new Set(sheet.sheetRows);
@@ -594,7 +533,9 @@ export function prefixFindings(
             }))
             .filter(({ row }) => sent.has(row));
         const present = cells.filter(({ value }) => value !== '');
-        if (!present.some(({ value }) => value.startsWith('dcid:'))) continue;
+        const members = new Set(model?.valueListOfProperty(target.property)?.members);
+        const bareMembers = present.length > 0 && present.every(({ value }) => members.has(value));
+        if (!bareMembers && !present.some(({ value }) => value.startsWith('dcid:'))) continue;
         for (const { row, value } of present) {
             if (!value.startsWith('dcid:'))
                 found.push({ code: 'missing_prefix', column: index, header, row, value });
@@ -643,6 +584,25 @@ export type PastedRead = {
     readonly prefixFindings: readonly PrefixFinding[];
 };
 
+/** A parsed range read through its headers' own mapping with the reader's `switches` applied. */
+const readRange = (
+    model: Model,
+    range: PastedRange,
+    mapped: Mapping,
+    switches: ReadonlyMap<number, ColumnSwitch>,
+): PastedRead => {
+    const kind = pastedKind(range.header);
+    const mapping = applySwitches(mapped, switches);
+    const sheet = rowsToCheck(mapping, range.rows);
+    return {
+        range,
+        mapping,
+        sheet,
+        summary: readSummary(kind, mapping, sheet),
+        prefixFindings: prefixFindings(kind, mapping, range.rows, sheet, model),
+    };
+};
+
 /**
  * Reads a paste, or the text of a chosen `.csv` file, which parse alike,
  * with the reader's column `switches` applied.
@@ -653,17 +613,27 @@ export function readPasted(
     switches: ReadonlyMap<number, ColumnSwitch> = new Map(),
 ): PastedRead {
     const range = parsePasted(text);
-    const kind = pastedKind(range.header);
-    const mapping = applySwitches(mapHeaders(model, range.header, range.rows), switches);
-    const sheet = rowsToCheck(mapping, range.rows);
-    return {
-        range,
-        mapping,
-        sheet,
-        summary: readSummary(kind, mapping, sheet),
-        prefixFindings: prefixFindings(kind, mapping, range.rows, sheet),
-    };
+    return readRange(model, range, mapHeaders(model, range.header, range.rows), switches);
 }
+
+/**
+ * The same text as `read` with `switches` applied, from `read`'s parsed
+ * range, so the text is not scanned again. `read` is a read with no switches.
+ */
+export const switchRead = (
+    model: Model,
+    read: PastedRead,
+    switches: ReadonlyMap<number, ColumnSwitch>,
+): PastedRead => readRange(model, read.range, read.mapping, switches);
+
+/** Every skip reason, in the order the summary line names them. */
+const SKIP_REASONS = [
+    'no_field',
+    'never_constraint',
+    'codes',
+    'duplicate',
+    'switched',
+] as const satisfies readonly SkipReason[];
 
 /** Why columns are not checked, for one column and for several. */
 const REASON_TEXT: Record<SkipReason, readonly [string, string]> = {
@@ -696,7 +666,7 @@ export function readSummaryText(summary: ReadSummary): string {
         lines.push('There is nothing to check until a row fills one of those columns.');
     }
     lines.push(`Checked: ${plural(summary.checked.length, 'column')}.`);
-    const reasons = (Object.keys(REASON_TEXT) as SkipReason[]).flatMap((reason) => {
+    const reasons = SKIP_REASONS.flatMap((reason) => {
         const names = summary.skipped.filter((column) => column.reason === reason);
         return names.length === 0
             ? []

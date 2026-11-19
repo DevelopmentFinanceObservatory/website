@@ -17,9 +17,11 @@ import {
     seedHref,
     seedRows,
     seedsYml,
+    formulaRows,
     type SeedDataset,
 } from '../seed.ts';
-import type { SchemaConstraintValues, SchemaPattern } from '../wire.ts';
+import { readUsage, type SchemaConstraintValues, type SchemaPattern } from '../wire.ts';
+import { usageBody } from './fixtures.ts';
 
 const pattern = (fields: Partial<SchemaPattern>): SchemaPattern => ({
     population_type: 'FinancialFlow',
@@ -51,6 +53,7 @@ const DAC2A_CONSTRAINTS = ['dac2aAidType', 'dacTypeOfFinance', 'financialFlowTyp
 const dac2a: SeedDataset = {
     id: 'provenance/OECDDAC2A',
     label: 'OECD DAC2a',
+    stat_var_count: 2,
     patterns: [
         pattern({ measured_property: 'amount', constraint_properties: DAC2A_CONSTRAINTS }),
         pattern({
@@ -68,6 +71,7 @@ const dac2a: SeedDataset = {
 const crdf: SeedDataset = {
     id: 'provenance/OECDClimateRelatedDevelopmentFinance',
     label: 'OECD Climate-related Development Finance',
+    stat_var_count: 1,
     patterns: [
         pattern({
             population_type: 'FinancialObligation',
@@ -80,6 +84,7 @@ const crdf: SeedDataset = {
 const oneClimate: SeedDataset = {
     id: 'provenance/ONEClimateFinance',
     label: 'ONE Data Climate Finance',
+    stat_var_count: 3,
     patterns: [
         pattern({ constraint_properties: ['financialFlowType', 'climateFinanceType'] }),
         pattern({
@@ -111,6 +116,7 @@ test('a column is pre-filled only when every pattern gives it one value', () => 
         financial_flow_type: 'dcid:Disbursement',
         netting_basis: '',
         unit: '',
+        measurement_method: '',
         measurement_denominator: '',
     });
     assert.equal(fills(crdf).population_type, 'dcid:FinancialObligation');
@@ -135,6 +141,24 @@ test('a column is pre-filled only when every pattern gives it one value', () => 
     assert.equal(added.find((column) => column.property === 'financialFlowType')?.fill, '');
 });
 
+test('a dataset whose patterns cover part of its StatVars pre-fills nothing', () => {
+    const usage = readUsage(usageBody()).provenances.find(
+        ({ ref }) => ref === 'provenance/OECDDAC1',
+    )!;
+    // The usage document lists patterns for 554 of DAC1's 653 StatVars.
+    const dac1: SeedDataset = { ...usage, id: usage.ref, label: 'OECD DAC1' };
+    assert.deepEqual(
+        seedColumns(dac1).filter((column) => column.fill !== ''),
+        [],
+    );
+    // With the patterns covering every StatVar, the shared fields fill.
+    const covered = fills({ ...dac1, stat_var_count: 554 });
+    assert.equal(covered.stat_type, 'dcid:measuredValue');
+    assert.equal(covered.measurement_qualifier, 'dcid:Nominal');
+    // A one-value constraint fills only when its count is the dataset's.
+    assert.equal(fills({ ...dac2a, stat_var_count: 3 }).financial_flow_type, '');
+});
+
 test('the columns follow the minimal layout, with the constraints as a union in first-named order', () => {
     assert.deepEqual(
         seedColumns(oneClimate).map((column) => column.name),
@@ -149,6 +173,7 @@ test('the columns follow the minimal layout, with the constraints as a union in 
             'climate_finance_type',
             'financial_obligation_type',
             'unit',
+            'measurement_method',
             'measurement_denominator',
         ],
     );
@@ -186,8 +211,19 @@ test('pasted codes make one row each, the second tab-separated cell filling stat
     assert.deepEqual(rows[0]?.slice(0, 3), ['106', 'Bilateral, total', 'dcid:FinancialFlow']);
     // A repeated code merges into its first row, which takes the first label given.
     assert.deepEqual(rows[1]?.slice(0, 2), ['218', 'Multilateral']);
-    assert.deepEqual(rows[2]?.slice(0, 2), ['=SUM', '"quoted"']);
+    assert.deepEqual(rows[2]?.slice(0, 2), ['=SUM', 'quoted']);
     assert.ok(rows.every((row) => row.length === columns.length));
+});
+
+test('a multi-line label copied from a spreadsheet stays one row', () => {
+    const { rows } = seedRows(seedColumns(dac2a), 'A1\t"Line one\nline ""two"""\r\nA2\tPlain\n');
+    assert.deepEqual(
+        rows.map((row) => row.slice(0, 2)),
+        [
+            ['A1', 'Line one\nline "two"'],
+            ['A2', 'Plain'],
+        ],
+    );
 });
 
 test('the CSV writes cells verbatim and quotes only what RFC 4180 requires', () => {
@@ -198,6 +234,8 @@ test('the CSV writes cells verbatim and quotes only what RFC 4180 requires', () 
     assert.ok(lines[1]?.startsWith('-1,"Say ""hi"", then",dcid:FinancialObligation'));
     assert.ok(lines[2]?.startsWith('+2,=x,'));
     assert.equal(lines.length, 3);
+    // The rows whose code or label a spreadsheet would run as a formula.
+    assert.deepEqual(formulaRows(seedRows(columns, '-1\tA\nB\t@x\nC\tsafe').rows), [0, 1]);
 });
 
 test('the seeds.yml stub types every column as a string and tests source_code alone', () => {

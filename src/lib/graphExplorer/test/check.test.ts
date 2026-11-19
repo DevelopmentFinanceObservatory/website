@@ -34,7 +34,7 @@ import {
 } from '../check.ts';
 import type { WaitCause } from '../load.ts';
 import { buildModel, openLiterals } from '../model.ts';
-import { mapHeaders, readPasted } from '../pasted.ts';
+import { mapHeaders, readPasted, type PrefixFinding } from '../pasted.ts';
 import {
     CHECK_MAX_ROWS,
     FINDING_CODES,
@@ -425,6 +425,15 @@ const finding = (overrides: Partial<SchemaFinding>): SchemaFinding => ({
 
 /** The sheet row of each checked row: the paste's rows 2 to 9. */
 const SHEET_ROWS = [2, 3, 4, 5, 6, 7, 8, 9];
+
+/** A bare cell on sheet row 5 of a seed column whose other cells carry the prefix. */
+const PREFIX: PrefixFinding = {
+    code: 'missing_prefix',
+    column: 2,
+    header: 'dac1AidType',
+    row: 5,
+    value: 'Net',
+};
 
 /** Findings about the checked row at `index`, sheet row 4 by default. */
 const at = (findings: readonly SchemaFinding[], index = 2): RowFinding[] =>
@@ -819,7 +828,9 @@ test('the findings CSV has a row per finding and per refused row, under the colu
             }),
         ]),
     );
-    const rows = findingsCsvRows(lines, [{ index: 7, detail: 'too many ids' }], SHEET_ROWS);
+    const rows = findingsCsvRows(lines, [{ index: 7, detail: 'too many ids' }], SHEET_ROWS, [
+        PREFIX,
+    ]);
     assert.deepEqual(rows[0], ['row', 'column', 'value', 'code', 'message']);
     assert.deepEqual(rows[1]?.slice(0, 4), [
         '4',
@@ -830,6 +841,7 @@ test('the findings CSV has a row per finding and per refused row, under the colu
     assert.equal(rows[1]?.[4], messageText(findingMessage(model, finding({}))));
     assert.deepEqual(rows[2]?.slice(0, 4), ['4', 'dcid', 'X', 'definition_differs']);
     assert.deepEqual(rows[3], ['9', '', '', 'request_invalid', 'too many ids']);
+    assert.deepEqual(rows[4]?.slice(0, 4), ['5', 'dac1AidType', 'Net', 'missing_prefix']);
 });
 
 test('a cell with an error and a warning is marked as an error; refused rows are flagged', () => {
@@ -848,15 +860,17 @@ test('a cell with an error and a warning is marked as an error; refused rows are
             { index: 99, detail: 'too many' },
         ],
         SHEET_ROWS,
+        [PREFIX, { ...PREFIX, row: 4, column: 2 }],
     );
     assert.deepEqual(
         [...marks.cells],
         [
             [cellKey(4, 2), 'error'],
             [cellKey(6, 2), 'warning'],
+            [cellKey(5, 2), 'warning'],
         ],
     );
-    assert.deepEqual([...marks.flaggedRows].toSorted(), [4, 6, 7, 9]);
+    assert.deepEqual([...marks.flaggedRows].toSorted(), [4, 5, 6, 7, 9]);
 });
 
 test('the result table shows flagged rows and rows without findings in bounded steps', () => {
@@ -879,6 +893,15 @@ test('the result table shows flagged rows and rows without findings in bounded s
     const all = shownRows(1000, flagged, { flagged: 2, quiet: 1000 });
     assert.equal(all.rows.length, 1000);
     assert.equal(all.hiddenQuiet, 0);
+
+    // Skipped rows share the quiet step and are counted apart from the rows without findings.
+    const skipped = shownRows(10, flagged, { flagged: 2, quiet: 2 }, new Set([2, 5, 8]));
+    assert.deepEqual(
+        skipped.rows.map(({ row }) => row),
+        [2, 3, 4],
+    );
+    assert.equal(skipped.hiddenSkipped, 2);
+    assert.equal(skipped.hiddenQuiet, 5);
 });
 
 test('a paste with thousands of flagged rows shows them a step at a time', () => {

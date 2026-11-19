@@ -937,9 +937,8 @@ export type OpenColumns = {
 };
 
 /**
- * The open property columns of `members`. The tree, the value-list CSV and
- * the Google Sheet's value-list tab all read their cells from it, so the
- * three name a reference the same way.
+ * The open property columns of `members`. The tree and the value-list CSV
+ * both read their cells from it, so the two name a reference the same way.
  */
 export function openColumns(model: Model, members: readonly string[]): OpenColumns {
     const fields = memberFields(model, members);

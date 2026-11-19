@@ -10,7 +10,6 @@ import {
     mapHeaders,
     parsePasted,
     readPasted,
-    readSummaryText,
     switchColumn,
     type ColumnSwitch,
     type ReadSummary,
@@ -18,7 +17,7 @@ import {
 } from '../pasted.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
-import { seedCsv, type SeedName } from './seedFixtures.ts';
+import { seedFixture, type SeedName } from './seedFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 
@@ -125,7 +124,7 @@ const EXPECTED: Record<SeedName, Expected> = {
 
 for (const [name, expected] of Object.entries(EXPECTED) as [SeedName, Expected][]) {
     test(`${name} reads as a seed with the columns, skips and rows of its summary`, () => {
-        const { summary, sheet } = readPasted(model, seedCsv(name));
+        const { summary, sheet } = readPasted(model, seedFixture(name));
         assert.equal(summary.kind, 'seed');
         assert.equal(summary.rows, expected.rows);
         assert.equal(summary.skippedRows, expected.skippedRows);
@@ -136,11 +135,11 @@ for (const [name, expected] of Object.entries(EXPECTED) as [SeedName, Expected][
 }
 
 test('rows that reuse a StatVar are skipped and named by sheet row', () => {
-    assert.deepEqual(readPasted(model, seedCsv('dac1')).sheet.skipped, [2, 5]);
+    assert.deepEqual(readPasted(model, seedFixture('dac1')).sheet.skipped, [2, 5]);
 });
 
 test('a paste with a dcid column is StatVar output and checks every mapped column', () => {
-    const { header, rows } = parsePasted(seedCsv('dac2a'));
+    const { header, rows } = parsePasted(seedFixture('dac2a'));
     const text = [['dcid', ...header], ...rows.map((row) => ['X', ...row])]
         .map((cells) => cells.join(','))
         .join('\n');
@@ -190,7 +189,7 @@ test('a column with prefixed and bare cells stays checked, and each bare cell is
 });
 
 test('a reader switch overrides a default skip, and the skipped property keeps its name', () => {
-    const text = seedCsv('dac2a');
+    const text = seedFixture('dac2a');
     const base = readPasted(model, text);
     const index = base.mapping.find(({ header }) => header === 'dac2a_aid_type')!.index;
     const switches = new Map<number, ColumnSwitch>([
@@ -204,7 +203,7 @@ test('a reader switch overrides a default skip, and the skipped property keeps i
 });
 
 test('a comma-separated file and the same range pasted from a spreadsheet read alike', () => {
-    const csv = seedCsv('weo');
+    const csv = seedFixture('weo');
     const { header, rows } = parsePasted(csv);
     const tabs = [header, ...rows].map((cells) => cells.join('\t')).join('\n');
     const a = readPasted(model, csv);
@@ -213,8 +212,34 @@ test('a comma-separated file and the same range pasted from a spreadsheet read a
     assert.deepEqual(b.sheet, a.sheet);
 });
 
-test('the summary line words each skip reason for one column or several', () => {
-    const text = readSummaryText(readPasted(model, seedCsv('dac2a')).summary);
-    assert.match(text, /aid_type \(the check has no field for it\)/);
-    assert.match(text, /measurement_method and unit \(never constraints\)/);
+test('a codes column is decided from the rows the check sends', () => {
+    const text = [
+        'source_code,statvar_dcid,population_type,measured_property,stat_type,dac1_aid_type',
+        // A row that reuses a StatVar is skipped, so its prefixed cell does not count.
+        'A,dcid:X,,,,dcid:DAC1AidType1010',
+        'B,,dcid:FinancialFlow,dcid:amount,dcid:measuredValue,1010',
+        'C,,dcid:FinancialFlow,dcid:amount,dcid:measuredValue,1015',
+    ].join('\n');
+    const read = readPasted(model, text);
+    assert.deepEqual(read.sheet.skipped, [2]);
+    assert.equal(skips(read.summary).dac1_aid_type, 'codes');
+    assert.deepEqual(read.sheet.rows[0]?.constraint_properties, {});
+    assert.deepEqual(read.prefixFindings, []);
+});
+
+test('a column of bare dcids of its value list is checked, and each cell is a finding', () => {
+    const text = [
+        'population_type,measured_property,stat_type,netting_basis',
+        'dcid:FinancialFlow,dcid:amount,dcid:measuredValue,Gross',
+        'dcid:FinancialFlow,dcid:amount,dcid:measuredValue,Net',
+    ].join('\n');
+    const read = readPasted(model, text);
+    assert.ok(headers(read.summary.checked).includes('netting_basis'));
+    assert.deepEqual(
+        read.prefixFindings.map(({ code, row, value }) => [code, row, value]),
+        [
+            ['missing_prefix', 2, 'Gross'],
+            ['missing_prefix', 3, 'Net'],
+        ],
+    );
 });

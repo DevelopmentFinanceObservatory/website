@@ -15,7 +15,7 @@ import {
     type WaitCause,
 } from './load.ts';
 import { KIND_WORDS, openLiterals, type Model } from './model.ts';
-import { findingColumn, sheetRow, type Mapping } from './pasted.ts';
+import { findingColumn, sheetRow, type Mapping, type PrefixFinding } from './pasted.ts';
 import { columnName } from './seed.ts';
 import type { SentencePart } from './sentence.ts';
 import {
@@ -633,11 +633,12 @@ export type SheetMarks = {
     readonly flaggedRows: ReadonlySet<number>;
 };
 
-/** The marks on the pasted table: each flagged cell and each flagged row. */
+/** The marks on the pasted table: each flagged cell and each flagged row. A prefix finding marks a warning. */
 export function sheetMarks(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
     sheetRows: readonly number[],
+    prefix: readonly PrefixFinding[] = [],
 ): SheetMarks {
     const cells = new Map<string, 'error' | 'warning'>();
     const flaggedRows = new Set<number>();
@@ -651,6 +652,11 @@ export function sheetMarks(
     for (const { index } of refused) {
         const row = sheetRows[index];
         if (row !== undefined) flaggedRows.add(row);
+    }
+    for (const { row, column } of prefix) {
+        flaggedRows.add(row);
+        const key = cellKey(row, column);
+        if (!cells.has(key)) cells.set(key, 'warning');
     }
     return { cells, flaggedRows };
 }
@@ -672,31 +678,40 @@ export type ShownCounts = { readonly flagged: number; readonly quiet: number };
 
 /**
  * The rows the result table shows, in sheet order. They are the first
- * `shown.flagged` flagged rows and the first `shown.quiet` rows without a
- * finding.
- * `hiddenFlagged` and `hiddenQuiet` count the rows of each kind left out.
+ * `shown.flagged` flagged rows and the first `shown.quiet` of the other
+ * rows, which are the rows without a finding and the `skipped` rows the
+ * check was not sent. `hiddenFlagged`, `hiddenQuiet` and `hiddenSkipped`
+ * count the rows of each kind left out.
  */
 export function shownRows(
     dataRows: number,
     flaggedRows: ReadonlySet<number>,
     shown: ShownCounts,
+    skipped: ReadonlySet<number> = new Set(),
 ): {
     readonly rows: readonly ShownRow[];
     readonly hiddenFlagged: number;
     readonly hiddenQuiet: number;
+    readonly hiddenSkipped: number;
 } {
     const rows: ShownRow[] = [];
     let flagged = 0;
-    let quiet = 0;
+    let other = 0;
+    let hiddenQuiet = 0;
+    let hiddenSkipped = 0;
     for (let dataIndex = 0; dataIndex < dataRows; dataIndex += 1) {
         const row = sheetRow(dataIndex);
-        const take = flaggedRows.has(row) ? flagged++ < shown.flagged : quiet++ < shown.quiet;
-        if (take) rows.push({ dataIndex, row });
+        if (flaggedRows.has(row)) {
+            if (flagged++ < shown.flagged) rows.push({ dataIndex, row });
+        } else if (other++ < shown.quiet) rows.push({ dataIndex, row });
+        else if (skipped.has(row)) hiddenSkipped += 1;
+        else hiddenQuiet += 1;
     }
     return {
         rows,
         hiddenFlagged: Math.max(0, flagged - shown.flagged),
-        hiddenQuiet: Math.max(0, quiet - shown.quiet),
+        hiddenQuiet,
+        hiddenSkipped,
     };
 }
 
@@ -770,11 +785,16 @@ export const messageText = (parts: readonly MessagePart[]): string =>
         .join('')
         .trim();
 
-/** The findings as CSV rows under a header: row, column, value, code, message. */
+/** The line a prefix finding reads as, in the page and the findings CSV. */
+const prefixMessage = ({ value }: PrefixFinding): string =>
+    `${value} has no dcid: prefix. Write dcid:${value} if it names a node of the graph.`;
+
+/** The findings as CSV rows under a header: row, column, value, code, message. Prefix findings come last. */
 export function findingsCsvRows(
     lines: readonly FindingLine[],
     refused: readonly RefusedRow[],
     sheetRows: readonly number[],
+    prefix: readonly PrefixFinding[] = [],
 ): string[][] {
     return [
         ['row', 'column', 'value', 'code', 'message'],
@@ -791,6 +811,13 @@ export function findingsCsvRows(
             '',
             'request_invalid',
             detail,
+        ]),
+        ...prefix.map((found) => [
+            String(found.row),
+            found.header,
+            found.value,
+            found.code,
+            prefixMessage(found),
         ]),
     ];
 }

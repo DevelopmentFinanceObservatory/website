@@ -8,5 +8,5 @@ import { readFileSync } from 'node:fs';
 
 export type SeedName = 'weo' | 'dac1' | 'dac2a' | 'ids';
 
-export const seedCsv = (name: SeedName): string =>
+export const seedFixture = (name: SeedName): string =>
     readFileSync(new URL(`./fixtures/seeds/${name}.csv`, import.meta.url), 'utf8');

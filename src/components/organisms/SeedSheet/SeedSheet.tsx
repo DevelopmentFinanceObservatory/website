@@ -26,6 +26,7 @@ import { patternId, type Model } from '@/lib/graphExplorer/model';
 import {
     columnName,
     datasetConstraints,
+    formulaRows,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -118,6 +119,9 @@ const ValuePanel = ({
             () => setCopied({ value, state: 'blocked' }),
         );
     };
+    // One status line for the panel, naming the value so each copy reads differently.
+    const status =
+        copied?.state === 'done' ? `Copied dcid:${copied.value}.` : copyText(copied?.state ?? null);
 
     return (
         <section id={id} className={styles.panel} aria-label={`Values of ${columnName(property)}`}>
@@ -134,7 +138,9 @@ const ValuePanel = ({
                     Close
                 </Button>
             </div>
-            <p className={styles.note}>Copy a value as it goes in the cell.</p>
+            <p className={styles.note}>
+                Copy a value as it goes in the cell. <span role="status">{status}</span>
+            </p>
             <div className={styles.values}>
                 <table className={styles.sheet}>
                     <caption className={styles.hidden}>
@@ -158,9 +164,6 @@ const ValuePanel = ({
                                         <Button small onClick={() => copy(value)}>
                                             Copy
                                         </Button>
-                                        <span role="status" className={styles.status}>
-                                            {copied?.value === value ? copyText(copied.state) : ''}
-                                        </span>
                                     </span>
                                 </td>
                             </tr>
@@ -218,15 +221,15 @@ const SeedTable = ({ columns, rows, open, panelId, onOpen }: SeedTableProps) => 
                             return (
                                 <th key={name} scope="col">
                                     {listed ? (
-                                        <button
-                                            type="button"
-                                            className={styles.heading}
+                                        <Button
+                                            variant="inline"
+                                            className={styles.headingToggle}
                                             aria-expanded={expanded}
                                             aria-controls={expanded ? panelId : undefined}
                                             onClick={() => onOpen(expanded ? null : property)}
                                         >
                                             {name}
-                                        </button>
+                                        </Button>
                                     ) : (
                                         name
                                     )}
@@ -272,7 +275,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const checkStep = useRef<HTMLDivElement | null>(null);
     const [codes, setCodes] = useState('');
     const [open, setOpen] = useState<string | null>(null);
-    const [copied, setCopied] = useState<CopyState>(null);
+    // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
+    const [copied, setCopied] = useState<{ state: CopyState; yml: string } | null>(null);
 
     const query = useMemo(() => readSeedQuery(params), [params]);
     const datasets = useMemo(
@@ -287,24 +291,32 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 : {
                       id: usage.ref,
                       label: model.label(usage.ref),
+                      stat_var_count: usage.stat_var_count,
                       patterns: usage.patterns,
                       constraint_values: usage.constraint_values,
                   },
         [model, usage],
     );
-    // An added id the model holds no property for makes no column.
+    const used = useMemo(() => usedConstraints(model), [model]);
+    // An added id makes a column only when some dataset uses it, so the page lists a tick box for it.
     const choice = useMemo(
         () => ({
             dropped: query.dropped,
-            added: query.added.filter((id) => model.kind(id) === 'property'),
+            added: query.added.filter((id) => used.includes(id)),
         }),
-        [model, query],
+        [used, query],
     );
     const columns = useMemo(
         () => (dataset === null ? [] : seedColumns(dataset, choice)),
         [dataset, choice],
     );
     const { rows, merged } = useMemo(() => seedRows(columns, codes), [columns, codes]);
+    const own = useMemo(() => (dataset === null ? [] : datasetConstraints(dataset)), [dataset]);
+    const others = used.filter((property) => !own.includes(property));
+    // The "more constraints" box opens when the URL adds one of them, then follows the reader.
+    const [moreOpen, setMoreOpen] = useState(() =>
+        others.some((property) => choice.added.includes(property)),
+    );
 
     useEffect(() => {
         if (openAt === 'check') checkStep.current?.scrollIntoView({ block: 'start' });
@@ -327,10 +339,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         );
     }
 
-    const own = datasetConstraints(dataset);
     const dropped = new Set(choice.dropped);
     const added = new Set(choice.added);
-    const others = usedConstraints(model).filter((property) => !own.includes(property));
     const write = (next: Partial<SeedQuery>) =>
         writeQuery({ dataset: dataset.id, ...choice, ...next }, carried);
     const toggle = (list: 'dropped' | 'added', property: string) =>
@@ -343,11 +353,13 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         ? open
         : null;
     const prefilled = columns.some((column) => column.fill !== '');
+    const formulas = formulaRows(rows).length;
+    const yml = seedsYml(NEW_SEED_NAME, columns);
 
     const copyYml = () => {
-        navigator.clipboard.writeText(seedsYml(NEW_SEED_NAME, columns)).then(
-            () => setCopied('done'),
-            () => setCopied('blocked'),
+        navigator.clipboard.writeText(yml).then(
+            () => setCopied({ state: 'done', yml }),
+            () => setCopied({ state: 'blocked', yml }),
         );
     };
     const download = () =>
@@ -370,9 +382,9 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
             <SheetSection title="1. Which existing dataset is closest?">
                 <div className={styles.pick} role="group" aria-label="Dataset">
                     {datasets.map((each) => (
-                        <button
+                        <Button
                             key={each.ref}
-                            type="button"
+                            variant="card"
                             className={styles.choice}
                             aria-pressed={each.ref === dataset.id}
                             onClick={() => {
@@ -385,7 +397,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                 {plural(each.stat_var_count, 'StatVar')},{' '}
                                 {plural(each.patterns.length, 'pattern')}
                             </span>
-                        </button>
+                        </Button>
                     ))}
                 </div>
                 <ul className={styles.patterns}>
@@ -444,7 +456,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     {others.length > 0 && (
                         <details
                             className={styles.more}
-                            open={others.some((property) => added.has(property)) || undefined}
+                            open={moreOpen}
+                            onToggle={(event) => setMoreOpen(event.currentTarget.open)}
                         >
                             <summary>
                                 {plural(others.length, 'more constraint')} other datasets use
@@ -477,8 +490,19 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     {prefilled &&
                         `Grey cells are filled because every StatVar of ${dataset.label} uses that value. `}
                     Hatched cells are yours to fill. An empty constraint cell means the StatVar has
-                    no such constraint. Open a constraint heading to see its values.
+                    no such constraint. A row that reuses a StatVar defined elsewhere leaves{' '}
+                    <code>population_type</code>, <code>measured_property</code> and{' '}
+                    <code>stat_type</code> empty, so clear any grey cell there. Open a constraint
+                    heading to see its values.
                 </p>
+                {formulas > 0 && (
+                    <p className={styles.warning}>
+                        {plural(formulas, 'row')} {formulas === 1 ? 'starts its' : 'start their'}{' '}
+                        code or label with <code>=</code>, <code>+</code>, <code>-</code> or{' '}
+                        <code>@</code>. The CSV keeps the cell as written, which a spreadsheet
+                        opening it may run as a formula.
+                    </p>
+                )}
                 {shownOpen !== null && (
                     <ValuePanel id={panelId} property={shownOpen} onClose={() => setOpen(null)} />
                 )}
@@ -490,7 +514,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         Copy seeds.yml
                     </Button>
                     <span className={styles.status} role="status">
-                        {copyText(copied)}
+                        {copied?.yml === yml ? copyText(copied.state) : ''}
                     </span>
                 </div>
                 <p className={styles.note}>
@@ -514,6 +538,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
  * the section's layout loaded.
  */
 const SeedSheet = ({ openAt = 'start' }: { openAt?: 'start' | 'check' }) => {
+    // Check a sheet opens at the check step and carries its own name, as TopBar marks it.
+    const title = openAt === 'check' ? 'Check a sheet' : 'Seed a dataset';
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
 
@@ -525,7 +551,7 @@ const SeedSheet = ({ openAt = 'start' }: { openAt?: 'start' | 'check' }) => {
                     <div className={styles.page}>
                         <header className={styles.header}>
                             <p className={styles.label}>Pipeline seeds</p>
-                            <h1 className={styles.title}>Seed a dataset</h1>
+                            <h1 className={styles.title}>{title}</h1>
                             <p className={styles.lead}>
                                 Start a new dataset&rsquo;s seed from the closest existing dataset
                                 and the source&rsquo;s codes, then check the filled seed against the

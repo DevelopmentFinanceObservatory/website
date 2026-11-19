@@ -1,22 +1,28 @@
 /**
  * A seed for a new dataset, in dfo-pipelines' minimal layout: one row per
  * source code, the identity columns, one snake_case column per constraint
- * property, `unit` and `measurement_denominator`. The columns come from an
- * existing dataset's patterns, the rows from pasted codes.
+ * property, `unit`, `measurement_method` and `measurement_denominator`. The
+ * columns come from an existing dataset's patterns, the rows from pasted
+ * codes.
  *
  * - The constraint columns are the union over the dataset's patterns, in the
  *   order the patterns first name them. A reader drops or adds columns.
+ * - Cells are pre-filled only when the patterns' StatVar counts sum to the
+ *   dataset's own count, so every StatVar of the dataset follows a listed
+ *   pattern. The usage document can list patterns for part of a dataset
+ *   (OECD DAC1's cover 554 of its 653 StatVars), and then nothing fills.
  * - An identity column (population type, measured property, stat type,
  *   measurement qualifier, measurement denominator) is pre-filled, as a
- *   `dcid:` cell, only when every pattern of the dataset carries it with the
- *   same value. A dataset that spans several values leaves the column empty.
- * - A constraint column is pre-filled the same way when every pattern of the
- *   dataset carries the property and one value covers all of the patterns'
- *   StatVars (DAC2A's `financial_flow_type` is `dcid:Disbursement`).
- *   Other constraint cells, `unit` and `statvar_name` start empty. A pasted
- *   label fills `statvar_name`.
+ *   `dcid:` cell, when every pattern carries it with the same value. A
+ *   dataset that spans several values leaves the column empty.
+ * - A constraint column is pre-filled the same way when every pattern
+ *   carries the property and one value is held by every StatVar of the
+ *   dataset (DAC2A's `financial_flow_type` is `dcid:Disbursement`). Other
+ *   constraint cells, `unit`, `measurement_method` and `statvar_name` start
+ *   empty. A pasted label fills `statvar_name`.
  * - The CSV writes cells verbatim, RFC 4180 quoting only. A seed is read by
- *   dbt, so a leading `=`, `+`, `-` or `@` stays as written.
+ *   dbt, so a leading `=`, `+`, `-` or `@` stays as written, and formulaRows
+ *   names the rows a spreadsheet would run as a formula.
  * - The query holds `dataset`, `drop` (the dropped constraint properties) and
  *   `add` (the added ones), each a comma-separated list of dcids, with the
  *   carried parameters (explore.ts).
@@ -28,13 +34,15 @@ import {
     type Carried,
     type QueryReader,
 } from './explore.ts';
+import { scan } from './delimited.ts';
 import { SEED_PATH } from './paths.ts';
+import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
 
-/** The dataset patterns and constraint values a seed's columns are read from. */
-export type SeedSource = Pick<ProvenanceUsage, 'patterns' | 'constraint_values'>;
+/** The dataset's StatVar count, patterns and constraint values a seed's columns are read from. */
+export type SeedSource = Pick<ProvenanceUsage, 'stat_var_count' | 'patterns' | 'constraint_values'>;
 
-/** The dataset a seed copies: its id, label, patterns and constraint values. */
+/** The dataset a seed copies: its id, label, StatVar count, patterns and constraint values. */
 export type SeedDataset = SeedSource & { readonly id: string; readonly label: string };
 
 /** The identity fields of a pattern that become columns of the same name. */
@@ -110,11 +118,16 @@ const IDENTITY_DESCRIPTIONS: Readonly<Record<IdentityName, string>> = {
         'The StatVar this one is a ratio of, as a dcid: node id. Empty for none.',
 };
 
+/** Whether the patterns' StatVar counts sum to the dataset's, so every StatVar follows a listed pattern. */
+const patternsCover = (dataset: SeedSource): boolean =>
+    dataset.patterns.reduce((sum, pattern) => sum + pattern.stat_var_count, 0) ===
+    dataset.stat_var_count;
+
 /**
  * The one value every StatVar of the dataset gives a constraint property, as
  * a `dcid:` cell, or ''. The value fills only when every pattern carries the
  * property, the dataset's constraint values hold that one value, and its
- * StatVar count equals the patterns' total, so no StatVar is left unknown.
+ * StatVar count equals the dataset's, so no StatVar is left unknown.
  */
 const sharedConstraint = (dataset: SeedSource, property: string): string => {
     if (!dataset.patterns.every((pattern) => pattern.constraint_properties.includes(property))) {
@@ -122,8 +135,9 @@ const sharedConstraint = (dataset: SeedSource, property: string): string => {
     }
     const values = dataset.constraint_values.find((entry) => entry.property === property)?.values;
     const [only] = values?.length === 1 ? values : [];
-    const total = dataset.patterns.reduce((sum, pattern) => sum + pattern.stat_var_count, 0);
-    return only !== undefined && only.stat_var_count === total ? `dcid:${only.value}` : '';
+    return only !== undefined && only.stat_var_count === dataset.stat_var_count
+        ? `dcid:${only.value}`
+        : '';
 };
 
 /** The columns of a seed for a dataset, in the minimal layout. */
@@ -131,6 +145,7 @@ export function seedColumns(
     dataset: SeedSource,
     choice: SeedChoice = NO_SEED_CHOICE,
 ): readonly SeedColumn[] {
+    const covered = patternsCover(dataset);
     const column = (
         name: string,
         kind: SeedColumn['kind'],
@@ -138,20 +153,19 @@ export function seedColumns(
         fill = '',
         property: string | null = null,
     ): SeedColumn => Object.freeze({ name, kind, property, fill, description });
-    const identity = (name: IdentityName): SeedColumn => {
-        return column(
+    const identity = (name: IdentityName): SeedColumn =>
+        column(
             name,
             'identity',
             IDENTITY_DESCRIPTIONS[name],
-            sharedValue(dataset.patterns, name),
+            covered ? sharedValue(dataset.patterns, name) : '',
         );
-    };
     const constraint = (property: string): SeedColumn =>
         column(
             columnName(property),
             'constraint',
             `The value of the constraint property ${property}, as a dcid: node id. Empty for no constraint.`,
-            sharedConstraint(dataset, property),
+            covered ? sharedConstraint(dataset, property) : '',
             property,
         );
     return Object.freeze([
@@ -163,6 +177,11 @@ export function seedColumns(
         identity('measurement_qualifier'),
         ...activeConstraints(dataset, choice).map(constraint),
         column('unit', 'extra', 'The unit of the value. Empty for none.'),
+        column(
+            'measurement_method',
+            'extra',
+            'How the value was measured (for example Modelled), as a dcid: node id. Empty for none.',
+        ),
         identity('measurement_denominator'),
     ]);
 }
@@ -175,15 +194,16 @@ export type SeedRows = {
 
 /**
  * The rows pasted codes make, one per code. Each non-blank line gives a code
- * (its first tab-separated cell) and a label (its second). A code repeated
- * on a later line is merged into its first row, which takes the first label
- * any of its lines give. Every other cell is the column's fill.
+ * (its first tab-separated cell) and a label (its second), read with the
+ * quotes a spreadsheet puts around a cell that holds a line break or a
+ * quote. A code repeated on a later line is merged into its first row, which
+ * takes the first label any of its lines give. Every other cell is the
+ * column's fill.
  */
 export function seedRows(columns: readonly SeedColumn[], pasted: string): SeedRows {
     const labels = new Map<string, string>();
     let merged = 0;
-    for (const line of pasted.split(/\r\n|\r|\n/)) {
-        const [first = '', second = ''] = line.split('\t');
+    for (const [first = '', second = ''] of scan(pasted, '\t').records) {
         const code = first.trim();
         if (code === '') continue;
         const label = second.trim();
@@ -201,18 +221,20 @@ export function seedRows(columns: readonly SeedColumn[], pasted: string): SeedRo
     return { rows, merged };
 }
 
-/** A CSV field, quoted per RFC 4180 when it holds a comma, quote or line break and verbatim otherwise. */
-const csvField = (raw: string): string =>
-    /[",\r\n]/.test(raw) ? `"${raw.replaceAll('"', '""')}"` : raw;
-
-/** The seed as CSV: a header row, then the rows, lines ending CRLF. */
+/** The seed as CSV: a header row, then the rows, lines ending CRLF, cells verbatim. */
 export const seedCsv = (
     columns: readonly SeedColumn[],
     rows: readonly (readonly string[])[],
-): string =>
-    [columns.map((column) => column.name), ...rows]
-        .map((row) => row.map(csvField).join(','))
-        .join('\r\n');
+): string => toCsv([columns.map((column) => column.name), ...rows], { verbatim: true });
+
+/**
+ * The indexes of the rows whose code or label starts with `=`, `+`, `-` or
+ * `@`, which a spreadsheet opening the CSV may run as a formula.
+ */
+export const formulaRows = (rows: readonly (readonly string[])[]): number[] =>
+    rows.flatMap((row, index) =>
+        row.slice(0, 2).some((cell) => /^[=+\-@]/.test(cell)) ? [index] : [],
+    );
 
 /** The name a new seed's file and `seeds.yml` entry take until the author renames them. */
 export const NEW_SEED_NAME = 'new_indicator_mapping';

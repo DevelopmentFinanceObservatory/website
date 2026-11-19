@@ -38,6 +38,7 @@ import {
     readSummaryText,
     sheetProblems,
     sheetProblemText,
+    switchRead,
     type ColumnSwitch,
     type ColumnTarget,
     type Mapping,
@@ -54,6 +55,10 @@ type Checked = {
     readonly pasted: PastedRange;
     /** The sheet row of each checked row. */
     readonly sheetRows: readonly number[];
+    /** The sheet rows the check was not sent, as rows that reuse a StatVar. */
+    readonly skipped: ReadonlySet<number>;
+    /** The cells that lack the `dcid:` prefix, as the page read them. */
+    readonly prefix: readonly PrefixFinding[];
 };
 
 type Run =
@@ -180,12 +185,13 @@ type SheetTableProps = {
     pasted: PastedRange;
     rows: readonly ShownRow[];
     marks: SheetMarks;
+    skipped: ReadonlySet<number>;
     cellId: (key: string) => string;
     rowId: (row: number) => string;
 };
 
 /** The shown rows of the pasted table, flagged cells marked. */
-const SheetTable = ({ pasted, rows, marks, cellId, rowId }: SheetTableProps) => {
+const SheetTable = ({ pasted, rows, marks, skipped, cellId, rowId }: SheetTableProps) => {
     const captionId = useId();
     return (
         <div
@@ -221,7 +227,12 @@ const SheetTable = ({ pasted, rows, marks, cellId, rowId }: SheetTableProps) => 
                                 // "Show N More" moves focus here when its last step unmounts it.
                                 tabIndex={-1}
                             >
-                                <th scope="row">{row}</th>
+                                <th scope="row">
+                                    {row}
+                                    {skipped.has(row) && (
+                                        <span className={styles.skipTag}> skipped</span>
+                                    )}
+                                </th>
                                 {pasted.header.map((_, index) => {
                                     const key = cellKey(row, index);
                                     const mark = marks.cells.get(key);
@@ -268,6 +279,15 @@ const ShowMore = ({ note, hidden, step, onShow }: ShowMoreProps) => {
     );
 };
 
+/** "N more rows without findings and M skipped rows not shown." */
+const quietNote = (quiet: number, skipped: number): string => {
+    const parts = [
+        ...(quiet > 0 ? [`${plural(quiet, 'more row')} without findings`] : []),
+        ...(skipped > 0 ? [`${plural(skipped, 'skipped row')}`] : []),
+    ];
+    return `${parts.join(' and ')} not shown.`;
+};
+
 /** Where focus goes once a "Show N More" that showed its last step unmounts. */
 type FocusAfter = { readonly list: 'flagged' | 'quiet' | 'findings'; readonly from: number };
 
@@ -282,15 +302,15 @@ const Results = ({ checked }: { checked: Checked }) => {
     const focusAfter = useRef<FocusAfter | null>(null);
     // The cell to light and focus once the row holding it is rendered.
     const pending = useRef<string | null>(null);
-    const { result, mapping, pasted, sheetRows } = checked;
+    const { result, mapping, pasted, sheetRows, skipped, prefix: prefixFound } = checked;
 
     const lines = useMemo(
         () => findingLines(model, mapping, sheetRows, result.findings),
         [model, mapping, sheetRows, result.findings],
     );
     const marks = useMemo(
-        () => sheetMarks(lines, result.refused, sheetRows),
-        [lines, result.refused, sheetRows],
+        () => sheetMarks(lines, result.refused, sheetRows, prefixFound),
+        [lines, result.refused, sheetRows, prefixFound],
     );
     const shownLines = useMemo(() => lines.slice(0, findingsShown), [lines, findingsShown]);
     // The closest values for the lines on screen only, each property and value pair once per model.
@@ -301,11 +321,13 @@ const Results = ({ checked }: { checked: Checked }) => {
     );
     const shown = useMemo(
         () =>
-            shownRows(pasted.rows.length, marks.flaggedRows, {
-                flagged: flaggedShown,
-                quiet: quietShown,
-            }),
-        [pasted.rows.length, marks.flaggedRows, flaggedShown, quietShown],
+            shownRows(
+                pasted.rows.length,
+                marks.flaggedRows,
+                { flagged: flaggedShown, quiet: quietShown },
+                skipped,
+            ),
+        [pasted.rows.length, marks.flaggedRows, flaggedShown, quietShown, skipped],
     );
     const cellId = useCallback((key: string) => `${prefix}-${key.replace(':', '-')}`, [prefix]);
     const rowId = useCallback((row: number) => `${prefix}-row-${row}`, [prefix]);
@@ -365,6 +387,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                 pasted={pasted}
                 rows={shown.rows}
                 marks={marks}
+                skipped={skipped}
                 cellId={cellId}
                 rowId={rowId}
             />
@@ -378,8 +401,8 @@ const Results = ({ checked }: { checked: Checked }) => {
                 }}
             />
             <ShowMore
-                note={`${plural(shown.hiddenQuiet, 'more row')} without findings not shown.`}
-                hidden={shown.hiddenQuiet}
+                note={quietNote(shown.hiddenQuiet, shown.hiddenSkipped)}
+                hidden={shown.hiddenQuiet + shown.hiddenSkipped}
                 step={QUIET_ROWS_STEP}
                 onShow={(last) => {
                     showStep('quiet', quietShown, last);
@@ -465,7 +488,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                 <Button
                     onClick={() =>
                         downloadCsv(
-                            findingsCsvRows(lines, result.refused, sheetRows),
+                            findingsCsvRows(lines, result.refused, sheetRows, prefixFound),
                             'seed-findings.csv',
                         )
                     }
@@ -483,8 +506,12 @@ const statusText = (run: Run): string => {
         return `Checked ${run.checked.toLocaleString('en-GB')} of ${plural(run.total, 'row')}.`;
     }
     if (run.status === 'done') {
-        const sentence = resultSentence(run.checked.result, run.checked.sheetRows.length);
-        return flaggedRowCount(run.checked.result) === 0
+        const { result, sheetRows, prefix } = run.checked;
+        const sentence = resultSentence(result, sheetRows.length);
+        if (prefix.length > 0) {
+            return `${sentence} ${plural(prefix.length, 'cell')} ${prefix.length === 1 ? 'lacks' : 'lack'} the dcid: prefix.`;
+        }
+        return flaggedRowCount(result) === 0
             ? `${sentence} The check does not cover unit or measurement_method.`
             : sentence;
     }
@@ -495,7 +522,10 @@ const statusText = (run: Run): string => {
 /** How long typing in the paste box pauses before the pasted text is read again. */
 const READ_PAUSE_MS = 300;
 
-/** The cells of a mixed seed column that lack the `dcid:` prefix, one line each. */
+/** The largest file the page reads, well past any seed or StatVar output. */
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/** The cells of a checked seed column that lack the `dcid:` prefix, one line each. */
 const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
     if (found.length === 0) return null;
     return (
@@ -509,8 +539,7 @@ const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
                                 Row {row}, {header}
                             </b>
                             . <code className={styles.value}>{value}</code> has no{' '}
-                            <code className={styles.value}>dcid:</code> prefix, which the other
-                            cells of the column carry. Write{' '}
+                            <code className={styles.value}>dcid:</code> prefix. Write{' '}
                             <code className={styles.value}>dcid:{value}</code> if it names a node of
                             the graph.
                         </span>
@@ -531,6 +560,8 @@ const CheckSheet = ({ title }: { title: string }) => {
     const textId = useId();
     const fileInput = useRef<HTMLInputElement | null>(null);
     const [text, setText] = useState('');
+    // The text as last set, which a file read that finishes late compares against.
+    const latest = useRef('');
     // The text the columns and rows are read from, which is `text` once typing pauses.
     const [settled, setSettled] = useState('');
     // What came of the last chosen file, until the text changes.
@@ -549,8 +580,8 @@ const CheckSheet = ({ title }: { title: string }) => {
     // The page's own reading of each column, which a reader's switch overrides.
     const read = useMemo(() => readPasted(model, settled), [model, settled]);
     const current = useMemo(
-        () => (switches.size === 0 ? read : readPasted(model, settled, switches)),
-        [model, settled, switches, read],
+        () => (switches.size === 0 ? read : switchRead(model, read, switches)),
+        [model, switches, read],
     );
     const { range: pasted, mapping, sheet, summary } = current;
     const problems = useMemo(() => sheetProblems(mapping, sheet), [mapping, sheet]);
@@ -562,6 +593,7 @@ const CheckSheet = ({ title }: { title: string }) => {
         setRun({ status: 'idle' });
     };
     const paste = (value: string) => {
+        latest.current = value;
         setText(value);
         setFileNote(null);
         reset();
@@ -572,13 +604,35 @@ const CheckSheet = ({ title }: { title: string }) => {
     };
     const choose = async (chosen: File | undefined) => {
         if (chosen === undefined) return;
+        if (chosen.size > MAX_FILE_BYTES) {
+            setFileNote(
+                `${chosen.name} is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB, more than a seed or StatVar output holds.`,
+            );
+            return;
+        }
+        const before = latest.current;
+        let bytes: ArrayBuffer;
         try {
-            pasteNow(await chosen.text());
-            setFileNote(`Read from ${chosen.name}.`);
+            bytes = await chosen.arrayBuffer();
         } catch (error) {
             console.error('Graph Explorer: the chosen file could not be read', error);
             setFileNote(`${chosen.name} could not be read.`);
+            return;
         }
+        let content: string;
+        try {
+            content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        } catch {
+            // A fatal decoder throws only on bytes that are not UTF-8.
+            setFileNote(
+                `${chosen.name} is not UTF-8 text. Save it as CSV UTF-8 and choose it again.`,
+            );
+            return;
+        }
+        // Text typed or pasted while the file loaded is the reader's newer choice.
+        if (latest.current !== before) return;
+        pasteNow(content);
+        setFileNote(`Read from ${chosen.name}.`);
     };
     const switchTo = (index: number, to: Switch | null) => {
         const next = new Map(switches);
@@ -594,7 +648,13 @@ const CheckSheet = ({ title }: { title: string }) => {
         const abort = new AbortController();
         controller.current = abort;
         const { rows, sheetRows } = sheet;
-        const snapshot = { mapping, pasted, sheetRows };
+        const snapshot = {
+            mapping,
+            pasted,
+            sheetRows,
+            skipped: new Set(sheet.skipped),
+            prefix: current.prefixFindings,
+        };
         // A late answer from a check the reader has moved on from changes nothing.
         const update = (next: Run | ((current: Run) => Run)) => {
             if (!abort.signal.aborted) setRun(next);
@@ -628,7 +688,10 @@ const CheckSheet = ({ title }: { title: string }) => {
 
     const canCheck = sheet.rows.length > 0 && problems.length === 0;
     // A check with nothing to show is its result line alone, marked as passed.
-    const clean = run.status === 'done' && flaggedRowCount(run.checked.result) === 0;
+    const clean =
+        run.status === 'done' &&
+        flaggedRowCount(run.checked.result) === 0 &&
+        run.checked.prefix.length === 0;
 
     return (
         <SheetSection title={title}>

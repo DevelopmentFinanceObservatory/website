@@ -147,6 +147,37 @@
     }
 }
 
+// Card: a bordered block whose children lay themselves out, dark while
+// pressed. The label box steps aside so the children are the card's items.
+.card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: rem(4);
+    padding: rem(12) rem(14);
+    color: var(--color-charcoal);
+    text-align: left;
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(6);
+
+    .label {
+        display: contents;
+        font: inherit;
+        letter-spacing: inherit;
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            border-color: var(--color-charcoal);
+        }
+    }
+
+    &[aria-pressed="true"] {
+        color: var(--color-bg);
+        background-color: var(--color-charcoal);
+        border-color: var(--color-charcoal);
+    }
+}
+
 // Hover fills only where hover exists — on touch the :hover state sticks
 // to the last tapped button, which read as a focus that never left. The
 // fill shifts to its variant's hover partner (--seg-hover); text and icon
@@ -252,14 +283,16 @@
 }
 
 // Inline: words set in running text, such as a join's phrase in the Graph
-// Explorer. The label wraps, takes the button's type and decoration, and
-// leaves the look to the caller's class.
+// Explorer or a seed column heading that opens its value list. The label
+// wraps, takes the button's type, colour and decoration, and leaves the look
+// to the caller's class.
 .inline .label {
     display: block;
     height: auto;
     padding-inline: 0;
     overflow: visible;
     font: inherit;
+    color: inherit;
     letter-spacing: inherit;
     text-decoration: inherit;
     background-color: transparent;
