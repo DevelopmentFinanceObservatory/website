@@ -22,7 +22,7 @@ import {
     type Role,
     type ValuesUsed,
 } from './model.ts';
-import type { Declarer, SchemaNode, SchemaPattern, SchemaUsage, UsageTerm } from './wire.ts';
+import type { SchemaNode, SchemaPattern, UsageTerm } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -752,51 +752,6 @@ export function centreHeading(model: Model, centre: Centre): CentreHeading | nul
         declaredBy: null,
     };
 }
-
-/** The usage documents of the two outside origins, each once loaded. */
-export type OutsideUsage = { readonly base?: SchemaUsage; readonly un?: SchemaUsage };
-
-const datasetRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
-
-const refsOf = (document: SchemaUsage): ReadonlySet<string> => {
-    let refs = datasetRefs.get(document);
-    if (refs === undefined) {
-        refs = new Set(document.provenances.map((dataset) => dataset.ref));
-        datasetRefs.set(document, refs);
-    }
-    return refs;
-};
-
-/**
- * The origin of the usage document a dataset of the model comes from, as a
- * `declared_by` for its origin tag: `base` or `un_system` for an outside
- * document, `dfo` for any other. A dataset two documents list comes from the
- * first, as the model counts it. Null for a dataset the model lacks.
- */
-export function datasetOrigin(model: Model, id: string, outside: OutsideUsage): Declarer | null {
-    const document = model.usageDocuments.find((entry) => refsOf(entry).has(id));
-    if (document === undefined) return null;
-    if (document === outside.base) return 'base';
-    if (document === outside.un) return 'un_system';
-    return 'dfo';
-}
-
-const termRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
-
-/**
- * True when the base usage document's `terms` name the ref. Base datasets
- * use such a term, so the base Data Commons browser has a page for it.
- */
-export const inBaseUsage = (id: string, outside: OutsideUsage): boolean => {
-    const { base } = outside;
-    if (base === undefined) return false;
-    let refs = termRefs.get(base);
-    if (refs === undefined) {
-        refs = new Set((base.terms ?? []).map((term) => term.ref));
-        termRefs.set(base, refs);
-    }
-    return refs.has(id);
-};
 
 /**
  * The dataset whose use the picture marks: the filtered dataset, except on

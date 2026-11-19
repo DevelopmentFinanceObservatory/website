@@ -1,11 +1,18 @@
 /**
  * `lists.ts` over the test documents: the first-N rule, datasets by use, and
- * the origin of a dataset and of a term.
+ * the origin of a dataset and of a term, and the base terms list.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { datasetOrigin, datasetsByUse, landedUsage, listHead, termOrigin } from '../lists.ts';
+import {
+    datasetOrigin,
+    datasetsByUse,
+    inBaseUsage,
+    landedUsage,
+    listHead,
+    termOrigin,
+} from '../lists.ts';
 import { buildModel } from '../model.ts';
 import { readSchema, readUsage, type SchemaNode, type SchemaTerm } from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
@@ -116,6 +123,13 @@ test('a dataset takes the origin of the usage document the model took it from', 
     assert.equal(originOf(ECLAC), 'un_system');
     // An outside document still loading gives its datasets no origin.
     assert.equal(datasetOrigin(model.dataset(ECLAC)!, landedUsage({ base: null, un: null })), null);
+
+    // The base document's terms name the terms the base browser has a page for.
+    assert.deepEqual(
+        ['age', SERIES, 'FinancialFlow'].map((id) => inBaseUsage(id, outside)),
+        [true, false, false],
+    );
+    assert.equal(inBaseUsage('age', { un }), false);
 });
 
 test("a term takes its schema node's origin, else the terms list's", () => {

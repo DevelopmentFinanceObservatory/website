@@ -197,7 +197,13 @@ const Centred = ({ centre, show, notice }: CentredProps) => {
 };
 
 /** The line over a picture drawn without its node view, offering to load the view again. */
-const FailedLine = ({ failure, onRetry }: { failure: NodeViewFailure; onRetry: () => void }) => (
+export const FailedLine = ({
+    failure,
+    onRetry,
+}: {
+    failure: NodeViewFailure;
+    onRetry: () => void;
+}) => (
     <p className={styles.filter} role="alert">
         <span>Its links on the graph could not be loaded. {failure.explanation}</span>
         <Button variant="bordered" small onClick={onRetry}>
@@ -227,7 +233,7 @@ const viewNotice = (
 };
 
 /** The screen while the node view of a term the DFO document lacks loads, or waits before a retry. */
-const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | null }) => (
+export const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | null }) => (
     <div className={styles.loading}>
         <Spinner size={24} label="Loading" />
         <p className={styles.note}>
@@ -247,7 +253,7 @@ const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | null }) =
 );
 
 /** A term whose node view was refused for good, with a way back to the start. */
-const Refused = ({ id, notHeld }: { id: string; notHeld: boolean }) => {
+export const Refused = ({ id, notHeld }: { id: string; notHeld: boolean }) => {
     const { go } = useExplore();
     const term = (
         <code>

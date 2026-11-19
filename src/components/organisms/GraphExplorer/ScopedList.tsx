@@ -23,6 +23,7 @@ import {
     type DatasetFilter,
     type Group,
     type ListScope,
+    type Model,
     type ScopedRow,
 } from '@/lib/graphExplorer/model';
 
@@ -69,8 +70,14 @@ const ValueListCell = ({ row }: { row: ScopedRow }) => {
 
 type ScopedListProps = {
     scope: ListScope;
-    /** The dataset filter, already checked against the model's datasets. */
+    /** The dataset filter, already checked against the full model's datasets. */
     show: DatasetFilter;
+    /**
+     * The model a class the DFO document does not declare lists from: its
+     * node view's, over every usage document loaded. The scoped model's
+     * otherwise.
+     */
+    classModel?: Model;
 };
 
 /**
@@ -80,12 +87,14 @@ type ScopedListProps = {
  * the count to one dataset (dimming the rows it does not use) or give each
  * dataset of the scoped model its own column, most StatVars first, the first
  * few on show with "All N". A chosen dataset the switches leave out is
- * counted from the full model, since the reader named it.
+ * counted from the full model, since the reader named it. The columns are
+ * the scoped model's datasets whichever model the rows come from.
  */
-const ScopedList = ({ scope, show }: ScopedListProps) => {
+const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
     const scoped = useModel();
     const full = useFullModel();
-    const model = show.kind === 'dataset' && !scoped.dataset(show.id) ? full : scoped;
+    const listed = classModel ?? scoped;
+    const model = show.kind === 'dataset' && !listed.dataset(show.id) ? full : listed;
     const origins = useListOrigins(model);
     const { go, setShow } = useExplore();
     const [filter, setFilter] = useState('');
@@ -104,6 +113,7 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
     const columnAt = new Map(list.columns.map((dataset, index) => [dataset, index]));
     const columns = listHead(
         datasetsByUse(model).flatMap((dataset) => {
+            if (show.kind === 'all' && !scoped.dataset(dataset.ref)) return [];
             const index = columnAt.get(dataset.ref);
             return index === undefined ? [] : [{ dataset, index }];
         }),
@@ -181,7 +191,10 @@ const ScopedList = ({ scope, show }: ScopedListProps) => {
                                                 )}
                                             >
                                                 {model.label(dataset.ref)}
-                                                <OriginTag declaredBy={origins.dataset(dataset)} />
+                                                <OriginTag
+                                                    declaredBy={origins.dataset(dataset)}
+                                                    dataset
+                                                />
                                             </th>
                                         ))
                                     )}

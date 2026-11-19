@@ -43,7 +43,7 @@ const StartScreen = () => {
                                     >
                                         {model.label(dataset.ref)}
                                     </ExploreLink>
-                                    <OriginTag declaredBy={origins.dataset(dataset)} />
+                                    <OriginTag declaredBy={origins.dataset(dataset)} dataset />
                                 </span>
                                 <span className={styles.figure}>
                                     {plural(dataset.stat_var_count, 'StatVar')}

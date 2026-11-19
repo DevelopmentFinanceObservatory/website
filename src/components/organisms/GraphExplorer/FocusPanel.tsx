@@ -10,23 +10,21 @@ import { useCarried, useModel } from './ExploreContext';
 import { OriginTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
+import { ListToggle, useListOrigins, type ListOrigins } from './ListToggle';
 import { useExplorerData } from './useExplorerData';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
 import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
-    BOX_LIMIT,
-    datasetOrigin,
     declaredDomain,
-    inBaseUsage,
     openEntries,
     periodText,
     sharePercent,
     termKindWords,
     type FocusBox,
-    type OutsideUsage,
 } from '@/lib/graphExplorer/focus';
+import { inBaseUsage, landedUsage, listHead } from '@/lib/graphExplorer/lists';
 import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
 import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
@@ -38,44 +36,21 @@ const DATA_COMMONS_BROWSER = 'https://datacommons.org/browser/';
 /** The dataset filter as the panel reads it: one chosen dataset, or none. */
 export type PanelLens = { readonly dataset: string | null; readonly label: string | null };
 
-/** The outside usage documents loaded so far, whatever the origin switches say. */
-const useOutsideUsage = (): OutsideUsage => {
-    const { usage } = useExplorerData();
-    return {
-        base: usage.base?.status === 'ready' ? usage.base.value : undefined,
-        un: usage.un?.status === 'ready' ? usage.un.value : undefined,
-    };
-};
-
-/** A dataset by its label, linking to its view, with the tag of the origin whose usage lists it. */
-const DatasetName = ({ id, outside }: { id: string; outside: OutsideUsage }) => {
-    const model = useModel();
+/** The origin tag of a dataset the model holds, from the usage document that lists it. */
+const DatasetTag = ({ id, origins }: { id: string; origins: ListOrigins }) => {
+    const dataset = useModel().dataset(id);
     return (
-        <span>
-            <TermLink id={id} />
-            <OriginTag declaredBy={datasetOrigin(model, id, outside)} />
-        </span>
+        <OriginTag declaredBy={dataset === undefined ? null : origins.dataset(dataset)} dataset />
     );
 };
 
-/**
- * The first BOX_LIMIT of a list of datasets, with "All N" to show the rest
- * when it holds more.
- */
-function useFirst<TItem>(items: readonly TItem[]) {
-    const [all, setAll] = useState(false);
-    const more = !all && items.length > BOX_LIMIT;
-    return {
-        shown: more ? items.slice(0, BOX_LIMIT) : items,
-        more: more ? (
-            <div>
-                <Button small onClick={() => setAll(true)}>
-                    All {count(items.length)}
-                </Button>
-            </div>
-        ) : null,
-    };
-}
+/** A dataset by its label, linking to its view, with the tag of the origin whose usage lists it. */
+const DatasetName = ({ id, origins }: { id: string; origins: ListOrigins }) => (
+    <span>
+        <TermLink id={id} />
+        <DatasetTag id={id} origins={origins} />
+    </span>
+);
 
 const Label = ({ children }: { children: React.ReactNode }) => (
     <p className={styles.label}>{children}</p>
@@ -126,9 +101,10 @@ const SheetLink = ({ href, children }: { href: string; children: React.ReactNode
 /** One bar per dataset: how many of its StatVars use the term, against its total. */
 const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
-    const outside = useOutsideUsage();
+    const origins = useListOrigins(model);
+    const [open, setOpen] = useState(false);
     const { byDataset } = model.usage(id);
-    const { shown, more } = useFirst(byDataset);
+    const head = listHead(byDataset, { open });
 
     return (
         <section className={styles.section}>
@@ -137,7 +113,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <p className={styles.note}>No StatVar in the datasets uses it.</p>
             ) : (
                 <ul className={styles.uses}>
-                    {shown.map(({ dataset, count: n }) => {
+                    {head.shown.map(({ dataset, count: n }) => {
                         const percent = sharePercent(
                             n,
                             model.dataset(dataset)?.stat_var_count ?? n,
@@ -150,7 +126,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                                     lens.dataset !== null && lens.dataset !== dataset && styles.dim,
                                 )}
                             >
-                                <DatasetName id={dataset} outside={outside} />
+                                <DatasetName id={dataset} origins={origins} />
                                 <span className={styles.mono}>{count(n)}</span>
                                 <span
                                     className={styles.bar}
@@ -164,7 +140,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
-            {more}
+            <ListToggle head={head} open={open} onToggle={() => setOpen((was) => !was)} />
         </section>
     );
 };
@@ -176,9 +152,10 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
  */
 const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
-    const outside = useOutsideUsage();
+    const origins = useListOrigins(model);
+    const [open, setOpen] = useState(false);
     const uses = model.memberUse(id);
-    const { shown, more } = useFirst(uses);
+    const head = listHead(uses, { open });
 
     return (
         <section className={styles.section}>
@@ -187,7 +164,7 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <p className={styles.note}>No dataset uses its values.</p>
             ) : (
                 <ul className={styles.uses}>
-                    {shown.map(({ dataset, values }) => {
+                    {head.shown.map(({ dataset, values }) => {
                         const percent = sharePercent(values.used, values.of);
                         return (
                             <li
@@ -197,7 +174,7 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                                     lens.dataset !== null && lens.dataset !== dataset && styles.dim,
                                 )}
                             >
-                                <DatasetName id={dataset} outside={outside} />
+                                <DatasetName id={dataset} origins={origins} />
                                 <span className={styles.mono}>{ofMembers(values)}</span>
                                 <span
                                     className={styles.bar}
@@ -211,7 +188,7 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
-            {more}
+            <ListToggle head={head} open={open} onToggle={() => setOpen((was) => !was)} />
         </section>
     );
 };
@@ -337,7 +314,7 @@ const FACETS: { key: keyof SchemaFacets; label: string; text?: (code: string) =>
 export const DatasetPanel = ({ view }: { view: DatasetView }) => {
     const model = useModel();
     const carried = useCarried();
-    const outside = useOutsideUsage();
+    const origins = useListOrigins(model);
     const facets = model.dataset(view.id)?.facets;
     const facetLines = facets ? FACETS.filter(({ key }) => facets[key].length > 0) : [];
 
@@ -347,7 +324,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                 <Label>Dataset</Label>
                 <h2 className={styles.name}>
                     {view.label}
-                    <OriginTag declaredBy={datasetOrigin(model, view.id, outside)} />
+                    <DatasetTag id={view.id} origins={origins} />
                 </h2>
                 <IdLine id={view.id} />
             </div>
@@ -419,7 +396,7 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
  */
 export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
-    const outside = useOutsideUsage();
+    const outside = landedUsage(useExplorerData().usage);
 
     return (
         <>

@@ -66,27 +66,34 @@ export const ExploreLink = ({ view, children, className, current }: ExploreLinkP
     );
 };
 
-/** The tag text and its title for the origins that get one. */
-const originTag = (declaredBy: string | null | undefined) => {
-    if (declaredBy === 'base') return { text: 'base', title: 'Declared by base Data Commons' };
-    if (declaredBy === 'un_system') {
-        return { text: 'UN', title: 'Declared by the UN System Data Commons' };
-    }
-    return null;
-};
+/** The tag text and the origin's name in its title, for the origins that get a tag. */
+const ORIGIN_TAGS: ReadonlyMap<string, { readonly text: string; readonly name: string }> = new Map([
+    ['base', { text: 'base', name: 'base Data Commons' }],
+    ['un_system', { text: 'UN', name: 'the UN System Data Commons' }],
+]);
 
 /**
- * The origin tag after a term's name, from its `declared_by`: "base" for
- * base Data Commons, "UN" for the UN System Data Commons, and nothing for a
- * DFO term or any other origin. A leading space separates it from the name.
+ * The origin tag after a name, from its `declared_by`: "base" for base Data
+ * Commons, "UN" for the UN System Data Commons, and nothing for the DFO or
+ * any other origin. Its title reads "Declared by …" for a term and "Data
+ * from …" for a `dataset`. A leading space separates it from the name.
  */
-export const OriginTag = ({ declaredBy }: { declaredBy: string | null | undefined }) => {
-    const tag = originTag(declaredBy);
-    if (tag === null) return null;
+export const OriginTag = ({
+    declaredBy,
+    dataset = false,
+}: {
+    declaredBy: string | null | undefined;
+    dataset?: boolean;
+}) => {
+    const tag = ORIGIN_TAGS.get(declaredBy ?? '');
+    if (tag === undefined) return null;
     return (
         <>
             {' '}
-            <span className={styles.tag} title={tag.title}>
+            <span
+                className={styles.tag}
+                title={`${dataset ? 'Data from' : 'Declared by'} ${tag.name}`}
+            >
                 {tag.text}
             </span>
         </>

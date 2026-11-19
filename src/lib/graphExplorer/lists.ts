@@ -1,7 +1,8 @@
 /**
- * The rules the start screen, the Show pills and the scoped list's dataset
- * columns share: datasets most used first, the first entries of a long list
- * with a way to see the rest, and the origin tag on each entry.
+ * The rules the start screen, the Show pills, the scoped list's dataset
+ * columns and the focus panel's bars share: datasets most used first, the
+ * first entries of a long list with a way to see the rest, and the origin
+ * tag on each entry.
  */
 import type { OriginSwitch } from './explore.ts';
 import type { Servable } from './load.ts';
@@ -92,6 +93,23 @@ export const datasetOrigin = (
     if (outside.base !== undefined && provenancesOf(outside.base).has(dataset)) return 'base';
     if (outside.un !== undefined && provenancesOf(outside.un).has(dataset)) return 'un_system';
     return null;
+};
+
+const baseTermRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
+
+/**
+ * True when the base usage document's `terms` name the ref. Base datasets
+ * use such a term, so the base Data Commons browser has a page for it.
+ */
+export const inBaseUsage = (id: string, outside: OutsideUsage): boolean => {
+    const { base } = outside;
+    if (base === undefined) return false;
+    let refs = baseTermRefs.get(base);
+    if (refs === undefined) {
+        refs = new Set((base.terms ?? []).map((term) => term.ref));
+        baseTermRefs.set(base, refs);
+    }
+    return refs.has(id);
 };
 
 const termIndexes = new WeakMap<readonly SchemaTerm[], ReadonlyMap<string, SchemaTerm>>();

@@ -8,13 +8,11 @@ import test from 'node:test';
 import {
     centreHeading,
     datasetBoxes,
-    datasetOrigin,
     declaredDomain,
     definedNotUsed,
     headsOf,
     linkShape,
     nodeBoxes,
-    inBaseUsage,
     openEntries,
     periodText,
     pictureLens,
@@ -480,23 +478,6 @@ test('the centre heading reads a dataset, a model term, a usage term and an unkn
     const unknown = centreHeading(full, { kind: 'node', id: 'ABSState' });
     assert.deepEqual([unknown?.declaredBy, unknown?.name], [null, 'ABSState']);
     assert.notEqual(unknown?.kind, age?.kind);
-});
-
-test('each dataset carries the origin of the usage document that lists it', () => {
-    const outside = { base: baseUsage, un: unUsage };
-    assert.deepEqual(
-        ['provenance/OECDDAC1', 'dc/base/Adolescent_Birth_Rate', 'undata/p/ECLAC', 'Gone'].map(
-            (id) => datasetOrigin(full, id, outside),
-        ),
-        ['dfo', 'base', 'un_system', null],
-    );
-    // Before the base document lands, the model it builds holds no base dataset.
-    assert.equal(datasetOrigin(model, 'dc/base/Adolescent_Birth_Rate', { un: unUsage }), null);
-    assert.deepEqual(
-        ['age', SERIES, 'FinancialFlow'].map((id) => inBaseUsage(id, outside)),
-        [true, false, false],
-    );
-    assert.equal(inBaseUsage('age', { un: unUsage }), false);
 });
 
 test('a dataset’s own view under its own filter carries no marks', () => {

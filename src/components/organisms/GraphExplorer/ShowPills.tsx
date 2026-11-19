@@ -81,7 +81,7 @@ const ShowPills = ({ value, onChange, withAll = false }: ShowPillsProps) => {
                         onClick={() => onChange(choice.filter)}
                     >
                         {choice.label}
-                        <OriginTag declaredBy={choice.origin} />
+                        <OriginTag declaredBy={choice.origin} dataset />
                     </button>
                 ))}
             </div>
