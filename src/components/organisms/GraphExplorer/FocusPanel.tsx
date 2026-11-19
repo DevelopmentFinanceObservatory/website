@@ -25,7 +25,7 @@ import {
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
 import { datasetHead } from '@/lib/graphExplorer/lists';
-import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
+import { declarerWords, kindWords, patternId, type DatasetView } from '@/lib/graphExplorer/model';
 import {
     leftOutLine,
     leftOutProperties,
@@ -301,7 +301,7 @@ export const NodePanel = ({
         <>
             <div className={styles.section}>
                 <Label>
-                    {KIND_WORDS[kind]}
+                    {kindWords(model, kind, node.types)}
                     {list !== undefined && (
                         <>
                             {' in '}

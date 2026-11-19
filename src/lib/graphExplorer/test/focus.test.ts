@@ -547,6 +547,29 @@ test('a term the model holds no node for is headed by its kind and where its ori
     );
 });
 
+test('a value no value list holds is headed by its types, a list member by its kind', () => {
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const template = body.nodes.find((node) => node.ref === 'Number');
+    assert.ok(template);
+    const add = (ref: string, label: string | null, types: string[]) =>
+        body.nodes.push({ ...template, ref, label, types });
+    const country = body.nodes.find((node) => node.ref === 'Country');
+    assert.ok(country);
+    country.label = 'Country';
+    // The fixture's Place has no label, so it reads as its dcid, as Number's DataType does.
+    add('country/USA', 'United States', ['Country', 'Place']);
+    add('flow/1', null, ['FinancialFlow']);
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    const kind = (id: string) => centreHeading(edited, { kind: 'node', id })?.kind;
+    assert.deepEqual(
+        [kind('country/USA'), kind('flow/1'), kind('CurrencyCHF'), kind('Number')],
+        ['Country, Place', edited.label('FinancialFlow'), 'Value', 'DataType'],
+    );
+    assert.notEqual(edited.label('FinancialFlow'), 'FinancialFlow');
+    // A UN series the model knows only from its usage document reads as its series class.
+    assert.equal(centreHeading(full, { kind: 'node', id: SERIES })?.kind, 'undata/eclac/SERIES');
+});
+
 test('a dataset’s own view under its own filter carries no marks', () => {
     const dac1 = { kind: 'dataset', id: 'provenance/OECDDAC1' } as const;
     assert.equal(pictureLens({ kind: 'dataset', id: dac1.id }, dac1), null);

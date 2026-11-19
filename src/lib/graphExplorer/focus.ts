@@ -16,6 +16,7 @@ import {
     declarerPlace,
     KIND_WORDS,
     kindOfTerm,
+    kindWords,
     plainName,
     ROLES,
     type DatasetFilter,
@@ -712,15 +713,15 @@ export type CentreHeading = {
 
 /**
  * What a term the model knows only from a usage document's `terms` is, read
- * from its types: a Class, a Property, or a value such as a UN series, whose
- * type is its series class. "Not in the DFO model" when no usage document
- * names it.
+ * from its types: a Class, a Property, or a value such as a UN series, read
+ * as kindWords reads a value, so a series reads as its series class. "Not in
+ * the DFO model" when no usage document names it.
  */
-export const termKindWords = (term: UsageTerm | undefined): string => {
+export const termKindWords = (model: Model, term: UsageTerm | undefined): string => {
     if (term === undefined) return 'Not in the DFO model';
     if (term.types.includes('Class')) return KIND_WORDS.class;
     if (term.types.includes('Property')) return KIND_WORDS.property;
-    return KIND_WORDS.value;
+    return kindWords(model, 'value', term.types);
 };
 
 /**
@@ -750,9 +751,10 @@ export function centreHeading(
     const declaredBy = termOrigin(model, sources, centre.id);
     const kind = model.kind(centre.id);
     if (kind !== undefined) {
-        const codes = model.node(centre.id)?.classification_code ?? [];
+        const node = model.node(centre.id);
+        const codes = node?.classification_code ?? [];
         return {
-            kind: KIND_WORDS[kind],
+            kind: kindWords(model, kind, node?.types ?? []),
             name: model.label(centre.id),
             sub: codes.length > 0 ? { kind: 'codes', codes } : null,
             declaredBy,
@@ -760,7 +762,7 @@ export function centreHeading(
     }
     const term = model.term(centre.id);
     const row = term === undefined ? outsideTerm(sources.terms, centre.id) : undefined;
-    const words = row === undefined ? termKindWords(term) : KIND_WORDS[kindOfTerm(row)];
+    const words = row === undefined ? termKindWords(model, term) : KIND_WORDS[kindOfTerm(row)];
     const known = term !== undefined || row !== undefined;
     return {
         kind: known && declaredBy !== null ? `${words} ${declarerPlace(declaredBy)}` : words,

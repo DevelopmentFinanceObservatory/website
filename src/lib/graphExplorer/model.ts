@@ -66,6 +66,23 @@ export const declarerPlace = (declaredBy: string | null): string => {
     return words === null ? 'on the graph' : `in ${words}`;
 };
 
+/**
+ * The words over a term's name: its kind's words, except for a value no
+ * value list holds, such as `country/USA`, which reads as its types' labels
+ * in order ("Country, Place"). A value typed by a value list, and a value
+ * with no types, read as "Value".
+ */
+export const kindWords = (
+    model: Pick<Model, 'hasValueList' | 'label'>,
+    kind: Kind | 'dataset',
+    types: readonly string[],
+): string => {
+    if (kind !== 'value' || types.length === 0 || types.some((type) => model.hasValueList(type))) {
+        return KIND_WORDS[kind];
+    }
+    return types.map((type) => model.label(type)).join(', ');
+};
+
 /** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
 export const kindOfTerm = (term: Pick<SchemaTerm, 'types'>): 'class' | 'property' =>
     term.types.includes('Class') ? 'class' : 'property';
