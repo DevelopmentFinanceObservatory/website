@@ -3,21 +3,102 @@
 // the same sums. Only type imports, which keeps the module loadable by `node --test`.
 import type { Group } from './thresholds.ts';
 
-/** The `data` of `_data/transfers.json`, written by `_data/fetch.py`. */
-export type TransfersData = {
+/** One member of the 75, as `_data/transfers.json` keeps it: the rows carry no names or groups. */
+export type TransferMember = { iso3: string; name: string; group: string };
+
+/** The `data` of `_data/transfers.json`: the membership and the release label. */
+export type TransfersMembers = {
     /** The IDS release the values come from, e.g. "November 2026". */
     release: string;
+    countries: TransferMember[];
+};
+
+/** The members with their net transfers by year, built in the browser from the transfers ref. */
+export type TransfersData = {
+    release: string;
     years: number[];
-    /** FDL's groups' totals by year, in current US dollars. The page regroups `countries`. */
-    groups: {
-        group: string;
-        label: string;
-        members: number;
-        values: (number | null)[];
-        reporting: number[];
-    }[];
-    /** Every country, with FDL's group and its net transfers by year; null where missing. */
-    countries: { iso3: string; name: string; group: string; values: (number | null)[] }[];
+    /** Every member, in membership order, with its net transfers by year; null where missing. */
+    countries: (TransferMember & { values: (number | null)[] })[];
+};
+
+/** A transfers row; the port reads `financingRecipient`, `time_period` and `value`. */
+export type TransferRow = Record<string, unknown>;
+
+/** The first year kept, as `_data/pipeline/transfers.py`'s FIRST_YEAR. */
+export const FIRST_YEAR = 2010;
+
+/**
+ * Port of `values_by_country`: each country's value by year from `FIRST_YEAR` on,
+ * skipping null values. A country with no rows is absent.
+ *
+ * @throws When no row survives, as the Python step does.
+ */
+export const valuesByCountry = (rows: TransferRow[]): Map<string, Map<number, number>> => {
+    const values = new Map<string, Map<number, number>>();
+    let kept = 0;
+
+    for (const row of rows) {
+        const year = Number(String(row['time_period']));
+
+        if (year < FIRST_YEAR || row['value'] === null || row['value'] === undefined) {
+            continue;
+        }
+
+        const iso3 = String(row['financingRecipient']).replace(/^country\//, '');
+        const byYear = values.get(iso3) ?? new Map<number, number>();
+
+        byYear.set(year, Number(row['value']));
+        values.set(iso3, byYear);
+        kept += 1;
+    }
+
+    if (kept === 0) {
+        throw new Error(`The fetch returned no values from ${FIRST_YEAR} on.`);
+    }
+
+    return values;
+};
+
+/**
+ * Port of `last_actual_year`: the latest year that at least half of the countries
+ * with any value report. Later years are incomplete.
+ */
+export const lastActualYear = (values: Map<string, Map<number, number>>): number => {
+    const counts = new Map<number, number>();
+
+    for (const byYear of values.values()) {
+        for (const year of byYear.keys()) {
+            counts.set(year, (counts.get(year) ?? 0) + 1);
+        }
+    }
+
+    const half = values.size / 2;
+    const years = [...counts].filter(([, count]) => count >= half).map(([year]) => year);
+
+    if (years.length === 0) {
+        throw new Error('No year is reported by half of the countries.');
+    }
+
+    return Math.max(...years);
+};
+
+/** Port of `transfers_by_country`: the members' values on the years `FIRST_YEAR` to the last actual one. */
+export const transfersByCountry = (
+    rows: TransferRow[],
+    { release, countries }: TransfersMembers,
+): TransfersData => {
+    const values = valuesByCountry(rows);
+    const last = lastActualYear(values);
+    const years = Array.from({ length: last - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i);
+
+    return {
+        release,
+        years,
+        countries: countries.map((member) => ({
+            ...member,
+            values: years.map((year) => values.get(member.iso3)?.get(year) ?? null),
+        })),
+    };
 };
 
 /** A scatter group, or `outside` for countries not in FDL's 58. */

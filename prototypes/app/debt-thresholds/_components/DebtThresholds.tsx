@@ -6,10 +6,10 @@ import { CardFoot } from './CardFoot';
 import { CountryCard, DownloadCsv, EmptyCountryCard, SourceLine } from './CountryCard';
 import { CountrySearch } from './CountrySearch';
 import styles from './DebtThresholds.module.scss';
-import { NetTransfers } from './NetTransfers';
 import { Summary } from './Summary';
 import { urlSelectionStore } from './selection';
 import { GROUP_COLOURS, ThresholdScatter, type ScatterPoint } from './ThresholdScatter';
+import { TransfersSection } from './TransfersSection';
 
 import type { Capacity, Country, ThresholdsData } from '../_data/types.ts';
 import {
@@ -33,7 +33,7 @@ import {
     type Group,
 } from '../_lib/thresholds.ts';
 import { ticksTo } from '../_lib/scale.ts';
-import { groupTransfers, transfersHeading, type TransfersData } from '../_lib/transfers.ts';
+import type { TransfersMembers } from '../_lib/transfers.ts';
 
 const CAPACITY_OPTIONS = [
     { value: 'assessed', label: 'As assessed' },
@@ -235,7 +235,7 @@ export const DebtThresholds = ({
     transfers,
 }: {
     data: ThresholdsData;
-    transfers: TransfersData;
+    transfers: TransfersMembers;
 }) => {
     const { countries } = data;
     const ticks = scatterTicks(data);
@@ -319,7 +319,6 @@ export const DebtThresholds = ({
             onChoose={choose}
         />
     );
-    const { lines: transferLines } = groupTransfers(transfers, groupOf);
     const groupSource = showsFdl
         ? `FDL, ${FDL_PUBLISHED}`
         : `DFO, ${year} data${override === 'assessed' ? '' : `, all ${override} capacity`}`;
@@ -428,23 +427,12 @@ export const DebtThresholds = ({
                     )}
                 </div>
 
-                <section className={styles.transfers} aria-labelledby="net-transfers">
-                    <h2 id="net-transfers" className={styles.sectionHeading}>
-                        {transfersHeading(transferLines, transfers.years)}
-                    </h2>
-                    <p className={styles.sectionLede}>
-                        Net transfers are loans received minus repayments and interest,{' '}
-                        {transfers.years[0]} to {transfers.years.at(-1)}. The lines group countries
-                        as the chart above does and follow its view and capacity controls. Below
-                        zero, a group pays its creditors more than it borrows.
-                    </p>
-                    <NetTransfers
-                        data={transfers}
-                        groupOf={groupOf}
-                        groupSource={groupSource}
-                        highlight={selected === undefined ? null : groupOf(selected.iso3)}
-                    />
-                </section>
+                <TransfersSection
+                    members={transfers}
+                    groupOf={groupOf}
+                    groupSource={groupSource}
+                    highlight={selected === undefined ? null : groupOf(selected.iso3)}
+                />
             </div>
         </div>
     );
