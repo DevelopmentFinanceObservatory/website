@@ -85,7 +85,7 @@ export const SOURCES = {
 
 /** The line under the lede on where the Global Fund's money comes from. Source: `SOURCES.globalFundUsCap`. */
 export const UNDER_LEDE =
-    "These figures count aid by channel, the institution that disbursed the money to each country. Money that governments and foundations give the Global Fund is recorded under the Global Fund, separate from those donors' own disbursements. By US law, the United States may give at most a third of all contributions to the Global Fund.";
+    'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.';
 
 /** The scope note under the lede. Source: `SOURCES.unaids2026`. */
 export const SCOPE_NOTE =
@@ -134,17 +134,17 @@ export const ledeSentence = (data: HivData): string => {
     }
 
     return [
-        `In ${lastYear(data)}, almost all HIV aid recorded for countries was disbursed through two channels, the US government and the Global Fund.`,
+        `In ${lastYear(data)}, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
         `Of the ${over1m} countries that received more than $1m, the Global Fund disbursed more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };
 
 /**
- * The channel share the lede leaves out, for How to interpret: the US and Global Fund share of
+ * The provider share the lede leaves out, for How to interpret: the US and Global Fund share of
  * HIV aid recorded for countries, and the US-majority countries that also received Global
  * Fund multi-disease grants under other codes.
  */
-export const channelNote = (data: HivData): string => {
+export const shareNote = (data: HivData): string => {
     const { usGfShare, usMajority, usMajorityGfMulti } = ledeFigures(data);
 
     return [

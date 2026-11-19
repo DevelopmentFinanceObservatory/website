@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
     allSentence,
-    channelNote,
+    shareNote,
     countrySentence,
     ledeSentence,
     largestOtherFalls,
@@ -26,13 +26,13 @@ import {
     YEARS,
 } from './fixture.mts';
 
-test('the lede names the two channels and the majority split; the channel note carries the share', () => {
+test('the lede names the two providers and the majority split; the share note carries the share', () => {
     assert.equal(
         ledeSentence(DATA),
-        'In 2024, almost all HIV aid recorded for countries was disbursed through two channels, the US government and the Global Fund. Of the 4 countries that received more than $1m, the Global Fund disbursed more than half in 1 and the United States in 2.',
+        'In 2024, the United States and the Global Fund disbursed almost all HIV aid recorded for countries. Of the 4 countries that received more than $1m, the Global Fund disbursed more than half in 1 and the United States in 2.',
     );
     assert.equal(
-        channelNote(DATA),
+        shareNote(DATA),
         'In these CRS figures, the United States and the Global Fund disbursed 99% of the HIV aid official donors recorded for countries in 2024. In 1 of the 2 countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.',
     );
 });
@@ -199,7 +199,7 @@ test('a small share is named as the table prints it', () => {
     );
 });
 
-test('the lede throws when the two channels no longer pay out almost all', () => {
+test('the lede throws when the two providers no longer disburse almost all', () => {
     assert.throws(
         () => ledeSentence({ ...DATA, allocated: { ...DATA.allocated, other: [342e6, 1e9] } }),
         /almost all/,

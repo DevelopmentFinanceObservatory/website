@@ -6,7 +6,7 @@ import prose from '../../components/Prose/Prose.module.scss';
 import { HivFinancing } from './_components/HivFinancing';
 import { SourceEntry, SourceLink } from './_components/SourceLink';
 import {
-    channelNote,
+    shareNote,
     DATA_SOURCES,
     ledeSentence,
     loansSentence,
@@ -69,7 +69,7 @@ export default ({ children }) => (
 
 ## How to interpret
 
-<p className={prose.p}>{channelNote(hiv.data)}</p>
+<p className={prose.p}>{shareNote(hiv.data)}</p>
 
 <p className={prose.p}>
     {OTHER_MEASURES.text}
