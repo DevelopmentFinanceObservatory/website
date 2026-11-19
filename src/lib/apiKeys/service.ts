@@ -112,7 +112,7 @@ export type AdminKey = OwnKey & {
 
 export type CreateResult =
     | { ok: true; id: string; key: string }
-    | { ok: false; reason: 'label_invalid' | 'cap_reached' | 'no_such_account' };
+    | { ok: false; reason: 'label_invalid' | 'name_taken' | 'cap_reached' | 'no_such_account' };
 
 /** An account as an operator sees it in the user list. */
 export type AdminUser = {
@@ -179,6 +179,52 @@ export const createKeyService = ({
         return row?.id ?? null;
     };
 
+    // Whether the account holds a key named `name`, compared without regard to
+    // case. `except` leaves one key out of the search.
+    const nameTaken = async (accountId: string, name: string): Promise<boolean> => {
+        const [row] = await db
+            .select({ id: apikey.id })
+            .from(apikey)
+            .where(
+                and(
+                    eq(apikey.referenceId, accountId),
+                    sql`lower(${apikey.name}) = ${name.toLowerCase()}`,
+                ),
+            )
+            .limit(1);
+
+        return row !== undefined;
+    };
+
+    // Creates in parallel can all pass `nameTaken`, as they can the cap, so
+    // after the insert the oldest key of each name stands and `keyId` is
+    // taken back when an older key holds its name. True when it was.
+    const takeBackDuplicate = async (
+        accountId: string,
+        keyId: string,
+        name: string,
+    ): Promise<boolean> => {
+        const [first] = await db
+            .select({ id: apikey.id })
+            .from(apikey)
+            .where(
+                and(
+                    eq(apikey.referenceId, accountId),
+                    sql`lower(${apikey.name}) = ${name.toLowerCase()}`,
+                ),
+            )
+            .orderBy(asc(apikey.createdAt), asc(apikey.id))
+            .limit(1);
+
+        if (!first || first.id === keyId) {
+            return false;
+        }
+
+        await db.delete(apikey).where(and(eq(apikey.id, keyId), eq(apikey.referenceId, accountId)));
+
+        return true;
+    };
+
     // The daily quota and today's count of each key, which the plugin's own
     // list knows nothing of.
     const withQuota = async <T extends { id: string }>(
@@ -232,7 +278,8 @@ export const createKeyService = ({
         },
 
         /**
-         * A new key for the user, unless the label is not usable or the
+         * A new key for the user, unless the label is not usable, another of
+         * the account's keys has that name (without regard to case), or the
          * account holds its cap. The full key is in this result and nowhere
          * after it.
          */
@@ -241,6 +288,10 @@ export const createKeyService = ({
 
             if (!name) {
                 return { ok: false, reason: 'label_invalid' };
+            }
+
+            if (await nameTaken(userId, name)) {
+                return { ok: false, reason: 'name_taken' };
             }
 
             const [held] = await db
@@ -272,6 +323,10 @@ export const createKeyService = ({
                     .where(and(eq(apikey.id, created.id), eq(apikey.referenceId, userId)));
 
                 return { ok: false, reason: 'cap_reached' };
+            }
+
+            if (await takeBackDuplicate(userId, created.id, name)) {
+                return { ok: false, reason: 'name_taken' };
             }
 
             log({ message: 'api key created', by: 'owner', keyId: created.id, accountId: userId });
@@ -414,7 +469,10 @@ export const createKeyService = ({
             return withQuota(rows);
         },
 
-        /** A key for the account with this email. Not held to the account cap. */
+        /**
+         * A key for the account with this email, unless another of its keys
+         * has that name. Not held to the account cap.
+         */
         async adminCreate(actor: string, email: string, label: unknown): Promise<CreateResult> {
             const name = parseLabel(label);
 
@@ -428,7 +486,15 @@ export const createKeyService = ({
                 return { ok: false, reason: 'no_such_account' };
             }
 
+            if (await nameTaken(accountId, name)) {
+                return { ok: false, reason: 'name_taken' };
+            }
+
             const created = await mint(accountId, name);
+
+            if (await takeBackDuplicate(accountId, created.id, name)) {
+                return { ok: false, reason: 'name_taken' };
+            }
 
             log({
                 message: 'api key admin',

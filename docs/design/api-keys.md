@@ -264,7 +264,7 @@ A new `api_key` table in the website's Postgres, beside the accounts and the lim
 | id                       | Short public identifier, used in logs and as the caller name                |
 | key_hash                 | SHA-256 of the key, unique                                                  |
 | prefix                   | First characters of the key, so its owner can recognize it in a list        |
-| label                    | What the key is for                                                         |
+| label                    | What the key is for, unique among the account's keys without regard to case |
 | user_id                  | Owning account                                                              |
 | daily_limit              | Optional daily API quota for this key, empty meaning the deployment default |
 | created_at, last_used_at | Lifecycle. `last_used_at` is updated occasionally, not on every call        |

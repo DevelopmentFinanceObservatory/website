@@ -40,6 +40,15 @@ const REFUSALS = {
             extra: { pointer: '/label' },
             headers: NO_STORE,
         }),
+    name_taken: () =>
+        problem({
+            status: 400,
+            code: 'key_name_taken',
+            detail: 'You already have a key with that name. Choose another.',
+            retryable: false,
+            extra: { pointer: '/label' },
+            headers: NO_STORE,
+        }),
     cap_reached: () =>
         refuse(
             403,

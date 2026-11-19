@@ -244,6 +244,41 @@ test('API key service', async (t) => {
         assert.equal((await service.listOwn(await as(alice))).length, before);
     });
 
+    await t.test("a name another of the account's keys holds is refused, in any case", async () => {
+        const nell = await account('nell@n.example');
+        const other = await account('otto@o.example');
+
+        assert.ok((await service.createOwn(nell, 'laptop')).ok);
+
+        for (const label of ['laptop', 'LapTop', '  laptop  ']) {
+            assert.deepEqual(await service.createOwn(nell, label), {
+                ok: false,
+                reason: 'name_taken',
+            });
+        }
+
+        assert.deepEqual(await service.adminCreate('ops@example.org', 'nell@n.example', 'LAPTOP'), {
+            ok: false,
+            reason: 'name_taken',
+        });
+        assert.equal((await service.listOwn(await as(nell))).length, 1);
+        // Another account may use the name.
+        assert.ok((await service.createOwn(other, 'laptop')).ok);
+    });
+
+    await t.test('creates of one name in parallel leave one key of that name', async () => {
+        const nora = await account('nora@n.example');
+        const results = await Promise.all(
+            // No more than the cap, so the only refusal is the name.
+            Array.from({ length: cap }, () => service.createOwn(nora, 'same')),
+        );
+        const held = await service.listOwn(await as(nora));
+
+        assert.equal(held.length, 1);
+        assert.equal(results.filter((r) => r.ok).length, 1);
+        assert.ok(results.every((r) => r.ok || r.reason === 'name_taken'));
+    });
+
     await t.test('the per-account cap is enforced, and a deletion frees a place', async () => {
         const carol = await account('carol@c.example');
         const made = [];

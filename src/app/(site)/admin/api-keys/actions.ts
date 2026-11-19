@@ -27,6 +27,7 @@ const PATH = '/admin/api-keys';
 
 const REFUSALS = {
     label_invalid: 'Give the key a name of 1 to 32 characters.',
+    name_taken: 'That account already has a key with that name.',
     cap_reached: 'That account holds as many keys as it may.',
     no_such_account: 'No account has that email.',
     not_found: 'That key was not found.',

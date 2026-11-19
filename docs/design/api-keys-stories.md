@@ -104,7 +104,7 @@ Key management is the panel. The account menu's "API keys" item opens it on what
 
 _As a DFO user, I want to create a named key and see the secret exactly once, so it is never stored anywhere I can't control._
 
-- [ ] "Create API key" swaps the list for a name field with Cancel and Create buttons. Creating takes a required name.
+- [ ] "Create API key" swaps the list for a name field with Cancel and Create buttons. Creating takes a required name. The name is 1 to 32 characters and unique among the account's keys, compared without regard to case; a taken name is refused with "You already have a key with that name" and makes no key.
 - [ ] On success, the panel shows the full key with Copy and Close actions and a plain warning that it won't be shown again.
 - [ ] A click outside the panel does not dismiss the key while it is shown; closing needs the explicit Close action.
 - [ ] After Close, the key never appears again: not in the list, page source, a reload, the back button or a server response.
