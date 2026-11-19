@@ -3,11 +3,30 @@
 // series glides them (_motion.scss).
 @use "motion" as *;
 
+// The wrap's width is the box's, which the chart's height follows.
+.box {
+    min-width: 0;
+    container-type: inline-size;
+}
+
 .wrap {
     position: relative;
     min-width: 0;
 
     @include still;
+
+    // Until measured the wrap is empty, so it takes the height ProviderBars will draw:
+    // the plot at --plot-ratio of the whole-pixel width, less the side margins, plus the
+    // top and bottom margins.
+    &:empty {
+        --plot-height: round(
+            nearest,
+            (round(down, 100cqi, 1px) - var(--margin-x)) / var(--plot-ratio),
+            1px
+        );
+
+        min-height: calc(var(--plot-height) + var(--margin-y));
+    }
 }
 
 .svg {
@@ -65,7 +84,7 @@
 
 // The pale column behind the year being read follows the pointer at once.
 .column {
-    fill: #f4f4ea;
+    fill: #ededde;
     transform-box: view-box;
     transform-origin: 0 0;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { hatchSwatch } from './ChartKey';
 import styles from './CountryTable.module.scss';
@@ -90,7 +91,7 @@ const FlagMark = ({ row, year }: { row: TableRow; year: number }) => (
             aria-hidden="true"
         />
         <span className={styles.srOnly}>
-            {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other codes and excluded from this row`}
+            {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other CRS codes and excluded from this row`}
         </span>
     </>
 );
@@ -116,12 +117,15 @@ export const CountryTable = ({
     year,
     selected,
     onSelect,
+    onCollapse,
 }: {
     countries: Country[];
     /** The year the figures are for. */
     year: number;
     selected: string | null;
     onSelect: (iso3: string) => void;
+    /** Called after the table collapses to its top rows, with the rows already gone. */
+    onCollapse?: () => void;
 }) => {
     const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>(DEFAULT_SORT);
     const [showAll, setShowAll] = useState(false);
@@ -209,13 +213,23 @@ export const CountryTable = ({
                     aria-hidden="true"
                 />
                 Marked countries also received Global Fund multi-disease grants in {year}, recorded
-                under other codes and excluded from these figures.
+                under other CRS codes and excluded from these figures.
             </p>
             <div className={styles.foot}>
                 <button
                     type="button"
                     aria-expanded={showAll}
-                    onClick={() => setShowAll((current) => !current)}
+                    onClick={() => {
+                        if (!showAll) {
+                            setShowAll(true);
+
+                            return;
+                        }
+
+                        // Committed first, so a scroll it triggers runs on the shorter page.
+                        flushSync(() => setShowAll(false));
+                        onCollapse?.();
+                    }}
                 >
                     {showAll ? `Show top ${COLLAPSED_ROWS}` : `Show all ${rows.length}`}
                 </button>

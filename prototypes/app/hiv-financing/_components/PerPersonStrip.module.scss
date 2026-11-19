@@ -49,9 +49,53 @@
     background: #484842;
 }
 
+// The plot's width is the strip's, which sets how many lanes the dots stack in.
+.strip {
+    container-type: inline-size;
+}
+
 .plot {
     position: relative;
     min-width: 0;
+
+    // Until measured the plot has no SVG, so it takes the height the strip draws at its
+    // width: 49px plus 10px a lane. The steps are where buildStrip adds a lane for the
+    // current data; they reserve room before hydration and give way to the drawn height.
+    &:not(:has(> svg)) {
+        min-height: 149px;
+
+        @container (min-width: 285px) {
+            min-height: 139px;
+        }
+
+        @container (min-width: 309px) {
+            min-height: 129px;
+        }
+
+        @container (min-width: 334px) {
+            min-height: 119px;
+        }
+
+        @container (min-width: 377px) {
+            min-height: 109px;
+        }
+
+        @container (min-width: 578px) {
+            min-height: 99px;
+        }
+
+        @container (min-width: 652px) {
+            min-height: 89px;
+        }
+
+        @container (min-width: 973px) {
+            min-height: 79px;
+        }
+
+        @container (min-width: 1231px) {
+            min-height: 69px;
+        }
+    }
 
     &:focus {
         outline: none;
@@ -102,7 +146,7 @@
     fill: #8a8a7c;
     stroke: #fff;
     stroke-width: 0.75;
-    transition: opacity 200ms ease;
+    transition: opacity $fade-ms $ease-out;
 
     &[data-dimmed="true"] {
         opacity: 0.35;
@@ -147,9 +191,11 @@
     font-weight: 400;
 }
 
-// The hover reading, drawn as a tooltip.
+// The hover reading, drawn as a tooltip centred over the dot at --x and kept inside the
+// plot's --width: the translate's percentages are the tooltip's own width.
 .tip {
     position: absolute;
+    left: var(--x, 0);
     z-index: 2;
     margin: 0;
     padding: 4px 8px;
@@ -161,7 +207,10 @@
     white-space: nowrap;
     box-shadow: 0 4px 12px rgb(72 72 66 / 12%);
     pointer-events: none;
-    transform: translate(-50%, -100%);
+    transform: translate(
+        clamp(calc(-1 * var(--x)), -50%, calc(var(--width) - var(--x) - 100%)),
+        -100%
+    );
 
     &[hidden] {
         display: none;

@@ -40,8 +40,20 @@ const rowClass = (row: KeyRow): string | undefined => {
     return row.hatched === true ? styles.outside : styles.item;
 };
 
-/** A chart's key for one year: a swatch, a name and the value for each series. */
-export const ChartKey = ({ year, rows }: { year: number; rows: readonly KeyRow[] }) => (
+/**
+ * A chart's key for one year: a swatch, a name and the value for each series. Values fade
+ * in when `scope` changes and change in place when the year does.
+ */
+export const ChartKey = ({
+    year,
+    rows,
+    scope,
+}: {
+    year: number;
+    rows: readonly KeyRow[];
+    /** What the chart shows, such as a country; a new scope remounts the values. */
+    scope: string;
+}) => (
     <div className={styles.key}>
         <p className={styles.year} aria-hidden="true">
             {year}
@@ -54,7 +66,7 @@ export const ChartKey = ({ year, rows }: { year: number; rows: readonly KeyRow[]
                         {row.label}
                         {row.note !== undefined && <span className={styles.note}>{row.note}</span>}
                     </span>
-                    <span key={row.value} className={styles.value}>
+                    <span key={scope} className={styles.value}>
                         {row.value}
                     </span>
                 </li>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type CSSProperties } from 'react';
 
 import { ChartKey, type KeyRow } from './ChartKey';
 import styles from './ProviderBars.module.scss';
@@ -32,6 +32,14 @@ const HATCH = 5;
 /** The narrowest gap between labelled years. */
 const MIN_LABEL_PITCH = 34;
 const BAR_SHARE = 0.68;
+
+/** The plot's shape for the stylesheet, which reserves the chart's height before it is
+ *  measured, so the server's page is as tall as the drawn one. */
+const SHAPE = {
+    '--plot-ratio': PLOT_RATIO,
+    '--margin-x': `${MARGIN.left + MARGIN.right}px`,
+    '--margin-y': `${MARGIN.top + MARGIN.bottom}px`,
+} as CSSProperties;
 
 /** A segment's base and end in dollars; a missing value has both at the stack's edge. */
 type Segment = { key: string; colour: string; hatched: boolean; from: number; to: number };
@@ -75,18 +83,21 @@ const keyRows = (series: ProviderSeries, multi: readonly number[], index: number
  * hatched on top and left out of the total. A dashed line marks the Global Fund's
  * reporting change before `BREAK_YEAR`. The key beside the chart reads the last year;
  * hovering, tapping or the arrow keys read another. A change of series glides the bars to
- * their new heights.
+ * their new heights. The key's values fade in when `scope` changes.
  */
 export const ProviderBars = ({
     series,
     multi,
     years,
+    scope,
 }: {
     series: ProviderSeries;
     /** Global Fund multi-disease grants, one per year. */
     multi: readonly number[];
     /** One per value in each of `series`' arrays, ascending. */
     years: readonly number[];
+    /** What the series cover, such as a country's iso3. */
+    scope: string;
 }) => {
     const hatchId = `hatch-${useId().replaceAll(':', '')}`;
     const [wrapRef, width] = useWidth();
@@ -135,147 +146,151 @@ export const ProviderBars = ({
         ` In ${shownYear}: ${read}. Use the left and right arrow keys to read each year.`;
 
     return (
-        <WithSide side={<ChartKey year={shownYear} rows={rows} />}>
-            <div ref={wrapRef} className={styles.wrap}>
-                {width > 0 && (
-                    <svg
-                        className={styles.svg}
-                        width={width}
-                        height={height}
-                        viewBox={`0 0 ${width} ${height}`}
-                        role="img"
-                        aria-label={label}
-                        tabIndex={0}
-                        onKeyDown={onKeyDown}
-                        onBlur={clear}
-                        onPointerMove={onPointer}
-                        onPointerDown={onPointer}
-                        onPointerLeave={onPointerLeave}
-                    >
-                        <defs>
-                            <pattern
-                                id={hatchId}
-                                patternUnits="userSpaceOnUse"
-                                width={HATCH}
-                                height={HATCH}
-                                patternTransform="rotate(45)"
-                            >
-                                <rect width={HATCH} height={HATCH} fill="#fff" />
-                                <line
-                                    x1={1}
-                                    x2={1}
-                                    y2={HATCH}
-                                    stroke={GF_MULTI.colour}
-                                    strokeWidth={2}
-                                />
-                            </pattern>
-                        </defs>
-                        <g aria-hidden="true">
-                            <rect
-                                className={styles.column}
-                                x={-0.5}
-                                width={1}
-                                height={1}
-                                style={{
-                                    transform: `translate(${sx(shown)}px, ${plot.top}px) scale(${pitch}, ${plot.bottom - plot.top})`,
-                                    opacity: reading === null ? 0 : 1,
-                                }}
-                            />
-                            {ticks.map((tick, index) => (
-                                // Gridlines are keyed by place, so they move when the scale changes;
-                                // labels are keyed by text, so a new one remounts.
-                                <g
-                                    key={index}
-                                    className={styles.mark}
-                                    style={{ transform: `translateY(${sy(tick)}px)` }}
+        <WithSide side={<ChartKey year={shownYear} rows={rows} scope={scope} />}>
+            <div className={styles.box} style={SHAPE}>
+                <div ref={wrapRef} className={styles.wrap}>
+                    {width > 0 && (
+                        <svg
+                            className={styles.svg}
+                            width={width}
+                            height={height}
+                            viewBox={`0 0 ${width} ${height}`}
+                            role="img"
+                            aria-label={label}
+                            tabIndex={0}
+                            onKeyDown={onKeyDown}
+                            onBlur={clear}
+                            onPointerMove={onPointer}
+                            onPointerDown={onPointer}
+                            onPointerLeave={onPointerLeave}
+                        >
+                            <defs>
+                                <pattern
+                                    id={hatchId}
+                                    patternUnits="userSpaceOnUse"
+                                    width={HATCH}
+                                    height={HATCH}
+                                    patternTransform="rotate(45)"
                                 >
+                                    <rect width={HATCH} height={HATCH} fill="#fff" />
                                     <line
-                                        x1={MARGIN.left}
-                                        x2={plot.right}
-                                        className={tick === 0 ? styles.axis : styles.grid}
+                                        x1={1}
+                                        x2={1}
+                                        y2={HATCH}
+                                        stroke={GF_MULTI.colour}
+                                        strokeWidth={2}
                                     />
-                                    <text
-                                        key={axisMoney(tick)}
-                                        x={MARGIN.left - 6}
-                                        y={4}
-                                        textAnchor="end"
-                                        className={styles.tick}
+                                </pattern>
+                            </defs>
+                            <g aria-hidden="true">
+                                <rect
+                                    className={styles.column}
+                                    x={-0.5}
+                                    width={1}
+                                    height={1}
+                                    style={{
+                                        transform: `translate(${sx(shown)}px, ${plot.top}px) scale(${pitch}, ${plot.bottom - plot.top})`,
+                                        opacity: reading === null ? 0 : 1,
+                                    }}
+                                />
+                                {ticks.map((tick, index) => (
+                                    // Gridlines are keyed by place, so they move when the scale changes;
+                                    // labels are keyed by text, so a new one remounts.
+                                    <g
+                                        key={index}
+                                        className={styles.mark}
+                                        style={{ transform: `translateY(${sy(tick)}px)` }}
                                     >
-                                        {axisMoney(tick)}
-                                    </text>
-                                </g>
-                            ))}
-                            {years.map((year, index) =>
-                                stack(layers, index).map((segment) => {
-                                    const top = sy(segment.to);
-                                    const tall = sy(segment.from) - top;
-
-                                    // A hatched segment is drawn at its pixel size, so the
-                                    // pattern keeps its spacing; the others scale a unit square.
-                                    return segment.hatched ? (
-                                        <g
-                                            key={`${year}-${segment.key}`}
-                                            className={styles.bar}
-                                            style={{
-                                                transform: `translate(${sx(index)}px, ${top}px)`,
-                                            }}
-                                        >
-                                            <rect
-                                                className={styles.hatched}
-                                                x={-barWidth / 2 + 0.5}
-                                                width={Math.max(0, barWidth - 1)}
-                                                fill={`url(#${hatchId})`}
-                                                stroke={tall > 0.5 ? segment.colour : 'none'}
-                                                // The attribute draws the rect where CSS
-                                                // geometry is unsupported; the style animates it.
-                                                height={Math.max(0, tall - 0.5)}
-                                                style={{ height: Math.max(0, tall - 0.5) }}
-                                            />
-                                        </g>
-                                    ) : (
-                                        <rect
-                                            key={`${year}-${segment.key}`}
-                                            className={styles.bar}
-                                            x={-0.5}
-                                            width={1}
-                                            height={1}
-                                            fill={segment.colour}
-                                            style={{
-                                                transform: `translate(${sx(index)}px, ${top}px) scale(${barWidth}, ${tall})`,
-                                            }}
+                                        <line
+                                            x1={MARGIN.left}
+                                            x2={plot.right}
+                                            className={tick === 0 ? styles.axis : styles.grid}
                                         />
-                                    );
-                                }),
-                            )}
-                            {breakX !== null && (
-                                <g className={styles.break}>
-                                    <line
-                                        x1={breakX}
-                                        x2={breakX}
-                                        y1={plot.top - 6}
-                                        y2={plot.bottom}
-                                    />
-                                    <text x={breakX} y={plot.top - 12} textAnchor="middle">
-                                        {BREAK_LABEL}
-                                    </text>
-                                </g>
-                            )}
-                            {years.map((year, index) =>
-                                labelled.has(index) ? (
-                                    <text
-                                        key={year}
-                                        x={sx(index)}
-                                        y={plot.bottom + 16}
-                                        textAnchor="middle"
-                                        className={index === shown ? styles.tickShown : styles.tick}
-                                    >
-                                        {year}
-                                    </text>
-                                ) : null,
-                            )}
-                        </g>
-                    </svg>
-                )}
+                                        <text
+                                            key={axisMoney(tick)}
+                                            x={MARGIN.left - 6}
+                                            y={4}
+                                            textAnchor="end"
+                                            className={styles.tick}
+                                        >
+                                            {axisMoney(tick)}
+                                        </text>
+                                    </g>
+                                ))}
+                                {years.map((year, index) =>
+                                    stack(layers, index).map((segment) => {
+                                        const top = sy(segment.to);
+                                        const tall = sy(segment.from) - top;
+
+                                        // A hatched segment is drawn at its pixel size, so the
+                                        // pattern keeps its spacing; the others scale a unit square.
+                                        return segment.hatched ? (
+                                            <g
+                                                key={`${year}-${segment.key}`}
+                                                className={styles.bar}
+                                                style={{
+                                                    transform: `translate(${sx(index)}px, ${top}px)`,
+                                                }}
+                                            >
+                                                <rect
+                                                    className={styles.hatched}
+                                                    x={-barWidth / 2 + 0.5}
+                                                    width={Math.max(0, barWidth - 1)}
+                                                    fill={`url(#${hatchId})`}
+                                                    stroke={tall > 0.5 ? segment.colour : 'none'}
+                                                    // The attribute draws the rect where CSS
+                                                    // geometry is unsupported; the style animates it.
+                                                    height={Math.max(0, tall - 0.5)}
+                                                    style={{ height: Math.max(0, tall - 0.5) }}
+                                                />
+                                            </g>
+                                        ) : (
+                                            <rect
+                                                key={`${year}-${segment.key}`}
+                                                className={styles.bar}
+                                                x={-0.5}
+                                                width={1}
+                                                height={1}
+                                                fill={segment.colour}
+                                                style={{
+                                                    transform: `translate(${sx(index)}px, ${top}px) scale(${barWidth}, ${tall})`,
+                                                }}
+                                            />
+                                        );
+                                    }),
+                                )}
+                                {breakX !== null && (
+                                    <g className={styles.break}>
+                                        <line
+                                            x1={breakX}
+                                            x2={breakX}
+                                            y1={plot.top - 6}
+                                            y2={plot.bottom}
+                                        />
+                                        <text x={breakX} y={plot.top - 12} textAnchor="middle">
+                                            {BREAK_LABEL}
+                                        </text>
+                                    </g>
+                                )}
+                                {years.map((year, index) =>
+                                    labelled.has(index) ? (
+                                        <text
+                                            key={year}
+                                            x={sx(index)}
+                                            y={plot.bottom + 16}
+                                            textAnchor="middle"
+                                            className={
+                                                index === shown ? styles.tickShown : styles.tick
+                                            }
+                                        >
+                                            {year}
+                                        </text>
+                                    ) : null,
+                                )}
+                            </g>
+                        </svg>
+                    )}
+                </div>
             </div>
             <p className={styles.srOnly} aria-live="polite">
                 {reading === null ? '' : `${shownYear}: ${read}`}

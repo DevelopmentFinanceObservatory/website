@@ -1,4 +1,4 @@
-// A chart's key. A value remounts when it changes and fades in.
+// A chart's key. A value remounts when the scope changes and fades in.
 @use "motion" as *;
 
 .key {

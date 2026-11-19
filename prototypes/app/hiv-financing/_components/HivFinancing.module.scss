@@ -66,6 +66,12 @@
     border-top: 1px solid #d2d2c5;
 }
 
+// Clears the site's fixed header, which slides back in on the scroll up after the table
+// collapses.
+.tableSection {
+    scroll-margin-top: 80px;
+}
+
 .heading {
     margin: 0 0 12px;
     color: #484842;

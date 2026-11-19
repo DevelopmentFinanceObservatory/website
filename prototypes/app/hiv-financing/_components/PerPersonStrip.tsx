@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
 
 import styles from './PerPersonStrip.module.scss';
 import { useWidth } from './useWidth';
@@ -246,10 +246,11 @@ export const PerPersonStrip = ({
                     style={
                         shown === null
                             ? undefined
-                            : {
-                                  left: Math.min(Math.max(sx(shown.x), 60), width - 60),
+                            : ({
+                                  '--x': `${sx(shown.x)}px`,
+                                  '--width': `${width}px`,
                                   top: yOf(shown) - RADIUS - 6,
-                              }
+                              } as CSSProperties)
                     }
                 >
                     {shown === null ? '' : `${shown.name} · ${dotValue(shown)}`}

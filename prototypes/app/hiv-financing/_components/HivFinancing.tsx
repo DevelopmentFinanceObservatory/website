@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CountrySearch } from './CountrySearch';
 import { CountryTable } from './CountryTable';
@@ -29,6 +29,11 @@ const ALL_COUNTRIES = 'All countries';
 const chartTitle = (name: string, data: HivData) =>
     `${name}, ${data.years[0]} to ${data.years.at(-1)}, constant ${data.priceBase} US dollars`;
 
+/** An in-page scroll's behaviour: instant under reduced motion. `auto` would defer to the
+ *  site's `scroll-behavior: smooth` on the root, so it is not used. */
+const scrollBehaviour = (): ScrollBehavior =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
+
 /**
  * The interactive part of the page: the scope row, the summary sentence, the bars and the
  * per-person strip, and the country table. Choosing the selected country again from a dot
@@ -43,7 +48,9 @@ export const HivFinancing = ({
     sections: readonly [Section, Section];
 }) => {
     const [selected, setSelected] = useState<string | null>(null);
+    const islandRef = useRef<HTMLDivElement>(null);
     const topRef = useRef<HTMLDivElement>(null);
+    const tableRef = useRef<HTMLElement>(null);
     const chosen = selected === null ? undefined : findCountry(data, selected);
     const [chartSection, tableSection] = sections;
     const year = lastYear(data);
@@ -65,6 +72,11 @@ export const HivFinancing = ({
         [data],
     );
 
+    // Text fades in on a change of scope, not on first paint (_motion.scss).
+    useEffect(() => {
+        islandRef.current?.setAttribute('data-ready', '');
+    }, []);
+
     const toggle = (iso3: string) => setSelected((current) => (current === iso3 ? null : iso3));
 
     const onRow = (iso3: string) => {
@@ -73,14 +85,21 @@ export const HivFinancing = ({
         toggle(iso3);
 
         if (opening) {
-            const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            topRef.current?.scrollIntoView({ block: 'start', behavior: scrollBehaviour() });
+        }
+    };
 
-            topRef.current?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    // Collapsing the table from the foot of its full length brings its heading back into view.
+    const onCollapse = () => {
+        const table = tableRef.current;
+
+        if (table !== null && table.getBoundingClientRect().top < 0) {
+            table.scrollIntoView({ block: 'start', behavior: scrollBehaviour() });
         }
     };
 
     return (
-        <div className={styles.island}>
+        <div ref={islandRef} className={styles.island}>
             <div ref={topRef} className={styles.top}>
                 <div className={styles.controls}>
                     <button
@@ -115,6 +134,7 @@ export const HivFinancing = ({
                     series={scopeSeries(data, selected)}
                     multi={scopeMulti(data, selected)}
                     years={data.years}
+                    scope={selected ?? ALL_COUNTRIES}
                 />
                 <p className={styles.note}>
                     {unallocatedNote(data)}
@@ -135,7 +155,11 @@ export const HivFinancing = ({
                 </div>
             </section>
 
-            <section className={styles.section} aria-labelledby={tableSection.id}>
+            <section
+                ref={tableRef}
+                className={`${styles.section} ${styles.tableSection}`}
+                aria-labelledby={tableSection.id}
+            >
                 <h2 id={tableSection.id} className={styles.heading}>
                     {tableSection.title}
                 </h2>
@@ -145,6 +169,7 @@ export const HivFinancing = ({
                     year={year}
                     selected={selected}
                     onSelect={onRow}
+                    onCollapse={onCollapse}
                 />
             </section>
         </div>
