@@ -17,7 +17,6 @@
  */
 import type { DatasetFilter, ListScope, Model } from './model.ts';
 import { EXPLORE_PATH } from './paths.ts';
-import type { SchemaTerm } from './wire.ts';
 
 export type ExploreView =
     | { readonly kind: 'start' }
@@ -179,22 +178,3 @@ export const listScopeExists = (model: Pick<Model, 'kind'>, scope: ListScope): b
     const kind = model.kind(scope.id);
     return kind === 'class' || kind === 'valueList';
 };
-
-/**
- * Whether a view waits on the terms lists before it can say what its centre
- * is. That holds for a term neither the model nor a loaded list (`outside`)
- * holds, while any switched-on list is not yet in (`settled` means loaded, or
- * not served here). Once every switched-on list is in, a term they all lack is
- * "Not in the DFO model".
- */
-export const awaitsTerms = (
-    model: Pick<Model, 'kind'>,
-    view: ExploreView,
-    switches: Pick<Carried, OriginSwitch>,
-    settled: Readonly<Record<OriginSwitch, boolean>>,
-    outside: readonly Pick<SchemaTerm, 'ref'>[],
-): boolean =>
-    view.kind === 'node' &&
-    model.kind(view.id) === undefined &&
-    !outside.some((term) => term.ref === view.id) &&
-    ORIGIN_SWITCHES.some((name) => switches[name] && !settled[name]);

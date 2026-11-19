@@ -10,6 +10,8 @@
  * full model (`full.node(id) !== undefined`), never of the centre's model,
  * which holds the view's neighbours too.
  */
+import type { Centre } from './focus.ts';
+import type { Loadable, NodeViewState, Waiting } from './load.ts';
 import { buildModel, type Model } from './model.ts';
 import type { SchemaNode, SchemaNodeView } from './wire.ts';
 
@@ -48,4 +50,44 @@ export function centreModel(full: Model, view: SchemaNodeView): Model {
     );
     byView.set(view, model);
     return model;
+}
+
+/** A node view's failure, for the line that offers to load it again. */
+export type NodeViewFailure = Extract<Loadable<unknown>, { readonly status: 'failed' }>;
+
+/**
+ * What a centred term or dataset shows: the centre drawn from `model`, with
+ * the node view's failure when it failed; a wait for a term the DFO
+ * document lacks; or the refusal that ended its view.
+ */
+export type CentreRoute =
+    | { readonly kind: 'draw'; readonly model: Model; readonly failed: NodeViewFailure | null }
+    | { readonly kind: 'loading'; readonly waiting: Waiting | null }
+    | { readonly kind: 'notHeld' }
+    | { readonly kind: 'notServed' };
+
+/** True for a centred term the DFO document does not declare, which reads its node view. */
+export const needsNodeView = (full: Model, centre: Centre): boolean =>
+    centre.kind === 'node' && full.node(centre.id)?.declared_by !== 'dfo';
+
+/**
+ * The route for a centre, from the full model and the state of its node
+ * view (null before the view's load starts, and for a centre that reads
+ * none). A dataset or a term the DFO document declares draws from the full
+ * model. Any other term draws from its centre's model once the view lands.
+ * Until then, and after a refusal or failure, a term the DFO document holds
+ * draws from the full model; a term it lacks waits, or shows the refusal,
+ * or draws from the full model beside the failure.
+ */
+export function routeCentre(full: Model, centre: Centre, state: NodeViewState | null): CentreRoute {
+    const fromFull = { kind: 'draw', model: full, failed: null } as const;
+    if (!needsNodeView(full, centre)) return fromFull;
+    if (state?.status === 'ready') {
+        return { kind: 'draw', model: centreModel(full, state.value), failed: null };
+    }
+    if (state?.status === 'failed') return { kind: 'draw', model: full, failed: state };
+    if (full.node(centre.id) !== undefined) return fromFull;
+    if (state === null) return { kind: 'loading', waiting: null };
+    if (state.status === 'loading') return { kind: 'loading', waiting: state.waiting };
+    return { kind: state.status };
 }

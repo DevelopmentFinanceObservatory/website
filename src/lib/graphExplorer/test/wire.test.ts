@@ -222,17 +222,26 @@ test("the usage guard reads an outside document's terms and unresolved denominat
 const nodeViewBody = (): unknown => {
     const nodes = at(schemaBody(), []).nodes;
     assert.ok(Array.isArray(nodes));
-    return { generation: 'g1', centre: nodes[0], nodes: nodes.slice(1, 3), capped: ['typeOf'] };
+    return {
+        generation: 'g1',
+        centre: nodes[0],
+        nodes: nodes.slice(1, 3),
+        capped: [{ ref: 'FinancialFlow', property: 'typeOf' }],
+    };
 };
 
 test('the node view guard reads the centre, its neighbours and the capped listings', () => {
     const view = readNodeView(nodeViewBody());
     assert.equal(view.nodes.length, 2);
-    assert.deepEqual(view.capped, ['typeOf']);
+    assert.deepEqual(view.capped, [{ ref: 'FinancialFlow', property: 'typeOf' }]);
 
     const noCapped = nodeViewBody();
     delete at(noCapped, []).capped;
     refuses(readNodeView, noCapped, 'node.capped');
+
+    const bareProperty = nodeViewBody();
+    at(bareProperty, []).capped = ['typeOf'];
+    refuses(readNodeView, bareProperty, 'node.capped[0]');
 
     const centre = nodeViewBody();
     delete at(centre, ['centre']).instances;

@@ -222,11 +222,16 @@ export type SchemaNodeView = {
      */
     nodes: SchemaNode[];
     /**
-     * The in-arc properties whose listing stopped at its cap, sorted. Any
-     * entry means the view leaves out neighbours the graph holds.
+     * The listings that stopped at their cap, sorted by ref then property:
+     * `typeOf` on the centre for a value list's members, one of the centre's
+     * own schema arcs, or `rangeIncludes` on a value's type class. Any entry
+     * means the view leaves out neighbours the graph holds.
      */
-    capped: string[];
+    capped: CappedListing[];
 };
+
+/** One listing of a node view that stopped at its cap: the node listed and the arc it was listed by. */
+export type CappedListing = { ref: string; property: string };
 
 /**
  * The `cause.code` values of the node view's 404: the node's origin is not
@@ -458,7 +463,7 @@ const schemaNodeView = obj({
     generation: nullable(str),
     centre: schemaNode,
     nodes: list(schemaNode),
-    capped: strList,
+    capped: list(obj({ ref: str, property: str })),
 });
 
 const schemaTerms = obj({

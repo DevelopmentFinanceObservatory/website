@@ -675,6 +675,10 @@ test('a switched-on origin widens the scoped model, and all switches on build on
     // An outside document not yet loaded leaves both models on what has landed.
     const dfoOnly = buildModels(schemaWithPerson, { dfo: dfoUsage }, { base: false, un: false });
     assert.equal(dfoOnly.scoped, dfoOnly.full);
+    // The full model is one object per set of documents, whatever the switches say.
+    assert.equal(baseOn.full, allOn.full);
+    assert.equal(buildModels(schemaWithPerson, usage, { base: false, un: false }).full, allOn.full);
+    assert.notEqual(dfoOnly.full, allOn.full);
 });
 
 test('a term a usage document names takes its label from `terms`, then its dcid, and stays out of the nodes', () => {

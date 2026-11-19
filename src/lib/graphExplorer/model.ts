@@ -936,9 +936,51 @@ export type ExploreModels = {
     readonly full: Model;
 };
 
+/** Stands for an outside usage document not loaded, as a WeakMap key. */
+const NOT_LOADED = Object.freeze({});
+
+/** The full model by schema, DFO, base and UN usage document, in that order of keys. */
+const fullModels = new WeakMap<
+    SchemaDocument,
+    WeakMap<SchemaUsage, WeakMap<object, WeakMap<object, Model>>>
+>();
+
+/** A WeakMap's entry for `key`, set to `create()` when it has none. */
+const entryOf = <TKey extends object, TValue>(
+    map: WeakMap<TKey, TValue>,
+    key: TKey,
+    create: () => TValue,
+): TValue => {
+    const held = map.get(key);
+    if (held !== undefined) return held;
+    const value = create();
+    map.set(key, value);
+    return value;
+};
+
 /**
- * The scoped and full models over one schema document. When every outside
- * document loaded has its switch on, the two are one object, built once.
+ * The model over every usage document loaded, built once per set of
+ * documents, so a switch toggle keeps the full model and what is cached
+ * on it.
+ */
+const fullModel = (schema: SchemaDocument, usage: UsageDocuments): Model => {
+    const byDfo = entryOf(fullModels, schema, () => new WeakMap());
+    const byBase = entryOf(byDfo, usage.dfo, () => new WeakMap());
+    const byUn = entryOf(byBase, usage.base ?? NOT_LOADED, () => new WeakMap());
+    return entryOf(byUn, usage.un ?? NOT_LOADED, () =>
+        buildModel(
+            schema,
+            usage.dfo,
+            ...[usage.base, usage.un].filter((document) => document !== undefined),
+        ),
+    );
+};
+
+/**
+ * The scoped and full models over one schema document. The full model is
+ * one object per set of documents, whatever the switches say. When every
+ * outside document loaded has its switch on, the scoped model is that
+ * object too.
  */
 export function buildModels(
     schema: SchemaDocument,
@@ -952,7 +994,7 @@ export function buildModels(
     const loaded = outside.flatMap(({ origin, document }) =>
         document === undefined ? [] : [{ origin, document }],
     );
-    const full = buildModel(schema, usage.dfo, ...loaded.map(({ document }) => document));
+    const full = fullModel(schema, usage);
     const switchedOn = loaded.filter(({ origin }) => switches[origin]);
     if (switchedOn.length === loaded.length) return Object.freeze({ scoped: full, full });
     const scoped = buildModel(schema, usage.dfo, ...switchedOn.map(({ document }) => document));

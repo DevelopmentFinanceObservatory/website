@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { centreModel, centreNodes } from '../nodeView.ts';
+import { LOADING, NOT_HELD, NOT_SERVED, type NodeViewState } from '../load.ts';
+import { centreModel, centreNodes, routeCentre, type CentreRoute } from '../nodeView.ts';
 import { readSchema, readUsage, type SchemaNode, type SchemaNodeView } from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
 
@@ -113,4 +114,61 @@ test("the view's centre replaces a held node of the same ref", () => {
 test('each pair of full model and view builds once', () => {
     assert.equal(centreModel(full, seriesView), centreModel(full, seriesView));
     assert.notEqual(centreModel(full, seriesView), centreModel(full, { ...seriesView }));
+});
+
+test('a centre draws from the full model, its view, a wait or a refusal by what the DFO document holds', () => {
+    const failed: NodeViewState = {
+        status: 'failed',
+        reason: 'timeout',
+        message: 'The view could not be loaded: it timed out.',
+        explanation: 'It timed out.',
+    };
+    const waiting: NodeViewState = {
+        status: 'loading',
+        waiting: { retryInMs: 2000, cause: 'busy' },
+    };
+    const ready: NodeViewState = { status: 'ready', value: seriesView };
+    const node = (id: string) => ({ kind: 'node', id }) as const;
+    const drawn = (route: CentreRoute) =>
+        route.kind === 'draw'
+            ? { draws: route.model === full ? 'full' : 'centre', failed: route.failed !== null }
+            : route;
+    const rows: [
+        string,
+        { kind: 'node' | 'dataset'; id: string },
+        NodeViewState | null,
+        unknown,
+    ][] = [
+        // A DFO-declared term and a dataset never wait on a view.
+        ['dfo term', node('FinancialFlow'), null, { draws: 'full', failed: false }],
+        ['dfo term', node('FinancialFlow'), ready, { draws: 'full', failed: false }],
+        [
+            'dataset',
+            { kind: 'dataset', id: 'provenance/OECDDAC1' },
+            null,
+            { draws: 'full', failed: false },
+        ],
+        // A held base term paints from the full model and redraws once its view lands.
+        ['held', node('amount'), null, { draws: 'full', failed: false }],
+        ['held', node('amount'), LOADING, { draws: 'full', failed: false }],
+        ['held', node('amount'), NOT_HELD, { draws: 'full', failed: false }],
+        ['held', node('amount'), NOT_SERVED, { draws: 'full', failed: false }],
+        ['held', node('amount'), failed, { draws: 'full', failed: true }],
+        ['held', node('amount'), ready, { draws: 'centre', failed: false }],
+        // A term the document lacks waits, or reads its refusal.
+        ['outside', node(SERIES), null, { kind: 'loading', waiting: null }],
+        ['outside', node(SERIES), waiting, { kind: 'loading', waiting: waiting.waiting }],
+        ['outside', node(SERIES), NOT_HELD, { kind: 'notHeld' }],
+        ['outside', node(SERIES), NOT_SERVED, { kind: 'notServed' }],
+        ['outside', node(SERIES), failed, { draws: 'full', failed: true }],
+        ['outside', node(SERIES), ready, { draws: 'centre', failed: false }],
+    ];
+    for (const [name, centre, state, expected] of rows) {
+        assert.deepEqual(
+            drawn(routeCentre(full, centre, state)),
+            expected,
+            `${name} ${state?.status}`,
+        );
+    }
+    assert.equal(full.node('amount')?.declared_by, 'base');
 });
