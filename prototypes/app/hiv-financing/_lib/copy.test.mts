@@ -10,6 +10,7 @@ import {
     ledeSentence,
     largestOtherFalls,
     loansSentence,
+    otherMeasures,
     plhivGapNote,
     stripCaption,
     tableRule,
@@ -309,4 +310,32 @@ test('the US swing sentence appears only for a dip or spike in 2019, with verbs 
     );
     assert.equal(usSwingSentence(us([3.6e9, 3.5e9, 3.7e9])), null);
     assert.equal(usSwingSentence(DATA), null);
+});
+
+test('other measures: the Global Fund share against countries and against the wider total', () => {
+    const series = (us: number, globalFund: number, other: number) => ({
+        us: [0, us],
+        globalFund: [0, globalFund],
+        other: [0, other],
+    });
+    const data = {
+        ...DATA,
+        years: [2023, 2024],
+        allocated: series(3e9, 2e9, 0.1e9),
+        unallocated: series(4e9, 0, 0.1e9),
+    };
+
+    // Countries: GF 2/5.1 = 39%, US and GF 98%. With $4.1bn more: GF 2/9.2 = 22%, together 98%.
+    assert.match(
+        otherMeasures(data).text,
+        /^Shares depend on the total\. Here the Global Fund disbursed 39% of HIV aid recorded for countries in 2024\. Including the \$4\.10bn reported for regions or no country, mostly from the United States, its share is 22%, and the two together still disbursed 98%\. The Global Fund puts/,
+    );
+    // Money elsewhere mostly from other providers: no "mostly" clause, and no "still" when the
+    // combined share moves (5/8.1 = 62%).
+    assert.match(
+        otherMeasures({ ...data, unallocated: series(0, 0, 3e9) }).text,
+        /no country, its share is 25%, and the two together disbursed 62%\./,
+    );
+    // Nothing elsewhere: no wider-total sentence.
+    assert.doesNotMatch(otherMeasures({ ...data, unallocated: series(0, 0, 0) }).text, /Including/);
 });

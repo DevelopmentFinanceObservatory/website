@@ -123,10 +123,37 @@ export const FUNDING_2025: Cited = {
     sources: [SOURCES.kff2025, SOURCES.unaidsSpecialReport2026],
 };
 
-/** The How to interpret line on how other measures count the US and the Global Fund. */
-export const OTHER_MEASURES: Cited = {
-    text: 'The Global Fund says it provides 28% of all international financing for HIV programmes. KFF credits Global Fund contributions to donor governments, which puts the United States at 80% of donor-government HIV funding in 2024 and 74% in 2025.',
-    sources: [SOURCES.globalFundHiv, SOURCES.kff2024, SOURCES.kff2025],
+/** The How to interpret paragraph on how the shares here line up with other measures, whose
+ *  totals are wider. */
+export const otherMeasures = (data: HivData): Cited => {
+    const last = lastYear(data);
+    const countries = lastTotal(data.allocated);
+    const elsewhere = lastTotal(data.unallocated);
+    const all = countries + elsewhere;
+    const gf = (data.allocated.globalFund.at(-1) ?? 0) + (data.unallocated.globalFund.at(-1) ?? 0);
+    const usGf = (series: HivData['allocated']) =>
+        (series.us.at(-1) ?? 0) + (series.globalFund.at(-1) ?? 0);
+    const togetherHere = pct(usGf(data.allocated) / countries);
+    const togetherAll = pct((usGf(data.allocated) + usGf(data.unallocated)) / all);
+    const mostlyUs =
+        (data.unallocated.us.at(-1) ?? 0) > elsewhere / 2 ? ', mostly from the United States' : '';
+    const wider =
+        elsewhere > 0
+            ? `Including the ${money(elsewhere)} reported for regions or no country${mostlyUs}, its share is ${pct(gf / all)}, and the two together ${togetherAll === togetherHere ? 'still ' : ''}disbursed ${togetherAll}.`
+            : null;
+
+    return {
+        text: [
+            'Shares depend on the total.',
+            `Here the Global Fund disbursed ${pct((data.allocated.globalFund.at(-1) ?? 0) / countries)} of HIV aid recorded for countries in ${last}.`,
+            wider,
+            'The Global Fund puts its own share of all international financing for HIV programmes at 28%.',
+            'KFF credits Global Fund money to the governments that fund it, which puts the United States at 80% of donor-government HIV funding in 2024 and 74% in 2025.',
+        ]
+            .filter((sentence) => sentence !== null)
+            .join(' '),
+        sources: [SOURCES.globalFundHiv, SOURCES.kff2024, SOURCES.kff2025],
+    };
 };
 
 /** Why aid per person is a ratio, and when the page leaves it blank. */
