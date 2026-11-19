@@ -1,10 +1,30 @@
-/** What an API key form action answers with (src/app/(site)/account/api-keys/actions). */
+/** What the account panel's routes (src/app/api/account/api-keys) answer with. */
 
-/** A create form's state: the new key, once, or why there is none. Null before the first submit. */
-export type CreatedState = {
-    created?: { id: string; key: string };
-    error?: string;
-} | null;
+/**
+ * One of the signed-in user's keys as the account panel receives it. Dates
+ * are ISO strings, since they travel as JSON.
+ */
+export type KeyView = {
+    id: string;
+    name: string | null;
+    start: string | null;
+    createdAt: string;
+    lastRequest: string | null;
+    dailyLimit: number;
+    usedToday: number;
+};
 
-/** A delete form's state: why it did not delete, or null. */
-export type DeleteState = { error: string | null } | null;
+/** What the account panel loads: who is signed in, their keys and the key cap. */
+export type ApiKeysData = {
+    user: { name: string; email: string };
+    keys: KeyView[];
+    maxKeys: number;
+    // False while the emergency switch (API_KEYS_ENABLED) is off.
+    keysEnabled: boolean;
+};
+
+/** A create or rotate answer: the new key, once, or why there is none. */
+export type KeyIssued = { key: string } | { error: string };
+
+/** A delete answer: why it did not delete, or null. */
+export type KeyRemoved = { error: string | null };

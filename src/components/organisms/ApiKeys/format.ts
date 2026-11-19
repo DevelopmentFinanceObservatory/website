@@ -8,3 +8,6 @@ export const formatDate = (date: Date | null): string =>
               timeZone: 'UTC',
           })
         : '—';
+
+/** A date given as an ISO string (as a JSON route returns it), formatted like `formatDate`. */
+export const formatIsoDate = (iso: string | null): string => formatDate(iso ? new Date(iso) : null);
