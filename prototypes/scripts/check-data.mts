@@ -2,12 +2,13 @@
 // (lib/dataFile.mts) with `provenance.sdk` naming a DFO SDK release,
 // `provenance.query` and `provenance.retrieved` as an ISO 8601 UTC time, and
 // `data`. `refs.json` and `live-refs.json` also map each read key to its ref
-// (check-data-rules.mts). A page prints its source line from these fields, and CI cannot
+// (check-data-rules.mts): each ref lists members, its provenance members are pinned,
+// and a live ref names only versions that refs.json pins. A page prints its source line from these fields, and CI cannot
 // refetch them, so a file without them fails here.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { problems } from './check-data-rules.mts';
+import { pinnedVersions, problems } from './check-data-rules.mts';
 
 const APP_DIR = path.join(import.meta.dirname, '..', 'app');
 const dataFiles = existsSync(APP_DIR)
@@ -37,8 +38,23 @@ for (const file of dataFiles) {
         continue;
     }
 
-    for (const problem of problems(parsed, path.basename(file))) {
-        failures.push(`${where}: ${problem}`);
+    const name = path.basename(file);
+    let pinned = new Set<string>();
+
+    if (name === 'live-refs.json') {
+        const sibling = path.join(path.dirname(file), 'refs.json');
+
+        try {
+            pinned = pinnedVersions(
+                (JSON.parse(readFileSync(sibling, 'utf8')) as { data?: unknown }).data,
+            );
+        } catch {
+            // No readable refs.json beside it: every live member then fails as unpinned.
+        }
+    }
+
+    for (const { code, message } of problems(parsed, name, pinned)) {
+        failures.push(`${where}: [${code}] ${message}`);
     }
 }
 

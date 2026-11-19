@@ -125,13 +125,13 @@ A step runs in one of three modes:
 
 To check that a step reproduces, run it plain with an empty `DFO_CACHE_DIR`, confirm every member of every ref is pinned, then run `git diff --exit-code -- app/<slug>/_data`.
 
-`pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) and a `provenance` object, and each entry of `live-refs.json` to be a ref object.
+`pnpm check:data` requires each entry of `refs.json` to have a `ref` object (with `format_version`) that lists at least one member, and a `provenance` object whose members are listed and all pinned. It requires each entry of `live-refs.json` to be a ref object with members, each of whose content versions is pinned in the same directory's `refs.json`. Each problem prints with a code such as `live_member_unpinned`.
 
 ### Reads in the browser
 
-A figure the reader should see move with DFO's data, or one a page derives on the client, reads from the browser instead of the static JSON. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. The field leaves the committed JSON, and no server-rendered text derives from it.
+A figure a page derives on the client reads from the browser instead of the static JSON. The read is of a pinned ref, a fixed version, so the rows match what the step committed and do not move when DFO's data changes. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. The field leaves the committed JSON, and no server-rendered text derives from it.
 
-`lib/pinnedRef.ts` reads one ref. It builds an anonymous client on the production API, which serves a pinned file from a shared cache for a year, and returns the dataset and its rows:
+`lib/pinnedRef.ts` reads one ref. It builds an anonymous client on the production API, which answers a pinned read with 200 and cache headers; the shared edge cache arrives with DevelopmentFinanceObservatory/infra#154. It returns the dataset and its rows:
 
 ```tsx
 'use client';
