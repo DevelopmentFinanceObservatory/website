@@ -478,6 +478,27 @@ test('the centre heading reads a dataset, a model term, a usage term and an unkn
     const unknown = centreHeading(full, { kind: 'node', id: 'ABSState' });
     assert.deepEqual([unknown?.declaredBy, unknown?.name], [null, 'ABSState']);
     assert.notEqual(unknown?.kind, age?.kind);
+
+    // With the loaded documents, a usage term takes its document's origin, and a
+    // term only a terms list holds takes its row's kind, label and origin.
+    const row = {
+        ref: 'ABSState',
+        label: 'Australian state',
+        types: ['Class' as const],
+        provenances: [],
+        declared_by: 'base',
+    };
+    const sources = { usage: { base: baseUsage, un: unUsage }, terms: [row] };
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: SERIES }, sources)?.declaredBy,
+        'un_system',
+    );
+    assert.equal(centreHeading(full, { kind: 'node', id: 'age' }, sources)?.declaredBy, 'base');
+    const listed = centreHeading(full, { kind: 'node', id: 'ABSState' }, sources);
+    assert.deepEqual(
+        [listed?.kind, listed?.name, listed?.declaredBy],
+        [person?.kind, 'Australian state', 'base'],
+    );
 });
 
 test('a dataset’s own view under its own filter carries no marks', () => {

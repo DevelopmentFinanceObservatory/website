@@ -16,10 +16,17 @@ import {
     type SkipReason,
 } from '../pasted.ts';
 import { readSchema, readUsage } from '../wire.ts';
-import { schemaBody, usageBody } from './fixtures.ts';
+import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
+import { seedColumns, seedCsv, seedRows } from '../seed.ts';
 import { seedFixture, type SeedName } from './seedFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
+const full = buildModel(
+    readSchema(schemaBody()),
+    readUsage(usageBody()),
+    readUsage(baseUsageBody()),
+    readUsage(unUsageBody()),
+);
 
 const headers = (columns: ReadSummary['checked']): string[] => columns.map(({ header }) => header);
 const skips = (summary: ReadSummary): Record<string, SkipReason> =>
@@ -124,15 +131,37 @@ const EXPECTED: Record<SeedName, Expected> = {
 
 for (const [name, expected] of Object.entries(EXPECTED) as [SeedName, Expected][]) {
     test(`${name} reads as a seed with the columns, skips and rows of its summary`, () => {
-        const { summary, sheet } = readPasted(model, seedFixture(name));
-        assert.equal(summary.kind, 'seed');
-        assert.equal(summary.rows, expected.rows);
-        assert.equal(summary.skippedRows, expected.skippedRows);
-        assert.equal(sheet.rows.length, expected.rows - expected.skippedRows);
-        assert.deepEqual(headers(summary.checked), expected.checked);
-        assert.deepEqual(skips(summary), expected.skipped);
+        // A model over the outside usage documents too reads a DFO seed the same way.
+        for (const over of [model, full]) {
+            const { summary, sheet } = readPasted(over, seedFixture(name));
+            assert.equal(summary.kind, 'seed');
+            assert.equal(summary.rows, expected.rows);
+            assert.equal(summary.skippedRows, expected.skippedRows);
+            assert.equal(sheet.rows.length, expected.rows - expected.skippedRows);
+            assert.deepEqual(headers(summary.checked), expected.checked);
+            assert.deepEqual(skips(summary), expected.skipped);
+        }
     });
 }
+
+test('a seed copied from a UN dataset checks the UN property its column names, value and all', () => {
+    const eclac = full.dataset('undata/p/ECLAC');
+    assert.ok(eclac);
+    const columns = seedColumns(eclac);
+    const { rows } = seedRows(columns, 'P1\tPensions, women');
+    const sexAt = columns.findIndex((column) => column.property === 'sex');
+    const filled = rows.map((row) =>
+        row.map((cell, at) => (at === sexAt ? 'dcid:SEX-NONE' : cell)),
+    );
+    const text = seedCsv(columns, filled);
+
+    const { mapping, sheet, summary } = readPasted(full, text);
+    assert.deepEqual(mapping[sexAt]?.target, { kind: 'property', property: 'sex' });
+    assert.deepEqual(sheet.rows[0]?.constraint_properties, { sex: 'SEX-NONE' });
+    assert.equal(skips(summary).sex, undefined);
+    // A model over the DFO document alone has no field for it.
+    assert.equal(skips(readPasted(model, text).summary).sex, 'no_field');
+});
 
 test('rows that reuse a StatVar are skipped and named by sheet row', () => {
     assert.deepEqual(readPasted(model, seedFixture('dac1')).sheet.skipped, [2, 5]);

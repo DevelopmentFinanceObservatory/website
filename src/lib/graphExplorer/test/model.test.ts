@@ -17,6 +17,7 @@ import {
     kindOfTerm,
     memberFields,
     openColumns,
+    patternId,
     plainName,
     searchMembers,
     type MemberTree,
@@ -723,4 +724,17 @@ test('a constraint property with no constraint values row reads as using no list
         ['gender', 'age'],
     );
     assert.equal(full.usageIn('Female', BIRTHS), 4);
+});
+
+test('two patterns that differ only in an unresolved denominator have different ids', () => {
+    const [pattern] = readUsage(baseUsageBody()).provenances[0]!.patterns.filter(
+        (each) => each.measurement_denominator_unresolved === true,
+    );
+    assert.ok(pattern);
+    const resolved = { ...pattern, measurement_denominator_unresolved: false };
+    assert.notEqual(patternId(pattern), patternId(resolved));
+    // An absent flag reads as false.
+    const absent = { ...pattern };
+    delete absent.measurement_denominator_unresolved;
+    assert.equal(patternId(absent), patternId(resolved));
 });

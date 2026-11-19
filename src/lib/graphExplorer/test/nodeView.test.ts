@@ -12,17 +12,26 @@ import {
     NOT_HELD,
     NOT_SERVED,
     ORIGIN_NOT_SERVED,
+    TOO_LARGE,
     type NodeViewState,
     type Servable,
 } from '../load.ts';
 import {
     awaitedDataset,
+    boxGaps,
     centreModel,
     centreNodes,
+    classListGaps,
     routeCentre,
+    viewCompleteness,
+    COMPLETE,
+    DESCENDANTS,
+    LINKS_LOADING,
+    LINKS_MISSING,
     type CentreRoute,
     type NodeViewFailure,
 } from '../nodeView.ts';
+import { nodeBoxes } from '../focus.ts';
 import { readSchema, readUsage, type SchemaNode, type SchemaNodeView } from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
 
@@ -147,9 +156,14 @@ test('a centre draws from the full model, its view, a wait or a refusal by what 
         if (route.kind !== 'draw') return route;
         const draws = route.model === full ? 'full' : 'centre';
         const { line } = route;
-        if (line === null) return { draws, line: null };
-        if (line.kind === 'refused') return { draws, line: line.refusal };
-        return { draws, line: line.retrying ? 'retrying' : 'failed' };
+        const { completeness } = route;
+        const links =
+            completeness.state === 'unresolved' && completeness.loading
+                ? 'loading'
+                : completeness.state;
+        if (line === null) return { draws, links, line: null };
+        if (line.kind === 'refused') return { draws, links, line: line.refusal };
+        return { draws, links, line: line.retrying ? 'retrying' : 'failed' };
     };
     // A term no usage document names, which the schema lacks too.
     const unnamed = 'undata/eclac/SERIES-UNNAMED';
@@ -161,42 +175,125 @@ test('a centre draws from the full model, its view, a wait or a refusal by what 
         unknown,
     ][] = [
         // A DFO-declared term and a dataset draw from the full model at once.
-        ['dfo term', node('FinancialFlow'), null, null, { draws: 'full', line: null }],
-        ['dfo term', node('FinancialFlow'), ready, null, { draws: 'full', line: null }],
+        [
+            'dfo term',
+            node('FinancialFlow'),
+            null,
+            null,
+            { draws: 'full', links: 'complete', line: null },
+        ],
+        [
+            'dfo term',
+            node('FinancialFlow'),
+            ready,
+            null,
+            { draws: 'full', links: 'complete', line: null },
+        ],
         [
             'dataset',
             { kind: 'dataset', id: 'provenance/OECDDAC1' },
             null,
             null,
-            { draws: 'full', line: null },
+            { draws: 'full', links: 'complete', line: null },
         ],
-        // A held base term paints from the full model and redraws once its view lands.
-        ['held', node('amount'), null, null, { draws: 'full', line: null }],
-        ['held', node('amount'), LOADING, null, { draws: 'full', line: null }],
-        ['held', node('amount'), NOT_HELD, null, { draws: 'full', line: null }],
-        ['held', node('amount'), NOT_SERVED, null, { draws: 'full', line: null }],
-        ['held', node('amount'), failed, null, { draws: 'full', line: 'failed' }],
-        ['held', node('amount'), LOADING, failed, { draws: 'full', line: 'retrying' }],
-        ['held', node('amount'), ready, failed, { draws: 'centre', line: null }],
+        // A held base term paints from the full model and redraws once its view lands. A
+        // refusal other than notHeld, which the picture would contradict, is its line.
+        ['held', node('amount'), null, null, { draws: 'full', links: 'loading', line: null }],
+        ['held', node('amount'), LOADING, null, { draws: 'full', links: 'loading', line: null }],
+        [
+            'held',
+            node('amount'),
+            NOT_HELD,
+            null,
+            { draws: 'full', links: 'unresolved', line: null },
+        ],
+        [
+            'held',
+            node('amount'),
+            NOT_SERVED,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'notServed' },
+        ],
+        [
+            'held',
+            node('amount'),
+            TOO_LARGE,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'tooLarge' },
+        ],
+        [
+            'held',
+            node('amount'),
+            failed,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'failed' },
+        ],
+        [
+            'held',
+            node('amount'),
+            LOADING,
+            failed,
+            { draws: 'full', links: 'loading', line: 'retrying' },
+        ],
+        ['held', node('amount'), ready, failed, { draws: 'centre', links: 'complete', line: null }],
         // A term the document lacks waits, or reads its refusal.
         ['outside', node(SERIES), null, null, { kind: 'loading', waiting: null }],
         ['outside', node(SERIES), waiting, null, { kind: 'loading', waiting: waiting.waiting }],
-        ['outside', node(SERIES), failed, null, { draws: 'full', line: 'failed' }],
+        [
+            'outside',
+            node(SERIES),
+            failed,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'failed' },
+        ],
         // A retry keeps the failed picture and its line, so focus stays on Try Again.
-        ['outside', node(SERIES), LOADING, failed, { draws: 'full', line: 'retrying' }],
-        ['outside', node(SERIES), waiting, failed, { draws: 'full', line: 'retrying' }],
-        ['outside', node(SERIES), ready, null, { draws: 'centre', line: null }],
+        [
+            'outside',
+            node(SERIES),
+            LOADING,
+            failed,
+            { draws: 'full', links: 'loading', line: 'retrying' },
+        ],
+        [
+            'outside',
+            node(SERIES),
+            waiting,
+            failed,
+            { draws: 'full', links: 'loading', line: 'retrying' },
+        ],
+        ['outside', node(SERIES), ready, null, { draws: 'centre', links: 'complete', line: null }],
         // A refused term the usage documents name keeps its use, with the refusal as a line.
-        ['named', node(SERIES), NOT_HELD, null, { draws: 'full', line: 'notHeld' }],
-        ['named', node(SERIES), NOT_SERVED, null, { draws: 'full', line: 'notServed' }],
+        [
+            'named',
+            node(SERIES),
+            NOT_HELD,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'notHeld' },
+        ],
+        [
+            'named',
+            node(SERIES),
+            NOT_SERVED,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'notServed' },
+        ],
         [
             'named',
             node(SERIES),
             ORIGIN_NOT_SERVED,
             null,
-            { draws: 'full', line: 'originNotServed' },
+            { draws: 'full', links: 'unresolved', line: 'originNotServed' },
+        ],
+        // A refused term a loaded terms list holds keeps its heading, with the refusal as a line.
+        [
+            'listed',
+            node(unnamed),
+            NOT_SERVED,
+            null,
+            { draws: 'full', links: 'unresolved', line: 'notServed' },
         ],
         // Any other refused term shows the refusal alone.
+        ['unnamed', node(unnamed), TOO_LARGE, null, { kind: 'refused', refusal: 'tooLarge' }],
         ['unnamed', node(unnamed), NOT_HELD, null, { kind: 'refused', refusal: 'notHeld' }],
         [
             'unnamed',
@@ -207,8 +304,9 @@ test('a centre draws from the full model, its view, a wait or a refusal by what 
         ],
     ];
     for (const [name, centre, state, lastFailure, expected] of rows) {
+        const listed = name === 'listed';
         assert.deepEqual(
-            drawn(routeCentre(full, centre, state, lastFailure)),
+            drawn(routeCentre(full, centre, state, { lastFailure, listed })),
             expected,
             `${name} ${state?.status} ${lastFailure?.status}`,
         );
@@ -253,4 +351,78 @@ test('a named dataset the full model lacks waits while an outside usage document
             name,
         );
     }
+});
+
+test('a node view is complete with no capped listing, and partial with any', () => {
+    const view = (capped: SchemaNodeView['capped']): SchemaNodeView => ({
+        ...seriesView,
+        capped,
+    });
+    assert.deepEqual(viewCompleteness(view([])), { state: 'complete' });
+    const walk = [{ ref: SERIES, property: DESCENDANTS }];
+    assert.deepEqual(viewCompleteness(view(walk)), { state: 'partial', capped: walk });
+});
+
+test("a box and a class's list name the gaps their listings leave", () => {
+    const CLASS = 'Person';
+    const view = (capped: SchemaNodeView['capped']): SchemaNodeView => ({
+        generation: null,
+        centre: node(CLASS, { types: ['Class'], sub_class_of: ['Thing'], declared_by: 'base' }),
+        nodes: [
+            node('Thing', { types: ['Class'] }),
+            node('Adult', { types: ['Class'], sub_class_of: [CLASS] }),
+            node('Senior', { types: ['Class'], sub_class_of: ['Adult'] }),
+        ],
+        capped,
+    });
+    const gapsOf = (capped: SchemaNodeView['capped']) => {
+        const each = view(capped);
+        const completeness = viewCompleteness(each);
+        const boxes = nodeBoxes(centreModel(full, each), CLASS);
+        return Object.fromEntries(
+            boxes.map((box) => [box.key, boxGaps(box, CLASS, completeness).join(' ')]),
+        );
+    };
+
+    assert.deepEqual(gapsOf([]), { up: '', measured: '', split: '', down: '' });
+    // The direct listing capped: its box is cut, and the walk below stopped with it.
+    assert.deepEqual(
+        gapsOf([
+            { ref: CLASS, property: 'subClassOf' },
+            { ref: CLASS, property: DESCENDANTS },
+        ]),
+        { up: '', measured: 'descendants', split: 'descendants', down: 'capped' },
+    );
+    assert.deepEqual(
+        gapsOf([
+            { ref: CLASS, property: 'domainIncludes' },
+            { ref: CLASS, property: DESCENDANTS },
+        ]),
+        { up: '', measured: 'capped descendants', split: 'capped descendants', down: '' },
+    );
+    // A cut list of another property, or a cap on another node, leaves the boxes whole.
+    assert.deepEqual(gapsOf([{ ref: CLASS, property: 'geoJsonCoordinates' }]), {
+        up: '',
+        measured: '',
+        split: '',
+        down: '',
+    });
+    assert.deepEqual(gapsOf([{ ref: 'Adult', property: DESCENDANTS }]), {
+        up: '',
+        measured: '',
+        split: '',
+        down: '',
+    });
+    const [box] = nodeBoxes(centreModel(full, view([])), CLASS);
+    assert.ok(box);
+    assert.deepEqual(boxGaps(box, CLASS, LINKS_MISSING), ['unresolved']);
+    assert.deepEqual(boxGaps(box, CLASS, LINKS_LOADING), ['unresolved']);
+    assert.deepEqual(boxGaps(box, CLASS, COMPLETE), []);
+
+    const listGaps = (capped: SchemaNodeView['capped']) =>
+        classListGaps(CLASS, viewCompleteness(view(capped)));
+    assert.deepEqual(listGaps([{ ref: CLASS, property: 'domainIncludes' }]), ['capped']);
+    assert.deepEqual(listGaps([{ ref: CLASS, property: DESCENDANTS }]), ['descendants']);
+    assert.deepEqual(listGaps([{ ref: CLASS, property: 'rangeIncludes' }]), []);
+    assert.deepEqual(classListGaps(CLASS, LINKS_MISSING), ['unresolved']);
 });

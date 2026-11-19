@@ -11,6 +11,7 @@ import {
     datasetsByUse,
     datasetsDfoFirst,
     inBaseUsage,
+    kindsDfoFirst,
     landedUsage,
     listHead,
     termOrigin,
@@ -167,17 +168,39 @@ test('a dataset takes the origin of the usage document the model took it from', 
     assert.equal(inBaseUsage('age', { un }), false);
 });
 
-test("a term takes its schema node's origin, else the terms list's", () => {
-    const model = buildModel(schema, readUsage(usageBody()), readUsage(unUsageBody()));
-    const series: SchemaTerm = {
-        ref: SERIES,
-        label: 'Older adults receiving insufficient pensions',
-        types: [],
+test("a term takes its schema node's origin, else its usage document's, else the terms list's", () => {
+    const base = readUsage(baseUsageBody());
+    const un = readUsage(unUsageBody());
+    const model = buildModel(schema, readUsage(usageBody()), un);
+    const listed: SchemaTerm = {
+        ref: 'undata/AGE',
+        label: 'Age',
+        types: ['Property'],
         provenances: [],
         declared_by: 'un_system',
     };
-    assert.equal(termOrigin(model, [], 'Person'), 'base');
-    assert.equal(termOrigin(model, [series], SERIES), 'un_system');
-    // The UN terms list not loaded yet.
-    assert.equal(termOrigin(model, [], SERIES), null);
+    const sources = (terms: readonly SchemaTerm[]) => ({ usage: { base, un }, terms });
+    assert.equal(termOrigin(model, sources([]), 'Person'), 'base');
+    // No terms list holds a UN series, so its usage document gives the origin.
+    assert.equal(termOrigin(model, sources([]), SERIES), 'un_system');
+    assert.equal(termOrigin(model, sources([]), 'gender'), 'base');
+    assert.equal(termOrigin(model, sources([listed]), 'undata/AGE'), 'un_system');
+    // Neither loaded yet.
+    assert.equal(termOrigin(model, { usage: {}, terms: [] }, SERIES), null);
+    assert.equal(termOrigin(model, sources([]), 'undata/AGE'), null);
+});
+
+test('the start screen lists the kinds of thing without an outside tag first, each group in the order given', () => {
+    const base = readUsage(baseUsageBody());
+    const un = readUsage(unUsageBody());
+    const model = buildModel(schema, readUsage(usageBody()), base, un);
+    const origin = (id: string) => termOrigin(model, { usage: { base, un }, terms: [] }, id);
+    // Most used last, so the outside kinds come before the DFO's.
+    const kinds = [...model.populationTypes()].reverse();
+    assert.deepEqual(
+        kindsDfoFirst(kinds, origin).map((kind) => kind.classId),
+        ['FinancialObligation', 'FinancialFlow', SERIES, 'Person'],
+    );
+    const dfo = buildModel(schema, readUsage(usageBody()));
+    assert.equal(kindsDfoFirst(dfo.populationTypes(), origin), dfo.populationTypes());
 });

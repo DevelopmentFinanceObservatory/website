@@ -8,8 +8,14 @@
  * - `?node=<dcid>`: one term at the centre
  * - `?dataset=<provenance dcid>`: one dataset at the centre
  * - `?show=<provenance dcid>` or `?show=all`: the dataset filter, carried while the reader moves
- * - `?base=1`: search reaches base Data Commons terms, carried while the reader moves
- * - `?un=1`: search reaches UN System Data Commons terms, carried while the reader moves
+ * - `?base=1`: the base Data Commons switch, carried while the reader moves
+ * - `?un=1`: the UN System Data Commons switch, carried while the reader moves
+ *
+ * A switch adds its origin's terms to search and its datasets to the start
+ * screen, the lists' dataset columns and Show pills, and the datasets Seed
+ * a dataset offers. A centred term or dataset, the dataset filter and the
+ * check's reading of seed headers cover every origin whatever the switches
+ * say.
  *
  * When several view parameters are set, `node` wins, then `dataset`, then `list`.
  * `show`, `base` and `un` are the carried parameters: every link in the
@@ -25,9 +31,9 @@ export type ExploreView =
     | { readonly kind: 'dataset'; readonly id: string };
 
 /**
- * The switches that each add one terms list outside the model to search, by
- * their query parameter: `base` for base Data Commons, `un` for the UN
- * System Data Commons.
+ * The origin switches by their query parameter: `base` for base Data
+ * Commons, `un` for the UN System Data Commons. Each widens search, the
+ * start screen, the lists and the seed picker to its origin.
  */
 export const ORIGIN_SWITCHES = ['base', 'un'] as const;
 
@@ -36,9 +42,9 @@ export type OriginSwitch = (typeof ORIGIN_SWITCHES)[number];
 /** The parameters every Graph Explorer link keeps: the dataset filter and the origin switches. */
 export type Carried = {
     readonly show: DatasetFilter;
-    /** Whether search reaches base Data Commons terms outside the model. */
+    /** Whether search, the start screen, the lists and the seed picker reach base Data Commons. */
     readonly base: boolean;
-    /** Whether search reaches UN System Data Commons terms outside the model. */
+    /** Whether search, the start screen, the lists and the seed picker reach the UN System Data Commons. */
     readonly un: boolean;
 };
 

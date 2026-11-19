@@ -11,6 +11,7 @@ import { useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
+import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { plural } from '@/lib/graphExplorer/counts';
 import {
     cellKey,
@@ -557,6 +558,7 @@ const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
  */
 const CheckSheet = ({ title }: { title: string }) => {
     const model = useModel();
+    const headerModel = useExplorerData().full ?? model;
     const textId = useId();
     const fileInput = useRef<HTMLInputElement | null>(null);
     const [text, setText] = useState('');
@@ -577,11 +579,13 @@ const CheckSheet = ({ title }: { title: string }) => {
         return () => clearTimeout(timer);
     }, [text, settled]);
 
-    // The page's own reading of each column, which a reader's switch overrides.
-    const read = useMemo(() => readPasted(model, settled), [model, settled]);
+    // The page's own reading of each column, which a reader's switch overrides. Headers are
+    // read against every usage document loaded, so a seed copied from an outside dataset keeps
+    // its outside properties whatever the switches say.
+    const read = useMemo(() => readPasted(headerModel, settled), [headerModel, settled]);
     const current = useMemo(
-        () => (switches.size === 0 ? read : switchRead(model, read, switches)),
-        [model, switches, read],
+        () => (switches.size === 0 ? read : switchRead(headerModel, read, switches)),
+        [headerModel, switches, read],
     );
     const { range: pasted, mapping, sheet, summary } = current;
     const problems = useMemo(() => sheetProblems(mapping, sheet), [mapping, sheet]);

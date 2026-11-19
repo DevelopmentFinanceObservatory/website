@@ -71,6 +71,21 @@ export function datasetsByUse(model: Model): readonly ProvenanceUsage[] {
     return sorted;
 }
 
+/** A scoped list's count column: its dataset and the column's index in the list's `columns`. */
+export type ListColumn = { readonly dataset: ProvenanceUsage; readonly index: number };
+
+/**
+ * A scoped list's count columns, most StatVars first as datasetsByUse
+ * orders them, so the table and its CSV file share one order.
+ */
+export const columnsByUse = (model: Model, columns: readonly string[]): readonly ListColumn[] => {
+    const columnAt = new Map(columns.map((dataset, index) => [dataset, index]));
+    return datasetsByUse(model).flatMap((dataset) => {
+        const index = columnAt.get(dataset.ref);
+        return index === undefined ? [] : [{ dataset, index }];
+    });
+};
+
 /**
  * The model's datasets for the start screen: the DFO's first, then those
  * from outside, each group as datasetsByUse orders it. The switches add the
@@ -85,6 +100,25 @@ export const datasetsDfoFirst = (
     return dfo.length === byUse.length
         ? byUse
         : [...dfo, ...byUse.filter((dataset) => datasetOrigin(dataset, outside) !== null)];
+};
+
+/** True for an origin outside the DFO that a list tags: base Data Commons or the UN System. */
+const isOutsideOrigin = (origin: string | null): boolean =>
+    origin === 'base' || origin === 'un_system';
+
+/**
+ * The kinds of thing for the start screen, as datasetsDfoFirst orders the
+ * datasets: those with no outside origin tag first, then the tagged ones,
+ * each group in the order given. `origin` reads a term's origin as
+ * termOrigin does.
+ */
+export const kindsDfoFirst = <TKind extends { readonly classId: string }>(
+    kinds: readonly TKind[],
+    origin: (id: string) => string | null,
+): readonly TKind[] => {
+    const outside = kinds.filter((kind) => isOutsideOrigin(origin(kind.classId)));
+    if (outside.length === 0) return kinds;
+    return [...kinds.filter((kind) => !outside.includes(kind)), ...outside];
 };
 
 /** The outside usage documents loaded, by the origin each describes. */
@@ -125,22 +159,24 @@ export const datasetOrigin = (
     return null;
 };
 
-const baseTermRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
+const termRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
+
+/** The refs a usage document's `terms` name, gathered once per document. */
+const usageTermRefs = (document: SchemaUsage): ReadonlySet<string> => {
+    let refs = termRefs.get(document);
+    if (refs === undefined) {
+        refs = new Set((document.terms ?? []).map((term) => term.ref));
+        termRefs.set(document, refs);
+    }
+    return refs;
+};
 
 /**
  * True when the base usage document's `terms` name the ref. Base datasets
  * use such a term, so the base Data Commons browser has a page for it.
  */
-export const inBaseUsage = (id: string, outside: OutsideUsage): boolean => {
-    const { base } = outside;
-    if (base === undefined) return false;
-    let refs = baseTermRefs.get(base);
-    if (refs === undefined) {
-        refs = new Set((base.terms ?? []).map((term) => term.ref));
-        baseTermRefs.set(base, refs);
-    }
-    return refs.has(id);
-};
+export const inBaseUsage = (id: string, outside: OutsideUsage): boolean =>
+    outside.base !== undefined && usageTermRefs(outside.base).has(id);
 
 const termIndexes = new WeakMap<readonly SchemaTerm[], ReadonlyMap<string, SchemaTerm>>();
 
@@ -152,14 +188,32 @@ const termIndex = (outside: readonly SchemaTerm[]): ReadonlyMap<string, SchemaTe
     return index;
 };
 
+/** The row the loaded terms lists hold for a ref, or undefined. */
+export const outsideTerm = (outside: readonly SchemaTerm[], id: string): SchemaTerm | undefined =>
+    termIndex(outside).get(id);
+
+/** What a term's origin is read from beside the schema: the outside usage documents and terms lists loaded. */
+export type TermSources = {
+    readonly usage: OutsideUsage;
+    readonly terms: readonly SchemaTerm[];
+};
+
 /**
- * The origin declaring a term, as a node's `declared_by`: the schema node's,
- * else the loaded terms list's, else null. A UN series that StatVars are
- * about is outside the schema, and the UN terms list loads whenever the UN
- * switch puts the series in the scoped model.
+ * The origin declaring a term, as a node's `declared_by`: the schema
+ * node's, else that of the outside usage document whose `terms` name it
+ * (base before UN, as the terms lists rank them), else the loaded terms
+ * list's, else null. The usage documents load on every visit and name the
+ * UN series StatVars are about, which no terms list holds, so a series
+ * carries its tag whatever the switches say.
  */
 export const termOrigin = (
     model: Pick<Model, 'node'>,
-    outside: readonly SchemaTerm[],
+    { usage, terms }: TermSources,
     id: string,
-): string | null => model.node(id)?.declared_by ?? termIndex(outside).get(id)?.declared_by ?? null;
+): string | null => {
+    const declared = model.node(id)?.declared_by;
+    if (declared !== undefined && declared !== null) return declared;
+    if (usage.base !== undefined && usageTermRefs(usage.base).has(id)) return 'base';
+    if (usage.un !== undefined && usageTermRefs(usage.un).has(id)) return 'un_system';
+    return outsideTerm(terms, id)?.declared_by ?? null;
+};

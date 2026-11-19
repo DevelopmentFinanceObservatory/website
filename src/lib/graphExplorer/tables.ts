@@ -2,30 +2,51 @@
  * Explore's lists as rows for a CSV file: a scoped list as shown, and a
  * value list's members.
  */
+import { columnsByUse } from './lists.ts';
 import type { Model, ScopedList } from './model.ts';
-import { filterScopedList, GROUPS, membersHaveCodes, openColumns } from './model.ts';
+import { declarerWords, filterScopedList, GROUPS, membersHaveCodes, openColumns } from './model.ts';
 import { csvFileName } from './sheet.ts';
+import type { ProvenanceUsage } from './wire.ts';
 
 /**
  * The rows of a scoped list that the filter text keeps (filterScopedList),
  * group by group, under a header. The counts are the StatVar total, or one
- * column per dataset the list counts, headed by the dataset's label.
+ * column per dataset the list counts, in the table's order (columnsByUse),
+ * headed by the dataset's label. Labels two columns share carry the words
+ * for each dataset's origin, read by `origin` as a node's `declared_by`
+ * with null for the DFO's.
  */
 export function scopedListTable(
     model: Model,
     list: ScopedList,
-    filter = '',
+    {
+        filter = '',
+        origin = () => null,
+    }: { filter?: string; origin?: (dataset: ProvenanceUsage) => string | null } = {},
 ): readonly (readonly string[])[] {
     const groups = filterScopedList(model, list, filter);
+    const columns = columnsByUse(model, list.columns);
+    const labels = columns.map(({ dataset }) => model.label(dataset.ref));
+    const shared = new Set(labels.filter((label, at) => labels.indexOf(label) !== at));
     const countHeads =
-        list.columns.length === 0 ? ['stat_vars'] : list.columns.map((id) => model.label(id));
+        list.columns.length === 0
+            ? ['stat_vars']
+            : columns.map(({ dataset }, at) => {
+                  const label = labels[at] ?? dataset.ref;
+                  return shared.has(label)
+                      ? `${label} (${declarerWords(origin(dataset) ?? 'dfo')})`
+                      : label;
+              });
     const rows = GROUPS.flatMap((group) =>
         groups[group].map((row) => [
             row.id,
             model.label(row.id),
             group,
             row.valueList?.lists.join(';') ?? '',
-            ...(list.columns.length === 0 ? [row.usage.total] : row.counts).map(String),
+            ...(list.columns.length === 0
+                ? [row.usage.total]
+                : columns.map(({ index }) => row.counts[index] ?? 0)
+            ).map(String),
         ]),
     );
     return [['dcid', 'label', 'group', 'value_list', ...countHeads], ...rows];
@@ -56,7 +77,5 @@ export function valueListTable(model: Model, listId: string): readonly (readonly
 }
 
 /** A value list's CSV file name from its label, ending `-partial.csv` when the list is partial. */
-export const valueListFileName = (model: Model, listId: string): string => {
-    const name = csvFileName(model.label(listId));
-    return model.membersComplete(listId) ? name : name.replace(/\.csv$/, '-partial.csv');
-};
+export const valueListFileName = (model: Model, listId: string): string =>
+    csvFileName(model.label(listId), { partial: !model.membersComplete(listId) });

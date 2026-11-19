@@ -10,22 +10,23 @@ import { useCarried, useModel } from './ExploreContext';
 import { OriginTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
-import { ListToggle, useListOrigins, type ListOrigins } from './ListToggle';
-import { useExplorerData } from './useExplorerData';
+import { GapNote } from './GapNote';
+import { ListToggle, useListOrigins, useTermSources, type ListOrigins } from './ListToggle';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
 import { count, ofMembers, plural, valueListLabel } from '@/lib/graphExplorer/counts';
 import {
+    centreHeading,
     declaredDomain,
     openEntries,
     periodText,
     sharePercent,
-    termKindWords,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { datasetHead, inBaseUsage, landedUsage } from '@/lib/graphExplorer/lists';
+import { datasetHead, inBaseUsage, outsideTerm } from '@/lib/graphExplorer/lists';
 import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
+import type { ListGap } from '@/lib/graphExplorer/nodeView';
 import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
@@ -425,25 +426,30 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 };
 
 /**
- * A term the model knows only from the usage documents, whose node view
- * did not load: what its types say it is, its name (else its dcid), and
- * every dataset that uses it. A term base datasets use gets a link to the
- * base Data Commons browser. Any other gets none, since the UN System Data
- * Commons serves no browser page (its /browser/ path answers 404).
+ * A term the model knows only from the usage documents or a loaded terms
+ * list, whose node view did not load: what its types say it is, its name
+ * (else its dcid), and every dataset that uses it. A term base
+ * datasets use, or the base terms list holds, gets a link to the base Data
+ * Commons browser. Any other gets none, since the UN System Data Commons
+ * serves no browser page (its /browser/ path answers 404).
  */
 export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
-    const outside = landedUsage(useExplorerData().usage);
+    const sources = useTermSources();
+    const heading = centreHeading(model, { kind: 'node', id }, sources);
+    const row = outsideTerm(sources.terms, id);
 
     return (
         <>
             <div className={styles.section}>
-                <Label>{termKindWords(model.term(id))}</Label>
-                <h2 className={styles.name}>{model.label(id)}</h2>
+                <Label>{heading?.kind}</Label>
+                <h2 className={styles.name}>{heading?.name ?? id}</h2>
                 <IdLine id={id} />
             </div>
             <p className={styles.note}>Only its use in the datasets is known here.</p>
-            {inBaseUsage(id, outside) && <BrowserLink id={id} />}
+            {(inBaseUsage(id, sources.usage) || row?.declared_by === 'base') && (
+                <BrowserLink id={id} />
+            )}
             <UsageBars id={id} lens={lens} />
         </>
     );
@@ -452,11 +458,13 @@ export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
 type FullListProps = {
     box: FocusBox;
     lens: PanelLens;
+    /** What the box's listings leave out, as boxGaps reads them. */
+    gaps: readonly ListGap[];
     onClose: () => void;
 };
 
-/** Every entry of one box of the picture, with a way back to the definition. */
-export const FullList = ({ box, lens, onClose }: FullListProps) => {
+/** Every entry of one box of the picture, with what it may leave out and a way back to the definition. */
+export const FullList = ({ box, lens, gaps, onClose }: FullListProps) => {
     const entries = useLens(lens.dataset, box.ids);
     const heading = useRef<HTMLHeadingElement>(null);
 
@@ -467,6 +475,7 @@ export const FullList = ({ box, lens, onClose }: FullListProps) => {
             <h2 className={styles.name} tabIndex={-1} ref={heading}>
                 {box.title} <span className={styles.total}>({count(box.ids.length)})</span>
             </h2>
+            <GapNote gaps={gaps} className={styles.note} />
             <ul className={styles.full}>
                 {box.ids.map((id) => (
                     <FocusEntry

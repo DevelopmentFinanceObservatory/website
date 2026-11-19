@@ -12,6 +12,7 @@ import {
     LIST_HEAD,
     termOrigin,
     type ListHead,
+    type TermSources,
 } from '@/lib/graphExplorer/lists';
 import type { Model } from '@/lib/graphExplorer/model';
 import type { ProvenanceUsage } from '@/lib/graphExplorer/wire';
@@ -55,18 +56,25 @@ export type ListOrigins = {
     readonly term: (id: string) => string | null;
 };
 
-/**
- * The origin of a dataset, from the usage document that lists it, and of a
- * term, from the schema or the terms lists the switches load.
- */
-export const useListOrigins = (model: Model): ListOrigins => {
+/** The outside usage documents landed and the terms lists the switches load, for termOrigin. */
+export const useTermSources = (): TermSources => {
     const { usage, outside } = useExplorerData();
     const { base, un } = landedUsage(usage);
+    return useMemo(() => ({ usage: { base, un }, terms: outside }), [base, un, outside]);
+};
+
+/**
+ * The origin of a dataset, from the usage document that lists it, and of a
+ * term, from the schema, the outside usage documents or the terms lists
+ * the switches load (`termOrigin`).
+ */
+export const useListOrigins = (model: Model): ListOrigins => {
+    const sources = useTermSources();
     return useMemo(
         () => ({
-            dataset: (dataset) => datasetOrigin(dataset, { base, un }),
-            term: (id) => termOrigin(model, outside, id),
+            dataset: (dataset) => datasetOrigin(dataset, sources.usage),
+            term: (id) => termOrigin(model, sources, id),
         }),
-        [base, un, model, outside],
+        [model, sources],
     );
 };

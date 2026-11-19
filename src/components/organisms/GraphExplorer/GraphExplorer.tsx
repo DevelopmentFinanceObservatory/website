@@ -19,6 +19,7 @@ import { useExplorerData } from './useExplorerData';
 import { useNodeView } from './useNodeView';
 
 import Button from '@/components/atoms/Button/Button';
+import Spinner from '@/components/atoms/Spinner/Spinner';
 import {
     checkFilter,
     exploreQuery,
@@ -30,7 +31,12 @@ import {
 } from '@/lib/graphExplorer/explore';
 import { LOADING } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, ListScope, Model } from '@/lib/graphExplorer/model';
-import { awaitedDataset, needsNodeView, routeCentre } from '@/lib/graphExplorer/nodeView';
+import {
+    awaitedDataset,
+    classListGaps,
+    needsNodeView,
+    routeCentre,
+} from '@/lib/graphExplorer/nodeView';
 
 /** The line naming a filtered dataset the model lacks, with a way to clear the filter. */
 const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => (
@@ -45,6 +51,20 @@ const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => 
         <Button variant="bordered" small onClick={onClear}>
             Clear
         </Button>
+    </p>
+);
+
+/** The line over a view drawn unfiltered while the filtered dataset may still arrive with an outside usage document. */
+const AwaitedFilter = ({ id }: { id: string }) => (
+    <p className={styles.filterNote} role="status">
+        <Spinner size={16} label="Loading" />
+        <span>
+            Loading{' '}
+            <code>
+                <BreakableId text={id} />
+            </code>{' '}
+            from the graph. The view shows every dataset until it arrives.
+        </span>
     </p>
 );
 
@@ -68,7 +88,8 @@ const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
  * model. Any other class lists from the model its node view builds, as its
  * centred view draws: a class the document holds lists from the full model
  * until the view lands, and a class it lacks waits for the view or shows
- * the refusal. A scope the model it lists from holds no class or value
+ * the refusal. The list says what its node view leaves out
+ * (classListGaps). A scope the model it lists from holds no class or value
  * list for reads as missing, unless the view's failure or refusal already
  * says why.
  */
@@ -94,20 +115,33 @@ const ListScreen = ({
             <ScopedList scope={scope} show={show} />
         );
     }
-    const route = routeCentre(full, centre, state, lastFailure);
+    const route = routeCentre(full, centre, state, { lastFailure });
     switch (route.kind) {
         case 'loading':
             return <ViewLoading id={centre.id} waiting={route.waiting} />;
         case 'refused':
             return <Refused id={centre.id} refusal={route.refusal} />;
         case 'draw': {
-            const { line, model } = route;
-            const notice = <CentreNotice id={centre.id} line={line} view={null} onRetry={retry} />;
+            const { line, model, completeness } = route;
+            // The list marks what its model leaves out itself, so the notice carries only the line.
+            const notice = (
+                <CentreNotice
+                    id={centre.id}
+                    name={model.label(centre.id)}
+                    line={line}
+                    onRetry={retry}
+                />
+            );
             if (listScopeExists(model, scope)) {
                 return (
                     <>
                         {notice}
-                        <ScopedList scope={scope} show={show} classModel={model} />
+                        <ScopedList
+                            scope={scope}
+                            show={show}
+                            classModel={model}
+                            gaps={classListGaps(centre.id, completeness)}
+                        />
                     </>
                 );
             }
@@ -129,9 +163,10 @@ const ListScreen = ({
  * its view shows every model's use of it whatever the switches say. The
  * dataset filter is checked against every dataset loaded, so a dataset the
  * reader names in `?show=` filters whatever the switches say. A dataset
- * named in `?dataset=` or `?show=` that the full model lacks waits while an
- * outside usage document loads, and reads as missing only once each has
- * settled.
+ * named in `?dataset=` that the full model lacks waits while an outside
+ * usage document loads. One named in `?show=` leaves the view unfiltered,
+ * with a line saying so, on every view that reads the filter. Either reads
+ * as missing only once each document has settled.
  */
 const GraphExplorer = () => {
     const navigation = useExploreState();
@@ -139,18 +174,12 @@ const GraphExplorer = () => {
     const model = data.model.status === 'ready' ? data.model.value : null;
     const { view } = navigation.state;
     const { show } = navigation.state;
-    const awaited =
-        data.full === null
-            ? null
-            : awaitedDataset(
-                  data.full,
-                  [
-                      view.kind === 'dataset' ? view.id : null,
-                      show.kind === 'dataset' ? show.id : null,
-                  ],
-                  data.usage,
-              );
-    const filter = data.full ? checkFilter(data.full, show) : { show: NO_FILTER, unknown: null };
+    const awaitedOf = (id: string | null) =>
+        data.full === null ? null : awaitedDataset(data.full, [id], data.usage);
+    const awaited = awaitedOf(view.kind === 'dataset' ? view.id : null);
+    const awaitedFilter = awaitedOf(show.kind === 'dataset' ? show.id : null);
+    const checked = data.full ? checkFilter(data.full, show) : { show: NO_FILTER, unknown: null };
+    const filter = awaitedFilter === null ? checked : { show: NO_FILTER, unknown: null };
 
     const screen = (full: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
@@ -177,6 +206,10 @@ const GraphExplorer = () => {
                                     <ViewLoading id={awaited} waiting={null} />
                                 ) : (
                                     <>
+                                        {/* The start screen reads no filter, so it says nothing of one still loading. */}
+                                        {awaitedFilter !== null && view.kind !== 'start' && (
+                                            <AwaitedFilter id={awaitedFilter} />
+                                        )}
                                         {filter.unknown !== null && (
                                             <UnknownFilter
                                                 id={filter.unknown}

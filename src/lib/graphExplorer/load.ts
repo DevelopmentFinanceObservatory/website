@@ -429,12 +429,23 @@ export type OriginNotServed = { readonly status: 'originNotServed' };
 
 export const ORIGIN_NOT_SERVED: OriginNotServed = Object.freeze({ status: 'originNotServed' });
 
-/** An answer that ends a load for good: asking again gets the same answer. */
-export type Refusal = NotServed | NotHeld | OriginNotServed;
+/**
+ * A node whose view is too large to send, because the node view answered
+ * 500 with `node_view_too_large` (a country's geoJson runs to megabytes).
+ */
+export type TooLarge = { readonly status: 'tooLarge' };
 
-/** True for NOT_SERVED, NOT_HELD and ORIGIN_NOT_SERVED. */
+export const TOO_LARGE: TooLarge = Object.freeze({ status: 'tooLarge' });
+
+/** An answer that ends a load for good: asking again gets the same answer. */
+export type Refusal = NotServed | NotHeld | OriginNotServed | TooLarge;
+
+/** True for NOT_SERVED, NOT_HELD, ORIGIN_NOT_SERVED and TOO_LARGE. */
 export const isRefusal = (value: unknown): value is Refusal =>
-    value === NOT_SERVED || value === NOT_HELD || value === ORIGIN_NOT_SERVED;
+    value === NOT_SERVED ||
+    value === NOT_HELD ||
+    value === ORIGIN_NOT_SERVED ||
+    value === TOO_LARGE;
 
 /**
  * As loadDocument, for a document the Graph API may not serve. A 404 whose
@@ -480,8 +491,9 @@ export const nodeViewName = (dcid: string): string => `The graph's view of ${dci
  * The node view of `dcid`, as loadDocument reads a document. A 404 whose
  * `cause.code` is `node_not_held` gives NOT_HELD, one whose `cause.code` is
  * `origin_not_served` gives ORIGIN_NOT_SERVED, and any other 404 gives
- * NOT_SERVED (the API lacks the route). None is waited on or retried. A 503
- * is, as every load's is. A dcid no path can name gives NOT_HELD with no
+ * NOT_SERVED (the API lacks the route). A 500 whose `cause.code` is
+ * `node_view_too_large` gives TOO_LARGE. None is waited on or retried. A
+ * 503 is, as every load's is. A dcid no path can name gives NOT_HELD with no
  * request.
  */
 export async function loadNodeView(
@@ -496,6 +508,7 @@ export async function loadNodeView(
             url,
             read: readNodeView,
             refusal: (status, problem) => {
+                if (status === 500 && problem.cause === 'node_view_too_large') return TOO_LARGE;
                 if (status !== 404) return null;
                 if (problem.cause === 'node_not_held') return NOT_HELD;
                 return problem.cause === ORIGIN_NOT_SERVED_CODE ? ORIGIN_NOT_SERVED : NOT_SERVED;

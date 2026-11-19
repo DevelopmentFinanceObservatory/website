@@ -17,6 +17,7 @@ import {
     NOT_SERVED,
     nodeViewUrl,
     ORIGIN_NOT_SERVED,
+    TOO_LARGE,
     RETRY_WAIT_MS,
     retryDelay,
     settled as isSettled,
@@ -351,12 +352,23 @@ const notFound = (cause: string | null) => () =>
         404,
     );
 
-test('a node view refused with node_not_held, origin_not_served or a bare 404 is final, with no retry', async () => {
+test('a node view refused with node_not_held, origin_not_served, a bare 404 or node_view_too_large is final, with no retry', async () => {
+    const tooLarge = () =>
+        json(
+            {
+                code: 'internal_error',
+                title: 'Internal error',
+                retryable: false,
+                cause: { code: 'node_view_too_large' },
+            },
+            500,
+        );
     const rows: [() => Response, Refusal][] = [
         [notFound('node_not_held'), NOT_HELD],
         [notFound('origin_not_served'), ORIGIN_NOT_SERVED],
         [notFound(null), NOT_SERVED],
         [() => new Response('Not Found', { status: 404 }), NOT_SERVED],
+        [tooLarge, TOO_LARGE],
     ];
     for (const [refusal, expected] of rows) {
         // A view scripted after the refusal is what a retry would read.

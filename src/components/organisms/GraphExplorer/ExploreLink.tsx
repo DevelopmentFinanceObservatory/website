@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { useCarried, useModel, useOptionalExplore } from './ExploreContext';
 import styles from './ExploreLink.module.scss';
+import { useListOrigins } from './ListToggle';
 
 import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
 
@@ -104,7 +105,7 @@ export const OriginTag = ({
  * A term or dataset by its label, or by `name` where the caller names it,
  * linking to its view: `?dataset=` for a dataset, `?node=` for anything
  * else, with the origin tag on a term base Data Commons or the UN System
- * Data Commons declares.
+ * Data Commons declares, or whose usage document names it (`termOrigin`).
  */
 export const TermLink = ({
     id,
@@ -116,6 +117,7 @@ export const TermLink = ({
     className?: string;
 }) => {
     const model = useModel();
+    const origins = useListOrigins(model);
     const view: ExploreView = model.dataset(id) ? { kind: 'dataset', id } : { kind: 'node', id };
 
     return (
@@ -123,7 +125,7 @@ export const TermLink = ({
             <ExploreLink view={view} className={className ?? styles.term}>
                 {name ?? model.label(id)}
             </ExploreLink>
-            <OriginTag declaredBy={model.node(id)?.declared_by} />
+            <OriginTag declaredBy={origins.term(id)} />
         </>
     );
 };

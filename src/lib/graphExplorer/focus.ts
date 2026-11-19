@@ -11,8 +11,10 @@
  * BOX_LIMIT and opens the rest where `more` says.
  */
 import { count, plural } from './counts.ts';
+import { outsideTerm, termOrigin, type TermSources } from './lists.ts';
 import {
     KIND_WORDS,
+    kindOfTerm,
     plainName,
     ROLES,
     type DatasetFilter,
@@ -701,7 +703,8 @@ export type CentreHeading = {
     readonly sub: CentreSub | null;
     /**
      * The origin declaring the centre, as a node's `declared_by`, for the tag
-     * after its name. Null for a dataset and for a term no node holds.
+     * after its name (termOrigin). Null for a dataset and for a term whose
+     * origin nothing loaded names.
      */
     readonly declaredBy: string | null;
 };
@@ -720,11 +723,17 @@ export const termKindWords = (term: UsageTerm | undefined): string => {
 };
 
 /**
- * The heading for a centred dataset, a term the model holds as a node, or a
- * term it knows only from a usage document (`model.term`), named by its
- * label or else its dcid. Null for a dataset the model lacks.
+ * The heading for a centred dataset, a term the model holds as a node, a
+ * term it knows only from a usage document (`model.term`), or a term only a
+ * loaded terms list holds, named by its label or else its dcid. A term's
+ * origin is termOrigin's over `sources`, or its node's alone without them.
+ * Null for a dataset the model lacks.
  */
-export function centreHeading(model: Model, centre: Centre): CentreHeading | null {
+export function centreHeading(
+    model: Model,
+    centre: Centre,
+    sources: TermSources = { usage: {}, terms: [] },
+): CentreHeading | null {
     if (centre.kind === 'dataset') {
         const view = model.datasetView(centre.id);
         if (!view) return null;
@@ -735,6 +744,7 @@ export function centreHeading(model: Model, centre: Centre): CentreHeading | nul
             declaredBy: null,
         };
     }
+    const declaredBy = termOrigin(model, sources, centre.id);
     const kind = model.kind(centre.id);
     if (kind !== undefined) {
         const codes = model.node(centre.id)?.classification_code ?? [];
@@ -742,14 +752,16 @@ export function centreHeading(model: Model, centre: Centre): CentreHeading | nul
             kind: KIND_WORDS[kind],
             name: model.label(centre.id),
             sub: codes.length > 0 ? { kind: 'codes', codes } : null,
-            declaredBy: model.node(centre.id)?.declared_by ?? null,
+            declaredBy,
         };
     }
+    const term = model.term(centre.id);
+    const row = term === undefined ? outsideTerm(sources.terms, centre.id) : undefined;
     return {
-        kind: termKindWords(model.term(centre.id)),
-        name: model.label(centre.id),
+        kind: row === undefined ? termKindWords(term) : KIND_WORDS[kindOfTerm(row)],
+        name: row?.label ?? model.label(centre.id),
         sub: { kind: 'dcid', id: centre.id },
-        declaredBy: null,
+        declaredBy,
     };
 }
 

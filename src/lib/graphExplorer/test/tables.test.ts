@@ -7,8 +7,8 @@ import test from 'node:test';
 
 import { buildModel } from '../model.ts';
 import { scopedListTable, valueListFileName, valueListTable } from '../tables.ts';
-import { readSchema, readUsage } from '../wire.ts';
-import { schemaBody, usageBody } from './fixtures.ts';
+import { readSchema, readUsage, type ProvenanceUsage } from '../wire.ts';
+import { baseUsageBody, schemaBody, usageBody } from './fixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
 const scope = { kind: 'class', id: 'FinancialObligation' } as const;
@@ -20,7 +20,7 @@ test('a scoped list without a dataset filter has the StatVar total', () => {
     assert.equal(table.length, 1 + model.scopedList(scope, { kind: 'none' }).total);
 });
 
-test('with every dataset on, each dataset has a count column headed by its label', () => {
+test('with every dataset on, each dataset has a count column headed by its label, most StatVars first', () => {
     const table = scopedListTable(model, model.scopedList(scope, { kind: 'all' }));
     assert.deepEqual(table[0], [
         'dcid',
@@ -29,15 +29,32 @@ test('with every dataset on, each dataset has a count column headed by its label
         'value_list',
         'OECD DAC1',
         'OECD DAC2a',
-        'OECD DAC2b',
         'ONE Data Climate Finance',
+        'OECD DAC2b',
     ]);
-    assert.deepEqual(table[1], ['amount', 'amount', 'measured', '', '468', '24', '14', '9']);
+    assert.deepEqual(table[1], ['amount', 'amount', 'measured', '', '468', '24', '9', '14']);
+});
+
+test("columns that share a label carry each dataset's origin", () => {
+    const base = readUsage(baseUsageBody());
+    const [births] = base.provenances;
+    assert.ok(births);
+    const renamed: ProvenanceUsage = { ...births, label: 'OECD DAC1' };
+    const named = { ...base, provenances: [renamed] };
+    const both = buildModel(readSchema(schemaBody()), readUsage(usageBody()), named);
+    const fromBase = new Set<ProvenanceUsage>([renamed]);
+    const table = scopedListTable(both, both.scopedList({ kind: 'dfo' }, { kind: 'all' }), {
+        origin: (dataset) => (fromBase.has(dataset) ? 'base' : null),
+    });
+    const heads = table[0]?.slice(4) ?? [];
+    assert.ok(heads.includes('OECD DAC1 (DFO)'));
+    assert.ok(heads.includes('OECD DAC1 (base Data Commons)'));
+    assert.ok(heads.includes('OECD DAC2a'));
 });
 
 test('only the rows the filter text keeps are written, matched on label or dcid', () => {
     const list = model.scopedList(scope, { kind: 'none' });
-    const table = scopedListTable(model, list, '  DAC ');
+    const table = scopedListTable(model, list, { filter: '  DAC ' });
     assert.deepEqual(
         table.slice(1).map((row) => [row[0], row[2], row[3]]),
         [

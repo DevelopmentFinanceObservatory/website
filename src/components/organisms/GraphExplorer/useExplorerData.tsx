@@ -308,14 +308,16 @@ const modelsFor = (
 export type ExplorerData = {
     /**
      * The scoped model: DFO usage and the outside usage whose switch is on.
-     * The start screen, the lists, search, seeding and checking read it.
+     * The start screen, the DFO property list, the Show pills, search and
+     * the seed picker read it, so the switches widen them.
      */
     readonly model: Loadable<Model>;
     /**
      * The full model, over every usage document loaded whatever the
      * switches say, once the DFO pair lands, and null before. A centred term or
-     * dataset and the dataset filter read it. It is a new model each time
-     * an outside usage document arrives.
+     * dataset, the dataset filter, a dataset a link names to Seed a dataset
+     * and the check's reading of seed headers read it. It is a new model
+     * each time an outside usage document arrives.
      */
     readonly full: Model | null;
     readonly retryModel: () => void;
@@ -332,7 +334,10 @@ export type ExplorerData = {
     readonly usageFailed: readonly OriginSwitch[];
     /** Loads each failed outside usage document again. */
     readonly retryUsage: () => void;
-    /** Which terms lists search reaches, set by the URL's `base` and `un` parameters. */
+    /**
+     * The origin switches, set by the URL's `base` and `un` parameters. Each
+     * loads its terms list for search and adds its datasets to the scoped model.
+     */
     readonly switches: Readonly<Record<OriginSwitch, boolean>>;
     /** Each terms list's state while its switch is on; null while it is off. */
     readonly terms: TermsStates;

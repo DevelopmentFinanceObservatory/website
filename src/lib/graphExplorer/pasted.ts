@@ -80,7 +80,7 @@ export type MappedColumn = {
 
 /**
  * Why a column is not checked:
- * - `no_field`: the header names no member of the model.
+ * - `no_field`: the header names no property or field the model knows.
  * - `never_constraint`: the header names something that is never a constraint
  *   (see NEVER_CONSTRAINT).
  * - `codes`: in a seed, the column names a property but holds source codes,
@@ -151,16 +151,42 @@ const fieldOf = (header: string): DefinitionField | undefined =>
 export const pastedKind = (headers: readonly string[]): PastedKind =>
     headers.some((header) => fieldOf(header.trim()) === 'dcid') ? 'statvars' : 'seed';
 
-/** The property a header names, which is the dcid itself or the one whose seed column name (`columnName`) it is. */
-const propertyOf = (model: Model, header: string, properties: readonly string[]) => {
-    if (model.kind(header) === 'property') return header;
-    const named = properties.filter((id) => columnName(id) === header);
-    return named.length === 1 ? named[0] : undefined;
+/**
+ * The property a header names: the dcid itself, or the one property whose
+ * seed column name (`columnName`) it is. Each tier is tried in order, so a
+ * header that names a DFO property keeps it whatever an outside model holds.
+ */
+const propertyOf = (header: string, tiers: readonly (readonly string[])[]) => {
+    for (const properties of tiers) {
+        if (properties.includes(header)) return header;
+        const named = properties.filter((id) => columnName(id) === header);
+        if (named.length > 0) return named.length === 1 ? named[0] : undefined;
+    }
+    return undefined;
 };
 
 /**
- * Reads each header as a definition field, a property of the model, or
- * neither. A column naming the same property or field as an earlier one is
+ * The properties a header may name, in the order they are tried: the
+ * schema's, then those an outside usage document's `terms` name. A seed
+ * copied from a base or UN dataset names such a property (`sex` from a UN
+ * agency) by its column name, so reading the seed against a model built
+ * over that document gives the column its property.
+ */
+const headerProperties = (model: Model): readonly (readonly string[])[] => {
+    const held = model.nodes
+        .filter((node) => model.kind(node.ref) === 'property')
+        .map((node) => node.ref);
+    const known = new Set(held);
+    const outside = model.usageDocuments
+        .flatMap((document) => document.terms ?? [])
+        .filter((term) => term.types.includes('Property') && !known.has(term.ref))
+        .map((term) => term.ref);
+    return [held, [...new Set(outside)]];
+};
+
+/**
+ * Reads each header as a definition field, a property of the model or of
+ * its outside usage documents (`headerProperties`), or neither. A column naming the same property or field as an earlier one is
  * ignored, with `duplicateOf` naming the earlier column.
  *
  * In a seed (no `dcid` column), a property column holds source codes and is
@@ -176,9 +202,7 @@ export function mapHeaders(
     headers: readonly string[],
     rows: readonly (readonly string[])[] = [],
 ): Mapping {
-    const properties = model.nodes
-        .filter((node) => model.kind(node.ref) === 'property')
-        .map((node) => node.ref);
+    const properties = headerProperties(model);
     const seed = pastedKind(headers) === 'seed';
     // The identity columns as settle gives them out: the first column naming each field.
     const identity = IDENTITY_FIELDS.flatMap((field) => {
@@ -198,7 +222,7 @@ export function mapHeaders(
             const field = fieldOf(header);
             const never = field === undefined && NEVER_CONSTRAINT.has(columnName(header));
             const property =
-                field === undefined && !never ? propertyOf(model, header, properties) : undefined;
+                field === undefined && !never ? propertyOf(header, properties) : undefined;
             let wanted: ColumnTarget = { kind: 'ignored' };
             let defaultSkip: SkipReason | null = null;
             if (field !== undefined) wanted = { kind: 'definition', field };

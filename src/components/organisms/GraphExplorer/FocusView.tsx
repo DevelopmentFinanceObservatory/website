@@ -8,6 +8,7 @@ import { OriginTag } from './ExploreLink';
 import { DatasetPanel, FullList, NodePanel, TermPanel, type PanelLens } from './FocusPanel';
 import FocusPicture from './FocusPicture';
 import styles from './FocusView.module.scss';
+import { useTermSources } from './ListToggle';
 import { useNodeView } from './useNodeView';
 
 import Button from '@/components/atoms/Button/Button';
@@ -24,16 +25,21 @@ import {
     type CentreSub,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
+import { outsideTerm } from '@/lib/graphExplorer/lists';
 import { waitText, type Waiting } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 import {
+    boxGaps,
+    COMPLETE,
+    DESCENDANTS,
+    isCapped,
     needsNodeView,
     routeCentre,
     type CentreLine,
+    type Completeness,
     type NodeViewFailure,
     type RefusalKind,
 } from '@/lib/graphExplorer/nodeView';
-import type { SchemaNodeView } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
     centre: Centre;
@@ -46,6 +52,10 @@ type FocusViewProps = {
 type CentredProps = Omit<FocusViewProps, 'full'> & {
     /** A line over the picture, or null. */
     notice: React.ReactNode;
+    /** How completely the model holds the centre's links. */
+    completeness: Completeness;
+    /** The centre's heading, which takes focus when a retried node view lands. */
+    headingRef: React.Ref<HTMLHeadingElement>;
 };
 
 /** Names the centred term in the document title while it is centred. */
@@ -103,8 +113,9 @@ const FilterLine = ({ lens, dataset }: { lens: PanelLens; dataset: string | null
  * the notice, the dataset filter's line, the focus picture and the panel
  * beside it with the definition, or with a box's full list while one is open.
  */
-const Centred = ({ centre, show, notice }: CentredProps) => {
+const Centred = ({ centre, show, notice, completeness, headingRef }: CentredProps) => {
     const model = useModel();
+    const sources = useTermSources();
     const { go } = useExplore();
     const [open, setOpen] = useState<string | null>(null);
     // The "All N" control that opened the full list, which takes focus back on close.
@@ -117,7 +128,7 @@ const Centred = ({ centre, show, notice }: CentredProps) => {
     const marked = pictureLens(centre, show);
     const markLens: PanelLens = marked === null ? { dataset: null, label: null } : lens;
 
-    const heading = useMemo(() => centreHeading(model, centre), [model, centre]);
+    const heading = useMemo(() => centreHeading(model, centre, sources), [model, centre, sources]);
     useDocumentTitle(heading?.name ?? centre.id);
 
     if (heading === null) {
@@ -170,6 +181,7 @@ const Centred = ({ centre, show, notice }: CentredProps) => {
                 {/* Keyed by the centre, so a bubble pinned open on one centre closes on the next. */}
                 <FocusPicture
                     key={`${centre.kind}:${centre.id}`}
+                    headingRef={headingRef}
                     kind={heading.kind}
                     name={
                         <>
@@ -193,7 +205,12 @@ const Centred = ({ centre, show, notice }: CentredProps) => {
             </div>
             <aside className={styles.panel} aria-label={openBox ? openBox.title : 'Definition'}>
                 {openBox ? (
-                    <FullList box={openBox} lens={markLens} onClose={closeList} />
+                    <FullList
+                        box={openBox}
+                        lens={markLens}
+                        gaps={boxGaps(openBox, centre.id, completeness)}
+                        onClose={closeList}
+                    />
                 ) : (
                     definition
                 )}
@@ -232,12 +249,47 @@ export const FailedLine = ({
     </p>
 );
 
-/** The line over a picture whose node view stopped some listings at their cap. */
-const CappedLine = () => (
-    <p className={styles.filter} role="status">
-        <span>Some lists here are cut short. The graph holds more links than one view reads.</span>
-    </p>
-);
+/**
+ * The line over a picture drawn from a model that may hold less than the
+ * graph: the node view loading or unavailable, listings stopped at their
+ * cap, or the walk down the class tree stopped. Nothing for a complete model.
+ */
+const CompletenessLine = ({
+    id,
+    name,
+    completeness,
+}: {
+    id: string;
+    name: string;
+    completeness: Completeness;
+}) => {
+    if (completeness.state === 'complete') return null;
+    if (completeness.state === 'unresolved') {
+        return (
+            <p className={styles.filter} role="status">
+                <span>
+                    {completeness.loading
+                        ? 'Loading its links on the graph.'
+                        : 'Its links on the graph are not available here.'}
+                </span>
+            </p>
+        );
+    }
+    const walk = isCapped(completeness, id, DESCENDANTS);
+    const others = completeness.capped.some(
+        (listing) => listing.ref !== id || listing.property !== DESCENDANTS,
+    );
+    return (
+        <p className={styles.filter} role="status">
+            <span>
+                {others &&
+                    'Some lists here are cut short. The graph holds more links than one view reads. '}
+                {walk &&
+                    `Counts over kinds of ${name} leave some out. The graph holds more narrower kinds than one view reads.`}
+            </span>
+        </p>
+    );
+};
 
 /** What a refusal says about the term whose dcid is `id`. */
 const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
@@ -250,9 +302,16 @@ const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
         case 'notHeld':
             return <>{term} is not on the graph.</>;
         case 'notServed':
-            return <>The graph that holds {term} is not served here.</>;
+            return (
+                <>
+                    The Graph API here does not serve term views, so {term} shows only what the
+                    lists say.
+                </>
+            );
         case 'originNotServed':
             return <>The UN System Data Commons is not served here.</>;
+        case 'tooLarge':
+            return <>The graph&rsquo;s view of {term} is too large to show here.</>;
     }
 };
 
@@ -265,24 +324,29 @@ const RefusedLine = ({ refusal, id }: { refusal: RefusalKind; id: string }) => (
     </p>
 );
 
-/** The line over a centre's picture: its node view's failure or refusal, or its cut lists. */
+/**
+ * The line over a centre's picture: its node view's failure or refusal, or
+ * else what its model may leave out (`completeness`, complete when not
+ * given, for a screen that marks its own list).
+ */
 export const CentreNotice = ({
     id,
+    name,
     line,
-    view,
+    completeness = COMPLETE,
     onRetry,
 }: {
     id: string;
+    name: string;
     line: CentreLine | null;
-    view: SchemaNodeView | null;
+    completeness?: Completeness;
     onRetry: () => void;
 }) => {
     if (line?.kind === 'failed') {
         return <FailedLine failure={line.failure} retrying={line.retrying} onRetry={onRetry} />;
     }
     if (line?.kind === 'refused') return <RefusedLine refusal={line.refusal} id={id} />;
-    if (view !== null && view.capped.length > 0) return <CappedLine />;
-    return null;
+    return <CompletenessLine id={id} name={name} completeness={completeness} />;
 };
 
 /** The screen while the node view of a term the DFO document lacks loads, or waits before a retry. */
@@ -326,15 +390,34 @@ export const Refused = ({ id, refusal }: { id: string; refusal: RefusalKind }) =
  * Any other term loads its node view: a term the document holds (Person)
  * paints from the full model at once and redraws when the view lands; a
  * term it lacks waits for the view. A refused view reads "not on the
- * graph" or "not served here", beside the term's use when the usage
- * documents name it. A failed view keeps what the full model shows, with a
- * line that loads it again.
+ * graph" or "not served here", beside the term's heading and use when the
+ * usage documents name it or a loaded terms list holds it. A failed view
+ * keeps what the full model shows, with a line that loads it again, and
+ * the heading takes focus once a retried view lands. The line over the
+ * picture says what the model may leave out (`Completeness`).
  */
 const FocusView = ({ centre, show, full }: FocusViewProps) => {
+    const sources = useTermSources();
     const { state, lastFailure, retry } = useNodeView(
         needsNodeView(full, centre) ? centre.id : null,
     );
-    const route = routeCentre(full, centre, state, lastFailure);
+    const listed = centre.kind === 'node' && outsideTerm(sources.terms, centre.id) !== undefined;
+    const route = routeCentre(full, centre, state, { lastFailure, listed });
+    const heading = useRef<HTMLHeadingElement | null>(null);
+    // Set by Try Again, so the heading takes focus once the button it was on goes.
+    const retried = useRef(false);
+    const failing = route.kind === 'draw' && route.line?.kind === 'failed';
+
+    useEffect(() => {
+        if (!retried.current || failing) return;
+        retried.current = false;
+        heading.current?.focus();
+    }, [failing]);
+
+    const onRetry = () => {
+        retried.current = true;
+        retry();
+    };
 
     switch (route.kind) {
         case 'loading':
@@ -347,12 +430,15 @@ const FocusView = ({ centre, show, full }: FocusViewProps) => {
                     <Centred
                         centre={centre}
                         show={show}
+                        completeness={route.completeness}
+                        headingRef={heading}
                         notice={
                             <CentreNotice
                                 id={centre.id}
+                                name={route.model.label(centre.id)}
                                 line={route.line}
-                                view={state?.status === 'ready' ? state.value : null}
-                                onRetry={retry}
+                                completeness={route.completeness}
+                                onRetry={onRetry}
                             />
                         }
                     />

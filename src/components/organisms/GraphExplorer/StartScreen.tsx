@@ -9,14 +9,15 @@ import { plural } from '@/lib/graphExplorer/counts';
 import styles from './StartScreen.module.scss';
 import { useExplorerData } from './useExplorerData';
 
-import { datasetsDfoFirst, landedUsage, listHead } from '@/lib/graphExplorer/lists';
+import { datasetsDfoFirst, kindsDfoFirst, landedUsage, listHead } from '@/lib/graphExplorer/lists';
 
 /**
  * The start screen over the scoped model: the datasets with their StatVar
  * counts, the DFO's first and then those the switches add, each group most
- * StatVars first, the kinds of thing their figures are about
- * with how many datasets use each, and one way to list every property the
- * DFO declares. Each long list shows its first entries and "All N", and
+ * StatVars first, the kinds of thing their figures are about with how many
+ * datasets use each, untagged kinds first and then base and UN ones, each
+ * group most used first, and one way to list every property the DFO
+ * declares. Each long list shows its first entries and "All N", and
  * each entry from outside the DFO carries its origin tag.
  */
 const StartScreen = () => {
@@ -29,7 +30,9 @@ const StartScreen = () => {
     const [kindsOpen, setKindsOpen] = useState(false);
     const propertyCount = model.dfoProperties().length;
     const datasets = listHead(datasetsDfoFirst(model, outside), { open: datasetsOpen });
-    const kinds = listHead(model.populationTypes(), { open: kindsOpen });
+    const kinds = listHead(kindsDfoFirst(model.populationTypes(), origins.term), {
+        open: kindsOpen,
+    });
 
     return (
         <div className={styles.start}>

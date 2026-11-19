@@ -7,6 +7,7 @@ import { BreakableId } from './BreakableId';
 import { ModelProvider, useExplore, useFullModel, useModel } from './ExploreContext';
 import { OriginTag, TermLink } from './ExploreLink';
 import { downloadCsv } from './downloadCsv';
+import { GapNote } from './GapNote';
 import { ListToggle, useListOrigins } from './ListToggle';
 import { count, memberTotal, ofMembers } from '@/lib/graphExplorer/counts';
 import styles from './ScopedList.module.scss';
@@ -14,7 +15,8 @@ import ShowPills from './ShowPills';
 
 import Button from '@/components/atoms/Button/Button';
 import { START_VIEW } from '@/lib/graphExplorer/explore';
-import { datasetsByUse, listHead } from '@/lib/graphExplorer/lists';
+import { columnsByUse, listHead } from '@/lib/graphExplorer/lists';
+import type { ListGap } from '@/lib/graphExplorer/nodeView';
 import { csvFileName } from '@/lib/graphExplorer/sheet';
 import { scopedListTable } from '@/lib/graphExplorer/tables';
 import {
@@ -78,6 +80,8 @@ type ScopedListProps = {
      * otherwise.
      */
     classModel?: Model;
+    /** What the list's listings leave out (classListGaps). None for a list the DFO document holds whole. */
+    gaps?: readonly ListGap[];
 };
 
 /**
@@ -88,12 +92,13 @@ type ScopedListProps = {
  * dataset of the model the rows come from its own column, most StatVars
  * first, the first few on show with "All N". A class the DFO document
  * declares lists from the scoped model, so its columns follow the switches.
- * Any other class's list is that term's own view, so its rows and columns
- * cover every usage document loaded, whatever the switches say. A chosen
- * dataset the switches leave out is counted from the full model, since the
- * reader named it.
+ * Any other class's list is that term's own view, so its rows, columns
+ * and Show pills cover every usage document loaded, whatever the switches
+ * say, and a line under the title says what its node view leaves out,
+ * which also names the CSV file `-partial`. A chosen dataset the switches
+ * leave out is counted from the full model, since the reader named it.
  */
-const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
+const ScopedList = ({ scope, show, classModel, gaps = [] }: ScopedListProps) => {
     const scoped = useModel();
     const full = useFullModel();
     const listed = classModel ?? scoped;
@@ -113,15 +118,7 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
         ? `Properties of ${model.label(scope.id)}`
         : 'Properties the DFO model defines';
 
-    // Each count column by the index of its dataset in `list.columns`, most StatVars first.
-    const columnAt = new Map(list.columns.map((dataset, index) => [dataset, index]));
-    const columns = listHead(
-        datasetsByUse(model).flatMap((dataset) => {
-            const index = columnAt.get(dataset.ref);
-            return index === undefined ? [] : [{ dataset, index }];
-        }),
-        { open: columnsOpen },
-    );
+    const columns = listHead(columnsByUse(model, list.columns), { open: columnsOpen });
     const columnCount = 2 + Math.max(1, columns.shown.length);
 
     const groups = GROUPS.map((group) => ({
@@ -139,8 +136,11 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
                     {title} <span className={styles.total}>({count(list.total)})</span>
                 </h1>
             </div>
+            <GapNote gaps={gaps} className={styles.note} />
             <div className={styles.controls}>
-                <ShowPills value={show} onChange={setShow} withAll />
+                <ModelProvider value={listed}>
+                    <ShowPills value={show} onChange={setShow} withAll />
+                </ModelProvider>
                 {show.kind === 'all' && (
                     <ListToggle
                         head={columns}
@@ -162,7 +162,10 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
                     small
                     disabled={groups.length === 0}
                     onClick={() =>
-                        downloadCsv(scopedListTable(model, list, filter), csvFileName(title))
+                        downloadCsv(
+                            scopedListTable(model, list, { filter, origin: origins.dataset }),
+                            csvFileName(title, { partial: gaps.length > 0 }),
+                        )
                     }
                 >
                     Download CSV

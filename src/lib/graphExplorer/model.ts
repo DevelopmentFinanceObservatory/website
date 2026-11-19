@@ -302,7 +302,8 @@ const fnv1a = (text: string, seed: number): string => {
 /**
  * A pattern's identity, as a React key: 16 hex digits hashed from the fields that
  * define it (population type, measured property, stat type, qualifier,
- * denominator, and the constraint and observation properties as sets). The
+ * denominator and whether it is unresolved, and the constraint and observation
+ * properties as sets). The
  * StatVar count and the examples change as usage grows and the API orders
  * patterns by count, so neither the position nor those fields enter the id.
  */
@@ -313,6 +314,7 @@ export const patternId = (pattern: SchemaPattern): string => {
         pattern.stat_type,
         pattern.measurement_qualifier,
         pattern.measurement_denominator,
+        pattern.measurement_denominator_unresolved ?? false,
         [...pattern.constraint_properties].sort(),
         [...pattern.observation_properties].sort(),
     ]);
@@ -1011,13 +1013,15 @@ export type UsageDocuments = {
 export type ExploreModels = {
     /**
      * DFO usage and the outside usage whose origin switch is on. The start
-     * screen, the lists, search, seeding and checking read it.
+     * screen, the DFO property list, the Show pills, search and the seed
+     * picker read it.
      */
     readonly scoped: Model;
     /**
      * Every usage document loaded, whatever the switches say. A centred term
-     * or dataset and the dataset filter read it, so a term's view shows every
-     * model's use of it.
+     * or dataset, the dataset filter, a dataset a link names to Seed a
+     * dataset and the check's reading of seed headers read it, so a term's
+     * view shows every model's use of it.
      */
     readonly full: Model;
 };

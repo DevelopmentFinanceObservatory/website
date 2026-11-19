@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 
 import styles from './SeedSheet.module.scss';
 
@@ -283,7 +283,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const carried = useCarried();
     const codesId = useId();
     const panelId = useId();
-    const checkStep = useRef<HTMLDivElement | null>(null);
+    const scrolled = useRef(false);
     const [codes, setCodes] = useState('');
     const [open, setOpen] = useState<string | null>(null);
     // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
@@ -338,12 +338,19 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         others.some((property) => choice.added.includes(property)),
     );
 
-    useEffect(() => {
-        if (openAt === 'check') checkStep.current?.scrollIntoView({ block: 'start' });
-    }, [openAt]);
+    // Check a sheet scrolls to the check step once, when it first mounts, which waits for an
+    // awaited dataset.
+    const scrollToCheck = useCallback(
+        (element: HTMLDivElement | null) => {
+            if (element === null || openAt !== 'check' || scrolled.current) return;
+            scrolled.current = true;
+            element.scrollIntoView({ block: 'start' });
+        },
+        [openAt],
+    );
 
     const checkSection = (title: string) => (
-        <div ref={checkStep} className={styles.step}>
+        <div ref={scrollToCheck} className={styles.step}>
             <CheckSheet title={title} />
         </div>
     );
