@@ -208,7 +208,7 @@ export const seedName = (dataset: Pick<SeedDataset, 'label'>): string => {
 };
 
 /** The columns whose cells every row must fill: the fields that make a StatVar's identity. */
-const NOT_NULL = ['population_type', 'measured_property', 'stat_type', 'measurement_qualifier'];
+const NOT_NULL = ['population_type', 'measured_property', 'stat_type'];
 
 /** The `seeds.yml` entry for a seed: every column a string, with a description. */
 export function seedsYml(name: string, columns: readonly SeedColumn[]): string {

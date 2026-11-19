@@ -193,15 +193,10 @@ test('the seeds.yml stub types every column as a string and tests the identity c
     const block = (column: string) =>
         yml.split('      - name: ').find((part) => part.startsWith(`${column}\n`)) ?? '';
     assert.match(block('source_code'), /data_tests:\n\s+- unique\n$/);
-    for (const column of [
-        'population_type',
-        'measured_property',
-        'stat_type',
-        'measurement_qualifier',
-    ]) {
+    for (const column of ['population_type', 'measured_property', 'stat_type']) {
         assert.match(block(column), /data_tests:\n\s+- not_null\n$/);
     }
-    for (const column of ['statvar_name', 'financial_flow_type', 'unit']) {
+    for (const column of ['statvar_name', 'financial_flow_type', 'unit', 'measurement_qualifier']) {
         assert.doesNotMatch(block(column), /data_tests/);
     }
     assert.match(block('dac2a_aid_type'), /description: ".*dac2aAidType/);
