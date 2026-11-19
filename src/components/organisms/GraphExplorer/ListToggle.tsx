@@ -96,7 +96,16 @@ export const FilterBox = ({
 );
 
 /** The note under a list with a FilterBox (filterNote): no match, or the ceiling and how to reach the rest. */
-export const FilterNoteLine = ({ text, matches }: { text: string; matches: Matches<unknown> }) => {
+export const FilterNoteLine = ({
+    text,
+    matches,
+    also,
+}: {
+    text: string;
+    matches: Matches<unknown>;
+    /** A sentence after the ceiling note's own, such as where the full list is. */
+    also?: string;
+}) => {
     const note = filterNote(text, matches);
     if (note === null) return null;
     if (note.kind === 'noMatch') {
@@ -106,7 +115,12 @@ export const FilterNoteLine = ({ text, matches }: { text: string; matches: Match
             </p>
         );
     }
-    return <CeilingNote matches={matches} then={note.then} />;
+    return (
+        <CeilingNote
+            matches={matches}
+            then={also === undefined ? note.then : `${note.then} ${also}`}
+        />
+    );
 };
 
 /** Where a list's entries come from, as a node's `declared_by`, for their origin tags. */

@@ -1,7 +1,7 @@
 'use client';
 
 import classNames from 'classnames';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { useModel } from './ExploreContext';
@@ -235,7 +235,11 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
         })),
     };
     const codes = membersHaveCodes(model, members);
-    const roots = firstMatches(model.memberTree(listId));
+    // The hierarchy serves only the blank filter, so typing in the box does not rebuild it.
+    const roots = useMemo(
+        () => (blank ? firstMatches(model.memberTree(listId)) : null),
+        [blank, model, listId],
+    );
 
     return (
         <div className={styles.tree}>
@@ -247,7 +251,7 @@ const ValueTree = ({ listId, lensDataset }: ValueTreeProps) => {
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
             />
-            {blank ? (
+            {roots !== null ? (
                 <>
                     <Table columns={columns}>
                         <ul className={styles.list}>

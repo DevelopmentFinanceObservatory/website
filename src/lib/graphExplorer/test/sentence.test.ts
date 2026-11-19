@@ -7,7 +7,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel, type Model } from '../model.ts';
-import { groupSentence, patternGroups, patternLine, patternSentence } from '../sentence.ts';
+import {
+    groupFilter,
+    groupSentence,
+    patternFilter,
+    patternGroups,
+    patternLine,
+    patternSentence,
+} from '../sentence.ts';
 import type { SentencePart } from '../sentence.ts';
 import { readSchema, readUsage, type SchemaPattern } from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
@@ -203,4 +210,32 @@ test('a slot names up to three terms joined with "or", and past that gives their
         'One of 4 measures of 4 kinds of thing, measured as Nominal, reported by financing ' +
             'provider, split by DAC 1 aid type, financial flow type and netting basis.',
     );
+});
+
+test('a filter keeps the groups whose sentence names a matching term, and the patterns whose terms match', () => {
+    const groups = patternGroups(model.dataset('provenance/OECDDAC2A')?.patterns ?? []);
+    const kept = (text: string) => {
+        const matches = groupFilter(model, text);
+        return matches === null
+            ? null
+            : groups.filter(matches).map((group) => group.patterns.length);
+    };
+    assert.equal(kept('  '), null);
+    assert.deepEqual(kept('dacTypeOfFinance'), [1]);
+    assert.deepEqual(kept('dac type of FINANCE'), [1]);
+    assert.deepEqual(kept('attributed amount'), [4]);
+    assert.equal(kept('financingRecipient')?.length, 3);
+    assert.deepEqual(kept('Count_Person'), []);
+
+    const [four] = groups.filter((group) => group.patterns.length === 4);
+    assert.ok(four);
+    const patterns = (text: string) => {
+        const matches = patternFilter(model, text);
+        return matches === null
+            ? null
+            : four.patterns.filter(matches).map((p) => p.measurement_denominator);
+    };
+    assert.equal(patterns(''), null);
+    assert.deepEqual(patterns('count_person'), ['Count_Person']);
+    assert.equal(patterns('financial flow')?.length, 4);
 });

@@ -4,6 +4,7 @@
  * render each term as a link.
  */
 import { count } from './counts.ts';
+import { textFilter } from './lists.ts';
 import type { Model } from './model.ts';
 import type { SchemaPattern } from './wire.ts';
 
@@ -176,3 +177,46 @@ export function patternLine(group: PatternGroup, pattern: SchemaPattern): Patter
         example: pattern.examples[0] ?? null,
     };
 }
+
+/** Each term a group's sentence can name, as dcids: measured, population, qualifier, between and split. */
+const groupTerms = (group: PatternGroup): readonly string[] => [
+    ...group.measured,
+    ...group.populationTypes,
+    ...(group.qualifier === null ? [] : [group.qualifier]),
+    ...group.between,
+    ...group.split,
+];
+
+/** Dcids with their labels, for a filter to match on either. */
+const withLabels = (model: Pick<Model, 'label'>, ids: readonly string[]): readonly string[] =>
+    ids.flatMap((id) => [id, model.label(id)]);
+
+/**
+ * A filter over split combinations: a group matches when the label or
+ * dcid of any term its sentence names holds `text` (textFilter). Null for
+ * blank text.
+ */
+export const groupFilter = (
+    model: Pick<Model, 'label'>,
+    text: string,
+): ((group: PatternGroup) => boolean) | null =>
+    textFilter(text, (group: PatternGroup) => withLabels(model, groupTerms(group)));
+
+/**
+ * A filter over a group's patterns on the label or dcid of the population
+ * type, measured property or denominator (textFilter). Null for blank text.
+ */
+export const patternFilter = (
+    model: Pick<Model, 'label'>,
+    text: string,
+): ((pattern: SchemaPattern) => boolean) | null =>
+    textFilter(text, (pattern: SchemaPattern) =>
+        withLabels(
+            model,
+            [
+                pattern.population_type,
+                pattern.measured_property,
+                pattern.measurement_denominator,
+            ].filter((id) => id !== null),
+        ),
+    );

@@ -6,16 +6,18 @@ import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
 import { useModel } from './ExploreContext';
 import { TermLink } from './ExploreLink';
-import { CeilingNote, ListToggle, useListOrigins } from './ListToggle';
+import { CeilingNote, FilterBox, FilterNoteLine, ListToggle, useListOrigins } from './ListToggle';
 import styles from './PatternGroups.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import { count, plural } from '@/lib/graphExplorer/counts';
 import { shareWords } from '@/lib/graphExplorer/focus';
-import { LIST_HEAD, listOnShow } from '@/lib/graphExplorer/lists';
+import { LIST_CEILING, LIST_HEAD, listOnShow } from '@/lib/graphExplorer/lists';
 import { patternId } from '@/lib/graphExplorer/model';
 import {
+    groupFilter,
     groupSentence,
+    patternFilter,
     patternGroups,
     patternLine,
     type PatternGroup,
@@ -133,11 +135,20 @@ const PatternLineView = ({
 
 /** A group's patterns: the first few, then all of them up to the ceiling. */
 const PatternList = ({ group, home, id }: { group: PatternGroup; home: Home; id: string }) => {
+    const model = useModel();
     const [open, setOpen] = useState(false);
-    const { head, shown } = listOnShow(group.patterns, { open });
+    const [filter, setFilter] = useState('');
+    const filtering = open && group.patterns.length > LIST_CEILING;
+    const { head, shown } = listOnShow(group.patterns, {
+        open,
+        matches: filtering ? patternFilter(model, filter) : null,
+    });
 
     return (
         <div className={styles.members}>
+            {filtering && (
+                <FilterBox value={filter} onChange={setFilter} label="Filter these patterns" />
+            )}
             <ul id={id} className={styles.lines}>
                 {shown.hits.map((pattern) => (
                     <PatternLineView
@@ -148,7 +159,11 @@ const PatternList = ({ group, home, id }: { group: PatternGroup; home: Home; id:
                     />
                 ))}
             </ul>
-            <CeilingNote matches={shown} then={CSV_HAS_ALL} />
+            {filtering ? (
+                <FilterNoteLine text={filter} matches={shown} also={CSV_HAS_ALL} />
+            ) : (
+                <CeilingNote matches={shown} then={CSV_HAS_ALL} />
+            )}
             <ListToggle
                 head={head}
                 noun="patterns"
@@ -233,6 +248,7 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
     const model = useModel();
     const origins = useListOrigins(model);
     const [open, setOpen] = useState(false);
+    const [filter, setFilter] = useState('');
     const listId = useId();
     const dataset = model.dataset(datasetId);
     if (dataset === undefined || dataset.patterns.length === 0) return null;
@@ -241,7 +257,12 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
     const home: Home = origin === 'base' || origin === 'un_system' ? origin : null;
     const groups = patternGroups(dataset.patterns);
     const total = dataset.stat_var_count;
-    const { head, shown } = listOnShow(groups, { open, limit: GROUP_CEILING });
+    const filtering = open && groups.length > GROUP_CEILING;
+    const { head, shown } = listOnShow(groups, {
+        open,
+        limit: GROUP_CEILING,
+        matches: filtering ? groupFilter(model, filter) : null,
+    });
     const headShare = groups
         .slice(0, LIST_HEAD)
         .reduce((sum, group) => sum + group.statVarCount, 0);
@@ -253,6 +274,13 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
                 {plural(groups.length, 'split combination')}
                 {head.long && ', most StatVars first'}.{home !== null && ` ${HOME_NOTES[home]}`}
             </p>
+            {filtering && (
+                <FilterBox
+                    value={filter}
+                    onChange={setFilter}
+                    label="Filter the split combinations"
+                />
+            )}
             <ol id={listId} className={styles.list}>
                 {shown.hits.map((group) => (
                     <GroupRow
@@ -270,7 +298,11 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
                     The {LIST_HEAD} shown hold {shareWords(headShare, total)} of its StatVars.
                 </p>
             )}
-            <CeilingNote matches={shown} then={CSV_HAS_ALL} />
+            {filtering ? (
+                <FilterNoteLine text={filter} matches={shown} also={CSV_HAS_ALL} />
+            ) : (
+                <CeilingNote matches={shown} then={CSV_HAS_ALL} />
+            )}
             <ListToggle
                 head={head}
                 noun="split combinations"
