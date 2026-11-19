@@ -196,21 +196,6 @@
     }
 }
 
-.patterns {
-    @include flex(column, flex-start, stretch);
-    @include font-size(14px, 1.45);
-
-    gap: rem(4);
-    padding-left: rem(18);
-    list-style: disc;
-    overflow-wrap: break-word;
-
-    code {
-        font-family: var(--font-dm-mono);
-        letter-spacing: -0.02em;
-    }
-}
-
 .paste {
     @include font-size(12px, 1.4);
 
