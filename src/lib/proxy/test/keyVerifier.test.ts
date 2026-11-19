@@ -20,7 +20,25 @@ import { buildKeyPool } from '../../../../db/connection.ts';
 import * as schema from '../../../../db/schema.ts';
 import { createTestDatabase } from '../../../../db/test/harness.ts';
 
-const { CACHE_INVALID_MS, CACHE_VALID_MS, createKeyVerifier } = await import('../keyVerifier.ts');
+const { CACHE_INVALID_MS, CACHE_VALID_MS, cacheLifetimes, createKeyVerifier } =
+    await import('../keyVerifier.ts');
+
+test('cacheLifetimes reads API_KEY_CACHE_S, with 0 turning the cache off', () => {
+    const defaults = { validMs: CACHE_VALID_MS, invalidMs: CACHE_INVALID_MS };
+
+    for (const [value, expected] of [
+        [undefined, defaults],
+        ['', defaults],
+        ['soon', defaults],
+        ['-5', defaults],
+        ['1.5', defaults],
+        ['0', { validMs: 0, invalidMs: 0 }],
+        ['10', { validMs: 10_000, invalidMs: 10_000 }],
+        ['300', { validMs: 300_000, invalidMs: CACHE_INVALID_MS }],
+    ] as const) {
+        assert.deepEqual(cacheLifetimes(value), expected, String(value));
+    }
+});
 
 const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, '../../../../db/migrations');
 
@@ -129,6 +147,17 @@ test('keyVerifier on the key store', async (t) => {
         );
         // Cached with the rest of the verdict.
         assert.equal((await verifier.cachedValid(daily))?.dailyLimit, 40);
+    });
+
+    await t.test('with the cache off, a changed daily limit applies on the next call', async () => {
+        const verifier = createKeyVerifier(db, cacheLifetimes('0'));
+        const limitOf = () =>
+            verifier.verify(daily).then((v) => v.kind === 'valid' && v.dailyLimit);
+
+        assert.equal(await limitOf(), 40);
+        await admin.query(`update apikey set daily_limit = 7 where id = 'id-daily'`);
+        assert.equal(await limitOf(), 7);
+        await admin.query(`update apikey set daily_limit = 40 where id = 'id-daily'`);
     });
 
     await t.test('unknown, disabled, expired and foreign-shaped keys are invalid', async () => {

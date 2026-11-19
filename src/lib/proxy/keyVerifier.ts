@@ -62,6 +62,27 @@ export const CACHE_VALID_MS = 60_000;
 export const CACHE_INVALID_MS = 30_000;
 const CACHE_MAX_ENTRIES = 5_000;
 
+/**
+ * The cache lifetimes from API_KEY_CACHE_S: a whole number of seconds for a
+ * valid verdict, with an invalid one kept no longer than its own default.
+ * 0 turns the cache off, so a change to a key's limits applies on its next
+ * call. Unset or not a whole number keeps the defaults.
+ */
+export const cacheLifetimes = (
+    value: string | undefined,
+): { validMs: number; invalidMs: number } => {
+    const seconds = value?.trim() ? Number(value) : NaN;
+
+    if (!Number.isInteger(seconds) || seconds < 0) {
+        return { validMs: CACHE_VALID_MS, invalidMs: CACHE_INVALID_MS };
+    }
+
+    return {
+        validMs: seconds * 1000,
+        invalidMs: Math.min(seconds * 1000, CACHE_INVALID_MS),
+    };
+};
+
 /** Reads only; the pool behind it is src/lib/db's keyDb. */
 export type KeyDb = Pick<NodePgDatabase, 'select' | 'update'>;
 

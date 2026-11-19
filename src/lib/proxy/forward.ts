@@ -29,7 +29,7 @@ import {
     upstreamRequestHeaders,
     type HeaderPass,
 } from './headers';
-import { createKeyVerifier } from './keyVerifier';
+import { cacheLifetimes, createKeyVerifier } from './keyVerifier';
 import { unreachableProblem } from './problem';
 import { rateHeaders } from './rateHeaders';
 import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
@@ -115,7 +115,7 @@ const keyTagValid = (key: string): boolean => {
 // The accounts' counts and key lookups, as forward() reaches them. A test
 // swaps a field for a fake.
 export const accessDeps: AccessDeps = {
-    verifier: createKeyVerifier(keyDb),
+    verifier: createKeyVerifier(keyDb, cacheLifetimes(process.env.API_KEY_CACHE_S)),
     tagValid: keyTagValid,
     hitAddress: hit,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
