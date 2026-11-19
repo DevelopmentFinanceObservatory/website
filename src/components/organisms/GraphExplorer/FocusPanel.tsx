@@ -26,7 +26,13 @@ import {
 } from '@/lib/graphExplorer/focus';
 import { datasetHead } from '@/lib/graphExplorer/lists';
 import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
-import { openLineCut, type Completeness, type ListGap } from '@/lib/graphExplorer/nodeView';
+import {
+    leftOutLine,
+    leftOutProperties,
+    openLineCut,
+    type Completeness,
+    type ListGap,
+} from '@/lib/graphExplorer/nodeView';
 import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
@@ -270,7 +276,10 @@ export const NodePanel = ({
 }: {
     id: string;
     lens: PanelLens;
-    /** How completely the model holds the term's links, for its open lines (openLineCut). */
+    /**
+     * How completely the model holds the term's links, for its open lines
+     * (openLineCut) and the properties its view left out (leftOutProperties).
+     */
     completeness: Completeness;
 }) => {
     const model = useModel();
@@ -284,6 +293,9 @@ export const NodePanel = ({
     const members = hasList ? model.members(id).length : 0;
     const complete = hasList && model.membersComplete(id);
     const used = hasList && lens.dataset !== null ? model.lens(lens.dataset, [id])[0] : undefined;
+    const leftOut = leftOutLine(
+        leftOutProperties(completeness, node).map((property) => model.label(property)),
+    );
 
     return (
         <>
@@ -328,6 +340,7 @@ export const NodePanel = ({
                 </p>
             )}
             <OpenLines id={id} completeness={completeness} />
+            {leftOut !== null && <p className={styles.note}>{leftOut}</p>}
             {hasList && (members > 0 || !complete) && (
                 <section className={styles.section}>
                     <Label>

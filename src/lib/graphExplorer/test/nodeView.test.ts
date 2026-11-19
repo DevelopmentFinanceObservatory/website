@@ -22,6 +22,8 @@ import {
     centreModel,
     centreNodes,
     classListGaps,
+    leftOutLine,
+    leftOutProperties,
     openLineCut,
     pictureCuts,
     routeCentre,
@@ -363,6 +365,35 @@ test('a node view is complete with no capped listing, and partial with any', () 
     assert.deepEqual(viewCompleteness(view([])), { state: 'complete' });
     const walk = [{ ref: SERIES, property: DESCENDANTS }];
     assert.deepEqual(viewCompleteness(view(walk)), { state: 'partial', capped: walk });
+});
+
+test('a capped property the centre does not hold reads as left out, and no listing does', () => {
+    const USA = 'country/USA';
+    const centre = node(USA, {
+        types: ['Country'],
+        other_properties: { nameWithLanguage: [{ value: 'United States@en' }] },
+    });
+    const capped = [
+        { ref: 'Country', property: 'geoJsonCoordinates' },
+        { ref: USA, property: DESCENDANTS },
+        { ref: USA, property: 'geoJsonCoordinates' },
+        { ref: USA, property: 'geoJsonCoordinatesDP1' },
+        { ref: USA, property: 'nameWithLanguage' },
+        { ref: USA, property: 'rangeIncludes' },
+        { ref: USA, property: 'typeOf' },
+        { ref: USA, property: 'typeOf/rangeIncludes' },
+    ];
+    const leftOut = leftOutProperties({ state: 'partial', capped }, centre);
+    assert.deepEqual(leftOut, ['geoJsonCoordinates', 'geoJsonCoordinatesDP1']);
+    assert.deepEqual(leftOutProperties(COMPLETE, centre), []);
+    assert.deepEqual(leftOutProperties(LINKS_MISSING, centre), []);
+
+    const line = leftOutLine(leftOut);
+    assert.ok(
+        leftOut.every((property) => line?.includes(property)),
+        line ?? 'no line',
+    );
+    assert.equal(leftOutLine([]), null);
 });
 
 test("a box and a class's list name the gaps their listings leave", () => {

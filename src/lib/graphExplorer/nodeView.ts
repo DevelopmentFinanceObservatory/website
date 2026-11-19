@@ -230,6 +230,47 @@ export function classListGaps(id: string, completeness: Completeness): readonly 
 export const openLineCut = (completeness: Completeness, id: string, property: string): boolean =>
     isCut(completeness, id, (listing) => listing.kind === 'open' && listing.property === property);
 
+/** The arcs whose listings into the centre a node view caps under the centre's own ref. */
+const IN_ARC_LISTINGS: ReadonlySet<string> = new Set([
+    'typeOf',
+    'subClassOf',
+    'subPropertyOf',
+    'specializationOf',
+    'rangeIncludes',
+    'domainIncludes',
+]);
+
+/**
+ * The properties a partial view left out of its centre `node`: each capped
+ * listing on the centre that names none of the view's own listings
+ * (CENTRE_CUTS and IN_ARC_LISTINGS) and no property the centre holds. The Graph API leaves
+ * out a property whose values are all literals and total more than 32 KiB,
+ * such as the eleven geoJson properties of `country/USA`, and caps it this
+ * way. A capped property the centre holds is cut short (openLineCut).
+ */
+export const leftOutProperties = (
+    completeness: Completeness,
+    node: SchemaNode,
+): readonly string[] =>
+    completeness.state !== 'partial'
+        ? []
+        : completeness.capped.flatMap(({ ref, property }) =>
+              ref === node.ref &&
+              !CENTRE_CUTS.has(property) &&
+              !IN_ARC_LISTINGS.has(property) &&
+              !Object.hasOwn(node.other_properties, property)
+                  ? [property]
+                  : [],
+          );
+
+/** The panel's line naming the properties `names` its view left out, or null for none. */
+export const leftOutLine = (names: readonly string[]): string | null => {
+    if (names.length === 0) return null;
+    if (names.length === 1) return `Left out because it is too large to load here: ${names[0]}.`;
+    const list = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    return `Left out because they are too large to load here: ${list}.`;
+};
+
 /**
  * What the line over the picture around `id` says is cut: the titles of
  * the boxes a capped listing cuts, "Values" when it cuts the members of a
