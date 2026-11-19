@@ -13,6 +13,7 @@
 import { count, plural } from './counts.ts';
 import { outsideTerm, termOrigin, type TermSources } from './lists.ts';
 import {
+    declarerPlace,
     KIND_WORDS,
     kindOfTerm,
     plainName,
@@ -727,7 +728,9 @@ export const termKindWords = (term: UsageTerm | undefined): string => {
  * term it knows only from a usage document (`model.term`), or a term only a
  * loaded terms list holds, named by its label or else its dcid. A term's
  * origin is termOrigin's over `sources`, or its node's alone without them.
- * Null for a dataset the model lacks.
+ * A term the model holds no node for has its kind followed by where its
+ * origin sits, such as "Property in the UN System Data Commons", so two
+ * terms with one label read apart. Null for a dataset the model lacks.
  */
 export function centreHeading(
     model: Model,
@@ -757,8 +760,10 @@ export function centreHeading(
     }
     const term = model.term(centre.id);
     const row = term === undefined ? outsideTerm(sources.terms, centre.id) : undefined;
+    const words = row === undefined ? termKindWords(term) : KIND_WORDS[kindOfTerm(row)];
+    const known = term !== undefined || row !== undefined;
     return {
-        kind: row === undefined ? termKindWords(term) : KIND_WORDS[kindOfTerm(row)],
+        kind: known && declaredBy !== null ? `${words} ${declarerPlace(declaredBy)}` : words,
         name: row?.label ?? model.label(centre.id),
         sub: { kind: 'dcid', id: centre.id },
         declaredBy,

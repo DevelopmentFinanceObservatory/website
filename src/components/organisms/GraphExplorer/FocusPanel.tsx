@@ -446,11 +446,11 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 /**
  * A term the model knows only from the usage documents or a loaded terms
  * list, whose node view did not load: what its types say it is, its name
- * (else its dcid), and every dataset that uses it. A term whose origin
- * reads as base Data Commons (`termOrigin`, as its heading's tag reads it)
- * gets a link to the base Data Commons browser. Any other gets none, since
- * the UN System Data Commons serves no browser page (its /browser/ path
- * answers 404).
+ * (else its dcid), and every dataset that uses it, with a link to the base
+ * Data Commons browser. A term whose origin reads as the UN System Data
+ * Commons (`termOrigin`, as its heading's tag reads it) gets none, since the
+ * base browser does not hold it and the UN System Data Commons serves no
+ * browser page (its /browser/ path answers 404).
  */
 export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
@@ -465,7 +465,7 @@ export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <IdLine id={id} />
             </div>
             <p className={styles.note}>Only its use in the datasets is known here.</p>
-            {heading?.declaredBy === 'base' && <BrowserLink id={id} />}
+            {heading?.declaredBy !== 'un_system' && <BrowserLink id={id} />}
             <UsageBars id={id} lens={lens} />
         </>
     );

@@ -22,7 +22,13 @@ import {
 } from '../focus.ts';
 import { buildModel, type Model } from '../model.ts';
 import { centreModel } from '../nodeView.ts';
-import { readSchema, readUsage, type SchemaNode, type SchemaPattern } from '../wire.ts';
+import {
+    readSchema,
+    readUsage,
+    type SchemaNode,
+    type SchemaPattern,
+    type SchemaTerm,
+} from '../wire.ts';
 import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
 import { withListedParties } from './sheetFixtures.ts';
 
@@ -497,7 +503,47 @@ test('the centre heading reads a dataset, a model term, a usage term and an unkn
     const listed = centreHeading(full, { kind: 'node', id: 'ABSState' }, sources);
     assert.deepEqual(
         [listed?.kind, listed?.name, listed?.declaredBy],
-        [person?.kind, 'Australian state', 'base'],
+        [`${person?.kind} in base Data Commons`, 'Australian state', 'base'],
+    );
+});
+
+test('a term the model holds no node for is headed by its kind and where its origin sits', () => {
+    const headingFor = (declaredBy: string | null, types: SchemaTerm['types'] = ['Class']) => {
+        const row = {
+            ref: 'ABSState',
+            label: 'Age',
+            types,
+            provenances: [],
+            declared_by: declaredBy,
+        };
+        const sources = { usage: {}, terms: [row] };
+        return centreHeading(full, { kind: 'node', id: 'ABSState' }, sources)?.kind;
+    };
+    assert.deepEqual(
+        [
+            headingFor('base'),
+            headingFor('un_system'),
+            headingFor('un_system', ['Property']),
+            headingFor('some_new_origin'),
+            headingFor(null),
+        ],
+        [
+            'Kind of thing in base Data Commons',
+            'Kind of thing in the UN System Data Commons',
+            'Property in the UN System Data Commons',
+            'Kind of thing in another origin',
+            'Kind of thing',
+        ],
+    );
+    // A usage term takes the place of the document naming it; a model node keeps its kind alone.
+    const sources = { usage: { base: baseUsage, un: unUsage }, terms: [] };
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: 'age' }, sources)?.kind,
+        'Property in base Data Commons',
+    );
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: 'FinancialFlow' }, sources)?.kind,
+        'Kind of thing',
     );
 });
 
