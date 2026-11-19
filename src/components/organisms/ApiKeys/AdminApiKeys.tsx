@@ -1,163 +1,158 @@
-import styles from './ApiKeys.module.scss';
-import ApiKeysShell from './ApiKeysShell';
-import CreateKeyForm from './CreateKeyForm';
-import DeleteKeyButton from './DeleteKeyButton';
-import { formatDate } from './format';
-import type { CreatedState, DeleteState } from './state';
+import Link from 'next/link';
 
-import type { AdminKey } from '@/lib/apiKeys/service';
+import styles from './AdminApiKeys.module.scss';
+import AdminSearch from './AdminSearch';
+import { ADMIN_PAGE_SIZE, type AdminActions, type AdminUserView } from './AdminState';
+import AdminUserRow from './AdminUserRow';
+
+import PageFade from '@/components/molecules/PageFade/PageFade';
+import PageHero from '@/components/molecules/PageHero/PageHero';
 
 type AdminApiKeysProps = {
-    keys: AdminKey[];
-    // The email filter as typed, to fill the box again.
-    filter: string;
+    // The page's users, already cut to the page.
+    users: AdminUserView[];
+    // Every user, and those the search matched.
+    total: number;
+    matched: number;
+    query: string;
+    page: number;
+    // The per-minute limit an account without its own is held to.
     defaultLimit: number;
     keysEnabled: boolean;
-    // The notice a limit change left, from the page's query (?limit=...).
-    notice?: string;
-    createAction: (previous: CreatedState, formData: FormData) => Promise<CreatedState>;
-    deleteAction: (previous: DeleteState, formData: FormData) => Promise<DeleteState>;
-    limitAction: (formData: FormData) => Promise<void>;
+    actions: AdminActions;
+};
+
+const count = (value: number) => value.toLocaleString('en-GB');
+
+/** The link to a page of the list, keeping the search. */
+const pageHref = (query: string, page: number): string => {
+    const params = new URLSearchParams();
+
+    if (query) {
+        params.set('q', query);
+    }
+
+    if (page > 1) {
+        params.set('page', String(page));
+    }
+
+    const text = params.toString();
+
+    return text ? `?${text}` : '?';
 };
 
 /**
- * The operators' view of every key (/admin/api-keys). A proof of concept:
- * plain on purpose, and the admin gate (lib/apiKeys/server `requireAdmin`)
- * is what keeps it private.
+ * The operators' view of accounts (/admin/api-keys): the dark hero with the
+ * user count and the email search, then one row per account that opens to its
+ * MCP keys. The admin gate (lib/apiKeys/server `requireAdmin`) is what keeps
+ * it private.
  */
 const AdminApiKeys = ({
-    keys,
-    filter,
+    users,
+    total,
+    matched,
+    query,
+    page,
     defaultLimit,
     keysEnabled,
-    notice,
-    createAction,
-    deleteAction,
-    limitAction,
-}: AdminApiKeysProps) => (
-    <ApiKeysShell
-        wide
-        title="API keys: admin"
-        lead="Every key across accounts. Proof of concept: it covers what operators need first, and will change."
-    >
-        <p className={keysEnabled ? styles.status : styles.notice} role="status">
-            API_KEYS_ENABLED is <strong>{keysEnabled ? 'on' : 'off'}</strong>
-            {keysEnabled
-                ? ': keys are honoured.'
-                : ': keys are stripped and every call is counted by address.'}{' '}
-            It is set in the deployment, not here.
-        </p>
-        <p className={styles.note}>
-            Last request is approximate: it is written when the proxy looks a key up, so it can be a
-            minute or so behind the last call.
-        </p>
-        {notice && (
-            <p className={styles.status} role="status">
-                {notice}
-            </p>
-        )}
+    actions,
+}: AdminApiKeysProps) => {
+    const pages = Math.max(1, Math.ceil(matched / ADMIN_PAGE_SIZE));
+    const first = (page - 1) * ADMIN_PAGE_SIZE + 1;
 
-        <h2 className={styles.heading}>Keys</h2>
-        <form className={styles.form} method="get">
-            <label className={styles.field}>
-                <span className={styles.label}>Filter by email</span>
-                <input
-                    className={styles.input}
-                    type="search"
-                    name="email"
-                    defaultValue={filter}
-                    placeholder="part of an email"
-                />
-            </label>
-            <button type="submit" className={styles.secondary}>
-                Filter
-            </button>
-        </form>
-        {keys.length === 0 ? (
-            <p className={styles.note}>{filter ? 'No keys match.' : 'No keys yet.'}</p>
-        ) : (
-            <div className={styles.scroll}>
-                <table className={styles.table}>
-                    <thead>
-                        <tr>
-                            <th>Key id</th>
-                            <th>Label</th>
-                            <th>Start</th>
-                            <th>Owner</th>
-                            <th>Created</th>
-                            <th>Last request</th>
-                            <th>Account limit</th>
-                            <th />
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {keys.map((key) => (
-                            <tr key={key.id}>
-                                <td>
-                                    <code>{key.id}</code>
-                                </td>
-                                <td>{key.name || 'Unnamed'}</td>
-                                <td>
-                                    <code>{key.start ? `${key.start}…` : '—'}</code>
-                                </td>
-                                <td>{key.ownerEmail}</td>
-                                <td>{formatDate(key.createdAt)}</td>
-                                <td>{key.lastRequest ? formatDate(key.lastRequest) : 'Not yet'}</td>
-                                <td>
-                                    {key.accountLimit === null
-                                        ? `default (${defaultLimit.toLocaleString('en-GB')})`
-                                        : key.accountLimit.toLocaleString('en-GB')}
-                                </td>
-                                <td className={styles.actions}>
-                                    <DeleteKeyButton
-                                        action={deleteAction}
-                                        keyId={key.id}
-                                        label={key.name || 'Unnamed'}
-                                    />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        )}
+    return (
+        <main>
+            <section className={styles.page}>
+                <PageHero tone="dark" boxMinHeight={260}>
+                    <h1 className={styles.title}>
+                        User Management
+                        <span className={styles.count} aria-label={`${count(total)} users`}>
+                            {count(total)}
+                        </span>
+                    </h1>
+                    <p className={styles.lead}>Manage all user API keys</p>
+                    <AdminSearch defaultValue={query} />
+                </PageHero>
 
-        <h2 className={styles.heading}>Create a key for an account</h2>
-        <CreateKeyForm action={createAction} withEmail />
+                <div className={styles.body}>
+                    {!keysEnabled && (
+                        <p className={styles.notice} role="status">
+                            API_KEYS_ENABLED is off in this deployment: keys are ignored and every
+                            call is counted by address.
+                        </p>
+                    )}
+                    {query && (
+                        <p className={styles.summary} role="status">
+                            {count(matched)} of {count(total)} users
+                        </p>
+                    )}
 
-        <h2 className={styles.heading}>Set an account&apos;s limit</h2>
-        <form className={styles.form} action={limitAction}>
-            <label className={styles.field}>
-                <span className={styles.label}>Account email</span>
-                <input
-                    className={styles.input}
-                    type="email"
-                    name="email"
-                    required
-                    autoComplete="off"
-                    placeholder="name@example.org"
-                />
-            </label>
-            <label className={styles.field}>
-                <span className={styles.label}>Calls per window</span>
-                <input
-                    className={styles.input}
-                    type="text"
-                    name="limit"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder={`empty = default (${defaultLimit})`}
-                />
-            </label>
-            <button type="submit" className={styles.primary}>
-                Save limit
-            </button>
-        </form>
-        <p className={styles.note}>
-            A positive whole number, or empty to go back to the default. A change reaches the proxy
-            within about a minute.
-        </p>
-    </ApiKeysShell>
-);
+                    {users.length === 0 ? (
+                        <p className={styles.empty}>
+                            {query ? 'No users match that search.' : 'No users on this page.'}
+                        </p>
+                    ) : (
+                        <div className={styles.scroll}>
+                            <table className={styles.table}>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">User</th>
+                                        <th scope="col">Created</th>
+                                        <th scope="col">API Keys</th>
+                                        <th scope="col">
+                                            <span className={styles.visuallyHidden}>Keys</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map((user) => (
+                                        <AdminUserRow
+                                            key={user.id}
+                                            user={user}
+                                            defaultLimit={defaultLimit}
+                                            actions={actions}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {pages > 1 && (
+                        <nav className={styles.pager} aria-label="Pages">
+                            {page > 1 ? (
+                                <Link
+                                    className={styles.pageLink}
+                                    href={pageHref(query, page - 1)}
+                                    prefetch={false}
+                                >
+                                    Previous
+                                </Link>
+                            ) : (
+                                <span />
+                            )}
+                            <span className={styles.pageInfo}>
+                                {count(first)} to {count(Math.min(page * ADMIN_PAGE_SIZE, matched))}{' '}
+                                of {count(matched)}
+                            </span>
+                            {page < pages ? (
+                                <Link
+                                    className={styles.pageLink}
+                                    href={pageHref(query, page + 1)}
+                                    prefetch={false}
+                                >
+                                    Next
+                                </Link>
+                            ) : (
+                                <span />
+                            )}
+                        </nav>
+                    )}
+                </div>
+                <PageFade />
+            </section>
+        </main>
+    );
+};
 
 export default AdminApiKeys;

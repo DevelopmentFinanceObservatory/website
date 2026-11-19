@@ -1,23 +1,39 @@
 import type { Metadata } from 'next';
 
-import { adminCreateKey, adminDeleteKey, adminSetLimit } from './actions';
+import {
+    adminCreateKey,
+    adminDeleteKey,
+    adminLoadKeys,
+    adminRotateKey,
+    adminSetKeyLimit,
+    adminSetLimit,
+} from './actions';
 
 import AdminApiKeys from '@/components/organisms/ApiKeys/AdminApiKeys';
+import { ADMIN_PAGE_SIZE } from '@/components/organisms/ApiKeys/AdminState';
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
-import { limitNotice } from '@/lib/apiKeys/settings';
 import { keysEnabled } from '@/lib/proxy/forward';
 import { KEYED_LIMIT } from '@/lib/proxy/rateLimit';
 
 export const metadata: Metadata = {
-    title: 'API keys: admin — DFO',
+    title: 'User management — DFO',
     robots: { index: false, follow: false },
 };
 
 const one = (value: string | string[] | undefined): string =>
     (Array.isArray(value) ? value[0] : value) ?? '';
 
+const actions = {
+    loadKeys: adminLoadKeys,
+    createKey: adminCreateKey,
+    rotateKey: adminRotateKey,
+    deleteKey: adminDeleteKey,
+    setKeyLimit: adminSetKeyLimit,
+    setAccountLimit: adminSetLimit,
+};
+
 /**
- * Admin proof of concept: every API key across accounts. Admins are the
+ * The operators' view of accounts and their MCP keys. Admins are the
  * signed-in users whose verified email is in ADMIN_EMAILS; anyone else gets
  * the 404 page (requireAdmin). The actions check the gate again.
  */
@@ -28,19 +44,27 @@ const AdminApiKeysPage = async ({
 }) => {
     await requireAdmin();
 
-    const query = await searchParams;
-    const filter = one(query.email).trim().slice(0, 320);
+    const params = await searchParams;
+    const query = one(params.q).trim().slice(0, 320);
+    const requested = Number.parseInt(one(params.page), 10);
+    const page = Number.isSafeInteger(requested) && requested >= 1 ? requested : 1;
+
+    const { total, matched, users } = await keyService.adminListUsers({
+        query: query || undefined,
+        offset: (page - 1) * ADMIN_PAGE_SIZE,
+        limit: ADMIN_PAGE_SIZE,
+    });
 
     return (
         <AdminApiKeys
-            keys={await keyService.adminList(filter || undefined)}
-            filter={filter}
+            users={users}
+            total={total}
+            matched={matched}
+            query={query}
+            page={page}
             defaultLimit={KEYED_LIMIT}
             keysEnabled={keysEnabled()}
-            notice={limitNotice(one(query.limit))}
-            createAction={adminCreateKey}
-            deleteAction={adminDeleteKey}
-            limitAction={adminSetLimit}
+            actions={actions}
         />
     );
 };

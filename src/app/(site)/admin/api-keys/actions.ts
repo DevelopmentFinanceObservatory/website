@@ -1,83 +1,128 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 
 import { keyService, requireAdmin } from '@/lib/apiKeys/server';
-import { parseEmailInput, parseLimitInput } from '@/lib/apiKeys/settings';
+import {
+    limitNotice,
+    parseDailyLimitInput,
+    parseEmailInput,
+    parseLimitInput,
+} from '@/lib/apiKeys/settings';
 
-import type { CreatedState, DeleteState } from '@/components/organisms/ApiKeys/state';
+import type { AdminDoneResult, AdminKeyResult } from '@/components/organisms/ApiKeys/AdminState';
+import type { AdminKey } from '@/lib/apiKeys/service';
 
 /*
- * Admin actions (proof of concept). A server action is a POST anyone can
- * send, so each one runs the admin gate first (requireAdmin: everyone not
- * on ADMIN_EMAILS gets the 404 page) and the page's own check is no
- * substitute. Next.js refuses one whose Origin is not the page's host, which
- * is the CSRF check. Each mutation logs one structured line through the
- * service: the actor's email, the action, the key id and the account id,
- * never a key.
+ * Admin actions. A server action is a POST anyone can send, so each one runs
+ * the admin gate first (requireAdmin: everyone not on ADMIN_EMAILS gets the
+ * 404 page) and the page's own check is no substitute. Arguments arrive from
+ * the network, so each is narrowed before use. Next.js refuses an action
+ * whose Origin is not the page's host, which is the CSRF check. Each
+ * mutation logs one structured line through the service: the actor's email,
+ * the action, the key id and the account id, never a key.
  */
 
 const PATH = '/admin/api-keys';
 
 const REFUSALS = {
-    label_invalid: 'Give the key a label of 1 to 32 characters.',
+    label_invalid: 'Give the key a name of 1 to 32 characters.',
     cap_reached: 'That account holds as many keys as it may.',
     no_such_account: 'No account has that email.',
+    not_found: 'That key was not found.',
 } as const;
 
-/** Creates a key for the account with the given email and answers with it, once. */
-export const adminCreateKey = async (
-    _previous: CreatedState,
-    formData: FormData,
-): Promise<CreatedState> => {
-    const admin = await requireAdmin();
-    const email = parseEmailInput(formData.get('email'));
+const LIMIT_INVALID = 'Enter a positive whole number, or leave it empty for the default.';
 
-    if (!email) {
-        return { error: 'Enter the account’s email address.' };
+/** One account's keys, with today's MCP usage; null when the id is not a string. */
+export const adminLoadKeys = async (userId: unknown): Promise<AdminKey[] | null> => {
+    await requireAdmin();
+
+    return typeof userId === 'string' && userId ? keyService.adminUserKeys(userId) : null;
+};
+
+/** Creates a key for the account with the given email and answers with it, once. */
+export const adminCreateKey = async (email: unknown, label: unknown): Promise<AdminKeyResult> => {
+    const admin = await requireAdmin();
+    const address = parseEmailInput(email);
+
+    if (!address) {
+        return { ok: false, error: 'That account has no valid email address.' };
     }
 
-    const result = await keyService.adminCreate(admin.email, email, formData.get('label'));
+    const result = await keyService.adminCreate(admin.email, address, label);
 
     if (!result.ok) {
-        return { error: REFUSALS[result.reason] };
+        return { ok: false, error: REFUSALS[result.reason] };
     }
 
     revalidatePath(PATH);
 
-    return { created: { id: result.id, key: result.key } };
+    return { ok: true, created: { id: result.id, key: result.key } };
+};
+
+/** Replaces a key with a new one for the same account and answers with it, once. */
+export const adminRotateKey = async (keyId: unknown): Promise<AdminKeyResult> => {
+    const admin = await requireAdmin();
+
+    if (typeof keyId !== 'string') {
+        return { ok: false, error: REFUSALS.not_found };
+    }
+
+    const result = await keyService.adminRotate(admin.email, keyId);
+
+    if (!result.ok) {
+        return { ok: false, error: REFUSALS[result.reason] };
+    }
+
+    return { ok: true, created: { id: result.id, key: result.key } };
 };
 
 /** Deletes any key. */
-export const adminDeleteKey = async (
-    _previous: DeleteState,
-    formData: FormData,
-): Promise<DeleteState> => {
+export const adminDeleteKey = async (keyId: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();
-    const keyId = formData.get('keyId');
 
     if (typeof keyId !== 'string' || !(await keyService.adminDelete(admin.email, keyId))) {
-        return { error: 'That key was not found.' };
+        return { ok: false, error: REFUSALS.not_found };
     }
 
     revalidatePath(PATH);
 
-    return { error: null };
+    return { ok: true };
 };
 
-/** Sets or clears an account's limit, then returns to the page with what happened in `?limit=`. */
-export const adminSetLimit = async (formData: FormData): Promise<void> => {
+/** Sets a key's own daily limit, or clears it (empty text) to put the key on the default. */
+export const adminSetKeyLimit = async (
+    keyId: unknown,
+    limit: unknown,
+): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();
-    const email = parseEmailInput(formData.get('email'));
-    const limit = parseLimitInput(formData.get('limit'));
+    const parsed = parseDailyLimitInput(limit);
 
-    if (!email || !limit.ok) {
-        redirect(`${PATH}?limit=invalid`);
+    if (typeof keyId !== 'string' || !parsed.ok) {
+        return { ok: false, error: LIMIT_INVALID };
     }
 
-    const done = await keyService.adminSetLimit(admin.email, email, limit.limit);
+    return (await keyService.adminSetKeyDailyLimit(admin.email, keyId, parsed.limit))
+        ? { ok: true }
+        : { ok: false, error: REFUSALS.not_found };
+};
+
+/** Sets or clears an account's per-minute limit (empty text clears it). */
+export const adminSetLimit = async (email: unknown, limit: unknown): Promise<AdminDoneResult> => {
+    const admin = await requireAdmin();
+    const address = parseEmailInput(email);
+    const parsed = parseLimitInput(limit);
+
+    if (!address || !parsed.ok) {
+        return { ok: false, error: LIMIT_INVALID };
+    }
+
+    const done = await keyService.adminSetLimit(admin.email, address, parsed.limit);
 
     revalidatePath(PATH);
-    redirect(`${PATH}?limit=${done ? (limit.limit === null ? 'cleared' : 'saved') : 'no-account'}`);
+
+    return done
+        ? { ok: true, message: limitNotice(parsed.limit === null ? 'cleared' : 'saved') }
+        : { ok: false, error: limitNotice('no-account') ?? 'No account has that email.' };
 };

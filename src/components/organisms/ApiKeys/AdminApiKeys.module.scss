@@ -1,0 +1,517 @@
+@use "variables" as *;
+@use "mixins" as *;
+@use "breakpoints" as *;
+
+// The admin user table (/admin/api-keys): the dark hero, then the table on
+// the light ground with each user's keys opening in a tinted sub-table.
+.page {
+    position: relative;
+    background-color: var(--color-bg);
+}
+
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// --- Hero -------------------------------------------------------------------
+
+.title {
+    @include font-size(60px, 0.95);
+
+    display: flex;
+    gap: rem(12);
+    align-items: flex-start;
+    margin-bottom: rem(20);
+    font-family: var(--font-outfit);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+// The user count: a mono chip a touch below the cap line.
+.count {
+    @include flex(row, center, center);
+    @include font-size(14px, 1);
+
+    flex-shrink: 0;
+    min-width: rem(37);
+    height: rem(22);
+    padding-inline: rem(6);
+    margin-top: rem(8);
+    font-family: var(--font-dm-mono);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-media-bg);
+    border-radius: rem(4);
+}
+
+.lead {
+    @include font-size(19px, 1.3);
+
+    margin-bottom: rem(30);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+}
+
+.search {
+    @include flex(row, flex-start, stretch);
+
+    flex-wrap: wrap;
+    gap: rem(4);
+    width: 100%;
+}
+
+.searchField {
+    flex: 1 1 rem(260);
+}
+
+.searchInput {
+    @include font-size(16px, 1.3);
+
+    width: 100%;
+    height: rem(28);
+    padding: 0 rem(10);
+    font-family: var(--font-outfit);
+    color: var(--color-bg);
+    background-color: transparent;
+    border: 1px solid var(--color-gray-2700);
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-media-bg);
+        opacity: 0.7;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-bg);
+        outline-offset: 1px;
+    }
+}
+
+// --- Body -------------------------------------------------------------------
+
+.body {
+    @include page-band(rem(30));
+
+    padding-top: rem(40);
+    padding-bottom: rem(120);
+    font-family: var(--font-outfit);
+    font-weight: 300;
+    color: var(--color-charcoal);
+    letter-spacing: -0.01em;
+}
+
+.notice {
+    @include font-size(14px, 1.4);
+
+    padding: rem(10) rem(14);
+    margin-bottom: rem(16);
+    background-color: var(--color-red-light);
+    border-radius: rem(6);
+}
+
+.summary {
+    @include font-size(13px, 1.3);
+
+    margin-bottom: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.empty {
+    @include font-size(17px, 1.45);
+
+    padding: rem(24) 0;
+    color: var(--color-text-muted);
+}
+
+.scroll {
+    overflow-x: auto;
+}
+
+.table {
+    @include font-size(15px, 1.35);
+
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+        padding: rem(14) rem(16) rem(14) 0;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    thead th {
+        @include font-size(12px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        color: var(--color-text-muted);
+        white-space: nowrap;
+        border-bottom: 1px solid var(--color-beige);
+    }
+}
+
+.row {
+    border-bottom: 1px solid var(--color-beige);
+}
+
+.email {
+    font-weight: 700;
+    word-break: break-all;
+}
+
+.mono {
+    @include font-size(13px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    white-space: nowrap;
+}
+
+.toggleCell {
+    width: rem(40);
+    padding-right: 0 !important;
+    text-align: right !important;
+}
+
+.toggle {
+    @include flex(row, center, center);
+
+    width: rem(32);
+    height: rem(32);
+    margin-left: auto;
+    color: var(--color-charcoal);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    svg {
+        transition: rotate 0.3s $ease-out;
+    }
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+    }
+}
+
+.toggleOpen svg {
+    rotate: 180deg;
+}
+
+// --- Opened row -------------------------------------------------------------
+
+.detail > td {
+    padding: 0;
+    background-color: var(--color-net-light);
+    border-bottom: 1px solid var(--color-beige);
+}
+
+.keys {
+    padding: rem(20) rem(20) rem(24);
+}
+
+.hint {
+    @include font-size(14px, 1.4);
+
+    color: var(--color-text-muted);
+}
+
+.noteError,
+.noteOk {
+    @include font-size(13px, 1.3);
+}
+
+.noteError {
+    color: var(--color-red);
+}
+
+.noteOk {
+    color: var(--color-text-muted);
+}
+
+.keyTable {
+    @include font-size(14px, 1.35);
+
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+        padding: rem(10) rem(16) rem(10) 0;
+        text-align: left;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--color-beige);
+    }
+
+    thead th {
+        @include font-size(12px, 1.3);
+
+        font-family: var(--font-dm-mono);
+        font-weight: 400;
+        color: var(--color-text-muted);
+    }
+}
+
+.keyName {
+    display: block;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.keyCreated {
+    @include font-size(12px, 1.3);
+
+    display: block;
+    margin-top: rem(2);
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.usage {
+    @include flex(row, flex-start, center);
+
+    gap: rem(12);
+}
+
+.meter {
+    width: rem(180);
+}
+
+.of {
+    @include font-size(13px, 1);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.limit {
+    display: inline-flex;
+    flex-direction: column;
+    gap: rem(4);
+}
+
+.limitInput,
+.toolInput {
+    @include font-size(13px, 1.3);
+
+    height: rem(28);
+    padding: 0 rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-beige);
+    border-radius: rem(4);
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 0;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+    }
+}
+
+.limitInput {
+    width: rem(96);
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+    }
+}
+
+.toolInput {
+    width: rem(220);
+}
+
+.keyActions {
+    white-space: nowrap;
+    text-align: right !important;
+
+    > * + * {
+        margin-left: rem(4);
+    }
+}
+
+.iconButton,
+.iconButtonDanger {
+    @include flex(row, center, center);
+
+    width: rem(28);
+    height: rem(28);
+    vertical-align: middle;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    border-radius: rem(4);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-charcoal);
+    }
+}
+
+.iconButton {
+    display: inline-flex;
+    color: var(--color-charcoal);
+}
+
+.iconButtonDanger {
+    display: inline-flex;
+    color: var(--color-red);
+}
+
+.iconSvg {
+    width: rem(20);
+    height: rem(20);
+}
+
+.confirm {
+    @include flex(row, flex-end, center);
+
+    flex-wrap: wrap;
+    gap: rem(6);
+}
+
+.confirmText {
+    @include font-size(13px, 1.3);
+
+    white-space: normal;
+}
+
+// A new key, shown once: loud enough that it is not missed.
+.once {
+    padding: rem(14);
+    margin-bottom: rem(16);
+    background-color: var(--color-white);
+    border: 2px solid var(--color-charcoal);
+    border-radius: rem(8);
+}
+
+.onceTitle {
+    @include font-size(15px, 1.3);
+
+    font-weight: 600;
+}
+
+.onceRow {
+    @include flex(row, flex-start, center);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+    margin-top: rem(10);
+}
+
+.onceKey {
+    @include font-size(14px, 1.3);
+
+    padding: rem(6) rem(8);
+    font-family: var(--font-dm-mono);
+    word-break: break-all;
+    user-select: all;
+    background-color: var(--color-net-light);
+    border-radius: rem(4);
+}
+
+.tools {
+    @include flex(row, flex-start, flex-end);
+
+    flex-wrap: wrap;
+    gap: rem(16) rem(32);
+    margin-top: rem(20);
+}
+
+.create {
+    @include flex(row, flex-start, flex-end);
+
+    flex-wrap: wrap;
+    gap: rem(8);
+}
+
+.toolField {
+    display: flex;
+    flex-direction: column;
+    gap: rem(4);
+}
+
+.toolLabel {
+    @include font-size(12px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+// --- Pager ------------------------------------------------------------------
+
+.pager {
+    @include flex(row, space-between, center);
+
+    gap: rem(12);
+    margin-top: rem(24);
+}
+
+.pageInfo {
+    @include font-size(13px, 1.3);
+
+    font-family: var(--font-dm-mono);
+    color: var(--color-text-muted);
+}
+
+.pageLink {
+    @include flex(row, center, center);
+    @include font-size(12px, 1);
+
+    height: rem(28);
+    padding-inline: rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    text-decoration: none;
+    border: 1px solid var(--color-sage);
+    border-radius: rem(4);
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-media-bg);
+        }
+    }
+}
+
+@include breakpoint(phone) {
+    .title {
+        @include font-size(40px, 1.1);
+    }
+
+    .count {
+        margin-top: rem(4);
+    }
+
+    .keys {
+        padding-inline: rem(12);
+    }
+
+    .usage {
+        flex-wrap: wrap;
+    }
+}
