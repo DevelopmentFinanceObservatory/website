@@ -4,6 +4,7 @@ import styles from './DebtThresholds.module.scss';
 import { NetTransfers } from './NetTransfers';
 import { useTransfers } from './useTransfers';
 
+import { readErrorCode } from '../_lib/readError.ts';
 import type { Group } from '../_lib/thresholds.ts';
 import {
     groupTransfers,
@@ -51,7 +52,8 @@ const Ready = ({
 
 /**
  * The net-transfers section. The rows come from the transfers ref in the browser, so the
- * section shows a loading line, then the chart, or the error when the read fails.
+ * section shows a loading line, then the chart, or a short failure line with the error's
+ * code when the read fails; `useTransfers` logs the full error.
  */
 export const TransfersSection = ({
     members,
@@ -86,8 +88,8 @@ export const TransfersSection = ({
                         </p>
                     ) : (
                         <p className={styles.sectionLede} role="alert">
-                            Net transfers could not be loaded: {state.error.message}. Reload the
-                            page to try again.
+                            Net transfers did not load. Reload the page to try again.{' '}
+                            <small className={styles.errorCode}>{readErrorCode(state.error)}</small>
                         </p>
                     )}
                 </>

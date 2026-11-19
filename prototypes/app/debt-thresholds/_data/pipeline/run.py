@@ -4,7 +4,10 @@
 logging or exits. Every DFO read is a pinned ref (`pipeline.sources.pinned`):
 a plain run fetches the refs refs.json holds and reproduces every output byte
 for byte; `--refresh` fetches their newest versions; `--search` builds each read
-from its series code. It writes, into the output folder:
+from its series code. Those two pin the new reads and write the refs files only
+after every check passes. `--no-pin` makes a trial run: it pins nothing and
+writes into a new temporary folder, or an `--out` outside `_data`, so the
+committed refs never name unpinned versions. It writes, into the output folder:
 
 - `coverage.md`: the countries by series for both base years, the creditor-group
   guard and the lending-terms fallback. The run returns 1 when more than
@@ -37,6 +40,7 @@ import argparse
 import json
 import logging
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -103,7 +107,9 @@ QUERIES = {
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the data step and return the process exit code."""
     parser = argparse.ArgumentParser(description="Build the debt-thresholds data files.")
-    parser.add_argument("--out", type=Path, default=Paths.default().out, help="output folder")
+    parser.add_argument(
+        "--out", type=Path, help="output folder (default _data, or a temporary one with --no-pin)"
+    )
     parser.add_argument(
         "--only", choices=("thresholds", "transfers"), help="build one part from the committed refs"
     )
@@ -115,7 +121,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--search", action="store_true", help="build each read from its series code and pin it"
     )
     parser.add_argument(
-        "--no-pin", action="store_true", help="leave new versions unpinned, for a trial run"
+        "--no-pin",
+        action="store_true",
+        help="leave new versions unpinned, for a trial run written outside _data",
     )
     args = parser.parse_args(argv)
     mode = Mode.SEARCH if args.search else Mode.REFRESH if args.refresh else Mode.PLAIN
@@ -123,6 +131,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         # refs.json carries one `retrieved` stamp for every output, so a refresh
         # rebuilds them all.
         parser.error("--only builds from the committed refs; refresh or search without it")
+    committed_dir = Paths.default().out
+    out = trial_out(args.out, no_pin=args.no_pin, committed=committed_dir)
+    if out is None:
+        parser.error(
+            "--no-pin writes refs that name unpinned versions; give an --out outside _data"
+        )
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter("fetch.py: %(message)s"))
@@ -130,8 +144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     log.setLevel(logging.INFO)
     log.propagate = False
 
-    committed_dir = Paths.default().out
-    args.out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     try:
         refs = read_data(committed_dir / "refs.json")
         reference = read_data(committed_dir / "reference.json") or {}
@@ -156,7 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             code = 0
             if args.only != "transfers":
                 code = build_thresholds(
-                    args.out,
+                    out,
                     reads=reads,
                     client=client,
                     snapshots=snapshots,
@@ -164,21 +177,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                     retrieved=retrieved,
                 )
             if args.only != "thresholds":
-                build_transfer_file(args.out, reads=reads, release=release, retrieved=retrieved)
+                build_transfer_file(out, reads=reads, release=release, retrieved=retrieved)
+            if mode is not Mode.PLAIN:
+                if code != 0:
+                    print("fetch.py: the checks failed, so nothing was pinned.", file=sys.stderr)
+                    return code
+                # Pin only now that check_actuals and the coverage check hold.
+                reads.keep()
     except DataError as error:
         print(f"fetch.py: {error}", file=sys.stderr)
         return 1
 
     if mode is not Mode.PLAIN:
         write_refs(
-            args.out,
+            out,
             reads,
             committed=refs or {},
             reference={"idsRelease": release, "views": snapshots},
             retrieved=retrieved,
         )
         log.info("pinned %d new member(s).", reads.pins)
+    if out != committed_dir:
+        log.info("wrote the outputs into %s.", out)
     return code
+
+
+def trial_out(out: Path | None, *, no_pin: bool, committed: Path) -> Path | None:
+    """Return the output folder, or None for a `--no-pin` run told to write into `committed`.
+
+    A `--no-pin` run without `--out` writes into a new temporary folder.
+    """
+    if not no_pin:
+        return out or committed
+    if out is None:
+        return Path(tempfile.mkdtemp(prefix="debt-thresholds-trial-"))
+    return None if out.resolve().is_relative_to(committed.resolve()) else out
 
 
 def read_data(path: Path) -> Any:

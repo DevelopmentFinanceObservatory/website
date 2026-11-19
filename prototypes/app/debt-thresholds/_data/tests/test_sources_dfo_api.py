@@ -1,6 +1,9 @@
 """Offline tests for the DFO helpers, the series codes and the pinned specs file."""
 
+import copy
+import json
 from collections import defaultdict
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +17,7 @@ from pipeline.sources.dfo_api import (
     IMF,
     Collected,
     by_creditor,
+    check_roles,
     pinned_specs,
     put,
 )
@@ -95,3 +99,50 @@ def test_by_creditor_refuses_imf_among_creditors():
     client = SimpleNamespace(analysis=Analysis({IMF: [row("KEN", "2020", 1.0)]}))
     with pytest.raises(DataError, match="IMF is among the creditors"):
         by_creditor(client, "service_by_creditor", "ref", defaultdict(dict))
+
+
+REFS = json.loads((Path(__file__).parent.parent / "refs.json").read_text())["data"]
+
+
+def spec(key: str, change=None) -> SimpleNamespace:
+    """The committed spec of `key`, with `change` applied to a copy of its identity."""
+    definition = copy.deepcopy(REFS[key]["ref"]["members"][0]["spec"]["definition"])
+    if change:
+        change(definition["identity"])
+    return SimpleNamespace(definition=definition)
+
+
+@pytest.mark.parametrize("key", list(REFS))
+def test_check_roles_accepts_every_committed_reading(key: str) -> None:
+    check_roles(key, spec(key))
+
+
+def open_origin(identity: dict) -> None:
+    identity["open_roles"] = ["origin"]
+
+
+def bind_imf(identity: dict) -> None:
+    identity["entities"]["origin"] = [IMF]
+
+
+def close_origin(identity: dict) -> None:
+    del identity["open_roles"]
+
+
+def bind_place(identity: dict) -> None:
+    identity["entities"]["destination"] = identity["entities"].pop("observationAbout")
+
+
+@pytest.mark.parametrize(
+    ("key", "change"),
+    [
+        ("service", open_origin),  # an all-creditor code read creditor by creditor
+        ("imf_stock", bind_imf),  # the IMF is in the code; a bound origin is a new spec
+        ("service_by_creditor", close_origin),  # a by-creditor code read as the total
+        ("service_by_creditor", bind_imf),
+        ("gdp", bind_place),
+    ],
+)
+def test_check_roles_refuses_a_drifted_role(key: str, change) -> None:
+    with pytest.raises(DataError, match=f"spec of {key} binds"):
+        check_roles(key, spec(key, change))

@@ -58,6 +58,18 @@ def test_transfers_by_country_ends_at_the_last_year_half_report() -> None:
     assert countries_without_values(countries) == ["DDD"]
 
 
+def test_last_actual_year_counts_the_countries_with_values_not_the_members() -> None:
+    # Three of six members have values; 2012 is reported by two of the three. Half of
+    # the three is 1.5, so 2012 is actual; half of the six members would be 3.
+    members = [{"iso3": iso3, "name": iso3, "group": "insolvent"} for iso3 in "ABCDEF"]
+    rows = [
+        *(row(iso3, year, 1.0) for iso3 in "AB" for year in (2010, 2011, 2012)),
+        *(row("C", year, 1.0) for year in (2010, 2011)),
+    ]
+    years, _ = transfers_by_country(rows, members)
+    assert years == [2010, 2011, 2012]
+
+
 def test_transfers_by_country_rejects_an_empty_fetch() -> None:
     with pytest.raises(DataError, match="no values"):
         transfers_by_country([row("AAA", 2005, 1.0)], MEMBERS)

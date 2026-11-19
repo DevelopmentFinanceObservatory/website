@@ -24,6 +24,17 @@ export type TransfersData = {
 /** A transfers row; the port reads `financingRecipient`, `time_period` and `value`. */
 export type TransferRow = Record<string, unknown>;
 
+/** The year in a `time_period`, read as Python's `int(str(value))` reads it. */
+const wholeYear = (value: unknown): number => {
+    const text = String(value).trim();
+
+    if (!/^[+-]?\d+$/.test(text)) {
+        throw new Error(`time_period ${JSON.stringify(text)} is not a whole year.`);
+    }
+
+    return Number(text);
+};
+
 /** The first year kept, as `_data/pipeline/transfers.py`'s FIRST_YEAR. */
 export const FIRST_YEAR = 2010;
 
@@ -31,14 +42,15 @@ export const FIRST_YEAR = 2010;
  * Port of `values_by_country`: each country's value by year from `FIRST_YEAR` on,
  * skipping null values. A country with no rows is absent.
  *
- * @throws When no row survives, as the Python step does.
+ * @throws When a row's `time_period` is not a whole year, as Python's `int()` refuses it,
+ *   or when no row survives, as the Python step does.
  */
 export const valuesByCountry = (rows: TransferRow[]): Map<string, Map<number, number>> => {
     const values = new Map<string, Map<number, number>>();
     let kept = 0;
 
     for (const row of rows) {
-        const year = Number(String(row['time_period']));
+        const year = wholeYear(row['time_period']);
 
         if (year < FIRST_YEAR || row['value'] === null || row['value'] === undefined) {
             continue;

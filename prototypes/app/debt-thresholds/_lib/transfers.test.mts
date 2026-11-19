@@ -69,7 +69,7 @@ test('transfersHeading states the swing, or asks a question when there is none',
     assert.match(transfersHeading([], YEARS), /\?$/);
 });
 
-// S4a's parity fixture: the Python step's output for seven countries, one without rows.
+// The parity fixture: the Python step's output for seven countries, one without rows.
 const fixture = JSON.parse(
     readFileSync(new URL('../_data/transfers-fixture.json', import.meta.url), 'utf8'),
 ).data as {
@@ -138,6 +138,42 @@ test('the port skips early years and nulls and stops where under half report', (
     );
 });
 
+test('lastActualYear divides by the countries with values, not by the members', () => {
+    // Three of six members have values and two of the three report 2012: half of three is
+    // 1.5, so 2012 is actual, where half of the six members would be 3.
+    const rows = [
+        ...['AAA', 'BBB'].flatMap((iso3) => [2010, 2011, 2012].map((year) => row(iso3, year, 1))),
+        row('CCC', 2010, 1),
+        row('CCC', 2011, 1),
+    ];
+    const built = transfersByCountry(rows, {
+        release: 'test',
+        countries: ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF'].map((iso3) => ({
+            iso3,
+            name: iso3,
+            group: 'x',
+        })),
+    });
+
+    assert.deepEqual(built.years, [2010, 2011, 2012]);
+});
+
 test('the port throws when no row survives', () => {
-    assert.throws(() => valuesByCountry([row('AAA', 2005, 1), row('AAA', 2012, null)]), /no values/);
+    assert.throws(
+        () => valuesByCountry([row('AAA', 2005, 1), row('AAA', 2012, null)]),
+        /no values/,
+    );
+});
+
+test('the port throws on a time_period that is not a whole year, as int() does', () => {
+    for (const year of ['2011.5', 2011.5, '2011-01', '']) {
+        assert.throws(() => valuesByCountry([row('AAA', year, 1)]));
+    }
+
+    assert.equal(
+        valuesByCountry([row('AAA', ' 2011 ', 1)])
+            .get('AAA')
+            ?.get(2011),
+        1,
+    );
 });

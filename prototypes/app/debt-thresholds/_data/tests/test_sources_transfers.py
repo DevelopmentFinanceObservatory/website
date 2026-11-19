@@ -23,9 +23,13 @@ class Reads:
         return data
 
 
-def client(*, complete: bool, calls: dict) -> SimpleNamespace:
+def client(*, complete: bool, calls: dict, identity: dict | None = None) -> SimpleNamespace:
     rows = [{"value": 1.0}]
-    dataset = SimpleNamespace(to_arrow=lambda: SimpleNamespace(to_pylist=lambda: rows))
+    spec = SimpleNamespace(definition={"identity": identity or {"entities": {"destination": []}}})
+    dataset = SimpleNamespace(
+        ref=SimpleNamespace(members=[SimpleNamespace(spec=spec)]),
+        to_arrow=lambda: SimpleNamespace(to_pylist=lambda: rows),
+    )
 
     def fetch(**kwargs: object) -> SimpleNamespace:
         calls["fetch"] = kwargs
@@ -83,4 +87,11 @@ def test_read_net_transfers_searches_the_code_and_fetches_the_destinations() -> 
 def test_read_net_transfers_refuses_a_code_that_reads_as_more_than_its_series() -> None:
     reads = Reads(client(complete=False, calls={}))
     with pytest.raises(DataError, match=f"{INDICATOR} did not read as its own series"):
+        read_net_transfers(["KEN"], reads=reads)
+
+
+def test_read_net_transfers_refuses_a_reading_by_creditor() -> None:
+    identity = {"entities": {"destination": []}, "open_roles": ["origin"]}
+    reads = Reads(client(complete=True, calls={}, identity=identity))
+    with pytest.raises(DataError, match="spec of transfers binds"):
         read_net_transfers(["KEN"], reads=reads)

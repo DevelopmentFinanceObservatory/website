@@ -90,10 +90,13 @@ def test_a_ref_mode_refuses_a_read_refs_json_lacks() -> None:
         reads.fetch("k", never)
 
 
-def test_refresh_fetches_the_newest_versions_and_pins_them() -> None:
+def test_refresh_fetches_the_newest_versions_and_pins_them_only_in_keep() -> None:
     client = Client(dataset("new", pinned=False))
     reads = Reads(client, mode=Mode.REFRESH, committed=COMMITTED)
     reads.fetch("k", never)
+    assert client.calls == [("fetch", {"r": "old"}, True)]
+    assert reads.records["k"]["provenance"] == {"p": "new", "pinned": False}
+    reads.keep()
     assert client.calls == [("fetch", {"r": "old"}, True), ("pin",)]
     assert reads.records == {"k": {"ref": {"r": "new"}, "provenance": {"p": "new", "pinned": True}}}
     assert reads.pins == 1
@@ -105,6 +108,8 @@ def test_search_builds_the_read_keeps_its_reading_and_pins_unless_told_not_to() 
         client = Client(dataset("unused", pinned=True))
         reads = Reads(client, mode=Mode.SEARCH, committed=COMMITTED, pin=pin)
         reads.fetch("k", lambda: ({"answer": 1}, dataset("built", pinned=False)))
+        assert client.calls == []
+        reads.keep()
         assert reads.readings == {"k": {"answer": 1}}
         assert reads.records["k"]["provenance"] == {"p": "built", "pinned": pin}
         assert reads.pins == pins

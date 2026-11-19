@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from pipeline.errors import DataError
-from pipeline.sources.dfo_api import SEARCH_PLACE, reading_record
+from pipeline.sources.dfo_api import SEARCH_PLACE, check_roles, reading_record
 from pipeline.sources.pinned import Reads
 from pipeline.transfers import INDICATOR, WINDOW
 
@@ -35,4 +35,6 @@ def read_net_transfers(iso3s: Sequence[str], *, reads: Reads) -> list[dict[str, 
         data = answer.fetch(window=WINDOW, entities={"destination": destinations}, progress=False)
         return reading_record(answer), data
 
-    return reads.fetch(KEY, build).to_arrow().to_pylist()
+    data = reads.fetch(KEY, build)
+    check_roles(KEY, data.ref.members[0].spec)
+    return data.to_arrow().to_pylist()

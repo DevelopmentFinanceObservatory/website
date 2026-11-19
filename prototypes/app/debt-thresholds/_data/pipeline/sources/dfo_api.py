@@ -122,7 +122,8 @@ def fetch_dfo(view: View, *, reads: Reads, ledger: Ledger) -> tuple[Panel, dict[
 
     The result is the panel and, per ISO3, the sum of debt service over single
     creditors, for the guard. Each reading is recorded in `ledger`. Raises
-    `DataError` when a series code does not read as its own series, or when the
+    `DataError` when a series code does not read as its own series, when a
+    reading's spec takes other roles than `check_roles` expects, or when the
     release's actual debt stocks do not end in the base year.
     """
     collected: Collected = {iso3: defaultdict(dict) for iso3 in ISO3}
@@ -136,14 +137,16 @@ def fetch_dfo(view: View, *, reads: Reads, ledger: Ledger) -> tuple[Panel, dict[
             # The step needs China's rows and, for the guard, the creditors' sum: DFO
             # cuts both from the pinned ref, so a plain run downloads neither in full.
             ref = reads.pinned_ref(key) if reads.mode is Mode.PLAIN else reads.fetch(key, build).ref
+            member = ref.members[0]
+            check_roles(key, member.spec)
             frame = by_creditor(reads.client, key, ref, creditor_sums)
             put(collected, _rows(frame), CHINA_KEYS[key])
         else:
             data = reads.fetch(key, build)
-            ref = data.ref
+            member = data.ref.members[0]
+            check_roles(key, member.spec)
             frame = _with_years(data.to_pandas(), key)
             put(collected, _rows(frame), DFO_KEYS[key])
-        member = ref.members[0]
         ledger.read(
             {
                 "key": key,
@@ -158,6 +161,32 @@ def fetch_dfo(view: View, *, reads: Reads, ledger: Ledger) -> tuple[Panel, dict[
     panel = {iso3: dict(keys) for iso3, keys in collected.items()}
     check_actuals(panel, view.base, source=f"the DFO's IDS {view.ids} release")
     return panel, dict(creditor_sums)
+
+
+def check_roles(key: str, spec: dfo.Spec) -> None:
+    """Raise `DataError` when a reading's spec binds or leaves open other roles than
+    the step reads it by.
+
+    GDP binds the place it is about. A reading by creditor binds the debtors and
+    leaves `origin` open, so its rows run creditor by creditor. Every other reading,
+    net transfers included, binds the debtors and leaves `origin` out, so it reads
+    all creditors together; the IMF readings name the IMF through their series code.
+    `Spec.roles` reports an open role and an absent one alike, so this reads the
+    spec's identity.
+    """
+    identity = spec.definition.get("identity") or {}
+    found = (sorted(identity.get("entities") or {}), sorted(identity.get("open_roles") or ()))
+    if key == "gdp":
+        expected = (["observationAbout"], [])
+    elif key in CHINA_KEYS:
+        expected = (["destination"], ["origin"])
+    else:
+        expected = (["destination"], [])
+    if found != expected:
+        raise DataError(
+            f"the spec of {key} binds {found[0]} and leaves {found[1]} open, where the "
+            f"step reads it binding {expected[0]} with {expected[1]} open."
+        )
 
 
 def by_creditor(

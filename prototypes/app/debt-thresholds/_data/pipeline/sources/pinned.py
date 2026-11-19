@@ -5,10 +5,13 @@ A run has three modes:
 - `plain` fetches the ref refs.json holds for each read and keeps the read's
   committed record, so the outputs reproduce byte for byte. It refuses a ref
   whose members are not all pinned.
-- `refresh` fetches the newest versions of each committed ref, pins them and
-  records the new ref and its provenance. A ref keeps its spec and window.
-- `search` builds each read from its series code, pins it and records it, with
-  Search's answer beside it. A change of spec or window takes this mode.
+- `refresh` fetches the newest versions of each committed ref and records the
+  new ref and its provenance. A ref keeps its spec and window.
+- `search` builds each read from its series code and records it, with Search's
+  answer beside it. A change of spec or window takes this mode.
+
+In both, `Reads.keep` pins the new reads once the run's checks hold, so a run
+that fails them spends none of the day's pins.
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ class Reads:
     """The reads of one run: fetches each one and keeps its `{ref, provenance}` record.
 
     `committed` is the `data` of refs.json, by read key. `pin` False leaves new
-    versions unpinned, for a trial run written outside `_data`.
+    versions unpinned in `keep`, for a trial run written outside `_data`.
     """
 
     def __init__(
@@ -56,13 +59,15 @@ class Reads:
         self._committed = committed
         self.records: dict[str, Record] = {}
         self.readings: dict[str, Record] = {}
+        self.fetched: dict[str, dfo.Dataset] = {}
         self.pins = 0
 
     def fetch(self, key: str, build: Callable[[], tuple[Record, dfo.Dataset]]) -> dfo.Dataset:
         """Return the read `key`'s dataset.
 
         In `search` mode `build` makes the read and returns its reading record,
-        such as Search's answer, with the data.
+        such as Search's answer, with the data. A read fetched anew is recorded
+        unpinned until `keep` pins it.
         """
         import dfo
 
@@ -83,14 +88,25 @@ class Reads:
                 self.records[key] = dict(entry)
                 return data
 
-        if self.pin:
-            self.pins += sum(not member.pinned for member in data.provenance.members)
-            data = self.client.pin(data)
+        self.fetched[key] = data
+        self._record(key, data)
+        return data
+
+    def keep(self) -> None:
+        """Pin each read fetched anew, unless told not to, and record its ref and provenance.
+
+        Call it once the run's checks hold.
+        """
+        for key, data in self.fetched.items():
+            if self.pin:
+                self.pins += sum(not member.pinned for member in data.provenance.members)
+                self._record(key, self.client.pin(data))
+
+    def _record(self, key: str, data: dfo.Dataset) -> None:
         self.records[key] = {
             "ref": json.loads(data.ref.to_json()),
             "provenance": json.loads(data.provenance.to_json()),
         }
-        return data
 
     def pinned_ref(self, key: str) -> dfo.DatasetRef:
         """Return the committed ref of `key` without downloading its rows, in `plain` mode.
