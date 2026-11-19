@@ -11,8 +11,8 @@
  *   `dcid:` cell, only when every pattern of the dataset carries it with the
  *   same value. A dataset that spans several values leaves the column empty.
  * - A constraint column is pre-filled the same way when every pattern of the
- *   dataset carries the property and the dataset's constraint values hold one
- *   value for it (DAC2A's `financial_flow_type` is `dcid:Disbursement`).
+ *   dataset carries the property and one value covers all of the patterns'
+ *   StatVars (DAC2A's `financial_flow_type` is `dcid:Disbursement`).
  *   Other constraint cells, `unit` and `statvar_name` start empty. A pasted
  *   label fills `statvar_name`.
  * - The CSV writes cells verbatim, RFC 4180 quoting only. A seed is read by
@@ -111,16 +111,19 @@ const IDENTITY_DESCRIPTIONS: Readonly<Record<IdentityName, string>> = {
 };
 
 /**
- * The one value the dataset's StatVars give a constraint property, as a
- * `dcid:` cell, or '' when a pattern lacks the property or the dataset uses
- * several values or none.
+ * The one value every StatVar of the dataset gives a constraint property, as
+ * a `dcid:` cell, or ''. The value fills only when every pattern carries the
+ * property, the dataset's constraint values hold that one value, and its
+ * StatVar count equals the patterns' total, so no StatVar is left unknown.
  */
 const sharedConstraint = (dataset: SeedSource, property: string): string => {
     if (!dataset.patterns.every((pattern) => pattern.constraint_properties.includes(property))) {
         return '';
     }
     const values = dataset.constraint_values.find((entry) => entry.property === property)?.values;
-    return values?.length === 1 && values[0] !== undefined ? `dcid:${values[0].value}` : '';
+    const [only] = values?.length === 1 ? values : [];
+    const total = dataset.patterns.reduce((sum, pattern) => sum + pattern.stat_var_count, 0);
+    return only !== undefined && only.stat_var_count === total ? `dcid:${only.value}` : '';
 };
 
 /** The columns of a seed for a dataset, in the minimal layout. */

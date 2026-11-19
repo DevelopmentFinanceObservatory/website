@@ -149,6 +149,11 @@ test('a paste with a dcid column is StatVar output and checks every mapped colum
     assert.ok(headers(summary.checked).includes('dac2a_aid_type'));
     assert.ok(headers(summary.checked).includes('dcid'));
     assert.equal(skips(summary).dac2a_aid_type, undefined);
+    // A row with a dcid and empty definition cells is sent, so the check reports them.
+    const empty = readPasted(model, 'dcid,population_type,measured_property\nX,,\n,,\n');
+    assert.deepEqual(empty.sheet.skipped, []);
+    assert.deepEqual(empty.sheet.sheetRows, [2]);
+    assert.equal(empty.sheet.rows[0]?.measured_property, null);
 });
 
 test('a never-constraint header is skipped even when it names a property of the model', () => {

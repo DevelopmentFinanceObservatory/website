@@ -361,14 +361,17 @@ const IDENTITY_FIELDS = ['populationType', 'measuredProperty', 'statType'] as co
  * mapping gives it, the column `findingColumn` places its findings on, and
  * a leading `dcid:` is dropped from each value. An empty cell leaves its
  * property or field out (null), and the route reports a missing measured
- * property as a finding. Blank rows are skipped. So is a row whose
- * population type, measured property and stat type cells are all empty, when
- * the sheet has any of those columns; `skipped` names it.
+ * property as a finding. Blank rows are skipped. In a seed, so is a row
+ * whose population type, measured property and stat type cells are all
+ * empty, when the sheet has any of those columns; `skipped` names it. StatVar
+ * output sends every nonblank row, since each defines the StatVar its `dcid`
+ * names.
  */
 export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])[]): SheetCheck {
     const checked: SchemaCheckRow[] = [];
     const sheetRows: number[] = [];
     const skipped: number[] = [];
+    const seed = pastedKind(mapping.map(({ header }) => header)) === 'seed';
     const identity = IDENTITY_FIELDS.filter((field) =>
         mapping.some(({ target }) => target.kind === 'definition' && target.field === field),
     );
@@ -382,7 +385,7 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
             return column === undefined ? '' : cell(column.index);
         };
         // A row that fills none of the identity columns reuses a StatVar defined elsewhere.
-        if (identity.length > 0 && identity.every((field) => definition(field) === '')) {
+        if (seed && identity.length > 0 && identity.every((field) => definition(field) === '')) {
             skipped.push(sheetRow(dataIndex));
             return;
         }

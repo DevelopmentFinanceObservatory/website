@@ -34,10 +34,16 @@ const pattern = (fields: Partial<SchemaPattern>): SchemaPattern => ({
     ...fields,
 });
 
-/** A constraint's values as the usage document lists them. */
+/** A constraint's values as the usage document lists them, each held by one StatVar. */
 const values = (property: string, ...ids: string[]): SchemaConstraintValues => ({
     property,
     values: ids.map((value) => ({ value, stat_var_count: 1 })),
+});
+
+/** A constraint's one value, held by `count` StatVars. */
+const counted = (property: string, value: string, count: number): SchemaConstraintValues => ({
+    property,
+    values: [{ value, stat_var_count: count }],
 });
 
 const DAC2A_CONSTRAINTS = ['dac2aAidType', 'dacTypeOfFinance', 'financialFlowType', 'nettingBasis'];
@@ -54,7 +60,7 @@ const dac2a: SeedDataset = {
     ],
     constraint_values: [
         values('dac2aAidType', 'DAC2aAidType106', 'DAC2aAidType201'),
-        values('financialFlowType', 'Disbursement'),
+        counted('financialFlowType', 'Disbursement', 2),
         values('nettingBasis', 'Gross', 'Net'),
     ],
 };
@@ -118,6 +124,12 @@ test('a column is pre-filled only when every pattern gives it one value', () => 
     assert.equal(fills(crdf).financial_obligation_type, 'dcid:Commitment');
     assert.equal(fills(crdf).climate_policy_objective, '');
     assert.equal(fills(oneClimate).financial_flow_type, '');
+    // One value held by one of the two StatVars leaves the other's unknown.
+    const partial = {
+        ...dac2a,
+        constraint_values: [counted('financialFlowType', 'Disbursement', 1)],
+    };
+    assert.equal(fills(partial).financial_flow_type, '');
     // An added column is on no pattern of the dataset.
     const added = seedColumns(crdf, { dropped: [], added: ['financialFlowType'] });
     assert.equal(added.find((column) => column.property === 'financialFlowType')?.fill, '');
