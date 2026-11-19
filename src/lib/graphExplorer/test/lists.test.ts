@@ -10,9 +10,14 @@ import {
     datasetOrigin,
     datasetsByUse,
     datasetsDfoFirst,
+    filterNote,
+    firstMatches,
     kindsDfoFirst,
     landedUsage,
+    LIST_CEILING,
     listHead,
+    listOnShow,
+    termFilter,
     termOrigin,
 } from '../lists.ts';
 import { buildModel } from '../model.ts';
@@ -199,4 +204,43 @@ test('the start screen lists the kinds of thing without an outside tag first, ea
     );
     const dfo = buildModel(schema, readUsage(usageBody()));
     assert.equal(kindsDfoFirst(dfo.populationTypes(), origin), dfo.populationTypes());
+});
+
+test('a list past the ceiling shows its first matches and counts them all', () => {
+    // As many ids as the property `value` is used with across the UN System's series.
+    const ids = Array.from({ length: 1_700 }, (_, index) => `undata/SERIES-${index}`);
+    const all = firstMatches(ids);
+    assert.equal(all.hits.length, LIST_CEILING);
+    assert.equal(all.total, 1_700);
+    assert.deepEqual(all.hits.slice(0, 2), ['undata/SERIES-0', 'undata/SERIES-1']);
+
+    const model = { label: (id: string) => (id.endsWith('-7') ? 'Births' : id) };
+    const filtered = firstMatches(ids, termFilter(model, '  births '));
+    assert.deepEqual(filtered, { hits: ['undata/SERIES-7'], total: 1 });
+    const byDcid = firstMatches(ids, termFilter(model, 'SERIES-16'));
+    assert.equal(byDcid.total, 111);
+    assert.equal(byDcid.hits.length, LIST_CEILING);
+    assert.equal(termFilter(model, '   '), null);
+});
+
+test('an open list past the ceiling shows the first 60, and a closed one its head', () => {
+    // As many split combinations as WHO's patterns form.
+    const groups = Array.from({ length: 230 }, (_, index) => index);
+    const open = listOnShow(groups, { open: true });
+    assert.equal(open.shown.hits.length, LIST_CEILING);
+    assert.equal(open.shown.total, 230);
+    const closed = listOnShow(groups, { open: false });
+    assert.equal(closed.shown.hits.length, 8);
+    assert.equal(closed.head.long, true);
+});
+
+test("a filtered list's note: no match only for a filter with text, else how to reach the rest", () => {
+    const over = { hits: Array.from({ length: LIST_CEILING }), total: 1_700 };
+    const none = { hits: [], total: 0 };
+    assert.equal(filterNote('', none), null);
+    assert.equal(filterNote('   ', none), null);
+    assert.deepEqual(filterNote(' births ', none), { kind: 'noMatch', text: 'births' });
+    assert.deepEqual(filterNote('', over), { kind: 'ceiling', then: 'Filter to find the rest.' });
+    assert.deepEqual(filterNote('a', over), { kind: 'ceiling', then: 'Type more to narrow.' });
+    assert.equal(filterNote('a', { hits: [1], total: 1 }), null);
 });

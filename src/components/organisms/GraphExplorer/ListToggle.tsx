@@ -8,10 +8,12 @@ import styles from './ListToggle.module.scss';
 import { count } from '@/lib/graphExplorer/counts';
 import {
     datasetOrigin,
+    filterNote,
     landedUsage,
     LIST_HEAD,
     termOrigin,
     type ListHead,
+    type Matches,
     type TermSources,
 } from '@/lib/graphExplorer/lists';
 import type { Model } from '@/lib/graphExplorer/model';
@@ -47,6 +49,77 @@ export const ListToggle = ({
         >
             {`${words} ${noun}`}
         </button>
+    );
+};
+
+/**
+ * "The first N of M." and any `then` under a list cut at its ceiling
+ * (LIST_CEILING), as firstMatches gives it. Nothing when every entry is on
+ * show.
+ */
+export const CeilingNote = ({
+    matches,
+    then,
+}: {
+    matches: Matches<unknown>;
+    /** What the reader can do to reach the rest, as a sentence, where there is a way. */
+    then?: string;
+}) => {
+    if (matches.total <= matches.hits.length) return null;
+    return (
+        <p className={styles.note} role="status">
+            The first {count(matches.hits.length)} of {count(matches.total)}.
+            {then !== undefined && ` ${then}`}
+        </p>
+    );
+};
+
+/** A box that filters a list as the reader types. */
+export const FilterBox = ({
+    value,
+    onChange,
+    label,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    /** The box's accessible name. */
+    label: string;
+}) => (
+    <input
+        type="search"
+        className={styles.filter}
+        placeholder="Filter by name or dcid"
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+    />
+);
+
+/** The note under a list with a FilterBox (filterNote): no match, or the ceiling and how to reach the rest. */
+export const FilterNoteLine = ({
+    text,
+    matches,
+    also,
+}: {
+    text: string;
+    matches: Matches<unknown>;
+    /** A sentence after the ceiling note's own, such as where the full list is. */
+    also?: string;
+}) => {
+    const note = filterNote(text, matches);
+    if (note === null) return null;
+    if (note.kind === 'noMatch') {
+        return (
+            <p className={styles.note} role="status">
+                No entry matches “{note.text}”.
+            </p>
+        );
+    }
+    return (
+        <CeilingNote
+            matches={matches}
+            then={also === undefined ? note.then : `${note.then} ${also}`}
+        />
     );
 };
 

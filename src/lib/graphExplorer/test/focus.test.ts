@@ -17,6 +17,7 @@ import {
     periodText,
     pictureLens,
     sharePercent,
+    shareWords,
     type ArcProperty,
     type FocusBox,
 } from '../focus.ts';
@@ -624,11 +625,17 @@ test('open properties read with their labels, held nodes as links and the rest a
     assert.deepEqual(openEntries(model, 'NotANode'), []);
 });
 
-test('a share is a whole percentage, at least 1 when anything is used', () => {
+test('a share is a whole percentage, at least 1 when anything is used, and "under 1%" in words below half a percent', () => {
     assert.equal(sharePercent(1, 653), 1);
     assert.equal(sharePercent(0, 653), 0);
     assert.equal(sharePercent(5, 0), 0);
     assert.equal(sharePercent(14, 25), 56);
+
+    // In words, a share below half a percent reads "under 1%" so a long tail does not read "1%".
+    assert.equal(shareWords(1, 653), 'under 1%');
+    assert.equal(shareWords(4, 653), '1%');
+    assert.equal(shareWords(16_755, 28_037), '60%');
+    assert.equal(shareWords(0, 653), '0%');
 });
 
 for (const [code, shown] of [

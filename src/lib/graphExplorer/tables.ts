@@ -5,6 +5,7 @@
 import { columnsByUse } from './lists.ts';
 import type { Model, ScopedList } from './model.ts';
 import { declarerWords, filterScopedList, GROUPS, membersHaveCodes, openColumns } from './model.ts';
+import { patternGroups } from './sentence.ts';
 import { csvFileName } from './sheet.ts';
 import type { ProvenanceUsage } from './wire.ts';
 
@@ -87,3 +88,51 @@ export function valueListTable(model: Model, listId: string): readonly (readonly
 /** A value list's CSV file name from its label, ending `-partial.csv` when the list is partial. */
 export const valueListFileName = (model: Model, listId: string): string =>
     csvFileName(model.label(listId), { partial: !model.membersComplete(listId) });
+
+/**
+ * A dataset's patterns, group by group as patternGroups orders them, most
+ * StatVars first inside each: the split combination's number and its
+ * constraint properties (`split`, joined with "; " in the order the panel
+ * names them), each identity field by dcid, the StatVar count and the
+ * examples. Other cells with several values separate them with semicolons.
+ */
+export function patternTable(model: Model, datasetId: string): readonly (readonly string[])[] {
+    const groups = patternGroups(model.dataset(datasetId)?.patterns ?? []);
+    const rows = groups.flatMap((group, index) =>
+        group.patterns.map((pattern) => [
+            String(index + 1),
+            group.split.join('; '),
+            pattern.population_type ?? '',
+            pattern.measured_property,
+            pattern.stat_type ?? '',
+            pattern.measurement_qualifier ?? '',
+            pattern.measurement_denominator ?? '',
+            String(pattern.measurement_denominator_unresolved ?? false),
+            pattern.observation_properties.join(';'),
+            pattern.constraint_properties.join(';'),
+            String(pattern.stat_var_count),
+            pattern.examples.join(';'),
+        ]),
+    );
+    return [
+        [
+            'split_combination',
+            'split',
+            'population_type',
+            'measured_property',
+            'stat_type',
+            'measurement_qualifier',
+            'measurement_denominator',
+            'measurement_denominator_unresolved',
+            'observation_properties',
+            'constraint_properties',
+            'stat_vars',
+            'examples',
+        ],
+        ...rows,
+    ];
+}
+
+/** A dataset's patterns CSV file name from its label. */
+export const patternFileName = (model: Model, datasetId: string): string =>
+    csvFileName(`${model.label(datasetId)} patterns`);
