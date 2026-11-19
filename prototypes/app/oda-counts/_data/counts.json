@@ -1,239 +1,164 @@
 {
   "provenance": {
-    "sdk": "development-finance==0.2.0",
+    "sdk": "development-finance==0.4.1",
     "query": "Every OECD DAC1 count of ODA by provider, 2015 to 2025: gross and net disbursements, grant equivalents, commitments and the OECD headline, with gross bilateral, multilateral and non-grant disbursements, in-donor refugee costs and ODA/GNI, in current and constant 2024 US dollars",
-    "retrieved": "2026-11-17T20:07:37.228Z",
+    "retrieved": "2026-11-19T22:35:23.948Z",
     "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+    "refs": "refs.json",
     "dfo": [
       {
         "key": "gross",
         "prices": "current",
-        "sentence": "Gross ODA disbursements by provider",
-        "specId": "spec_674c9240244777ff2a8c12b48fb9a6e7",
-        "versions": [
-          "cv_5891efa08d98e932a3fd450fe480d53e"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_b72e0995342bd9098128a40a73ab2f47",
+        "version": "cv_5891efa08d98e932a3fd450fe480d53e",
         "rows": 594,
         "warnings": []
       },
       {
         "key": "gross",
         "prices": "constant",
-        "sentence": "Gross ODA disbursements by provider",
-        "specId": "spec_9f2b5642f2da15e504b802a3e5c835f1",
-        "versions": [
-          "cv_9a5f40701554107446afce02d51c030d"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_e11f6ab465ae6a35761352d0e062c127",
+        "version": "cv_9a5f40701554107446afce02d51c030d",
         "rows": 594,
         "warnings": []
       },
       {
         "key": "net",
         "prices": "current",
-        "sentence": "Net ODA disbursements by provider",
-        "specId": "spec_6e5b678e6d4e7c71cc78d017a7c82bfb",
-        "versions": [
-          "cv_a544716471dab6ba61f985ee870cb088"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_8d8e8db15e3215dd9406c95b577a5299",
+        "version": "cv_a544716471dab6ba61f985ee870cb088",
         "rows": 594,
         "warnings": []
       },
       {
         "key": "net",
         "prices": "constant",
-        "sentence": "Net ODA disbursements by provider",
-        "specId": "spec_4ca4cd22eac6329fefb9ad48413771d8",
-        "versions": [
-          "cv_ab793c4bd497a28c27825f46acb9f86a"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_67d0900dcde1867dbbb3a726acb6c7d1",
+        "version": "cv_ab793c4bd497a28c27825f46acb9f86a",
         "rows": 594,
         "warnings": []
       },
       {
         "key": "grantEquivalent",
         "prices": "current",
-        "sentence": "ODA grant equivalents by provider",
-        "specId": "spec_4676ad39150f779b2d7ff2ecdd00f365",
-        "versions": [
-          "cv_5f832c287b0cd6e2c7a1b73a68799361"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_b29006424ec60d7ca1f75eff15d46da0",
+        "version": "cv_5f832c287b0cd6e2c7a1b73a68799361",
         "rows": 535,
         "warnings": []
       },
       {
         "key": "grantEquivalent",
         "prices": "constant",
-        "sentence": "ODA grant equivalents by provider",
-        "specId": "spec_05a0a99b58805b0c5fa3d6fea2c81a15",
-        "versions": [
-          "cv_8136e22a83fec57e68fd4ef09802b6ba"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_88c152c964b7b35d9e84857e36463b14",
+        "version": "cv_8136e22a83fec57e68fd4ef09802b6ba",
         "rows": 534,
         "warnings": [
-          "A constant-price conversion left out each entity's rows in the years the deflator table holds no value for it, and every row of an entity it holds no value for in the base year. It left out rows of 1 entity. [deflator_missing_omitted]"
+          "deflator_missing_omitted"
         ]
       },
       {
         "key": "commitments",
         "prices": "current",
-        "sentence": "ODA commitments by provider",
-        "specId": "spec_e65aeebeecb3bfc3bdabee53ac501eae",
-        "versions": [
-          "cv_8056c3263441d5b343c7a24dee9a2536"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_49eac7017112b95c2b675b32663003a3",
+        "version": "cv_8056c3263441d5b343c7a24dee9a2536",
         "rows": 487,
         "warnings": []
       },
       {
         "key": "commitments",
         "prices": "constant",
-        "sentence": "ODA commitments by provider",
-        "specId": "spec_80ef8c9b657279f012a5bc77581d6735",
-        "versions": [
-          "cv_69ca2239ecdd4adccbd45891ddf65748"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_c1ac8de724166dc01d8b6b2f3d2690bf",
+        "version": "cv_69ca2239ecdd4adccbd45891ddf65748",
         "rows": 487,
         "warnings": []
       },
       {
         "key": "headline",
         "prices": "current",
-        "sentence": "OECD headline ODA by provider",
-        "specId": "spec_21f96066af87a5ead1d3fa2fdd4164b8",
-        "versions": [
-          "cv_b5c9be1f98e485284c206b7344ac45c2"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_34b9f201e81a04a82d2de9b0e4bf4a8a",
+        "version": "cv_b5c9be1f98e485284c206b7344ac45c2",
         "rows": 595,
         "warnings": []
       },
       {
         "key": "headline",
         "prices": "constant",
-        "sentence": "OECD headline ODA by provider",
-        "specId": "spec_644bc1ccde6442396e780596c1d93509",
-        "versions": [
-          "cv_ad4bc110dfb23c0ef57afd7989fc1460"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_48d8d23f5b311ff1d3268ffeb8cd0088",
+        "version": "cv_ad4bc110dfb23c0ef57afd7989fc1460",
         "rows": 594,
         "warnings": [
-          "A constant-price conversion left out each entity's rows in the years the deflator table holds no value for it, and every row of an entity it holds no value for in the base year. It left out rows of 1 entity. [deflator_missing_omitted]"
+          "deflator_missing_omitted"
         ]
       },
       {
         "key": "bilateral",
         "prices": "current",
-        "sentence": "Gross bilateral ODA disbursements by provider",
-        "specId": "spec_36721057cf0be59c259b56e8bebed83c",
-        "versions": [
-          "cv_1f5dd060a3aa6317d1065133ffe6d496"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_c10cf577341365b12d83728c2cabf3b4",
+        "version": "cv_1f5dd060a3aa6317d1065133ffe6d496",
         "rows": 546,
         "warnings": []
       },
       {
         "key": "bilateral",
         "prices": "constant",
-        "sentence": "Gross bilateral ODA disbursements by provider",
-        "specId": "spec_4c4c042e4e952629038bc88cffb8c572",
-        "versions": [
-          "cv_31f43392401adf4503709de79c316679"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_1781b471be98e910064a3ace21c6085e",
+        "version": "cv_31f43392401adf4503709de79c316679",
         "rows": 546,
         "warnings": []
       },
       {
         "key": "multilateral",
         "prices": "current",
-        "sentence": "Gross multilateral ODA disbursements by provider",
-        "specId": "spec_4f3601ce50434bf59a43133613bb466a",
-        "versions": [
-          "cv_28843d5da505fb45888daa24ce395ad3"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_1c1eb783c03bc1056864ffb51dff3145",
+        "version": "cv_28843d5da505fb45888daa24ce395ad3",
         "rows": 543,
         "warnings": []
       },
       {
         "key": "multilateral",
         "prices": "constant",
-        "sentence": "Gross multilateral ODA disbursements by provider",
-        "specId": "spec_cd629c7d46e5c6b7973dc25a6d76043d",
-        "versions": [
-          "cv_d8fde6e71724263fcb8268f9bf405dd8"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_243de67c38e813f9acd3e0815b6c1967",
+        "version": "cv_d8fde6e71724263fcb8268f9bf405dd8",
         "rows": 543,
         "warnings": []
       },
       {
         "key": "refugeeCosts",
         "prices": "current",
-        "sentence": "In-donor refugee costs, net ODA disbursements by provider",
-        "specId": "spec_ca50900929f05acc479bb378c316e1ea",
-        "versions": [
-          "cv_6871d575e1818c4cc3b48dccbd33f237"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_cf5577e39d404c1e58891334ed081bb0",
+        "version": "cv_6871d575e1818c4cc3b48dccbd33f237",
         "rows": 437,
         "warnings": []
       },
       {
         "key": "refugeeCosts",
         "prices": "constant",
-        "sentence": "In-donor refugee costs, net ODA disbursements by provider",
-        "specId": "spec_c681710281438bca40e6b63eac57f2ba",
-        "versions": [
-          "cv_63572af7a6fcadf2ac62957472a2e52a"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_20e07304dd2f0300336b7ab9e88bd91d",
+        "version": "cv_63572af7a6fcadf2ac62957472a2e52a",
         "rows": 437,
         "warnings": []
       },
       {
         "key": "grossNonGrants",
         "prices": "current",
-        "sentence": "Gross ODA non-grant disbursements by provider",
-        "specId": "spec_1c01d6203b749ebab8afc8a58305b0a2",
-        "versions": [
-          "cv_532cb2f8f47028f721a53101e7d51caa"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_ffbb1f8f00e012896c853570f746acca",
+        "version": "cv_532cb2f8f47028f721a53101e7d51caa",
         "rows": 266,
         "warnings": []
       },
       {
         "key": "grossNonGrants",
         "prices": "constant",
-        "sentence": "Gross ODA non-grant disbursements by provider",
-        "specId": "spec_61ddf481ebea2f3933c17949ffce9b67",
-        "versions": [
-          "cv_cf6cca6212839b8302def68ba32383dd"
-        ],
-        "citation": "OECD DAC1 (2026), processed by the Development Finance Observatory",
+        "specId": "spec_6e6da48debf065977d4b21552048eebe",
+        "version": "cv_cf6cca6212839b8302def68ba32383dd",
         "rows": 266,
         "warnings": []
       },
       {
         "key": "odaGni",
         "prices": "ratio",
-        "sentence": "OECD headline ODA as a share of GNI by provider",
-        "specId": "spec_72de007c7db7e1590765bab90c3adb24",
-        "versions": [
-          "cv_91fe20b6a137bf1d62eb7be30d246979"
-        ],
-        "citation": "OECD DAC1 (2026), via the Development Finance Observatory",
+        "specId": "spec_53b3cbb33442b824ea535a27e67ffecb",
+        "version": "cv_91fe20b6a137bf1d62eb7be30d246979",
         "rows": 548,
         "warnings": []
       }
