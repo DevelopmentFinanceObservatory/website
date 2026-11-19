@@ -215,6 +215,7 @@ const Centred = ({ centre, show, line, onRetry, completeness, headingRef }: Cent
             <aside className={styles.panel} aria-label={openBox ? openBox.title : 'Definition'}>
                 {openBox ? (
                     <FullList
+                        key={`${centre.id}:${openBox.key}`}
                         box={openBox}
                         lens={markLens}
                         gaps={boxGaps(openBox, centre.id, completeness)}

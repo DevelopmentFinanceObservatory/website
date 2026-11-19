@@ -27,6 +27,7 @@ import {
     type UsageTerm,
 } from './wire.ts';
 import type { OriginSwitch } from './explore.ts';
+import { firstMatches, LIST_CEILING, type Matches } from './lists.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
 
@@ -1229,35 +1230,36 @@ export function cellWidth(cells: readonly string[], head: string): number {
     );
 }
 
-/** The most matches a value-list member search returns. */
-export const MEMBER_HIT_LIMIT = 60;
-
 /**
  * The members of a value list whose label, dcid, classification code, other
  * name, open property literal or label of a held node it refers to holds
  * `text`, ignoring case and surrounding space, in list order. Returns the
- * first `limit` and how many match in all. Empty for blank text.
+ * first `limit` (firstMatches) and how many match in all. Empty for blank
+ * text.
  */
 export function searchMembers(
     model: Model,
     listId: string,
     text: string,
-    limit = MEMBER_HIT_LIMIT,
-): { readonly hits: readonly string[]; readonly total: number } {
+    limit = LIST_CEILING,
+): Matches<string> {
     const needle = text.trim().toLowerCase();
     if (needle === '') return { hits: [], total: 0 };
-    const matched = model.members(listId).filter((id) => {
-        const node = model.node(id);
-        return [
-            model.label(id),
-            id,
-            ...(node?.classification_code ?? []),
-            ...(node?.alternate_name ?? []),
-            ...openLiterals(node),
-            ...heldReferenceLabels(model, node),
-        ].some((name) => name.toLowerCase().includes(needle));
-    });
-    return { hits: matched.slice(0, limit), total: matched.length };
+    return firstMatches(
+        model.members(listId),
+        (id) => {
+            const node = model.node(id);
+            return [
+                model.label(id),
+                id,
+                ...(node?.classification_code ?? []),
+                ...(node?.alternate_name ?? []),
+                ...openLiterals(node),
+                ...heldReferenceLabels(model, node),
+            ].some((name) => name.toLowerCase().includes(needle));
+        },
+        limit,
+    );
 }
 
 /**
