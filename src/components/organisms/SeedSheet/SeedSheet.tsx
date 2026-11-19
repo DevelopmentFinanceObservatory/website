@@ -476,6 +476,11 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         ? open
         : null;
     const prefilled = columns.some((column) => column.fill !== '');
+    // Only a constraint whose property has a value list opens a panel from its heading.
+    const listedHeading = columns.some(
+        (column) =>
+            column.property !== null && model.valueListOfProperty(column.property) !== undefined,
+    );
     const formulas = formulaRows(rows).length;
     const yml = seedsYml(NEW_SEED_NAME, columns);
 
@@ -542,18 +547,20 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     <PatternGroups
                         key={dataset.id}
                         datasetId={dataset.id}
-                        action={(group, groups) =>
-                            groups.length > 1 && (
+                        action={(group, groups) => {
+                            if (groups.length <= 1) return null;
+                            const inUse = pressed(group, groups);
+                            return (
                                 <Button
-                                    variant="bordered"
+                                    variant={inUse ? 'dark' : 'bordered'}
                                     small
-                                    aria-pressed={pressed(group, groups)}
+                                    aria-pressed={inUse}
                                     onClick={() => chooseColumns(group.split)}
                                 >
-                                    Use These Columns
+                                    {inUse ? 'Columns in Use' : 'Use These Columns'}
                                 </Button>
-                            )
-                        }
+                            );
+                        }}
                     />
                 </ModelProvider>
             </SheetSection>
@@ -650,8 +657,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     Hatched cells are yours to fill. An empty constraint cell means the StatVar has
                     no such constraint. A row that reuses a StatVar defined elsewhere leaves{' '}
                     <code>population_type</code>, <code>measured_property</code> and{' '}
-                    <code>stat_type</code> empty, so clear any grey cell there. Open a constraint
-                    heading to see its values.
+                    <code>stat_type</code> empty, so clear any grey cell there.
+                    {listedHeading && ' Open a constraint heading to see its values.'}
                 </p>
                 {formulas > 0 && (
                     <p className={styles.warning}>
