@@ -12,7 +12,7 @@ test('money follows the mock-up: two decimals under $10bn, one above, whole mill
         [4.54e6, '$4.5m'],
         [400e3, '$400k'],
         [0, '$0'],
-        // Rounding never prints a figure in the smaller unit that belongs to the larger one.
+        // A figure that rounds up to the next unit prints in the larger unit.
         [999.7e6, '$1.00bn'],
         [9.97e6, '$10m'],
         [999.6e3, '$1.0m'],

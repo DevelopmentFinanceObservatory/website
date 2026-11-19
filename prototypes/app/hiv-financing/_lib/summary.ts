@@ -3,8 +3,16 @@ import type { Country, HivData, ProviderKey, ProviderSeries } from '../_data/typ
 
 import { PROVIDER_KEYS } from './providers.ts';
 
-/** The year the page's last-year figures are for, the last of `HivData.years`. */
-export const LAST_YEAR = 2024;
+/** The year the page's last-year figures are for: the last of `HivData.years`. */
+export const lastYear = (data: { readonly years: readonly number[] }): number => {
+    const year = data.years.at(-1);
+
+    if (year === undefined) {
+        throw new Error('HivData.years is empty');
+    }
+
+    return year;
+};
 
 /** The lede counts countries that received more than this in the last year, in US dollars. */
 export const LEDE_THRESHOLD = 1_000_000;
@@ -28,6 +36,10 @@ export const lastShares = (series: ProviderSeries): Record<ProviderKey, number> 
 
     return { us: share('us'), globalFund: share('globalFund'), other: share('other') };
 };
+
+/** The names of the countries with no estimate of people living with HIV, in data order. */
+export const withoutPlhiv = (data: HivData): string[] =>
+    data.countries.filter((country) => country.plhiv === null).map((country) => country.name);
 
 export const findCountry = (data: HivData, iso3: string): Country | undefined =>
     data.countries.find((country) => country.iso3 === iso3);

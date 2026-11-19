@@ -38,13 +38,36 @@ export const stackExtent = (layers: readonly Layer[]): { low: number; high: numb
     return { low, high };
 };
 
+/** The bars' axis reaches at least this, in US dollars, so a country with a few thousand
+ *  dollars gets ticks such as "$250k" in place of several that all read "$0k". */
+export const BAR_AXIS_FLOOR = 1_000_000;
+
+/** The bars' axis ticks: from 0 to at least the tallest stack and at least `BAR_AXIS_FLOOR`. */
+export const barTicks = (high: number): number[] => valueTicks(0, Math.max(high, BAR_AXIS_FLOOR));
+
+/**
+ * The indices of the years to label on an axis of `count` years where labels need
+ * `step` years between them: the first and the last always, and every `step`th counting
+ * back from the last, leaving out any that would sit within `step` of the first.
+ */
+export const labelledYears = (count: number, step: number): Set<number> => {
+    const last = count - 1;
+    const labelled = new Set<number>(count > 0 ? [0, last] : []);
+
+    for (let index = last - step; index >= step; index -= step) {
+        labelled.add(index);
+    }
+
+    return labelled;
+};
+
 /**
  * Axis ticks from the lower of 0 and `low` to at least `high`, on a step of 1, 2, 2.5
  * or 5 times a power of ten that gives about `count` intervals.
  */
 export const valueTicks = (low: number, high: number, count = 4): number[] => {
     const from = Math.min(0, low);
-    // With nothing above the floor, the axis still spans one unit, so it never divides by zero.
+    // With nothing above the floor, the axis still spans one unit, which keeps the step above zero.
     const to = Math.max(0, high) > from ? Math.max(0, high) : from + 1;
     const raw = (to - from) / count;
     const magnitude = 10 ** Math.floor(Math.log10(raw));

@@ -27,7 +27,7 @@ test('sortRows puts missing values last in both directions', () => {
     assert.deepEqual(order('aid', 'descending'), ['KEN', 'CIV', 'UKR', 'COD', 'COG', 'MEX']);
     assert.deepEqual(order('art', 'descending'), ['KEN', 'MEX', 'COD', 'COG', 'CIV', 'UKR']);
     assert.deepEqual(order('art', 'ascending'), ['COG', 'COD', 'MEX', 'KEN', 'CIV', 'UKR']);
-    // The mix column sorts on the US share; Mexico's 0 sorts as a value.
+    // The mix column sorts on the US share, and Mexico's 0 sorts as a value.
     assert.deepEqual(order('mix', 'descending'), ['COG', 'KEN', 'UKR', 'CIV', 'COD', 'MEX']);
     assert.deepEqual(order('name', 'ascending'), ['CIV', 'COD', 'KEN', 'MEX', 'COG', 'UKR']);
 });

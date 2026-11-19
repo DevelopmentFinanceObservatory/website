@@ -4,7 +4,7 @@ import styles from './Reserved.module.scss';
 
 /**
  * Text that takes the room of the largest of its `variants` at any width, so changing it
- * never moves what follows. The variants sit in the same grid cell as the text, hidden;
+ * leaves what follows in place. The variants sit in the same grid cell as the text, hidden;
  * the text remounts when it changes and fades in.
  */
 export const Reserved = ({

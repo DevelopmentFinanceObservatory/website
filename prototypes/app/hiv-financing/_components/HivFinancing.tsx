@@ -12,7 +12,7 @@ import { Reserved } from './Reserved';
 import type { HivData } from '../_data/types.ts';
 import { allSentence, countrySentence } from '../_lib/copy.ts';
 import { money } from '../_lib/format.ts';
-import { findCountry, lastTotal, LAST_YEAR, scopeSeries } from '../_lib/summary.ts';
+import { findCountry, lastTotal, lastYear, scopeSeries } from '../_lib/summary.ts';
 
 export type Section = { id: string; title: string };
 
@@ -23,8 +23,8 @@ const chartTitle = (name: string, years: readonly number[]) =>
 
 /**
  * The interactive part of the page: the scope row, the summary sentence, the bars and the
- * per-person strip, and the country table. Choosing the selected country again, from a dot,
- * a row or the search, returns to all countries.
+ * per-person strip, and the country table. Choosing the selected country again from a dot
+ * or a row returns to all countries; choosing it in the search keeps it.
  */
 export const HivFinancing = ({
     data,
@@ -38,6 +38,7 @@ export const HivFinancing = ({
     const topRef = useRef<HTMLDivElement>(null);
     const chosen = selected === null ? undefined : findCountry(data, selected);
     const [chartSection, tableSection] = sections;
+    const year = lastYear(data);
 
     const sentence = chosen === undefined ? allSentence(data) : countrySentence(chosen, data.years);
     const title = chartTitle(chosen?.name ?? ALL_COUNTRIES, data.years);
@@ -85,7 +86,8 @@ export const HivFinancing = ({
                     <CountrySearch
                         countries={data.countries}
                         chosen={chosen}
-                        onChoose={toggle}
+                        year={year}
+                        onChoose={setSelected}
                         onClear={() => setSelected(null)}
                     />
                 </div>
@@ -103,12 +105,13 @@ export const HivFinancing = ({
                 </h3>
                 <ProviderBars series={scopeSeries(data, selected)} years={data.years} />
                 <p className={styles.note} data-hidden={chosen !== undefined}>
-                    Not shown: {money(lastTotal(data.unallocated))} in {LAST_YEAR} reported for
-                    regions or no country.
+                    Not shown: {money(lastTotal(data.unallocated))} in {year} reported for regions
+                    or no country.
                 </p>
                 <div className={styles.below}>
                     <PerPersonStrip
                         countries={data.countries}
+                        year={year}
                         selected={selected}
                         onSelect={toggle}
                     />
@@ -119,7 +122,12 @@ export const HivFinancing = ({
                 <h2 id={tableSection.id} className={styles.heading}>
                     {tableSection.title}
                 </h2>
-                <CountryTable countries={data.countries} selected={selected} onSelect={onRow} />
+                <CountryTable
+                    countries={data.countries}
+                    year={year}
+                    selected={selected}
+                    onSelect={onRow}
+                />
             </section>
         </div>
     );

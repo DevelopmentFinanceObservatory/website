@@ -73,7 +73,7 @@
     white-space: nowrap;
 }
 
-// Nothing glides under reduced motion; values still fade in.
+// Under reduced motion bars and marks jump to their places; values fade in.
 
 @media (prefers-reduced-motion: reduce) {
     .mark,

@@ -3,12 +3,14 @@ import { prototype, prototypeMetadata } from '../../registry';
 import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
 
 import { HivFinancing } from './_components/HivFinancing';
-import { ledeSentence, SCOPE_NOTE } from './_lib/copy';
+import { ledeSentence, plhivGapNote, SCOPE_NOTE } from './_lib/copy';
 import { money } from './_lib/format';
-import { LAST_YEAR } from './_lib/summary';
+import { lastYear } from './_lib/summary';
 import hiv from './_data/hiv.json';
 
 export const entry = prototype('hiv-financing');
+
+export const LAST_YEAR = lastYear(hiv.data);
 
 export const metadata = prototypeMetadata(entry);
 
@@ -36,7 +38,7 @@ export default ({ children }) => (
     </PrototypePage>
 );
 
-{SCOPE_NOTE}
+<p>{SCOPE_NOTE}</p>
 
 <HivFinancing data={hiv.data} sections={SECTIONS} />
 
@@ -44,7 +46,7 @@ export default ({ children }) => (
 
 HIV aid is gross ODA disbursements under CRS purpose code 13040, STD control including HIV/AIDS, in current US dollars. HIV work recorded under other codes, such as health systems or reproductive health, is left out.
 
-The Global Fund reports to the CRS as a provider. Money donors give the Global Fund is counted once, under the Global Fund, and not under the donor.
+The Global Fund reports to the CRS as a provider. Money donors give the Global Fund is counted once, under the Global Fund.
 
 People living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths are UNAIDS estimates.
 
@@ -52,8 +54,8 @@ The table lists countries the CRS records as HIV aid recipients from {years[0]} 
 
 ## Notes
 
-- Governments' own spending on HIV is not in the DFO, so the page shows external financing only.
-- The United States reports a varying amount without a country: {money(usUnallocated.at(-2))} in {years.at(-2)} and {money(usUnallocated.at(-1))} in {years.at(-1)}. A country's US figure moves with that reporting as well as with spending.
+- The United States reports a varying amount without a country: {money(usUnallocated.at(-2))} in {years.at(-2)} and {money(usUnallocated.at(-1))} in {years.at(-1)}. A country's US figure moves with that reporting as well as with disbursements.
+- {plhivGapNote(hiv.data)}
 
 ## Sources
 

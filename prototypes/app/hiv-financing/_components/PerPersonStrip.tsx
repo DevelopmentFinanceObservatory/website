@@ -8,7 +8,6 @@ import { useWidth } from './useWidth';
 import type { Country } from '../_data/types.ts';
 import { perPerson, people } from '../_lib/format.ts';
 import { buildStrip, scalePosition, STRIP_MIN_PLHIV, type StripDot } from '../_lib/strip.ts';
-import { LAST_YEAR } from '../_lib/summary.ts';
 
 const RADIUS = 4.5;
 /** Lanes sit one dot and a hairline apart. */
@@ -28,17 +27,20 @@ const tickText = (tick: number) => `$${Number(tick.toFixed(1))}`;
 
 /**
  * Last-year HIV aid per person living with HIV, one dot per country with 50,000 or more
- * people living with HIV and some aid, on a fixed axis with the median marked. Dots never
- * move; the selected country's dot gets a ring and a label and the others sit back.
+ * people living with HIV and some aid, on a fixed axis with the median marked. Dots stay
+ * put; the selected country's dot gets a ring and a label and the others sit back.
  * Hovering or the arrow keys read a dot's name and value; a click or Enter selects its
  * country.
  */
 export const PerPersonStrip = ({
     countries,
+    year,
     selected,
     onSelect,
 }: {
     countries: readonly Country[];
+    /** The year the aid figures are for. */
+    year: number;
     /** The selected country's iso3, or null for all countries. */
     selected: string | null;
     onSelect: (iso3: string) => void;
@@ -119,7 +121,7 @@ export const PerPersonStrip = ({
               ? 'end'
               : 'middle';
     const summary =
-        `Dot strip of ${LAST_YEAR} HIV aid per person living with HIV in ${dots.length} ` +
+        `Dot strip of ${year} HIV aid per person living with HIV in ${dots.length} ` +
         `countries.${median === null ? '' : ` The median is ${perPerson(median)}.`}` +
         (chosenText === '' ? '' : ` ${chosenText}.`) +
         ' Use the arrow keys to read each country and Enter to select one.';
@@ -128,7 +130,7 @@ export const PerPersonStrip = ({
         <div className={styles.strip}>
             <p className={styles.head}>
                 <span className={styles.label}>
-                    HIV aid per person living with HIV, {LAST_YEAR}
+                    HIV aid per person living with HIV, {year}
                     <span className={styles.count}>
                         {dots.length} countries with {people(STRIP_MIN_PLHIV)} or more people living
                         with HIV

@@ -7,23 +7,25 @@ import styles from './CountrySearch.module.scss';
 import type { Country } from '../_data/types.ts';
 import { money } from '../_lib/format.ts';
 import { matchCountries } from '../_lib/search.ts';
-import { LAST_YEAR, lastAid } from '../_lib/summary.ts';
+import { lastAid } from '../_lib/summary.ts';
 
 const MAX_SHOWN = 8;
 
 /**
- * A type-to-find box for the countries, from fragility-finance's ContextSearch: an ARIA
- * combobox whose list matches by name, ignoring accents. Arrow keys move through the list,
- * Enter chooses, Escape clears the text. Out of focus it shows the selected country; the
+ * A type-to-find box for the countries: an ARIA combobox whose list matches by name,
+ * ignoring accents. Arrow keys move through the list, Enter chooses, Escape clears the text. Out of focus it shows the selected country; the
  * clear button returns the page to all countries.
  */
 export const CountrySearch = ({
     countries,
+    year,
     chosen,
     onChoose,
     onClear,
 }: {
     countries: readonly Country[];
+    /** The year of the aid figure each option shows. */
+    year: number;
     chosen: Country | undefined;
     onChoose: (iso3: string) => void;
     onClear: () => void;
@@ -140,7 +142,7 @@ export const CountrySearch = ({
                         >
                             <span className={styles.name}>{option.name}</span>
                             <span className={styles.value}>
-                                {money(lastAid(option))} in {LAST_YEAR}
+                                {money(lastAid(option))} in {year}
                             </span>
                         </li>
                     ))}

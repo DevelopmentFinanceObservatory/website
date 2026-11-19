@@ -90,7 +90,7 @@
     fill: #75756b;
 }
 
-// The dots carry no provider colour: each is a country's aid from every provider.
+// The dots are neutral grey, since each shows a country's aid from every provider.
 .dot {
     fill: #8a8a7c;
     stroke: #fff;
@@ -140,7 +140,7 @@
     font-weight: 400;
 }
 
-// The hover reading, the scatter tooltip's face from debt-thresholds.
+// The hover reading, drawn as a tooltip.
 .tip {
     position: absolute;
     z-index: 2;
@@ -170,7 +170,7 @@
     white-space: nowrap;
 }
 
-// Under reduced motion the ring does not glide; it and the labels still fade in.
+// Under reduced motion the ring jumps to its dot; it and the labels fade in.
 
 @media (prefers-reduced-motion: reduce) {
     .ring {

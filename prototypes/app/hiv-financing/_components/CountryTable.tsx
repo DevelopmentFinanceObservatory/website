@@ -7,7 +7,6 @@ import styles from './CountryTable.module.scss';
 import type { Country } from '../_data/types.ts';
 import { deathCount, money, pct, peopleShort, percent, perPerson } from '../_lib/format.ts';
 import { PROVIDERS } from '../_lib/providers.ts';
-import { LAST_YEAR } from '../_lib/summary.ts';
 import {
     DEFAULT_SORT,
     firstDirection,
@@ -25,10 +24,12 @@ const MISSING = '–';
 
 type Column = { key: SortKey; label: string; cell: (row: TableRow) => string };
 
-const COLUMNS: readonly Column[] = [
+/** The columns for figures from `year`. */
+const columns = (year: number): readonly Column[] => [
     { key: 'name', label: 'Country', cell: (row) => row.name },
-    { key: 'aid', label: `HIV aid, ${LAST_YEAR}`, cell: (row) => money(row.aid) },
-    { key: 'mix', label: 'Who provides it', cell: () => '' },
+    { key: 'aid', label: `HIV aid, ${year}`, cell: (row) => money(row.aid) },
+    // The header names its sort: the mix column sorts on the US share.
+    { key: 'mix', label: 'Who provides it, by US share', cell: () => '' },
     {
         key: 'plhiv',
         label: 'People living with HIV',
@@ -69,8 +70,8 @@ const MixBar = ({ row }: { row: TableRow }) => (
     </span>
 );
 
-const download = (rows: readonly TableRow[]) => {
-    const blob = new Blob([toCsv(rows, LAST_YEAR)], { type: 'text/csv;charset=utf-8' });
+const download = (rows: readonly TableRow[], year: number) => {
+    const blob = new Blob([toCsv(rows, year)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -87,16 +88,20 @@ const download = (rows: readonly TableRow[]) => {
  */
 export const CountryTable = ({
     countries,
+    year,
     selected,
     onSelect,
 }: {
     countries: Country[];
+    /** The year the figures are for. */
+    year: number;
     selected: string | null;
     onSelect: (iso3: string) => void;
 }) => {
     const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>(DEFAULT_SORT);
     const [showAll, setShowAll] = useState(false);
 
+    const shownColumns = columns(year);
     const rows = sortRows(tableRows(countries), sort.key, sort.direction);
     const top = showAll ? rows : rows.slice(0, COLLAPSED_ROWS);
     const pinned = showAll ? undefined : rows.find((row) => row.iso3 === selected);
@@ -119,12 +124,12 @@ export const CountryTable = ({
                 className={styles.scroll}
                 tabIndex={0}
                 role="region"
-                aria-label={`HIV aid by country, ${LAST_YEAR}, scrolls sideways`}
+                aria-label={`HIV aid by country, ${year}, scrolls sideways`}
             >
                 <table>
                     <thead>
                         <tr>
-                            {COLUMNS.map((column) => (
+                            {shownColumns.map((column) => (
                                 <th
                                     key={column.key}
                                     scope="col"
@@ -145,7 +150,7 @@ export const CountryTable = ({
                     <tbody>
                         {shown.map((row) => (
                             <tr key={row.iso3} data-selected={row.iso3 === selected}>
-                                {COLUMNS.map((column) =>
+                                {shownColumns.map((column) =>
                                     column.key === 'name' ? (
                                         <th key={column.key} scope="row">
                                             <button
@@ -179,7 +184,7 @@ export const CountryTable = ({
                 >
                     {showAll ? `Show the top ${COLLAPSED_ROWS}` : `Show all ${rows.length}`}
                 </button>
-                <button type="button" onClick={() => download(rows)}>
+                <button type="button" onClick={() => download(rows, year)}>
                     Download CSV
                 </button>
             </div>

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { DATA, KENYA, MEXICO } from './fixture.mts';
-import { lastShares, ledeFigures, scopeSeries, seriesTotals } from './summary.ts';
+import { lastShares, lastYear, ledeFigures, scopeSeries, seriesTotals } from './summary.ts';
 
 test("the lede's majority counts only a US or a Global Fund majority", () => {
     // Kenya (US), Côte d'Ivoire (Global Fund) and Ukraine (US) count; DR Congo, where all
@@ -22,4 +22,10 @@ test('scopeSeries shows allocated money for all countries, else the country, els
 test('totals and shares by year; shares are 0 with no aid', () => {
     assert.deepEqual(seriesTotals(KENYA.aid), [360e6, 304e6]);
     assert.deepEqual(lastShares(MEXICO.aid), { us: 0, globalFund: 0, other: 0 });
+});
+
+test('the last year comes from the data', () => {
+    assert.equal(lastYear(DATA), 2024);
+    assert.equal(lastYear({ years: [2016, 2023] }), 2023);
+    assert.throws(() => lastYear({ years: [] }));
 });

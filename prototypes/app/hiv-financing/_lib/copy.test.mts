@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { allSentence, countrySentence, ledeSentence } from './copy.ts';
+import { allSentence, countrySentence, ledeSentence, plhivGapNote } from './copy.ts';
 import {
     CONGO,
     country,
@@ -37,7 +37,7 @@ test('a country sentence with every clause', () => {
 
 test('missing data leaves its clause out', () => {
     const cases: [string, string][] = [
-        // No ART figure, no 2015 deaths; a provider with no money is not named.
+        // No ART figure and no 2015 deaths. A provider with no money is left out of the mix.
         [
             countrySentence(IVORY_COAST, YEARS),
             "In 2024 Côte d'Ivoire received $90m in HIV aid, $450 per person living with HIV. Of that, 44% came from the United States and 56% from the Global Fund.",
@@ -79,5 +79,12 @@ test('a share under half a point is not named', () => {
     assert.equal(
         countrySentence(mostlyUs, YEARS),
         'In 2024 Beta received $1.0m in HIV aid. Of that, 100% came from the United States.',
+    );
+});
+
+test('the Notes line names the countries with no estimate of people living with HIV', () => {
+    assert.equal(
+        plhivGapNote(DATA),
+        'The DFO holds no UNAIDS estimate of people living with HIV for Ukraine, so the page gives no aid per person for it and leaves it off the dot strip.',
     );
 });

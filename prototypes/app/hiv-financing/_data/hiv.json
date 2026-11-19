@@ -2,7 +2,7 @@
  "provenance": {
   "sdk": "development-finance==0.3.0",
   "query": "HIV/AIDS aid by donor and recipient, 2015 to 2024 (OECD CRS, purpose code 13040, gross disbursements, current US dollars); UNAIDS people living with HIV, antiretroviral therapy coverage and AIDS-related deaths for each country, 2015 to 2024",
-  "retrieved": "2026-11-19T13:20:54.886Z",
+  "retrieved": "2026-11-19T13:42:01.488Z",
   "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory; OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
   "dfo": [
    {

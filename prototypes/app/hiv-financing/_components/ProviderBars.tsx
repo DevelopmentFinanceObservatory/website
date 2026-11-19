@@ -7,7 +7,7 @@ import { useYearReading } from './useYearReading';
 import { WithSide } from './WithSide';
 
 import type { ProviderSeries } from '../_data/types.ts';
-import { providerLayers, stackExtent, valueTicks, type Layer } from '../_lib/chart.ts';
+import { barTicks, labelledYears, providerLayers, stackExtent, type Layer } from '../_lib/chart.ts';
 import { axisMoney, money } from '../_lib/format.ts';
 import { PROVIDERS } from '../_lib/providers.ts';
 import { seriesTotals } from '../_lib/summary.ts';
@@ -72,14 +72,17 @@ export const ProviderBars = ({
 
     const layers = providerLayers(series);
     const { high } = stackExtent(layers);
-    const ticks = valueTicks(0, high);
+    const ticks = barTicks(high);
     const yMax = ticks.at(-1) ?? 1;
     const height = Math.round(plotWidth / PLOT_RATIO) + MARGIN.top + MARGIN.bottom;
     const plot = { top: MARGIN.top, bottom: height - MARGIN.bottom, right: width - MARGIN.right };
     const sy = (value: number) => plot.bottom - (value / yMax) * (plot.bottom - plot.top);
     const sx = (index: number) => MARGIN.left + pitch * (index + 0.5);
     const barWidth = Math.max(2, pitch * BAR_SHARE);
-    const labelStep = Math.max(1, Math.ceil(MIN_LABEL_PITCH / Math.max(pitch, 1)));
+    const labelled = labelledYears(
+        years.length,
+        Math.max(1, Math.ceil(MIN_LABEL_PITCH / Math.max(pitch, 1))),
+    );
 
     const rows = keyRows(series, shown);
     const shownYear = years[shown] ?? 0;
@@ -158,7 +161,7 @@ export const ProviderBars = ({
                                 )),
                             )}
                             {years.map((year, index) =>
-                                (lastIndex - index) % labelStep === 0 ? (
+                                labelled.has(index) ? (
                                     <text
                                         key={year}
                                         x={sx(index)}

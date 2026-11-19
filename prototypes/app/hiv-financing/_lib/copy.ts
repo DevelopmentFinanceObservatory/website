@@ -13,26 +13,33 @@ import {
     roundDeaths,
 } from './format.ts';
 import { PROVIDERS } from './providers.ts';
-import { lastAid, lastShares, lastTotal, ledeFigures } from './summary.ts';
+import { lastAid, lastShares, lastTotal, lastYear, ledeFigures, withoutPlhiv } from './summary.ts';
 
 export const SCOPE_NOTE =
     "This page shows aid from donors and multilateral funds. Governments' own spending on HIV is not in the DFO, so it does not show what share of a country's HIV response donors pay for.";
 
+/** The Notes line naming the countries kept in the table with no estimate of people living with HIV. */
+export const plhivGapNote = (data: HivData): string => {
+    const names = withoutPlhiv(data);
+
+    return names.length === 0
+        ? 'The DFO holds a UNAIDS estimate of people living with HIV for every country in the table.'
+        : `The DFO holds no UNAIDS estimate of people living with HIV for ${listOf(names)}, so the page gives no aid per person for ${names.length === 1 ? 'it' : 'them'} and leaves ${names.length === 1 ? 'it' : 'them'} off the dot strip.`;
+};
+
 /** A provider's share is named in the country sentence from half a percentage point up. */
 const NAMED_SHARE = 0.005;
-
-const lastYearOf = (years: readonly number[]): number => years.at(-1) ?? 0;
 
 export const ledeSentence = (data: HivData): string => {
     const { usGfShare, over1m, oneProviderMajority } = ledeFigures(data);
 
-    return `In ${lastYearOf(data.years)} the United States and the Global Fund gave ${pct(usGfShare)} of the external HIV financing that donors assigned to countries. In ${oneProviderMajority} of the ${over1m} countries that received more than $1m, one of the two gave more than half.`;
+    return `In ${lastYear(data)} the United States and the Global Fund gave ${pct(usGfShare)} of the external HIV financing that donors assigned to countries. In ${oneProviderMajority} of the ${over1m} countries that received more than $1m, one of the two gave more than half.`;
 };
 
 /** The summary sentence with no country selected. */
 export const allSentence = (data: HivData): string => {
     const first = data.years[0] ?? 0;
-    const last = lastYearOf(data.years);
+    const last = lastYear(data);
     const others = data.allocated.other;
 
     return `In ${last} donors assigned ${money(lastTotal(data.allocated))} of HIV aid to ${data.recipients} countries and reported another ${money(lastTotal(data.unallocated))} for regions or no country. Providers other than the United States and the Global Fund gave ${money(others.at(-1) ?? 0)} to countries, against ${money(others[0] ?? 0)} in ${first}.`;
@@ -40,16 +47,17 @@ export const allSentence = (data: HivData): string => {
 
 const mixClause = (country: Country): string | null => {
     const shares = lastShares(country.aid);
+    // The first item carries the verb: "66% came from the United States, 33% from ...".
     const named = PROVIDERS.filter(({ key }) => shares[key] >= NAMED_SHARE).map(
-        ({ key, label }) =>
-            `${pct(shares[key])} from ${key === 'other' ? 'all other providers' : `the ${label}`}`,
+        ({ key, label }, index) =>
+            `${pct(shares[key])} ${index === 0 ? 'came from' : 'from'} ${key === 'other' ? 'all other providers' : `the ${label}`}`,
     );
 
     if (named.length === 0) {
         return null;
     }
 
-    return `Of that, ${listOf(named).replace(' from ', ' came from ')}.`;
+    return `Of that, ${listOf(named)}.`;
 };
 
 const treatmentClause = (country: Country): string | null =>
@@ -65,9 +73,9 @@ const deathsClause = (country: Country, years: readonly number[]): string | null
         return null;
     }
 
-    // The verb compares the figures as printed, so "held" never sits between two different numbers.
+    // The verb compares the figures as printed, so "held" appears only between two equal numbers.
     const [from, to] = [roundDeaths(first), roundDeaths(last)];
-    const [start, end] = [years[0] ?? 0, lastYearOf(years)];
+    const [start, end] = [years[0] ?? 0, lastYear({ years })];
 
     if (to === from) {
         return `AIDS-related deaths held at ${deathCount(last)} from ${start} to ${end}.`;
@@ -76,10 +84,10 @@ const deathsClause = (country: Country, years: readonly number[]): string | null
     return `AIDS-related deaths ${to < from ? 'fell' : 'rose'} from ${deathCount(first)} in ${start} to ${deathCount(last)} in ${end}.`;
 };
 
-/** The summary sentence for one country; a clause whose data is missing is left out. */
+/** The summary sentence for one country. A clause whose data is missing is left out. */
 export const countrySentence = (country: Country, years: readonly number[]): string => {
     const aid = lastAid(country);
-    const year = lastYearOf(years);
+    const year = lastYear({ years });
     let opening: string;
 
     if (aid === 0) {

@@ -29,7 +29,7 @@ export const perPersonPoints = (
         })
         .toSorted((a, b) => a.value - b.value || a.name.localeCompare(b.name));
 
-/** The median of the values, the mean of the middle two for an even count; null for none. */
+/** The median of the values, the mean of the middle two for an even count, or null for none. */
 export const median = (values: readonly number[]): number | null => {
     const sorted = values.toSorted((a, b) => a - b);
     const middle = Math.floor(sorted.length / 2);
@@ -53,7 +53,7 @@ export const stripScale = (values: readonly number[]): StripScale => {
     return { min: 0, max: ticks.at(-1) ?? 1, ticks };
 };
 
-/** A value's place on a scale, 0 to 1, clamped; `clipped` where it falls outside. */
+/** A value's place on a scale, 0 to 1 and clamped, with `clipped` set where it falls outside. */
 export const scalePosition = (
     scale: StripScale,
     value: number,
