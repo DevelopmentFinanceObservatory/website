@@ -79,16 +79,19 @@ export const FilterBox = ({
     value,
     onChange,
     label,
+    placeholder = 'Filter by name or dcid',
 }: {
     value: string;
     onChange: (value: string) => void;
     /** The box's accessible name. */
     label: string;
+    /** What the box matches, for a list that matches more than name and dcid. */
+    placeholder?: string;
 }) => (
     <input
         type="search"
         className={styles.filter}
-        placeholder="Filter by name or dcid"
+        placeholder={placeholder}
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}

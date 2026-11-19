@@ -17,7 +17,8 @@ import {
 import { OriginTag, TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
 import {
-    CeilingNote,
+    FilterBox,
+    FilterNoteLine,
     ListToggle,
     TermSourcesProvider,
 } from '@/components/organisms/GraphExplorer/ListToggle';
@@ -37,6 +38,7 @@ import {
     landedUsage,
     listHead,
     termFilter,
+    textFilter,
 } from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
 import {
@@ -94,32 +96,6 @@ const usedConstraints = (model: Model): readonly string[] =>
         ),
     ].sort((a, b) => model.label(a).localeCompare(model.label(b), 'en-GB'));
 
-/** What a reader does to reach the entries past a list's ceiling, by whether the filter is blank. */
-const ceilingThen = (filter: string): string =>
-    filter.trim() === '' ? 'Filter to find the rest.' : 'Type more to narrow.';
-
-/** A filter box over a list. `placeholder` names what it matches. */
-const FilterBox = ({
-    value,
-    placeholder,
-    label,
-    onChange,
-}: {
-    value: string;
-    placeholder: string;
-    label: string;
-    onChange: (value: string) => void;
-}) => (
-    <input
-        type="search"
-        className={styles.filter}
-        placeholder={placeholder}
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-    />
-);
-
 /** One constraint column's tick box: its column name and the property it holds. */
 const ConstraintBox = ({
     property,
@@ -163,17 +139,13 @@ const ValuePanel = ({
     const values = model.valueListOfProperty(property);
     if (values === undefined) return null;
 
-    const byTerm = termFilter(model, filter);
-    const needle = filter.trim().toLowerCase();
     const shown = firstMatches(
         values.members,
-        byTerm === null
-            ? null
-            : (value) =>
-                  byTerm(value) ||
-                  (model.node(value)?.classification_code ?? []).some((code) =>
-                      code.toLowerCase().includes(needle),
-                  ),
+        textFilter(filter, (value: string) => [
+            value,
+            model.label(value),
+            ...(model.node(value)?.classification_code ?? []),
+        ]),
     );
 
     const copy = (value: string) => {
@@ -206,9 +178,9 @@ const ValuePanel = ({
             </p>
             <FilterBox
                 value={filter}
-                placeholder="Filter by code, name or dcid"
-                label={`Filter the values of ${columnName(property)} by code, name or dcid`}
                 onChange={setFilter}
+                label={`Filter the values of ${columnName(property)} by code, name or dcid`}
+                placeholder="Filter by code, name or dcid"
             />
             <div className={styles.values}>
                 <table className={styles.sheet}>
@@ -240,12 +212,7 @@ const ValuePanel = ({
                     </tbody>
                 </table>
             </div>
-            {shown.total === 0 && values.members.length > 0 && (
-                <p className={styles.note} role="status">
-                    No value matches “{filter.trim()}”.
-                </p>
-            )}
-            <CeilingNote matches={shown} then={ceilingThen(filter)} />
+            <FilterNoteLine text={filter} matches={shown} />
         </section>
     );
 };
@@ -619,9 +586,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             </summary>
                             <FilterBox
                                 value={moreFilter}
-                                placeholder="Filter by name or dcid"
-                                label="Filter the other datasets' constraints by name or dcid"
                                 onChange={setMoreFilter}
+                                label="Filter the other datasets' constraints by name or dcid"
                             />
                             <div className={styles.checks}>
                                 {moreShown.hits.map((property) => (
@@ -633,12 +599,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                     />
                                 ))}
                             </div>
-                            {moreShown.total === 0 && (
-                                <p className={styles.note} role="status">
-                                    No constraint matches “{moreFilter.trim()}”.
-                                </p>
-                            )}
-                            <CeilingNote matches={moreShown} then={ceilingThen(moreFilter)} />
+                            <FilterNoteLine text={moreFilter} matches={moreShown} />
                         </details>
                     )}
                 </fieldset>

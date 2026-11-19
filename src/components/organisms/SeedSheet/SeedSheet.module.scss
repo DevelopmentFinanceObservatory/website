@@ -196,24 +196,6 @@
     }
 }
 
-.filter {
-    @include font-size(13px, 1);
-
-    width: rem(280);
-    max-width: 100%;
-    height: rem(34);
-    padding: 0 rem(10);
-    font-family: var(--font-dm-mono);
-    letter-spacing: -0.02em;
-    background-color: var(--color-white);
-    border: 1px solid var(--color-stone-light);
-    border-radius: rem(4);
-
-    &::placeholder {
-        color: var(--color-stone);
-    }
-}
-
 .paste {
     @include font-size(12px, 1.4);
 
