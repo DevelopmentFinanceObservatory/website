@@ -119,7 +119,7 @@ export const SCOPE_NOTE: Cited = {
 
 /** The note near the top on funding in 2025, after the OECD data end. */
 export const FUNDING_2025: Cited = {
-    text: 'The OECD data end in 2024. KFF reports that donor-government HIV funding fell from $8.3bn in 2024 to $6.2bn in 2025, in current dollars. UNAIDS reports that international HIV funding fell from $8.8bn to $7.3bn over the same years, in constant 2024 dollars. Both use their own counting rules, so their totals differ from the OECD figures here. This page will add 2025 figures when the OECD publishes them.',
+    text: 'The OECD data end in 2024. KFF reports that donor-government HIV funding fell from $8.3bn in 2024 to $6.2bn in 2025, in current dollars. UNAIDS reports that international HIV funding fell from $8.8bn to $7.3bn over the same years. Both use their own counting rules, so their totals differ from the OECD figures here. This page will add 2025 figures when the OECD publishes them.',
     sources: [SOURCES.kff2025, SOURCES.unaidsSpecialReport2026],
 };
 
