@@ -75,6 +75,7 @@ export const listKeys = async (request: Request): Promise<Response> => {
             id: key.id,
             name: key.name,
             start: key.start,
+            tail: key.tail,
             createdAt: key.createdAt.toISOString(),
             lastRequest: key.lastRequest?.toISOString() ?? null,
             dailyLimit: key.dailyLimit,

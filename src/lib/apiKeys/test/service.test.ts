@@ -142,6 +142,7 @@ test('API key service', async (t) => {
             'lastRequest',
             'name',
             'start',
+            'tail',
             'usedToday',
         ]);
         assert.ok(row?.key && row.key !== made.key);
@@ -154,6 +155,8 @@ test('API key service', async (t) => {
         assert.equal(listed[0]!.start, made.key.slice(0, API_KEY_START_LENGTH));
         assert.equal(listed[0]!.start?.length, 9);
         assert.match(listed[0]!.start ?? '', /^dfo_k_[A-Za-z0-9]{3}$/);
+        // The tail is the key's last four characters, also nothing more.
+        assert.equal(listed[0]!.tail, made.key.slice(-4));
 
         await service.deleteOwn(await as(bob), made.id);
     });

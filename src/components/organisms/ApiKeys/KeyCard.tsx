@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import styles from './ApiKeysPanel.module.scss';
-import { formatIsoDate } from './format';
+import { formatIsoDate, keySnippet } from './format';
 import type { KeyView } from './state';
 
 import Button from '@/components/atoms/Button/Button';
@@ -24,7 +24,7 @@ const KeyCard = ({ item, busy, onDelete }: KeyCardProps) => {
         <article className={styles.card}>
             <h4 className={styles.cardName}>{item.name || 'Unnamed'}</h4>
             <p className={styles.muted}>
-                <code className={styles.prefix}>{item.start ? `${item.start}…` : '—'}</code>
+                <code className={styles.prefix}>{keySnippet(item.start, item.tail)}</code>
             </p>
             <p className={styles.muted}>Created {formatIsoDate(item.createdAt)}</p>
             <p className={styles.muted}>

@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react';
 import styles from './AdminApiKeys.module.scss';
 import AdminLimitInput from './AdminLimitInput';
 import { type AdminActions, formatDay } from './AdminState';
+import { keySnippet } from './format';
 
 import Button from '@/components/atoms/Button/Button';
 import Icon from '@/components/atoms/Icon/Icon';
@@ -78,6 +79,9 @@ const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) 
             <tr className={classNames(styles.keyRow, open && styles.keyRowOpen)}>
                 <td className={styles.keyCell}>
                     <span className={styles.keyName}>{name}</span>
+                    <code className={styles.keySnippet}>
+                        {keySnippet(keyData.start, keyData.tail)}
+                    </code>
                     <span className={styles.keyCreated}>
                         <time dateTime={keyData.createdAt.toISOString()}>
                             {formatDay(keyData.createdAt)}

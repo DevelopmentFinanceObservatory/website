@@ -123,6 +123,9 @@ export const apikey = pgTable(
         permissions: text('permissions'),
         metadata: text('metadata'),
         dailyLimit: integer('daily_limit'),
+        // The key's last four characters, kept in the clear beside `start` so a
+        // key can be shown as `dfo_k_RCd…Qjsd`. Null for keys made before it.
+        tail: text('tail'),
     },
     (table) => [
         index('apikey_configId_idx').on(table.configId),

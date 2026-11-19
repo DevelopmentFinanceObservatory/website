@@ -8,6 +8,8 @@ export type KeyView = {
     id: string;
     name: string | null;
     start: string | null;
+    // The key's last characters, null for a key made before they were kept.
+    tail: string | null;
     createdAt: string;
     lastRequest: string | null;
     dailyLimit: number;

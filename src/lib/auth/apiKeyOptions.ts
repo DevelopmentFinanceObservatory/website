@@ -31,6 +31,15 @@ export const API_KEY_PATHS: readonly string[] = [
 export const API_KEY_START_LENGTH = API_KEY_PREFIX.length + 3;
 
 /**
+ * How many of a key's last characters are stored in the clear as the row's
+ * `tail`, shown after the start (`dfo_k_RCd…Qjsd`). Four, as the SDKs show a
+ * key (`dfo_k_***Qjsd`), so an operator can match what a user's client
+ * prints. They are four of the six checksum characters, about 24 bits of
+ * a CRC of the key, far too little to help guess its 32 random letters.
+ */
+export const API_KEY_TAIL_LENGTH = 4;
+
+/**
  * A new key: the prefix, KEY_RANDOM_LENGTH random letters (as the plugin's
  * own generator makes them), the signed tag and the checksum
  * (src/lib/auth/keyTag). The plugin stores the hash of the whole key.

@@ -32,7 +32,7 @@ import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'driz
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apikey, limitCounter, user } from '../../../db/schema.ts';
-import { API_KEY_PREFIX } from '../auth/apiKeyOptions.ts';
+import { API_KEY_PREFIX, API_KEY_TAIL_LENGTH } from '../auth/apiKeyOptions.ts';
 import { likeContaining } from '../likePattern.ts';
 import { dailyCounterKey, dailyUsage } from '../proxy/limitCounter.ts';
 import { parseLabel } from './settings.ts';
@@ -88,6 +88,9 @@ export type OwnKey = {
     id: string;
     name: string | null;
     start: string | null;
+    // The key's last characters (API_KEY_TAIL_LENGTH), null for a key made
+    // before they were kept.
+    tail: string | null;
     createdAt: Date;
     // When the proxy last looked the key up (keyVerifier records it on a
     // cache miss), so up to about a minute behind the last call. Null until
@@ -162,12 +165,21 @@ export const createKeyService = ({
     defaultDailyLimit,
     log = defaultLog,
 }: KeyServiceOptions) => {
-    const mint = (userId: string, label: string | null) =>
+    const mint = async (userId: string, label: string | null) => {
         // The prefix is passed even though the plugin's default is the same,
         // so no later change to the plugin options can open it to a request.
-        auth.api.createApiKey({
+        const created = await auth.api.createApiKey({
             body: { userId, name: label ?? undefined, prefix: API_KEY_PREFIX },
         });
+
+        // The plugin keeps only the start; the tail is ours.
+        await db
+            .update(apikey)
+            .set({ tail: created.key.slice(-API_KEY_TAIL_LENGTH) })
+            .where(eq(apikey.id, created.id));
+
+        return created;
+    };
 
     const userIdByEmail = async (email: string): Promise<string | null> => {
         const [row] = await db
@@ -225,12 +237,17 @@ export const createKeyService = ({
         return true;
     };
 
-    // The daily quota and today's count of each key, which the plugin's own
-    // list knows nothing of.
+    // The tail, daily quota and today's count of each key, which the plugin's
+    // own list knows nothing of.
     const withQuota = async <T extends { id: string }>(
         keys: T[],
     ): Promise<
-        (T & { dailyLimit: number; customDailyLimit: number | null; usedToday: number })[]
+        (T & {
+            tail: string | null;
+            dailyLimit: number;
+            customDailyLimit: number | null;
+            usedToday: number;
+        })[]
     > => {
         if (keys.length === 0) {
             return [];
@@ -239,18 +256,20 @@ export const createKeyService = ({
         const ids = keys.map(({ id }) => id);
         const [limits, used] = await Promise.all([
             db
-                .select({ id: apikey.id, custom: apikey.dailyLimit })
+                .select({ id: apikey.id, custom: apikey.dailyLimit, tail: apikey.tail })
                 .from(apikey)
                 .where(inArray(apikey.id, ids)),
             dailyUsage(db, ids),
         ]);
         const custom = new Map(limits.map(({ id, custom }) => [id, ownDaily(custom)]));
+        const tails = new Map(limits.map(({ id, tail }) => [id, tail]));
 
         return keys.map((key) => {
             const own = custom.get(key.id) ?? null;
 
             return {
                 ...key,
+                tail: tails.get(key.id) ?? null,
                 dailyLimit: own ?? defaultDailyLimit(),
                 customDailyLimit: own,
                 usedToday: used.get(key.id) ?? 0,
