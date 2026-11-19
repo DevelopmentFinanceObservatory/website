@@ -11,7 +11,7 @@ import {
     FUNDING_2025,
     ledeSentence,
     loansSentence,
-    OTHER_MEASURES,
+    otherMeasures,
     PER_PERSON_NOTE,
     plhivGapNote,
     PROVIDER_NOTE,
@@ -62,7 +62,7 @@ export default ({ children }) => (
 </p>
 
 <p className={prose.p}>
-    <CitedText parts={[OTHER_MEASURES]} className={prose.a} />
+    <CitedText parts={[otherMeasures(hiv.data)]} className={prose.a} />
 </p>
 
 HIV aid here is gross ODA disbursements under CRS code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. {loansSentence(hiv.data)} Totals exclude HIV work under other codes, such as social mitigation of HIV/AIDS (16064), health systems, or reproductive health.
