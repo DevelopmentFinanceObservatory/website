@@ -5,10 +5,10 @@ import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } fro
 import styles from './PerPersonStrip.module.scss';
 import { useWidth } from './useWidth';
 
-import type { Country } from '../_data/types.ts';
 import { MEDIAN_CAVEAT } from '../_lib/copy.ts';
 import { perPerson } from '../_lib/format.ts';
 import { buildStrip, scalePosition, type StripDot } from '../_lib/strip.ts';
+import type { UnaidsCountry } from '../_lib/unaids.ts';
 
 const RADIUS = 4.5;
 /** Lanes sit one dot and a hairline apart. */
@@ -40,7 +40,7 @@ export const PerPersonStrip = ({
     selected,
     onSelect,
 }: {
-    countries: readonly Country[];
+    countries: readonly UnaidsCountry[];
     /** The year the aid figures are for. */
     year: number;
     /** Which countries the strip holds, under its title. */

@@ -27,6 +27,7 @@ import {
     PER_PERSON_MIN_PLHIV,
     withoutPlhiv,
 } from './summary.ts';
+import type { NamedFigures, UnaidsCountry } from './unaids.ts';
 
 /** A cited web page; `date` is null for an undated page, and `detail` names what the page
  *  takes from it. */
@@ -166,8 +167,8 @@ export const PER_PERSON_NOTE: Cited = {
 export const MEDIAN_CAVEAT = "The middle country's ratio, not spending per patient.";
 
 /** The Notes line naming the countries kept in the table with no estimate of people living with HIV. */
-export const plhivGapNote = (data: HivData): string => {
-    const names = withoutPlhiv(data);
+export const plhivGapNote = (countries: readonly NamedFigures[]): string => {
+    const names = withoutPlhiv(countries);
     const them = names.length === 1 ? 'it' : 'them';
 
     return names.length === 0
@@ -177,13 +178,16 @@ export const plhivGapNote = (data: HivData): string => {
 
 /** The Notes line on the other UNAIDS figures missing for countries that do have an
  *  estimate of people living with HIV; null when none is missing. */
-export const unaidsGapNote = (data: HivData): string | null => {
-    const named = data.countries.filter((country) => country.plhiv !== null);
+export const unaidsGapNote = (
+    countries: readonly NamedFigures[],
+    years: readonly number[],
+): string | null => {
+    const named = countries.filter((country) => country.plhiv !== null);
     const sorted = (names: string[]) => names.toSorted((a, b) => a.localeCompare(b, 'en'));
     const noArt = sorted(named.filter((c) => c.art === null).map((c) => c.name));
     const noDeaths = sorted(named.filter((c) => c.deaths.at(-1) === null).map((c) => c.name));
     const noFirst = sorted(named.filter((c) => c.deaths[0] === null).map((c) => c.name));
-    const [first, last] = [data.years[0], lastYear(data)];
+    const [first, last] = [years[0], lastYear({ years })];
     const missing = [
         noArt.length === 0 ? null : `treatment coverage for ${listOf(noArt)}`,
         noDeaths.length === 0 ? null : `AIDS-related deaths in ${last} for ${listOf(noDeaths)}`,
@@ -489,10 +493,10 @@ export const loansSentence = (data: HivData): string | null => {
 };
 
 /** The strip's caption: how many countries it holds and the rule that picks them. */
-export const stripCaption = (data: HivData): string => {
-    const count = perPersonPoints(data.countries).length;
+export const stripCaption = (countries: readonly UnaidsCountry[], year: number): string => {
+    const count = perPersonPoints(countries).length;
 
-    return `${count} ${count === 1 ? 'country' : 'countries'} that received HIV aid in ${lastYear(data)} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
+    return `${count} ${count === 1 ? 'country' : 'countries'} that received HIV aid in ${year} and ${count === 1 ? 'has' : 'have'} at least ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV`;
 };
 
 /** The line under the table's heading: which countries it lists. */
@@ -533,12 +537,12 @@ const multiClause = (country: Country, year: number): string | null => {
         : null;
 };
 
-const treatmentClause = (country: Country): string | null =>
+const treatmentClause = (country: UnaidsCountry): string | null =>
     country.art === null || country.plhiv === null || country.plhiv === 0
         ? null
         : `${percent(country.art)} of the ${people(country.plhiv)} people living with HIV were on antiretroviral therapy.`;
 
-const deathsClause = (country: Country, years: readonly number[]): string | null => {
+const deathsClause = (country: UnaidsCountry, years: readonly number[]): string | null => {
     const first = country.deaths[0];
     const last = country.deaths.at(-1);
 
@@ -558,7 +562,7 @@ const deathsClause = (country: Country, years: readonly number[]): string | null
 };
 
 /** The summary sentence for one country. A clause whose data is missing is left out. */
-export const countrySentence = (country: Country, years: readonly number[]): string => {
+export const countrySentence = (country: UnaidsCountry, years: readonly number[]): string => {
     const aid = lastAid(country);
     const year = lastYear({ years });
     const ratio = aidPerPerson(country);

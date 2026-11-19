@@ -8,6 +8,8 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
+import { UnaidsStatus } from './UnaidsStatus';
+import { useUnaids } from './useUnaids';
 
 import type { HivData } from '../_data/types.ts';
 import {
@@ -18,7 +20,8 @@ import {
     tableRule,
     unallocatedCaption,
 } from '../_lib/copy.ts';
-import { findCountry, lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
+import { lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
+import { joinUnaids } from '../_lib/unaids.ts';
 
 export type Section = { id: string; title: string };
 
@@ -36,6 +39,10 @@ const scrollBehaviour = (): ScrollBehavior =>
  * The interactive part of the page: the scope row, the summary sentence, the bars and the
  * per-person strip, and the country table. Choosing the selected country again from a dot
  * or a row returns to all countries; choosing it in the search keeps it.
+ *
+ * The UNAIDS figures come from the pinned reads in the browser (useUnaids). Until they arrive,
+ * or when they fail, a country's sentence leaves out its per-person, treatment and deaths
+ * clauses, the strip gives way to a status line, and the table's UNAIDS columns wait.
  */
 export const HivFinancing = ({
     data,
@@ -49,7 +56,18 @@ export const HivFinancing = ({
     const islandRef = useRef<HTMLDivElement>(null);
     const topRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLElement>(null);
-    const chosen = selected === null ? undefined : findCountry(data, selected);
+    const unaids = useUnaids(data.countries, data.years);
+    const countries = useMemo(
+        () =>
+            joinUnaids(
+                data.countries,
+                unaids.status === 'ready' ? unaids.figures : null,
+                data.years,
+            ),
+        [data, unaids],
+    );
+    const chosen =
+        selected === null ? undefined : countries.find((country) => country.iso3 === selected);
     const [chartSection, tableSection] = sections;
     const year = lastYear(data);
 
@@ -61,13 +79,13 @@ export const HivFinancing = ({
         () => ({
             sentences: [
                 allSentence(data),
-                ...data.countries.map((country) => countrySentence(country, data.years)),
+                ...countries.map((country) => countrySentence(country, data.years)),
             ],
-            titles: [ALL_COUNTRIES, ...data.countries.map((country) => country.name)].map((name) =>
+            titles: [ALL_COUNTRIES, ...countries.map((country) => country.name)].map((name) =>
                 chartTitle(name, data),
             ),
         }),
-        [data],
+        [data, countries],
     );
 
     // Text fades in on a change of scope, not on first paint (_motion.scss).
@@ -109,7 +127,7 @@ export const HivFinancing = ({
                         {ALL_COUNTRIES}
                     </button>
                     <CountrySearch
-                        countries={data.countries}
+                        countries={countries}
                         chosen={chosen}
                         year={year}
                         onChoose={setSelected}
@@ -136,13 +154,17 @@ export const HivFinancing = ({
                 />
                 <p className={styles.note}>{unallocatedCaption(data)}</p>
                 <div className={styles.below}>
-                    <PerPersonStrip
-                        countries={data.countries}
-                        year={year}
-                        caption={stripCaption(data)}
-                        selected={selected}
-                        onSelect={toggle}
-                    />
+                    {unaids.status === 'ready' ? (
+                        <PerPersonStrip
+                            countries={countries}
+                            year={year}
+                            caption={stripCaption(countries, year)}
+                            selected={selected}
+                            onSelect={toggle}
+                        />
+                    ) : (
+                        <UnaidsStatus state={unaids} what="the strip of aid per person" />
+                    )}
                 </div>
             </section>
 
@@ -155,8 +177,10 @@ export const HivFinancing = ({
                     {tableSection.title}
                 </h2>
                 <p className={styles.rule}>{tableRule(data)}</p>
+                <UnaidsStatus state={unaids} what="the UNAIDS columns" />
                 <CountryTable
-                    countries={data.countries}
+                    countries={countries}
+                    unaids={unaids.status}
                     year={year}
                     legend={flagLegend(data)}
                     selected={selected}

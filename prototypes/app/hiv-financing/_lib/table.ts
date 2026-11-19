@@ -1,8 +1,9 @@
 // The country table's rows, their sort, and the CSV download of them.
-import type { Country, ProviderKey } from '../_data/types.ts';
+import type { ProviderKey } from '../_data/types.ts';
 
 import { mixPercents, roundDeaths } from './format.ts';
 import { aidPerPerson, gfMultiFlag, lastAid, lastShares } from './summary.ts';
+import type { UnaidsCountry } from './unaids.ts';
 
 export type TableRow = {
     iso3: string;
@@ -29,7 +30,7 @@ export type TableRow = {
     deaths: number | null;
 };
 
-export const tableRows = (countries: readonly Country[]): TableRow[] =>
+export const tableRows = (countries: readonly UnaidsCountry[]): TableRow[] =>
     countries.map((country) => {
         const shares = lastShares(country.aid);
 

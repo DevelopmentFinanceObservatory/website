@@ -6,7 +6,6 @@ import { flushSync } from 'react-dom';
 import { hatchSwatch } from './ChartKey';
 import styles from './CountryTable.module.scss';
 
-import type { Country } from '../_data/types.ts';
 import { deathCount, money, peopleShort, percent, perPerson } from '../_lib/format.ts';
 import { GF_MULTI, PROVIDERS } from '../_lib/providers.ts';
 import {
@@ -19,12 +18,23 @@ import {
     type SortKey,
     type TableRow,
 } from '../_lib/table.ts';
+import type { UnaidsCountry } from '../_lib/unaids.ts';
+import type { UnaidsState } from './useUnaids';
 
 const COLLAPSED_ROWS = 15;
 
 const MISSING = '–';
 
-type Column = { key: SortKey; label: string; cell: (row: TableRow) => string };
+/** A UNAIDS cell while the reads run. */
+const LOADING = '…';
+
+type Column = {
+    key: SortKey;
+    label: string;
+    cell: (row: TableRow) => string;
+    /** The column's figures come from the UNAIDS reads. */
+    unaids?: boolean;
+};
 
 /** The columns for figures from `year`. */
 const columns = (year: number): readonly Column[] => [
@@ -34,21 +44,25 @@ const columns = (year: number): readonly Column[] => [
     { key: 'mix', label: `Provider mix, ${year}, by US share`, cell: () => '' },
     {
         key: 'plhiv',
+        unaids: true,
         label: `People living with HIV, ${year}`,
         cell: (row) => (row.plhiv === null ? MISSING : peopleShort(row.plhiv)),
     },
     {
         key: 'perPerson',
+        unaids: true,
         label: `Aid per person living with HIV, ${year}`,
         cell: (row) => (row.perPerson === null ? MISSING : perPerson(row.perPerson)),
     },
     {
         key: 'art',
+        unaids: true,
         label: `On treatment, ${year}`,
         cell: (row) => (row.art === null ? MISSING : percent(row.art)),
     },
     {
         key: 'deaths',
+        unaids: true,
         label: `AIDS-related deaths, ${year}`,
         cell: (row) => (row.deaths === null ? MISSING : deathCount(row.deaths)),
     },
@@ -113,17 +127,21 @@ const download = (rows: readonly TableRow[], year: number) => {
  * Every country's last-year HIV aid, who provides it, and the UNAIDS figures beside it.
  * Header buttons sort; each Country cell holds a button that selects the row. Shows the
  * top rows of the current sort, plus the selected country wherever it ranks. The CSV holds
- * every row in the current sort order.
+ * every row in the current sort order. The UNAIDS columns show "…" until `unaids` is ready,
+ * and the CSV waits for them.
  */
 export const CountryTable = ({
     countries,
+    unaids,
     year,
     legend,
     selected,
     onSelect,
     onCollapse,
 }: {
-    countries: Country[];
+    countries: readonly UnaidsCountry[];
+    /** Where the UNAIDS reads stand. */
+    unaids: UnaidsState['status'];
     /** The year the figures are for. */
     year: number;
     /** The note under the table on the marked rows. */
@@ -207,6 +225,12 @@ export const CountryTable = ({
                                         >
                                             {column.key === 'mix' ? (
                                                 <Mix row={row} />
+                                            ) : column.unaids && unaids !== 'ready' ? (
+                                                unaids === 'loading' ? (
+                                                    LOADING
+                                                ) : (
+                                                    MISSING
+                                                )
                                             ) : (
                                                 column.cell(row)
                                             )}
@@ -244,7 +268,11 @@ export const CountryTable = ({
                 >
                     {showAll ? `Show top ${COLLAPSED_ROWS}` : `Show all ${rows.length}`}
                 </button>
-                <button type="button" onClick={() => download(rows, year)}>
+                <button
+                    type="button"
+                    disabled={unaids !== 'ready'}
+                    onClick={() => download(rows, year)}
+                >
                     Download CSV
                 </button>
             </div>
