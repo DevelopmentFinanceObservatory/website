@@ -106,7 +106,7 @@ test("a dataset's bars keep the filtered dataset past their head", () => {
 test('datasets come most StatVars first, then by label, whatever the document order', () => {
     const base = readUsage(baseUsageBody());
     const un = readUsage(unUsageBody());
-    // ECLAC has 4 StatVars; give the base dataset 4 too, and list UN first.
+    // ECLAC has 4 StatVars, so give the base dataset 4 too, and list UN first.
     const tied = {
         ...base,
         provenances: base.provenances.map((p) => ({ ...p, stat_var_count: 4 })),
@@ -144,7 +144,7 @@ test('a dataset takes the origin of the usage document the model took it from', 
     const dfo = readUsage(usageBody());
     const base = readUsage(baseUsageBody());
     const un = readUsage(unUsageBody());
-    // A base document that also lists a DFO ref: the DFO document's entry wins in the model.
+    // A base document that also lists a DFO ref loses to the DFO document's entry in the model.
     const overlapping = { ...base, provenances: [...base.provenances, { ...dfo.provenances[0]! }] };
     const model = buildModel(schema, dfo, overlapping, un);
     const outside = landedUsage({

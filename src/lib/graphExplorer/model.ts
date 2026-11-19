@@ -263,7 +263,7 @@ export type Model = {
     populationTypes(): readonly PopulationTypeUse[];
     /**
      * True when some pattern names the node as its population type, whatever
-     * its kind: a UN series is a `value` that StatVars are about.
+     * its kind. A UN series is a `value` that StatVars are about.
      */
     isPopulationType(id: string): boolean;
     propertiesOf(classId: string): ClassProperties;

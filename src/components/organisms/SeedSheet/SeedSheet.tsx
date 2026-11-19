@@ -271,7 +271,7 @@ const SeedTable = ({ columns, rows, open, panelId, onOpen }: SeedTableProps) => 
  * Steps 1 to 4 over the model and the URL's choices. The picker lists the
  * scoped model's datasets. A dataset the URL names is read from the full
  * model, so a link from an outside dataset's view seeds that dataset
- * whatever the switches say; while an outside usage document that may hold
+ * whatever the switches say. While an outside usage document that may hold
  * it loads, the steps wait. A named dataset with no patterns, once every
  * document has settled, gives way to the first dataset, with a line saying so.
  */

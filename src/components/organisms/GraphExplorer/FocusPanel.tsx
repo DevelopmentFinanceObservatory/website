@@ -251,7 +251,7 @@ const OpenLines = ({ id }: { id: string }) => {
 /**
  * A term the model holds: what it is, its names, its definition, its source
  * and its use. A term the base Data Commons declares links to its browser
- * page; the UN System Data Commons serves no browser page.
+ * page. The UN System Data Commons serves no browser page.
  */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();

@@ -480,7 +480,7 @@ export const nodeViewName = (dcid: string): string => `The graph's view of ${dci
  * The node view of `dcid`, as loadDocument reads a document. A 404 whose
  * `cause.code` is `node_not_held` gives NOT_HELD, one whose `cause.code` is
  * `origin_not_served` gives ORIGIN_NOT_SERVED, and any other 404 gives
- * NOT_SERVED (the API lacks the route). None is waited on or retried; a 503
+ * NOT_SERVED (the API lacks the route). None is waited on or retried. A 503
  * is, as every load's is. A dcid no path can name gives NOT_HELD with no
  * request.
  */

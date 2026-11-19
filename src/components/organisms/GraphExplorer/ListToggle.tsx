@@ -17,7 +17,7 @@ import type { Model } from '@/lib/graphExplorer/model';
 import type { ProvenanceUsage } from '@/lib/graphExplorer/wire';
 
 /**
- * "All N" and `noun` under a long list's first entries, and "First 8" and
+ * "All N" and `noun` under a long list's first entries, and "First N" (`LIST_HEAD`) and
  * `noun` once it is open, controlling the list whose id is `controls`.
  * Nothing for a list no longer than its head.
  */

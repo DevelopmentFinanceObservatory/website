@@ -196,7 +196,7 @@ test("the usage guard reads an outside document's terms and unresolved denominat
     const outside = readUsage(baseUsageBody());
     assert.equal(outside.terms?.length, 8);
     assert.equal(outside.provenances[0]?.patterns[1]?.measurement_denominator_unresolved, true);
-    // The DFO document carries neither member.
+    // The DFO document omits `terms`.
     assert.equal(readUsage(usageBody()).terms, undefined);
 
     const unlabelled = baseUsageBody();

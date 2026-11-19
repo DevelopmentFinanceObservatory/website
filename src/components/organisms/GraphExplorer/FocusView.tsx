@@ -235,13 +235,11 @@ export const FailedLine = ({
 /** The line over a picture whose node view stopped some listings at their cap. */
 const CappedLine = () => (
     <p className={styles.filter} role="status">
-        <span>
-            Some lists here are cut short, as the graph holds more links than one view reads.
-        </span>
+        <span>Some lists here are cut short. The graph holds more links than one view reads.</span>
     </p>
 );
 
-/** What a refusal says about the term `term` names. */
+/** What a refusal says about the term whose dcid is `id`. */
 const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
     const term = (
         <code>

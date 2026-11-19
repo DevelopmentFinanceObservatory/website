@@ -456,7 +456,7 @@ test('the centre heading reads a dataset, a model term, a usage term and an unkn
     const term = centreHeading(model, { kind: 'node', id: 'FinancialFlow' });
     assert.deepEqual([term?.name, term?.declaredBy], [model.label('FinancialFlow'), 'dfo']);
 
-    // A term only the usage documents name: its kind from its types, its name, else its dcid.
+    // A term only the usage documents name takes its kind from its types, and its name else its dcid.
     const age = centreHeading(full, { kind: 'node', id: 'age' });
     const person = centreHeading(full, { kind: 'node', id: 'Person' });
     const series = centreHeading(full, { kind: 'node', id: SERIES });

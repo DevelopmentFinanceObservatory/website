@@ -160,7 +160,7 @@ test('a centre draws from the full model, its view, a wait or a refusal by what 
         NodeViewFailure | null,
         unknown,
     ][] = [
-        // A DFO-declared term and a dataset never wait on a view.
+        // A DFO-declared term and a dataset draw from the full model at once.
         ['dfo term', node('FinancialFlow'), null, null, { draws: 'full', line: null }],
         ['dfo term', node('FinancialFlow'), ready, null, { draws: 'full', line: null }],
         [
@@ -242,7 +242,7 @@ test('a named dataset the full model lacks waits while an outside usage document
         // Once every document has settled, the dataset is missing.
         ['all settled', [base, base], failed, NOT_SERVED, null],
         ['all ready', [base, null], ready, ready, null],
-        // A dataset the model holds, or none named, never waits.
+        // A dataset the model holds, or none named, gives null.
         ['held', ['provenance/OECDDAC1', 'provenance/OECDDAC2A'], LOADING, LOADING, null],
         ['none named', [null, null], LOADING, LOADING, null],
     ];

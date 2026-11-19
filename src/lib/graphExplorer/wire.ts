@@ -191,7 +191,7 @@ export type UsageTerm = {
     ref: string;
     /** Null when the arcs naming the node give no name, as for `Person`. */
     label: string | null;
-    /** Sorted; empty when the arcs naming the node give none. */
+    /** Sorted. Empty when the arcs naming the node give none. */
     types: string[];
 };
 
@@ -230,7 +230,7 @@ export type SchemaNodeView = {
     capped: CappedListing[];
 };
 
-/** One listing of a node view that stopped at its cap: the node listed and the arc it was listed by. */
+/** One listing of a node view that stopped at its cap, with the node listed and the arc it was listed by. */
 export type CappedListing = { ref: string; property: string };
 
 /** A constraint value as sent: a node dcid, or a literal or null the check flags. */

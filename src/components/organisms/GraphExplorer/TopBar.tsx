@@ -91,9 +91,9 @@ const TermsLine = ({
 };
 
 /**
- * One line for the outside usage documents that failed, however many,
- * naming what the views leave out: the DFO views, and those over any other
- * document that loaded, stand without them.
+ * One line for the outside usage documents that failed, however many. The
+ * DFO views, and those over any other document that loaded, stand without
+ * them.
  */
 const UsageLine = ({
     failed,

@@ -65,7 +65,7 @@ type ModelDocuments = DfoDocuments & {
 
 type LoadedDocuments = {
     readonly dfo: Loadable<DfoDocuments>;
-    /** Null until the DFO pair lands; a new object on each later arrival of an outside document. */
+    /** Null until the DFO pair lands. A new object follows each later arrival of an outside document. */
     readonly documents: ModelDocuments | null;
     readonly retryModel: () => void;
     readonly usage: UsageStates;
@@ -313,7 +313,7 @@ export type ExplorerData = {
     readonly model: Loadable<Model>;
     /**
      * The full model, over every usage document loaded whatever the
-     * switches say, once the DFO pair lands; else null. A centred term or
+     * switches say, once the DFO pair lands, and null before. A centred term or
      * dataset and the dataset filter read it. It is a new model each time
      * an outside usage document arrives.
      */
@@ -321,13 +321,13 @@ export type ExplorerData = {
     readonly retryModel: () => void;
     /**
      * Each outside usage document's state. These load on every visit,
-     * whatever the switches say; a document has settled once it loads,
+     * whatever the switches say. A document has settled once it loads,
      * fails or is not served (`settled` in load.ts).
      */
     readonly usage: UsageStates;
     /**
-     * The outside usage documents that failed, in switch order; empty while
-     * none has. The models leave them out.
+     * The outside usage documents that failed, in switch order, and empty
+     * while none has. The models leave them out.
      */
     readonly usageFailed: readonly OriginSwitch[];
     /** Loads each failed outside usage document again. */

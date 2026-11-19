@@ -7,8 +7,8 @@
  * from the view. Every other ref takes the DFO document's node when the
  * document holds it, else the view's node, so a view's neighbour never
  * replaces a node the document holds. Whether a ref is held is a fact of the
- * full model (`full.node(id) !== undefined`), never of the centre's model,
- * which holds the view's neighbours too.
+ * full model (`full.node(id) !== undefined`), since the centre's model
+ * holds the view's neighbours too.
  */
 import { ORIGIN_SWITCHES, type OriginSwitch } from './explore.ts';
 import type { Centre } from './focus.ts';
@@ -77,8 +77,8 @@ export type CentreLine =
 
 /**
  * What a centred term or dataset shows: the centre drawn from `model`, with
- * a line when its node view failed or was refused; a wait for a term the
- * DFO document lacks; or the refusal that ended its view.
+ * a line when its node view failed or was refused, a wait for a term the
+ * DFO document lacks, or the refusal that ended its view.
  */
 export type CentreRoute =
     | { readonly kind: 'draw'; readonly model: Model; readonly line: CentreLine | null }
@@ -99,7 +99,7 @@ export const needsNodeView = (full: Model, centre: Centre): boolean =>
  * full model. A term it lacks waits, or draws from the full model beside
  * the failure, which stays on show while a retry loads. A refused term
  * that the usage documents name draws from the full model beside the
- * refusal; any other shows the refusal alone.
+ * refusal. Any other shows the refusal alone.
  */
 export function routeCentre(
     full: Model,

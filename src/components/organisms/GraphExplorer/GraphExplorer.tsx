@@ -171,7 +171,7 @@ const GraphExplorer = () => {
                     <div className={styles.explorer}>
                         <TopBar />
                         <main className={styles.main} key={exploreQuery({ view, ...NO_CARRIED })}>
-                            {/* The full model is in whenever the scoped one is: both build from the DFO pair. */}
+                            {/* The full model is in whenever the scoped one is, since both build from the DFO pair. */}
                             {data.model.status === 'ready' && data.full !== null ? (
                                 awaited !== null ? (
                                     <ViewLoading id={awaited} waiting={null} />

@@ -687,7 +687,7 @@ test('a term a usage document names takes its label from `terms`, then its dcid,
     assert.equal(full.label('gender'), 'Gender');
     // A null label on the term falls back to the dcid.
     assert.equal(full.label('Person'), 'Person');
-    // A held node's own name wins; a held node with none takes the term's.
+    // A held node's own name wins, and a held node with none takes the term's.
     assert.equal(full.label('FinancialFlow'), model.label('FinancialFlow'));
     assert.equal(model.label('amount'), 'amount');
     assert.equal(full.label('amount'), 'Amount on base');
