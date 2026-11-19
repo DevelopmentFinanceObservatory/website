@@ -87,15 +87,21 @@ export type FocusBox = {
     readonly values: ReadonlyMap<string, ValuesUsed> | null;
 };
 
-/** How a box's join is drawn: solid for one arc, dashed through a midpoint dot for a chain. */
+/**
+ * How a box's join is drawn: solid for one arc, dashed through a midpoint dot
+ * for a chain. A chain's heads point away from the dot (`outward`), at it
+ * (`inward`), or only at the box (`box`).
+ */
 export type LinkShape =
     | { readonly dashed: false; readonly head: 'box' | 'centre' }
-    | { readonly dashed: true; readonly heads: 'outward' | 'inward' };
+    | { readonly dashed: true; readonly heads: 'outward' | 'inward' | 'box' };
 
 /**
  * The arrowheads of a box's join. One arc points from subject to object.
  * StatVars are the subject of both their arcs, so both heads point away from
- * the dot; a value list is the object of both, so both point at it.
+ * the dot; a value list is the object of both, so both point at it. A
+ * dataset's StatVars hold no arc to the dataset the usage document states, so
+ * that half has no head.
  */
 export const linkShape = (via: Via): LinkShape => {
     switch (via.kind) {
@@ -105,9 +111,31 @@ export const linkShape = (via: Via): LinkShape => {
                 head: via.direction === 'out' ? 'box' : 'centre',
             };
         case 'statVars':
-            return { dashed: true, heads: 'outward' };
+            return { dashed: true, heads: via.centre === null ? 'box' : 'outward' };
         case 'valueList':
             return { dashed: true, heads: 'inward' };
+    }
+};
+
+/** One end of a half of a join, in reading order: top or left, bottom or right. */
+export type End = 'start' | 'end';
+
+/**
+ * Where the arrowhead sits on each half of a join, the half read first then
+ * the other: an end of that half, or null for none. `boxFirst` says whether
+ * the box sits before the join in reading order (above it, or left of it).
+ */
+export const headsOf = (shape: LinkShape, boxFirst: boolean): readonly [End | null, End | null] => {
+    const atBox: readonly [End | null, End | null] = boxFirst ? ['start', null] : [null, 'end'];
+    const atCentre: readonly [End | null, End | null] = boxFirst ? [null, 'end'] : ['start', null];
+    if (!shape.dashed) return shape.head === 'box' ? atBox : atCentre;
+    switch (shape.heads) {
+        case 'outward':
+            return ['start', 'end'];
+        case 'inward':
+            return ['end', 'start'];
+        case 'box':
+            return atBox;
     }
 };
 
@@ -193,22 +221,44 @@ const andNarrower = (model: Model, classId: string): Set<string> => {
     return seen;
 };
 
-const allPatterns = (model: Model): readonly SchemaPattern[] =>
-    model.datasets.flatMap((dataset) => dataset.patterns);
+const patternsCache = new WeakMap<Model, readonly SchemaPattern[]>();
 
-/** A class's role box: StatVars about the class, or a narrower one, use each entry in `role`. */
-const classRoleVia = (model: Model, classId: string, role: Role, ids: readonly string[]): Via => {
+/** Every dataset's patterns, gathered once per model. */
+const allPatterns = (model: Model): readonly SchemaPattern[] => {
+    let patterns = patternsCache.get(model);
+    if (patterns === undefined) {
+        patterns = Object.freeze(model.datasets.flatMap((dataset) => dataset.patterns));
+        patternsCache.set(model, patterns);
+    }
+    return patterns;
+};
+
+/** The patterns about a class or a narrower one, for its role boxes. */
+const patternsAbout = (model: Model, classId: string): readonly SchemaPattern[] => {
     const about = andNarrower(model, classId);
+    return allPatterns(model).filter(
+        (pattern) => pattern.population_type !== null && about.has(pattern.population_type),
+    );
+};
+
+/**
+ * A class's role box: StatVars about the class, or a narrower one, use each
+ * entry in `role`. `about` holds the patterns about the class or a narrower one.
+ */
+const classRoleVia = (
+    classId: string,
+    role: Role,
+    ids: readonly string[],
+    about: readonly SchemaPattern[],
+): Via => {
     const direct = new Set<string>();
     let statVars = 0;
     let kinds = false;
-    for (const pattern of allPatterns(model)) {
-        const type = pattern.population_type;
-        if (type === null || !about.has(type)) continue;
+    for (const pattern of about) {
         const used = ids.filter((entry) => hasRole(pattern, role, entry));
         if (used.length === 0) continue;
         statVars += pattern.stat_var_count;
-        if (type === classId) for (const entry of used) direct.add(entry);
+        if (pattern.population_type === classId) for (const entry of used) direct.add(entry);
         else kinds = true;
     }
     return Object.freeze({
@@ -364,8 +414,26 @@ const box = (centre: string, label: (id: string) => string, spec: BoxSpec): Focu
     });
 };
 
-/** The boxes around a term the model holds, empty boxes left out. An id the model lacks gets []. */
+const boxesCache = new WeakMap<Model, Map<string, readonly FocusBox[]>>();
+
+/**
+ * The boxes around a term the model holds, empty boxes left out. An id the
+ * model lacks gets []. Each model computes a term's boxes once.
+ */
 export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
+    let byId = boxesCache.get(model);
+    if (byId === undefined) {
+        byId = new Map();
+        boxesCache.set(model, byId);
+    }
+    const cached = byId.get(id);
+    if (cached !== undefined) return cached;
+    const boxes = buildNodeBoxes(model, id);
+    byId.set(id, boxes);
+    return boxes;
+}
+
+function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
     const kind = model.kind(id);
     if (kind === undefined) return [];
 
@@ -410,6 +478,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
     switch (kind) {
         case 'class': {
             const { groups } = model.propertiesOf(id);
+            const about = patternsAbout(model, id);
             const role = (group: Role, title: string, phrase: string) => {
                 const ids = groups[group].map((entry) => entry.id);
                 return make({
@@ -417,7 +486,7 @@ export function nodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     side: 'right',
                     title,
                     ids,
-                    via: classRoleVia(model, id, group, ids),
+                    via: classRoleVia(id, group, ids, about),
                     phrase,
                     more: 'list',
                 });

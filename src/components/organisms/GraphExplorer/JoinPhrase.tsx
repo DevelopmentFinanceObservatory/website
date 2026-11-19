@@ -12,10 +12,14 @@ type JoinPhraseProps = {
     note: string | null;
 };
 
+/** Closes the bubble open now, so only one shows at a time. */
+let closeOpen: (() => void) | null = null;
+
 /**
- * A join's words as a button. Hovering it, focusing it from the keyboard or
- * tapping it opens a bubble above it with the link written out. Escape, a tap
- * elsewhere or moving focus away closes it.
+ * A join's words as a button. Hovering it previews a bubble above it with the
+ * link written out, and a press shows or hides the bubble. Escape, a press
+ * elsewhere, moving focus away or opening another join's bubble closes it.
+ * The bubble describes the button, so a screen reader reads the link on focus.
  */
 export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
     const [hovered, setHovered] = useState(false);
@@ -30,6 +34,8 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
             setHovered(false);
             setHeld(false);
         };
+        closeOpen?.();
+        closeOpen = close;
         const onKey = (event: KeyboardEvent) => {
             if (event.key === 'Escape') close();
         };
@@ -40,6 +46,7 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
         document.addEventListener('keydown', onKey);
         document.addEventListener('pointerdown', onPointer);
         return () => {
+            if (closeOpen === close) closeOpen = null;
             document.removeEventListener('keydown', onKey);
             document.removeEventListener('pointerdown', onPointer);
         };
@@ -48,6 +55,13 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
     // Touch input emits pointer events too, and a tap toggles through onClick alone.
     const onHover = (event: React.PointerEvent, entering: boolean) => {
         if (event.pointerType === 'mouse') setHovered(entering);
+    };
+
+    // A press flips what the reader sees: it hides a bubble the pointer previews, and
+    // shows a closed one until it is closed.
+    const onPress = () => {
+        setHovered(false);
+        setHeld(!open);
     };
 
     return (
@@ -62,12 +76,9 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
                 className={styles.phrase}
                 aria-expanded={open}
                 aria-controls={bubble}
-                // A mouse click focuses the button too; only keyboard focus opens the bubble.
-                onFocus={(event) => {
-                    if (event.currentTarget.matches(':focus-visible')) setHeld(true);
-                }}
+                aria-describedby={bubble}
                 onBlur={() => setHeld(false)}
-                onClick={() => setHeld((was) => !was)}
+                onClick={onPress}
             >
                 {phrase}
             </button>

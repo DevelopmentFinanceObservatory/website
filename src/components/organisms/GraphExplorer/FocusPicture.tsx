@@ -11,9 +11,10 @@ import { count } from '@/lib/graphExplorer/counts';
 
 import {
     BOX_LIMIT,
+    headsOf,
     linkShape,
+    type End,
     type FocusBox,
-    type LinkShape,
     type Side,
 } from '@/lib/graphExplorer/focus';
 
@@ -34,36 +35,48 @@ type FocusPictureProps = {
     onOpen: (key: string) => void;
 };
 
-type End = 'start' | 'end';
+type Heads = readonly [End | null, End | null];
 
-/** One half of a join's line, with an arrowhead at one end or none. */
-const Segment = ({ head, dashed }: { head: End | null; dashed: boolean }) => (
+/**
+ * One half of a join's line. `wide` and `stacked` place its arrowhead, if any,
+ * in each layout.
+ */
+const Segment = ({
+    wide,
+    stacked,
+    dashed,
+}: {
+    wide: End | null;
+    stacked: End | null;
+    dashed: boolean;
+}) => (
     <span
         aria-hidden="true"
         className={classNames(
             styles.segment,
             dashed && styles.dashed,
-            head === 'start' && styles.headStart,
-            head === 'end' && styles.headEnd,
+            wide === 'start' && styles.headStart,
+            wide === 'end' && styles.headEnd,
+            stacked === 'start' && styles.stackStart,
+            stacked === 'end' && styles.stackEnd,
         )}
     />
 );
 
-/**
- * Where each half's arrowhead points. One arc has a single head, at the box's
- * end or the centre's. A chain has one on each half: both away from the dot,
- * or both towards it.
- */
-const headsOf = (shape: LinkShape, boxFirst: boolean): readonly [End | null, End | null] => {
-    if (shape.dashed) return shape.heads === 'outward' ? ['start', 'end'] : ['end', 'start'];
-    return (shape.head === 'box') === boxFirst ? ['start', null] : [null, 'end'];
-};
+/** Whether the half of a join at the centre's end has a head pointing at the centre. */
+const pointsAtCentre = (heads: Heads, boxFirst: boolean): boolean =>
+    boxFirst ? heads[1] === 'end' : heads[0] === 'start';
+
+const intoCentre = (box: FocusBox, boxFirst: boolean): boolean =>
+    pointsAtCentre(headsOf(linkShape(box.via), boxFirst), boxFirst);
 
 /**
- * The line between a box and the centre, with its words. `boxFirst` says
- * whether the box sits before the join in reading order (above it, or left of
- * it), so each arrowhead lands on the end its link points to, in either
- * layout. A chain's dashed line carries a dot at its midpoint.
+ * The line between a box and the centre, with its words. In the wide layout
+ * `boxFirst` says whether the box sits above or left of the join, and a join
+ * above or below the centre that points at it leaves its head to the line the
+ * centre draws to its card. In the stacked layout every join runs from the
+ * spine on the left to its box. A chain's dashed line carries a dot at its
+ * midpoint.
  */
 const Join = ({
     box,
@@ -76,15 +89,54 @@ const Join = ({
 }) => {
     const shape = linkShape(box.via);
     const heads = headsOf(shape, boxFirst);
+    const wide: Heads =
+        vertical && pointsAtCentre(heads, boxFirst)
+            ? boxFirst
+                ? [heads[0], null]
+                : [null, heads[1]]
+            : heads;
+    const stacked = headsOf(shape, false);
     return (
-        <div className={vertical ? styles.vjoin : styles.hjoin}>
-            <Segment head={heads[0]} dashed={shape.dashed} />
+        <div
+            className={classNames(
+                vertical ? styles.vjoin : styles.hjoin,
+                shape.dashed && styles.chain,
+            )}
+        >
+            <Segment wide={wide[0]} stacked={stacked[0]} dashed={shape.dashed} />
             {shape.dashed && <span className={styles.dot} aria-hidden="true" />}
             <span className={styles.phrase}>
                 <JoinPhrase phrase={box.join} triple={box.triple} note={box.note} />
             </span>
-            <Segment head={heads[1]} dashed={shape.dashed} />
+            <Segment wide={wide[1]} stacked={stacked[1]} dashed={shape.dashed} />
         </div>
+    );
+};
+
+/** What the two kinds of line mean, for the kinds the picture draws. */
+const Legend = ({ boxes }: { boxes: readonly FocusBox[] }) => {
+    const shapes = boxes.map((box) => linkShape(box.via));
+    const solid = shapes.some((shape) => !shape.dashed);
+    const dashed = shapes.some((shape) => shape.dashed);
+    if (!solid && !dashed) return null;
+    return (
+        <ul className={styles.legend}>
+            {solid && (
+                <li>
+                    <span className={styles.sample} aria-hidden="true" />
+                    One arc, pointing from subject to object
+                </li>
+            )}
+            {dashed && (
+                <li>
+                    <span
+                        className={classNames(styles.sample, styles.sampleChain)}
+                        aria-hidden="true"
+                    />
+                    A path through StatVars or a value list, at the dot
+                </li>
+            )}
+        </ul>
     );
 };
 
@@ -137,9 +189,10 @@ const Box = ({
  * The focus picture: the centre with its boxes around it, broader terms
  * above, what it is used with on the left, what it connects to on the right
  * and narrower terms below, each box joined to the centre by a labelled
- * arrow. Under the right-hand boxes of a class, a link to its scoped list
- * counts the properties it declares that no dataset uses yet. On a narrow
- * screen it is one column in that reading order.
+ * arrow, with a legend for the kinds of line under it. Under the right-hand
+ * boxes of a class, a link to its scoped list counts the properties it
+ * declares that no dataset uses yet. On a narrow screen it is one column in
+ * that reading order, each box joined to a spine that runs to the centre.
  */
 const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictureProps) => {
     const on = (side: Side) => boxes.filter((box) => box.side === side);
@@ -174,6 +227,8 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                         styles.centre,
                         up.length > 0 && styles.joinUp,
                         down.length > 0 && styles.joinDown,
+                        up.some((box) => intoCentre(box, true)) && styles.headAbove,
+                        down.some((box) => intoCentre(box, false)) && styles.headBelow,
                     )}
                 >
                     <div className={styles.self}>
@@ -215,6 +270,7 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                     </div>
                 )}
             </div>
+            <Legend boxes={boxes} />
         </div>
     );
 };

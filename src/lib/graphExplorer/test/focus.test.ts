@@ -10,6 +10,7 @@ import {
     datasetBoxes,
     declaredDomain,
     definedNotUsed,
+    headsOf,
     linkShape,
     nodeBoxes,
     openEntries,
@@ -128,6 +129,16 @@ test('a dataset: what it is about on the left; measured, between and splits on t
     assert.equal(boxes[0]?.values, null);
 });
 
+/** A StatVar chain from the centre (none for a dataset) to each entry's measured property. */
+const statVars = (centre: ['populationType'] | null): Parameters<typeof linkShape>[0] => ({
+    kind: 'statVars',
+    centre,
+    entries: ['measuredProperty'],
+    statVars: 1,
+    kinds: false,
+    kindsOnly: 0,
+});
+
 /** The schema field holding each arc's objects on its subject's node. */
 const ARC_FIELD: Record<ArcProperty, keyof SchemaNode> = {
     subClassOf: 'sub_class_of',
@@ -173,10 +184,113 @@ test('every entry of every arc box holds the arc its box names, subject to objec
                     `${id} ${entry.key} names ${arc}, which no entry holds`,
                 );
             }
-            assert.equal(linkShape(via).dashed, false);
+            assert.deepEqual(linkShape(via), {
+                dashed: false,
+                head: via.direction === 'out' ? 'box' : 'centre',
+            });
+            const ends = entry.triple.split(' → ');
+            const [subject, object] =
+                via.direction === 'out'
+                    ? [on.label(id), 'each of these']
+                    : ['each of these', on.label(id)];
+            assert.deepEqual([ends[0], ends.at(-1)], [subject, object], `${id} ${entry.key}`);
         }
     }
     assert.ok(entries > 50, `only ${entries} entries checked`);
+});
+
+test('a box’s join words, bubble and sentence read along its arc', () => {
+    const shown = (id: string, key: string) => {
+        const entry = nodeBoxes(model, id).find((box) => box.key === key);
+        return entry && [entry.join, entry.triple, entry.sentence];
+    };
+    const rows: [string, string, string[]][] = [
+        [
+            'FinancialFlow',
+            'up',
+            [
+                'is a kind of',
+                'financial flow → subClassOf → each of these',
+                'Graph link: financial flow subClassOf each entry.',
+            ],
+        ],
+        [
+            'FinancingEvent',
+            'down',
+            [
+                'is a kind of',
+                'each of these → subClassOf → financing event',
+                'Graph link: each entry subClassOf financing event.',
+            ],
+        ],
+        [
+            'WriteDown',
+            'list',
+            [
+                'is a member of',
+                'write-down → typeOf → each of these',
+                'Graph link: write-down typeOf each entry.',
+            ],
+        ],
+        [
+            'WriteDown',
+            'up',
+            [
+                'is a narrower value of',
+                'write-down → specializationOf → each of these',
+                'Graph link: write-down specializationOf each entry.',
+            ],
+        ],
+        [
+            'Country',
+            'left',
+            [
+                'takes values from',
+                'each of these → rangeIncludes → Country',
+                'Graph link: each entry rangeIncludes Country.',
+            ],
+        ],
+        [
+            'WriteDown',
+            'left',
+            [
+                'takes this value',
+                'each of these → rangeIncludes → financial flow type ← typeOf ← write-down',
+                'Graph link: each entry rangeIncludes financial flow type, and write-down typeOf financial flow type.',
+            ],
+        ],
+        [
+            'FinancialFlow',
+            'measured',
+            [
+                'measured as',
+                'financial flow ← populationType · 474 StatVars · measuredProperty → each of these',
+                'Graph link: 474 StatVars have financial flow as their populationType and each entry as their measuredProperty.',
+            ],
+        ],
+    ];
+    for (const [id, key, expected] of rows)
+        assert.deepEqual(shown(id, key), expected, `${id} ${key}`);
+});
+
+test('each half of a join carries the head its link points to, in reading order', () => {
+    const rows: [Parameters<typeof linkShape>[0], boolean, [string | null, string | null]][] = [
+        [{ kind: 'arc', properties: ['subClassOf'], direction: 'out' }, true, ['start', null]],
+        [{ kind: 'arc', properties: ['subClassOf'], direction: 'out' }, false, [null, 'end']],
+        [{ kind: 'arc', properties: ['subClassOf'], direction: 'in' }, true, [null, 'end']],
+        [{ kind: 'arc', properties: ['subClassOf'], direction: 'in' }, false, ['start', null]],
+        [{ kind: 'valueList', list: 'FinancialFlowTypeEnum' }, false, ['end', 'start']],
+        [statVars(['populationType']), false, ['start', 'end']],
+        [statVars(null), true, ['start', null]],
+        [statVars(null), false, [null, 'end']],
+    ];
+    for (const [via, boxFirst, heads] of rows) {
+        assert.deepEqual(
+            headsOf(linkShape(via), boxFirst),
+            heads,
+            `${JSON.stringify(via)} ${boxFirst}`,
+        );
+    }
 });
 
 /** Whether a pattern's StatVars name `id` by the StatVar arc. */
@@ -233,7 +347,6 @@ test('a box backed by two arcs names both, and a value’s "Set with" passes thr
         properties: ['subClassOf', 'specializationOf'],
         direction: 'out',
     });
-    assert.equal(up?.join.split(' or ').length, 2);
 
     const setWith = nodeBoxes(model, 'WriteDown').find((entry) => entry.key === 'left');
     assert.deepEqual(setWith?.via, { kind: 'valueList', list: 'FinancialFlowTypeEnum' });
@@ -261,6 +374,7 @@ test('a dataset box counts the dataset’s StatVars that name its entries', () =
         if (entry.via.kind !== 'statVars') continue;
         assert.equal(entry.via.centre, null);
         assert.ok(entry.via.statVars > 0 && entry.via.statVars <= view.statVarCount);
+        assert.deepEqual(linkShape(entry.via), { dashed: true, heads: 'box' });
     }
 });
 
