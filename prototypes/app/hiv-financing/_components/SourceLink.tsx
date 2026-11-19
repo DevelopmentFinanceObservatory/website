@@ -26,7 +26,7 @@ export const SourceLink = ({
     </>
 );
 
-/** A full entry for a Sources list: publisher, linked title and date. */
+/** A full entry for a Sources list: publisher, linked title, date, and what the page takes. */
 export const SourceEntry = ({ source, className }: { source: Source; className?: string }) => (
     <>
         {source.publisher},{' '}
@@ -34,5 +34,6 @@ export const SourceEntry = ({ source, className }: { source: Source; className?:
             {source.title}
         </a>
         {source.date === null ? '' : `, ${source.date}`}
+        {source.detail === undefined ? '' : `, ${source.detail}`}
     </>
 );

@@ -30,7 +30,7 @@ const columns = (year: number): readonly Column[] => [
     { key: 'name', label: 'Country', cell: (row) => row.name },
     { key: 'aid', label: `HIV aid, ${year}`, cell: (row) => money(row.aid) },
     // The header names its sort: the mix column sorts on the US share.
-    { key: 'mix', label: `Who provides it, ${year}, by US share`, cell: () => '' },
+    { key: 'mix', label: `Provider mix, ${year}, by US share`, cell: () => '' },
     {
         key: 'plhiv',
         label: `People living with HIV, ${year}`,
@@ -86,11 +86,11 @@ const FlagMark = ({ row, year }: { row: TableRow; year: number }) => (
         <span
             className={styles.flag}
             style={hatchSwatch(GF_MULTI.colour)}
-            title={`Global Fund multi-disease grants, ${money(row.globalFundMulti)} in ${year}, not in this row`}
+            title={`Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year}, excluded from this row`}
             aria-hidden="true"
         />
         <span className={styles.srOnly}>
-            {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other codes and not in this row`}
+            {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other codes and excluded from this row`}
         </span>
     </>
 );
@@ -208,8 +208,8 @@ export const CountryTable = ({
                     style={hatchSwatch(GF_MULTI.colour)}
                     aria-hidden="true"
                 />
-                Marked rows: the Global Fund also gave the country multi-disease grants in {year},
-                which are recorded under other codes and are not in the row&apos;s figures.
+                Marked countries also received Global Fund multi-disease grants in {year}, recorded
+                under other codes and excluded from these figures.
             </p>
             <div className={styles.foot}>
                 <button
@@ -217,7 +217,7 @@ export const CountryTable = ({
                     aria-expanded={showAll}
                     onClick={() => setShowAll((current) => !current)}
                 >
-                    {showAll ? `Show the top ${COLLAPSED_ROWS}` : `Show all ${rows.length}`}
+                    {showAll ? `Show top ${COLLAPSED_ROWS}` : `Show all ${rows.length}`}
                 </button>
                 <button type="button" onClick={() => download(rows, year)}>
                     Download CSV

@@ -29,11 +29,11 @@ import {
 test('the lede names the two channels and the majority split; the channel note carries the share', () => {
     assert.equal(
         ledeSentence(DATA),
-        'In 2024 almost all HIV aid recorded for countries was paid out through two channels: the US government and the Global Fund. Of the 4 countries that received more than $1m, the Global Fund paid out more than half in 1 and the United States in 2.',
+        'In 2024, almost all HIV aid recorded for countries was disbursed through two channels, the US government and the Global Fund. Of the 4 countries that received more than $1m, the Global Fund disbursed more than half in 1 and the United States in 2.',
     );
     assert.equal(
         channelNote(DATA),
-        "On this page's measure, the United States and the Global Fund paid out 99% of the HIV aid that official donors recorded for countries in 2024. In 1 of the 2 countries where the United States paid out more than half, the Global Fund also gave multi-disease grants recorded under other codes.",
+        'In these CRS figures, the United States and the Global Fund disbursed 99% of the HIV aid official donors recorded for countries in 2024. In 1 of the 2 countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.',
     );
 });
 
@@ -42,7 +42,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024 donors assigned $6.45bn of HIV aid to 8 countries, 5 of them in the table. Providers other than the United States and the Global Fund gave $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries, 5 of them in the table. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -90,7 +90,7 @@ test('the unallocated note compares the US total with KFF and gives the range to
             allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
             unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
         }),
-        'Donors also reported $4.60bn of HIV aid in 2024 for regions or no country, which the chart leaves out. US money under this code, for countries and for regions or no country together, was $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US money to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024. The rest of the US total was reported for regions or no country.',
+        'The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under this code were $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US disbursements to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024, with the remainder reported as regional or unallocated.',
     );
     // With no year from 2020 the range sentence is left out.
     assert.match(
@@ -107,19 +107,19 @@ test('the unallocated note compares the US total with KFF and gives the range to
 test('the strip caption and the table rule count from the data', () => {
     assert.equal(
         stripCaption(DATA),
-        '3 countries with 50,000 or more people living with HIV and some aid in 2024',
+        '3 countries that received aid in 2024 and have at least 50,000 people living with HIV',
     );
     // Five table countries had 2024 aid, so 3 of the 8 recipients sit outside the table.
     assert.equal(
         tableRule(DATA),
-        'The table lists the 6 countries that received more than $1m of HIV aid in 2024 or have 50,000 or more people living with HIV. Another 3 countries received $5.99bn between them.',
+        'The table lists the 6 countries that received more than $1m in HIV aid in 2024 or have at least 50,000 people living with HIV. Another 3 countries received $5.99bn in total.',
     );
 });
 
 test('a country sentence with every clause', () => {
     assert.equal(
         countrySentence(KENYA, YEARS),
-        'In 2024 Kenya received $304m in HIV aid, $217 per person living with HIV. Of that, 66% came from the United States, 33% from the Global Fund, and 1% from all other providers. 87% of its 1.40 million people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 36,400 in 2015 to 20,800 in 2024.',
+        'In 2024, Kenya received $304m in HIV aid, or $217 per person living with HIV. Of that, 66% came from the United States, 33% from the Global Fund, and 1% from all other providers. 87% of the 1.40 million people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 36,400 in 2015 to 20,800 in 2024.',
     );
 });
 
@@ -128,17 +128,17 @@ test('missing data leaves its clause out', () => {
         // No ART figure and no 2015 deaths. A provider with no money is left out of the mix.
         [
             countrySentence(IVORY_COAST, YEARS),
-            "In 2024 Côte d'Ivoire received $90m in HIV aid, $450 per person living with HIV. Of that, 44% came from the United States and 56% from the Global Fund.",
+            "In 2024, Côte d'Ivoire received $90m in HIV aid, or $450 per person living with HIV. Of that, 44% came from the United States and 56% from the Global Fund.",
         ],
         // No UNAIDS figures: no per-person figure, no treatment, no deaths.
         [
             countrySentence(UKRAINE, YEARS),
-            'In 2024 Ukraine received $52m in HIV aid. Of that, 58% came from the United States, 38% from the Global Fund, and 4% from all other providers.',
+            'In 2024, Ukraine received $52m in HIV aid. Of that, 58% came from the United States, 38% from the Global Fund, and 4% from all other providers.',
         ],
         // All US under 13040, with Global Fund multi-disease grants under other codes.
         [
             countrySentence(NAMIBIA, YEARS),
-            "In 2024 Namibia received $71m in HIV aid, $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund's multi-disease grants to Namibia, $16m in 2024, are recorded under other codes, so this figure excludes them. 95% of its 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.",
+            'In 2024, Namibia received $71m in HIV aid, or $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund disbursed $16m in multi-disease grants to Namibia in 2024, recorded under other codes and excluded from the HIV aid total. 95% of the 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.',
         ],
         // Under 5,000 people living with HIV: no per-person figure.
         [
@@ -150,12 +150,12 @@ test('missing data leaves its clause out', () => {
                 }),
                 YEARS,
             ),
-            'In 2024 Gamma received $2.0m in HIV aid. Of that, 100% came from the United States.',
+            'In 2024, Gamma received $2.0m in HIV aid. Of that, 100% came from the United States.',
         ],
         // No aid: no per-person figure and no mix.
         [
             countrySentence(MEXICO, YEARS),
-            'In 2024 Mexico received no HIV aid. 70% of its 300,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths held at 4,000 from 2015 to 2024.',
+            'In 2024, Mexico received no HIV aid. 70% of the 300,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths held at 4,000 from 2015 to 2024.',
         ],
     ];
 
@@ -195,7 +195,7 @@ test('a small share is named as the table prints it', () => {
 
     assert.equal(
         countrySentence(mostlyUs, YEARS),
-        'In 2024 Beta received $1.0m in HIV aid. Of that, >99% came from the United States and <1% from the Global Fund.',
+        'In 2024, Beta received $1.0m in HIV aid. Of that, >99% came from the United States and <1% from the Global Fund.',
     );
 });
 
@@ -219,7 +219,7 @@ test('the fall sentence drops its share when the named falls exceed the net fall
 test('the loans sentence names the lenders, with "from" only when they make up the total', () => {
     assert.equal(
         loansSentence(DATA),
-        'It also holds $467m of ODA loans to countries from 2015 to 2024, from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
+        'It also includes $467m in ODA loans to countries from 2015 to 2024, from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
     );
     assert.match(
         loansSentence({ ...DATA, loans: { ...DATA.loans, total: 500e6 } }) ?? '',
@@ -231,6 +231,6 @@ test('the loans sentence names the lenders, with "from" only when they make up t
 test('the Notes line names the countries with no estimate of people living with HIV', () => {
     assert.equal(
         plhivGapNote(DATA),
-        "Estimates of people living with HIV for Ukraine are missing from the DFO's UNAIDS source, so the page gives no aid per person for it and leaves it off the dot strip.",
+        "Estimates of people living with HIV for Ukraine are missing from the Development Finance Observatory's UNAIDS data, so aid per person is blank for it and the dot strip excludes it.",
     );
 });

@@ -148,7 +148,7 @@ export const CountrySearch = ({
                     ))}
                     {matches.length === 0 && (
                         <li className={styles.none} role="presentation">
-                            No country matches.
+                            No matching countries.
                         </li>
                     )}
                 </ul>

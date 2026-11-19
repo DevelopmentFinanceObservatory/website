@@ -18,6 +18,6 @@ export const PROVIDER_KEYS: readonly ProviderKey[] = PROVIDERS.map((provider) =>
  *  Global Fund's colour above the HIV stack, because only part of each grant is for HIV. */
 export const GF_MULTI = {
     key: 'globalFundMulti',
-    label: 'Global Fund multi-disease grants, part HIV',
+    label: 'Global Fund multi-disease grants (partly HIV)',
     colour: '#2a9d8f',
 } as const;

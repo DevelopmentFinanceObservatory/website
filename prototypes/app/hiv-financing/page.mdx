@@ -7,6 +7,7 @@ import { HivFinancing } from './_components/HivFinancing';
 import { SourceEntry, SourceLink } from './_components/SourceLink';
 import {
     channelNote,
+    DATA_SOURCES,
     ledeSentence,
     loansSentence,
     OTHER_MEASURES,
@@ -75,17 +76,17 @@ export default ({ children }) => (
     <SourceLink sources={OTHER_MEASURES.sources} className={prose.a} />
 </p>
 
-HIV aid is gross ODA disbursements under CRS purpose code 13040, STD control including HIV/AIDS, in current US dollars. The code covers all sexually transmitted diseases. {loansSentence(hiv.data)} HIV work recorded under other codes, such as health systems or reproductive health, is left out.
+HIV aid here is gross ODA disbursements under CRS purpose code 13040 (STD control including HIV/AIDS) in current US dollars. The code covers all sexually transmitted diseases. {loansSentence(hiv.data)} These totals exclude HIV work recorded under other codes, such as health systems or reproductive health.
 
-The Global Fund reports to the CRS as a provider, so money donors give the Global Fund is counted once, under the Global Fund. It also records part of its HIV money under other codes: combined HIV and tuberculosis grants mostly under code 12250 to 2019, and multi-disease grants mostly under code 12110 from 2020. The page counts both codes in every year. Only part of each of these grants is for HIV, so the chart draws them hatched above the bars and leaves them out of the total, and the table marks the countries that received them in {LAST_YEAR}. From 2019 to 2020 its multi-disease money to countries fell from {gfMultiToCountries(2019)} to {gfMultiToCountries(2020)}, while its money under the HIV code rose from {gfToCountries(2019)} to {gfToCountries(2020)}, so much of the jump in its bars between those years is a change of code. A dashed line marks the change of code.
+The Global Fund reports to the CRS as a provider in its own right, so contributions from donors appear once, under the Global Fund. It also records part of its HIV funding under other codes, with combined HIV and tuberculosis grants mostly under 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Both codes are tracked in every year. Because these grants are only partly for HIV, the chart shows them as a hatched layer above the bars, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. Between 2019 and 2020, Global Fund multi-disease grants to countries fell from {gfMultiToCountries(2019)} to {gfMultiToCountries(2020)}, while its disbursements under the HIV code rose from {gfToCountries(2019)} to {gfToCountries(2020)}. Much of the jump in its bars reflects that reclassification, marked by the dashed line.
 
-Figures are in current US dollars, with no adjustment for inflation, and follow the timing of donors' reports. US money to countries fell from {usToCountries(2018)} in 2018 to {usToCountries(2019)} in 2019 and rose to {usToCountries(2020)} in 2020, so read single-year changes with care.
+Figures are unadjusted for inflation and follow the timing of donors' reports. US disbursements to countries fell from {usToCountries(2018)} in 2018 to {usToCountries(2019)} in 2019, then rose to {usToCountries(2020)} in 2020, so single-year swings can reflect reporting timing.
 
-The data cover official donors and omit private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from these.
+The data cover official donors and exclude private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from the totals here.
 
 <p className={prose.p}>{PER_PERSON_NOTE}</p>
 
-People living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths are UNAIDS estimates for {LAST_YEAR}. A country's summary sentence compares its deaths with {hiv.data.years[0]}.
+People living with HIV, antiretroviral therapy coverage, and AIDS-related deaths are UNAIDS estimates for {LAST_YEAR}. Each country summary compares AIDS-related deaths with {hiv.data.years[0]}.
 
 ## Notes
 
@@ -94,24 +95,7 @@ People living with HIV, coverage of antiretroviral therapy, and AIDS-related dea
 ## Sources
 
 <ul className={prose.list}>
-    <li>
-        OECD,{' '}
-        <a
-            href="https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem"
-            className={prose.a}
-        >
-            Creditor Reporting System
-        </a>
-        , purpose codes 13040, 12110 and 12250
-    </li>
-    <li>
-        UNAIDS,{' '}
-        <a href="https://aidsinfo.unaids.org" className={prose.a}>
-            AIDSinfo
-        </a>
-        , people living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths
-    </li>
-    {Object.values(SOURCES).map((source) => (
+    {[...DATA_SOURCES, ...Object.values(SOURCES)].map((source) => (
         <li key={source.url}>
             <SourceEntry source={source} className={prose.a} />
         </li>

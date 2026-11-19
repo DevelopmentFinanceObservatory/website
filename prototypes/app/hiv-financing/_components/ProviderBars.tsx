@@ -64,7 +64,7 @@ const keyRows = (series: ProviderSeries, multi: readonly number[], index: number
         label: GF_MULTI.label,
         colour: GF_MULTI.colour,
         hatched: true,
-        note: 'Not in the total',
+        note: 'Outside the total',
         value: money(multi[index] ?? 0),
     },
 ];
@@ -128,7 +128,7 @@ export const ProviderBars = ({
     const span = years.length > 0 ? `${years[0]} to ${years.at(-1)}` : '';
     const label =
         `HIV aid by provider, ${span}, stacked bars. A hatched layer on top shows ${GF_MULTI.label}, ` +
-        'which the total leaves out.' +
+        'outside the total.' +
         (breakX === null
             ? ''
             : ` A dashed line between ${BREAK_YEAR - 1} and ${BREAK_YEAR} marks a ${BREAK_LABEL.toLowerCase()}.`) +
