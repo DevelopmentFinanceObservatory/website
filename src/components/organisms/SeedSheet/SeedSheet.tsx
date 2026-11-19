@@ -14,22 +14,36 @@ import {
     useCarried,
     useModel,
 } from '@/components/organisms/GraphExplorer/ExploreContext';
-import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
+import { OriginTag, TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
-import { TermSourcesProvider } from '@/components/organisms/GraphExplorer/ListToggle';
+import {
+    CeilingNote,
+    ListToggle,
+    TermSourcesProvider,
+} from '@/components/organisms/GraphExplorer/ListToggle';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
+import { PatternGroups } from '@/components/organisms/GraphExplorer/PatternGroups';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { downloadBlob } from '@/lib/download';
 import { plural, valueCount } from '@/lib/graphExplorer/counts';
 import type { Carried } from '@/lib/graphExplorer/explore';
-import { patternId, type Model } from '@/lib/graphExplorer/model';
-import { datasetOrigin, landedUsage } from '@/lib/graphExplorer/lists';
+import type { Model } from '@/lib/graphExplorer/model';
+import {
+    datasetOrigin,
+    datasetsDfoFirst,
+    firstMatches,
+    landedUsage,
+    listHead,
+    termFilter,
+} from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
 import {
     columnName,
+    constraintBoxes,
     datasetConstraints,
+    dropsOutside,
     formulaRows,
     NEW_SEED_NAME,
     readSeedQuery,
@@ -65,6 +79,10 @@ const copyText = (state: CopyState): string => {
     return state === 'blocked' ? 'Copying is blocked here.' : '';
 };
 
+/** True when two lists hold the same entries, whatever their order. */
+const sameMembers = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && b.every((entry) => a.includes(entry));
+
 /** The constraint properties some dataset's patterns name, each once, by label. */
 const usedConstraints = (model: Model): readonly string[] =>
     [
@@ -74,6 +92,32 @@ const usedConstraints = (model: Model): readonly string[] =>
             ),
         ),
     ].sort((a, b) => model.label(a).localeCompare(model.label(b), 'en-GB'));
+
+/** What a reader does to reach the entries past a list's ceiling, by whether the filter is blank. */
+const ceilingThen = (filter: string): string =>
+    filter.trim() === '' ? 'Filter to find the rest.' : 'Type more to narrow.';
+
+/** A filter box over a list. `placeholder` names what it matches. */
+const FilterBox = ({
+    value,
+    placeholder,
+    label,
+    onChange,
+}: {
+    value: string;
+    placeholder: string;
+    label: string;
+    onChange: (value: string) => void;
+}) => (
+    <input
+        type="search"
+        className={styles.filter}
+        placeholder={placeholder}
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+    />
+);
 
 /** One constraint column's tick box: its column name and the property it holds. */
 const ConstraintBox = ({
@@ -114,8 +158,22 @@ const ValuePanel = ({
 }) => {
     const model = useModel();
     const [copied, setCopied] = useState<{ value: string; state: CopyState } | null>(null);
+    const [filter, setFilter] = useState('');
     const values = model.valueListOfProperty(property);
     if (values === undefined) return null;
+
+    const byTerm = termFilter(model, filter);
+    const needle = filter.trim().toLowerCase();
+    const shown = firstMatches(
+        values.members,
+        byTerm === null
+            ? null
+            : (value) =>
+                  byTerm(value) ||
+                  (model.node(value)?.classification_code ?? []).some((code) =>
+                      code.toLowerCase().includes(needle),
+                  ),
+    );
 
     const copy = (value: string) => {
         navigator.clipboard.writeText(`dcid:${value}`).then(
@@ -145,6 +203,12 @@ const ValuePanel = ({
             <p className={styles.note}>
                 Copy a value as it goes in the cell. <span role="status">{status}</span>
             </p>
+            <FilterBox
+                value={filter}
+                placeholder="Filter by code, name or dcid"
+                label={`Filter the values of ${columnName(property)} by code, name or dcid`}
+                onChange={setFilter}
+            />
             <div className={styles.values}>
                 <table className={styles.sheet}>
                     <caption className={styles.hidden}>
@@ -158,7 +222,7 @@ const ValuePanel = ({
                         </tr>
                     </thead>
                     <tbody>
-                        {values.members.map((value) => (
+                        {shown.hits.map((value) => (
                             <tr key={value}>
                                 <td>{model.node(value)?.classification_code.join(', ')}</td>
                                 <td className={styles.name}>{model.label(value)}</td>
@@ -175,6 +239,12 @@ const ValuePanel = ({
                     </tbody>
                 </table>
             </div>
+            {shown.total === 0 && values.members.length > 0 && (
+                <p className={styles.note} role="status">
+                    No value matches “{filter.trim()}”.
+                </p>
+            )}
+            <CeilingNote matches={shown} then={ceilingThen(filter)} />
         </section>
     );
 };
@@ -288,13 +358,19 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const scrolled = useRef(false);
     const [codes, setCodes] = useState('');
     const [open, setOpen] = useState<string | null>(null);
+    const [picksOpen, setPicksOpen] = useState(false);
+    const [boxesOpen, setBoxesOpen] = useState(false);
+    const [moreFilter, setMoreFilter] = useState('');
+    const picksId = useId();
+    const boxesId = useId();
     // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
     const [copied, setCopied] = useState<{ state: CopyState; yml: string } | null>(null);
 
     const query = useMemo(() => readSeedQuery(params), [params]);
+    const outside = useMemo(() => landedUsage(data.usage), [data.usage]);
     const datasets = useMemo(
-        () => model.datasets.filter((dataset) => dataset.patterns.length > 0),
-        [model],
+        () => datasetsDfoFirst(model, outside).filter((dataset) => dataset.patterns.length > 0),
+        [model, outside],
     );
     const named = query.dataset === null ? undefined : full.dataset(query.dataset);
     const awaited =
@@ -306,8 +382,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
               ? datasets[0]
               : undefined;
     const picks = usage === undefined || datasets.includes(usage) ? datasets : [...datasets, usage];
-    const outsideDataset =
-        usage !== undefined && datasetOrigin(usage, landedUsage(data.usage)) !== null;
+    const outsideDataset = usage !== undefined && datasetOrigin(usage, outside) !== null;
     const dataset = useMemo(
         (): SeedDataset | null =>
             usage === undefined
@@ -395,6 +470,16 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 ? choice[list].filter((id) => id !== property)
                 : [...choice[list], property],
         });
+    const chooseColumns = (split: readonly string[]) => {
+        setOpen(null);
+        write({ dropped: dropsOutside(dataset, split) });
+    };
+    const pickHead = listHead(picks, {
+        open: picksOpen,
+        keep: (each) => each.ref === dataset.id,
+    });
+    const boxes = constraintBoxes(dataset, { dropped: choice.dropped, open: boxesOpen });
+    const moreShown = firstMatches(others, termFilter(model, moreFilter));
     const shownOpen = columns.some((column) => column.property !== null && column.property === open)
         ? open
         : null;
@@ -426,8 +511,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 </p>
             )}
             <SheetSection title="1. Which existing dataset is closest?">
-                <div className={styles.pick} role="group" aria-label="Dataset">
-                    {picks.map((each) => (
+                <div id={picksId} className={styles.pick} role="group" aria-label="Dataset">
+                    {pickHead.shown.map((each) => (
                         <Button
                             key={each.ref}
                             variant="card"
@@ -438,7 +523,10 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                 writeQuery({ dataset: each.ref, dropped: [], added: [] }, carried);
                             }}
                         >
-                            <span className={styles.choiceName}>{full.label(each.ref)}</span>
+                            <span className={styles.choiceName}>
+                                {full.label(each.ref)}
+                                <OriginTag declaredBy={datasetOrigin(each, outside)} dataset />
+                            </span>
                             <span className={styles.choiceMeta}>
                                 {plural(each.stat_var_count, 'StatVar')},{' '}
                                 {plural(each.patterns.length, 'pattern')}
@@ -446,24 +534,34 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         </Button>
                     ))}
                 </div>
-                <ul className={styles.patterns}>
-                    {dataset.patterns.map((pattern) => (
-                        <li key={patternId(pattern)}>
-                            Population type <code>{pattern.population_type ?? 'none'}</code>,
-                            measured property <code>{pattern.measured_property}</code>
-                            {pattern.constraint_properties.length > 0 && ', constraints '}
-                            {pattern.constraint_properties.map((property, at) => (
-                                <span key={property}>
-                                    {at > 0 && ', '}
-                                    <code>
-                                        <BreakableId text={property} />
-                                    </code>
-                                </span>
-                            ))}{' '}
-                            ({plural(pattern.stat_var_count, 'StatVar')})
-                        </li>
-                    ))}
-                </ul>
+                <ListToggle
+                    head={pickHead}
+                    noun="datasets"
+                    controls={picksId}
+                    open={picksOpen}
+                    onToggle={() => setPicksOpen((was) => !was)}
+                />
+                {/* The full model holds a dataset the URL names from outside the switches' scope. */}
+                <ModelProvider value={full}>
+                    <PatternGroups
+                        datasetId={dataset.id}
+                        action={(group, groups) =>
+                            groups.length > 1 && (
+                                <Button
+                                    variant="bordered"
+                                    small
+                                    aria-pressed={sameMembers(
+                                        choice.dropped,
+                                        dropsOutside(dataset, group.split),
+                                    )}
+                                    onClick={() => chooseColumns(group.split)}
+                                >
+                                    Use These Columns
+                                </Button>
+                            )
+                        }
+                    />
+                </ModelProvider>
             </SheetSection>
 
             <SheetSection title="2. Paste the source’s codes">
@@ -489,8 +587,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         Constraint columns. Each ticked constraint becomes a column, named from the
                         property beside it.
                     </legend>
-                    <div className={styles.checks}>
-                        {own.map((property) => (
+                    <div id={boxesId} className={styles.checks}>
+                        {boxes.shown.map((property) => (
                             <ConstraintBox
                                 key={property}
                                 property={property}
@@ -499,6 +597,13 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             />
                         ))}
                     </div>
+                    <ListToggle
+                        head={boxes}
+                        noun="constraints"
+                        controls={boxesId}
+                        open={boxesOpen}
+                        onToggle={() => setBoxesOpen((was) => !was)}
+                    />
                     {others.length > 0 && (
                         <details
                             className={styles.more}
@@ -508,8 +613,14 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             <summary>
                                 {plural(others.length, 'more constraint')} other datasets use
                             </summary>
+                            <FilterBox
+                                value={moreFilter}
+                                placeholder="Filter by name or dcid"
+                                label="Filter the other datasets' constraints by name or dcid"
+                                onChange={setMoreFilter}
+                            />
                             <div className={styles.checks}>
-                                {others.map((property) => (
+                                {moreShown.hits.map((property) => (
                                     <ConstraintBox
                                         key={property}
                                         property={property}
@@ -518,6 +629,12 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                     />
                                 ))}
                             </div>
+                            {moreShown.total === 0 && (
+                                <p className={styles.note} role="status">
+                                    No constraint matches “{moreFilter.trim()}”.
+                                </p>
+                            )}
+                            <CeilingNote matches={moreShown} then={ceilingThen(moreFilter)} />
                         </details>
                     )}
                 </fieldset>

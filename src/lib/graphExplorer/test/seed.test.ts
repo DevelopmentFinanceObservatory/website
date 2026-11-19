@@ -9,6 +9,9 @@ import { NO_CARRIED, readCarried, type Carried } from '../explore.ts';
 import {
     activeConstraints,
     columnName,
+    constraintBoxes,
+    constraintsByShare,
+    dropsOutside,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -20,6 +23,7 @@ import {
     formulaRows,
     type SeedDataset,
 } from '../seed.ts';
+import { patternGroups } from '../sentence.ts';
 import { readUsage, type SchemaConstraintValues, type SchemaPattern } from '../wire.ts';
 import { usageBody } from './fixtures.ts';
 
@@ -198,6 +202,92 @@ test('dropping and adding constraint columns changes the columns and the constra
         'climatePolicyObjective',
         'financialObligationType',
     ]);
+});
+
+/**
+ * A dataset shaped like the UN System's WHO: many split combinations over
+ * one large constraint set, with a long tail of properties. The first
+ * pattern names a small property, so first-named order differs from share.
+ */
+const who: SeedDataset = {
+    id: 'undata/p/WHO',
+    label: 'World Health Organization (WHO)',
+    stat_var_count: 26157,
+    patterns: [
+        pattern({ constraint_properties: ['undataAge', 'undataFbHazard'], stat_var_count: 1115 }),
+        pattern({
+            population_type: 'undata/who/SERIES-GHE_YLD',
+            constraint_properties: ['undataAge', 'undataGheCause', 'undataSex'],
+            stat_var_count: 2512,
+        }),
+        pattern({
+            population_type: 'undata/who/SERIES-GHE_DALY',
+            constraint_properties: ['undataSex', 'undataAge', 'undataGheCause'],
+            stat_var_count: 14243,
+        }),
+        pattern({ constraint_properties: ['undataGheCause', 'undataSex'], stat_var_count: 2591 }),
+        pattern({ constraint_properties: ['undataGheCause'], stat_var_count: 1458 }),
+        pattern({ constraint_properties: ['undataAirPolType', 'undataSex'], stat_var_count: 1321 }),
+        pattern({ constraint_properties: ['undataWealthQuantile'], stat_var_count: 766 }),
+        pattern({ constraint_properties: ['undataEstBasis'], stat_var_count: 549 }),
+        pattern({ constraint_properties: ['undataNutStatus'], stat_var_count: 523 }),
+        pattern({ constraint_properties: ['undataIycfPrac'], stat_var_count: 271 }),
+        pattern({ constraint_properties: ['undataUrbanization'], stat_var_count: 210 }),
+        pattern({ constraint_properties: ['undataEducationLevel'], stat_var_count: 198 }),
+    ],
+    constraint_values: [],
+};
+
+const WHO_BY_SHARE = [
+    'undataGheCause',
+    'undataSex',
+    'undataAge',
+    'undataAirPolType',
+    'undataFbHazard',
+    'undataWealthQuantile',
+    'undataEstBasis',
+    'undataNutStatus',
+    'undataIycfPrac',
+    'undataUrbanization',
+    'undataEducationLevel',
+];
+
+test("a split combination's drop list leaves the seed with that combination's columns", () => {
+    const groups = patternGroups(who.patterns);
+    assert.equal(groups.length, 11);
+    const [largest] = groups;
+    assert.deepEqual(dropsOutside(who, largest?.split ?? []), [
+        'undataFbHazard',
+        'undataAirPolType',
+        'undataWealthQuantile',
+        'undataEstBasis',
+        'undataNutStatus',
+        'undataIycfPrac',
+        'undataUrbanization',
+        'undataEducationLevel',
+    ]);
+    for (const group of groups) {
+        const dropped = dropsOutside(who, group.split);
+        assert.deepEqual(
+            activeConstraints(who, { dropped, added: [] }).toSorted(),
+            group.split.toSorted(),
+        );
+    }
+});
+
+test('the constraint boxes run by StatVar share and keep every ticked box past the head', () => {
+    assert.deepEqual(constraintsByShare(who), WHO_BY_SHARE);
+
+    const everyTicked = constraintBoxes(who, { dropped: [], open: false });
+    assert.deepEqual(everyTicked.shown, WHO_BY_SHARE);
+    assert.equal(everyTicked.long, false);
+
+    const dropped = dropsOutside(who, ['undataEducationLevel']);
+    const chosen = constraintBoxes(who, { dropped, open: false });
+    assert.deepEqual(chosen.shown, [...WHO_BY_SHARE.slice(0, 8), 'undataEducationLevel']);
+    assert.equal(chosen.long, true);
+    assert.equal(chosen.total, 11);
+    assert.deepEqual(constraintBoxes(who, { dropped, open: true }).shown, WHO_BY_SHARE);
 });
 
 test('pasted codes make one row each, the second tab-separated cell filling statvar_name', () => {

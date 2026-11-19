@@ -35,6 +35,7 @@ import {
     type QueryReader,
 } from './explore.ts';
 import { scan } from './delimited.ts';
+import { listHead, type ListHead } from './lists.ts';
 import { SEED_PATH } from './paths.ts';
 import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
@@ -85,6 +86,52 @@ export const columnName = (property: string): string =>
 export const datasetConstraints = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => [
     ...new Set(dataset.patterns.flatMap((pattern) => pattern.constraint_properties)),
 ];
+
+/**
+ * The dataset's constraint properties that a split combination leaves out,
+ * in first-named order: the `drop` list that seeds a table with the
+ * combination's columns only.
+ */
+export const dropsOutside = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    split: readonly string[],
+): readonly string[] => {
+    const kept = new Set(split);
+    return datasetConstraints(dataset).filter((property) => !kept.has(property));
+};
+
+/**
+ * The dataset's constraint properties by the StatVars of the patterns that
+ * name each, most first, ties in first-named order.
+ */
+export const constraintsByShare = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => {
+    const share = new Map<string, number>();
+    for (const pattern of dataset.patterns) {
+        for (const property of pattern.constraint_properties) {
+            share.set(property, (share.get(property) ?? 0) + pattern.stat_var_count);
+        }
+    }
+    return datasetConstraints(dataset).toSorted(
+        (a, b) => (share.get(b) ?? 0) - (share.get(a) ?? 0),
+    );
+};
+
+/**
+ * The dataset's constraint tick boxes on show, as constraintsByShare orders
+ * them: the head, plus every ticked box (one not in `dropped`) past it, or
+ * every box when `open`. A list whose head and ticked boxes already hold
+ * every box reads as short, so it offers no "All N".
+ */
+export const constraintBoxes = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    { dropped, open }: { dropped: readonly string[]; open: boolean },
+): ListHead<string> => {
+    const ordered = constraintsByShare(dataset);
+    const unticked = new Set(dropped);
+    const closed = listHead(ordered, { open: false, keep: (property) => !unticked.has(property) });
+    if (closed.shown.length === ordered.length) return { ...closed, long: false };
+    return open ? listHead(ordered, { open: true }) : closed;
+};
 
 /** The constraint properties the seed holds: the dataset's, minus dropped, plus added. */
 export const activeConstraints = (
