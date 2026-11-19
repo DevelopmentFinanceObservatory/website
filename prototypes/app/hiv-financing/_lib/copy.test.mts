@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
     allSentence,
     codeChangeSentence,
+    flagLegend,
     shareNote,
     countrySentence,
     ledeSentence,
@@ -12,6 +13,7 @@ import {
     plhivGapNote,
     stripCaption,
     tableRule,
+    unaidsGapNote,
     unallocatedNote,
     usSwingSentence,
 } from './copy.ts';
@@ -31,7 +33,7 @@ import {
 test('the lede names the two providers and the majority split; the share note carries the share', () => {
     assert.equal(
         ledeSentence(DATA),
-        'In 2024, the United States and the Global Fund disbursed almost all HIV aid recorded for countries. Of the 4 countries that received more than $1m, the Global Fund disbursed more than half in 1 and the United States in 2.',
+        'In 2024, the latest year of OECD data, the United States and the Global Fund disbursed almost all HIV aid recorded for countries. Of the 4 countries that received more than $1m, the Global Fund disbursed more than half in 1 and the United States in 2.',
     );
     assert.equal(
         shareNote(DATA),
@@ -78,32 +80,57 @@ test('the falls throw when a provider with a fixed fact is missing from the data
     );
 });
 
-test('the unallocated note compares the US total with KFF and gives the range to countries', () => {
+test('the unallocated note compares the US total with KFF and places the excess', () => {
     const us = (values: number[]) => ({
         us: values,
         globalFund: [0, 0, 0, 0],
         other: [0, 0, 0, 0],
     });
+    const text = (parts: { text: string }[]) => parts.map((part) => part.text).join(' ');
+    const recent = {
+        ...DATA,
+        years: [2019, 2020, 2023, 2024],
+        allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
+        unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
+    };
+    const parts = unallocatedNote(recent);
 
     assert.equal(
-        unallocatedNote({
-            ...DATA,
-            years: [2019, 2020, 2023, 2024],
-            allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
-            unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
-        }),
-        'The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under the CRS HIV code were $4.00bn in 2023 and $8.00bn in 2024. For comparison, KFF puts US bilateral HIV spending at $5.4bn in 2024. In the CRS, US disbursements to countries ranged from $3.20bn to $3.90bn a year from 2020 to 2024, with the rest reported as regional or unallocated.',
+        text(parts),
+        "The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under the CRS HIV code were $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. Of the 2024 US total, $3.50bn went to named countries, so the entire excess over KFF's figure lies in the $4.50bn reported for regions or no country. US disbursements to countries stayed between $3.20bn and $3.90bn a year from 2020 to 2024.",
     );
-    // With no year from 2020 the range sentence is left out.
+    // The KFF citation sits on the part that quotes KFF.
+    assert.match(parts[0]?.sources?.[0]?.url ?? '', /kff\.org/);
+    // With US money to countries above KFF's figure, the excess cannot be placed.
+    assert.doesNotMatch(
+        text(unallocatedNote({ ...recent, allocated: us([2e9, 3.2e9, 3.9e9, 5.5e9]) })),
+        /excess over KFF/,
+    );
+    // Before 2020 there is no range, and outside KFF's year no excess sentence.
     assert.match(
-        unallocatedNote({
-            ...DATA,
-            years: [2016, 2017, 2018, 2019],
-            allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
-            unallocated: us([0, 0, 0.1e9, 4.5e9]),
-        }),
+        text(
+            unallocatedNote({
+                ...DATA,
+                years: [2016, 2017, 2018, 2019],
+                allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
+                unallocated: us([0, 0, 0.1e9, 4.5e9]),
+            }),
+        ),
         /at \$5\.4bn in 2024\.$/,
     );
+});
+
+test('the flag legend counts the multi-disease money to countries outside the table', () => {
+    assert.match(flagLegend(DATA), /A further \$595m went to countries with no HIV aid in 2024\.$/);
+    assert.doesNotMatch(flagLegend({ ...DATA, globalFundMulti: [0, 5e6] }), /A further/);
+});
+
+test('the UNAIDS gap note names missing coverage and deaths outside the PLHIV gap', () => {
+    assert.equal(
+        unaidsGapNote(DATA),
+        'The same data have no figures on treatment coverage for Côte d\'Ivoire. The table shows "–" where a figure is missing. With no 2015 figure for AIDS-related deaths in Côte d\'Ivoire, its summary leaves out the comparison with 2015.',
+    );
+    assert.equal(unaidsGapNote({ ...DATA, countries: [DR_CONGO, UKRAINE] }), null);
 });
 
 test('the strip caption counts from the data, and the table rule names the year', () => {

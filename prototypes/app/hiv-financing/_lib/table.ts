@@ -1,7 +1,7 @@
 // The country table's rows, their sort, and the CSV download of them.
 import type { Country, ProviderKey } from '../_data/types.ts';
 
-import { roundDeaths, wholePercents } from './format.ts';
+import { mixPercents, roundDeaths } from './format.ts';
 import { aidPerPerson, gfMultiFlag, lastAid, lastShares } from './summary.ts';
 
 export type TableRow = {
@@ -43,7 +43,7 @@ export const tableRows = (countries: readonly Country[]): TableRow[] =>
                 other: country.aid.other.at(-1) ?? 0,
             },
             shares,
-            mixPercents: wholePercents(shares),
+            mixPercents: mixPercents(shares),
             globalFundMulti: country.globalFundMulti.at(-1) ?? 0,
             flagged: gfMultiFlag(country),
             plhiv: country.plhiv,

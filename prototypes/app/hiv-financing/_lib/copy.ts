@@ -12,7 +12,7 @@ import {
     percent,
     perPerson,
     roundDeaths,
-    wholePercents,
+    mixPercents,
 } from './format.ts';
 import { BREAK_YEAR } from './chart.ts';
 import { PROVIDERS } from './providers.ts';
@@ -37,6 +37,9 @@ export type Source = {
     url: string;
     detail?: string;
 };
+
+/** A sentence or run of sentences, with the sources that back it. */
+export type Cited = { text: string; sources?: readonly Source[] };
 
 /** The data sources the page's figures come from, listed first under Sources. */
 export const DATA_SOURCES: readonly Source[] = [
@@ -64,11 +67,29 @@ export const SOURCES = {
         date: '27 July 2026',
         url: 'https://www.kff.org/global-health-policy/donor-government-funding-for-hiv-in-low-and-middle-income-countries-in-2025/',
     },
-    unaids2026: {
+    kff2024: {
+        publisher: 'KFF and UNAIDS',
+        title: 'Donor Government Funding for HIV in Low- and Middle-Income Countries in 2024',
+        date: '10 July 2025',
+        url: 'https://www.kff.org/global-health-policy/donor-government-funding-for-hiv-in-low-and-middle-income-countries-in-2024/',
+    },
+    unaidsFactSheet2025: {
         publisher: 'UNAIDS',
-        title: 'A perilous moment for the response to HIV warns UNAIDS',
-        date: '12 June 2026',
-        url: 'https://unaids.org/en/resources/presscentre/pressreleaseandstatementarchive/2026/june/20260612_PR_global_aids_brief',
+        title: 'Fact sheet 2025: Global HIV statistics',
+        date: '2025',
+        url: 'https://www.unaids.org/sites/default/files/media_asset/UNAIDS_FactSheet_en.pdf',
+    },
+    unaidsSpecialReport2026: {
+        publisher: 'UNAIDS',
+        title: 'Global HIV response falters as reemergence looms',
+        date: '27 July 2026',
+        url: 'https://www.unaids.org/en/resources/presscentre/pressreleaseandstatementarchive/2026/july/20260727_PR_UNAIDS_special_report_AIDS2026',
+    },
+    unaidsGlobalAidsUpdate2025: {
+        publisher: 'UNAIDS',
+        title: 'Global AIDS Update 2025',
+        date: '10 July 2025',
+        url: 'https://www.unaids.org/en/resources/presscentre/pressreleaseandstatementarchive/2025/july/20250710_global-aids-update',
     },
     globalFundHiv: {
         publisher: 'The Global Fund',
@@ -84,29 +105,35 @@ export const SOURCES = {
     },
 } as const satisfies Record<string, Source>;
 
-/** The line under the lede on where the Global Fund's money comes from. Source: `SOURCES.globalFundUsCap`. */
-export const UNDER_LEDE =
-    'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts once, as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.';
+/** The line under the lede on where the Global Fund's money comes from. */
+export const UNDER_LEDE: Cited = {
+    text: 'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts once, as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.',
+    sources: [SOURCES.globalFundUsCap],
+};
 
-/** The scope note under the lede. Source: `SOURCES.unaids2026`. */
-export const SCOPE_NOTE =
-    'UNAIDS estimates that governments in low- and middle-income countries paid for 52% of their HIV responses in 2024. The figures here cover external aid only.';
+/** The scope note under the lede. */
+export const SCOPE_NOTE: Cited = {
+    text: 'UNAIDS estimates that around 52% of the money available for HIV in low- and middle-income countries in 2024 came from domestic sources. The figures here cover external aid only.',
+    sources: [SOURCES.unaidsFactSheet2025],
+};
 
-/** The dated line under the chart on funding after the data end. Source: `SOURCES.kff2025`. */
-export const FUNDING_2025 = {
-    text: 'KFF reports donor-government HIV funding of $8.3bn in 2024 and $6.2bn in 2025.',
-    source: SOURCES.kff2025,
-} as const;
+/** The note near the top on funding in 2025, after the OECD data end. */
+export const FUNDING_2025: Cited = {
+    text: 'The OECD data end in 2024. KFF reports that donor-government HIV funding fell from $8.3bn in 2024 to $6.2bn in 2025, in current dollars. UNAIDS reports that international HIV funding fell from $8.8bn to $7.3bn over the same years, in constant 2024 dollars. Both use their own counting rules, so their totals differ from the OECD figures here. This page will add 2025 figures when the OECD publishes them.',
+    sources: [SOURCES.kff2025, SOURCES.unaidsSpecialReport2026],
+};
 
-/** The How to interpret line on measures that give the US and the Global Fund lower shares.
- *  Sources: `SOURCES.globalFundHiv` and `SOURCES.kff2025`. */
-export const OTHER_MEASURES = {
-    text: 'Other measures give lower shares. The Global Fund says it provides 28% of all international financing for HIV programmes. KFF puts the United States at 74% of donor-government HIV funding in 2025, including the US contribution to the Global Fund.',
-    sources: [SOURCES.globalFundHiv, SOURCES.kff2025],
-} as const;
+/** The How to interpret line on how other measures count the US and the Global Fund. */
+export const OTHER_MEASURES: Cited = {
+    text: 'Other measures count the United States and the Global Fund differently. The Global Fund counts itself as a separate source and says it provides 28% of all international financing for HIV programmes. KFF credits Global Fund money to the governments that gave it, which puts the United States at 80% of donor-government HIV funding in 2024 and 74% in 2025.',
+    sources: [SOURCES.globalFundHiv, SOURCES.kff2024, SOURCES.kff2025],
+};
 
 /** Why aid per person is a ratio, and when the page leaves it blank. */
-export const PER_PERSON_NOTE = `Aid per person living with HIV divides a country's HIV aid by its number of people living with HIV. Because aid also pays for prevention, testing, and health systems, this ratio does not measure spending per patient. The ratio is blank where fewer than ${PER_PERSON_MIN_PLHIV.toLocaleString('en-GB')} people live with HIV, because small counts make it swing.`;
+export const PER_PERSON_NOTE: Cited = {
+    text: `Aid per person living with HIV divides a country's HIV aid by its number of people living with HIV. Because aid also pays for prevention, testing, and health systems, this ratio does not measure spending per patient. It also excludes domestic spending, so it reads low where governments pay most of the cost. South Africa funds 77% of its AIDS response, by UNAIDS's estimate. The ratio is blank where fewer than ${PER_PERSON_MIN_PLHIV.toLocaleString('en-GB')} people live with HIV, because small counts make it swing.`,
+    sources: [SOURCES.unaidsGlobalAidsUpdate2025],
+};
 
 /** The caveat beside the strip's median. */
 export const MEDIAN_CAVEAT =
@@ -122,6 +149,34 @@ export const plhivGapNote = (data: HivData): string => {
         : `The Development Finance Observatory's UNAIDS data have no estimate of people living with HIV for ${listOf(names)}, so aid per person is blank for ${them} and the dot strip excludes ${them}.`;
 };
 
+/** The Notes line on the other UNAIDS figures missing for countries that do have an
+ *  estimate of people living with HIV; null when none is missing. */
+export const unaidsGapNote = (data: HivData): string | null => {
+    const named = data.countries.filter((country) => country.plhiv !== null);
+    const sorted = (names: string[]) => names.toSorted((a, b) => a.localeCompare(b, 'en'));
+    const noArt = sorted(named.filter((c) => c.art === null).map((c) => c.name));
+    const noDeaths = sorted(named.filter((c) => c.deaths.at(-1) === null).map((c) => c.name));
+    const noFirst = sorted(named.filter((c) => c.deaths[0] === null).map((c) => c.name));
+    const [first, last] = [data.years[0], lastYear(data)];
+    const missing = [
+        noArt.length === 0 ? null : `treatment coverage for ${listOf(noArt)}`,
+        noDeaths.length === 0 ? null : `AIDS-related deaths in ${last} for ${listOf(noDeaths)}`,
+    ].filter((part) => part !== null);
+
+    return (
+        [
+            missing.length === 0
+                ? null
+                : `The same data have no figures on ${missing.join(', or ')}. The table shows "–" where a figure is missing.`,
+            noFirst.length === 0
+                ? null
+                : `With no ${first} figure for AIDS-related deaths in ${listOf(noFirst)}, ${noFirst.length === 1 ? 'its summary leaves' : 'their summaries leave'} out the comparison with ${first}.`,
+        ]
+            .filter((sentence) => sentence !== null)
+            .join(' ') || null
+    );
+};
+
 /** The lede says "almost all" from this US and Global Fund share up; below it the lede throws. */
 const ALMOST_ALL = 0.95;
 
@@ -135,7 +190,7 @@ export const ledeSentence = (data: HivData): string => {
     }
 
     return [
-        `In ${lastYear(data)}, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
+        `In ${lastYear(data)}, the latest year of OECD data, the United States and the Global Fund disbursed almost all HIV aid recorded for countries.`,
         `Of the ${over1m} countries that received more than $1m, the Global Fund disbursed more than half in ${gfMajority} and the United States in ${usMajority}.`,
     ].join(' ');
 };
@@ -244,8 +299,10 @@ export const allSentence = (data: HivData): string => {
         .join(' ');
 };
 
-/** US bilateral HIV spending in 2024, from `SOURCES.kff2025`. */
-const KFF_US_BILATERAL_2024 = '$5.4bn';
+/** US bilateral HIV spending in `KFF_YEAR`, from `SOURCES.kff2025`, in current dollars,
+ *  which equal constant dollars in that year. */
+const KFF_US_BILATERAL = 5.4e9;
+const KFF_YEAR = 2024;
 
 /** From this year US money to countries held in a narrow range. */
 const US_STEADY_FROM = 2020;
@@ -254,7 +311,7 @@ const US_STEADY_FROM = 2020;
  * The note under the chart on money reported for regions or no country, which the chart
  * leaves out, and on the US total that runs above US government reports.
  */
-export const unallocatedNote = (data: HivData): string => {
+export const unallocatedNote = (data: HivData): Cited[] => {
     const last = lastYear(data);
     const previous = data.years.at(-2) ?? last;
     const usAll = data.allocated.us.map(
@@ -266,13 +323,45 @@ export const unallocatedNote = (data: HivData): string => {
     const range =
         steady.length === 0
             ? null
-            : `In the CRS, US disbursements to countries ranged from ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}, with the rest reported as regional or unallocated.`;
+            : `US disbursements to countries stayed between ${money(Math.min(...steady))} and ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}.`;
+    const usCountries = data.allocated.us.at(-1) ?? 0;
+    const usElsewhere = data.unallocated.us.at(-1) ?? 0;
+    // Money to countries at or below KFF's figure puts all of the excess in the rest.
+    const excess =
+        last === KFF_YEAR &&
+        usCountries <= KFF_US_BILATERAL &&
+        usCountries + usElsewhere > KFF_US_BILATERAL
+            ? `Of the ${last} US total, ${money(usCountries)} went to named countries, so the entire excess over KFF's figure lies in the ${money(usElsewhere)} reported for regions or no country.`
+            : null;
 
     return [
-        `The chart excludes ${money(lastTotal(data.unallocated))} of ${last} HIV aid reported for regions or with no country specified.`,
-        `Including those flows, total US disbursements under the CRS HIV code were ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
-        `For comparison, KFF puts US bilateral HIV spending at ${KFF_US_BILATERAL_2024} in 2024.`,
-        range,
+        {
+            text: [
+                `The chart excludes ${money(lastTotal(data.unallocated))} of ${last} HIV aid reported for regions or with no country specified.`,
+                `Including those flows, total US disbursements under the CRS HIV code were ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
+                `KFF puts US bilateral HIV spending at $${KFF_US_BILATERAL / 1e9}bn in ${KFF_YEAR}.`,
+            ].join(' '),
+            sources: [SOURCES.kff2025],
+        },
+        ...[excess, range].filter((sentence) => sentence !== null).map((text) => ({ text })),
+    ];
+};
+
+/** The table's legend for the marked rows, with the multi-disease money to countries the
+ *  table leaves out. */
+export const flagLegend = (data: HivData): string => {
+    const last = lastYear(data);
+    const inTable = data.countries.reduce(
+        (sum, country) => sum + (country.globalFundMulti.at(-1) ?? 0),
+        0,
+    );
+    const outside = (data.globalFundMulti.at(-1) ?? 0) - inTable;
+
+    return [
+        `Marked countries also received Global Fund multi-disease grants in ${last}, with the amount shown beside each name. These grants are recorded under other CRS codes and excluded from the table's HIV aid figures.`,
+        outside >= 0.5e6
+            ? `A further ${money(outside)} went to countries with no HIV aid in ${last}.`
+            : null,
     ]
         .filter((sentence) => sentence !== null)
         .join(' ');
@@ -390,7 +479,7 @@ const nameInText = (country: Country): string =>
 
 const mixClause = (country: Country): string | null => {
     const shares = lastShares(country.aid);
-    const printed = wholePercents(shares);
+    const printed = mixPercents(shares);
     // The first item carries the verb: "66% came from the United States, 33% from ...".
     // Every provider with a share above 0 is named, as the table prints it ("<1%" for a small one).
     const named = PROVIDERS.filter(({ key }) => shares[key] > 0).map(

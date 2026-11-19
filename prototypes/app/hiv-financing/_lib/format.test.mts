@@ -10,6 +10,7 @@ import {
     peopleShort,
     perPerson,
     pct,
+    mixPercents,
     wholePercents,
 } from './format.ts';
 
@@ -74,4 +75,19 @@ test('wholePercents rounds by largest remainder to sum to 100, with "<1%" for a 
     });
     assert.deepEqual(wholePercents({ a: 0.996, b: 0.004, c: 0 }), { a: '>99%', b: '<1%', c: '0%' });
     assert.deepEqual(wholePercents({ a: 0, b: 0 }), { a: '0%', b: '0%' });
+});
+
+test('mixPercents prints one decimal when a share is within half a point of 50%', () => {
+    // DR Congo's Global Fund share of 50.004% and Malawi's US share of 49.86% both print 50% whole.
+    assert.deepEqual(mixPercents({ us: 0.4986, globalFund: 0.5, other: 0.0014 }), {
+        us: '49.9%',
+        globalFund: '50.0%',
+        other: '0.1%',
+    });
+    assert.deepEqual(mixPercents({ us: 0.6, globalFund: 0.4, other: 0.0004 }), {
+        us: '60%',
+        globalFund: '40%',
+        other: '<1%',
+    });
+    assert.deepEqual(mixPercents({ us: 0.5, globalFund: 0.49996, other: 0.00004 }).other, '<0.1%');
 });

@@ -90,6 +90,9 @@ const FlagMark = ({ row, year }: { row: TableRow; year: number }) => (
             title={`Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year}, excluded from this row`}
             aria-hidden="true"
         />
+        <span className={styles.flagAmount} aria-hidden="true">
+            {money(row.globalFundMulti)}
+        </span>
         <span className={styles.srOnly}>
             {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other CRS codes and excluded from this row`}
         </span>
@@ -115,6 +118,7 @@ const download = (rows: readonly TableRow[], year: number) => {
 export const CountryTable = ({
     countries,
     year,
+    legend,
     selected,
     onSelect,
     onCollapse,
@@ -122,6 +126,8 @@ export const CountryTable = ({
     countries: Country[];
     /** The year the figures are for. */
     year: number;
+    /** The note under the table on the marked rows. */
+    legend: string;
     selected: string | null;
     onSelect: (iso3: string) => void;
     /** Called after the table collapses to its top rows, with the rows already gone. */
@@ -212,8 +218,7 @@ export const CountryTable = ({
                     style={hatchSwatch(GF_MULTI.colour)}
                     aria-hidden="true"
                 />
-                Marked countries also received Global Fund multi-disease grants in {year}, recorded
-                under other CRS codes and excluded from these figures.
+                {legend}
             </p>
             <div className={styles.foot}>
                 <button

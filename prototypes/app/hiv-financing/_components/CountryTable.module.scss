@@ -96,9 +96,12 @@
     white-space: nowrap;
 }
 
+// Wide enough for the longest mix, "US 49.8% · GF 49.7%", so every bar starts at one edge.
 .mixText {
+    min-width: 19ch;
     color: #5e5e52;
     font: 400 11px var(--font-dm-mono);
+    text-align: left;
 }
 
 // The three providers' shares of the row's aid, side by side.
@@ -126,6 +129,15 @@
     margin-left: 6px;
     border-radius: 2px;
     vertical-align: -1px;
+}
+
+.flagAmount {
+    margin-left: 4px;
+    color: #5e5e52;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .legend {

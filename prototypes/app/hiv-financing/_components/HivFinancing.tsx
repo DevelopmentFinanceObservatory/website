@@ -8,14 +8,13 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
-import { SourceLink } from './SourceLink';
+import { CitedText } from './SourceLink';
 
 import type { HivData } from '../_data/types.ts';
 import {
     allSentence,
     countrySentence,
-    FUNDING_2025,
-    SOURCES,
+    flagLegend,
     stripCaption,
     tableRule,
     unallocatedNote,
@@ -137,12 +136,7 @@ export const HivFinancing = ({
                     scope={selected ?? ALL_COUNTRIES}
                 />
                 <p className={styles.note}>
-                    {unallocatedNote(data)}
-                    <SourceLink sources={[SOURCES.kff2025]} />
-                </p>
-                <p className={styles.note}>
-                    {FUNDING_2025.text}
-                    <SourceLink sources={[FUNDING_2025.source]} />
+                    <CitedText parts={unallocatedNote(data)} />
                 </p>
                 <div className={styles.below}>
                     <PerPersonStrip
@@ -167,6 +161,7 @@ export const HivFinancing = ({
                 <CountryTable
                     countries={data.countries}
                     year={year}
+                    legend={flagLegend(data)}
                     selected={selected}
                     onSelect={onRow}
                     onCollapse={onCollapse}

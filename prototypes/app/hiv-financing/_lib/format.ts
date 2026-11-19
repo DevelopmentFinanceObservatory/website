@@ -76,46 +76,70 @@ export const perPerson = (dollars: number): string => {
 };
 
 /**
- * Shares as whole percentages that sum to 100, by the largest-remainder method: each share
- * rounds down, then the points left over go to the largest remainders, ties to the earlier
- * key. A share above 0 that ends at 0 prints "<1%", and a share below the whole that ends at
- * 100 prints ">99%". Shares that sum to 0 print "0%" each.
+ * Shares as percentages to `decimals` places that sum to 100, by the largest-remainder method:
+ * each share rounds down, then the steps left over go to the largest remainders, ties to the
+ * earlier key. A share above 0 that ends at 0 prints "<1%" ("<0.1%" with one decimal), and a
+ * share below the whole that ends at 100 prints ">99%" (">99.9%"). Shares that sum to 0 print
+ * "0%" each.
  */
-export const wholePercents = <TKey extends string>(
+export const sharePercents = <TKey extends string>(
     shares: Record<TKey, number>,
+    decimals = 0,
 ): Record<TKey, string> => {
+    const scale = 10 ** decimals;
     // Object.keys returns the record's own keys, which are exactly TKey.
     const keys = Object.keys(shares) as TKey[];
     const total = keys.reduce((sum, key) => sum + shares[key], 0);
-    const exact = keys.map((key) => (total > 0 ? (shares[key] / total) * 100 : 0));
-    const whole = exact.map((value) => Math.floor(value));
-    const left = total > 0 ? 100 - whole.reduce((sum, value) => sum + value, 0) : 0;
+    const exact = keys.map((key) => (total > 0 ? (shares[key] / total) * 100 * scale : 0));
+    const steps = exact.map((value) => Math.floor(value));
+    const left = total > 0 ? 100 * scale - steps.reduce((sum, value) => sum + value, 0) : 0;
     const byRemainder = exact
         .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
         .toSorted((a, b) => b.remainder - a.remainder || a.index - b.index);
 
     for (const { index } of byRemainder.slice(0, left)) {
-        whole[index] = (whole[index] ?? 0) + 1;
+        steps[index] = (steps[index] ?? 0) + 1;
     }
+
+    const step = 1 / scale;
+    const text = (value: number) => (value / scale).toFixed(decimals);
 
     // fromEntries over `keys` yields one entry per TKey.
     return Object.fromEntries(
         keys.map((key, index) => {
-            const value = whole[index] ?? 0;
-
+            const value = steps[index] ?? 0;
             const exactly = exact[index] ?? 0;
-            let printed = `${value}%`;
+            let printed = `${text(value)}%`;
 
             if (value === 0 && exactly > 0) {
-                printed = '<1%';
-            } else if (value === 100 && exactly < 100) {
-                printed = '>99%';
+                printed = `<${step}%`;
+            } else if (value === 100 * scale && exactly < 100 * scale) {
+                printed = `>${text(100 * scale - 1)}%`;
             }
 
             return [key, printed];
         }),
     ) as Record<TKey, string>;
 };
+
+/** Whole percentages by `sharePercents`. */
+export const wholePercents = <TKey extends string>(
+    shares: Record<TKey, number>,
+): Record<TKey, string> => sharePercents(shares, 0);
+
+/** A share prints one decimal when any share sits within this of a half, so a reader sees
+ *  which side of 50% it falls. */
+const NEAR_HALF = 0.005;
+
+/** A provider mix as printed: whole percentages, or one decimal when a share is within half a
+ *  point of 50%. */
+export const mixPercents = <TKey extends string>(
+    shares: Record<TKey, number>,
+): Record<TKey, string> =>
+    sharePercents(
+        shares,
+        Object.values<number>(shares).some((share) => Math.abs(share - 0.5) < NEAR_HALF) ? 1 : 0,
+    );
 
 /** A death estimate rounded as the page prints it: to the nearest hundred from 1,000 up. */
 export const roundDeaths = (n: number): number =>
