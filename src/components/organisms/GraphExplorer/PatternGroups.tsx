@@ -35,6 +35,9 @@ const HOME_NOTES: Readonly<Record<'base' | 'un_system', string>> = {
 /** What a reader does to reach the patterns past a list's ceiling. */
 const CSV_HAS_ALL = 'The CSV has every pattern.';
 
+/** A group row is a sentence several lines tall, so the open list stops sooner than a list of terms. */
+const GROUP_CEILING = 24;
+
 /** The punctuation a sentence's text part opens with, which belongs to the term before it. */
 const leadingMark = (part: SentencePart | undefined): string =>
     part?.kind === 'text' ? (/^[,.;:]/.exec(part.text)?.[0] ?? '') : '';
@@ -238,7 +241,7 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
     const home: Home = origin === 'base' || origin === 'un_system' ? origin : null;
     const groups = patternGroups(dataset.patterns);
     const total = dataset.stat_var_count;
-    const { head, shown } = listOnShow(groups, { open });
+    const { head, shown } = listOnShow(groups, { open, limit: GROUP_CEILING });
     const headShare = groups
         .slice(0, LIST_HEAD)
         .reduce((sum, group) => sum + group.statVarCount, 0);
