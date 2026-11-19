@@ -166,7 +166,9 @@ const FocusView = ({ centre, show, baseTerms }: FocusViewProps) => {
         <div className={styles.work}>
             <div className={styles.stage}>
                 <FilterLine lens={lens} dataset={datasetView ? datasetView.id : null} />
+                {/* Keyed by the centre, so a bubble pinned open on one centre closes on the next. */}
                 <FocusPicture
+                    key={`${centre.kind}:${centre.id}`}
                     kind={heading.kind}
                     name={<WithTag name={heading.name} base={heading.base} />}
                     sub={subText(heading.sub)}
