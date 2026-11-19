@@ -4,6 +4,7 @@ import {
     adminCreateKey,
     adminDeleteKey,
     adminLoadKeys,
+    adminResetKeyUsage,
     adminSetKeyLimit,
     adminSetLimit,
 } from './actions';
@@ -27,6 +28,7 @@ const actions = {
     createKey: adminCreateKey,
     deleteKey: adminDeleteKey,
     setKeyLimit: adminSetKeyLimit,
+    resetKeyUsage: adminResetKeyUsage,
     setAccountLimit: adminSetLimit,
 };
 

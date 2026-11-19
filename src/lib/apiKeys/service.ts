@@ -31,10 +31,10 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { apikey, user } from '../../../db/schema.ts';
+import { apikey, limitCounter, user } from '../../../db/schema.ts';
 import { API_KEY_PREFIX } from '../auth/apiKeyOptions.ts';
 import { likeContaining } from '../likePattern.ts';
-import { dailyUsage } from '../proxy/limitCounter.ts';
+import { dailyCounterKey, dailyUsage } from '../proxy/limitCounter.ts';
 import { parseLabel } from './settings.ts';
 
 /** The parts of the Better Auth instance this module uses. */
@@ -490,6 +490,35 @@ export const createKeyService = ({
                 keyId,
                 accountId: row.accountId,
                 limit,
+            });
+
+            return true;
+        },
+
+        /**
+         * Sets a key's /mcp count for the current UTC day back to 0, so a key
+         * that used its daily quota works again at once. False when there is
+         * no such key.
+         */
+        async adminResetKeyUsage(actor: string, keyId: string): Promise<boolean> {
+            const [row] = await db
+                .select({ accountId: apikey.referenceId })
+                .from(apikey)
+                .where(eq(apikey.id, keyId))
+                .limit(1);
+
+            if (!row) {
+                return false;
+            }
+
+            await db.delete(limitCounter).where(eq(limitCounter.key, dailyCounterKey(keyId)));
+
+            log({
+                message: 'api key admin',
+                action: 'reset-usage',
+                actor,
+                keyId,
+                accountId: row.accountId,
             });
 
             return true;

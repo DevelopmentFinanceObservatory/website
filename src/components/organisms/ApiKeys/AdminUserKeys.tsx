@@ -156,7 +156,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                                 keyData={key}
                                 actions={actions}
                                 onChanged={() => void reload()}
-                                onRefresh={reload}
+                                reload={reload}
                             />
                         ))}
                     </tbody>

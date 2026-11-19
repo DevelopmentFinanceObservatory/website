@@ -448,6 +448,10 @@ test('API key service', async (t) => {
         await set("date_bin('86400 s', now(), timestamptz 'epoch')", 7);
         assert.equal(await usedToday(), 7);
 
+        assert.equal(await service.adminResetKeyUsage('ops@example.org', made.id), true);
+        assert.equal(await usedToday(), 0);
+        assert.equal(await service.adminResetKeyUsage('ops@example.org', 'no-such-key'), false);
+
         await set("date_bin('86400 s', now(), timestamptz 'epoch') - interval '1 day'", 900);
         assert.equal(await usedToday(), 0);
     });
@@ -545,6 +549,7 @@ test('API key service', async (t) => {
             'clear-limit',
             'create',
             'delete',
+            'reset-usage',
             'set-daily-limit',
             'set-limit',
         ]);

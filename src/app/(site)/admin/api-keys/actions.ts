@@ -91,6 +91,15 @@ export const adminSetKeyLimit = async (
         : { ok: false, error: REFUSALS.not_found };
 };
 
+/** Sets a key's MCP call count for today back to 0. */
+export const adminResetKeyUsage = async (keyId: unknown): Promise<AdminDoneResult> => {
+    const admin = await requireAdmin();
+
+    return typeof keyId === 'string' && (await keyService.adminResetKeyUsage(admin.email, keyId))
+        ? { ok: true }
+        : { ok: false, error: REFUSALS.not_found };
+};
+
 /** Sets or clears an account's per-minute limit (empty text clears it). */
 export const adminSetLimit = async (email: unknown, limit: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();

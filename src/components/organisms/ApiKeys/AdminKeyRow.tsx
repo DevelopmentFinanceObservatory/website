@@ -19,10 +19,10 @@ type AdminKeyRowProps = {
     // Reloads the account's keys after a change.
     onChanged: () => void;
     // Reloads all of the account's keys from the server, usage and limits included.
-    onRefresh: () => Promise<void>;
+    reload: () => Promise<void>;
 };
 
-const RefreshIcon = () => (
+const ResetIcon = () => (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={styles.iconSvg}>
         <path
             d="M15.5 10a5.5 5.5 0 1 1-1.8-4.07M15 3.5v3h-3"
@@ -33,13 +33,28 @@ const RefreshIcon = () => (
     </svg>
 );
 
-/** One key of an account: its name, today's MCP use against its daily limit, with refresh and delete. */
-const AdminKeyRow = ({ keyData, actions, onChanged, onRefresh }: AdminKeyRowProps) => {
+/** One key of an account: its name, today's MCP use against its daily limit, with reset and delete. */
+const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) => {
     const name = keyData.name || 'Unnamed';
     const [asking, setAsking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
-    const [refreshing, startRefresh] = useTransition();
+    const [resetting, startReset] = useTransition();
+
+    const reset = () => {
+        setError(null);
+        startReset(async () => {
+            const result = await actions.resetKeyUsage(keyData.id);
+
+            if (!result.ok) {
+                setError(result.error);
+
+                return;
+            }
+
+            await reload();
+        });
+    };
 
     const confirm = () => {
         startTransition(async () => {
@@ -91,16 +106,12 @@ const AdminKeyRow = ({ keyData, actions, onChanged, onRefresh }: AdminKeyRowProp
                     <button
                         type="button"
                         className={styles.iconButton}
-                        aria-label={`Refresh usage for ${name}`}
-                        title="Refresh usage"
-                        disabled={refreshing}
-                        onClick={() => startRefresh(onRefresh)}
+                        aria-label={`Reset today's usage for ${name}`}
+                        title="Reset today's usage to 0"
+                        disabled={resetting}
+                        onClick={reset}
                     >
-                        {refreshing ? (
-                            <Spinner size={16} label="Refreshing usage" />
-                        ) : (
-                            <RefreshIcon />
-                        )}
+                        {resetting ? <Spinner size={16} label="Resetting usage" /> : <ResetIcon />}
                     </button>
                     <button
                         type="button"
