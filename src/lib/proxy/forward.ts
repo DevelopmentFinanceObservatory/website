@@ -71,7 +71,7 @@ const limiterKey = limiterKeyFor(trustedHops(process.env));
 export const clientIp = (req: NextRequest): string =>
     limiterKey(req.headers.get('x-forwarded-for'));
 
-type ForwardOptions = {
+export type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
     // The upstream URL to hit (path + query already resolved).
