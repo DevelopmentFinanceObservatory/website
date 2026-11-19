@@ -63,7 +63,7 @@ const AdminApiKeys = ({
     return (
         <main>
             <section className={styles.page}>
-                <PageHero tone="dark" boxMinHeight={260}>
+                <PageHero tone="dark" className={styles.hero}>
                     <h1 className={styles.title}>
                         User Management
                         <span className={styles.count} aria-label={`${count(total)} users`}>
@@ -149,7 +149,7 @@ const AdminApiKeys = ({
                         </nav>
                     )}
                 </div>
-                <PageFade />
+                <PageFade height={120} />
             </section>
         </main>
     );

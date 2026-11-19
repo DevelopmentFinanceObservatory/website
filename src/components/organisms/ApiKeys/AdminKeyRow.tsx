@@ -1,5 +1,6 @@
 'use client';
 
+import classNames from 'classnames';
 import { useState, useTransition } from 'react';
 
 import styles from './AdminApiKeys.module.scss';
@@ -62,100 +63,112 @@ const AdminKeyRow = ({ keyData, actions, onChanged, onRevealed }: AdminKeyRowPro
         });
     };
 
+    const open = asking !== null || error !== null;
+
     return (
-        <tr className={styles.keyRow}>
-            <td>
-                <span className={styles.keyName}>{name}</span>
-                <span className={styles.keyCreated}>
-                    <time dateTime={keyData.createdAt.toISOString()}>
-                        {formatDay(keyData.createdAt)}
-                    </time>
-                </span>
-            </td>
-            <td>
-                <div className={styles.usage}>
-                    <UsageMeter
-                        used={keyData.usedToday}
-                        limit={keyData.dailyLimit}
-                        label="MCP calls today"
-                        className={styles.meter}
-                    />
-                    <span className={styles.of}>of</span>
-                    <AdminLimitInput
-                        value={keyData.customDailyLimit}
-                        placeholder={String(keyData.dailyLimit)}
-                        label={`Daily MCP call limit for ${name}`}
-                        save={(limit) => actions.setKeyLimit(keyData.id, limit)}
-                        onSaved={onChanged}
-                    />
-                </div>
-            </td>
-            <td className={styles.keyActions}>
-                {asking ? (
-                    <span
-                        className={styles.confirm}
-                        role="group"
-                        aria-label={`Confirm for ${name}`}
+        <>
+            <tr className={classNames(styles.keyRow, open && styles.keyRowOpen)}>
+                <td className={styles.keyCell}>
+                    <span className={styles.keyName}>{name}</span>
+                    <span className={styles.keyCreated}>
+                        <time dateTime={keyData.createdAt.toISOString()}>
+                            {formatDay(keyData.createdAt)}
+                        </time>
+                    </span>
+                </td>
+                <td>
+                    <div className={styles.usage}>
+                        <UsageMeter
+                            used={keyData.usedToday}
+                            limit={keyData.dailyLimit}
+                            label="MCP calls today"
+                            className={styles.meter}
+                        />
+                        <span className={styles.of}>of</span>
+                        <AdminLimitInput
+                            value={keyData.customDailyLimit}
+                            placeholder={String(keyData.dailyLimit)}
+                            label={`Daily MCP call limit for ${name}`}
+                            save={(limit) => actions.setKeyLimit(keyData.id, limit)}
+                            onSaved={onChanged}
+                        />
+                    </div>
+                </td>
+                <td className={styles.keyActions}>
+                    <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={`Rotate ${name}`}
+                        title="Rotate: make a new key and stop this one"
+                        disabled={asking !== null}
+                        onClick={() => {
+                            setError(null);
+                            setAsking('rotate');
+                        }}
                     >
-                        <span className={styles.confirmText}>
-                            {asking === 'rotate'
-                                ? 'Replace this key? The old one stops working.'
-                                : 'Delete this key for good?'}
-                        </span>
-                        <Button
-                            type="button"
-                            variant="dark"
-                            small
-                            disabled={pending}
-                            onClick={confirm}
-                        >
-                            {asking === 'rotate' ? 'Rotate' : 'Delete'}
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="bordered"
-                            small
-                            disabled={pending}
-                            onClick={() => setAsking(null)}
-                        >
-                            Cancel
-                        </Button>
-                    </span>
-                ) : (
-                    <>
-                        <button
-                            type="button"
-                            className={styles.iconButton}
-                            aria-label={`Rotate ${name}`}
-                            title="Rotate: make a new key and stop this one"
-                            onClick={() => {
-                                setError(null);
-                                setAsking('rotate');
-                            }}
-                        >
-                            <RotateIcon />
-                        </button>
-                        <button
-                            type="button"
-                            className={styles.iconButtonDanger}
-                            aria-label={`Delete ${name}`}
-                            title="Delete this key"
-                            onClick={() => {
-                                setError(null);
-                                setAsking('delete');
-                            }}
-                        >
-                            <Icon name="remove" />
-                        </button>
-                    </>
-                )}
-                {error && (
-                    <span className={styles.noteError} role="alert">
-                        {error}
-                    </span>
-                )}
-            </td>
-        </tr>
+                        <RotateIcon />
+                    </button>
+                    <button
+                        type="button"
+                        className={styles.iconButtonDanger}
+                        aria-label={`Delete ${name}`}
+                        title="Delete this key"
+                        disabled={asking !== null}
+                        onClick={() => {
+                            setError(null);
+                            setAsking('delete');
+                        }}
+                    >
+                        <Icon name="remove" />
+                    </button>
+                </td>
+            </tr>
+            {/* The question and any refusal sit in a row of their own, so the
+                columns above keep their widths while it is open. */}
+            {open && (
+                <tr className={styles.confirmRow}>
+                    <td colSpan={3}>
+                        {asking ? (
+                            <span
+                                className={styles.confirm}
+                                role="group"
+                                aria-label={`Confirm for ${name}`}
+                            >
+                                <span className={styles.confirmText}>
+                                    {asking === 'rotate'
+                                        ? 'Replace this key? The old one stops working.'
+                                        : 'Delete this key for good?'}
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="dark"
+                                    small
+                                    disabled={pending}
+                                    onClick={confirm}
+                                >
+                                    {asking === 'rotate' ? 'Rotate' : 'Delete'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="bordered"
+                                    small
+                                    disabled={pending}
+                                    onClick={() => setAsking(null)}
+                                >
+                                    Cancel
+                                </Button>
+                            </span>
+                        ) : (
+                            error && (
+                                <span className={styles.noteError} role="alert">
+                                    {error}
+                                </span>
+                            )
+                        )}
+                    </td>
+                </tr>
+            )}
+        </>
     );
 };
 

@@ -103,7 +103,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                         <code className={styles.onceKey} data-testid="new-key">
                             {revealed.key.key}
                         </code>
-                        <Button type="button" variant="dark" small icon="copy-small" onClick={copy}>
+                        <Button type="button" variant="dark" small onClick={copy}>
                             {copied ? 'Copied' : 'Copy'}
                         </Button>
                         <Button

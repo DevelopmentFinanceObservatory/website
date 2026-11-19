@@ -20,6 +20,14 @@
 
 // --- Hero -------------------------------------------------------------------
 
+// A compact hero: PageHero's default is a screen-tall box on tablet and phone
+// with the map above it, which pushed the title and search below the fold.
+// Here the box sits just under the nav at every width.
+.page .hero {
+    min-height: 0;
+    padding-top: rem(100);
+}
+
 .title {
     @include font-size(60px, 0.95);
 
@@ -100,7 +108,7 @@
     @include page-band(rem(30));
 
     padding-top: rem(40);
-    padding-bottom: rem(120);
+    padding-bottom: rem(40);
     font-family: var(--font-outfit);
     font-weight: 300;
     color: var(--color-charcoal);
@@ -165,7 +173,7 @@
 
 .email {
     font-weight: 700;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 .mono {
@@ -175,10 +183,16 @@
     white-space: nowrap;
 }
 
-.toggleCell {
+// The created date and the key count, which share one muted line on phones.
+.created,
+.active {
+    white-space: nowrap;
+}
+
+.table .toggleCell {
     width: rem(40);
-    padding-right: 0 !important;
-    text-align: right !important;
+    padding-right: 0;
+    text-align: right;
 }
 
 .toggle {
@@ -341,9 +355,15 @@
     width: rem(220);
 }
 
-.keyActions {
+// The per-minute field's placeholder ("600 default") needs more than a
+// key's daily limit does.
+.toolField .limitInput {
+    width: rem(140);
+}
+
+.keyTable .keyActions {
     white-space: nowrap;
-    text-align: right !important;
+    text-align: right;
 
     > * + * {
         margin-left: rem(4);
@@ -386,6 +406,17 @@
 .iconSvg {
     width: rem(20);
     height: rem(20);
+}
+
+// The rotate and delete question sits in its own row under the key, so
+// opening it moves none of the key row's columns.
+.keyTable .confirmRow td {
+    padding-block: rem(8);
+    text-align: right;
+}
+
+.keyTable .keyRowOpen td {
+    border-bottom-color: transparent;
 }
 
 .confirm {
@@ -498,6 +529,9 @@
     }
 }
 
+// Phones: the tables give way to stacked rows. A user is the email, then the
+// date and key count on one muted line, with the chevron at the top right. A
+// key is its name and date, then the meter and limit, then its actions.
 @include breakpoint(phone) {
     .title {
         @include font-size(40px, 1.1);
@@ -507,11 +541,152 @@
         margin-top: rem(4);
     }
 
+    .page .hero {
+        padding-top: rem(84);
+    }
+
+    .body {
+        @include page-band(rem(20));
+    }
+
+    .search {
+        flex-wrap: nowrap;
+    }
+
+    .searchField {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .table,
+    .table tbody,
+    .table tr,
+    .table th,
+    .table td,
+    .keyTable,
+    .keyTable tbody,
+    .keyTable tr,
+    .keyTable th,
+    .keyTable td {
+        display: block;
+    }
+
+    .table thead,
+    .keyTable thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+
+    .table .row {
+        position: relative;
+        padding: rem(14) rem(44) rem(12) 0;
+    }
+
+    .table .row th,
+    .table .row td {
+        padding: 0;
+    }
+
+    .table .email {
+        margin-bottom: rem(4);
+    }
+
+    .table .created,
+    .table .active {
+        @include font-size(13px, 1.3);
+
+        display: inline;
+        font-family: var(--font-dm-mono);
+        font-weight: 300;
+        color: var(--color-text-muted);
+    }
+
+    .table .active::before {
+        content: " · ";
+    }
+
+    .table .toggleCell {
+        position: absolute;
+        top: rem(10);
+        right: 0;
+        width: auto;
+    }
+
+    .table .detail td {
+        padding: 0;
+    }
+
     .keys {
         padding-inline: rem(12);
     }
 
+    .keyTable .keyRow {
+        padding-block: rem(12);
+        border-bottom: 1px solid var(--color-beige);
+    }
+
+    .keyTable .keyRow td {
+        padding: 0;
+        border-bottom: 0;
+    }
+
+    .keyTable .keyRowOpen {
+        border-bottom-color: transparent;
+    }
+
+    .keyCell {
+        margin-bottom: rem(10);
+    }
+
+    .keyTable .keyActions {
+        margin-top: rem(10);
+        text-align: left;
+    }
+
+    .keyTable .confirmRow {
+        padding-bottom: rem(12);
+        border-bottom: 1px solid var(--color-beige);
+    }
+
+    .keyTable .confirmRow td {
+        padding: 0;
+        text-align: left;
+    }
+
+    .confirm {
+        justify-content: flex-start;
+    }
+
     .usage {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+    }
+
+    .meter {
+        flex: 1 1 0;
+        width: auto;
+        min-width: 0;
+    }
+
+    .tools {
+        flex-direction: column;
+        align-items: stretch;
+        gap: rem(16);
+    }
+
+    .create {
+        flex-wrap: nowrap;
+        align-items: flex-end;
+    }
+
+    .create .toolField {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .create .toolInput {
+        width: 100%;
     }
 }

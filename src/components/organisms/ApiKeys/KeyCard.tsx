@@ -39,7 +39,7 @@ const KeyCard = ({ item, busy, onRotate, onDelete }: KeyCardProps) => {
                 className={styles.meter}
             />
             <p className={styles.caption}>
-                of {item.dailyLimit.toLocaleString('en-GB')} MCP calls today · resets 00:00 UTC
+                of {item.dailyLimit.toLocaleString('en-GB')} calls today · resets 00:00 UTC
             </p>
 
             {confirming ? (

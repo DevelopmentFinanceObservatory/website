@@ -20,7 +20,10 @@
     position: relative;
     height: rem(6);
     overflow: hidden;
-    background-color: var(--color-stone);
+
+    // A faint tint of the fill, so an empty bar reads as empty on any of the
+    // light surfaces it sits on (the panel's white card, the admin table).
+    background-color: color-mix(in sRGB, var(--color-charcoal) 14%, transparent);
     border-radius: rem(3);
 }
 

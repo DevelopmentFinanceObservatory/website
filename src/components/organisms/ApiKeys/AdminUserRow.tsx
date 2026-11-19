@@ -31,12 +31,12 @@ const AdminUserRow = ({ user, defaultLimit, actions }: AdminUserRowProps) => {
                 <th scope="row" className={styles.email}>
                     {user.email}
                 </th>
-                <td className={styles.mono}>
+                <td className={classNames(styles.mono, styles.created)}>
                     <time dateTime={user.createdAt.toISOString()}>
                         {formatDateTime(user.createdAt)}
                     </time>
                 </td>
-                <td>{user.activeKeys} Active</td>
+                <td className={styles.active}>{user.activeKeys} Active</td>
                 <td className={styles.toggleCell}>
                     <button
                         type="button"

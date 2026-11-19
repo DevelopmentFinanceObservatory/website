@@ -132,7 +132,7 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
             ) : (
                 <div className={styles.list}>
                     <div className={styles.who}>
-                        <span className={styles.name}>{data.user.name}</span>
+                        {data.user.name && <span className={styles.name}>{data.user.name}</span>}
                         <span className={styles.muted}>{data.user.email}</span>
                     </div>
 
