@@ -10,11 +10,13 @@ import {
     datasetOrigin,
     datasetsByUse,
     datasetsDfoFirst,
+    filterNote,
     firstMatches,
     kindsDfoFirst,
     landedUsage,
     LIST_CEILING,
     listHead,
+    listOnShow,
     termFilter,
     termOrigin,
 } from '../lists.ts';
@@ -219,4 +221,26 @@ test('a list past the ceiling shows its first matches and counts them all', () =
     assert.equal(byDcid.total, 111);
     assert.equal(byDcid.hits.length, LIST_CEILING);
     assert.equal(termFilter(model, '   '), null);
+});
+
+test('an open list past the ceiling shows the first 60, and a closed one its head', () => {
+    // As many split combinations as WHO's patterns form.
+    const groups = Array.from({ length: 230 }, (_, index) => index);
+    const open = listOnShow(groups, { open: true });
+    assert.equal(open.shown.hits.length, LIST_CEILING);
+    assert.equal(open.shown.total, 230);
+    const closed = listOnShow(groups, { open: false });
+    assert.equal(closed.shown.hits.length, 8);
+    assert.equal(closed.head.long, true);
+});
+
+test("a filtered list's note: no match only for a filter with text, else how to reach the rest", () => {
+    const over = { hits: Array.from({ length: LIST_CEILING }), total: 1_700 };
+    const none = { hits: [], total: 0 };
+    assert.equal(filterNote('', none), null);
+    assert.equal(filterNote('   ', none), null);
+    assert.deepEqual(filterNote(' births ', none), { kind: 'noMatch', text: 'births' });
+    assert.deepEqual(filterNote('', over), { kind: 'ceiling', then: 'Filter to find the rest.' });
+    assert.deepEqual(filterNote('a', over), { kind: 'ceiling', then: 'Type more to narrow.' });
+    assert.equal(filterNote('a', { hits: [1], total: 1 }), null);
 });

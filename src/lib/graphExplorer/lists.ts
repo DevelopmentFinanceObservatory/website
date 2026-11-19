@@ -69,17 +69,58 @@ export function firstMatches<TItem>(
 }
 
 /**
- * A filter over terms by label or dcid, ignoring case and surrounding
- * space, or null for blank text, which keeps every term.
+ * A filter keeping the entries any of whose `texts` holds `text`, ignoring
+ * case and surrounding space, or null for blank text, which keeps every
+ * entry.
  */
+export const textFilter = <TItem>(
+    text: string,
+    texts: (item: TItem) => readonly string[],
+): ((item: TItem) => boolean) | null => {
+    const needle = text.trim().toLowerCase();
+    if (needle === '') return null;
+    return (item) => texts(item).some((each) => each.toLowerCase().includes(needle));
+};
+
+/** A filter over terms by label or dcid (textFilter). */
 export const termFilter = (
     model: Pick<Model, 'label'>,
     text: string,
-): ((id: string) => boolean) | null => {
-    const needle = text.trim().toLowerCase();
-    if (needle === '') return null;
-    return (id) =>
-        id.toLowerCase().includes(needle) || model.label(id).toLowerCase().includes(needle);
+): ((id: string) => boolean) | null => textFilter(text, (id: string) => [id, model.label(id)]);
+
+/**
+ * A long list as a screen shows it: its head (listHead), and the entries on
+ * show, at most `limit` of those `matches` keeps (firstMatches). Closed, the
+ * head is on show; open, the whole list up to the ceiling.
+ */
+export const listOnShow = <TItem>(
+    items: readonly TItem[],
+    {
+        open,
+        matches = null,
+        limit = LIST_CEILING,
+    }: { open: boolean; matches?: ((item: TItem) => boolean) | null; limit?: number },
+): { readonly head: ListHead<TItem>; readonly shown: Matches<TItem> } => {
+    const head = listHead(items, { open });
+    return { head, shown: firstMatches(head.shown, matches, limit) };
+};
+
+/** What a filtered list says under its rows (filterNote). */
+export type FilterNote =
+    | { readonly kind: 'noMatch'; readonly text: string }
+    | { readonly kind: 'ceiling'; readonly then: string };
+
+/**
+ * The note under a list with a filter box, from its filter `text` and the
+ * matches on show: that nothing matches a non-blank filter, or, past the
+ * ceiling, how to reach the rest. Null when every match is on show, and for
+ * a blank filter over an empty list.
+ */
+export const filterNote = (text: string, matches: Matches<unknown>): FilterNote | null => {
+    const blank = text.trim() === '';
+    if (matches.total === 0) return blank ? null : { kind: 'noMatch', text: text.trim() };
+    if (matches.total <= matches.hits.length) return null;
+    return { kind: 'ceiling', then: blank ? 'Filter to find the rest.' : 'Type more to narrow.' };
 };
 
 /**

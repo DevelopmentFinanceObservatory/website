@@ -133,11 +133,7 @@ for (const [listId, fileName] of [
 
 test("a dataset's patterns are written group by group, one row per pattern", () => {
     const [head, ...rows] = patternTable(model, 'provenance/OECDDAC2A');
-    assert.deepEqual(head?.slice(0, 3), [
-        'split_combination',
-        'population_type',
-        'measured_property',
-    ]);
+    assert.deepEqual(head?.slice(0, 3), ['split_combination', 'split', 'population_type']);
     assert.equal(rows.length, 6);
     const column = (name: string) => head?.indexOf(name) ?? -1;
     assert.deepEqual(
@@ -155,6 +151,22 @@ test("a dataset's patterns are written group by group, one row per pattern", () 
             'Count_Person',
             'PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal',
         ],
+    );
+    assert.deepEqual(
+        [
+            ...new Set(
+                rows.map((row) => `${row[column('split_combination')]} ${row[column('split')]}`),
+            ),
+        ],
+        [
+            '1 dac2aAidType; dacTypeOfFinance; financialFlowType; nettingBasis',
+            '2 dac2aAidType; financialFlowType; nettingBasis',
+            '3 dac2aAidType; financialFlowType',
+        ],
+    );
+    assert.deepEqual(
+        [...new Set(rows.map((row) => row[column('measurement_denominator_unresolved')]))],
+        ['false'],
     );
     assert.equal(patternFileName(model, 'provenance/OECDDAC2A'), 'oecd-dac2a-patterns.csv');
 });

@@ -12,7 +12,7 @@ import styles from './PatternGroups.module.scss';
 import Button from '@/components/atoms/Button/Button';
 import { count, plural } from '@/lib/graphExplorer/counts';
 import { shareWords } from '@/lib/graphExplorer/focus';
-import { firstMatches, LIST_HEAD, listHead } from '@/lib/graphExplorer/lists';
+import { LIST_HEAD, listOnShow } from '@/lib/graphExplorer/lists';
 import { patternId } from '@/lib/graphExplorer/model';
 import {
     groupSentence,
@@ -35,13 +35,19 @@ const HOME_NOTES: Readonly<Record<'base' | 'un_system', string>> = {
 /** What a reader does to reach the patterns past a list's ceiling. */
 const CSV_HAS_ALL = 'The CSV has every pattern.';
 
+/** The punctuation a sentence's text part opens with, which belongs to the term before it. */
+const leadingMark = (part: SentencePart | undefined): string =>
+    part?.kind === 'text' ? (/^[,.;:]/.exec(part.text)?.[0] ?? '') : '';
+
 const Sentence = ({ parts, home }: { parts: readonly SentencePart[]; home: Home }) => (
     <p className={styles.sentence}>
         {parts.map((part, at) =>
             part.kind === 'term' ? (
-                <TermLink key={at} id={part.id} home={home} />
+                <TermLink key={at} id={part.id} home={home} trail={leadingMark(parts[at + 1])} />
             ) : (
-                <span key={at}>{part.text}</span>
+                <span key={at}>
+                    {part.text.slice(parts[at - 1]?.kind === 'term' ? leadingMark(part).length : 0)}
+                </span>
             ),
         )}
     </p>
@@ -125,8 +131,7 @@ const PatternLineView = ({
 /** A group's patterns: the first few, then all of them up to the ceiling. */
 const PatternList = ({ group, home, id }: { group: PatternGroup; home: Home; id: string }) => {
     const [open, setOpen] = useState(false);
-    const head = listHead(group.patterns, { open });
-    const shown = firstMatches(head.shown);
+    const { head, shown } = listOnShow(group.patterns, { open });
 
     return (
         <div className={styles.members}>
@@ -184,7 +189,7 @@ const GroupRow = ({ group, groups, total, home, action }: GroupRowProps) => {
                         type="button"
                         className={styles.expand}
                         aria-expanded={open}
-                        aria-controls={listId}
+                        aria-controls={open ? listId : undefined}
                         onClick={() => setOpen((was) => !was)}
                     >
                         {plural(group.patterns.length, 'pattern')}
@@ -233,8 +238,7 @@ export const PatternGroups = ({ datasetId, action, children }: PatternGroupsProp
     const home: Home = origin === 'base' || origin === 'un_system' ? origin : null;
     const groups = patternGroups(dataset.patterns);
     const total = dataset.stat_var_count;
-    const head = listHead(groups, { open });
-    const shown = firstMatches(head.shown);
+    const { head, shown } = listOnShow(groups, { open });
     const headShare = groups
         .slice(0, LIST_HEAD)
         .reduce((sum, group) => sum + group.statVarCount, 0);

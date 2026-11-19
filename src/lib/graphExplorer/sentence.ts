@@ -106,21 +106,20 @@ const isClass = (model: Model, id: string): boolean => {
  * "The <measured property> of a <population type>, measured as <qualifier>,
  * reported by <role> | between <a> and <b>, split by <a>, <b> and <c>."
  * The measured property and population type slots name up to three terms
- * joined with "or", and past that give their count: "15 kinds of thing",
- * "2,734 measures". "of a" goes before Classes only. A clause with nothing
- * to say is left out.
+ * joined with "or", and past that give their count: "of 15 kinds of
+ * thing", and "One of 2,734 measures" in place of "The <measured
+ * property>". "of a" goes before Classes only. A clause with nothing to
+ * say is left out.
  */
 export function groupSentence(model: Model, group: PatternGroup): SentencePart[] {
     const text = (value: string): SentencePart => ({ kind: 'text', text: value });
     const term = (id: string): SentencePart => ({ kind: 'term', id, label: model.label(id) });
 
     const { measured, populationTypes } = group;
-    const parts: SentencePart[] = [
-        text('The '),
-        ...(measured.length > SLOT_NAMES
-            ? [text(`${count(measured.length)} measures`)]
-            : series(model, measured, 'or')),
-    ];
+    const parts: SentencePart[] =
+        measured.length > SLOT_NAMES
+            ? [text(`One of ${count(measured.length)} measures`)]
+            : [text('The '), ...series(model, measured, 'or')];
     if (populationTypes.length > SLOT_NAMES) {
         parts.push(text(` of ${count(populationTypes.length)} kinds of thing`));
     } else if (populationTypes.length > 0) {

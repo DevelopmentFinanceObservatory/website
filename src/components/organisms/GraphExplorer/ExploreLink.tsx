@@ -87,22 +87,32 @@ export const OriginTag = ({
     declaredBy,
     dataset = false,
     dfo = false,
+    trail = '',
 }: {
     declaredBy: string | null | undefined;
     dataset?: boolean;
     dfo?: boolean;
+    /** Punctuation that follows the tag, kept on the tag's line. */
+    trail?: string;
 }) => {
     const tag = dfo && declaredBy === 'dfo' ? DFO_TAG : ORIGIN_TAGS.get(declaredBy ?? '');
-    if (tag === undefined) return null;
+    if (tag === undefined) return trail;
+    const pill = (
+        <span className={styles.tag} title={`${dataset ? 'Data from' : 'Declared by'} ${tag.name}`}>
+            {tag.text}
+        </span>
+    );
     return (
         <>
             {' '}
-            <span
-                className={styles.tag}
-                title={`${dataset ? 'Data from' : 'Declared by'} ${tag.name}`}
-            >
-                {tag.text}
-            </span>
+            {trail === '' ? (
+                pill
+            ) : (
+                <span className={styles.trailed}>
+                    {pill}
+                    {trail}
+                </span>
+            )}
         </>
     );
 };
@@ -119,18 +129,22 @@ const differsFromHome = (origin: string | null, home: 'base' | 'un_system' | nul
  * With `home`, the origin of the dataset whose terms the link sits among
  * (null for a DFO dataset), the tag shows only where the term's origin
  * differs from it, and a DFO term among an outside dataset's terms is
- * tagged "DFO".
+ * tagged "DFO". `trail` punctuation follows the tag with no break or space
+ * before it.
  */
 export const TermLink = ({
     id,
     name,
     className,
     home,
+    trail = '',
 }: {
     id: string;
     name?: string;
     className?: string;
     home?: 'base' | 'un_system' | null;
+    /** Punctuation that follows the term, kept on the line of its tag. */
+    trail?: string;
 }) => {
     const model = useModel();
     const origins = useListOrigins(model);
@@ -143,7 +157,11 @@ export const TermLink = ({
             <ExploreLink view={view} className={className ?? styles.term}>
                 {name ?? model.label(id)}
             </ExploreLink>
-            {tagged && <OriginTag declaredBy={origin} dfo={home !== undefined} />}
+            {tagged ? (
+                <OriginTag declaredBy={origin} dfo={home !== undefined} trail={trail} />
+            ) : (
+                trail
+            )}
         </>
     );
 };

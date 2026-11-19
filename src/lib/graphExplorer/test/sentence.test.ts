@@ -81,11 +81,11 @@ test('clauses with nothing to say are left out', () => {
 });
 
 /**
- * The sentence one pattern read as before patterns were grouped, kept here as
- * the reference a one-pattern group must match. "of a" goes before a Class
- * only, which `isClass` reads from the test documents.
+ * The reference sentence for one pattern, written out term by term, which a
+ * group of that pattern alone must match. "of a" goes before a Class only,
+ * which `isClass` reads from the test documents.
  */
-const ungroupedSentence = (
+const singleSentence = (
     model: Model,
     pattern: SchemaPattern,
     isClass: (id: string) => boolean,
@@ -116,7 +116,7 @@ const ungroupedSentence = (
     return `${text}.`;
 };
 
-test('a group of one pattern reads as the pattern did before grouping, for every fixture pattern', () => {
+test('a group of one pattern reads as the reference sentence for that pattern, for every fixture pattern', () => {
     const isClass = (id: string) =>
         everyModel.kind(id) === 'class' || (everyModel.term(id)?.types.includes('Class') ?? false);
     let checked = 0;
@@ -131,7 +131,7 @@ test('a group of one pattern reads as the pattern did before grouping, for every
             );
             assert.equal(
                 read(groupSentence(everyModel, group)),
-                ungroupedSentence(everyModel, pattern, isClass),
+                singleSentence(everyModel, pattern, isClass),
             );
             checked += 1;
         }
@@ -200,7 +200,7 @@ test('a slot names up to three terms joined with "or", and past that gives their
     assert.ok(wide);
     assert.equal(
         read(groupSentence(model, wide)),
-        'The 4 measures of 4 kinds of thing, measured as Nominal, reported by financing ' +
+        'One of 4 measures of 4 kinds of thing, measured as Nominal, reported by financing ' +
             'provider, split by DAC 1 aid type, financial flow type and netting basis.',
     );
 });

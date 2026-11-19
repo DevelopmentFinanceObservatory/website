@@ -13,6 +13,8 @@ import styles from './FocusPanel.module.scss';
 import { GapNote } from './GapNote';
 import {
     CeilingNote,
+    FilterBox,
+    FilterNoteLine,
     ListToggle,
     useListOrigins,
     useTermSources,
@@ -31,7 +33,14 @@ import {
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { datasetHead, firstMatches, listHead, termFilter } from '@/lib/graphExplorer/lists';
+import {
+    datasetHead,
+    firstMatches,
+    LIST_CEILING,
+    listOnShow,
+    termFilter,
+    textFilter,
+} from '@/lib/graphExplorer/lists';
 import { declarerWords, kindWords, type DatasetView } from '@/lib/graphExplorer/model';
 import {
     leftOutLine,
@@ -246,22 +255,35 @@ const ValueLine = <TItem,>({
     lead,
     items,
     itemKey,
+    itemTexts,
     renderItem,
+    noun,
     end = '',
 }: {
     lead: React.ReactNode;
     items: readonly TItem[];
     itemKey: (item: TItem, index: number) => string;
+    /** The texts the filter box matches an item on. */
+    itemTexts: (item: TItem) => readonly string[];
     renderItem: (item: TItem) => React.ReactNode;
+    /** The items' name in the toggle: "All N <noun>". */
+    noun: string;
     end?: string;
 }) => {
     const [open, setOpen] = useState(false);
+    const [filter, setFilter] = useState('');
     const listId = useId();
-    const head = listHead(items, { open });
-    const shown = firstMatches(head.shown);
+    const filtering = open && items.length > LIST_CEILING;
+    const { head, shown } = listOnShow(items, {
+        open,
+        matches: filtering ? textFilter(filter, itemTexts) : null,
+    });
 
     return (
         <>
+            {filtering && (
+                <FilterBox value={filter} onChange={setFilter} label={`Filter these ${noun}`} />
+            )}
             <p id={listId} className={styles.line}>
                 {lead}
                 {shown.hits.map((item, index) => (
@@ -272,10 +294,14 @@ const ValueLine = <TItem,>({
                 ))}
                 {end}
             </p>
-            <CeilingNote matches={shown} />
+            {filtering ? (
+                <FilterNoteLine text={filter} matches={shown} />
+            ) : (
+                <CeilingNote matches={shown} />
+            )}
             <ListToggle
                 head={head}
-                noun="values"
+                noun={noun}
                 controls={listId}
                 open={open}
                 onToggle={() => setOpen((was) => !was)}
@@ -300,6 +326,10 @@ const OpenLines = ({ id, completeness }: { id: string; completeness: Completenes
                 itemKey={(value, index) =>
                     value.kind === 'node' ? value.id : `${index}:${value.text}`
                 }
+                itemTexts={(value) =>
+                    value.kind === 'node' ? [value.id, value.name] : [value.text]
+                }
+                noun="values"
                 renderItem={(value) =>
                     value.kind === 'node' ? (
                         <TermLink id={value.id} name={value.name} />
@@ -385,6 +415,8 @@ export const NodePanel = ({
                     lead="Declared for "
                     items={domain}
                     itemKey={(classId) => classId}
+                    itemTexts={(classId) => [classId, model.label(classId)]}
+                    noun="classes"
                     renderItem={(classId) => <TermLink id={classId} />}
                     end="."
                 />
@@ -532,35 +564,23 @@ export const FullList = ({ box, lens, gaps, onClose }: FullListProps) => {
                 {box.title} <span className={styles.total}>({count(box.ids.length)})</span>
             </h2>
             <GapNote gaps={gaps} className={styles.note} />
-            <input
-                type="search"
-                className={styles.filter}
-                placeholder="Filter by name or dcid"
-                aria-label="Filter this list by name or dcid"
+            <FilterBox
                 value={filter}
-                onChange={(event) => setFilter(event.target.value)}
+                onChange={setFilter}
+                label="Filter this list by name or dcid"
             />
-            {shown.total === 0 ? (
-                <p className={styles.note} role="status">
-                    No entry matches “{filter.trim()}”.
-                </p>
-            ) : (
-                <ul className={styles.full}>
-                    {shown.hits.map((id) => (
-                        <FocusEntry
-                            key={id}
-                            id={id}
-                            lens={entries?.get(id) ?? null}
-                            datasetLabel={lens.label}
-                            values={box.values?.get(id) ?? null}
-                        />
-                    ))}
-                </ul>
-            )}
-            <CeilingNote
-                matches={shown}
-                then={filter.trim() === '' ? 'Filter to find the rest.' : 'Type more to narrow.'}
-            />
+            <ul className={styles.full}>
+                {shown.hits.map((id) => (
+                    <FocusEntry
+                        key={id}
+                        id={id}
+                        lens={entries?.get(id) ?? null}
+                        datasetLabel={lens.label}
+                        values={box.values?.get(id) ?? null}
+                    />
+                ))}
+            </ul>
+            <FilterNoteLine text={filter} matches={shown} />
             <div>
                 <Button onClick={onClose}>Back to Definition</Button>
             </div>

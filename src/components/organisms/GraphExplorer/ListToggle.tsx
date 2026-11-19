@@ -8,6 +8,7 @@ import styles from './ListToggle.module.scss';
 import { count } from '@/lib/graphExplorer/counts';
 import {
     datasetOrigin,
+    filterNote,
     landedUsage,
     LIST_HEAD,
     termOrigin,
@@ -71,6 +72,41 @@ export const CeilingNote = ({
             {then !== undefined && ` ${then}`}
         </p>
     );
+};
+
+/** A box that filters a list as the reader types. */
+export const FilterBox = ({
+    value,
+    onChange,
+    label,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    /** The box's accessible name. */
+    label: string;
+}) => (
+    <input
+        type="search"
+        className={styles.filter}
+        placeholder="Filter by name or dcid"
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+    />
+);
+
+/** The note under a list with a FilterBox (filterNote): no match, or the ceiling and how to reach the rest. */
+export const FilterNoteLine = ({ text, matches }: { text: string; matches: Matches<unknown> }) => {
+    const note = filterNote(text, matches);
+    if (note === null) return null;
+    if (note.kind === 'noMatch') {
+        return (
+            <p className={styles.note} role="status">
+                No entry matches “{note.text}”.
+            </p>
+        );
+    }
+    return <CeilingNote matches={matches} then={note.then} />;
 };
 
 /** Where a list's entries come from, as a node's `declared_by`, for their origin tags. */
