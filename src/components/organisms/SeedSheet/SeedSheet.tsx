@@ -43,6 +43,7 @@ import {
     columnName,
     constraintBoxes,
     datasetConstraints,
+    defaultDrops,
     dropsOutside,
     formulaRows,
     NEW_SEED_NAME,
@@ -400,10 +401,10 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     // An added id makes a column only when some dataset uses it, so the page lists a tick box for it.
     const choice = useMemo(
         () => ({
-            dropped: query.dropped,
+            dropped: query.dropped ?? (dataset === null ? [] : defaultDrops(dataset)),
             added: query.added.filter((id) => used.includes(id)),
         }),
-        [used, query],
+        [used, query, dataset],
     );
     const columns = useMemo(
         () => (dataset === null ? [] : seedColumns(dataset, choice)),
@@ -520,7 +521,10 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             aria-pressed={each.ref === dataset.id}
                             onClick={() => {
                                 setOpen(null);
-                                writeQuery({ dataset: each.ref, dropped: [], added: [] }, carried);
+                                writeQuery(
+                                    { dataset: each.ref, dropped: null, added: [] },
+                                    carried,
+                                );
                             }}
                         >
                             <span className={styles.choiceName}>

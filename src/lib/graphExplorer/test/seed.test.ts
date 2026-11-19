@@ -11,6 +11,7 @@ import {
     columnName,
     constraintBoxes,
     constraintsByShare,
+    defaultDrops,
     dropsOutside,
     NEW_SEED_NAME,
     readSeedQuery,
@@ -290,6 +291,40 @@ test('the constraint boxes run by StatVar share and keep every ticked box past t
     assert.deepEqual(constraintBoxes(who, { dropped, open: true }).shown, WHO_BY_SHARE);
 });
 
+test('a seed starts with the largest combination only past 12 constraints, unless the URL names a drop list', () => {
+    const wide: SeedDataset = {
+        ...who,
+        patterns: [
+            ...who.patterns,
+            pattern({ constraint_properties: ['undataAtProduct'], stat_var_count: 184 }),
+            pattern({ constraint_properties: ['undataRefPerCd'], stat_var_count: 162 }),
+        ],
+    };
+    const started = (dataset: SeedDataset, search: string) => {
+        const dropped = readSeedQuery(new URLSearchParams(search)).dropped;
+        return activeConstraints(dataset, {
+            dropped: dropped ?? defaultDrops(dataset),
+            added: [],
+        }).toSorted();
+    };
+
+    assert.deepEqual(started(wide, '?dataset=undata/p/WHO'), [
+        'undataAge',
+        'undataGheCause',
+        'undataSex',
+    ]);
+    assert.deepEqual(started(who, '?dataset=undata/p/WHO'), WHO_BY_SHARE.toSorted());
+    assert.deepEqual(
+        started(wide, '?dataset=undata/p/WHO&drop='),
+        [...WHO_BY_SHARE, 'undataAtProduct', 'undataRefPerCd'].toSorted(),
+    );
+    const everything = { dataset: 'undata/p/WHO', dropped: [], added: [] };
+    assert.deepEqual(
+        readSeedQuery(new URLSearchParams(seedQuery(everything, NO_CARRIED))),
+        everything,
+    );
+});
+
 test('pasted codes make one row each, the second tab-separated cell filling statvar_name', () => {
     const columns = seedColumns(dac2a);
     const { rows, merged } = seedRows(
@@ -361,7 +396,7 @@ test('the URL state round-trips the dataset, dropped and added columns and the c
     };
     const text = seedQuery(query, NO_CARRIED);
     assert.deepEqual(readSeedQuery(new URLSearchParams(text)), query);
-    assert.equal(seedQuery({ dataset: null, dropped: [], added: [] }, NO_CARRIED), '');
+    assert.equal(seedQuery({ dataset: null, dropped: null, added: [] }, NO_CARRIED), '');
     assert.deepEqual(readSeedQuery(new URLSearchParams('?drop=a,a,,b')).dropped, ['a', 'b']);
     assert.equal(readSeedQuery(new URLSearchParams('?dataset=')).dataset, null);
 });

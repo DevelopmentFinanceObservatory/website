@@ -25,7 +25,8 @@
  *   names the rows a spreadsheet would run as a formula.
  * - The query holds `dataset`, `drop` (the dropped constraint properties) and
  *   `add` (the added ones), each a comma-separated list of dcids, with the
- *   carried parameters (explore.ts).
+ *   carried parameters (explore.ts). A query with no `drop` takes the
+ *   dataset's default (defaultDrops); an empty `drop=` drops nothing.
  */
 import {
     queryString,
@@ -37,6 +38,7 @@ import {
 import { scan } from './delimited.ts';
 import { listHead, type ListHead } from './lists.ts';
 import { SEED_PATH } from './paths.ts';
+import { patternGroups } from './sentence.ts';
 import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
 
@@ -131,6 +133,24 @@ export const constraintBoxes = (
     const closed = listHead(ordered, { open: false, keep: (property) => !unticked.has(property) });
     if (closed.shown.length === ordered.length) return { ...closed, long: false };
     return open ? listHead(ordered, { open: true }) : closed;
+};
+
+/**
+ * The most constraint properties a dataset's seed starts with all of. Past
+ * it, a column for every property the patterns name (WHO's 96) gives a
+ * table no single source fills, so the seed starts with one combination's.
+ */
+export const ALL_CONSTRAINTS_UP_TO = 12;
+
+/**
+ * The constraint properties a seed drops when the URL names none: nothing
+ * for a dataset with at most ALL_CONSTRAINTS_UP_TO, else every one outside
+ * its largest split combination (patternGroups' first).
+ */
+export const defaultDrops = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => {
+    if (datasetConstraints(dataset).length <= ALL_CONSTRAINTS_UP_TO) return [];
+    const [largest] = patternGroups(dataset.patterns);
+    return largest === undefined ? [] : dropsOutside(dataset, largest.split);
 };
 
 /** The constraint properties the seed holds: the dataset's, minus dropped, plus added. */
@@ -315,10 +335,17 @@ export function seedsYml(name: string, columns: readonly SeedColumn[]): string {
     return `${lines.join('\n')}\n`;
 }
 
-/** The page state as the URL holds it. */
-export type SeedQuery = SeedChoice & { readonly dataset: string | null };
+/**
+ * The page state as the URL holds it. `dropped` is null when the URL names
+ * no drop list, so the dataset's default applies (defaultDrops).
+ */
+export type SeedQuery = {
+    readonly dataset: string | null;
+    readonly dropped: readonly string[] | null;
+    readonly added: readonly string[];
+};
 
-export const NO_SEED_QUERY: SeedQuery = Object.freeze({ dataset: null, ...NO_SEED_CHOICE });
+export const NO_SEED_QUERY: SeedQuery = Object.freeze({ dataset: null, dropped: null, added: [] });
 
 const readList = (params: QueryReader, name: string): readonly string[] => [
     ...new Set((queryValue(params, name) ?? '').split(',').filter((id) => id !== '')),
@@ -327,7 +354,7 @@ const readList = (params: QueryReader, name: string): readonly string[] => [
 /** The page state a query string holds. */
 export const readSeedQuery = (params: QueryReader): SeedQuery => ({
     dataset: queryValue(params, 'dataset'),
-    dropped: readList(params, 'drop'),
+    dropped: params.get('drop') === null ? null : readList(params, 'drop'),
     added: readList(params, 'add'),
 });
 
@@ -335,7 +362,7 @@ export const readSeedQuery = (params: QueryReader): SeedQuery => ({
 export const seedQuery = (query: SeedQuery, carried: Carried): string => {
     const params = new URLSearchParams();
     if (query.dataset !== null) params.set('dataset', query.dataset);
-    if (query.dropped.length > 0) params.set('drop', query.dropped.join(','));
+    if (query.dropped !== null) params.set('drop', query.dropped.join(','));
     if (query.added.length > 0) params.set('add', query.added.join(','));
     writeCarried(params, carried);
     return queryString(params);
