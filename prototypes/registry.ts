@@ -22,6 +22,13 @@ export type Prototype = {
 /** Every prototype, newest first. */
 export const prototypes: Prototype[] = [
     {
+        slug: 'hiv-financing',
+        title: 'Who provides external financing for HIV?',
+        summary:
+            'HIV aid to 113 countries since 2015 from the United States, the Global Fund, and all other providers, alongside people living with HIV, treatment coverage, and AIDS-related deaths.',
+        date: '2026-11-19',
+    },
+    {
         slug: 'fragility-finance',
         title: 'What external finance reaches fragile contexts?',
         summary:
