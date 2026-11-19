@@ -123,7 +123,7 @@ export const unauthorizedProblem = (): Response =>
 /**
  * A 401 `invalid_api_key` problem document: the call's API key is unknown,
  * disabled, expired or malformed. The call is not treated as anonymous.
- * No `WWW-Authenticate`, which would send an MCP client looking for OAuth.
+ * No `WWW-Authenticate`, which would send a client looking for OAuth.
  */
 export const invalidKeyProblem = (): Response =>
     problem({

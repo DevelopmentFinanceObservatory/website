@@ -31,11 +31,11 @@ export type ReservationVerdict =
     | { admitted: true; receipt: Reservation; limit: number; remaining: number; reset: number }
     | { admitted: false; limit: number; remaining: 0; reset: number };
 
-/** The window of a key's /mcp quota in seconds: a UTC day, epoch-aligned. */
+/** The window of a key's daily API quota in seconds: a UTC day, epoch-aligned. */
 export const DAY_S = 86_400;
 
-/** The counter key of an API key's daily /mcp quota. */
-export const dailyCounterKey = (keyId: string): string => `mcpday:key:${keyId}`;
+/** The counter key of an API key's daily API quota. */
+export const dailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
 
 // Rows whose window started this long ago are dead for any window of a day
 // or less, the longest the site uses.
@@ -173,7 +173,7 @@ export const pruneCounters = async (db: CounterDb): Promise<void> => {
 };
 
 /**
- * How many /mcp calls each of the keys `keyIds` has made in the current UTC
+ * How many API calls each of the keys `keyIds` has made in the current UTC
  * day, counted refused calls included. A key with no counter, or a counter
  * from an earlier day, is 0.
  */

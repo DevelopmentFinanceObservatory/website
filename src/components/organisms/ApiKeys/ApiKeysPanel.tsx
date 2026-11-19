@@ -29,7 +29,7 @@ const fetchKeys = async (): Promise<ApiKeysData | string> => {
 type View = { name: 'list' } | { name: 'create' } | { name: 'reveal'; key: string };
 
 /**
- * The account's MCP keys in the house side panel, opened from the account
+ * The account's API keys in the house side panel, opened from the account
  * menu: list, create and delete, and the one-time view of a new key.
  * It reads and writes through the JSON routes under /api/account/api-keys, so it
  * works on any page, the prototypes app's static export included.
@@ -129,7 +129,7 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
                     </div>
 
                     <div className={styles.sectionHead}>
-                        <h3 className={styles.section}>MCP keys</h3>
+                        <h3 className={styles.section}>API keys</h3>
                         <Button
                             small
                             variant="dark"
@@ -145,7 +145,7 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
 
                     {!data.keysEnabled && (
                         <p className={styles.notice} role="status">
-                            MCP keys are switched off for now. Calls count by address, and a key is
+                            API keys are switched off for now. Calls count by address, and a key is
                             ignored.
                         </p>
                     )}
@@ -163,9 +163,10 @@ const ApiKeysPanel = ({ open, onOpenChange }: ApiKeysPanelProps) => {
 
                     {data.keys.length === 0 ? (
                         <p className={styles.muted}>
-                            An MCP key raises your daily call limit on the DFO MCP server. See{' '}
-                            <Link className={styles.link} href={docsHref('mcp/connect')}>
-                                how to connect an assistant
+                            An API key raises your API limits for scripts and pipelines that use the
+                            DFO API or the Python and TypeScript SDK. See{' '}
+                            <Link className={styles.link} href={docsHref('build/api-keys')}>
+                                how to use an API key
                             </Link>
                             .
                         </p>

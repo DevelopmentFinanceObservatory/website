@@ -20,7 +20,7 @@
  *     limits are never passed on, so every key has the plugin's defaults. The
  *     account's own limit (user.api_rate_limit) is the per-minute limit, and
  *     the key's `daily_limit` column, set only by an operator, is its daily
- *     /mcp quota (src/lib/proxy/access)
+ *     API quota (src/lib/proxy/access)
  *   - revoking deletes the row: a disabled key could be switched back on
  *   - the full key is returned by the create call and nowhere else. Only its
  *     hash is stored, and neither the key nor the hash is logged
@@ -77,7 +77,7 @@ export type KeyServiceOptions = {
     db: KeyDb;
     /** How many keys an account may hold; read per call so a change needs no restart. */
     maxPerAccount: () => number;
-    /** A key's daily /mcp calls when it sets none of its own; read per call. */
+    /** A key's daily API calls when it sets none of its own; read per call. */
     defaultDailyLimit: () => number;
     /** One structured line per mutation. Never receives a key or a hash. */
     log?: (line: Record<string, unknown>) => void;
@@ -93,11 +93,11 @@ export type OwnKey = {
     // cache miss), so up to about a minute behind the last call. Null until
     // the key is first used.
     lastRequest: Date | null;
-    // The key's daily /mcp calls: its own, else the deployment default.
+    // The key's daily API calls: its own, else the deployment default.
     dailyLimit: number;
     // The key's own daily limit, null when it has none.
     customDailyLimit: number | null;
-    // /mcp calls counted against the key in the current UTC day, refused
+    // API calls counted against the key in the current UTC day, refused
     // calls included.
     usedToday: number;
 };
@@ -464,7 +464,7 @@ export const createKeyService = ({
         },
 
         /**
-         * Sets the daily /mcp limit of one key, or clears it with null so the
+         * Sets the daily API limit of one key, or clears it with null so the
          * deployment default applies. False when there is no such key. The
          * proxy's key cache holds the old limit for up to a minute.
          */
@@ -496,7 +496,7 @@ export const createKeyService = ({
         },
 
         /**
-         * Sets a key's /mcp count for the current UTC day back to 0, so a key
+         * Sets a key's API call count for the current UTC day back to 0, so a key
          * that used its daily quota works again at once. False when there is
          * no such key.
          */

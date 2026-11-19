@@ -1,7 +1,7 @@
 /**
- * `forward()` with API keys, honored on /mcp only: what reaches the upstream
+ * `forward()` with API keys, honored on the API only: what reaches the upstream
  * (never the key, the caller named as `user:` for an account), what a bad,
- * unavailable or ignored key does, a key on /api, the Studio and the kill
+ * unavailable or ignored key does, a key on /mcp, the Studio and the kill
  * switch, the usage line, and the whole flow, the daily quota included, on a
  * real key store and counter.
  */
@@ -78,7 +78,7 @@ const call = (headers: Record<string, string> = {}, options: Options = {}): Prom
         new Request('http://site.test/api/v1/search/x', {
             headers: { 'x-forwarded-for': '203.0.113.7', ...headers },
         }) as NextRequest,
-        { surface: 'mcp', target: `${base}/x`, unreachable: 'unreachable', ...options },
+        { surface: 'api', target: `${base}/x`, unreachable: 'unreachable', ...options },
     );
 
 const original = { ...accessDeps };
@@ -145,7 +145,7 @@ const fresh = () => {
 
 test.after(() => mock.restoreAll());
 
-test('forward: a key on /api is stripped and ignored: anonymous, counted by address, no usage line', async () => {
+test('forward: a key on /mcp is stripped and ignored: anonymous, counted by address, no usage line', async () => {
     fresh();
 
     for (const answer of [VALID, { kind: 'invalid' } as KeyVerdict]) {
@@ -158,7 +158,7 @@ test('forward: a key on /api is stripped and ignored: anonymous, counted by addr
         ] as Record<string, string>[]) {
             seen.length = 0;
 
-            const res = await call(headers, { surface: 'api' });
+            const res = await call(headers, { surface: 'mcp' });
 
             assert.equal(res.status, 200);
             assert.equal(res.headers.get('x-ratelimit-limit'), '120');
@@ -167,13 +167,13 @@ test('forward: a key on /api is stripped and ignored: anonymous, counted by addr
             assert.equal(seen[0]!['x-api-key'], undefined);
         }
 
-        assert.ok(log.every((entry) => entry === 'address:api'));
+        assert.ok(log.every((entry) => entry === 'address:mcp'));
     }
 
     assert.deepEqual(lines, []);
 });
 
-test('forward: a valid key on /mcp goes to dfo-apis as the account, with no key in sight', async () => {
+test('forward: a valid key on the API goes to dfo-apis as the account, with no key in sight', async () => {
     fresh();
     fakes(VALID);
 
@@ -201,7 +201,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'lookup', 'address:mcp']);
+    assert.deepEqual(log, ['cache', 'lookup', 'address:api']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -237,7 +237,7 @@ test('forward: another bearer is no key, and dfo-apis gets no caller Authorizati
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:mcp']);
+    assert.deepEqual(log, ['address:api']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
@@ -249,7 +249,7 @@ test('forward: a key in another scheme, or bare, is anonymous and never reaches 
         const res = await call({ authorization });
 
         assert.equal(res.status, 200);
-        assert.deepEqual(log, ['address:mcp']);
+        assert.deepEqual(log, ['address:api']);
         assert.equal(seen[0]!.authorization, undefined);
     }
 });
@@ -260,13 +260,14 @@ test('forward: a call with no key is anonymous, and a client-sent caller is drop
 
     await call({ 'x-dfo-caller': accountCaller });
 
-    assert.deepEqual(log, ['address:mcp']);
+    assert.deepEqual(log, ['address:api']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
-test('forward: /mcp names the account to dfo-ai, and the harness token replaces any bearer', async () => {
+test('forward: /mcp strips a key, names the address to dfo-ai, and the harness token replaces any bearer', async () => {
     fresh();
-    fakes(VALID, true);
+
+    const log = fakes(VALID, true);
 
     const mcp = (headers: Record<string, string>, options: Options = {}) =>
         call(headers, {
@@ -288,10 +289,10 @@ test('forward: /mcp names the account to dfo-ai, and the harness token replaces 
     const target = `http://127.0.0.1:${(other.address() as AddressInfo).port}/mcp/`;
 
     try {
-        // With the harness token held: read the key, then replace the header.
+        // With the harness token held: the key is dropped, the header replaced.
         await mcp({ authorization: `Bearer ${KEY}` }, { target, bearer: 'harness' });
         assert.equal(seen[0]!.authorization, 'Bearer harness');
-        assert.equal(seen[0]!['x-dfo-caller'], accountCaller);
+        assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
         assert.equal(seen[0]!['x-dfo-caller-principal'], undefined);
 
         // Without it: the key is the proxy's own, so no credential goes on.
@@ -299,25 +300,30 @@ test('forward: /mcp names the account to dfo-ai, and the harness token replaces 
         await mcp({ authorization: `Bearer ${KEY}` }, { target });
         assert.equal(seen[0]!.authorization, undefined);
         assert.equal(seen[0]!['x-api-key'], undefined);
+        assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 
-        // Another scheme or a bare key is no key, and goes no further either.
+        // Another scheme or a bare key goes no further either.
         for (const authorization of [`Token ${KEY}`, KEY]) {
             seen.length = 0;
             await mcp({ authorization }, { target });
             assert.equal(seen[0]!.authorization, undefined);
         }
 
-        // The key in X-API-Key, the harness token as the bearer: both work.
+        // The key in X-API-Key, the harness token as the bearer: the token
+        // goes on, the key does not, and the caller is still the address.
         seen.length = 0;
         await mcp({ authorization: 'Bearer harness-token', 'x-api-key': KEY }, { target });
         assert.equal(seen[0]!.authorization, 'Bearer harness-token');
         assert.equal(seen[0]!['x-api-key'], undefined);
-        assert.equal(seen[0]!['x-dfo-caller'], accountCaller);
+        assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 
         // Anonymous callers are named by address, as before.
         seen.length = 0;
         await mcp({}, { target });
         assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
+
+        // No key was looked up or counted against an account on any of them.
+        assert.ok(log.every((entry) => entry === 'address:mcp'));
     } finally {
         other.closeAllConnections();
         other.close();
@@ -354,7 +360,7 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': 'junk' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:mcp']);
+    assert.deepEqual(log, ['address:api']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
@@ -366,10 +372,10 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
     fakes(VALID);
 
     await call({ 'x-api-key': 'another-service-secret' });
-    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
+    await call({ 'x-api-key': KEY });
     await call({ authorization: `Bearer ${KEY}` });
-    // /api ignores keys, so there is nothing to count.
-    await call({ 'x-api-key': KEY }, { surface: 'api' });
+    // /mcp ignores keys, so there is nothing to count.
+    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
     // The Studio ignores keys whatever the switch says.
     await call({ 'x-api-key': KEY }, { keys: false });
 
@@ -379,13 +385,13 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
             {
                 severity: 'INFO',
                 message: 'api key header while keys are off',
-                surface: 'mcp',
+                surface: 'api',
                 ours: false,
             },
             {
                 severity: 'INFO',
                 message: 'api key header while keys are off',
-                surface: 'mcp',
+                surface: 'api',
                 ours: true,
             },
         ],
@@ -414,7 +420,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'mcp',
+                surface: 'api',
                 outcome: 'allowed',
                 keyId: 'key-public-1',
                 accountId: ACCOUNT,
@@ -422,7 +428,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'mcp',
+                surface: 'api',
                 outcome: 'invalid',
                 keyId: null,
                 accountId: null,
@@ -430,7 +436,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'mcp',
+                surface: 'api',
                 outcome: 'unavailable',
                 keyId: null,
                 accountId: null,
@@ -438,7 +444,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'mcp',
+                surface: 'api',
                 outcome: 'forged',
                 keyId: null,
                 accountId: null,
@@ -510,7 +516,7 @@ test('forward on a real key store and counter', async (t) => {
 
     wire(keyPool);
 
-    await t.test('an account is held to its own limit on /mcp', async () => {
+    await t.test('an account is held to its own limit on the API', async () => {
         const statuses = [];
 
         for (let i = 0; i < 4; i++) {
@@ -520,8 +526,8 @@ test('forward on a real key store and counter', async (t) => {
         assert.deepEqual(statuses, [200, 200, 200, 429]);
     });
 
-    await t.test('the same key on /api is anonymous, at the address limit', async () => {
-        const res = await call({ 'x-api-key': keys.own! }, { surface: 'api' });
+    await t.test('the same key on /mcp is anonymous, at the address limit', async () => {
+        const res = await call({ 'x-api-key': keys.own! }, { surface: 'mcp' });
 
         assert.equal(res.status, 200);
         assert.equal(res.headers.get('x-ratelimit-limit'), '3');
@@ -550,7 +556,7 @@ test('forward on a real key store and counter', async (t) => {
 
             const [row] = (
                 await admin.query('select count, window_start from limit_counter where key = $1', [
-                    'mcpday:key:key-quota',
+                    'apiday:key:key-quota',
                 ])
             ).rows;
 

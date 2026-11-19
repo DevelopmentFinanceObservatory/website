@@ -49,7 +49,7 @@ export type KeyVerdict =
           accountId: string;
           // The account's own calls per window, or null for the default.
           rateLimit: number | null;
-          // The key's own calls per UTC day on /mcp, or null for the default.
+          // The key's own calls per UTC day on the API, or null for the default.
           dailyLimit: number | null;
           expiresAt: Date | null;
       }

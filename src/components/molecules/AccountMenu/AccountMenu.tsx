@@ -148,7 +148,7 @@ const AccountMenu = ({ className }: AccountMenuProps) => {
                     {isAdmin && (
                         <DropdownMenu.Item asChild onSelect={() => navigate('/admin/api-keys')}>
                             <button type="button" className={styles.item}>
-                                Admin: API keys
+                                User management
                             </button>
                         </DropdownMenu.Item>
                     )}

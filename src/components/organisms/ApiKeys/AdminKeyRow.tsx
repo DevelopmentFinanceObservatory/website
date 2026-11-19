@@ -33,7 +33,7 @@ const ResetIcon = () => (
     </svg>
 );
 
-/** One key of an account: its name, today's MCP use against its daily limit, with reset and delete. */
+/** One key of an account: its name, today's API use against its daily limit, with reset and delete. */
 const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) => {
     const name = keyData.name || 'Unnamed';
     const [asking, setAsking] = useState(false);
@@ -89,14 +89,14 @@ const AdminKeyRow = ({ keyData, actions, onChanged, reload }: AdminKeyRowProps) 
                         <UsageMeter
                             used={keyData.usedToday}
                             limit={keyData.dailyLimit}
-                            label="MCP calls today"
+                            label="API calls today"
                             className={styles.meter}
                         />
                         <span className={styles.of}>of</span>
                         <AdminLimitInput
                             value={keyData.customDailyLimit}
                             placeholder={String(keyData.dailyLimit)}
-                            label={`Daily MCP call limit for ${name}`}
+                            label={`Daily API call limit for ${name}`}
                             save={(limit) => actions.setKeyLimit(keyData.id, limit)}
                             onSaved={onChanged}
                         />

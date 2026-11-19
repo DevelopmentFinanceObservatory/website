@@ -440,7 +440,7 @@ test('API key service', async (t) => {
                 `insert into limit_counter (key, window_start, count)
                  values ($1, ${windowStart}, $2)
                  on conflict (key) do update set window_start = excluded.window_start, count = excluded.count`,
-                [`mcpday:key:${made.id}`, n],
+                [`apiday:key:${made.id}`, n],
             );
 
         assert.equal(await usedToday(), 0);

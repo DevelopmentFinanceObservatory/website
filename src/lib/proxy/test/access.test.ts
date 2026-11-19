@@ -2,10 +2,10 @@
  * `access.ts`: the decision for a call to the platform proxy, with a fake
  * limiter and key verifier so the order of counts and lookups can be seen.
  * An anonymous call is counted by address as before; a call with a key on
- * /mcp is checked for its signed tag, then counted against its account and
+ * the API is checked for its signed tag, then counted against its account and
  * against its own daily quota, and never its address. Only a key with a good
  * tag that the store does not hold is counted against the address. A key on
- * any other surface is ignored.
+ * any other surface, /mcp included, is ignored.
  */
 import '../../test/serverModules.ts';
 
@@ -105,7 +105,7 @@ const decide = (
     options: { surface?: 'api' | 'mcp' | 'pin'; keys?: boolean } = {},
 ) =>
     decideAccess(deps, {
-        surface: 'surface' in options ? options.surface : 'mcp',
+        surface: 'surface' in options ? options.surface : 'api',
         keys: options.keys ?? true,
         headers: new Headers(headers),
         ip: '203.0.113.7',
@@ -115,7 +115,7 @@ test('a call with no key is counted against its address, as before', async () =>
     const { calls, deps } = world();
     const access = await decide(deps);
 
-    assert.deepEqual(calls, ['address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['address:api:203.0.113.7']);
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.refusal, undefined);
     assert.equal(access.outcome, undefined);
@@ -144,7 +144,7 @@ test('a key on a call that ignores keys is ignored: anonymous, counted by addres
     const { calls, deps } = world();
     const access = await decide(deps, { 'x-api-key': 'nonsense' }, { keys: false });
 
-    assert.deepEqual(calls, ['address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['address:api:203.0.113.7']);
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.refusal, undefined);
 });
@@ -153,7 +153,7 @@ test('a valid key in the cache is counted against its account alone, at the defa
     const { calls, deps } = world({ cached: true });
     const access = await decide(deps, { authorization: `Bearer ${KEY}` });
 
-    assert.deepEqual(calls, ['cache', 'account:mcp:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:key-1:1000']);
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
     assert.equal(access.outcome, 'allowed');
     assert.equal(access.verdict?.limit, 600);
@@ -165,11 +165,11 @@ test('an account with a limit of its own is counted at that limit', async () => 
 
     await decide(deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(calls, ['cache', 'account:mcp:acct-1:200', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:200', 'daily:key-1:1000']);
 });
 
-test('a key is honored on /mcp only: elsewhere it is anonymous, counted by address, never looked up', async () => {
-    for (const surface of ['api', 'pin'] as const) {
+test('a key is honored on the api surface only: elsewhere it is anonymous, counted by address, never looked up', async () => {
+    for (const surface of ['mcp', 'pin'] as const) {
         const { calls, deps } = world({ cached: true });
         const access = await decide(deps, { 'x-api-key': KEY }, { surface });
 
@@ -212,7 +212,7 @@ test('a key past its daily quota is a 429 that reports the quota', async () => {
     assert.equal(access.refusal?.headers.get('retry-after'), '30');
     assert.equal(access.verdict?.limit, 1000);
     assert.deepEqual(access.identity, { kind: 'keyed', keyId: 'key-1', accountId: 'acct-1' });
-    assert.deepEqual(calls, ['cache', 'account:mcp:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600', 'daily:key-1:1000']);
 });
 
 test('a call over the per-minute account limit is refused before the daily quota is counted', async () => {
@@ -220,14 +220,14 @@ test('a call over the per-minute account limit is refused before the daily quota
     const access = await decide(deps, { 'x-api-key': KEY });
 
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), '600');
-    assert.deepEqual(calls, ['cache', 'account:mcp:acct-1:600']);
+    assert.deepEqual(calls, ['cache', 'account:api:acct-1:600']);
 });
 
 test('a key not in the cache is looked up and counted against its account, not its address', async () => {
     const { calls, deps } = world();
     const access = await decide(deps, { 'x-api-key': KEY });
 
-    assert.deepEqual(calls, ['cache', 'lookup', 'account:mcp:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600', 'daily:key-1:1000']);
     assert.equal(access.outcome, 'allowed');
     // The headers describe the account's allowance, not the address's.
     assert.equal(access.verdict?.limit, 600);
@@ -252,7 +252,7 @@ test('a valid key from an address past its anonymous limit is served on a cache 
 
     assert.equal(access.refusal, undefined);
     assert.equal(access.outcome, 'allowed');
-    assert.deepEqual(calls, ['cache', 'lookup', 'account:mcp:acct-1:600', 'daily:key-1:1000']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'account:api:acct-1:600', 'daily:key-1:1000']);
 });
 
 test('a key with a bad tag is a 401 with no lookup and no count', async () => {
@@ -280,7 +280,7 @@ test('a key with a good tag that the store lacks, from an address past its limit
 
     assert.equal(access.refusal?.status, 429);
     assert.equal(access.outcome, 'limited');
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
     assert.match((await access.refusal!.json()).detail, /per address/);
 });
 
@@ -297,7 +297,7 @@ test('an invalid key is a 401 problem document and does not fall back to anonymo
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     // A deleted key keeps a good tag, so a miss costs its address a call;
     // no account count, and the 401 carries no limit headers.
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
     assert.equal(access.refusal?.headers.get('x-ratelimit-limit'), null);
 });
 
@@ -309,7 +309,7 @@ test('an unavailable key store lets the call through as anonymous, counted by ad
     assert.equal(access.outcome, 'unavailable');
     assert.deepEqual(access.identity, { kind: 'anonymous' });
     assert.equal(access.verdict?.limit, 120);
-    assert.deepEqual(calls, ['cache', 'lookup', 'address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['cache', 'lookup', 'address:api:203.0.113.7']);
 });
 
 test('two different keys are a 400 before anything is counted', async () => {
@@ -337,6 +337,6 @@ test('a bearer that is not one of our keys is no key: anonymous, no lookup', asy
     const { calls, deps } = world();
     const access = await decide(deps, { authorization: 'Bearer harness-token' });
 
-    assert.deepEqual(calls, ['address:mcp:203.0.113.7']);
+    assert.deepEqual(calls, ['address:api:203.0.113.7']);
     assert.equal(access.outcome, undefined);
 });

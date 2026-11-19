@@ -34,7 +34,7 @@ const KeyCard = ({ item, busy, onDelete }: KeyCardProps) => {
             <UsageMeter
                 used={item.usedToday}
                 limit={item.dailyLimit}
-                label="MCP calls today"
+                label="API calls today"
                 className={styles.meter}
             />
             <p className={styles.caption}>

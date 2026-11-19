@@ -23,7 +23,7 @@ export type AdminActions = {
     deleteKey: (keyId: string) => Promise<AdminDoneResult>;
     // Empty text clears the key's own limit, which puts it back on the default.
     setKeyLimit: (keyId: string, limit: string) => Promise<AdminDoneResult>;
-    // Sets the key's MCP call count for today back to 0.
+    // Sets the key's API call count for today back to 0.
     resetKeyUsage: (keyId: string) => Promise<AdminDoneResult>;
     // The account's per-minute limit; empty text clears it.
     setAccountLimit: (email: string, limit: string) => Promise<AdminDoneResult>;

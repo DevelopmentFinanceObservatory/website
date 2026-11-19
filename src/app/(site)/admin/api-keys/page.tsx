@@ -33,7 +33,7 @@ const actions = {
 };
 
 /**
- * The operators' view of accounts and their MCP keys. Admins are the
+ * The operators' view of accounts and their API keys. Admins are the
  * signed-in users whose verified email is in ADMIN_EMAILS; anyone else gets
  * the 404 page (requireAdmin). The actions check the gate again.
  */

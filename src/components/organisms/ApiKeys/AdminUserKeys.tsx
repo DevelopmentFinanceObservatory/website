@@ -143,7 +143,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                     <thead>
                         <tr>
                             <th scope="col">Key</th>
-                            <th scope="col">MCP calls today</th>
+                            <th scope="col">API calls today</th>
                             <th scope="col">
                                 <span className={styles.visuallyHidden}>Actions</span>
                             </th>
@@ -191,7 +191,7 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                     <AdminLimitInput
                         value={user.accountLimit}
                         placeholder={`${defaultLimit.toLocaleString('en-GB')} default`}
-                        label={`Per-minute MCP call limit for ${user.email}`}
+                        label={`Per-minute API call limit for ${user.email}`}
                         save={(limit) => actions.setAccountLimit(user.email, limit)}
                     />
                 </label>

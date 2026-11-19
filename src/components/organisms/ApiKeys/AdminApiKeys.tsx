@@ -44,7 +44,7 @@ const pageHref = (query: string, page: number): string => {
 /**
  * The operators' view of accounts (/admin/api-keys): the dark hero with the
  * user count and the email search, then one row per account that opens to its
- * MCP keys. The admin gate (lib/apiKeys/server `requireAdmin`) is what keeps
+ * API keys. The admin gate (lib/apiKeys/server `requireAdmin`) is what keeps
  * it private.
  */
 const AdminApiKeys = ({
@@ -65,7 +65,7 @@ const AdminApiKeys = ({
             <section className={styles.page}>
                 <PageHero tone="dark" className={styles.hero}>
                     <h1 className={styles.title}>
-                        User Management
+                        User management
                         <span className={styles.count} aria-label={`${count(total)} users`}>
                             {count(total)}
                         </span>

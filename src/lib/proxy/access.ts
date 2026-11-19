@@ -7,7 +7,7 @@
  * A call is anonymous, counted against its address as before, or keyed,
  * counted against the account that owns the key at the account's limit and
  * against the key's own daily quota (docs/design/api-keys.md, "The Proxy
- * Check"). Keys are honored on /mcp only (`honorsKeys`). Every key carries a tag
+ * Check"). Keys are honored on the 'api' surface only (`honorsKeys`). Every key carries a tag
  * signed by a server secret (src/lib/auth/keyTag), checked first, so a
  * made-up key costs no read and no count:
  *
@@ -25,7 +25,8 @@
  *                                the address is over its limit)
  *     store unavailable          anonymous, counted against the address
  *
- * A key sent on a surface that does not honor keys (every one but /mcp), or
+ * A key sent on a surface that does not honor keys (every one but 'api',
+ * /mcp among them), or
  * with keys switched off (API_KEYS_ENABLED), is ignored: the call is
  * anonymous and the key is stripped before the call goes upstream by
  * `forward`.
@@ -76,8 +77,8 @@ export type AccessDeps = {
     defaultDailyLimit: number;
 };
 
-/** Whether a call on `surface` may carry a key: /mcp only. */
-export const honorsKeys = (surface: Surface | undefined): boolean => surface === 'mcp';
+/** Whether a call on `surface` may carry a key: the 'api' surface only. */
+export const honorsKeys = (surface: Surface | undefined): boolean => surface === 'api';
 
 const accountLimit = (key: ValidKey, defaultLimit: number): number => key.rateLimit ?? defaultLimit;
 

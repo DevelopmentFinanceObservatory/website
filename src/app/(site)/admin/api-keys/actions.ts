@@ -34,7 +34,7 @@ const REFUSALS = {
 
 const LIMIT_INVALID = 'Enter a positive whole number, or leave it empty for the default.';
 
-/** One account's keys, with today's MCP usage; null when the id is not a string. */
+/** One account's keys, with today's API usage; null when the id is not a string. */
 export const adminLoadKeys = async (userId: unknown): Promise<AdminKey[] | null> => {
     await requireAdmin();
 
@@ -91,7 +91,7 @@ export const adminSetKeyLimit = async (
         : { ok: false, error: REFUSALS.not_found };
 };
 
-/** Sets a key's MCP call count for today back to 0. */
+/** Sets a key's API call count for today back to 0. */
 export const adminResetKeyUsage = async (keyId: unknown): Promise<AdminDoneResult> => {
     const admin = await requireAdmin();
 
