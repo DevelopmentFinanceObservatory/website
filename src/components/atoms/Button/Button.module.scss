@@ -251,6 +251,21 @@
     rotate: 180deg;
 }
 
+// Inline: words set in running text, such as a join's phrase in the Graph
+// Explorer. The label wraps, takes the button's type and decoration, and
+// leaves the look to the caller's class.
+.inline .label {
+    display: block;
+    height: auto;
+    padding-inline: 0;
+    overflow: visible;
+    font: inherit;
+    letter-spacing: inherit;
+    text-decoration: inherit;
+    background-color: transparent;
+    border-radius: 0;
+}
+
 // Compact size: same type, rem(20) tall segments.
 .small {
     .label,

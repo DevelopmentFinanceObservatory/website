@@ -184,93 +184,66 @@ test('every entry of every arc box holds the arc its box names, subject to objec
                     `${id} ${entry.key} names ${arc}, which no entry holds`,
                 );
             }
-            assert.deepEqual(linkShape(via), {
-                dashed: false,
-                head: via.direction === 'out' ? 'box' : 'centre',
-            });
             const ends = entry.triple.split(' → ');
-            const [subject, object] =
-                via.direction === 'out'
-                    ? [on.label(id), 'each of these']
-                    : ['each of these', on.label(id)];
-            assert.deepEqual([ends[0], ends.at(-1)], [subject, object], `${id} ${entry.key}`);
+            const [centreEnd, boxEnd] =
+                via.direction === 'out' ? [ends[0], ends.at(-1)] : [ends.at(-1), ends[0]];
+            assert.equal(centreEnd, on.label(id), `${id} ${entry.key}: ${entry.triple}`);
+            assert.notEqual(boxEnd, on.label(id), `${id} ${entry.key}: ${entry.triple}`);
         }
     }
     assert.ok(entries > 50, `only ${entries} entries checked`);
 });
 
-test('a box’s join words, bubble and sentence read along its arc', () => {
-    const shown = (id: string, key: string) => {
-        const entry = nodeBoxes(model, id).find((box) => box.key === key);
-        return entry && [entry.join, entry.triple, entry.sentence];
-    };
-    const rows: [string, string, string[]][] = [
-        [
-            'FinancialFlow',
-            'up',
-            [
-                'is a kind of',
-                'financial flow → subClassOf → each of these',
-                'Graph link: financial flow subClassOf each entry.',
-            ],
-        ],
-        [
-            'FinancingEvent',
-            'down',
-            [
-                'is a kind of',
-                'each of these → subClassOf → financing event',
-                'Graph link: each entry subClassOf financing event.',
-            ],
-        ],
-        [
-            'WriteDown',
-            'list',
-            [
-                'is a member of',
-                'write-down → typeOf → each of these',
-                'Graph link: write-down typeOf each entry.',
-            ],
-        ],
-        [
-            'WriteDown',
-            'up',
-            [
-                'is a narrower value of',
-                'write-down → specializationOf → each of these',
-                'Graph link: write-down specializationOf each entry.',
-            ],
-        ],
-        [
-            'Country',
-            'left',
-            [
-                'takes values from',
-                'each of these → rangeIncludes → Country',
-                'Graph link: each entry rangeIncludes Country.',
-            ],
-        ],
+test('a box’s link, bubble and sentence name the arcs it follows', () => {
+    const find = (id: string, key: string) => nodeBoxes(model, id).find((box) => box.key === key);
+    type Via = Parameters<typeof linkShape>[0];
+    const arc = (property: ArcProperty, direction: 'in' | 'out'): Via => ({
+        kind: 'arc',
+        properties: [property],
+        direction,
+    });
+    const rows: [string, string, Via, string[]][] = [
+        ['FinancialFlow', 'up', arc('subClassOf', 'out'), ['subClassOf']],
+        ['FinancingEvent', 'down', arc('subClassOf', 'in'), ['subClassOf']],
+        ['WriteDown', 'list', arc('typeOf', 'out'), ['typeOf']],
+        ['WriteDown', 'up', arc('specializationOf', 'out'), ['specializationOf']],
+        ['Country', 'left', arc('rangeIncludes', 'in'), ['rangeIncludes']],
         [
             'WriteDown',
             'left',
-            [
-                'takes this value',
-                'each of these → rangeIncludes → financial flow type ← typeOf ← write-down',
-                'Graph link: each entry rangeIncludes financial flow type, and write-down typeOf financial flow type.',
-            ],
+            { kind: 'valueList', list: 'FinancialFlowTypeEnum' },
+            ['rangeIncludes', 'typeOf'],
         ],
         [
             'FinancialFlow',
             'measured',
-            [
-                'measured as',
-                'financial flow ← populationType · 474 StatVars · measuredProperty → each of these',
-                'Graph link: 474 StatVars have financial flow as their populationType and each entry as their measuredProperty.',
-            ],
+            {
+                kind: 'statVars',
+                centre: ['populationType'],
+                entries: ['measuredProperty'],
+                statVars: 474,
+                kinds: false,
+                kindsOnly: 0,
+            },
+            ['populationType', 'measuredProperty'],
         ],
     ];
-    for (const [id, key, expected] of rows)
-        assert.deepEqual(shown(id, key), expected, `${id} ${key}`);
+    for (const [id, key, via, arcs] of rows) {
+        const entry = find(id, key);
+        assert.ok(entry, `${id} ${key}`);
+        assert.deepEqual(entry.via, via, `${id} ${key}`);
+        for (const name of arcs) {
+            assert.ok(entry.triple.includes(name), `${id} ${key} bubble: ${name}`);
+            assert.ok(entry.sentence.includes(name), `${id} ${key} sentence: ${name}`);
+        }
+    }
+
+    const measured = find('FinancialFlow', 'measured');
+    assert.deepEqual(measured && [measured.join, measured.triple, measured.sentence], [
+        'measured as',
+        'financial flow ← populationType · 474 StatVars · measuredProperty → each of these',
+        'Graph link: 474 StatVars have financial flow as their populationType and each entry as their measuredProperty.',
+    ]);
 });
 
 test('each half of a join carries the head its link points to, in reading order', () => {

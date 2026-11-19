@@ -72,25 +72,27 @@ const intoCentre = (box: FocusBox, boxFirst: boolean): boolean =>
 
 /**
  * The line between a box and the centre, with its words. In the wide layout
- * `boxFirst` says whether the box sits above or left of the join, and a join
- * above or below the centre that points at it leaves its head to the line the
- * centre draws to its card. In the stacked layout every join runs from the
- * spine on the left to its box. A chain's dashed line carries a dot at its
- * midpoint.
+ * `boxFirst` says whether the box sits above or left of the join, and with
+ * `meetsCentre` the centre draws the rest of the line to its card, so a join
+ * that points at the centre leaves its head to that line. In the stacked
+ * layout every join runs from the spine on the left to its box. A chain's
+ * dashed line carries a dot at its midpoint.
  */
 const Join = ({
     box,
     vertical,
     boxFirst,
+    meetsCentre = false,
 }: {
     box: FocusBox;
     vertical: boolean;
     boxFirst: boolean;
+    meetsCentre?: boolean;
 }) => {
     const shape = linkShape(box.via);
     const heads = headsOf(shape, boxFirst);
     const wide: Heads =
-        vertical && pointsAtCentre(heads, boxFirst)
+        meetsCentre && pointsAtCentre(heads, boxFirst)
             ? boxFirst
                 ? [heads[0], null]
                 : [null, heads[1]]
@@ -198,6 +200,9 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
     const on = (side: Side) => boxes.filter((box) => box.side === side);
     const [up, left, right, down] = (['up', 'left', 'right', 'down'] as const).map(on);
     const unusedClass = unused > 0 ? shared.listClass : null;
+    // A lone box above or below sits over or under the card's middle, so the
+    // centre's line can carry its join to the card. Two or more sit to the sides.
+    const [lineUp, lineDown] = [up, down].map((group) => group.length === 1);
 
     return (
         <div className={styles.frame}>
@@ -206,8 +211,8 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                     <div className={styles.up}>
                         {up.map((box) => (
                             <div key={box.key} className={styles.column}>
+                                <Join box={box} vertical boxFirst meetsCentre={lineUp} />
                                 <Box box={box} {...shared} />
-                                <Join box={box} vertical boxFirst />
                             </div>
                         ))}
                     </div>
@@ -216,8 +221,8 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                     <div className={styles.left}>
                         {left.map((box) => (
                             <div key={box.key} className={styles.row}>
-                                <Box box={box} {...shared} />
                                 <Join box={box} vertical={false} boxFirst />
+                                <Box box={box} {...shared} />
                             </div>
                         ))}
                     </div>
@@ -225,10 +230,10 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                 <div
                     className={classNames(
                         styles.centre,
-                        up.length > 0 && styles.joinUp,
-                        down.length > 0 && styles.joinDown,
-                        up.some((box) => intoCentre(box, true)) && styles.headAbove,
-                        down.some((box) => intoCentre(box, false)) && styles.headBelow,
+                        lineUp && styles.joinUp,
+                        lineDown && styles.joinDown,
+                        lineUp && up.some((box) => intoCentre(box, true)) && styles.headAbove,
+                        lineDown && down.some((box) => intoCentre(box, false)) && styles.headBelow,
                     )}
                 >
                     <div className={styles.self}>
@@ -263,7 +268,7 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                     <div className={styles.down}>
                         {down.map((box) => (
                             <div key={box.key} className={styles.column}>
-                                <Join box={box} vertical boxFirst={false} />
+                                <Join box={box} vertical boxFirst={false} meetsCentre={lineDown} />
                                 <Box box={box} {...shared} />
                             </div>
                         ))}

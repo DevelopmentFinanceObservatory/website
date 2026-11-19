@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import styles from './JoinPhrase.module.scss';
 
+import Button from '@/components/atoms/Button/Button';
+
 type JoinPhraseProps = {
     /** The words on the join. */
     phrase: string;
@@ -17,9 +19,10 @@ let closeOpen: (() => void) | null = null;
 
 /**
  * A join's words as a button. Hovering it previews a bubble above it with the
- * link written out, and a press shows or hides the bubble. Escape, a press
- * elsewhere, moving focus away or opening another join's bubble closes it.
- * The bubble describes the button, so a screen reader reads the link on focus.
+ * link written out, and a press pins the bubble open or unpins it. Escape, a
+ * press outside the words and their bubble, moving focus outside them or
+ * opening another join's bubble closes it. The bubble describes the button,
+ * so a screen reader reads the link on focus.
  */
 export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
     const [hovered, setHovered] = useState(false);
@@ -57,11 +60,11 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
         if (event.pointerType === 'mouse') setHovered(entering);
     };
 
-    // A press flips what the reader sees. It hides a bubble the pointer previews, and
-    // shows a closed one until it is closed.
-    const onPress = () => {
-        setHovered(false);
-        setHeld(!open);
+    // Focus that moves into the bubble, as a press on its text does, keeps it pinned.
+    const onBlur = (event: React.FocusEvent) => {
+        if (event.relatedTarget instanceof Node && root.current?.contains(event.relatedTarget))
+            return;
+        setHeld(false);
     };
 
     return (
@@ -71,18 +74,18 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
             onPointerEnter={(event) => onHover(event, true)}
             onPointerLeave={(event) => onHover(event, false)}
         >
-            <button
-                type="button"
+            <Button
+                variant="inline"
                 className={styles.phrase}
                 aria-expanded={open}
                 aria-controls={bubble}
                 aria-describedby={bubble}
-                onBlur={() => setHeld(false)}
-                onClick={onPress}
+                onBlur={onBlur}
+                onClick={() => setHeld(!held)}
             >
                 {phrase}
-            </button>
-            <span id={bubble} className={styles.bubble} hidden={!open}>
+            </Button>
+            <span id={bubble} className={styles.bubble} tabIndex={-1} hidden={!open}>
                 <span>{triple}</span>
                 {note !== null && <span className={styles.note}>{note}</span>}
             </span>

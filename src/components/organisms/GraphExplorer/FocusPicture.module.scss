@@ -34,7 +34,7 @@ $stack-below: 720px;
 // With no left box the left column folds away and the right one takes its
 // width. The boxes above and below then line up with the centre's left edge.
 
-@container picture (min-width: #{$stack-below}) {
+@container picture (width >= #{$stack-below}) {
     .noLeft {
         grid-template-columns: 0 minmax(rem(180), rem(300)) minmax(0, 1fr);
 
@@ -102,8 +102,8 @@ $stack-below: 720px;
     }
 }
 
-// The centre's cell spans the row, and a hairline above and below the card
-// carries the joins of the boxes over and under it to the card's edges.
+// The centre's cell spans the row, and a hairline above or below the card
+// carries the join of a lone box over or under it to the card's edge.
 .centre {
     @include flex(column, center, stretch);
 
@@ -240,7 +240,7 @@ $stack-below: 720px;
 // chain's dashed line has a dot between the halves. Each half may end in an
 // arrowhead, placed per layout: `headStart` and `headEnd` in the wide layout,
 // `stackStart` and `stackEnd` in the stacked one.
-$head: 7px;
+$head: rem(7);
 
 @mixin join-across {
     // The empty third row matches the words' row, so the line sits at the
@@ -380,9 +380,17 @@ $head: 7px;
     }
 }
 
-@container picture (min-width: #{$stack-below}) {
+@container picture (width >= #{$stack-below}) {
     .hjoin {
         @include join-across;
+    }
+
+    // Each join comes before its box in the document, so focus reaches the
+    // join first as the stacked layout draws it. Above and left of the centre
+    // the box is drawn first.
+    .up > .column > .box,
+    .left > .row > .box {
+        order: -1;
     }
 
     .vjoin {
@@ -402,10 +410,12 @@ $head: 7px;
     }
 
     // A join above or below the centre that points at it leaves its head to
-    // the line the centre draws, so the head meets the card.
+    // the line the centre draws, so the head meets the card. The line keeps
+    // the head's height when no side box is taller than the card.
     .headAbove::before,
     .headBelow::after {
         width: $head;
+        min-height: $head;
     }
 
     .headAbove::before {
@@ -455,6 +465,7 @@ $head: 7px;
     flex-wrap: wrap;
     gap: rem(6) rem(20);
     margin-top: rem(8);
+    padding-inline: rem(20);
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
@@ -498,7 +509,7 @@ $head: 7px;
     }
 
     &::after {
-        inset: 0 auto 0 calc(50% - #{$head * 0.5});
+        inset: 0 auto 0 calc(50% - #{$head} / 2);
         clip-path: none;
         border-radius: 50%;
     }
@@ -521,13 +532,23 @@ $stack-gap: rem(12);
 $spine: rem(16);
 $spine-half: rem(8);
 
-@container picture (max-width: #{$stack-below - 1px}) {
+// The width a join's bubble leaves free: the farthest its words start from the
+// frame's left edge (the picture's padding, the spine less the join's overlap,
+// and the join's width less the narrowest words, halved: 48 px), and a 12 px
+// margin on the right.
+$bubble-inset: rem(60);
+
+@container picture (width < #{$stack-below}) {
     // A flex column, since a grid's empty rows would each add a gap and break the spine.
     .picture {
         @include flex(column, flex-start, stretch);
 
         gap: $stack-gap;
         padding: rem(16) rem(12);
+    }
+
+    .legend {
+        padding-inline: rem(12);
     }
 
     .up,
@@ -589,11 +610,15 @@ $spine-half: rem(8);
     }
 
     // Every join reads from the spine to its box, so it comes first in the row.
+    // Its bubble opens rightwards from the words and stays inside the frame.
     .hjoin,
     .vjoin {
         @include join-across;
 
-        order: -1;
+        --bubble-left: 0;
+        --bubble-shift: 0;
+        --bubble-room: calc(100cqi - #{$bubble-inset});
+
         margin-inline-start: -$spine-half;
     }
 

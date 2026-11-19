@@ -5,13 +5,19 @@
 // a pointer moving from the words onto the bubble keeps it open.
 $bubble-gap: rem(6);
 
+// The bubble centres over the words unless the layout around them sets
+// `--bubble-left` and `--bubble-shift` to anchor it, and `--bubble-room` to the
+// most width it may take there.
+
 .root {
     position: relative;
     display: inline-flex;
     max-width: 100%;
 }
 
-.phrase {
+// The child selector outranks the Button atom's own reset, whichever
+// stylesheet loads first.
+.root > .phrase {
     @include font-size(11px, 1.2);
 
     display: inline-flex;
@@ -38,11 +44,11 @@ $bubble-gap: rem(6);
 
     position: absolute;
     bottom: calc(100% + #{$bubble-gap});
-    left: 50%;
+    left: var(--bubble-left, 50%);
     z-index: 2;
     gap: rem(4);
     width: max-content;
-    max-width: min(#{rem(280)}, 80vw);
+    max-width: min(#{rem(280)}, var(--bubble-room, 80vw));
     padding: rem(6) rem(8);
     font-family: var(--font-dm-mono);
     color: var(--color-bg);
@@ -51,7 +57,11 @@ $bubble-gap: rem(6);
     overflow-wrap: anywhere;
     background-color: var(--color-charcoal);
     border-radius: rem(4);
-    transform: translateX(-50%);
+    transform: translateX(var(--bubble-shift, -50%));
+
+    &:focus {
+        outline: none;
+    }
 
     &[hidden] {
         display: none;
