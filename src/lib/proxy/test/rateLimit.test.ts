@@ -71,6 +71,31 @@ test('limiter: counts an address and an account apart, per surface, at the limit
         assert.equal((await limiter.hitKey('api', 'acct:b', 3)).remaining, 2);
     });
 
+    await t.test('a key is counted in a one-day window under mcpday:key:<id>', async () => {
+        const first = await limiter.hitDaily('k1', 2);
+        const second = await limiter.hitDaily('k1', 2);
+        const third = await limiter.hitDaily('k1', 2);
+
+        assert.deepEqual(
+            [first, second, third].map(({ allowed, remaining }) => [allowed, remaining]),
+            [
+                [true, 1],
+                [true, 0],
+                [false, 0],
+            ],
+        );
+        // The window is a UTC day, whatever window the per-minute counts use.
+        assert.ok(first.reset > 3600 && first.reset <= 86_400);
+
+        const { rows } = await pool.query(
+            "select count from limit_counter where key = 'mcpday:key:k1'",
+        );
+
+        assert.equal(rows[0].count, 3);
+        // The same key's per-window count is separate.
+        assert.equal((await limiter.hitKey('mcp', 'k1', 2)).remaining, 1);
+    });
+
     await t.test(
         'a caller refused on the shared count stays refused when it then fails',
         async () => {
@@ -147,4 +172,7 @@ test('limiter: a count that times out falls back too', async () => {
 
     assert.equal((await limiter.hitKey('mcp', 'x', 1)).allowed, true);
     assert.equal((await limiter.hitKey('mcp', 'x', 1)).allowed, false);
+    // The daily count falls back on its own one-day window.
+    assert.equal((await limiter.hitDaily('x', 1)).allowed, true);
+    assert.equal((await limiter.hitDaily('x', 1)).allowed, false);
 });

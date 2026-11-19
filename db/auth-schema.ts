@@ -122,6 +122,7 @@ export const apikey = pgTable(
         updatedAt: timestamp('updated_at').notNull(),
         permissions: text('permissions'),
         metadata: text('metadata'),
+        dailyLimit: integer('daily_limit'),
     },
     (table) => [
         index('apikey_configId_idx').on(table.configId),

@@ -66,7 +66,9 @@ test('API key table and plugin setup', async (t) => {
     const alice = await signedIn('alice@a.example');
 
     await t.test('the runtime role reads apikey and user.api_rate_limit', async () => {
-        await pool.query('select id, key, enabled, expires_at, reference_id from apikey limit 1');
+        await pool.query(
+            'select id, key, enabled, expires_at, reference_id, daily_limit from apikey limit 1',
+        );
         await pool.query('select api_rate_limit from "user" limit 1');
     });
 
@@ -80,6 +82,25 @@ test('API key table and plugin setup', async (t) => {
         assert.equal(updated.rowCount, 1);
         assert.ok(updated.rows[0].last_request);
     });
+
+    await t.test(
+        'a key has no daily limit until one is set, and the runtime role sets it',
+        async () => {
+            const created = await auth.api.createApiKey({ body: { userId: alice.user.id } });
+            const [before] = (
+                await pool.query('select daily_limit from apikey where id = $1', [created.id])
+            ).rows;
+
+            assert.equal(before.daily_limit, null);
+
+            const updated = await pool.query(
+                'update apikey set daily_limit = 25 where id = $1 returning daily_limit',
+                [created.id],
+            );
+
+            assert.equal(updated.rows[0].daily_limit, 25);
+        },
+    );
 
     await t.test(
         'a key is stored as its SHA-256, base64url, with the dfo_live_ prefix and a signed tag',

@@ -104,6 +104,13 @@ export const parseLimitInput = (value: unknown): LimitInput => {
     return limit >= 1 && limit <= MAX_LIMIT ? { ok: true, limit } : { ok: false };
 };
 
+/**
+ * A key's daily limit as typed in the admin form: a positive whole number,
+ * or empty to clear it (the deployment default, API_KEY_DAILY_LIMIT,
+ * applies). The rule is the account limit's.
+ */
+export const parseDailyLimitInput = (value: unknown): LimitInput => parseLimitInput(value);
+
 /** An email as typed in an admin form: trimmed and lowercased, and shaped like an address; else null. */
 export const parseEmailInput = (value: unknown): string | null => {
     if (typeof value !== 'string') {

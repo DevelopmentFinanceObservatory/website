@@ -5,14 +5,17 @@
  * with a fake limiter and key verifier.
  *
  * A call is anonymous, counted against its address as before, or keyed,
- * counted against the account that owns the key at the account's limit
- * (docs/design/api-keys.md, "The Proxy Check"). Every key carries a tag
+ * counted against the account that owns the key at the account's limit and
+ * against the key's own daily quota (docs/design/api-keys.md, "The Proxy
+ * Check"). Keys are honored on /mcp only (`honorsKeys`). Every key carries a tag
  * signed by a server secret (src/lib/auth/keyTag), checked first, so a
  * made-up key costs no read and no count:
  *
  *   no key                       anonymous
  *   bad tag                      401, no lookup, no count (outcome `forged`)
- *   good tag, valid in the cache counted against the account
+ *   good tag, valid in the cache counted against the account, then the key's
+ *                                daily quota; the headers report the account's
+ *                                count, or the quota's when it refuses
  *   good tag, otherwise looked up:
  *     valid                      counted against the account, never the
  *                                address, so keyed callers behind a shared
@@ -22,11 +25,17 @@
  *                                the address is over its limit)
  *     store unavailable          anonymous, counted against the address
  *
- * A key sent on a surface that does not honor keys, or with keys switched
- * off (API_KEYS_ENABLED), is ignored: the call is anonymous and the key is
- * stripped before the call goes upstream by `forward`.
+ * A key sent on a surface that does not honor keys (every one but /mcp), or
+ * with keys switched off (API_KEYS_ENABLED), is ignored: the call is
+ * anonymous and the key is stripped before the call goes upstream by
+ * `forward`.
  */
-import { conflictingKeysProblem, invalidKeyProblem, rateLimitedProblem } from './problem.ts';
+import {
+    conflictingKeysProblem,
+    dailyQuotaProblem,
+    invalidKeyProblem,
+    rateLimitedProblem,
+} from './problem.ts';
 import { readApiKey } from './apiKey.ts';
 import type { KeyVerifier, ValidKey } from './keyVerifier.ts';
 import type { RateVerdict } from './rateHeaders.ts';
@@ -59,15 +68,23 @@ export type AccessDeps = {
     hitAddress: (surface: Surface, ip: string) => Promise<RateVerdict>;
     // Count a call from an account against `limit`.
     hitAccount: (surface: Surface, accountId: string, limit: number) => Promise<RateVerdict>;
+    // Count a call by a key against its daily quota of `limit`.
+    hitDaily: (keyId: string, limit: number) => Promise<RateVerdict>;
     // The account's limit when it has none of its own.
     defaultLimit: number;
+    // A key's daily quota when it has none of its own.
+    defaultDailyLimit: number;
 };
+
+/** Whether a call on `surface` may carry a key: /mcp only. */
+export const honorsKeys = (surface: Surface | undefined): boolean => surface === 'mcp';
 
 const accountLimit = (key: ValidKey, defaultLimit: number): number => key.rateLimit ?? defaultLimit;
 
 /**
- * Decide the call. `keys` is whether this call honors a key at all (the
- * route's surface, and API_KEYS_ENABLED); `surface` unset means the call has
+ * Decide the call. `keys` is whether the route and the deployment accept a
+ * key at all (the route's `keys` option, and API_KEYS_ENABLED); the surface
+ * must honor keys as well (`honorsKeys`). `surface` unset means the call has
  * no limit and no key check.
  */
 export const decideAccess = async (
@@ -92,7 +109,7 @@ export const decideAccess = async (
             : { identity: anonymous, verdict };
     };
 
-    if (!surface || !keys) {
+    if (!surface || !keys || !honorsKeys(surface)) {
         return countAddress();
     }
 
@@ -118,12 +135,23 @@ export const decideAccess = async (
         );
         const identity: Identity = { kind: 'keyed', keyId: key.keyId, accountId: key.accountId };
 
-        return verdict.allowed
+        if (!verdict.allowed) {
+            return {
+                refusal: rateLimitedProblem(verdict, rateHeaders(verdict), 'account'),
+                identity,
+                verdict,
+                outcome: 'limited',
+            };
+        }
+
+        const daily = await deps.hitDaily(key.keyId, key.dailyLimit ?? deps.defaultDailyLimit);
+
+        return daily.allowed
             ? { identity, verdict, outcome: 'allowed' }
             : {
-                  refusal: rateLimitedProblem(verdict, rateHeaders(verdict), 'account'),
+                  refusal: dailyQuotaProblem(daily, rateHeaders(daily)),
                   identity,
-                  verdict,
+                  verdict: daily,
                   outcome: 'limited',
               };
     };

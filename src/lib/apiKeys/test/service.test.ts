@@ -59,10 +59,12 @@ test('API key service', async (t) => {
     const context = await auth.$context;
     const lines: Record<string, unknown>[] = [];
     let cap = 3;
+    let defaultDaily = 1000;
     const service = createKeyService({
         auth,
         db,
         maxPerAccount: () => cap,
+        defaultDailyLimit: () => defaultDaily,
         log: (line) => lines.push(line),
     });
 
@@ -134,10 +136,13 @@ test('API key service', async (t) => {
 
         assert.deepEqual(Object.keys(listed[0]!).sort(), [
             'createdAt',
+            'customDailyLimit',
+            'dailyLimit',
             'id',
             'lastRequest',
             'name',
             'start',
+            'usedToday',
         ]);
         assert.ok(row?.key && row.key !== made.key);
 
@@ -375,6 +380,316 @@ test('API key service', async (t) => {
         assert.equal(await service.adminDelete('ops@example.org', victim.id), false);
     });
 
+    await t.test(
+        'the daily limit is the default until an operator sets one, and reads back',
+        async () => {
+            const ida = await account('ida@i.example');
+            const made = await service.createOwn(ida, 'daily');
+
+            assert.ok(made.ok);
+
+            const read = async () =>
+                (await service.listOwn(await as(ida))).find((k) => k.id === made.id)!;
+
+            assert.deepEqual(
+                [
+                    (await read()).dailyLimit,
+                    (await read()).customDailyLimit,
+                    (await read()).usedToday,
+                ],
+                [1000, null, 0],
+            );
+
+            assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, 25), true);
+            assert.equal((await read()).dailyLimit, 25);
+            assert.equal((await read()).customDailyLimit, 25);
+
+            // The proxy's verifier reads the same column.
+            const verdict = await createKeyVerifier(db).verify(made.key);
+
+            assert.ok(verdict.kind === 'valid');
+            assert.equal(verdict.dailyLimit, 25);
+
+            // Clearing returns the key to the default, which is read per call.
+            assert.equal(
+                await service.adminSetKeyDailyLimit('ops@example.org', made.id, null),
+                true,
+            );
+            defaultDaily = 400;
+            assert.equal((await read()).dailyLimit, 400);
+            assert.equal((await read()).customDailyLimit, null);
+            defaultDaily = 1000;
+
+            assert.equal(
+                await service.adminSetKeyDailyLimit('ops@example.org', 'no-such-key', 5),
+                false,
+            );
+        },
+    );
+
+    await t.test("usedToday is today's count only: an older day counts as zero", async () => {
+        const joe = await account('joe@j.example');
+        const made = await service.createOwn(joe, 'counted');
+
+        assert.ok(made.ok);
+
+        const usedToday = async () =>
+            (await service.listOwn(await as(joe))).find((k) => k.id === made.id)!.usedToday;
+        const set = (windowStart: string, n: number) =>
+            pool.query(
+                `insert into limit_counter (key, window_start, count)
+                 values ($1, ${windowStart}, $2)
+                 on conflict (key) do update set window_start = excluded.window_start, count = excluded.count`,
+                [`mcpday:key:${made.id}`, n],
+            );
+
+        assert.equal(await usedToday(), 0);
+
+        await set("date_bin('86400 s', now(), timestamptz 'epoch')", 7);
+        assert.equal(await usedToday(), 7);
+
+        await set("date_bin('86400 s', now(), timestamptz 'epoch') - interval '1 day'", 900);
+        assert.equal(await usedToday(), 0);
+    });
+
+    await t.test(
+        'rotating gives a new key with the same owner, label and daily limit',
+        async () => {
+            const kim = await account('kim@k.example');
+            const made = await service.createOwn(kim, 'rotate me');
+
+            assert.ok(made.ok);
+            assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', made.id, 12), true);
+
+            const rotated = await service.rotateOwn(await as(kim), made.id);
+
+            assert.ok(rotated.ok);
+            assert.notEqual(rotated.id, made.id);
+            assert.match(rotated.key, /^dfo_live_[A-Za-z]{32}[A-Za-z0-9_-]{8}$/);
+            assert.equal(await rowOf(made.id), undefined);
+
+            const row = await rowOf(rotated.id);
+
+            assert.equal(row?.referenceId, kim);
+            assert.equal(row?.name, 'rotate me');
+            assert.equal(row?.dailyLimit, 12);
+
+            // The old key stops verifying and the new one verifies.
+            const verifier = createKeyVerifier(db, { validMs: 0, invalidMs: 0 });
+
+            assert.equal((await verifier.verify(made.key)).kind, 'invalid');
+            assert.equal((await verifier.verify(rotated.key)).kind, 'valid');
+
+            // A key with no daily limit of its own rotates to one with none.
+            const plain = await service.createOwn(kim, 'plain');
+
+            assert.ok(plain.ok);
+
+            const again = await service.rotateOwn(await as(kim), plain.id);
+
+            assert.ok(again.ok);
+            assert.equal((await rowOf(again.id))?.dailyLimit, null);
+        },
+    );
+
+    await t.test(
+        "rotating works at the key cap and reaches only the owner's own keys",
+        async () => {
+            const lee = await account('lee@l.example');
+            const mal = await account('mal@m.example');
+            const held = [];
+
+            for (let i = 0; i < cap; i += 1) {
+                const made = await service.createOwn(lee, `k${i}`);
+
+                assert.ok(made.ok);
+                held.push(made);
+            }
+
+            assert.equal((await service.createOwn(lee, 'over')).ok, false);
+
+            const rotated = await service.rotateOwn(await as(lee), held[0]!.id);
+
+            assert.ok(rotated.ok);
+
+            const mine = await service.listOwn(await as(lee));
+
+            assert.equal(mine.length, cap);
+
+            const notFound = { ok: false, reason: 'not_found' };
+
+            // Another account's key, a missing key and a key just rotated away.
+            assert.deepEqual(await service.rotateOwn(await as(mal), mine[0]!.id), notFound);
+            assert.deepEqual(await service.rotateOwn(await as(lee), 'no-such-key'), notFound);
+            assert.deepEqual(await service.rotateOwn(await as(lee), held[0]!.id), notFound);
+            assert.ok(await rowOf(mine[0]!.id));
+            assert.equal((await service.listOwn(await as(lee))).length, cap);
+        },
+    );
+
+    await t.test("rotating carries today's daily count over, so it is no fresh quota", async () => {
+        const uma = await account('uma@u.example');
+        const made = await service.createOwn(uma, 'spent');
+
+        assert.ok(made.ok);
+
+        const today = "date_bin('86400 s', now(), timestamptz 'epoch')";
+        const seed = (id: string, windowStart: string, n: number) =>
+            pool.query(
+                `insert into limit_counter (key, window_start, count) values ($1, ${windowStart}, $2)`,
+                [`mcpday:key:${id}`, n],
+            );
+        const counter = async (id: string) =>
+            (
+                await pool.query('select count, window_start from limit_counter where key = $1', [
+                    `mcpday:key:${id}`,
+                ])
+            ).rows[0];
+
+        await seed(made.id, today, 640);
+
+        const before = await counter(made.id);
+        const rotated = await service.rotateOwn(await as(uma), made.id);
+
+        assert.ok(rotated.ok);
+
+        const after = await counter(rotated.id);
+
+        assert.equal(after.count, 640);
+        assert.deepEqual(after.window_start, before.window_start);
+        assert.equal(
+            (await service.listOwn(await as(uma))).find((k) => k.id === rotated.id)?.usedToday,
+            640,
+        );
+
+        // An operator's rotation does the same; a count from an earlier day is not carried.
+        const second = await service.adminRotate('ops@example.org', rotated.id);
+
+        assert.ok(second.ok);
+        assert.equal((await counter(second.id)).count, 640);
+
+        const stale = await service.createOwn(uma, 'yesterday');
+
+        assert.ok(stale.ok);
+        await seed(stale.id, `${today} - interval '1 day'`, 900);
+
+        const fresh = await service.adminRotate('ops@example.org', stale.id);
+
+        assert.ok(fresh.ok);
+        assert.equal(await counter(fresh.id), undefined);
+    });
+
+    await t.test('two rotations of one key leave one new key', async () => {
+        const ned = await account('ned@n.example');
+        const made = await service.createOwn(ned, 'race');
+
+        assert.ok(made.ok);
+
+        const results = await Promise.all([
+            service.rotateOwn(await as(ned), made.id),
+            service.rotateOwn(await as(ned), made.id),
+        ]);
+
+        assert.equal(results.filter((r) => r.ok).length, 1);
+        assert.equal((await service.listOwn(await as(ned))).length, 1);
+    });
+
+    await t.test('admin: rotate any key, by id', async () => {
+        const opal = await account('opal@o.example');
+        const made = await service.createOwn(opal, 'by operator');
+
+        assert.ok(made.ok);
+
+        const rotated = await service.adminRotate('ops@example.org', made.id);
+
+        assert.ok(rotated.ok);
+        assert.equal((await rowOf(rotated.id))?.referenceId, opal);
+        assert.equal(await rowOf(made.id), undefined);
+        assert.deepEqual(await service.adminRotate('ops@example.org', made.id), {
+            ok: false,
+            reason: 'not_found',
+        });
+    });
+
+    await t.test(
+        'admin: users, newest first, with a search, a page and their key counts',
+        async () => {
+            const pat = await account('Pat.Needle@p.example');
+            const quinn = await account('quinn.needle@q.example');
+
+            assert.ok((await service.createOwn(pat, 'one')).ok);
+            assert.ok((await service.createOwn(pat, 'two')).ok);
+            // One of Pat's two keys has expired, so only one is active.
+            await pool.query(
+                `update apikey set expires_at = now() - interval '1 hour'
+             where id = (select id from apikey where reference_id = $1 limit 1)`,
+                [pat],
+            );
+            // Quinn signs up after Pat.
+            await pool.query(`update "user" set created_at = '2100-01-01' where id = $1`, [quinn]);
+
+            const everyone = await service.adminListUsers({});
+            const everyoneCount = (await pool.query('select count(*)::int as n from "user"'))
+                .rows[0].n;
+
+            assert.equal(everyone.total, everyoneCount);
+            assert.equal(everyone.matched, everyoneCount);
+            assert.equal(everyone.users[0]!.id, quinn);
+
+            const found = await service.adminListUsers({ query: '  NEEDLE ' });
+
+            assert.equal(found.total, everyoneCount);
+            assert.equal(found.matched, 2);
+            assert.deepEqual(
+                found.users.map((u) => [u.id, u.email, u.activeKeys, u.accountLimit]),
+                [
+                    [quinn, 'quinn.needle@q.example', 0, null],
+                    [pat, 'pat.needle@p.example', 1, null],
+                ],
+            );
+            assert.ok(found.users.every((u) => u.createdAt instanceof Date));
+
+            // A page, with the match count unchanged.
+            const page = await service.adminListUsers({ query: 'needle', offset: 1, limit: 1 });
+
+            assert.equal(page.matched, 2);
+            assert.deepEqual(
+                page.users.map((u) => u.id),
+                [pat],
+            );
+            assert.equal((await service.adminListUsers({ limit: 3 })).users.length, 3);
+
+            // LIKE wildcards in the query are text.
+            assert.equal((await service.adminListUsers({ query: '%' })).matched, 0);
+            assert.equal((await service.adminListUsers({ query: '_' })).matched, 0);
+            assert.deepEqual(await service.adminListUsers({ query: 'no-match-anywhere' }), {
+                total: everyoneCount,
+                matched: 0,
+                users: [],
+            });
+        },
+    );
+
+    await t.test("admin: one account's keys with the owner, limit and usage", async () => {
+        const rae = await account('rae@r.example');
+        const other = await account('sam@s.example');
+        const first = await service.createOwn(rae, 'first');
+        const second = await service.createOwn(rae, 'second');
+
+        assert.ok(first.ok && second.ok);
+        assert.ok((await service.createOwn(other, 'not rae')).ok);
+        assert.equal(await service.adminSetKeyDailyLimit('ops@example.org', first.id, 9), true);
+
+        const keys = await service.adminUserKeys(rae);
+
+        assert.deepEqual(keys.map((k) => k.id).sort(), [first.id, second.id].sort());
+        assert.ok(keys.every((k) => k.ownerId === rae && k.ownerEmail === 'rae@r.example'));
+        assert.equal(keys.find((k) => k.id === first.id)?.dailyLimit, 9);
+        assert.equal(keys.find((k) => k.id === second.id)?.dailyLimit, 1000);
+        assert.equal(keys[0]!.usedToday, 0);
+        assert.deepEqual(await service.adminUserKeys('no-such-account'), []);
+    });
+
     await t.test('every mutation logs a line without any key or hash', async () => {
         const messages = lines.map((l) => l.message);
 
@@ -384,7 +699,15 @@ test('API key service', async (t) => {
         const admin = lines.filter((l) => l.message === 'api key admin');
         const actions = new Set(admin.map((l) => l.action));
 
-        assert.deepEqual([...actions].sort(), ['clear-limit', 'create', 'delete', 'set-limit']);
+        assert.deepEqual([...actions].sort(), [
+            'clear-daily-limit',
+            'clear-limit',
+            'create',
+            'delete',
+            'rotate',
+            'set-daily-limit',
+            'set-limit',
+        ]);
 
         for (const line of admin) {
             assert.equal(line.actor, 'ops@example.org');

@@ -1,8 +1,9 @@
 /**
- * `forward()` with API keys: what reaches the upstream (never the key, the
- * caller named as `user:` for an account), what a bad, unavailable or
- * ignored key does, the Studio and the kill switch, the usage line, and the
- * whole flow on a real key store and counter.
+ * `forward()` with API keys, honored on /mcp only: what reaches the upstream
+ * (never the key, the caller named as `user:` for an account), what a bad,
+ * unavailable or ignored key does, a key on /api, the Studio and the kill
+ * switch, the usage line, and the whole flow, the daily quota included, on a
+ * real key store and counter.
  */
 import '../../test/serverModules.ts';
 
@@ -77,7 +78,7 @@ const call = (headers: Record<string, string> = {}, options: Options = {}): Prom
         new Request('http://site.test/api/v1/search/x', {
             headers: { 'x-forwarded-for': '203.0.113.7', ...headers },
         }) as NextRequest,
-        { surface: 'api', target: `${base}/x`, unreachable: 'unreachable', ...options },
+        { surface: 'mcp', target: `${base}/x`, unreachable: 'unreachable', ...options },
     );
 
 const original = { ...accessDeps };
@@ -107,6 +108,11 @@ const fakes = (answer: KeyVerdict, cached = false) => {
 
         return verdictOf(limit);
     };
+    accessDeps.hitDaily = async (keyId, limit) => {
+        log.push(`daily:${keyId}`);
+
+        return verdictOf(limit);
+    };
 
     return log;
 };
@@ -121,6 +127,7 @@ const VALID: KeyVerdict = {
     keyId: 'key-public-1',
     accountId: ACCOUNT,
     rateLimit: null,
+    dailyLimit: null,
     expiresAt: null,
 };
 
@@ -138,7 +145,35 @@ const fresh = () => {
 
 test.after(() => mock.restoreAll());
 
-test('forward: a valid key goes to dfo-apis as the account, with no key in sight', async () => {
+test('forward: a key on /api is stripped and ignored: anonymous, counted by address, no usage line', async () => {
+    fresh();
+
+    for (const answer of [VALID, { kind: 'invalid' } as KeyVerdict]) {
+        const log = fakes(answer, true);
+
+        for (const headers of [
+            { authorization: `Bearer ${KEY}` },
+            { 'x-api-key': KEY },
+            { authorization: `Bearer ${KEY}`, 'x-api-key': FORGED },
+        ] as Record<string, string>[]) {
+            seen.length = 0;
+
+            const res = await call(headers, { surface: 'api' });
+
+            assert.equal(res.status, 200);
+            assert.equal(res.headers.get('x-ratelimit-limit'), '120');
+            assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
+            assert.equal(seen[0]!.authorization, undefined);
+            assert.equal(seen[0]!['x-api-key'], undefined);
+        }
+
+        assert.ok(log.every((entry) => entry === 'address:api'));
+    }
+
+    assert.deepEqual(lines, []);
+});
+
+test('forward: a valid key on /mcp goes to dfo-apis as the account, with no key in sight', async () => {
     fresh();
     fakes(VALID);
 
@@ -166,7 +201,7 @@ test('forward: an unavailable key store goes on as anonymous with the key still 
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': KEY });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['cache', 'lookup', 'address:api']);
+    assert.deepEqual(log, ['cache', 'lookup', 'address:mcp']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
@@ -202,7 +237,7 @@ test('forward: another bearer is no key, and dfo-apis gets no caller Authorizati
     const res = await call({ authorization: 'Bearer some-other-token' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['address:mcp']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
@@ -214,7 +249,7 @@ test('forward: a key in another scheme, or bare, is anonymous and never reaches 
         const res = await call({ authorization });
 
         assert.equal(res.status, 200);
-        assert.deepEqual(log, ['address:api']);
+        assert.deepEqual(log, ['address:mcp']);
         assert.equal(seen[0]!.authorization, undefined);
     }
 });
@@ -225,7 +260,7 @@ test('forward: a call with no key is anonymous, and a client-sent caller is drop
 
     await call({ 'x-dfo-caller': accountCaller });
 
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['address:mcp']);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
 });
 
@@ -300,7 +335,7 @@ test('forward: the Studio strips a key and otherwise ignores it', async () => {
     ] as Record<string, string>[]) {
         seen.length = 0;
 
-        const res = await call(headers, { keys: false, bearer: 'studio-token' });
+        const res = await call(headers, { surface: 'api', keys: false, bearer: 'studio-token' });
 
         assert.equal(res.status, 200);
         assert.equal(seen[0]!.authorization, 'Bearer studio-token');
@@ -319,7 +354,7 @@ test('forward: API_KEYS_ENABLED=false strips keys and treats every call as anony
     const res = await call({ authorization: `Bearer ${KEY}`, 'x-api-key': 'junk' });
 
     assert.equal(res.status, 200);
-    assert.deepEqual(log, ['address:api']);
+    assert.deepEqual(log, ['address:mcp']);
     assert.equal(seen[0]!.authorization, undefined);
     assert.equal(seen[0]!['x-api-key'], undefined);
     assert.equal(seen[0]!['x-dfo-caller'], addressCaller);
@@ -333,6 +368,8 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
     await call({ 'x-api-key': 'another-service-secret' });
     await call({ 'x-api-key': KEY }, { surface: 'mcp' });
     await call({ authorization: `Bearer ${KEY}` });
+    // /api ignores keys, so there is nothing to count.
+    await call({ 'x-api-key': KEY }, { surface: 'api' });
     // The Studio ignores keys whatever the switch says.
     await call({ 'x-api-key': KEY }, { keys: false });
 
@@ -342,7 +379,7 @@ test('forward: while keys are off, a call with X-API-Key is logged without its v
             {
                 severity: 'INFO',
                 message: 'api key header while keys are off',
-                surface: 'api',
+                surface: 'mcp',
                 ours: false,
             },
             {
@@ -362,7 +399,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
     await call({ authorization: `Bearer ${KEY}` });
 
     fakes({ kind: 'invalid' });
-    await call({ 'x-api-key': KEY }, { surface: 'mcp' });
+    await call({ 'x-api-key': KEY });
 
     fakes({ kind: 'unavailable' });
     await call({ 'x-api-key': KEY });
@@ -377,7 +414,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'api',
+                surface: 'mcp',
                 outcome: 'allowed',
                 keyId: 'key-public-1',
                 accountId: ACCOUNT,
@@ -393,7 +430,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'api',
+                surface: 'mcp',
                 outcome: 'unavailable',
                 keyId: null,
                 accountId: null,
@@ -401,7 +438,7 @@ test('forward: logs one line per keyed call with the key id, account, surface an
             {
                 severity: 'INFO',
                 message: 'api key call',
-                surface: 'api',
+                surface: 'mcp',
                 outcome: 'forged',
                 keyId: null,
                 accountId: null,
@@ -442,6 +479,7 @@ test('forward on a real key store and counter', async (t) => {
         ['own', 3],
         ['default', null],
         ['spare', 10],
+        ['quota', 10],
     ] as const) {
         await admin.query(
             `insert into "user" (id, name, email, email_verified, created_at, updated_at, api_rate_limit)
@@ -451,9 +489,9 @@ test('forward on a real key store and counter', async (t) => {
 
         keys[id] = signKey(`dfo_live_${id.padEnd(32, 'z')}`, [SECRET]);
         await admin.query(
-            `insert into apikey (id, reference_id, key, created_at, updated_at)
-             values ($1, $3, $2, now(), now())`,
-            [`key-${id}`, await defaultKeyHasher(keys[id]), id],
+            `insert into apikey (id, reference_id, key, created_at, updated_at, daily_limit)
+             values ($1, $3, $2, now(), now(), $4)`,
+            [`key-${id}`, await defaultKeyHasher(keys[id]), id, id === 'quota' ? 2 : null],
         );
     }
 
@@ -464,13 +502,15 @@ test('forward on a real key store and counter', async (t) => {
                 limiter.hitKey(surface, ip, { api: 3, mcp: 3, pin: 3 }[surface]),
             hitAccount: (surface: 'api' | 'mcp' | 'pin', accountId: string, limit: number) =>
                 limiter.hitKey(surface, `acct:${accountId}`, limit),
+            hitDaily: (keyId: string, limit: number) => limiter.hitDaily(keyId, limit),
             defaultLimit: 5,
+            defaultDailyLimit: 1000,
         });
     };
 
     wire(keyPool);
 
-    await t.test('an account is held to its own limit, apart per surface', async () => {
+    await t.test('an account is held to its own limit on /mcp', async () => {
         const statuses = [];
 
         for (let i = 0; i < 4; i++) {
@@ -478,8 +518,45 @@ test('forward on a real key store and counter', async (t) => {
         }
 
         assert.deepEqual(statuses, [200, 200, 200, 429]);
-        assert.equal((await call({ 'x-api-key': keys.own! }, { surface: 'mcp' })).status, 200);
     });
+
+    await t.test('the same key on /api is anonymous, at the address limit', async () => {
+        const res = await call({ 'x-api-key': keys.own! }, { surface: 'api' });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('x-ratelimit-limit'), '3');
+    });
+
+    await t.test(
+        "a key's daily quota refuses the call after it, with the quota's reset",
+        async () => {
+            const statuses = [];
+            const answers: Response[] = [];
+
+            for (let i = 0; i < 3; i++) {
+                const res = await call({ 'x-api-key': keys.quota! });
+
+                statuses.push(res.status);
+                answers.push(res);
+            }
+
+            assert.deepEqual(statuses, [200, 200, 429]);
+            // An allowed call reports the per-minute verdict, a refused one the quota's.
+            assert.equal(answers[0]!.headers.get('x-ratelimit-limit'), '10');
+            assert.equal(answers[2]!.headers.get('x-ratelimit-limit'), '2');
+            assert.equal(answers[2]!.headers.get('x-ratelimit-remaining'), '0');
+            assert.equal((await answers[2]!.json()).code, 'rate_limited');
+            assert.ok(Number(answers[2]!.headers.get('retry-after')) <= 86_400);
+
+            const [row] = (
+                await admin.query('select count, window_start from limit_counter where key = $1', [
+                    'mcpday:key:key-quota',
+                ])
+            ).rows;
+
+            assert.equal(row.count, 3);
+        },
+    );
 
     await t.test('an account with no limit of its own gets the default', async () => {
         const statuses = [];

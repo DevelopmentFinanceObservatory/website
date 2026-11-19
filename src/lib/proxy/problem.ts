@@ -158,6 +158,23 @@ export const rateLimitedProblem = (
     });
 
 /**
+ * A 429 `rate_limited` problem document: the API key's daily quota of
+ * `limit` calls is used up. `reset` is the seconds to 00:00 UTC, when the
+ * count starts over.
+ */
+export const dailyQuotaProblem = (
+    { limit, reset }: { limit: number; reset: number },
+    headers: Record<string, string>,
+): Response =>
+    problem({
+        status: 429,
+        code: 'rate_limited',
+        detail: `This API key's daily quota of ${limit} calls is used up. It resets at 00:00 UTC, in ${reset}s.`,
+        retryable: true,
+        headers: { ...headers, 'Retry-After': String(reset) },
+    });
+
+/**
  * A 502 `transient_unavailable` problem document: the upstream did not
  * answer. `upstreamStatus` is the status of an upstream that did answer and
  * whose body then failed before the first byte was relayed; the document

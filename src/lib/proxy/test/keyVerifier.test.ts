@@ -64,13 +64,17 @@ test('keyVerifier on the key store', async (t) => {
     const addKey = async (
         name: string,
         account: string,
-        { enabled = true, expiresAt = null }: { enabled?: boolean; expiresAt?: Date | null } = {},
+        {
+            enabled = true,
+            expiresAt = null,
+            dailyLimit = null,
+        }: { enabled?: boolean; expiresAt?: Date | null; dailyLimit?: number | null } = {},
     ) => {
         const key = keyOf(name);
 
         await admin.query(
-            `insert into apikey (id, reference_id, key, enabled, expires_at, created_at, updated_at)
-             values ($1, $2, $3, $4, $5, now(), now())`,
+            `insert into apikey (id, reference_id, key, enabled, expires_at, daily_limit, created_at, updated_at)
+             values ($1, $2, $3, $4, $5, $6, now(), now())`,
             // The column has no time zone, which Drizzle reads as UTC.
             [
                 `id-${name}`,
@@ -78,6 +82,7 @@ test('keyVerifier on the key store', async (t) => {
                 await defaultKeyHasher(key),
                 enabled,
                 expiresAt?.toISOString().replace('Z', '') ?? null,
+                dailyLimit,
             ],
         );
 
@@ -86,7 +91,8 @@ test('keyVerifier on the key store', async (t) => {
 
     const live = await addKey('live', 'acct-default');
     const own = await addKey('own', 'acct-250');
-    const zero = await addKey('zero', 'acct-zero');
+    const zero = await addKey('zero', 'acct-zero', { dailyLimit: 0 });
+    const daily = await addKey('daily', 'acct-default', { dailyLimit: 40 });
     const disabled = await addKey('disabled', 'acct-default', { enabled: false });
     const expired = await addKey('expired', 'acct-default', {
         expiresAt: new Date(Date.now() - 1000),
@@ -100,6 +106,7 @@ test('keyVerifier on the key store', async (t) => {
             keyId: 'id-live',
             accountId: 'acct-default',
             rateLimit: null,
+            dailyLimit: null,
             expiresAt: null,
         });
         assert.equal(
@@ -111,6 +118,17 @@ test('keyVerifier on the key store', async (t) => {
             await verifier.verify(zero).then((v) => v.kind === 'valid' && v.rateLimit),
             null,
         );
+        // The key's own daily limit, with the same rule.
+        assert.equal(
+            await verifier.verify(daily).then((v) => v.kind === 'valid' && v.dailyLimit),
+            40,
+        );
+        assert.equal(
+            await verifier.verify(zero).then((v) => v.kind === 'valid' && v.dailyLimit),
+            null,
+        );
+        // Cached with the rest of the verdict.
+        assert.equal((await verifier.cachedValid(daily))?.dailyLimit, 40);
     });
 
     await t.test('unknown, disabled, expired and foreign-shaped keys are invalid', async () => {

@@ -3,7 +3,7 @@ import 'server-only';
 import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
-import { countHit, pruneCounters, type CounterDb } from './limitCounter';
+import { countHit, DAY_S, dailyCounterKey, pruneCounters, type CounterDb } from './limitCounter';
 import { createFallbackCounter, type FallbackCounter } from './limitFallback';
 import type { RateVerdict } from './rateHeaders';
 
@@ -27,9 +27,13 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
- *   RATE_LIMIT_KEYED      calls per window per account on each of the API
- *                         and MCP surfaces, for an account with no limit of
- *                         its own (default 600)
+ *   RATE_LIMIT_KEYED      calls per window per account on the MCP surface,
+ *                         for an account with no limit of its own (default
+ *                         600)
+ *   API_KEY_DAILY_LIMIT   /mcp calls per UTC day per API key, for a key with
+ *                         no limit of its own (`apikey.daily_limit`; default
+ *                         1000). Counted apart from the window above, in a
+ *                         one-day window (hitDaily).
  */
 /** The rate-limit window in seconds, which the key pages show too. */
 export const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
@@ -49,11 +53,14 @@ export const LIMITS = {
 } as const;
 
 /**
- * An account's calls per window on each surface when it sets none of its own
- * (`user.api_rate_limit`). One number for every surface, since an account is
- * one caller, not a vendor's address with many users behind it.
+ * An account's calls per window when it sets none of its own
+ * (`user.api_rate_limit`). An account is one caller, not a vendor's address
+ * with many users behind it.
  */
 export const KEYED_LIMIT = Number(process.env.RATE_LIMIT_KEYED) || 600;
+
+/** A key's /mcp calls per UTC day when it sets none of its own (`apikey.daily_limit`). */
+export const KEY_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 1000;
 
 export type Surface = keyof typeof LIMITS;
 
@@ -64,6 +71,11 @@ export type Limiter = {
      * address (limiterBucket) or `acct:<account id>`.
      */
     hitKey(surface: Surface, callerKey: string, limit: number): Promise<RateVerdict>;
+    /**
+     * Count one /mcp call by the key `keyId` against its quota of `limit`
+     * calls in the current UTC day (`dailyCounterKey`).
+     */
+    hitDaily(keyId: string, limit: number): Promise<RateVerdict>;
 };
 
 export const createLimiter = (
@@ -71,42 +83,55 @@ export const createLimiter = (
     {
         windowS = WINDOW_S,
         fallback = createFallbackCounter(windowS),
+        dailyFallback = createFallbackCounter(DAY_S),
         warn = console.warn,
         prune = true,
     }: {
         windowS?: number;
         fallback?: FallbackCounter;
+        dailyFallback?: FallbackCounter;
         warn?: (message: string, error: unknown) => void;
         prune?: boolean;
     } = {},
 ): Limiter => {
     let lastPrune = 0;
 
+    // Each instance deletes dead counters, at most once an hour, the
+    // Studio's included (every Studio call passes here too). The delete uses
+    // the same bounded counter pool as the counts.
+    const pruneOften = (): void => {
+        if (prune && Date.now() - lastPrune > PRUNE_EVERY_MS) {
+            lastPrune = Date.now();
+            pruneCounters(db).catch((error) => warn('limit counters not pruned', error));
+        }
+    };
+
+    const count = async (
+        counter: FallbackCounter,
+        key: string,
+        limit: number,
+        window: number,
+    ): Promise<RateVerdict> => {
+        pruneOften();
+
+        try {
+            const sentAt = Date.now();
+            const verdict = await countHit(db, key, limit, window);
+
+            counter.record(key, verdict, sentAt);
+
+            return verdict;
+        } catch (error) {
+            warn('rate limit unavailable, counting in memory', error);
+
+            return counter.hit(key, limit);
+        }
+    };
+
     return {
-        async hitKey(surface, callerKey, limit) {
-            // Each instance deletes dead counters, at most once an hour, the
-            // Studio's included (every Studio call passes here too). The
-            // delete uses the same bounded counter pool as the counts.
-            if (prune && Date.now() - lastPrune > PRUNE_EVERY_MS) {
-                lastPrune = Date.now();
-                pruneCounters(db).catch((error) => warn('limit counters not pruned', error));
-            }
-
-            const key = `${surface}:${callerKey}`;
-
-            try {
-                const sentAt = Date.now();
-                const verdict = await countHit(db, key, limit, windowS);
-
-                fallback.record(key, verdict, sentAt);
-
-                return verdict;
-            } catch (error) {
-                warn('rate limit unavailable, counting in memory', error);
-
-                return fallback.hit(key, limit);
-            }
-        },
+        hitKey: (surface, callerKey, limit) =>
+            count(fallback, `${surface}:${callerKey}`, limit, windowS),
+        hitDaily: (keyId, limit) => count(dailyFallback, dailyCounterKey(keyId), limit, DAY_S),
     };
 };
 
@@ -119,3 +144,7 @@ export const hitKey = (surface: Surface, callerKey: string, limit: number): Prom
 /** Count one call from the address `ip` against `surface`'s anonymous allowance. */
 export const hit = (surface: Surface, ip: string): Promise<RateVerdict> =>
     hitKey(surface, limiterBucket(ip), LIMITS[surface]);
+
+/** Count one /mcp call by the key `keyId` against its daily quota (see Limiter). */
+export const hitDaily = (keyId: string, limit: number): Promise<RateVerdict> =>
+    limiter.hitDaily(keyId, limit);

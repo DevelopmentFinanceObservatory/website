@@ -1,6 +1,7 @@
 /**
- * What the API key pages do with keys: a signed-in user's own (src/app/(site)/account/api-keys) and
- * an operator's over every account (src/app/(site)/admin/api-keys). The plugin's own HTTP
+ * What the API key screens do with keys: a signed-in user's own, in the account panel
+ * (src/lib/apiKeys/account, behind src/app/api/account/api-keys), and an operator's over every account
+ * (src/app/(site)/admin/api-keys). The plugin's own HTTP
  * endpoints for keys stay closed (src/lib/auth/apiKeyOptions), so this is the
  * only way in.
  *
@@ -16,8 +17,10 @@
  * Rules, from docs/design/api-keys.md ("How It Would Fit"):
  *   - the prefix is ours (`dfo_live_`), never taken from a request
  *   - a key's owner is the id passed in; expiry, metadata, permissions and
- *     limits are never passed on, so every key has the plugin's defaults and
- *     the account's own limit (user.api_rate_limit) is the one limit
+ *     limits are never passed on, so every key has the plugin's defaults. The
+ *     account's own limit (user.api_rate_limit) is the per-minute limit, and
+ *     the key's `daily_limit` column, set only by an operator or carried over
+ *     by a rotation, is its daily /mcp quota (src/lib/proxy/access)
  *   - revoking deletes the row: a disabled key could be switched back on
  *   - the full key is returned by the create call and nowhere else. Only its
  *     hash is stored, and neither the key nor the hash is logged
@@ -25,12 +28,13 @@
  * Kept apart from the Next.js code, with the auth instance and database
  * passed in, so `node --test` can drive it on a test database.
  */
-import { and, asc, count, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { apikey, user } from '../../../db/schema.ts';
 import { API_KEY_PREFIX } from '../auth/apiKeyOptions.ts';
 import { likeContaining } from '../likePattern.ts';
+import { copyDailyCounter, dailyUsage } from '../proxy/limitCounter.ts';
 import { parseLabel } from './settings.ts';
 
 /** The parts of the Better Auth instance this module uses. */
@@ -66,13 +70,15 @@ export type Owner = { userId: string; headers: Headers };
 
 export type DeleteResult = 'deleted' | 'not_found' | 'signed_out';
 
-export type KeyDb = Pick<NodePgDatabase, 'select' | 'delete'>;
+export type KeyDb = Pick<NodePgDatabase, 'select' | 'insert' | 'update' | 'delete'>;
 
 export type KeyServiceOptions = {
     auth: KeyAuth;
     db: KeyDb;
     /** How many keys an account may hold; read per call so a change needs no restart. */
     maxPerAccount: () => number;
+    /** A key's daily /mcp calls when it sets none of its own; read per call. */
+    defaultDailyLimit: () => number;
     /** One structured line per mutation. Never receives a key or a hash. */
     log?: (line: Record<string, unknown>) => void;
 };
@@ -87,6 +93,13 @@ export type OwnKey = {
     // cache miss), so up to about a minute behind the last call. Null until
     // the key is first used.
     lastRequest: Date | null;
+    // The key's daily /mcp calls: its own, else the deployment default.
+    dailyLimit: number;
+    // The key's own daily limit, null when it has none.
+    customDailyLimit: number | null;
+    // /mcp calls counted against the key in the current UTC day, refused
+    // calls included.
+    usedToday: number;
 };
 
 /** A key and its account, as an operator sees it. */
@@ -100,6 +113,20 @@ export type AdminKey = OwnKey & {
 export type CreateResult =
     | { ok: true; id: string; key: string }
     | { ok: false; reason: 'label_invalid' | 'cap_reached' | 'no_such_account' };
+
+export type RotateResult = CreateResult | { ok: false; reason: 'not_found' };
+
+/** An account as an operator sees it in the user list. */
+export type AdminUser = {
+    id: string;
+    email: string;
+    name: string | null;
+    createdAt: Date;
+    // Keys that are enabled and not expired.
+    activeKeys: number;
+    // The account's own per-minute limit, null for the default.
+    accountLimit: number | null;
+};
 
 export const defaultLog = (line: Record<string, unknown>): void => {
     console.log(JSON.stringify({ severity: 'INFO', ...line }));
@@ -116,6 +143,13 @@ const ownKeyColumns = {
 // The most keys one operator list returns.
 const ADMIN_LIST_LIMIT = 500;
 
+const ADMIN_USERS_DEFAULT_LIMIT = 50;
+const ADMIN_USERS_MAX_LIMIT = 500;
+
+/** A positive whole number is a key's own daily limit; anything else is the default. */
+const ownDaily = (value: number | null): number | null =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 ? value : null;
+
 /** The HTTP status of a Better Auth APIError, or undefined for any other throw. */
 const statusOf = (error: unknown): number | undefined => {
     const status = (error as { statusCode?: unknown } | null)?.statusCode;
@@ -127,12 +161,15 @@ export const createKeyService = ({
     auth,
     db,
     maxPerAccount,
+    defaultDailyLimit,
     log = defaultLog,
 }: KeyServiceOptions) => {
-    const mint = (userId: string, label: string) =>
+    const mint = (userId: string, label: string | null) =>
         // The prefix is passed even though the plugin's default is the same,
         // so no later change to the plugin options can open it to a request.
-        auth.api.createApiKey({ body: { userId, name: label, prefix: API_KEY_PREFIX } });
+        auth.api.createApiKey({
+            body: { userId, name: label ?? undefined, prefix: API_KEY_PREFIX },
+        });
 
     const userIdByEmail = async (email: string): Promise<string | null> => {
         const [row] = await db
@@ -144,6 +181,100 @@ export const createKeyService = ({
         return row?.id ?? null;
     };
 
+    // The daily quota and today's count of each key, which the plugin's own
+    // list knows nothing of.
+    const withQuota = async <T extends { id: string }>(
+        keys: T[],
+    ): Promise<
+        (T & { dailyLimit: number; customDailyLimit: number | null; usedToday: number })[]
+    > => {
+        if (keys.length === 0) {
+            return [];
+        }
+
+        const ids = keys.map(({ id }) => id);
+        const [limits, used] = await Promise.all([
+            db
+                .select({ id: apikey.id, custom: apikey.dailyLimit })
+                .from(apikey)
+                .where(inArray(apikey.id, ids)),
+            dailyUsage(db, ids),
+        ]);
+        const custom = new Map(limits.map(({ id, custom }) => [id, ownDaily(custom)]));
+
+        return keys.map((key) => {
+            const own = custom.get(key.id) ?? null;
+
+            return {
+                ...key,
+                dailyLimit: own ?? defaultDailyLimit(),
+                customDailyLimit: own,
+                usedToday: used.get(key.id) ?? 0,
+            };
+        });
+    };
+
+    // A new key for the account with the label, daily limit and today's daily
+    // count of `source`, and the old one deleted. The new key is minted first, so a failure
+    // leaves the old one standing; a second rotation of the same key that
+    // loses the race for the delete takes its new key back.
+    const rotate = async (
+        source: { id: string; name: string | null; dailyLimit: number | null; accountId: string },
+        deleteOld: () => Promise<boolean>,
+    ): Promise<RotateResult> => {
+        const created = await mint(source.accountId, source.name);
+
+        if (source.dailyLimit !== null) {
+            await db
+                .update(apikey)
+                .set({ dailyLimit: source.dailyLimit })
+                .where(eq(apikey.id, created.id));
+        }
+
+        if (!(await deleteOld())) {
+            await db.delete(apikey).where(eq(apikey.id, created.id));
+
+            return { ok: false, reason: 'not_found' };
+        }
+
+        // Today's count goes with the key, so a rotation is no fresh quota.
+        await copyDailyCounter(db, source.id, created.id);
+
+        return { ok: true, id: created.id, key: created.key };
+    };
+
+    const findKey = async (keyId: string, accountId?: string) => {
+        const [row] = await db
+            .select({
+                id: apikey.id,
+                name: apikey.name,
+                dailyLimit: apikey.dailyLimit,
+                accountId: apikey.referenceId,
+            })
+            .from(apikey)
+            .where(
+                accountId === undefined
+                    ? eq(apikey.id, keyId)
+                    : and(eq(apikey.id, keyId), eq(apikey.referenceId, accountId)),
+            )
+            .limit(1);
+
+        return row;
+    };
+
+    const deleteKey = async (keyId: string, accountId?: string): Promise<boolean> => {
+        const gone = await db
+            .delete(apikey)
+            .where(
+                accountId === undefined
+                    ? eq(apikey.id, keyId)
+                    : and(eq(apikey.id, keyId), eq(apikey.referenceId, accountId)),
+            )
+            .returning({ id: apikey.id });
+
+        return gone.length > 0;
+    };
+
     return {
         /** The session user's keys, newest first, as the plugin lists them. */
         async listOwn({ headers }: Owner): Promise<OwnKey[]> {
@@ -152,13 +283,15 @@ export const createKeyService = ({
                 query: { sortBy: 'createdAt', sortDirection: 'desc' },
             });
 
-            return apiKeys.map(({ id, name, start, createdAt, lastRequest }) => ({
-                id,
-                name,
-                start,
-                createdAt: new Date(createdAt),
-                lastRequest: lastRequest ? new Date(lastRequest) : null,
-            }));
+            return withQuota(
+                apiKeys.map(({ id, name, start, createdAt, lastRequest }) => ({
+                    id,
+                    name,
+                    start,
+                    createdAt: new Date(createdAt),
+                    lastRequest: lastRequest ? new Date(lastRequest) : null,
+                })),
+            );
         },
 
         /**
@@ -235,6 +368,34 @@ export const createKeyService = ({
             return 'deleted';
         },
 
+        /**
+         * Replaces one of the session user's keys with a new one of the same
+         * label, daily limit and today's count, and returns the new key once. The old key is
+         * deleted, so the owner's key cap does not apply. Only the owner's
+         * own keys are found.
+         */
+        async rotateOwn({ userId }: Owner, keyId: string): Promise<RotateResult> {
+            const source = await findKey(keyId, userId);
+
+            if (!source) {
+                return { ok: false, reason: 'not_found' };
+            }
+
+            const result = await rotate(source, () => deleteKey(keyId, userId));
+
+            if (result.ok) {
+                log({
+                    message: 'api key rotated',
+                    by: 'owner',
+                    keyId: result.id,
+                    previousKeyId: keyId,
+                    accountId: userId,
+                });
+            }
+
+            return result;
+        },
+
         /** The account's own limit, or null for the default. */
         async accountLimit(userId: string): Promise<number | null> {
             const [row] = await db
@@ -264,7 +425,84 @@ export const createKeyService = ({
                 .orderBy(desc(apikey.createdAt))
                 .limit(ADMIN_LIST_LIMIT);
 
-            return rows;
+            return withQuota(rows);
+        },
+
+        /**
+         * One page of accounts, newest first. `total` counts every account and
+         * `matched` those whose email contains `query` (case-insensitive,
+         * wildcards literal); `users` is the page of the matched ones.
+         */
+        async adminListUsers({
+            query,
+            offset = 0,
+            limit = ADMIN_USERS_DEFAULT_LIMIT,
+        }: {
+            query?: string;
+            offset?: number;
+            limit?: number;
+        } = {}): Promise<{ total: number; matched: number; users: AdminUser[] }> {
+            const needle = query?.trim();
+            const where = needle ? ilike(user.email, likeContaining(needle)) : undefined;
+            const [[all], [found], page] = await Promise.all([
+                db.select({ n: count() }).from(user),
+                db.select({ n: count() }).from(user).where(where),
+                db
+                    .select({
+                        id: user.id,
+                        email: user.email,
+                        name: user.name,
+                        createdAt: user.createdAt,
+                        accountLimit: user.apiRateLimit,
+                    })
+                    .from(user)
+                    .where(where)
+                    .orderBy(desc(user.createdAt), desc(user.id))
+                    .offset(Math.max(0, Math.trunc(offset)))
+                    .limit(Math.min(ADMIN_USERS_MAX_LIMIT, Math.max(1, Math.trunc(limit)))),
+            ]);
+            const active =
+                page.length === 0
+                    ? []
+                    : await db
+                          .select({ accountId: apikey.referenceId, n: count() })
+                          .from(apikey)
+                          .where(
+                              and(
+                                  inArray(
+                                      apikey.referenceId,
+                                      page.map(({ id }) => id),
+                                  ),
+                                  or(isNull(apikey.enabled), eq(apikey.enabled, true)),
+                                  or(isNull(apikey.expiresAt), sql`${apikey.expiresAt} > now()`),
+                              ),
+                          )
+                          .groupBy(apikey.referenceId);
+            const keys = new Map(active.map(({ accountId, n }) => [accountId, n]));
+
+            return {
+                total: all?.n ?? 0,
+                matched: found?.n ?? 0,
+                users: page.map((row) => ({ ...row, activeKeys: keys.get(row.id) ?? 0 })),
+            };
+        },
+
+        /** Every key of one account, newest first, with the owner. */
+        async adminUserKeys(userId: string): Promise<AdminKey[]> {
+            const rows = await db
+                .select({
+                    ...ownKeyColumns,
+                    ownerId: user.id,
+                    ownerEmail: user.email,
+                    accountLimit: user.apiRateLimit,
+                })
+                .from(apikey)
+                .innerJoin(user, eq(user.id, apikey.referenceId))
+                .where(eq(apikey.referenceId, userId))
+                .orderBy(desc(apikey.createdAt), desc(apikey.id))
+                .limit(ADMIN_LIST_LIMIT);
+
+            return withQuota(rows);
         },
 
         /** A key for the account with this email. Not held to the account cap. */
@@ -314,6 +552,66 @@ export const createKeyService = ({
             });
 
             return true;
+        },
+
+        /**
+         * Sets the daily /mcp limit of one key, or clears it with null so the
+         * deployment default applies. False when there is no such key. The
+         * proxy's key cache holds the old limit for up to a minute.
+         */
+        async adminSetKeyDailyLimit(
+            actor: string,
+            keyId: string,
+            limit: number | null,
+        ): Promise<boolean> {
+            const [row] = await db
+                .update(apikey)
+                .set({ dailyLimit: limit, updatedAt: new Date() })
+                .where(eq(apikey.id, keyId))
+                .returning({ accountId: apikey.referenceId });
+
+            if (!row) {
+                return false;
+            }
+
+            log({
+                message: 'api key admin',
+                action: limit === null ? 'clear-daily-limit' : 'set-daily-limit',
+                actor,
+                keyId,
+                accountId: row.accountId,
+                limit,
+            });
+
+            return true;
+        },
+
+        /**
+         * Replaces any key with a new one for the same account, of the same
+         * label, daily limit and today's count, and returns the new key once. Not held to
+         * the account cap, since the old key is deleted.
+         */
+        async adminRotate(actor: string, keyId: string): Promise<RotateResult> {
+            const source = await findKey(keyId);
+
+            if (!source) {
+                return { ok: false, reason: 'not_found' };
+            }
+
+            const result = await rotate(source, () => deleteKey(keyId));
+
+            if (result.ok) {
+                log({
+                    message: 'api key admin',
+                    action: 'rotate',
+                    actor,
+                    keyId: result.id,
+                    previousKeyId: keyId,
+                    accountId: source.accountId,
+                });
+            }
+
+            return result;
         },
 
         /**

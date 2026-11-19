@@ -7,7 +7,12 @@ import { keyDb } from '@/lib/db';
 
 import { hasValidTag, tagSecrets } from '@/lib/auth/keyTag';
 
-import { decideAccess, type Access, type AccessDeps } from './access';
+import {
+    decideAccess,
+    honorsKeys as surfaceHonorsKeys,
+    type Access,
+    type AccessDeps,
+} from './access';
 import { API_KEY_HEADER, carriesKey, hasKeyPrefix } from './apiKey';
 import {
     accountCaller,
@@ -27,7 +32,7 @@ import {
 import { createKeyVerifier } from './keyVerifier';
 import { unreachableProblem } from './problem';
 import { rateHeaders } from './rateHeaders';
-import { hit, hitKey, KEYED_LIMIT, type Surface } from './rateLimit';
+import { hit, hitDaily, hitKey, KEY_DAILY_LIMIT, KEYED_LIMIT, type Surface } from './rateLimit';
 
 /**
  * The platform proxy: the DFO APIs and the MCP servers mirrored 1:1 under
@@ -36,12 +41,13 @@ import { hit, hitKey, KEYED_LIMIT, type Surface } from './rateLimit';
  * must not reach a client). An /api/*, /openapi.json or /mcp call, and a
  * /codes call the route forwards, is rate-limited per IP: /mcp on its own
  * allowance, the rest on 'api' (src/lib/proxy/rateLimit; the X-RateLimit-*
- * headers go out only on a counted call). A call may carry an API key,
+ * headers go out only on a counted call). A call to /mcp may carry an API key,
  * `Authorization: Bearer dfo_…` or `X-API-Key` (src/lib/proxy/apiKey), and is
- * then counted against the key's account at the account's limit, or refused
- * with a 401 when the key is not valid (src/lib/proxy/access). The key is
- * never forwarded, on any route, in any header or scheme, and the Studio
- * ignores it. dfo-apis gets no caller Authorization at all. A call is forwarded with its
+ * then counted against the key's account at the account's limit and against
+ * the key's daily quota, or refused with a 401 when the key is not valid
+ * (src/lib/proxy/access). On any other route a key is ignored: the call is
+ * anonymous and counted by address. The key is never forwarded, on any route,
+ * in any header or scheme. dfo-apis gets no caller Authorization at all. A call is forwarded with its
  * method, query, body, content headers, user-agent, x-dfo-client and every
  * mcp-* header (src/lib/proxy/headers), and the upstream's response streamed back: SSE
  * (search resolve, studio turns, MCP) and file downloads both depend on
@@ -69,8 +75,9 @@ import { hit, hitKey, KEYED_LIMIT, type Surface } from './rateLimit';
  * (src/lib/apisAuth matches on the target's origin), and names the caller in
  * x-dfo-caller beside the x-dfo-caller-principal secret (setApisCaller in
  * src/lib/proxy/caller), matched on the same origin. The caller is `ip:` and
- * a digest of the address, or `user:` and a digest of the account for a call
- * with a valid key. The other upstreams get neither, bar /mcp's caller.
+ * a digest of the address. The other upstreams get neither, bar /mcp's
+ * caller, which is `user:` and a digest of the account for a call with a
+ * valid key.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -112,7 +119,9 @@ export const accessDeps: AccessDeps = {
     tagValid: keyTagValid,
     hitAddress: hit,
     hitAccount: (surface, accountId, limit) => hitKey(surface, `acct:${accountId}`, limit),
+    hitDaily,
     defaultLimit: KEYED_LIMIT,
+    defaultDailyLimit: KEY_DAILY_LIMIT,
 };
 
 // API_KEYS_ENABLED is the emergency switch: set to `false` (or `0`, `off`,
@@ -164,8 +173,9 @@ const logKeyHeaderWhileOff = (surface: Surface, headers: Headers): void => {
 type ForwardOptions = {
     // Which allowance applies (see rateLimit's LIMITS); unset, no limit.
     surface?: Surface;
-    // Whether an API key on the call counts. False (the Studio): the key is
-    // stripped and otherwise ignored. Default true, on a limited surface.
+    // Whether an API key on the call counts. Only the 'mcp' surface honors
+    // keys (src/lib/proxy/access); false there strips and ignores the key
+    // too. On every other surface the key is stripped and ignored.
     keys?: boolean;
     // The upstream URL to hit (path + query already resolved).
     target: string;
@@ -233,7 +243,7 @@ const peeked = async (body: ReadableStream<Uint8Array>): Promise<ReadableStream<
 
 export const forward = async (req: NextRequest, options: ForwardOptions): Promise<Response> => {
     // Who the caller is and whether it is within its allowance, decided once.
-    const honorsKeys = options.surface !== undefined && options.keys !== false;
+    const honorsKeys = surfaceHonorsKeys(options.surface) && options.keys !== false;
     const keysOn = keysEnabled();
     const access = await decideAccess(accessDeps, {
         surface: options.surface,
