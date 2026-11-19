@@ -18,11 +18,12 @@
  * fields included, and every rung is measured as the route measures it
  * (`fitsProps`). The run fields stay on every rung, and the floor drops only
  * their `byStep`. The flat `specIds` and `measures` lists stay on every rung
- * too. The API takes at most six parts per question (`_PARSED_MAX_PARTS` in
- * dfo-apis search/models/request.py), and the floor holds only those two
- * lists (a spec id clipped to 64 characters and a measure token of at most 128
- * per part) and, per part, a clipped spec id and integer counts: about 2 KB
- * of the 8 KB cap, so it needs no check.
+ * too, and name each `resolved` entry by position, so no entry repeats its
+ * spec id. The API takes at most six parts per question (`_PARSED_MAX_PARTS`
+ * in dfo-apis search/models/request.py), and the floor holds only those two
+ * lists (a spec id clipped to 64 characters and a measure token of at most
+ * 128 per part) and integer counts per part: under 2 KB of the 8 KB cap, so
+ * it needs no check.
  */
 
 import { fitsProps, MAX_LIST_IDS, NO_ID, TOKEN_PATTERN } from '../events/limits.ts';
@@ -123,8 +124,8 @@ export type SearchEventProps = Partial<SearchSettleProps> & {
     /** The measure each resolved part asked for (see `measureToken`), one per entry of
      *  `specIds` in the same order; `-` for a part with no measure to name. */
     measures: string[];
+    /** One entry per entry of `specIds`, in the same order, which names its spec. */
     resolved: ({
-        specId: string;
         statVarCount: number;
         entityCount: number;
         sources?: string[];
@@ -295,7 +296,6 @@ export function searchEventProps({
 
             const asked = askedFor(spec.identity, spec.entity_groups);
             const counts = {
-                specId: spec.spec_id,
                 // The served members once settled, else the family's count;
                 // none for a spec the site could not read.
                 statVarCount: statVarsUnreadable(spec)
@@ -306,7 +306,7 @@ export function searchEventProps({
             };
 
             if (rung === 'floor') {
-                return { ...counts, specId: clip(counts.specId, MAX_SPEC_ID) };
+                return counts;
             }
 
             return rung === 'minimal'

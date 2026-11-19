@@ -20,3 +20,12 @@ export const NO_ID = '-';
  *  export to keep it (db/event-export.ts). `|` joins the members of a
  *  `measures` token; a Data Commons dcid has `/` but no `|`. */
 export const TOKEN_PATTERN = /^[A-Za-z0-9][\w.:/|-]{0,127}$/;
+
+/** A path on the site: a slash, then letters, digits and `_ - . : /`, up to
+ *  the 300 characters POST /api/events keeps. The routes under src/app use
+ *  fixed names plus dcids (/data/sources/<dcid>), doc slugs, gallery slugs,
+ *  UUIDs (/studio/<id>) and share ids (/s/<id>, /embed/<id>), all within
+ *  that set. Spaces, `@`, `,` and `%` escapes are refused, so text a visitor
+ *  typed does not pass. The export keeps a page only when it matches
+ *  (db/event-export.ts), and POST /api/events/data-view stores one only then. */
+export const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;

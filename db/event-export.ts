@@ -9,6 +9,7 @@ import type { CardTarget } from '../src/components/organisms/Studio/hooks/useCha
 import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
+import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
 import type {
@@ -29,7 +30,7 @@ import {
     within,
 } from './bounded.ts';
 import { requiredEnv } from './connection.ts';
-import { MAX_LIST_IDS, NO_ID, TOKEN_PATTERN } from '../src/lib/events/limits.ts';
+import { MAX_LIST_IDS, NO_ID, PAGE_PATH, TOKEN_PATTERN } from '../src/lib/events/limits.ts';
 
 /**
  * The event export (db/export-events.ts): copies the `event` table into the
@@ -117,6 +118,7 @@ const PROMPT_INTENTS = every<'new' | CardTarget['intent']>()(['new', 'follow_up'
 const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'text']);
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
+const DATA_VIEW_VIA = every<DataViewVia>()(['pinned_ref', 'saved_file', 'share', 'baked']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -236,6 +238,17 @@ export const PROP_RULES = {
         owner: 'boolean',
     },
     'gallery.open': { ...EVERY_EVENT, slug: 'token', kind: GALLERY_KINDS },
+    // POST /api/events/data-view (src/lib/events/dataView.ts).
+    'data.view': {
+        ...EVERY_EVENT,
+        specIds: 'tokens',
+        contentVersions: 'tokens',
+        via: DATA_VIEW_VIA,
+        shareId: 'digest',
+        surface: ['page'],
+        host: 'token',
+        listed: 'boolean',
+    },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest, passes, exportProps, exportPage or exportRow bumps
@@ -332,14 +345,6 @@ export const EXPORT_SCHEMA: ExportField[] = [
     { name: 'props', type: 'JSON', mode: 'REQUIRED' },
     { name: 'export_rules', type: 'STRING' },
 ];
-
-// A path on the site: a slash, then letters, digits and `_ - . : /`, up to
-// the 300 characters POST /api/events keeps. The routes under src/app use
-// fixed names plus dcids (/data/sources/<dcid>), doc slugs, gallery slugs,
-// UUIDs (/studio/<id>) and share ids (/s/<id>, /embed/<id>), all within
-// that set. Spaces, `@`, `,` and `%` escapes are refused, so text a visitor
-// typed does not pass.
-const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;
 
 // The share pages and everything under them, /s/<id>/download/preparing
 // included. The id segment opens the share.

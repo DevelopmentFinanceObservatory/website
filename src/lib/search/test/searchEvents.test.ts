@@ -72,9 +72,9 @@ test('a run over hundreds of StatVars and places fits the intake cap, as counts'
     });
 
     assert.ok(JSON.stringify(props).length <= MAX_PROPS_BYTES);
+    assert.deepEqual(props.specIds, ['spec_12b8fa627fefe6caea4a9140085c6d0f']);
     assert.deepEqual(props.resolved, [
         {
-            specId: 'spec_12b8fa627fefe6caea4a9140085c6d0f',
             measure: {
                 kind: 'statvar_schema',
                 population_type: 'FinancialFlow',
@@ -358,7 +358,7 @@ test('refused parts of control characters end on the floor: no free text, fixed 
     assert.deepEqual(props.refused, []);
 });
 
-test('the floor holds a clipped spec id and integer counts per part, whatever the identity weighs', () => {
+test('the floor holds the clipped spec ids and integer counts per part, whatever the identity weighs', () => {
     const spec = aidPart.hydratedSpec as any;
     const part = (index: number) =>
         ({
@@ -378,7 +378,11 @@ test('the floor holds a clipped spec id and integer counts per part, whatever th
     assert.ok(fitsProps(props));
     assert.equal(props.truncated, true);
     assert.equal(props.resolved[0].measure, undefined);
-    assert.equal(props.resolved[0].specId.length, 64);
+    assert.deepEqual(Object.keys(props.resolved[0]).toSorted(), [
+        'entityCount',
+        'sourceCount',
+        'statVarCount',
+    ]);
     assert.equal(props.specIds.length, 6);
     assert.equal(props.specIds[0].length, 64);
     // A token over the cap is dropped, and the part keeps its place in the list.

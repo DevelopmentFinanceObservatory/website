@@ -17,6 +17,7 @@ import {
     type ExportRow,
     exportRules,
     pgEventSource,
+    PROP_RULES,
     runExport,
     ROW_SHAPE,
     ROW_SHAPE_VERSION,
@@ -261,6 +262,34 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
         name: 'search.query',
         props: { measures: Array.from({ length: 11 }, (_, at) => `sv:Ind_${at}`) },
     }),
+    sourceEvent({
+        id: 10,
+        name: 'data.view',
+        page: '/insights/aid-to-health',
+        props: {
+            specIds: ['spec_a1', '-'],
+            contentVersions: ['cv_9f2e', '-'],
+            via: 'share',
+            shareId: 'aB3dE5fG7h',
+            surface: 'page',
+            host: 'blog.example',
+            listed: false,
+            internal_eng: false,
+        },
+    }),
+    sourceEvent({
+        id: 11,
+        name: 'data.view',
+        userId: 'user-1',
+        props: {
+            specIds: ['spec_a1'],
+            contentVersions: ['cv_9f2e'],
+            via: 'embedded',
+            surface: 'page',
+            listed: 'yes',
+            internal_eng: true,
+        },
+    }),
 ];
 
 // Version 1 pinned the first four sample rows, which version 2 leaves as they were.
@@ -394,6 +423,43 @@ const GOLDEN_ROWS: Record<number, ExportRow[]> = {
             props: {},
             export_rules: 'r',
         },
+        {
+            id: 10,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'data.view',
+            page: '/insights/aid-to-health',
+            signed_in: false,
+            visitor_hash: null,
+            user_hash: null,
+            props: {
+                specIds: ['spec_a1', '-'],
+                contentVersions: ['cv_9f2e', '-'],
+                via: 'share',
+                shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
+                surface: 'page',
+                host: 'blog.example',
+                listed: false,
+                internal_eng: false,
+            },
+            export_rules: 'r',
+        },
+        {
+            id: 11,
+            created_at: '2026-10-20T13:04:05.123456Z',
+            name: 'data.view',
+            page: null,
+            signed_in: true,
+            visitor_hash: null,
+            user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
+            // A `via` the site never sends and a string `listed` are dropped.
+            props: {
+                specIds: ['spec_a1'],
+                contentVersions: ['cv_9f2e'],
+                surface: 'page',
+                internal_eng: true,
+            },
+            export_rules: 'r',
+        },
     ],
 };
 
@@ -402,6 +468,27 @@ test('exportRow writes the rows pinned to the current ROW_SHAPE_VERSION', () => 
         GOLDEN_SAMPLE.map((row) => exportRow(row, KEY, 'r')),
         GOLDEN_ROWS[ROW_SHAPE_VERSION],
     );
+});
+
+test('exportRow lets no email address out, whatever field the source holds it in', () => {
+    const email = 'ana@example.org';
+    const rows = Object.entries(PROP_RULES).flatMap(([name, rules]) => {
+        const props = Object.fromEntries(Object.keys(rules).map((key) => [key, email]));
+        const listProps = Object.fromEntries(Object.keys(rules).map((key) => [key, [email]]));
+
+        return [props, listProps].flatMap((eventProps) =>
+            [`/${email}`, `/data?email=${email}`, `/s/${email}`].map((page) =>
+                exportRow(
+                    sourceEvent({ name, userId: email, visitorId: email, page, props: eventProps }),
+                    KEY,
+                    RULES,
+                ),
+            ),
+        );
+    });
+
+    assert.ok(rows.length > 0);
+    assert.ok(rows.every((row) => !JSON.stringify(row).includes('@')));
 });
 
 const counts = (days: Record<string, number>) => new Map(Object.entries(days));
