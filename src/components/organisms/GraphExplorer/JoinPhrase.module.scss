@@ -1,0 +1,72 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// The gap between the words and their bubble. The bubble's bridge spans it, so
+// a pointer moving from the words onto the bubble keeps it open.
+$bubble-gap: rem(6);
+
+.root {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+}
+
+.phrase {
+    @include font-size(11px, 1.2);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: rem(24);
+    min-height: rem(24);
+    padding: rem(2) rem(4);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    text-align: center;
+    text-decoration: underline dotted;
+    text-underline-offset: rem(2);
+    background-color: var(--color-net-light);
+    border: 0;
+    border-radius: rem(4);
+    cursor: pointer;
+}
+
+.bubble {
+    @include flex(column, flex-start, flex-start);
+    @include font-size(11px, 1.35);
+
+    position: absolute;
+    bottom: calc(100% + #{$bubble-gap});
+    left: 50%;
+    z-index: 2;
+    gap: rem(4);
+    width: max-content;
+    max-width: min(#{rem(280)}, 80vw);
+    padding: rem(6) rem(8);
+    font-family: var(--font-dm-mono);
+    color: var(--color-bg);
+    letter-spacing: -0.02em;
+    text-align: start;
+    overflow-wrap: anywhere;
+    background-color: var(--color-charcoal);
+    border-radius: rem(4);
+    transform: translateX(-50%);
+
+    &[hidden] {
+        display: none;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        height: $bubble-gap;
+    }
+}
+
+.note {
+    color: var(--color-sage);
+}

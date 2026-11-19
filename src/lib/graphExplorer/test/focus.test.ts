@@ -10,16 +10,18 @@ import {
     datasetBoxes,
     declaredDomain,
     definedNotUsed,
+    linkShape,
     nodeBoxes,
     openEntries,
     outsideKind,
     periodText,
     pictureLens,
     sharePercent,
+    type ArcProperty,
     type FocusBox,
 } from '../focus.ts';
-import { buildModel } from '../model.ts';
-import { readSchema, readUsage, readTerms } from '../wire.ts';
+import { buildModel, type Model } from '../model.ts';
+import { readSchema, readUsage, readTerms, type SchemaNode, type SchemaPattern } from '../wire.ts';
 import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 import { withListedParties } from './sheetFixtures.ts';
 
@@ -124,6 +126,142 @@ test('a dataset: what it is about on the left; measured, between and splits on t
         complete: true,
     });
     assert.equal(boxes[0]?.values, null);
+});
+
+/** The schema field holding each arc's objects on its subject's node. */
+const ARC_FIELD: Record<ArcProperty, keyof SchemaNode> = {
+    subClassOf: 'sub_class_of',
+    subPropertyOf: 'sub_property_of',
+    specializationOf: 'specialization_of',
+    typeOf: 'types',
+    rangeIncludes: 'range_includes',
+};
+
+/** Whether the schema document states `subject arc object`. */
+const states = (model: Model, subject: string, arc: ArcProperty, object: string): boolean => {
+    const objects = model.node(subject)?.[ARC_FIELD[arc]];
+    return Array.isArray(objects) && objects.includes(object);
+};
+
+const listed = withListedParties();
+const everyBox = (on: Model) =>
+    on.nodes.flatMap((node) => nodeBoxes(on, node.ref).map((entry) => ({ id: node.ref, entry })));
+
+test('every entry of every arc box holds the arc its box names, subject to object', () => {
+    let entries = 0;
+    for (const on of [model, listed]) {
+        for (const { id, entry } of everyBox(on)) {
+            const { via } = entry;
+            if (via.kind !== 'arc') continue;
+            assert.ok(via.properties.length > 0, `${id} ${entry.key} names no arc`);
+            const triple = (other: string): [string, string] =>
+                via.direction === 'out' ? [id, other] : [other, id];
+            for (const other of entry.ids) {
+                const [subject, object] = triple(other);
+                assert.ok(
+                    via.properties.some((arc) => states(on, subject, arc, object)),
+                    `${subject} ${via.properties.join('|')} ${object} (${id} ${entry.key})`,
+                );
+                entries += 1;
+            }
+            for (const arc of via.properties) {
+                assert.ok(
+                    entry.ids.some((other) => {
+                        const [subject, object] = triple(other);
+                        return states(on, subject, arc, object);
+                    }),
+                    `${id} ${entry.key} names ${arc}, which no entry holds`,
+                );
+            }
+            assert.equal(linkShape(via).dashed, false);
+        }
+    }
+    assert.ok(entries > 50, `only ${entries} entries checked`);
+});
+
+/** Whether a pattern's StatVars name `id` by the StatVar arc. */
+const patternNames = (pattern: SchemaPattern, arc: string, id: string): boolean =>
+    ({
+        populationType: pattern.population_type === id,
+        measuredProperty: pattern.measured_property === id,
+        observationProperties: pattern.observation_properties.includes(id),
+        constraintProperties: pattern.constraint_properties.includes(id),
+    })[arc] ?? false;
+
+test('every entry of a StatVar box shares a pattern with the centre by the arcs its box names', () => {
+    const patterns = model.datasets.flatMap((dataset) => dataset.patterns);
+    const kindsOf = (id: string): Set<string> => {
+        const seen = new Set([id]);
+        for (const next of seen) for (const child of model.narrower(next)) seen.add(child);
+        return seen;
+    };
+    let checked = 0;
+    for (const { id, entry } of everyBox(model)) {
+        const { via } = entry;
+        if (via.kind !== 'statVars' || via.centre === null) continue;
+        const about = model.kind(id) === 'class' ? kindsOf(id) : new Set([id]);
+        let onlyKinds = 0;
+        for (const other of entry.ids) {
+            const linking = patterns.filter(
+                (pattern) =>
+                    via.entries.some((arc) => patternNames(pattern, arc, other)) &&
+                    [...about].some((centre) =>
+                        via.centre?.some((arc) => patternNames(pattern, arc, centre)),
+                    ),
+            );
+            assert.ok(linking.length > 0, `${id} ${entry.key}: ${other}`);
+            if (model.kind(id) === 'class' && !linking.some((p) => p.population_type === id)) {
+                onlyKinds += 1;
+            }
+            checked += 1;
+        }
+        assert.equal(via.kindsOnly, onlyKinds, `${id} ${entry.key}`);
+        assert.deepEqual(linkShape(via), { dashed: true, heads: 'outward' });
+    }
+    assert.ok(checked > 20, `only ${checked} entries checked`);
+});
+
+test('a box backed by two arcs names both, and a value’s "Set with" passes through its list', () => {
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const flow = body.nodes.find((node) => node.ref === 'FinancialFlow');
+    assert.ok(flow);
+    flow.specialization_of = ['FinancialObligation'];
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    const up = nodeBoxes(edited, 'FinancialFlow').find((entry) => entry.key === 'up');
+    assert.deepEqual(up?.via, {
+        kind: 'arc',
+        properties: ['subClassOf', 'specializationOf'],
+        direction: 'out',
+    });
+    assert.equal(up?.join.split(' or ').length, 2);
+
+    const setWith = nodeBoxes(model, 'WriteDown').find((entry) => entry.key === 'left');
+    assert.deepEqual(setWith?.via, { kind: 'valueList', list: 'FinancialFlowTypeEnum' });
+    assert.deepEqual(linkShape({ kind: 'valueList', list: 'FinancialFlowTypeEnum' }), {
+        dashed: true,
+        heads: 'inward',
+    });
+    for (const property of setWith?.ids ?? []) {
+        assert.ok(states(model, property, 'rangeIncludes', 'FinancialFlowTypeEnum'));
+    }
+    assert.ok(states(model, 'WriteDown', 'typeOf', 'FinancialFlowTypeEnum'));
+});
+
+test('a class box reached partly through narrower classes carries a note; one reached directly does not', () => {
+    const measured = (id: string) => nodeBoxes(model, id).find((entry) => entry.key === 'measured');
+    assert.notEqual(measured('FinancingEvent')?.note, null);
+    assert.equal(measured('FinancialFlow')?.note, null);
+});
+
+test('a dataset box counts the dataset’s StatVars that name its entries', () => {
+    const view = model.datasetView('provenance/OECDDAC2B');
+    assert.ok(view);
+    for (const entry of datasetBoxes(view)) {
+        assert.equal(entry.via.kind, 'statVars');
+        if (entry.via.kind !== 'statVars') continue;
+        assert.equal(entry.via.centre, null);
+        assert.ok(entry.via.statVars > 0 && entry.via.statVars <= view.statVarCount);
+    }
 });
 
 test('a declared domain shows only where it differs from the classes in use', () => {
