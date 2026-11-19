@@ -39,6 +39,20 @@ export function listHead<TItem>(
     return { shown: [...items.slice(0, head), ...rest], total: items.length, long };
 }
 
+/**
+ * The head of a list of datasets' entries, as listHead gives it, keeping
+ * the entry of the filtered dataset (`dataset`, null for none) past the
+ * head, so the bars show the dataset the reader chose.
+ */
+export const datasetHead = <TItem extends { readonly dataset: string }>(
+    items: readonly TItem[],
+    { open, dataset }: { open: boolean; dataset: string | null },
+): ListHead<TItem> =>
+    listHead(items, {
+        open,
+        keep: dataset === null ? undefined : (item) => item.dataset === dataset,
+    });
+
 const byUseCache = new WeakMap<Model, readonly ProvenanceUsage[]>();
 
 /** The model's datasets, most StatVars first, then by label. Computed once per model. */
@@ -56,6 +70,22 @@ export function datasetsByUse(model: Model): readonly ProvenanceUsage[] {
     byUseCache.set(model, sorted);
     return sorted;
 }
+
+/**
+ * The model's datasets for the start screen: the DFO's first, then those
+ * from outside, each group as datasetsByUse orders it. The switches add the
+ * outside datasets to the list without pushing the DFO's past its head.
+ */
+export const datasetsDfoFirst = (
+    model: Model,
+    outside: OutsideUsage,
+): readonly ProvenanceUsage[] => {
+    const byUse = datasetsByUse(model);
+    const dfo = byUse.filter((dataset) => datasetOrigin(dataset, outside) === null);
+    return dfo.length === byUse.length
+        ? byUse
+        : [...dfo, ...byUse.filter((dataset) => datasetOrigin(dataset, outside) !== null)];
+};
 
 /** The outside usage documents loaded, by the origin each describes. */
 export type OutsideUsage = { readonly base?: SchemaUsage; readonly un?: SchemaUsage };

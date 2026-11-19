@@ -9,7 +9,7 @@ import {
     useExploreState,
     useModel,
 } from './ExploreContext';
-import FocusView, { FailedLine, Refused, ViewLoading } from './FocusView';
+import FocusView, { CentreNotice, Refused, ViewLoading } from './FocusView';
 import styles from './GraphExplorer.module.scss';
 import LoadStatus from './LoadStatus';
 import ScopedList from './ScopedList';
@@ -30,7 +30,7 @@ import {
 } from '@/lib/graphExplorer/explore';
 import { LOADING } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, ListScope, Model } from '@/lib/graphExplorer/model';
-import { needsNodeView, routeCentre } from '@/lib/graphExplorer/nodeView';
+import { awaitedDataset, needsNodeView, routeCentre } from '@/lib/graphExplorer/nodeView';
 
 /** The line naming a filtered dataset the model lacks, with a way to clear the filter. */
 const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => (
@@ -69,7 +69,8 @@ const Missing = ({ id, onStart }: { id: string; onStart: () => void }) => (
  * centred view draws: a class the document holds lists from the full model
  * until the view lands, and a class it lacks waits for the view or shows
  * the refusal. A scope the model it lists from holds no class or value
- * list for reads as missing.
+ * list for reads as missing, unless the view's failure or refusal already
+ * says why.
  */
 const ListScreen = ({
     scope,
@@ -84,30 +85,39 @@ const ListScreen = ({
     const scoped = useModel();
     const centre = scope.kind === 'class' ? ({ kind: 'node', id: scope.id } as const) : null;
     const outside = centre !== null && needsNodeView(full, centre);
-    const { state, retry } = useNodeView(outside ? centre.id : null);
+    const { state, lastFailure, retry } = useNodeView(outside ? centre.id : null);
 
-    const list = (model: Model, classModel?: Model) =>
-        scope.kind === 'class' && !listScopeExists(model, scope) ? (
+    if (!outside) {
+        return scope.kind === 'class' && !listScopeExists(scoped, scope) ? (
             <Missing id={scope.id} onStart={() => go(START_VIEW)} />
         ) : (
-            <ScopedList scope={scope} show={show} classModel={classModel} />
+            <ScopedList scope={scope} show={show} />
         );
-
-    if (!outside) return list(scoped);
-    const route = routeCentre(full, centre, state);
+    }
+    const route = routeCentre(full, centre, state, lastFailure);
     switch (route.kind) {
         case 'loading':
             return <ViewLoading id={centre.id} waiting={route.waiting} />;
-        case 'notHeld':
-        case 'notServed':
-            return <Refused id={centre.id} notHeld={route.kind === 'notHeld'} />;
-        case 'draw':
-            return (
-                <>
-                    {route.failed !== null && <FailedLine failure={route.failed} onRetry={retry} />}
-                    {list(route.model, route.model)}
-                </>
+        case 'refused':
+            return <Refused id={centre.id} refusal={route.refusal} />;
+        case 'draw': {
+            const { line, model } = route;
+            const notice = <CentreNotice id={centre.id} line={line} view={null} onRetry={retry} />;
+            if (listScopeExists(model, scope)) {
+                return (
+                    <>
+                        {notice}
+                        <ScopedList scope={scope} show={show} classModel={model} />
+                    </>
+                );
+            }
+            if (line?.kind === 'refused') return <Refused id={centre.id} refusal={line.refusal} />;
+            return line === null ? (
+                <Missing id={centre.id} onStart={() => go(START_VIEW)} />
+            ) : (
+                notice
             );
+        }
     }
 };
 
@@ -118,17 +128,29 @@ const ListScreen = ({
  * switches widen them. A centred term or dataset reads the full model, so
  * its view shows every model's use of it whatever the switches say. The
  * dataset filter is checked against every dataset loaded, so a dataset the
- * reader names in `?show=` filters whatever the switches say.
+ * reader names in `?show=` filters whatever the switches say. A dataset
+ * named in `?dataset=` or `?show=` that the full model lacks waits while an
+ * outside usage document loads, and reads as missing only once each has
+ * settled.
  */
 const GraphExplorer = () => {
     const navigation = useExploreState();
     const data = useExplorerData();
     const model = data.model.status === 'ready' ? data.model.value : null;
     const { view } = navigation.state;
-    const filterModel = data.full;
-    const filter = filterModel
-        ? checkFilter(filterModel, navigation.state.show)
-        : { show: NO_FILTER, unknown: null };
+    const { show } = navigation.state;
+    const awaited =
+        data.full === null
+            ? null
+            : awaitedDataset(
+                  data.full,
+                  [
+                      view.kind === 'dataset' ? view.id : null,
+                      show.kind === 'dataset' ? show.id : null,
+                  ],
+                  data.usage,
+              );
+    const filter = data.full ? checkFilter(data.full, show) : { show: NO_FILTER, unknown: null };
 
     const screen = (full: Model, view: ExploreView, show: DatasetFilter) => {
         switch (view.kind) {
@@ -151,15 +173,19 @@ const GraphExplorer = () => {
                         <main className={styles.main} key={exploreQuery({ view, ...NO_CARRIED })}>
                             {/* The full model is in whenever the scoped one is: both build from the DFO pair. */}
                             {data.model.status === 'ready' && data.full !== null ? (
-                                <>
-                                    {filter.unknown !== null && (
-                                        <UnknownFilter
-                                            id={filter.unknown}
-                                            onClear={() => navigation.setShow(NO_FILTER)}
-                                        />
-                                    )}
-                                    {screen(data.full, view, filter.show)}
-                                </>
+                                awaited !== null ? (
+                                    <ViewLoading id={awaited} waiting={null} />
+                                ) : (
+                                    <>
+                                        {filter.unknown !== null && (
+                                            <UnknownFilter
+                                                id={filter.unknown}
+                                                onClear={() => navigation.setShow(NO_FILTER)}
+                                            />
+                                        )}
+                                        {screen(data.full, view, filter.show)}
+                                    </>
+                                )
                             ) : (
                                 <LoadStatus
                                     state={data.model.status === 'ready' ? LOADING : data.model}

@@ -1,18 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { useModel } from './ExploreContext';
 import { ExploreLink, OriginTag } from './ExploreLink';
 import { ListToggle, useListOrigins } from './ListToggle';
 import { plural } from '@/lib/graphExplorer/counts';
 import styles from './StartScreen.module.scss';
+import { useExplorerData } from './useExplorerData';
 
-import { datasetsByUse, listHead } from '@/lib/graphExplorer/lists';
+import { datasetsDfoFirst, landedUsage, listHead } from '@/lib/graphExplorer/lists';
 
 /**
  * The start screen over the scoped model: the datasets with their StatVar
- * counts, most StatVars first, the kinds of thing their figures are about
+ * counts, the DFO's first and then those the switches add, each group most
+ * StatVars first, the kinds of thing their figures are about
  * with how many datasets use each, and one way to list every property the
  * DFO declares. Each long list shows its first entries and "All N", and
  * each entry from outside the DFO carries its origin tag.
@@ -20,10 +22,13 @@ import { datasetsByUse, listHead } from '@/lib/graphExplorer/lists';
 const StartScreen = () => {
     const model = useModel();
     const origins = useListOrigins(model);
+    const outside = landedUsage(useExplorerData().usage);
+    const datasetsId = useId();
+    const kindsId = useId();
     const [datasetsOpen, setDatasetsOpen] = useState(false);
     const [kindsOpen, setKindsOpen] = useState(false);
     const propertyCount = model.dfoProperties().length;
-    const datasets = listHead(datasetsByUse(model), { open: datasetsOpen });
+    const datasets = listHead(datasetsDfoFirst(model, outside), { open: datasetsOpen });
     const kinds = listHead(model.populationTypes(), { open: kindsOpen });
 
     return (
@@ -33,7 +38,7 @@ const StartScreen = () => {
                     <h2 id="start-datasets" className={styles.label}>
                         Start from a dataset
                     </h2>
-                    <ul className={styles.rows}>
+                    <ul id={datasetsId} className={styles.rows}>
                         {datasets.shown.map((dataset) => (
                             <li key={dataset.ref} className={styles.row}>
                                 <span className={styles.entry}>
@@ -53,6 +58,8 @@ const StartScreen = () => {
                     </ul>
                     <ListToggle
                         head={datasets}
+                        noun="datasets"
+                        controls={datasetsId}
                         open={datasetsOpen}
                         onToggle={() => setDatasetsOpen((open) => !open)}
                     />
@@ -62,7 +69,7 @@ const StartScreen = () => {
                         <h2 id="start-kinds" className={styles.label}>
                             Start from a kind of thing
                         </h2>
-                        <ul className={styles.rows}>
+                        <ul id={kindsId} className={styles.rows}>
                             {kinds.shown.map((use) => (
                                 <li key={use.classId} className={styles.row}>
                                     <span className={styles.entry}>
@@ -82,6 +89,8 @@ const StartScreen = () => {
                         </ul>
                         <ListToggle
                             head={kinds}
+                            noun="kinds of thing"
+                            controls={kindsId}
                             open={kindsOpen}
                             onToggle={() => setKindsOpen((open) => !open)}
                         />

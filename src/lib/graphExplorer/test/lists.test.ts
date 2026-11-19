@@ -6,8 +6,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    datasetHead,
     datasetOrigin,
     datasetsByUse,
+    datasetsDfoFirst,
     inBaseUsage,
     landedUsage,
     listHead,
@@ -90,6 +92,17 @@ for (const { name, items, open, keep, shown, long } of [
     });
 }
 
+test("a dataset's bars keep the filtered dataset past their head", () => {
+    const uses = ten.map((at) => ({ dataset: `d${at}`, count: 10 - at }));
+    const refs = (dataset: string | null, open = false) =>
+        datasetHead(uses, { open, dataset }).shown.map((use) => use.dataset);
+    const head = uses.slice(0, 8).map((use) => use.dataset);
+    assert.deepEqual(refs('d9'), [...head, 'd9']);
+    assert.deepEqual(refs('d2'), head);
+    assert.deepEqual(refs(null), head);
+    assert.equal(refs('d9', true).length, 10);
+});
+
 test('datasets come most StatVars first, then by label, whatever the document order', () => {
     const base = readUsage(baseUsageBody());
     const un = readUsage(unUsageBody());
@@ -103,6 +116,28 @@ test('datasets come most StatVars first, then by label, whatever the document or
         datasetsByUse(model).map((dataset) => dataset.ref),
         [DAC1, DAC2A, CLIMATE, DAC2B, BIRTHS, ECLAC],
     );
+});
+
+test("the start screen lists the DFO's datasets first, then the outside ones, each most used first", () => {
+    const dfo = readUsage(usageBody());
+    const un = readUsage(unUsageBody());
+    const base = readUsage(baseUsageBody());
+    // The base dataset outnumbers every DFO dataset.
+    const large = {
+        ...base,
+        provenances: base.provenances.map((p) => ({ ...p, stat_var_count: 5000 })),
+    };
+    const model = buildModel(schema, dfo, un, large);
+    const refs = (outside: Parameters<typeof datasetsDfoFirst>[1]) =>
+        datasetsDfoFirst(model, outside).map((dataset) => dataset.ref);
+    assert.deepEqual(
+        datasetsByUse(model).map((dataset) => dataset.ref),
+        [BIRTHS, DAC1, DAC2A, CLIMATE, DAC2B, ECLAC],
+    );
+    assert.deepEqual(refs({ base: large, un }), [DAC1, DAC2A, CLIMATE, DAC2B, BIRTHS, ECLAC]);
+    // A DFO-only model keeps its own order.
+    const dfoOnly = buildModel(schema, dfo);
+    assert.equal(datasetsDfoFirst(dfoOnly, {}), datasetsByUse(dfoOnly));
 });
 
 test('a dataset takes the origin of the usage document the model took it from', () => {

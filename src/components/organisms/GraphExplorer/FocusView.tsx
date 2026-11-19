@@ -26,7 +26,13 @@ import {
 } from '@/lib/graphExplorer/focus';
 import { waitText, type Waiting } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
-import { needsNodeView, routeCentre, type NodeViewFailure } from '@/lib/graphExplorer/nodeView';
+import {
+    needsNodeView,
+    routeCentre,
+    type CentreLine,
+    type NodeViewFailure,
+    type RefusalKind,
+} from '@/lib/graphExplorer/nodeView';
 import type { SchemaNodeView } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
@@ -196,17 +202,31 @@ const Centred = ({ centre, show, notice }: CentredProps) => {
     );
 };
 
-/** The line over a picture drawn without its node view, offering to load the view again. */
+/**
+ * The line over a picture drawn without its node view, offering to load the
+ * view again. While a retry loads, the line says so and its button stays in
+ * place, so focus stays on it.
+ */
 export const FailedLine = ({
     failure,
+    retrying,
     onRetry,
 }: {
     failure: NodeViewFailure;
+    retrying: boolean;
     onRetry: () => void;
 }) => (
     <p className={styles.filter} role="alert">
-        <span>Its links on the graph could not be loaded. {failure.explanation}</span>
-        <Button variant="bordered" small onClick={onRetry}>
+        <span>
+            Its links on the graph could not be loaded.{' '}
+            {retrying ? 'Loading them again.' : failure.explanation}
+        </span>
+        <Button
+            variant="bordered"
+            small
+            aria-disabled={retrying}
+            onClick={retrying ? undefined : onRetry}
+        >
             Try Again
         </Button>
     </p>
@@ -221,20 +241,55 @@ const CappedLine = () => (
     </p>
 );
 
-/** The line over a centre's picture: its node view's failure, or its cut lists. */
-const viewNotice = (
-    failed: NodeViewFailure | null,
-    view: SchemaNodeView | null,
-    retry: () => void,
-) => {
-    if (failed !== null) return <FailedLine failure={failed} onRetry={retry} />;
+/** What a refusal says about the term `term` names. */
+const RefusalText = ({ refusal, id }: { refusal: RefusalKind; id: string }) => {
+    const term = (
+        <code>
+            <BreakableId text={id} />
+        </code>
+    );
+    switch (refusal) {
+        case 'notHeld':
+            return <>{term} is not on the graph.</>;
+        case 'notServed':
+            return <>The graph that holds {term} is not served here.</>;
+        case 'originNotServed':
+            return <>The UN System Data Commons is not served here.</>;
+    }
+};
+
+/** The line over a picture drawn from the usage documents alone, after its node view was refused. */
+const RefusedLine = ({ refusal, id }: { refusal: RefusalKind; id: string }) => (
+    <p className={styles.filter} role="status">
+        <span>
+            <RefusalText refusal={refusal} id={id} />
+        </span>
+    </p>
+);
+
+/** The line over a centre's picture: its node view's failure or refusal, or its cut lists. */
+export const CentreNotice = ({
+    id,
+    line,
+    view,
+    onRetry,
+}: {
+    id: string;
+    line: CentreLine | null;
+    view: SchemaNodeView | null;
+    onRetry: () => void;
+}) => {
+    if (line?.kind === 'failed') {
+        return <FailedLine failure={line.failure} retrying={line.retrying} onRetry={onRetry} />;
+    }
+    if (line?.kind === 'refused') return <RefusedLine refusal={line.refusal} id={id} />;
     if (view !== null && view.capped.length > 0) return <CappedLine />;
     return null;
 };
 
 /** The screen while the node view of a term the DFO document lacks loads, or waits before a retry. */
 export const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | null }) => (
-    <div className={styles.loading}>
+    <div className={styles.loading} role="status">
         <Spinner size={24} label="Loading" />
         <p className={styles.note}>
             {waiting === null ? (
@@ -253,21 +308,12 @@ export const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | nu
 );
 
 /** A term whose node view was refused for good, with a way back to the start. */
-export const Refused = ({ id, notHeld }: { id: string; notHeld: boolean }) => {
+export const Refused = ({ id, refusal }: { id: string; refusal: RefusalKind }) => {
     const { go } = useExplore();
-    const term = (
-        <code>
-            <BreakableId text={id} />
-        </code>
-    );
     return (
         <div className={styles.missing} role="status">
             <p>
-                {notHeld ? (
-                    <>{term} is not on the graph.</>
-                ) : (
-                    <>The graph that holds {term} is not served here.</>
-                )}
+                <RefusalText refusal={refusal} id={id} />
             </p>
             <div>
                 <Button onClick={() => go(START_VIEW)}>Start</Button>
@@ -281,31 +327,36 @@ export const Refused = ({ id, notHeld }: { id: string; notHeld: boolean }) => {
  * dataset or a term the DFO document declares draws from the full model.
  * Any other term loads its node view: a term the document holds (Person)
  * paints from the full model at once and redraws when the view lands; a
- * term it lacks waits for the view, and reads "not on the graph" or "not
- * served here" when the view is refused. A failed view keeps what the full
- * model shows, with a line that loads it again.
+ * term it lacks waits for the view. A refused view reads "not on the
+ * graph" or "not served here", beside the term's use when the usage
+ * documents name it. A failed view keeps what the full model shows, with a
+ * line that loads it again.
  */
 const FocusView = ({ centre, show, full }: FocusViewProps) => {
-    const { state, retry } = useNodeView(needsNodeView(full, centre) ? centre.id : null);
-    const route = routeCentre(full, centre, state);
+    const { state, lastFailure, retry } = useNodeView(
+        needsNodeView(full, centre) ? centre.id : null,
+    );
+    const route = routeCentre(full, centre, state, lastFailure);
 
     switch (route.kind) {
         case 'loading':
             return <ViewLoading id={centre.id} waiting={route.waiting} />;
-        case 'notHeld':
-        case 'notServed':
-            return <Refused id={centre.id} notHeld={route.kind === 'notHeld'} />;
+        case 'refused':
+            return <Refused id={centre.id} refusal={route.refusal} />;
         case 'draw':
             return (
                 <ModelProvider value={route.model}>
                     <Centred
                         centre={centre}
                         show={show}
-                        notice={viewNotice(
-                            route.failed,
-                            state?.status === 'ready' ? state.value : null,
-                            retry,
-                        )}
+                        notice={
+                            <CentreNotice
+                                id={centre.id}
+                                line={route.line}
+                                view={state?.status === 'ready' ? state.value : null}
+                                onRetry={retry}
+                            />
+                        }
                     />
                 </ModelProvider>
             );

@@ -92,10 +92,9 @@ export const useModel = (): Model => {
 };
 
 /**
- * The full model, over every usage document loaded. Under a centred term's
- * view, `useModel` reads the centre's model, which holds the view's
- * neighbours too, so whether the DFO document holds a ref is read here.
- * Throws where no FullModelProvider is above.
+ * The full model, over every usage document loaded whatever the switches
+ * say. The scoped list and the Show pills read it for a chosen dataset the
+ * switches leave out. Throws where no FullModelProvider is above.
  */
 export const useFullModel = (): Model => {
     const model = useContext(FullModelContext);

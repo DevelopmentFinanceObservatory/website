@@ -32,6 +32,7 @@ const ShowPills = ({ value, onChange, withAll = false }: ShowPillsProps) => {
     const full = useFullModel();
     const origins = useListOrigins(model);
     const labelId = useId();
+    const pillsId = useId();
     const [open, setOpen] = useState(false);
 
     const chosen = value.kind === 'dataset' ? value.id : null;
@@ -71,7 +72,7 @@ const ShowPills = ({ value, onChange, withAll = false }: ShowPillsProps) => {
             <span className={styles.label} id={labelId}>
                 Show
             </span>
-            <div className={styles.pills} role="group" aria-labelledby={labelId}>
+            <div id={pillsId} className={styles.pills} role="group" aria-labelledby={labelId}>
                 {choices.map((choice) => (
                     <button
                         key={choice.key}
@@ -85,7 +86,13 @@ const ShowPills = ({ value, onChange, withAll = false }: ShowPillsProps) => {
                     </button>
                 ))}
             </div>
-            <ListToggle head={head} open={open} onToggle={() => setOpen((was) => !was)} />
+            <ListToggle
+                head={head}
+                noun="datasets"
+                controls={pillsId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
         </div>
     );
 };

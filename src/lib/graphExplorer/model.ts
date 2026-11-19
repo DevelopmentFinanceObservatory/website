@@ -394,20 +394,42 @@ const distinctLists = (node: SchemaNode): SchemaNode => ({
     },
 });
 
+/** A pattern with the dataset whose StatVars it forms. */
+type DatasetPattern = { readonly dataset: string; readonly pattern: SchemaPattern };
+
 /**
- * The index over a schema document and the usage documents, each listing a
- * dcid once (the wire guards refuse a repeat). A dataset or term two usage
- * documents list counts once, as the first lists it. Every list on a node
- * holds an id once, so no list the model answers repeats an id.
+ * What the usage documents say, indexed once. No node changes it, so a
+ * model built for one centre shares its full model's index.
  */
-export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsage[]): Model {
-    const nodes = Object.freeze(
-        schema.nodes.map(distinctLists).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
-    );
-    const byId = new Map(nodes.map((node) => [node.ref, node]));
+type UsageIndex = {
+    readonly documents: readonly SchemaUsage[];
+    readonly datasets: readonly ProvenanceUsage[];
+    readonly datasetById: ReadonlyMap<string, ProvenanceUsage>;
+    readonly termById: ReadonlyMap<string, UsageTerm>;
+    /** StatVars per node and dataset. */
+    readonly counts: ReadonlyMap<string, ReadonlyMap<string, number>>;
+    /** The roles a property has per dataset. */
+    readonly roleIndex: ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<Role>>>;
+    readonly patterns: readonly DatasetPattern[];
+    /** The values each dataset's StatVars give each property. */
+    readonly constraintValues: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+    /** StatVars per property and population type, over the patterns that give the property a role. */
+    readonly usedWithCounts: ReadonlyMap<string, ReadonlyMap<string, number>>;
+    /** The datasets whose patterns are about each population type. */
+    readonly populationDatasets: ReadonlyMap<string, ReadonlySet<string>>;
+    /** StatVars per population type. */
+    readonly populationStatVars: ReadonlyMap<string, number>;
+};
+
+/**
+ * The index over usage documents, each listing a dcid once (the wire guards
+ * refuse a repeat). A dataset or term two usage documents list counts once,
+ * as the first lists it.
+ */
+const indexUsage = (documents: readonly SchemaUsage[]): UsageIndex => {
     const datasetById = new Map<string, ProvenanceUsage>();
     const termById = new Map<string, UsageTerm>();
-    for (const document of usageDocuments) {
+    for (const document of documents) {
         for (const dataset of document.provenances) {
             if (!datasetById.has(dataset.ref)) datasetById.set(dataset.ref, dataset);
         }
@@ -416,6 +438,129 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         }
     }
     const datasets = Object.freeze([...datasetById.values()]);
+
+    const counts = new Map<string, Map<string, number>>();
+    const roleIndex = new Map<string, Map<string, Set<Role>>>();
+    const patterns: DatasetPattern[] = [];
+    const constraintValues = new Map<string, Map<string, readonly string[]>>();
+
+    const add = (id: string, dataset: string, count: number, combine: 'sum' | 'max') => {
+        const perDataset = counts.get(id) ?? new Map<string, number>();
+        const held = perDataset.get(dataset) ?? 0;
+        perDataset.set(dataset, combine === 'sum' ? held + count : Math.max(held, count));
+        counts.set(id, perDataset);
+    };
+
+    for (const dataset of datasets) {
+        for (const pattern of dataset.patterns) {
+            patterns.push({ dataset: dataset.ref, pattern });
+            for (const id of patternIds(pattern)) {
+                add(id, dataset.ref, pattern.stat_var_count, 'sum');
+            }
+            for (const [id, role] of patternRoles(pattern)) {
+                const perDataset = roleIndex.get(id) ?? new Map<string, Set<Role>>();
+                perDataset.set(dataset.ref, (perDataset.get(dataset.ref) ?? new Set()).add(role));
+                roleIndex.set(id, perDataset);
+            }
+        }
+        const values = new Map<string, readonly string[]>();
+        for (const constraint of dataset.constraint_values) {
+            values.set(
+                constraint.property,
+                Object.freeze(constraint.values.map((value) => value.value)),
+            );
+            // A value can also sit in a pattern field. The larger count stands, so no StatVar
+            // counts twice.
+            for (const value of constraint.values) {
+                add(value.value, dataset.ref, value.stat_var_count, 'max');
+            }
+        }
+        constraintValues.set(dataset.ref, values);
+    }
+
+    const usedWithCounts = new Map<string, Map<string, number>>();
+    const populationDatasets = new Map<string, Set<string>>();
+    const populationStatVars = new Map<string, number>();
+    for (const { dataset, pattern } of patterns) {
+        const classId = pattern.population_type;
+        if (classId === null) continue;
+        for (const property of new Set(patternRoles(pattern).map(([id]) => id))) {
+            const totals = usedWithCounts.get(property) ?? new Map<string, number>();
+            totals.set(classId, (totals.get(classId) ?? 0) + pattern.stat_var_count);
+            usedWithCounts.set(property, totals);
+        }
+        populationDatasets.set(
+            classId,
+            (populationDatasets.get(classId) ?? new Set()).add(dataset),
+        );
+        populationStatVars.set(
+            classId,
+            (populationStatVars.get(classId) ?? 0) + pattern.stat_var_count,
+        );
+    }
+
+    return {
+        documents: Object.freeze([...documents]),
+        datasets,
+        datasetById,
+        termById,
+        counts,
+        roleIndex,
+        patterns: Object.freeze(patterns),
+        constraintValues,
+        usedWithCounts,
+        populationDatasets,
+        populationStatVars,
+    };
+};
+
+/** Each model's usage index, for withNodes to share. */
+const usageIndexes = new WeakMap<Model, UsageIndex>();
+
+/**
+ * The index over a schema document and the usage documents, each listing a
+ * dcid once (the wire guards refuse a repeat). A dataset or term two usage
+ * documents list counts once, as the first lists it. Every list on a node
+ * holds an id once, so no list the model answers repeats an id.
+ */
+export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsage[]): Model {
+    return modelOver(schema, indexUsage(usageDocuments));
+}
+
+/**
+ * The model over `schema`'s nodes and the usage documents `model` was built
+ * from. It shares `model`'s usage index, so its cost follows the nodes and
+ * not the usage.
+ */
+export function withNodes(model: Model, schema: SchemaDocument): Model {
+    return modelOver(schema, usageIndexes.get(model) ?? indexUsage(model.usageDocuments));
+}
+
+/** Nodes distinctLists made, which a model built from another model's nodes keeps as they are. */
+const distinctNodes = new WeakSet<SchemaNode>();
+
+const distinctNode = (node: SchemaNode): SchemaNode => {
+    if (distinctNodes.has(node)) return node;
+    const made = distinctLists(node);
+    distinctNodes.add(made);
+    return made;
+};
+
+function modelOver(schema: SchemaDocument, index: UsageIndex): Model {
+    const nodes = Object.freeze(
+        schema.nodes.map(distinctNode).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
+    );
+    const byId = new Map(nodes.map((node) => [node.ref, node]));
+    const {
+        datasets,
+        datasetById,
+        termById,
+        counts,
+        roleIndex,
+        patterns,
+        constraintValues,
+        usedWithCounts,
+    } = index;
     const isEnumeration = (node: SchemaNode): boolean => {
         const seen = new Set<string>();
         const queue = [...node.sub_class_of];
@@ -585,46 +730,6 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         return Object.freeze(roots.map(build));
     };
 
-    // Usage: StatVar counts per node and dataset.
-    const counts = new Map<string, Map<string, number>>();
-    const roleIndex = new Map<string, Map<string, Set<Role>>>();
-    const patterns: { dataset: string; pattern: SchemaPattern }[] = [];
-    const constraintValues = new Map<string, Map<string, readonly string[]>>();
-
-    const add = (id: string, dataset: string, count: number, combine: 'sum' | 'max') => {
-        const perDataset = counts.get(id) ?? new Map<string, number>();
-        const held = perDataset.get(dataset) ?? 0;
-        perDataset.set(dataset, combine === 'sum' ? held + count : Math.max(held, count));
-        counts.set(id, perDataset);
-    };
-
-    for (const dataset of datasets) {
-        for (const pattern of dataset.patterns) {
-            patterns.push({ dataset: dataset.ref, pattern });
-            for (const id of patternIds(pattern)) {
-                add(id, dataset.ref, pattern.stat_var_count, 'sum');
-            }
-            for (const [id, role] of patternRoles(pattern)) {
-                const perDataset = roleIndex.get(id) ?? new Map<string, Set<Role>>();
-                perDataset.set(dataset.ref, (perDataset.get(dataset.ref) ?? new Set()).add(role));
-                roleIndex.set(id, perDataset);
-            }
-        }
-        const values = new Map<string, readonly string[]>();
-        for (const constraint of dataset.constraint_values) {
-            values.set(
-                constraint.property,
-                Object.freeze(constraint.values.map((value) => value.value)),
-            );
-            // A value can also sit in a pattern field. The larger count stands, so no StatVar
-            // counts twice.
-            for (const value of constraint.values) {
-                add(value.value, dataset.ref, value.stat_var_count, 'max');
-            }
-        }
-        constraintValues.set(dataset.ref, values);
-    }
-
     const usageCache = new Map<string, Usage>();
     const usage = (id: string): Usage => {
         const cached = usageCache.get(id);
@@ -650,17 +755,6 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         return orderRoles([...perDataset.values()].flatMap((held) => [...held]));
     };
 
-    // StatVars per property and population type, over the patterns that give the property a role.
-    const usedWithCounts = new Map<string, Map<string, number>>();
-    for (const { pattern } of patterns) {
-        const classId = pattern.population_type;
-        if (classId === null) continue;
-        for (const property of new Set(patternRoles(pattern).map(([id]) => id))) {
-            const totals = usedWithCounts.get(property) ?? new Map<string, number>();
-            totals.set(classId, (totals.get(classId) ?? 0) + pattern.stat_var_count);
-            usedWithCounts.set(property, totals);
-        }
-    }
     const usedWithCache = new Map<string, readonly ClassCount[]>();
     const usedWith = (id: string): readonly ClassCount[] => {
         const cached = usedWithCache.get(id);
@@ -674,22 +768,15 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         return result;
     };
 
-    const populationTypes: readonly PopulationTypeUse[] = (() => {
-        const datasetsOf = new Map<string, Set<string>>();
-        const statVars = new Map<string, number>();
-        for (const { dataset, pattern } of patterns) {
-            const id = pattern.population_type;
-            if (id === null) continue;
-            datasetsOf.set(id, (datasetsOf.get(id) ?? new Set()).add(dataset));
-            statVars.set(id, (statVars.get(id) ?? 0) + pattern.stat_var_count);
-        }
-        return Object.freeze(
-            [...datasetsOf]
+    let populationTypeList: readonly PopulationTypeUse[] | undefined;
+    const populationTypes = (): readonly PopulationTypeUse[] =>
+        (populationTypeList ??= Object.freeze(
+            [...index.populationDatasets]
                 .map(([classId, using]) =>
                     Object.freeze({
                         classId,
                         datasets: using.size,
-                        statVars: statVars.get(classId) ?? 0,
+                        statVars: index.populationStatVars.get(classId) ?? 0,
                     }),
                 )
                 .sort(
@@ -698,10 +785,7 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
                         b.statVars - a.statVars ||
                         byLabel(a.classId, b.classId),
                 ),
-        );
-    })();
-
-    const populationTypeIds = new Set(populationTypes.map((use) => use.classId));
+        ));
 
     const moreUsed = (a: string, b: string): number =>
         usage(b).total - usage(a).total || byLabel(a, b);
@@ -876,11 +960,11 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
             }),
         );
 
-    return Object.freeze({
+    const model: Model = Object.freeze({
         generation: schema.generation,
         nodes,
         datasets,
-        usageDocuments: Object.freeze([...usageDocuments]),
+        usageDocuments: index.documents,
         node: (id: string) => byId.get(id),
         dataset: (id: string) => datasetById.get(id),
         term: (id: string) => termById.get(id),
@@ -901,8 +985,8 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         usageIn,
         roles,
         usedWith,
-        populationTypes: () => populationTypes,
-        isPopulationType: (id: string) => populationTypeIds.has(id),
+        populationTypes,
+        isPopulationType: (id: string) => index.populationDatasets.has(id),
         propertiesOf,
         byUse,
         dfoProperties,
@@ -912,6 +996,8 @@ export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsag
         lens,
         memberUse,
     });
+    usageIndexes.set(model, index);
+    return model;
 }
 
 /** The usage documents an Explore visit loads: the DFO document, and each outside one once it lands. */
@@ -939,8 +1025,8 @@ export type ExploreModels = {
 /** Stands for an outside usage document not loaded, as a WeakMap key. */
 const NOT_LOADED = Object.freeze({});
 
-/** The full model by schema, DFO, base and UN usage document, in that order of keys. */
-const fullModels = new WeakMap<
+/** The model by schema, DFO, base and UN usage document, in that order of keys. */
+const models = new WeakMap<
     SchemaDocument,
     WeakMap<SchemaUsage, WeakMap<object, WeakMap<object, Model>>>
 >();
@@ -959,12 +1045,12 @@ const entryOf = <TKey extends object, TValue>(
 };
 
 /**
- * The model over every usage document loaded, built once per set of
- * documents, so a switch toggle keeps the full model and what is cached
- * on it.
+ * The model over the schema and the usage documents given, built once per
+ * set of documents, so a switch toggle or the arrival of a document a model
+ * leaves out keeps that model and what is cached on it.
  */
-const fullModel = (schema: SchemaDocument, usage: UsageDocuments): Model => {
-    const byDfo = entryOf(fullModels, schema, () => new WeakMap());
+const modelOf = (schema: SchemaDocument, usage: UsageDocuments): Model => {
+    const byDfo = entryOf(models, schema, () => new WeakMap());
     const byBase = entryOf(byDfo, usage.dfo, () => new WeakMap());
     const byUn = entryOf(byBase, usage.base ?? NOT_LOADED, () => new WeakMap());
     return entryOf(byUn, usage.un ?? NOT_LOADED, () =>
@@ -977,28 +1063,24 @@ const fullModel = (schema: SchemaDocument, usage: UsageDocuments): Model => {
 };
 
 /**
- * The scoped and full models over one schema document. The full model is
- * one object per set of documents, whatever the switches say. When every
- * outside document loaded has its switch on, the scoped model is that
- * object too.
+ * The scoped and full models over one schema document. Each is one object
+ * per set of documents it reads, so the scoped model keeps its identity
+ * while a document whose switch is off arrives. When every outside document
+ * loaded has its switch on, the scoped model is the full model.
  */
 export function buildModels(
     schema: SchemaDocument,
     usage: UsageDocuments,
     switches: Readonly<Record<OriginSwitch, boolean>>,
 ): ExploreModels {
-    const outside = [
-        { origin: 'base', document: usage.base },
-        { origin: 'un', document: usage.un },
-    ] as const;
-    const loaded = outside.flatMap(({ origin, document }) =>
-        document === undefined ? [] : [{ origin, document }],
-    );
-    const full = fullModel(schema, usage);
-    const switchedOn = loaded.filter(({ origin }) => switches[origin]);
-    if (switchedOn.length === loaded.length) return Object.freeze({ scoped: full, full });
-    const scoped = buildModel(schema, usage.dfo, ...switchedOn.map(({ document }) => document));
-    return Object.freeze({ scoped, full });
+    return Object.freeze({
+        scoped: modelOf(schema, {
+            dfo: usage.dfo,
+            base: switches.base ? usage.base : undefined,
+            un: switches.un ? usage.un : undefined,
+        }),
+        full: modelOf(schema, usage),
+    });
 }
 
 /** An open property value as text: a node's dcid, else the literal. */

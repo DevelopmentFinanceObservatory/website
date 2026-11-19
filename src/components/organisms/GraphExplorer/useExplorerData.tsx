@@ -13,7 +13,6 @@ import {
     loadNodeView,
     loadServed,
     nodeViewName,
-    settled,
     sharedLoad,
     type KeyedLoads,
     type Loadable,
@@ -24,6 +23,7 @@ import {
     type WaitCause,
 } from '@/lib/graphExplorer/load';
 import { buildModels, type ExploreModels, type Model } from '@/lib/graphExplorer/model';
+import type { NodeViewFailure } from '@/lib/graphExplorer/nodeView';
 import {
     outsideTermList,
     readSchema,
@@ -84,10 +84,28 @@ type LoadedDocuments = {
     ) => readonly SchemaTerm[];
 };
 
-type NodeViews = {
+type NodeViewStates = {
     /** Each node view's state by dcid, for the dcids held or loaded this visit. */
     readonly states: ReadonlyMap<string, NodeViewState>;
-    readonly loads: KeyedLoads;
+    /** Each node view's last failure by dcid, kept while a retry loads it. */
+    readonly failures: ReadonlyMap<string, NodeViewFailure>;
+};
+
+type NodeViews = NodeViewStates & { readonly loads: KeyedLoads };
+
+/** The node views' states once `state` is published for `dcid`. */
+const publishView = (
+    { states, failures }: NodeViewStates,
+    dcid: string,
+    state: NodeViewState | null,
+): NodeViewStates => {
+    const nextStates = new Map(states);
+    if (state === null) nextStates.delete(dcid);
+    else nextStates.set(dcid, state);
+    const nextFailures = new Map(failures);
+    if (state?.status === 'failed') nextFailures.set(dcid, state);
+    else if (state?.status !== 'loading') nextFailures.delete(dcid);
+    return { states: nextStates, failures: nextFailures };
 };
 
 /** Whether a terms list has yet to load or is loading, as opposed to loaded, failed or not served. */
@@ -106,11 +124,11 @@ const loaded = <TValue,>(state: Servable<TValue> | null): TValue | undefined =>
  * on its own so one failing leaves the others in place. Both outside usage
  * documents load at once, beside the DFO pair: the models build when the
  * DFO pair lands and rebuild as each outside document arrives, so a failed
- * or slow outside document holds back nothing. The UN System documents read
- * as not served on a 404 whose cause is `origin_not_served`. It sits in the
- * section's layout, which stays mounted while the reader moves between
- * Explore, Seed a dataset and Check a sheet, so each document and node view
- * loads once per visit.
+ * or slow outside document holds back nothing. The outside usage documents
+ * and the UN System terms list read as not served on a 404 whose cause is
+ * `origin_not_served`. It sits in the section's layout, which stays mounted
+ * while the reader moves between Explore, Seed a dataset and Check a sheet,
+ * so each document and node view loads once per visit.
  */
 export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }) => {
     const [dfo, setDfo] = useState<Loadable<DfoDocuments>>(LOADING);
@@ -119,11 +137,14 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
     const [unUsage, setUnUsage] = useState<Servable<SchemaUsage> | null>(null);
     const [baseTerms, setBaseTerms] = useState<Servable<SchemaTerms> | null>(null);
     const [unTerms, setUnTerms] = useState<Servable<SchemaTerms> | null>(null);
-    const [nodeViews, setNodeViews] = useState<ReadonlyMap<string, NodeViewState>>(() => new Map());
+    const [nodeViews, setNodeViews] = useState<NodeViewStates>(() => ({
+        states: new Map(),
+        failures: new Map(),
+    }));
     const [usageLoads] = useState<Readonly<Record<OriginSwitch, SharedLoad>>>(() => ({
         base: sharedLoad<SchemaUsage>({
             what: BASE_USAGE,
-            load: (options) => loadDocument(BASE_USAGE, BASE_USAGE_URL, readUsage, options),
+            load: (options) => loadServed(BASE_USAGE, BASE_USAGE_URL, readUsage, options),
             publish: setBaseUsage,
         }),
         un: sharedLoad<SchemaUsage>({
@@ -148,13 +169,7 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
         keyedLoads<SchemaNodeView, Refusal>({
             what: nodeViewName,
             load: loadNodeView,
-            publish: (dcid, state) =>
-                setNodeViews((states) => {
-                    const next = new Map(states);
-                    if (state === null) next.delete(dcid);
-                    else next.set(dcid, state);
-                    return next;
-                }),
+            publish: (dcid, state) => setNodeViews((views) => publishView(views, dcid, state)),
         }),
     );
 
@@ -244,7 +259,7 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
     }, [baseValue, unValue, baseInFlight]);
 
     const views = useMemo(
-        () => ({ states: nodeViews, loads: nodeViewLoads }),
+        () => ({ ...nodeViews, loads: nodeViewLoads }),
         [nodeViews, nodeViewLoads],
     );
 
@@ -304,7 +319,11 @@ export type ExplorerData = {
      */
     readonly full: Model | null;
     readonly retryModel: () => void;
-    /** Each outside usage document's state. These load on every visit, whatever the switches say. */
+    /**
+     * Each outside usage document's state. These load on every visit,
+     * whatever the switches say; a document has settled once it loads,
+     * fails or is not served (`settled` in load.ts).
+     */
     readonly usage: UsageStates;
     /**
      * The outside usage documents that failed, in switch order; empty while
@@ -317,8 +336,6 @@ export type ExplorerData = {
     readonly switches: Readonly<Record<OriginSwitch, boolean>>;
     /** Each terms list's state while its switch is on; null while it is off. */
     readonly terms: TermsStates;
-    /** Whether each terms list has come to rest, by loading or by not being served. False while its switch is off. */
-    readonly termsSettled: Readonly<Record<OriginSwitch, boolean>>;
     /**
      * The terms lists loaded while their switches are on, merged by
      * `outsideTermList`, for search and the centre. One list per pair of
@@ -350,10 +367,11 @@ export const useExplorerData = (): ExplorerData => {
         [documents.documents, base, un],
     );
     // Screens memoise on the model's state, so it keeps its identity while its model does.
+    const scoped = models?.scoped ?? null;
     const model = useMemo<Loadable<Model>>(() => {
         if (dfo.status !== 'ready') return dfo;
-        return models === null ? LOADING : { status: 'ready', value: models.scoped };
-    }, [models, dfo]);
+        return scoped === null ? LOADING : { status: 'ready', value: scoped };
+    }, [scoped, dfo]);
 
     const shown: TermsStates = { base: base ? terms.base : null, un: un ? terms.un : null };
     return {
@@ -365,7 +383,6 @@ export const useExplorerData = (): ExplorerData => {
         retryUsage,
         switches: { base, un },
         terms: shown,
-        termsSettled: { base: settled(shown.base), un: settled(shown.un) },
         outside: outsideOf({ base, un }),
         retryTerms: (origin) => loadTerms(origin, true),
     };

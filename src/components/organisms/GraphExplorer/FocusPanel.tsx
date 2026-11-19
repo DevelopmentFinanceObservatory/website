@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { BreakableId } from './BreakableId';
 import { downloadCsv } from './downloadCsv';
@@ -24,7 +24,7 @@ import {
     termKindWords,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { inBaseUsage, landedUsage, listHead } from '@/lib/graphExplorer/lists';
+import { datasetHead, inBaseUsage, landedUsage } from '@/lib/graphExplorer/lists';
 import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
 import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
@@ -98,13 +98,31 @@ const SheetLink = ({ href, children }: { href: string; children: React.ReactNode
     </Link>
 );
 
-/** One bar per dataset: how many of its StatVars use the term, against its total. */
+/** A link to the term's page in the base Data Commons browser. */
+const BrowserLink = ({ id }: { id: string }) => (
+    <p className={styles.line}>
+        <a
+            className={styles.external}
+            href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            Open in the Data Commons browser
+        </a>
+    </p>
+);
+
+/**
+ * One bar per dataset: how many of its StatVars use the term, against its
+ * total. The filtered dataset's bar stays on show past the first few.
+ */
 const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
     const origins = useListOrigins(model);
     const [open, setOpen] = useState(false);
+    const listId = useId();
     const { byDataset } = model.usage(id);
-    const head = listHead(byDataset, { open });
+    const head = datasetHead(byDataset, { open, dataset: lens.dataset });
 
     return (
         <section className={styles.section}>
@@ -112,7 +130,7 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
             {byDataset.length === 0 ? (
                 <p className={styles.note}>No StatVar in the datasets uses it.</p>
             ) : (
-                <ul className={styles.uses}>
+                <ul id={listId} className={styles.uses}>
                     {head.shown.map(({ dataset, count: n }) => {
                         const percent = sharePercent(
                             n,
@@ -140,7 +158,13 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
-            <ListToggle head={head} open={open} onToggle={() => setOpen((was) => !was)} />
+            <ListToggle
+                head={head}
+                noun="datasets"
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
         </section>
     );
 };
@@ -148,14 +172,16 @@ const UsageBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
 /**
  * One bar per dataset that uses a value list's members: how many of them,
  * against the list's size. A StatVar names the members, so the list's use is
- * read from them, as the dataset filter reads it.
+ * read from them, as the dataset filter reads it. The filtered dataset's bar
+ * stays on show past the first few.
  */
 const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
     const origins = useListOrigins(model);
     const [open, setOpen] = useState(false);
+    const listId = useId();
     const uses = model.memberUse(id);
-    const head = listHead(uses, { open });
+    const head = datasetHead(uses, { open, dataset: lens.dataset });
 
     return (
         <section className={styles.section}>
@@ -163,7 +189,7 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
             {uses.length === 0 ? (
                 <p className={styles.note}>No dataset uses its values.</p>
             ) : (
-                <ul className={styles.uses}>
+                <ul id={listId} className={styles.uses}>
                     {head.shown.map(({ dataset, values }) => {
                         const percent = sharePercent(values.used, values.of);
                         return (
@@ -188,7 +214,13 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     })}
                 </ul>
             )}
-            <ListToggle head={head} open={open} onToggle={() => setOpen((was) => !was)} />
+            <ListToggle
+                head={head}
+                noun="datasets"
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
         </section>
     );
 };
@@ -216,7 +248,11 @@ const OpenLines = ({ id }: { id: string }) => {
     ));
 };
 
-/** A term the model holds: what it is, its names, its definition, its source and its use. */
+/**
+ * A term the model holds: what it is, its names, its definition, its source
+ * and its use. A term the base Data Commons declares links to its browser
+ * page; the UN System Data Commons serves no browser page.
+ */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
     const node = model.node(id);
@@ -259,6 +295,7 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                     </span>
                 </p>
             )}
+            {node.declared_by === 'base' && <BrowserLink id={id} />}
             {domain && (
                 <p className={styles.line}>
                     Declared for{' '}
@@ -406,18 +443,7 @@ export const TermPanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
                 <IdLine id={id} />
             </div>
             <p className={styles.note}>Only its use in the datasets is known here.</p>
-            {inBaseUsage(id, outside) && (
-                <p className={styles.line}>
-                    <a
-                        className={styles.external}
-                        href={`${DATA_COMMONS_BROWSER}${encodeURIComponent(id)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        Open in the Data Commons browser
-                    </a>
-                </p>
-            )}
+            {inBaseUsage(id, outside) && <BrowserLink id={id} />}
             <UsageBars id={id} lens={lens} />
         </>
     );

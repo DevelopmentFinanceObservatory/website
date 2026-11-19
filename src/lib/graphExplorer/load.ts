@@ -408,7 +408,7 @@ export async function loadDocument<TDocument>(
 export type NotServed = { readonly status: 'notServed' };
 
 /** The `cause.code` of the 404 that says this Graph API does not serve a document. */
-const ORIGIN_NOT_SERVED = 'origin_not_served';
+const ORIGIN_NOT_SERVED_CODE = 'origin_not_served';
 
 export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
 
@@ -420,12 +420,21 @@ export type NotHeld = { readonly status: 'notHeld' };
 
 export const NOT_HELD: NotHeld = Object.freeze({ status: 'notHeld' });
 
-/** An answer that ends a load for good: asking again gets the same answer. */
-export type Refusal = NotServed | NotHeld;
+/**
+ * A node whose origin this deployment does not serve, because the node view
+ * answered 404 with `origin_not_served`. The Graph API sends it for a UN
+ * System node while the UN System Data Commons is switched off there.
+ */
+export type OriginNotServed = { readonly status: 'originNotServed' };
 
-/** True for NOT_SERVED and NOT_HELD. */
+export const ORIGIN_NOT_SERVED: OriginNotServed = Object.freeze({ status: 'originNotServed' });
+
+/** An answer that ends a load for good: asking again gets the same answer. */
+export type Refusal = NotServed | NotHeld | OriginNotServed;
+
+/** True for NOT_SERVED, NOT_HELD and ORIGIN_NOT_SERVED. */
 export const isRefusal = (value: unknown): value is Refusal =>
-    value === NOT_SERVED || value === NOT_HELD;
+    value === NOT_SERVED || value === NOT_HELD || value === ORIGIN_NOT_SERVED;
 
 /**
  * As loadDocument, for a document the Graph API may not serve. A 404 whose
@@ -445,41 +454,51 @@ export async function loadServed<TDocument>(
             url,
             read,
             refusal: (status, problem) =>
-                status === 404 && problem.cause === ORIGIN_NOT_SERVED ? NOT_SERVED : null,
+                status === 404 && problem.cause === ORIGIN_NOT_SERVED_CODE ? NOT_SERVED : null,
         },
         options,
     );
 }
 
 /**
- * The path of the node view of `dcid`. A dcid holds `/`, which the route
- * reads as part of the dcid, so each segment is encoded and the slashes are
- * kept.
+ * The path of the node view of `dcid`, or null for a dcid with a `.` or
+ * `..` segment. A dcid holds `/`, which the route reads as part of the
+ * dcid, so each segment is encoded and the slashes are kept. A URL resolves
+ * a dot segment against the path before it is sent, encoded as `%2E` or
+ * not, so no path names such a dcid.
  */
-export const nodeViewUrl = (dcid: string): string =>
-    `/api/graph/schema/node/${dcid.split('/').map(encodeURIComponent).join('/')}`;
+export const nodeViewUrl = (dcid: string): string | null => {
+    const segments = dcid.split('/');
+    if (segments.some((segment) => segment === '.' || segment === '..')) return null;
+    return `/api/graph/schema/node/${segments.map(encodeURIComponent).join('/')}`;
+};
 
 /** The node view of `dcid` as a load names it in a failure. */
 export const nodeViewName = (dcid: string): string => `The graph's view of ${dcid}`;
 
 /**
  * The node view of `dcid`, as loadDocument reads a document. A 404 whose
- * `cause.code` is `node_not_held` gives NOT_HELD, and any other 404 gives
- * NOT_SERVED (the node's origin is not served here, or the API lacks the
- * route). Neither is waited on or retried; a 503 is, as every load's is.
+ * `cause.code` is `node_not_held` gives NOT_HELD, one whose `cause.code` is
+ * `origin_not_served` gives ORIGIN_NOT_SERVED, and any other 404 gives
+ * NOT_SERVED (the API lacks the route). None is waited on or retried; a 503
+ * is, as every load's is. A dcid no path can name gives NOT_HELD with no
+ * request.
  */
 export async function loadNodeView(
     dcid: string,
     options: LoadOptions = {},
 ): Promise<SchemaNodeView | Refusal> {
+    const url = nodeViewUrl(dcid);
+    if (url === null) return NOT_HELD;
     return load<SchemaNodeView | Refusal>(
         nodeViewName(dcid),
         {
-            url: nodeViewUrl(dcid),
+            url,
             read: readNodeView,
             refusal: (status, problem) => {
                 if (status !== 404) return null;
-                return problem.cause === 'node_not_held' ? NOT_HELD : NOT_SERVED;
+                if (problem.cause === 'node_not_held') return NOT_HELD;
+                return problem.cause === ORIGIN_NOT_SERVED_CODE ? ORIGIN_NOT_SERVED : NOT_SERVED;
             },
         },
         options,
@@ -534,9 +553,12 @@ export type Servable<TValue> = Loadable<TValue> | NotServed;
 /** A node view's state: a Loadable, or the refusal that ended it. */
 export type NodeViewState = Loadable<SchemaNodeView> | Refusal;
 
-/** Whether a document's load has come to rest, by loading or by not being served here. */
+/**
+ * Whether a document's load has come to rest: loaded, not served here, or
+ * failed. False before it starts and while it loads or waits.
+ */
 export const settled = (state: Servable<unknown> | null): boolean =>
-    state?.status === 'ready' || state?.status === 'notServed';
+    state !== null && state.status !== 'loading';
 
 /**
  * A load failure as the screens show it. `what` names the document, as

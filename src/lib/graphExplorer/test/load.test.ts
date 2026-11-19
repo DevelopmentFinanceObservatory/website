@@ -16,6 +16,7 @@ import {
     NOT_HELD,
     NOT_SERVED,
     nodeViewUrl,
+    ORIGIN_NOT_SERVED,
     RETRY_WAIT_MS,
     retryDelay,
     settled as isSettled,
@@ -23,6 +24,7 @@ import {
     waitText,
     type NotHeld,
     type NotServed,
+    type Refusal,
     type Servable,
     type WaitCause,
 } from '../load.ts';
@@ -350,9 +352,9 @@ const notFound = (cause: string | null) => () =>
     );
 
 test('a node view refused with node_not_held, origin_not_served or a bare 404 is final, with no retry', async () => {
-    const rows: [() => Response, NotHeld | NotServed][] = [
+    const rows: [() => Response, Refusal][] = [
         [notFound('node_not_held'), NOT_HELD],
-        [notFound('origin_not_served'), NOT_SERVED],
+        [notFound('origin_not_served'), ORIGIN_NOT_SERVED],
         [notFound(null), NOT_SERVED],
         [() => new Response('Not Found', { status: 404 }), NOT_SERVED],
     ];
@@ -379,6 +381,16 @@ test("a node view's path encodes each segment of the dcid and keeps its slashes"
         nodeViewUrl('undata/eclac/SERIES-INSUF PENSION?#'),
         '/api/graph/schema/node/undata/eclac/SERIES-INSUF%20PENSION%3F%23',
     );
+});
+
+test('a dcid with a dot segment, which a URL would resolve away, is not held, with no request', async () => {
+    for (const dcid of ['../usage', 'dc/..', './x', 'dc/./x']) {
+        const { options, urls } = rig([() => json(nodeViewBody())]);
+        assert.equal(nodeViewUrl(dcid), null);
+        assert.equal(await loadNodeView(dcid, options), NOT_HELD);
+        assert.deepEqual(urls, []);
+    }
+    assert.equal(nodeViewUrl('dc/x.y..z'), '/api/graph/schema/node/dc/x.y..z');
 });
 
 /** A shared load over a load the test settles by hand, and every state it published. */
@@ -458,13 +470,14 @@ test('a shared load answered not served publishes it, and a retry leaves it alon
     assert.equal(runs.length, 1);
 });
 
-test('a terms list is settled once loaded or not served, and not while absent, loading or failed', () => {
+test('a document is settled once loaded, not served or failed, and not while absent or loading', () => {
     const rows: [Servable<unknown> | null, boolean][] = [
         [null, false],
         [LOADING, false],
+        [{ status: 'loading', waiting: { retryInMs: 5000, cause: 'schema_building' } }, false],
         [{ status: 'ready', value: {} }, true],
         [NOT_SERVED, true],
-        [{ status: 'failed', reason: 'unexpected', message: 'm', explanation: 'e' }, false],
+        [{ status: 'failed', reason: 'unexpected', message: 'm', explanation: 'e' }, true],
     ];
     assert.deepEqual(
         rows.map(([state]) => isSettled(state)),

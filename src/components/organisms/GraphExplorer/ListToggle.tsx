@@ -17,25 +17,34 @@ import type { Model } from '@/lib/graphExplorer/model';
 import type { ProvenanceUsage } from '@/lib/graphExplorer/wire';
 
 /**
- * "All N" under a long list's first entries, and "First 8" once it is open,
- * each followed by `noun` when given. Nothing for a list no longer than its head.
+ * "All N" and `noun` under a long list's first entries, and "First 8" and
+ * `noun` once it is open, controlling the list whose id is `controls`.
+ * Nothing for a list no longer than its head.
  */
 export const ListToggle = ({
     head,
     open,
     onToggle,
     noun,
+    controls,
 }: {
     head: ListHead<unknown>;
     open: boolean;
     onToggle: () => void;
-    noun?: string;
+    noun: string;
+    controls: string;
 }) => {
     if (!head.long) return null;
     const words = open ? `First ${LIST_HEAD}` : `All ${count(head.total)}`;
     return (
-        <button type="button" className={styles.toggle} aria-expanded={open} onClick={onToggle}>
-            {noun === undefined ? words : `${words} ${noun}`}
+        <button
+            type="button"
+            className={styles.toggle}
+            aria-expanded={open}
+            aria-controls={controls}
+            onClick={onToggle}
+        >
+            {`${words} ${noun}`}
         </button>
     );
 };

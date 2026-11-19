@@ -85,10 +85,13 @@ type ScopedListProps = {
  * grouped by what they do in a StatVar. Each row has the label, the dcid,
  * the value list it draws from and its StatVar count. The Show pills narrow
  * the count to one dataset (dimming the rows it does not use) or give each
- * dataset of the scoped model its own column, most StatVars first, the first
- * few on show with "All N". A chosen dataset the switches leave out is
- * counted from the full model, since the reader named it. The columns are
- * the scoped model's datasets whichever model the rows come from.
+ * dataset of the model the rows come from its own column, most StatVars
+ * first, the first few on show with "All N". A class the DFO document
+ * declares lists from the scoped model, so its columns follow the switches.
+ * Any other class's list is that term's own view, so its rows and columns
+ * cover every usage document loaded, whatever the switches say. A chosen
+ * dataset the switches leave out is counted from the full model, since the
+ * reader named it.
  */
 const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
     const scoped = useModel();
@@ -100,6 +103,7 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
     const [filter, setFilter] = useState('');
     const [columnsOpen, setColumnsOpen] = useState(false);
     const titleId = useId();
+    const tableId = useId();
 
     const list = useMemo(() => model.scopedList(scope, show), [model, scope, show]);
     const kept = useMemo(() => filterScopedList(model, list, filter), [model, list, filter]);
@@ -113,7 +117,6 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
     const columnAt = new Map(list.columns.map((dataset, index) => [dataset, index]));
     const columns = listHead(
         datasetsByUse(model).flatMap((dataset) => {
-            if (show.kind === 'all' && !scoped.dataset(dataset.ref)) return [];
             const index = columnAt.get(dataset.ref);
             return index === undefined ? [] : [{ dataset, index }];
         }),
@@ -142,6 +145,7 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
                     <ListToggle
                         head={columns}
                         noun="columns"
+                        controls={tableId}
                         open={columnsOpen}
                         onToggle={() => setColumnsOpen((open) => !open)}
                     />
@@ -171,7 +175,7 @@ const ScopedList = ({ scope, show, classModel }: ScopedListProps) => {
             ) : (
                 <ModelProvider value={model}>
                     <div className={styles.scroll}>
-                        <table className={styles.table} aria-labelledby={titleId}>
+                        <table id={tableId} className={styles.table} aria-labelledby={titleId}>
                             <thead>
                                 <tr>
                                     <th scope="col">Property</th>

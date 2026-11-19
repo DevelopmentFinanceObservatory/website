@@ -233,12 +233,6 @@ export type SchemaNodeView = {
 /** One listing of a node view that stopped at its cap: the node listed and the arc it was listed by. */
 export type CappedListing = { ref: string; property: string };
 
-/**
- * The `cause.code` values of the node view's 404: the node's origin is not
- * served here, or the graph does not hold the node. Neither is retried.
- */
-export const NODE_VIEW_REFUSALS = ['origin_not_served', 'node_not_held'] as const;
-
 /** A constraint value as sent: a node dcid, or a literal or null the check flags. */
 export type CheckConstraintValue = string | number | boolean | null;
 

@@ -6,6 +6,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import styles from './SeedSheet.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
+import Spinner from '@/components/atoms/Spinner/Spinner';
 import CheckSheet from '@/components/organisms/CheckSheet/CheckSheet';
 import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import {
@@ -23,6 +24,7 @@ import { downloadBlob } from '@/lib/download';
 import { plural, valueCount } from '@/lib/graphExplorer/counts';
 import type { Carried } from '@/lib/graphExplorer/explore';
 import { patternId, type Model } from '@/lib/graphExplorer/model';
+import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
 import {
     columnName,
     datasetConstraints,
@@ -265,9 +267,18 @@ const SeedTable = ({ columns, rows, open, panelId, onOpen }: SeedTableProps) => 
     );
 };
 
-/** Steps 1 to 4 over the model and the URL's choices. */
+/**
+ * Steps 1 to 4 over the model and the URL's choices. The picker lists the
+ * scoped model's datasets. A dataset the URL names is read from the full
+ * model, so a link from an outside dataset's view seeds that dataset
+ * whatever the switches say; while an outside usage document that may hold
+ * it loads, the steps wait. A named dataset with no patterns, once every
+ * document has settled, gives way to the first dataset, with a line saying so.
+ */
 const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const model = useModel();
+    const data = useExplorerData();
+    const full = data.full ?? model;
     const params = useSearchParams();
     const carried = useCarried();
     const codesId = useId();
@@ -283,19 +294,28 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         () => model.datasets.filter((dataset) => dataset.patterns.length > 0),
         [model],
     );
-    const usage = datasets.find((dataset) => dataset.ref === query.dataset) ?? datasets[0];
+    const named = query.dataset === null ? undefined : full.dataset(query.dataset);
+    const awaited =
+        query.dataset === null ? null : awaitedDataset(full, [query.dataset], data.usage);
+    const usage =
+        named !== undefined && named.patterns.length > 0
+            ? named
+            : awaited === null
+              ? datasets[0]
+              : undefined;
+    const picks = usage === undefined || datasets.includes(usage) ? datasets : [...datasets, usage];
     const dataset = useMemo(
         (): SeedDataset | null =>
             usage === undefined
                 ? null
                 : {
                       id: usage.ref,
-                      label: model.label(usage.ref),
+                      label: full.label(usage.ref),
                       stat_var_count: usage.stat_var_count,
                       patterns: usage.patterns,
                       constraint_values: usage.constraint_values,
                   },
-        [model, usage],
+        [full, usage],
     );
     const used = useMemo(() => usedConstraints(model), [model]);
     // An added id makes a column only when some dataset uses it, so the page lists a tick box for it.
@@ -327,6 +347,21 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
             <CheckSheet title={title} />
         </div>
     );
+
+    if (awaited !== null) {
+        return (
+            <p className={styles.lead} role="status">
+                <Spinner size={16} label="Loading" />{' '}
+                <span>
+                    Loading{' '}
+                    <code>
+                        <BreakableId text={awaited} />
+                    </code>{' '}
+                    from the graph.
+                </span>
+            </p>
+        );
+    }
 
     if (dataset === null) {
         return (
@@ -381,7 +416,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
             )}
             <SheetSection title="1. Which existing dataset is closest?">
                 <div className={styles.pick} role="group" aria-label="Dataset">
-                    {datasets.map((each) => (
+                    {picks.map((each) => (
                         <Button
                             key={each.ref}
                             variant="card"
@@ -392,7 +427,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                 writeQuery({ dataset: each.ref, dropped: [], added: [] }, carried);
                             }}
                         >
-                            <span className={styles.choiceName}>{model.label(each.ref)}</span>
+                            <span className={styles.choiceName}>{full.label(each.ref)}</span>
                             <span className={styles.choiceMeta}>
                                 {plural(each.stat_var_count, 'StatVar')},{' '}
                                 {plural(each.patterns.length, 'pattern')}

@@ -91,8 +91,9 @@ const TermsLine = ({
 };
 
 /**
- * One line for the outside usage documents that failed, however many: the
- * DFO views stand without them.
+ * One line for the outside usage documents that failed, however many,
+ * naming what the views leave out: the DFO views, and those over any other
+ * document that loaded, stand without them.
  */
 const UsageLine = ({
     failed,
@@ -105,7 +106,7 @@ const UsageLine = ({
     return (
         <div className={styles.terms} role="alert">
             <span>
-                {`${capitalise(names.join(' and '))} Data Commons usage could not be loaded, so terms show their DFO use only.`}
+                {`${capitalise(names.join(' and '))} Data Commons usage could not be loaded, so terms leave out ${failed.length === 1 ? 'its' : 'their'} datasets.`}
             </span>
             <Button small onClick={onRetry}>
                 Try Again
