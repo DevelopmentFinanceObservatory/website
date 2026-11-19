@@ -32,6 +32,8 @@ const SCHEMA_URL = '/api/graph/schema';
 const USAGE_URL = '/api/graph/schema/usage';
 const TERMS_URL = '/api/graph/schema/terms';
 const UN_TERMS_URL = '/api/graph/schema/terms/un_system';
+const BASE_TERMS = 'Base Data Commons terms';
+const UN_TERMS = 'UN System Data Commons terms';
 
 /** Each terms list's state by the switch that loads it. It is null until first asked for. */
 export type TermsStates = Readonly<Record<OriginSwitch, Servable<SchemaTerms> | null>>;
@@ -42,14 +44,30 @@ type LoadedDocuments = {
     readonly terms: TermsStates;
     /** Loads one terms list unless it is loading or loaded; `retry` also reloads a failed one. */
     readonly loadTerms: (origin: OriginSwitch, retry?: boolean) => void;
+    /**
+     * The merged outside list for a pair of switches, built once for each pair
+     * whenever a list loads, so every screen shares one list and a wait tick
+     * leaves it as it is.
+     */
+    readonly outsideOf: (
+        switches: Readonly<Record<OriginSwitch, boolean>>,
+    ) => readonly SchemaTerm[];
 };
+
+const loaded = (state: Servable<SchemaTerms> | null): SchemaTerms | undefined =>
+    state?.status === 'ready' ? state.value : undefined;
+
+/** Whether a terms list has yet to load or is loading, as opposed to loaded, failed or not served. */
+const inFlight = (state: Servable<SchemaTerms> | null): boolean =>
+    state === null || state.status === 'loading';
 
 const DocumentsContext = createContext<LoadedDocuments | null>(null);
 
 /**
  * The schema and usage documents, built into one model, and one terms list
  * per origin switch, each loaded on its own so one failing leaves the other
- * in place. The UN System list reads as not served on any 404. It sits in
+ * in place. The UN System list reads as not served on a 404 whose cause is
+ * `origin_not_served`. It sits in
  * the section's layout, which stays mounted while the reader moves between
  * Explore, Seed a dataset and Check a sheet, so each document loads once per
  * visit.
@@ -61,13 +79,13 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
     const [unTerms, setUnTerms] = useState<Servable<SchemaTerms> | null>(null);
     const [loads] = useState<Readonly<Record<OriginSwitch, SharedLoad>>>(() => ({
         base: sharedLoad({
-            load: (options) =>
-                loadDocument('Base Data Commons terms', TERMS_URL, readTerms, options),
+            what: BASE_TERMS,
+            load: (options) => loadDocument(BASE_TERMS, TERMS_URL, readTerms, options),
             publish: setBaseTerms,
         }),
         un: sharedLoad({
-            load: (options) =>
-                loadServed('UN System Data Commons terms', UN_TERMS_URL, readUnTerms, options),
+            what: UN_TERMS,
+            load: (options) => loadServed(UN_TERMS, UN_TERMS_URL, readUnTerms, options),
             publish: setUnTerms,
         }),
     }));
@@ -93,7 +111,7 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
             } catch (error) {
                 if (controller.signal.aborted) return;
                 controller.abort();
-                setModel(loadFailure(error));
+                setModel(loadFailure(error, 'The model'));
             }
         })();
 
@@ -118,9 +136,36 @@ export const ExplorerDataProvider = ({ children }: { children: React.ReactNode }
         setAttempt((n) => n + 1);
     }, []);
 
+    // Keyed on the loaded lists and the base list's progress, which a wait tick leaves unchanged.
+    const baseValue = loaded(baseTerms);
+    const unValue = loaded(unTerms);
+    const baseInFlight = inFlight(baseTerms);
+    const outsideOf = useMemo(() => {
+        const merge = (base: boolean, un: boolean) =>
+            outsideTermList({
+                base: base ? baseValue : undefined,
+                un: un ? unValue : undefined,
+                baseLoading: base && baseInFlight,
+            });
+        const lists = {
+            none: merge(false, false),
+            base: merge(true, false),
+            un: merge(false, true),
+            both: merge(true, true),
+        };
+        return ({ base, un }: Readonly<Record<OriginSwitch, boolean>>) =>
+            base ? (un ? lists.both : lists.base) : un ? lists.un : lists.none;
+    }, [baseValue, unValue, baseInFlight]);
+
     return (
         <DocumentsContext.Provider
-            value={{ model, retryModel, terms: { base: baseTerms, un: unTerms }, loadTerms }}
+            value={{
+                model,
+                retryModel,
+                terms: { base: baseTerms, un: unTerms },
+                loadTerms,
+                outsideOf,
+            }}
         >
             {children}
         </DocumentsContext.Provider>
@@ -136,13 +181,14 @@ export type ExplorerData = {
     readonly terms: TermsStates;
     /** Whether each terms list has come to rest, by loading or by not being served. False while its switch is off. */
     readonly termsSettled: Readonly<Record<OriginSwitch, boolean>>;
-    /** The terms lists loaded while their switches are on, merged once per load, for search and the centre. */
+    /**
+     * The terms lists loaded while their switches are on, merged by
+     * `outsideTermList`, for search and the centre. One list per pair of
+     * switches and per load, shared by every screen.
+     */
     readonly outside: readonly SchemaTerm[];
     readonly retryTerms: (origin: OriginSwitch) => void;
 };
-
-const loaded = (state: Servable<SchemaTerms> | null): SchemaTerms | undefined =>
-    state?.status === 'ready' ? state.value : undefined;
 
 /**
  * The loaded documents for one screen, with each terms list loaded whenever
@@ -152,7 +198,7 @@ export const useExplorerData = (): ExplorerData => {
     const documents = useContext(DocumentsContext);
     if (!documents) throw new Error('useExplorerData is used outside ExplorerDataProvider');
     const { base, un } = useCarried();
-    const { model, retryModel, terms, loadTerms } = documents;
+    const { model, retryModel, terms, loadTerms, outsideOf } = documents;
 
     useEffect(() => {
         if (base) loadTerms('base');
@@ -162,22 +208,13 @@ export const useExplorerData = (): ExplorerData => {
     }, [un, loadTerms]);
 
     const shown: TermsStates = { base: base ? terms.base : null, un: un ? terms.un : null };
-    // Search and the centre heading memoise on `outside`, so it keeps its identity between renders.
-    const outside = useMemo(
-        () =>
-            outsideTermList({
-                base: base ? loaded(terms.base) : undefined,
-                un: un ? loaded(terms.un) : undefined,
-            }),
-        [base, un, terms.base, terms.un],
-    );
     return {
         model,
         retryModel,
         switches: { base, un },
         terms: shown,
         termsSettled: { base: settled(shown.base), un: settled(shown.un) },
-        outside,
+        outside: outsideOf({ base, un }),
         retryTerms: (origin) => loadTerms(origin, true),
     };
 };

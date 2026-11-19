@@ -65,23 +65,27 @@ test('within a rank, DFO terms and datasets come before base terms', () => {
     ]);
 });
 
-test('a model node declared by the UN System ranks after a DFO node, as base does', () => {
-    const schema = readSchema(schemaBody());
-    const declare = (ref: string, declaredBy: string) => {
-        const node = schema.nodes.find((entry) => entry.ref === ref);
-        assert.ok(node);
-        node.declared_by = declaredBy;
-    };
+test('a model node declared by base or the UN System ranks after a DFO node, and an undeclared one with it', () => {
     // measuredValue is the shortest label, so label length alone would rank it first.
-    declare('measuredValue', 'un_system');
-    declare('measurementQualifier', 'dfo');
-    const hits = search(buildModel(schema, readUsage(usageBody())), 'measure').hits.map((hit) => [
-        hit.id,
-        hit.declaredBy,
-    ]);
-    const un = hits.findIndex(([, by]) => by === 'un_system');
-    const dfo = hits.findIndex(([, by]) => by === 'dfo');
-    assert.ok(dfo >= 0 && un > dfo);
+    const leadsFor = (declaredBy: string | null) => {
+        const schema = readSchema(schemaBody());
+        for (const [ref, by] of [
+            ['measuredValue', declaredBy],
+            ['measurementQualifier', 'dfo'],
+        ] as const) {
+            const node = schema.nodes.find((entry) => entry.ref === ref);
+            assert.ok(node);
+            node.declared_by = by;
+        }
+        const ids = search(buildModel(schema, readUsage(usageBody())), 'measure').hits.map(
+            (hit) => hit.id,
+        );
+        return ids.indexOf('measuredValue') < ids.indexOf('measurementQualifier');
+    };
+    assert.deepEqual(
+        [leadsFor('un_system'), leadsFor('base'), leadsFor(null), leadsFor('dfo')],
+        [false, false, true, true],
+    );
 });
 
 test('datasets are found by label and dcid', () => {
@@ -117,7 +121,7 @@ test('with the terms list, base terms outside the model follow those inside', ()
         ],
     );
     const hits = search(model, 'amount', {
-        outside: outsideTermList({ base: baseTerms }),
+        outside: baseTerms.terms,
     }).hits.filter((hit) => hit.match === 'exact');
     assert.deepEqual(
         hits.map((hit) => [hit.id, hit.kind, hit.inModel]),
@@ -134,7 +138,7 @@ test('a term with no declaring provenance outside the model is found', () => {
     assert.ok(term);
     term.declared_by = null;
     const hits = search(model, 'AdministrativeArea1', {
-        outside: outsideTermList({ base: readTerms(body) }),
+        outside: readTerms(body).terms,
     }).hits;
     assert.deepEqual(
         hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
@@ -148,7 +152,7 @@ test('a term outside the model carries the origin declaring it, and a DFO row is
     assert.ok(term);
     const exact = () =>
         search(model, 'AdministrativeArea1', {
-            outside: outsideTermList({ base: readTerms(body) }),
+            outside: readTerms(body).terms,
         })
             .hits.filter((hit) => hit.match === 'exact')
             .map((hit) => [hit.id, hit.inModel, hit.declaredBy]);
@@ -161,7 +165,7 @@ test('a term outside the model carries the origin declaring it, and a DFO row is
 
 test('a base term the model holds is found once, as part of the model', () => {
     const hits = search(model, 'AdministrativeArea', {
-        outside: outsideTermList({ base: baseTerms }),
+        outside: baseTerms.terms,
     }).hits;
     assert.deepEqual(
         hits.filter((hit) => hit.match === 'exact').map((hit) => [hit.id, hit.inModel]),
@@ -177,38 +181,26 @@ test('a base term the model holds is found once, as part of the model', () => {
     );
 });
 
-/** A UN System terms body, where every row is a Class under the UN provenance. */
-const unBody = (rows: { ref: string; label: string; declared_by: string }[]) => ({
-    generation: null,
-    terms: rows.map((row) => ({ ...row, types: ['Class'], provenances: ['undata/p/UNData'] })),
-});
-
-test('UN System terms are found beside base terms, and the base row wins on a ref both lists hold', () => {
-    const un = readUnTerms(
-        unBody([
-            { ref: 'undata/AGE', label: 'Age', declared_by: 'un_system' },
-            // The UN System redeclares base classes. The list's AdministrativeArea1 row is UN's.
-            { ref: 'AdministrativeArea1', label: 'AdministrativeArea1', declared_by: 'un_system' },
-            // A row the UN body declares under another origin is ignored.
-            { ref: 'undata/Stray', label: 'Age stray', declared_by: 'base' },
-        ]),
-    );
-    const found = (query: string) =>
-        search(model, query, { outside: outsideTermList({ base: baseTerms, un }), limit: 50 })
-            .hits.filter((hit) => !hit.inModel)
-            .map((hit) => [hit.id, hit.declaredBy]);
-
-    assert.deepEqual(found('undata/'), [['undata/AGE', 'un_system']]);
+test('UN System terms are found beside base terms, tagged with their origin', () => {
+    const un = readUnTerms({
+        generation: null,
+        terms: [
+            {
+                ref: 'undata/AGE',
+                label: 'Age',
+                types: ['Class'],
+                provenances: ['undata/p/UNData'],
+                declared_by: 'un_system',
+            },
+        ],
+    });
+    const hits = search(model, 'undata/', {
+        outside: outsideTermList({ base: baseTerms, un, baseLoading: false }),
+        limit: 50,
+    }).hits.filter((hit) => !hit.inModel);
     assert.deepEqual(
-        found('AdministrativeArea1').filter(([id]) => id === 'AdministrativeArea1'),
-        [['AdministrativeArea1', 'base']],
-    );
-    // With the base list missing, as after its load failed, UN hits stay.
-    assert.deepEqual(
-        search(model, 'AdministrativeArea1', { outside: outsideTermList({ un }) })
-            .hits.filter((hit) => !hit.inModel)
-            .map((hit) => [hit.id, hit.declaredBy]),
-        [['AdministrativeArea1', 'un_system']],
+        hits.map((hit) => [hit.id, hit.declaredBy]),
+        [['undata/AGE', 'un_system']],
     );
 });
 

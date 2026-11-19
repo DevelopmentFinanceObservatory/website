@@ -53,15 +53,19 @@ const bestMatch = (query: string, fields: readonly (string | null)[]): MatchRank
     return best === undefined ? undefined : RANKS[best];
 };
 
-/** DFO terms and datasets, then other terms in the model, then terms outside it. */
+/** A hit's place within its match rank, as `search` orders them. */
 const tier = (hit: SearchHit): number => {
     if (!hit.inModel) return 2;
-    return hit.kind === 'dataset' || hit.declaredBy === 'dfo' ? 0 : 1;
+    return hit.declaredBy === 'base' || hit.declaredBy === 'un_system' ? 1 : 0;
 };
 
 /**
- * Hits for `query`, case-insensitive, ranked exact, then prefix, then
- * substring. Within a rank, DFO terms and datasets come before other origins' terms, then by label.
+ * Hits for `query`, case-insensitive, ranked by match first: exact, then
+ * prefix, then substring. Within a match rank, DFO terms and datasets come
+ * first, with any model term base Data Commons or the UN System does not
+ * declare; then the model's base and UN System terms; then terms outside the
+ * model; then the shorter label. An exact base hit therefore lists above a
+ * DFO prefix hit.
  */
 export function search(model: Model, query: string, options: SearchOptions = {}): SearchResult {
     const { outside = [], limit = 12 } = options;

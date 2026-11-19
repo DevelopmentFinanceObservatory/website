@@ -73,9 +73,9 @@ const TermsLine = ({
             <p className={styles.terms} role="status">
                 <Spinner size={14} label="Loading" />
                 <span className={styles.termsText}>
-                    {terms.waiting === null
-                        ? `Loading ${ORIGIN_NAMES[origin]} terms.`
-                        : waitText(terms.waiting.retryInMs, terms.waiting.cause)}
+                    {`Loading ${ORIGIN_NAMES[origin]} terms.`}
+                    {terms.waiting !== null &&
+                        ` ${waitText(terms.waiting.retryInMs, terms.waiting.cause)}`}
                 </span>
             </p>
         );

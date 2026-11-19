@@ -10,7 +10,7 @@ import { OriginTag } from './ExploreLink';
 import styles from './SearchBox.module.scss';
 
 import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
-import { declarerWords, KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
+import { declarerPlace, KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
 import {
     enterChoice,
     escapeAction,
@@ -27,9 +27,7 @@ import type { SchemaTerm } from '@/lib/graphExplorer/wire';
  */
 const describe = (model: Model, hit: SearchHit): string => {
     if (!hit.inModel) {
-        const words = declarerWords(hit.declaredBy);
-        const where = words === null ? 'on the graph' : `in ${words}`;
-        return `${KIND_WORDS[hit.kind]} ${where}, outside the DFO model`;
+        return `${KIND_WORDS[hit.kind]} ${declarerPlace(hit.declaredBy)}, outside the DFO model`;
     }
     if (hit.kind === 'value') {
         const list = model.valueListOf(hit.id);

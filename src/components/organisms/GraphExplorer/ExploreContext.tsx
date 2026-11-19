@@ -15,7 +15,7 @@ import {
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 
 export type ExploreNavigation = {
-    /** The view, the dataset filter and the base switch the URL holds. */
+    /** The view, the dataset filter and the origin switches the URL holds. */
     readonly state: ExploreState;
     /** The address of a view, keeping the carried parameters. */
     readonly hrefFor: (view: ExploreView) => string;

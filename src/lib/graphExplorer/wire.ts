@@ -108,16 +108,20 @@ export type OutsideTerms = {
     readonly base?: SchemaTerms;
     /** The UN System Data Commons terms list. */
     readonly un?: SchemaTerms;
+    /** Whether the base switch is on and its list is still loading. */
+    readonly baseLoading: boolean;
 };
 
 /**
  * Every term of the outside lists, one per ref. The UN System redeclares
  * some base classes (`Dataset`, `Topic`), and on a ref both lists hold the
- * base row wins.
+ * base row wins. While the base list loads, the UN rows wait with it, so a
+ * shared ref never reads as UN first and then flips to base. Once the base
+ * list has failed, the UN rows stand alone.
  */
-export const outsideTermList = ({ base, un }: OutsideTerms): readonly SchemaTerm[] => {
+export const outsideTermList = ({ base, un, baseLoading }: OutsideTerms): readonly SchemaTerm[] => {
     const baseTerms = base?.terms ?? [];
-    if (un === undefined) return baseTerms;
+    if (un === undefined || baseLoading) return baseTerms;
     const seen = new Set(baseTerms.map((term) => term.ref));
     return [...baseTerms, ...un.terms.filter((term) => !seen.has(term.ref))];
 };

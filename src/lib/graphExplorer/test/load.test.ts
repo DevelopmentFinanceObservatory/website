@@ -119,7 +119,8 @@ test('the loader waits out a build and a spent allowance, then reads the documen
     assert.equal(urls.length, 3);
 });
 
-test('a 404 from a document the Graph API may not serve reads as not served, with no retry', async () => {
+test('a 404 naming origin_not_served reads as not served, with no retry; any other 404 fails', async () => {
+    const UN_URL = '/api/graph/schema/terms/un_system';
     const refusal = () =>
         json(
             {
@@ -130,39 +131,25 @@ test('a 404 from a document the Graph API may not serve reads as not served, wit
             },
             404,
         );
-    // An API without the route answers a bare 404, which fails closed the same way.
+    const { options, waits, urls } = rig([refusal]);
+    assert.equal(await loadServed('UN terms', UN_URL, readTerms, options), NOT_SERVED);
+    assert.deepEqual(waits, []);
+    assert.equal(urls.length, 1);
+
+    const { options: served } = rig([() => json(termsBody())]);
+    assert.deepEqual(
+        await loadServed('UN terms', UN_URL, readTerms, served),
+        readTerms(termsBody()),
+    );
+
+    // An API without the route, or an old revision, answers a bare 404: a failure a retry can clear.
     const bare = () => new Response('Not Found', { status: 404 });
-    for (const answer of [refusal, bare]) {
-        const { options, waits, urls } = rig([answer]);
-        const terms = await loadServed(
-            'UN terms',
-            '/api/graph/schema/terms/un_system',
-            readTerms,
-            options,
-        );
-        assert.equal(terms, NOT_SERVED);
-        assert.deepEqual(waits, []);
-        assert.equal(urls.length, 1);
+    for (const answer of [bare, () => json({ title: 'Bad gateway' }, 502)]) {
+        await assert.rejects(loadServed('UN terms', UN_URL, readTerms, rig([answer]).options), {
+            name: 'LoadError',
+            reason: 'status',
+        });
     }
-
-    const { options } = rig([() => json(termsBody())]);
-    const terms = await loadServed(
-        'UN terms',
-        '/api/graph/schema/terms/un_system',
-        readTerms,
-        options,
-    );
-    assert.notEqual(terms, NOT_SERVED);
-
-    await assert.rejects(
-        loadServed(
-            'UN terms',
-            '/x',
-            readTerms,
-            rig([() => json({ title: 'Bad gateway' }, 502)]).options,
-        ),
-        { name: 'LoadError', reason: 'status', status: 502 },
-    );
     await assert.rejects(loadDocument('The model', '/x', readSchema, rig([refusal]).options), {
         name: 'LoadError',
         reason: 'status',
@@ -227,12 +214,29 @@ test('a failure explains what went wrong without naming the document the heading
             '/api/graph/schema',
             readSchema,
             options,
-        ).then(() => assert.fail('the load should fail'), loadFailure);
+        ).then(
+            () => assert.fail('the load should fail'),
+            (error: unknown) => loadFailure(error, 'The model'),
+        );
         assert.equal(state.status, 'failed');
         if (state.status !== 'failed') return;
         assert.ok(state.message.startsWith('The model '));
         assert.ok(!state.explanation.includes('The model'), state.explanation);
         assert.ok(state.message.toLowerCase().endsWith(state.explanation.toLowerCase()));
+    }
+});
+
+test('an unexpected failure names the document that failed', () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+        const state = loadFailure(new TypeError('boom'), 'UN System Data Commons terms');
+        assert.equal(state.status, 'failed');
+        if (state.status !== 'failed') return;
+        assert.equal(state.reason, 'unexpected');
+        assert.ok(state.message.startsWith('UN System Data Commons terms '), state.message);
+    } finally {
+        console.error = original;
     }
 });
 
@@ -332,6 +336,7 @@ const sharedRig = () => {
     }[] = [];
     const states: (Servable<string> | null)[] = [];
     const shared = sharedLoad<string>({
+        what: 'The terms',
         load: ({ signal }) =>
             new Promise((resolve, reject) => {
                 runs.push({

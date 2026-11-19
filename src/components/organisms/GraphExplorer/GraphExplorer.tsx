@@ -67,12 +67,17 @@ const GraphExplorer = () => {
     const filter = model
         ? checkFilter(model, navigation.state.show)
         : { show: NO_FILTER, unknown: null };
-    // The terms list the main area waits on is the first switched-on one not yet in, or null when none.
+    // The terms list the main area waits on, or null when none: a switched-on list still loading
+    // comes before one that failed, since the loading one may yet hold the term.
     // A term a loaded list holds needs no wait.
+    const unsettled = ORIGIN_SWITCHES.filter(
+        (name) => data.switches[name] && !data.termsSettled[name],
+    );
     const termsInMain =
         model !== null &&
         awaitsTerms(model, navigation.state.view, data.switches, data.termsSettled, data.outside)
-            ? (ORIGIN_SWITCHES.find((name) => data.switches[name] && !data.termsSettled[name]) ??
+            ? (unsettled.find((name) => data.terms[name]?.status !== 'failed') ??
+              unsettled[0] ??
               null)
             : null;
 

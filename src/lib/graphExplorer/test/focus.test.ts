@@ -407,11 +407,7 @@ test('the centre heading reads a dataset, a model term, a base term and an unkno
 
     const baseTerms = readTerms(termsBody());
     const outside = 'ABSState';
-    const base = centreHeading(
-        model,
-        { kind: 'node', id: outside },
-        outsideTermList({ base: baseTerms }),
-    );
+    const base = centreHeading(model, { kind: 'node', id: outside }, baseTerms.terms);
     assert.deepEqual(
         [base?.declaredBy, base?.term?.ref, base?.sub],
         ['base', outside, { kind: 'dcid', id: outside }],
@@ -436,43 +432,49 @@ test('a term outside the model is headed by the origin declaring it', () => {
         const heading = centreHeading(
             model,
             { kind: 'node', id: 'ABSState' },
-            outsideTermList({ base: readTerms(body) }),
+            readTerms(body).terms,
         );
         return [heading?.kind, heading?.declaredBy];
     };
-    assert.deepEqual(headingFor('base'), ['Base Data Commons', 'base']);
-    assert.deepEqual(headingFor('un_system'), ['UN System Data Commons', 'un_system']);
-    assert.deepEqual(headingFor('some_new_origin'), ['Another origin', 'some_new_origin']);
-    assert.deepEqual(headingFor(null), ['On the graph', null]);
+    assert.deepEqual(headingFor('base'), ['Kind of thing in base Data Commons', 'base']);
+    assert.deepEqual(headingFor('un_system'), [
+        'Kind of thing in the UN System Data Commons',
+        'un_system',
+    ]);
+    assert.deepEqual(headingFor('some_new_origin'), [
+        'Kind of thing in another origin',
+        'some_new_origin',
+    ]);
+    assert.deepEqual(headingFor(null), ['Kind of thing on the graph', null]);
 });
 
-test('a term in the UN System list is headed as UN, and the base row wins on a ref both lists hold', () => {
+test('two UN System terms with one label are told apart by their kind', () => {
+    const row = (ref: string, types: string[]) => ({
+        ref,
+        label: 'Age',
+        types,
+        provenances: ['undata/p/UNData'],
+        declared_by: 'un_system',
+    });
     const un = readUnTerms({
         generation: null,
-        terms: [
-            {
-                ref: 'undata/AGE',
-                label: 'Age',
-                types: ['Class'],
-                provenances: ['undata/p/UNData'],
-                declared_by: 'un_system',
-            },
-            {
-                ref: 'ABSState',
-                label: 'UN state',
-                types: ['Class'],
-                provenances: ['undata/p/UNData'],
-                declared_by: 'un_system',
-            },
-        ],
+        terms: [row('undata/AGE', ['Class']), row('undataAge', ['Property'])],
     });
-    const outside = outsideTermList({ base: readTerms(termsBody()), un });
-    const age = centreHeading(model, { kind: 'node', id: 'undata/AGE' }, outside);
-    assert.deepEqual([age?.declaredBy, age?.name], ['un_system', 'Age']);
-    const shared = centreHeading(model, { kind: 'node', id: 'ABSState' }, outside);
-    assert.equal(shared?.declaredBy, 'base');
-    assert.notEqual(outsideKind(age?.term), outsideKind(shared?.term));
-    assert.notEqual(age?.kind, shared?.kind);
+    const outside = outsideTermList({ un, baseLoading: false });
+    const heading = (id: string) => {
+        const centre = centreHeading(model, { kind: 'node', id }, outside);
+        return [centre?.kind, centre?.name, centre?.declaredBy];
+    };
+    assert.deepEqual(heading('undata/AGE'), [
+        'Kind of thing in the UN System Data Commons',
+        'Age',
+        'un_system',
+    ]);
+    assert.deepEqual(heading('undataAge'), [
+        'Property in the UN System Data Commons',
+        'Age',
+        'un_system',
+    ]);
 });
 
 test('a dataset’s own view under its own filter carries no marks', () => {

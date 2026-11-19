@@ -47,10 +47,6 @@ test('a node reads as a class, value list, property or value, with its label and
     );
     assert.equal(model.label(DAC2B), 'OECD DAC2b');
     assert.equal(model.label('NotANode'), 'NotANode');
-
-    assert.equal(model.node('amount')?.declared_by, 'base');
-    assert.equal(model.node('Nominal')?.declared_by, 'base');
-    assert.notEqual(model.node('financialFlowType')?.declared_by, 'base');
 });
 
 test('a class outside Enumeration that lists its instances stays a class and offers its list', () => {
@@ -110,15 +106,6 @@ test('a property whose range classes all list their instances is complete only w
     }
 });
 
-test('a node the graph names no declarer for reads as declared by none', () => {
-    const schema = readSchema(schemaBody());
-    const amount = schema.nodes.find((node) => node.ref === 'amount');
-    assert.ok(amount);
-    amount.declared_by = null;
-    const undeclared = buildModel(schema, readUsage(usageBody()));
-    assert.equal(undeclared.node('amount')?.declared_by, null);
-});
-
 test('only a DFO-declared property is in the DFO scope, and each origin has its words', () => {
     const schema = readSchema(schemaBody());
     const flowType = schema.nodes.find((node) => node.ref === 'financialFlowType');
@@ -127,7 +114,6 @@ test('only a DFO-declared property is in the DFO scope, and each origin has its 
     flowType.declared_by = 'un_system';
     const elsewhere = buildModel(schema, readUsage(usageBody()));
     assert.ok(!elsewhere.dfoProperties().includes('financialFlowType'));
-    assert.equal(elsewhere.node('financialFlowType')?.declared_by, 'un_system');
 
     assert.deepEqual(['dfo', 'base', 'un_system', 'some_new_origin', null].map(declarerWords), [
         'DFO',

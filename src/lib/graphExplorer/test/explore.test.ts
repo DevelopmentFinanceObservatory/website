@@ -20,7 +20,7 @@ import {
     type ExploreState,
 } from '../explore.ts';
 import { buildModel, type ListScope } from '../model.ts';
-import { readSchema, readUsage } from '../wire.ts';
+import { outsideTermList, readSchema, readUnTerms, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 
 const read = (query: string) => readExplore(new URLSearchParams(query));
@@ -247,6 +247,25 @@ test('a term a loaded list holds does not wait on the lists still loading', () =
         awaitsTerms(model, { kind: 'node', id: 'undata/Other' }, switches, unReady, unLoaded),
         true,
     );
+
+    // A ref the UN list holds still waits while the base list loads, since base may hold it too.
+    const un = readUnTerms({
+        generation: null,
+        terms: [
+            {
+                ref: 'Topic',
+                label: 'Topic',
+                types: ['Class'],
+                provenances: [],
+                declared_by: 'un_system',
+            },
+        ],
+    });
+    const topic = { kind: 'node', id: 'Topic' } as const;
+    const outside = (baseLoading: boolean) => outsideTermList({ un, baseLoading });
+    assert.equal(awaitsTerms(model, topic, switches, unReady, outside(true)), true);
+    const baseFailed = { base: false, un: true };
+    assert.equal(awaitsTerms(model, topic, switches, baseFailed, outside(false)), false);
 });
 
 test('an origin switch sets or clears its own parameter and keeps every other parameter', () => {

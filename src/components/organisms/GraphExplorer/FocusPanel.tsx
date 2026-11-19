@@ -360,10 +360,9 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
 /**
  * A term the DFO model does not hold, such as a base Data Commons or UN
  * System Data Commons term reached from search: its name, its origin tag,
- * and, for a base term, a link to the base Data Commons browser. A UN System
- * or unknown term gets no link, since the base browser does not hold it and
- * the UN System Data Commons serves no browser page (its /browser/ path
- * answers 404).
+ * and a link to the base Data Commons browser. A UN System term gets no
+ * link, since the base browser does not hold it and the UN System Data
+ * Commons serves no browser page (its /browser/ path answers 404).
  */
 export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | undefined }) => (
     <>
@@ -376,7 +375,7 @@ export const OutsidePanel = ({ id, term }: { id: string; term: SchemaTerm | unde
             <IdLine id={id} />
         </div>
         <p>The DFO model does not use it, so no dataset here draws on it.</p>
-        {term?.declared_by === 'base' && (
+        {term?.declared_by !== 'un_system' && (
             <p className={styles.line}>
                 <a
                     className={styles.external}

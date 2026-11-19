@@ -187,7 +187,7 @@ export type Problem = {
     readonly text: string | null;
     /** The pointer into the request it names. */
     readonly pointer: string | null;
-    /** `cause.code`: why the Graph API is unavailable, on a 503. */
+    /** `cause.code`: why the Graph API is unavailable on a 503, or why it refused on a 404. */
     readonly cause: string | null;
     /** False when asking again cannot help. */
     readonly retryable: boolean | null;
@@ -404,8 +404,11 @@ export async function loadDocument<TDocument>(
     return load(what, { url, read }, options);
 }
 
-/** A document this Graph API does not serve, because its URL answered 404. */
+/** A document this Graph API does not serve, as its 404 with `cause.code` `origin_not_served` says. */
 export type NotServed = { readonly status: 'notServed' };
+
+/** The `cause.code` of the 404 that says this Graph API does not serve a document. */
+const ORIGIN_NOT_SERVED = 'origin_not_served';
 
 export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
 
@@ -413,9 +416,10 @@ export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
 export const isNotServed = (value: unknown): value is NotServed => value === NOT_SERVED;
 
 /**
- * As loadDocument, for a document the Graph API may not serve. Any 404 from
- * `url` gives NOT_SERVED, with no wait and no retry. An API without the
- * route answers 404 too, so the page fails closed on either.
+ * As loadDocument, for a document the Graph API may not serve. A 404 whose
+ * `cause.code` is `origin_not_served` gives NOT_SERVED, which is final. Any
+ * other 404, such as from an API revision without the route, fails like any
+ * other status, so a retry can clear it.
  */
 export async function loadServed<TDocument>(
     what: string,
@@ -425,7 +429,12 @@ export async function loadServed<TDocument>(
 ): Promise<TDocument | NotServed> {
     return load<TDocument | NotServed>(
         what,
-        { url, read, refusal: (status) => (status === 404 ? NOT_SERVED : null) },
+        {
+            url,
+            read,
+            refusal: (status, problem) =>
+                status === 404 && problem.cause === ORIGIN_NOT_SERVED ? NOT_SERVED : null,
+        },
         options,
     );
 }
@@ -479,8 +488,12 @@ export type Servable<TValue> = Loadable<TValue> | NotServed;
 export const settled = (state: Servable<unknown> | null): boolean =>
     state?.status === 'ready' || state?.status === 'notServed';
 
-/** A load failure as the screens show it. An error that is not a LoadError is logged with its cause. */
-export const loadFailure = (error: unknown): Loadable<never> => {
+/**
+ * A load failure as the screens show it. `what` names the document, as
+ * loadDocument's `what` does ("The model"). An error that is not a LoadError
+ * is logged with its cause.
+ */
+export const loadFailure = (error: unknown, what: string): Loadable<never> => {
     if (error instanceof LoadError) {
         return {
             status: 'failed',
@@ -489,12 +502,12 @@ export const loadFailure = (error: unknown): Loadable<never> => {
             explanation: error.explanation,
         };
     }
-    console.error('Graph Explorer: loading the model failed', error);
+    console.error(`Graph Explorer: loading ${what} failed`, error);
     return {
         status: 'failed',
         reason: 'unexpected',
-        message: 'Something went wrong reading the model.',
-        explanation: 'Something went wrong reading the model.',
+        message: `${what} could not be loaded: something went wrong reading it.`,
+        explanation: 'Something went wrong reading it.',
     };
 };
 
@@ -514,9 +527,12 @@ export type SharedLoad = {
  * A load that answers NOT_SERVED publishes it, and `retry` leaves it alone.
  */
 export function sharedLoad<TValue>({
+    what,
     load,
     publish,
 }: {
+    /** Names the document in a failure, as loadDocument's `what` does. */
+    what: string;
     load: (options: {
         signal: AbortSignal;
         onWait: (retryInMs: number, cause: WaitCause) => void;
@@ -547,7 +563,7 @@ export function sharedLoad<TValue>({
                     update({ status: 'loading', waiting: { retryInMs, cause } }),
             }).then(
                 (value) => update(isNotServed(value) ? value : { status: 'ready', value }),
-                (error: unknown) => update(loadFailure(error)),
+                (error: unknown) => update(loadFailure(error, what)),
             );
         },
         abort: () => {

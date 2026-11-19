@@ -49,6 +49,17 @@ export const declarerWords = (declaredBy: string | null): string | null => {
     return isDeclarer(declaredBy) ? DECLARER_WORDS[declaredBy] : 'another origin';
 };
 
+/**
+ * Where a term outside the model sits, as its label and search hit say it
+ * after its kind: "in base Data Commons", "in the UN System Data Commons",
+ * "in another origin", or "on the graph" when it names no origin.
+ */
+export const declarerPlace = (declaredBy: string | null): string => {
+    if (declaredBy === 'un_system') return 'in the UN System Data Commons';
+    const words = declarerWords(declaredBy);
+    return words === null ? 'on the graph' : `in ${words}`;
+};
+
 /** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
 export const kindOfTerm = (term: Pick<SchemaTerm, 'types'>): 'class' | 'property' =>
     term.types.includes('Class') ? 'class' : 'property';

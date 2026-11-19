@@ -12,7 +12,7 @@
  */
 import { count, plural } from './counts.ts';
 import {
-    declarerWords,
+    declarerPlace,
     KIND_WORDS,
     kindOfTerm,
     plainName,
@@ -701,12 +701,6 @@ export type CentreHeading = {
     readonly term: SchemaTerm | undefined;
 };
 
-/** The origin declaring a term outside the model, for its heading: "Base Data Commons". */
-const termOrigin = (term: SchemaTerm): string => {
-    const words = declarerWords(term.declared_by);
-    return words === null ? 'On the graph' : words.charAt(0).toUpperCase() + words.slice(1);
-};
-
 /**
  * The heading for a centred dataset, model term, or term outside the model
  * (found in the merged `outside` list). Null for a dataset the model lacks.
@@ -740,7 +734,7 @@ export function centreHeading(
     }
     const term = outside.find((entry) => entry.ref === centre.id);
     return {
-        kind: term ? termOrigin(term) : 'Not in the DFO model',
+        kind: outsideKind(term),
         name: term?.label ?? centre.id,
         sub: { kind: 'dcid', id: centre.id },
         declaredBy: term?.declared_by ?? null,
@@ -749,16 +743,14 @@ export function centreHeading(
 }
 
 /**
- * What a term outside the model is, for its panel's label: "Property on the
- * graph", or "Property in the UN System Data Commons" for a UN System term,
- * since the UN System is a graph of its own.
+ * What a term outside the model is, for its heading and its panel's label:
+ * its kind and where it sits, such as "Property in the UN System Data
+ * Commons", so two terms with one label read apart.
  */
-export const outsideKind = (term: SchemaTerm | undefined): string => {
-    if (!term) return 'Not in the DFO model';
-    const where =
-        term.declared_by === 'un_system' ? 'in the UN System Data Commons' : 'on the graph';
-    return `${KIND_WORDS[kindOfTerm(term)]} ${where}`;
-};
+export const outsideKind = (term: SchemaTerm | undefined): string =>
+    term
+        ? `${KIND_WORDS[kindOfTerm(term)]} ${declarerPlace(term.declared_by)}`
+        : 'Not in the DFO model';
 
 /**
  * The dataset whose use the picture marks: the filtered dataset, except on
