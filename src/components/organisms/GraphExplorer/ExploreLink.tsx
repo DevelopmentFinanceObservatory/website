@@ -66,17 +66,38 @@ export const ExploreLink = ({ view, children, className, current }: ExploreLinkP
     );
 };
 
-/** The "base" tag on a term base Data Commons declares. */
-export const BaseTag = () => (
-    <span className={styles.tag} title="Declared by base Data Commons">
-        base
-    </span>
-);
+/** The tag text and its title for the origins that get one. */
+const originTag = (declaredBy: string | null | undefined) => {
+    if (declaredBy === 'base') return { text: 'base', title: 'Declared by base Data Commons' };
+    if (declaredBy === 'un_system') {
+        return { text: 'UN', title: 'Declared by the UN System Data Commons' };
+    }
+    return null;
+};
+
+/**
+ * The origin tag after a term's name, from its `declared_by`: "base" for
+ * base Data Commons, "UN" for the UN System Data Commons, and nothing for a
+ * DFO term or any other origin. A leading space separates it from the name.
+ */
+export const OriginTag = ({ declaredBy }: { declaredBy: string | null | undefined }) => {
+    const tag = originTag(declaredBy);
+    if (tag === null) return null;
+    return (
+        <>
+            {' '}
+            <span className={styles.tag} title={tag.title}>
+                {tag.text}
+            </span>
+        </>
+    );
+};
 
 /**
  * A term or dataset by its label, or by `name` where the caller names it,
  * linking to its view: `?dataset=` for a dataset, `?node=` for anything
- * else, with the "base" tag on a base term.
+ * else, with the origin tag on a term base Data Commons or the UN System
+ * Data Commons declares.
  */
 export const TermLink = ({
     id,
@@ -95,12 +116,7 @@ export const TermLink = ({
             <ExploreLink view={view} className={className ?? styles.term}>
                 {name ?? model.label(id)}
             </ExploreLink>
-            {model.isBase(id) && (
-                <>
-                    {' '}
-                    <BaseTag />
-                </>
-            )}
+            <OriginTag declaredBy={model.node(id)?.declared_by} />
         </>
     );
 };

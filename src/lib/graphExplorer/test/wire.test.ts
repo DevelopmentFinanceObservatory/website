@@ -6,7 +6,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { asRecord } from '../../asRecord.ts';
-import { readCheckResponse, readSchema, readUsage, readTerms, WireShapeError } from '../wire.ts';
+import {
+    outsideTermList,
+    readCheckResponse,
+    readSchema,
+    readTerms,
+    readUnTerms,
+    readUsage,
+    WireShapeError,
+} from '../wire.ts';
 import { schemaBody, usageBody, termsBody } from './fixtures.ts';
 
 /** The record at `path` in a parsed document; fails the test when there is none. */
@@ -107,6 +115,66 @@ test('the terms guard refuses a term with a member removed', () => {
     const body = termsBody();
     delete at(body, ['terms', 0]).types;
     refuses(readTerms, body, 'terms.terms[0].types');
+});
+
+/** A terms body whose every row is a Class, each `[ref, declared_by]`. */
+const listOf = (rows: [string, string | null][]) => ({
+    generation: null,
+    terms: rows.map(([ref, declaredBy]) => ({
+        ref,
+        label: ref,
+        types: ['Class'],
+        provenances: [],
+        declared_by: declaredBy,
+    })),
+});
+
+test('the UN System reader keeps only the rows the UN System declares', () => {
+    const un = readUnTerms(
+        listOf([
+            ['undata/AGE', 'un_system'],
+            ['undata/Stray', 'base'],
+            ['undata/Unowned', null],
+        ]),
+    );
+    assert.deepEqual(
+        un.terms.map((term) => term.ref),
+        ['undata/AGE'],
+    );
+});
+
+test('the outside list holds one row per ref, the base row winning, and UN rows wait while base loads', () => {
+    const base = readTerms(
+        listOf([
+            ['Topic', 'base'],
+            ['Amount', 'base'],
+        ]),
+    );
+    const un = readUnTerms(
+        listOf([
+            ['Topic', 'un_system'],
+            ['undata/AGE', 'un_system'],
+        ]),
+    );
+    const rows = (lists: Parameters<typeof outsideTermList>[0]) =>
+        outsideTermList(lists).map((term) => [term.ref, term.declared_by]);
+
+    assert.deepEqual(rows({ base, un, baseLoading: false }), [
+        ['Topic', 'base'],
+        ['Amount', 'base'],
+        ['undata/AGE', 'un_system'],
+    ]);
+    assert.deepEqual(rows({ base, baseLoading: false }), [
+        ['Topic', 'base'],
+        ['Amount', 'base'],
+    ]);
+    // With the base list off, failed or not served, the UN rows stand alone.
+    assert.deepEqual(rows({ un, baseLoading: false }), [
+        ['Topic', 'un_system'],
+        ['undata/AGE', 'un_system'],
+    ]);
+    // While the base list loads, a shared ref such as Topic must not read as UN first.
+    assert.deepEqual(rows({ un, baseLoading: true }), []);
 });
 
 test('the usage guard checks patterns, constraint values and facets', () => {

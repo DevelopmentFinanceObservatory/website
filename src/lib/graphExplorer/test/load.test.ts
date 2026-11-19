@@ -7,17 +7,22 @@ import test from 'node:test';
 
 import {
     LoadError,
+    LOADING,
     loadDocument,
     loadFailure,
+    loadServed,
+    NOT_SERVED,
     RETRY_WAIT_MS,
     retryDelay,
+    settled as isSettled,
     sharedLoad,
     waitText,
-    type Loadable,
+    type NotServed,
+    type Servable,
     type WaitCause,
 } from '../load.ts';
-import { readSchema } from '../wire.ts';
-import { schemaBody } from './fixtures.ts';
+import { readSchema, readTerms } from '../wire.ts';
+import { schemaBody, termsBody } from './fixtures.ts';
 
 test('a 503 with Retry-After in seconds waits that long', () => {
     assert.equal(retryDelay({ status: 503, retryAfter: '5', waitedMs: 0, nowMs: 0 }), 5000);
@@ -114,6 +119,44 @@ test('the loader waits out a build and a spent allowance, then reads the documen
     assert.equal(urls.length, 3);
 });
 
+test('a 404 naming origin_not_served reads as not served, with no retry; any other 404 fails', async () => {
+    const UN_URL = '/api/graph/schema/terms/un_system';
+    const refusal = () =>
+        json(
+            {
+                code: 'not_found',
+                title: 'Not found',
+                retryable: false,
+                cause: { code: 'origin_not_served' },
+            },
+            404,
+        );
+    const { options, waits, urls } = rig([refusal]);
+    assert.equal(await loadServed('UN terms', UN_URL, readTerms, options), NOT_SERVED);
+    assert.deepEqual(waits, []);
+    assert.equal(urls.length, 1);
+
+    const { options: served } = rig([() => json(termsBody())]);
+    assert.deepEqual(
+        await loadServed('UN terms', UN_URL, readTerms, served),
+        readTerms(termsBody()),
+    );
+
+    // An API without the route, or an old revision, answers a bare 404: a failure a retry can clear.
+    const bare = () => new Response('Not Found', { status: 404 });
+    for (const answer of [bare, () => json({ title: 'Bad gateway' }, 502)]) {
+        await assert.rejects(loadServed('UN terms', UN_URL, readTerms, rig([answer]).options), {
+            name: 'LoadError',
+            reason: 'status',
+        });
+    }
+    await assert.rejects(loadDocument('The model', '/x', readSchema, rig([refusal]).options), {
+        name: 'LoadError',
+        reason: 'status',
+        status: 404,
+    });
+});
+
 test('each wait cause reads as its own line, and an unknown cause as a neutral wait', () => {
     assert.equal(
         waitText(4200, 'schema_building'),
@@ -171,12 +214,29 @@ test('a failure explains what went wrong without naming the document the heading
             '/api/graph/schema',
             readSchema,
             options,
-        ).then(() => assert.fail('the load should fail'), loadFailure);
+        ).then(
+            () => assert.fail('the load should fail'),
+            (error: unknown) => loadFailure(error, 'The model'),
+        );
         assert.equal(state.status, 'failed');
         if (state.status !== 'failed') return;
         assert.ok(state.message.startsWith('The model '));
         assert.ok(!state.explanation.includes('The model'), state.explanation);
         assert.ok(state.message.toLowerCase().endsWith(state.explanation.toLowerCase()));
+    }
+});
+
+test('an unexpected failure names the document that failed', () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+        const state = loadFailure(new TypeError('boom'), 'UN System Data Commons terms');
+        assert.equal(state.status, 'failed');
+        if (state.status !== 'failed') return;
+        assert.equal(state.reason, 'unexpected');
+        assert.ok(state.message.startsWith('UN System Data Commons terms '), state.message);
+    } finally {
+        console.error = original;
     }
 });
 
@@ -269,9 +329,14 @@ test('a load that outlasts its overall bound fails as a timeout', async () => {
 
 /** A shared load over a load the test settles by hand, and every state it published. */
 const sharedRig = () => {
-    const runs: { signal: AbortSignal; settle: (value: string) => void; fail: () => void }[] = [];
-    const states: (Loadable<string> | null)[] = [];
+    const runs: {
+        signal: AbortSignal;
+        settle: (value: string | NotServed) => void;
+        fail: () => void;
+    }[] = [];
+    const states: (Servable<string> | null)[] = [];
     const shared = sharedLoad<string>({
+        what: 'The terms',
         load: ({ signal }) =>
             new Promise((resolve, reject) => {
                 runs.push({
@@ -327,4 +392,28 @@ test('a finished shared load survives an abort, and only a retry restarts a fail
     assert.equal(runs.length, 1);
     shared.start(true);
     assert.equal(runs.length, 2);
+});
+
+test('a shared load answered not served publishes it, and a retry leaves it alone', async () => {
+    const { runs, states, shared } = sharedRig();
+    shared.start();
+    runs[0]?.settle(NOT_SERVED);
+    await settled();
+    assert.deepEqual(states.at(-1), { status: 'notServed' });
+    shared.start(true);
+    assert.equal(runs.length, 1);
+});
+
+test('a terms list is settled once loaded or not served, and not while absent, loading or failed', () => {
+    const rows: [Servable<unknown> | null, boolean][] = [
+        [null, false],
+        [LOADING, false],
+        [{ status: 'ready', value: {} }, true],
+        [NOT_SERVED, true],
+        [{ status: 'failed', reason: 'unexpected', message: 'm', explanation: 'e' }, false],
+    ];
+    assert.deepEqual(
+        rows.map(([state]) => isSettled(state)),
+        rows.map(([, expected]) => expected),
+    );
 });
