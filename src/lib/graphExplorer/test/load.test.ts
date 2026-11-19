@@ -6,17 +6,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    keyedLoads,
     LoadError,
     LOADING,
     loadDocument,
     loadFailure,
+    loadNodeView,
     loadServed,
+    NOT_HELD,
     NOT_SERVED,
+    nodeViewUrl,
     RETRY_WAIT_MS,
     retryDelay,
     settled as isSettled,
     sharedLoad,
     waitText,
+    type NotHeld,
     type NotServed,
     type Servable,
     type WaitCause,
@@ -327,6 +332,55 @@ test('a load that outlasts its overall bound fails as a timeout', async () => {
     assert.ok(calls >= 1);
 });
 
+/** A node view whose centre and neighbour are nodes of the schema fixture. */
+const nodeViewBody = () => {
+    const [centre, neighbour] = (schemaBody() as { nodes: unknown[] }).nodes;
+    return { generation: 'g', centre, nodes: [neighbour], capped: [] };
+};
+
+const notFound = (cause: string | null) => () =>
+    json(
+        {
+            code: 'not_found',
+            title: 'Not found',
+            retryable: false,
+            ...(cause === null ? {} : { cause: { code: cause } }),
+        },
+        404,
+    );
+
+test('a node view refused with node_not_held, origin_not_served or a bare 404 is final, with no retry', async () => {
+    const rows: [() => Response, NotHeld | NotServed][] = [
+        [notFound('node_not_held'), NOT_HELD],
+        [notFound('origin_not_served'), NOT_SERVED],
+        [notFound(null), NOT_SERVED],
+        [() => new Response('Not Found', { status: 404 }), NOT_SERVED],
+    ];
+    for (const [refusal, expected] of rows) {
+        // A view scripted after the refusal is what a retry would read.
+        const { options, waits, urls } = rig([refusal, () => json(nodeViewBody())]);
+        assert.equal(await loadNodeView('Person', options), expected);
+        assert.deepEqual(waits, []);
+        assert.deepEqual(urls, ['/api/graph/schema/node/Person']);
+    }
+});
+
+test('a node view waits out a 503 and then reads the view', async () => {
+    const { options, waits, urls } = rig([building, () => json(nodeViewBody())]);
+    const view = await loadNodeView('Person', options);
+    assert.ok(typeof view === 'object' && 'centre' in view);
+    assert.equal(view.generation, 'g');
+    assert.deepEqual(waits, [5000]);
+    assert.equal(urls.length, 2);
+});
+
+test("a node view's path encodes each segment of the dcid and keeps its slashes", () => {
+    assert.equal(
+        nodeViewUrl('undata/eclac/SERIES-INSUF PENSION?#'),
+        '/api/graph/schema/node/undata/eclac/SERIES-INSUF%20PENSION%3F%23',
+    );
+});
+
 /** A shared load over a load the test settles by hand, and every state it published. */
 const sharedRig = () => {
     const runs: {
@@ -416,4 +470,66 @@ test('a terms list is settled once loaded or not served, and not while absent, l
         rows.map(([state]) => isSettled(state)),
         rows.map(([, expected]) => expected),
     );
+});
+
+test('a shared load answered not held publishes it, and a retry leaves it alone', async () => {
+    const runs: ((value: string | NotHeld) => void)[] = [];
+    const states: (Servable<string> | NotHeld | null)[] = [];
+    const shared = sharedLoad<string, NotHeld>({
+        what: 'The view',
+        load: () => new Promise((resolve) => runs.push(resolve)),
+        publish: (state) => states.push(state),
+    });
+    shared.start();
+    runs[0]?.(NOT_HELD);
+    await settled();
+    assert.equal(states.at(-1), NOT_HELD);
+    shared.start(true);
+    assert.equal(runs.length, 1);
+});
+
+/** Keyed loads the test settles by hand, with every key's runs and published states. */
+const keyedRig = () => {
+    const runs: { key: string; signal: AbortSignal; settle: (value: string) => void }[] = [];
+    const states: [string, Servable<string> | null][] = [];
+    const loads = keyedLoads<string>({
+        what: (key) => `The view of ${key}`,
+        load: (key, { signal }) =>
+            new Promise((resolve) => runs.push({ key, signal, settle: resolve })),
+        publish: (key, state) => states.push([key, state]),
+    });
+    return { runs, states, loads };
+};
+
+test('keyed loads run once per key however many hold it, and stop when the last lets go', () => {
+    const { runs, states, loads } = keyedRig();
+    const first = loads.hold('Person');
+    const second = loads.hold('Person');
+    loads.hold('Place');
+    assert.deepEqual(
+        runs.map((run) => run.key),
+        ['Person', 'Place'],
+    );
+    first();
+    first();
+    assert.equal(runs[0]?.signal.aborted, false);
+    second();
+    assert.equal(runs[0]?.signal.aborted, true);
+    assert.deepEqual(states.at(-1), ['Person', null]);
+    assert.equal(runs[1]?.signal.aborted, false);
+
+    loads.hold('Person');
+    assert.equal(runs.length, 3);
+});
+
+test('a keyed load that finished survives every release and is never asked for again', async () => {
+    const { runs, states, loads } = keyedRig();
+    const release = loads.hold('Person');
+    runs[0]?.settle('view');
+    await settled();
+    release();
+    loads.hold('Person');
+    loads.retry('Person');
+    assert.equal(runs.length, 1);
+    assert.deepEqual(states.at(-1), ['Person', { status: 'ready', value: 'view' }]);
 });

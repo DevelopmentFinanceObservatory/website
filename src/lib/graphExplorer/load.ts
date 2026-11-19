@@ -10,7 +10,7 @@
  * wrong, including a response whose shape the guard refuses.
  */
 import { asRecord } from '../asRecord.ts';
-import { WireShapeError } from './wire.ts';
+import { readNodeView, WireShapeError, type SchemaNodeView } from './wire.ts';
 
 /** How long one request keeps asking while the Graph API is building or the proxy refuses. */
 export const RETRY_WAIT_MS = 60_000;
@@ -415,6 +415,18 @@ export const NOT_SERVED: NotServed = Object.freeze({ status: 'notServed' });
 /** True for the NOT_SERVED answer of loadServed. */
 export const isNotServed = (value: unknown): value is NotServed => value === NOT_SERVED;
 
+/** A node the graph does not hold, because the node view answered 404 with `node_not_held`. */
+export type NotHeld = { readonly status: 'notHeld' };
+
+export const NOT_HELD: NotHeld = Object.freeze({ status: 'notHeld' });
+
+/** An answer that ends a load for good: asking again gets the same answer. */
+export type Refusal = NotServed | NotHeld;
+
+/** True for NOT_SERVED and NOT_HELD. */
+export const isRefusal = (value: unknown): value is Refusal =>
+    value === NOT_SERVED || value === NOT_HELD;
+
 /**
  * As loadDocument, for a document the Graph API may not serve. A 404 whose
  * `cause.code` is `origin_not_served` gives NOT_SERVED, which is final. Any
@@ -434,6 +446,41 @@ export async function loadServed<TDocument>(
             read,
             refusal: (status, problem) =>
                 status === 404 && problem.cause === ORIGIN_NOT_SERVED ? NOT_SERVED : null,
+        },
+        options,
+    );
+}
+
+/**
+ * The path of the node view of `dcid`. A dcid holds `/`, which the route
+ * reads as part of the dcid, so each segment is encoded and the slashes are
+ * kept.
+ */
+export const nodeViewUrl = (dcid: string): string =>
+    `/api/graph/schema/node/${dcid.split('/').map(encodeURIComponent).join('/')}`;
+
+/** The node view of `dcid` as a load names it in a failure. */
+export const nodeViewName = (dcid: string): string => `The graph's view of ${dcid}`;
+
+/**
+ * The node view of `dcid`, as loadDocument reads a document. A 404 whose
+ * `cause.code` is `node_not_held` gives NOT_HELD, and any other 404 gives
+ * NOT_SERVED (the node's origin is not served here, or the API lacks the
+ * route). Neither is waited on or retried; a 503 is, as every load's is.
+ */
+export async function loadNodeView(
+    dcid: string,
+    options: LoadOptions = {},
+): Promise<SchemaNodeView | Refusal> {
+    return load<SchemaNodeView | Refusal>(
+        nodeViewName(dcid),
+        {
+            url: nodeViewUrl(dcid),
+            read: readNodeView,
+            refusal: (status, problem) => {
+                if (status !== 404) return null;
+                return problem.cause === 'node_not_held' ? NOT_HELD : NOT_SERVED;
+            },
         },
         options,
     );
@@ -484,6 +531,9 @@ export const LOADING = { status: 'loading', waiting: null } as const;
 /** A Loadable for a document the Graph API may not serve, as loadServed reads it. */
 export type Servable<TValue> = Loadable<TValue> | NotServed;
 
+/** A node view's state: a Loadable, or the refusal that ended it. */
+export type NodeViewState = Loadable<SchemaNodeView> | Refusal;
+
 /** Whether a document's load has come to rest, by loading or by not being served here. */
 export const settled = (state: Servable<unknown> | null): boolean =>
     state?.status === 'ready' || state?.status === 'notServed';
@@ -524,9 +574,10 @@ export type SharedLoad = {
  * it passes through. `abort` forgets a load still running, publishing null,
  * so a caller that aborts and starts again (as React's StrictMode does with
  * an effect) gets a fresh load. A finished or failed load stays as it is.
- * A load that answers NOT_SERVED publishes it, and `retry` leaves it alone.
+ * A load that answers a refusal (NOT_SERVED, or NOT_HELD where `load` can
+ * give it) publishes it, and `retry` leaves it alone.
  */
-export function sharedLoad<TValue>({
+export function sharedLoad<TValue, TRefusal extends Refusal = NotServed>({
     what,
     load,
     publish,
@@ -536,22 +587,23 @@ export function sharedLoad<TValue>({
     load: (options: {
         signal: AbortSignal;
         onWait: (retryInMs: number, cause: WaitCause) => void;
-    }) => Promise<TValue | NotServed>;
-    publish: (state: Servable<TValue> | null) => void;
+    }) => Promise<TValue | TRefusal>;
+    publish: (state: Loadable<TValue> | TRefusal | null) => void;
 }): SharedLoad {
-    let state: Servable<TValue> | null = null;
+    let state: Loadable<TValue> | TRefusal | null = null;
     let running: AbortController | null = null;
-    const set = (next: Servable<TValue> | null) => {
+    const set = (next: Loadable<TValue> | TRefusal | null) => {
         state = next;
         publish(next);
     };
+    const isRefused = (value: TValue | TRefusal): value is TRefusal => isRefusal(value);
 
     return {
         start: (retry = false) => {
             if (state !== null && !(retry && state.status === 'failed')) return;
             const controller = new AbortController();
             running = controller;
-            const update = (next: Servable<TValue>) => {
+            const update = (next: Loadable<TValue> | TRefusal) => {
                 if (controller.signal.aborted) return;
                 if (next.status !== 'loading') running = null;
                 set(next);
@@ -562,7 +614,7 @@ export function sharedLoad<TValue>({
                 onWait: (retryInMs, cause) =>
                     update({ status: 'loading', waiting: { retryInMs, cause } }),
             }).then(
-                (value) => update(isNotServed(value) ? value : { status: 'ready', value }),
+                (value) => update(isRefused(value) ? value : { status: 'ready', value }),
                 (error: unknown) => update(loadFailure(error, what)),
             );
         },
@@ -572,5 +624,68 @@ export function sharedLoad<TValue>({
             running = null;
             set(null);
         },
+    };
+}
+
+/** Shared loads by key, each running while at least one caller holds it. */
+export type KeyedLoads = {
+    /**
+     * Holds the load of `key`, starting it unless it is running or done, and
+     * gives the function that lets go of it. Letting go of the last hold on
+     * a load still running aborts it, so the next hold starts it again.
+     */
+    readonly hold: (key: string) => () => void;
+    /** Starts the load of `key` again when it failed. */
+    readonly retry: (key: string) => void;
+};
+
+/**
+ * One sharedLoad per key, made on first hold and kept for the life of the
+ * registry, so a key that loaded or was refused is never asked for again.
+ */
+export function keyedLoads<TValue, TRefusal extends Refusal = NotServed>({
+    what,
+    load,
+    publish,
+}: {
+    /** Names the document of `key` in a failure, as loadDocument's `what` does. */
+    what: (key: string) => string;
+    load: (
+        key: string,
+        options: { signal: AbortSignal; onWait: (retryInMs: number, cause: WaitCause) => void },
+    ) => Promise<TValue | TRefusal>;
+    publish: (key: string, state: Loadable<TValue> | TRefusal | null) => void;
+}): KeyedLoads {
+    const entries = new Map<string, { shared: SharedLoad; holds: number }>();
+    const entry = (key: string) => {
+        let found = entries.get(key);
+        if (found === undefined) {
+            found = {
+                shared: sharedLoad<TValue, TRefusal>({
+                    what: what(key),
+                    load: (options) => load(key, options),
+                    publish: (state) => publish(key, state),
+                }),
+                holds: 0,
+            };
+            entries.set(key, found);
+        }
+        return found;
+    };
+
+    return {
+        hold: (key) => {
+            const held = entry(key);
+            held.holds += 1;
+            held.shared.start();
+            let released = false;
+            return () => {
+                if (released) return;
+                released = true;
+                held.holds -= 1;
+                if (held.holds === 0) held.shared.abort();
+            };
+        },
+        retry: (key) => entries.get(key)?.shared.start(true),
     };
 }
