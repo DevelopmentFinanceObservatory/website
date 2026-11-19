@@ -32,9 +32,10 @@
     }
 
     thead th {
+        min-width: 72px;
         color: #5e5e52;
         font: 400 11px var(--font-dm-mono);
-        white-space: nowrap;
+        vertical-align: bottom;
     }
 
     thead th[aria-sort] {
@@ -47,6 +48,7 @@
 
     tbody th {
         font-weight: 400;
+        white-space: nowrap;
     }
 
     td {
@@ -86,6 +88,19 @@
     }
 }
 
+// The bar and the printed shares, side by side.
+.mixCell {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.mixText {
+    color: #5e5e52;
+    font: 400 11px var(--font-dm-mono);
+}
+
 // The three providers' shares of the row's aid, side by side.
 .mix {
     display: inline-flex;
@@ -100,6 +115,36 @@
         flex-basis: 0;
         min-width: 0;
     }
+}
+
+// The hatched mark on a row the Global Fund's multi-disease grants leave understated.
+.flag {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 10px;
+    height: 10px;
+    margin-left: 6px;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.legend {
+    margin: 0;
+    color: #5e5e52;
+    font-size: 12.5px;
+
+    .flag {
+        margin: 0 6px 0 0;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .foot {

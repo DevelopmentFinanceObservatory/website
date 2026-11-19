@@ -3,7 +3,7 @@
 import type { Country } from '../_data/types.ts';
 
 import { valueTicks } from './chart.ts';
-import { lastAid } from './summary.ts';
+import { aidPerPerson } from './summary.ts';
 
 /** The strip holds countries with at least this many people living with HIV. */
 export const STRIP_MIN_PLHIV = 50_000;
@@ -21,10 +21,10 @@ export const perPersonPoints = (
 ): PerPersonPoint[] =>
     countries
         .flatMap((country) => {
-            const aid = lastAid(country);
+            const value = aidPerPerson(country);
 
-            return country.plhiv !== null && country.plhiv >= min && aid > 0
-                ? [{ iso3: country.iso3, name: country.name, value: aid / country.plhiv }]
+            return value !== null && value > 0 && (country.plhiv ?? 0) >= min
+                ? [{ iso3: country.iso3, name: country.name, value }]
                 : [];
         })
         .toSorted((a, b) => a.value - b.value || a.name.localeCompare(b.name));

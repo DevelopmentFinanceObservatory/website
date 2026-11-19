@@ -67,8 +67,45 @@ export const pct = (share: number): string => `${Math.round(share * 100)}%`;
 /** A value already in percent, to the whole point: 87.4 -> "87%". */
 export const percent = (value: number): string => `${Math.round(value)}%`;
 
-/** Aid per person, to the whole dollar: "$134". */
-export const perPerson = (dollars: number): string => `$${Math.round(dollars)}`;
+/** Aid per person, to the whole dollar: "$134", "$8,736", "$0", and "under $1" for a value
+ *  above 0 that rounds to 0. */
+export const perPerson = (dollars: number): string => {
+    const whole = Math.round(dollars);
+
+    return whole === 0 && dollars > 0 ? 'under $1' : `$${whole.toLocaleString('en-GB')}`;
+};
+
+/**
+ * Shares as whole percentages that sum to 100, by the largest-remainder method: each share
+ * rounds down, then the points left over go to the largest remainders, ties to the earlier
+ * key. A share above 0 that ends at 0 prints "<1%". Shares that sum to 0 print "0%" each.
+ */
+export const wholePercents = <TKey extends string>(
+    shares: Record<TKey, number>,
+): Record<TKey, string> => {
+    // Object.keys returns the record's own keys, which are exactly TKey.
+    const keys = Object.keys(shares) as TKey[];
+    const total = keys.reduce((sum, key) => sum + shares[key], 0);
+    const exact = keys.map((key) => (total > 0 ? (shares[key] / total) * 100 : 0));
+    const whole = exact.map((value) => Math.floor(value));
+    const left = total > 0 ? 100 - whole.reduce((sum, value) => sum + value, 0) : 0;
+    const byRemainder = exact
+        .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+        .toSorted((a, b) => b.remainder - a.remainder || a.index - b.index);
+
+    for (const { index } of byRemainder.slice(0, left)) {
+        whole[index] = (whole[index] ?? 0) + 1;
+    }
+
+    // fromEntries over `keys` yields one entry per TKey.
+    return Object.fromEntries(
+        keys.map((key, index) => {
+            const value = whole[index] ?? 0;
+
+            return [key, value === 0 && shares[key] > 0 ? '<1%' : `${value}%`];
+        }),
+    ) as Record<TKey, string>;
+};
 
 /** A death estimate rounded as the page prints it: to the nearest hundred from 1,000 up. */
 export const roundDeaths = (n: number): number =>

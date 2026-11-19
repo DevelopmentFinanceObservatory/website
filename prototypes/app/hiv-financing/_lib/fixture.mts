@@ -17,10 +17,12 @@ export const country = (overrides: Partial<Country> = {}): Country => ({
     plhiv: null,
     art: null,
     deaths: [null, null],
+    globalFundMulti: [0, 0],
     ...overrides,
 });
 
-/** $304m in 2024: 66% US, 33% Global Fund, 1% others; $217 per person; deaths fell. */
+/** $304m in 2024: 66% US, 33% Global Fund, 1% others; $217 per person; deaths fell; Global
+ *  Fund multi-disease grants beside Global Fund HIV money, so flagged but no sentence clause. */
 export const KENYA = country({
     iso3: 'KEN',
     name: 'Kenya',
@@ -28,6 +30,7 @@ export const KENYA = country({
     plhiv: 1_400_000,
     art: 87.3,
     deaths: [36_420, 20_810],
+    globalFundMulti: [0, 5e6],
 });
 
 /** $90m, a Global Fund majority; an accented name; no ART figure; no 2015 deaths. */
@@ -80,12 +83,36 @@ export const UKRAINE = country({
 
 export const COUNTRIES = [KENYA, IVORY_COAST, UKRAINE, DR_CONGO, CONGO, MEXICO];
 
+/** Outside `COUNTRIES`: all US under 13040, with Global Fund multi-disease grants under
+ *  other codes, so the country sentence says the Global Fund's money is not in the figure. */
+export const NAMIBIA = country({
+    iso3: 'NAM',
+    name: 'Namibia',
+    aid: series([60e6, 71e6], [10e6, 0], [0, 0]),
+    plhiv: 220_000,
+    art: 95,
+    deaths: [3_800, 3_200],
+    globalFundMulti: [0, 16e6],
+});
+
 export const DATA: HivData = {
     years: YEARS,
     // $6.447bn in 2024, of which the US and the Global Fund gave $6.4bn (99%).
     allocated: series([1e9, 4e9], [1e9, 2.4e9], [342e6, 47e6]),
     // $4.24bn in 2024.
     unallocated: series([500e6, 4.1e9], [0, 100e6], [40e6, 40e6]),
-    recipients: 96,
+    // Kenya's $5m and $595m in countries outside the table.
+    globalFundMulti: [300e6, 600e6],
+    otherProviders: [
+        { name: 'International Development Association', first: 88e6, last: 2e6 },
+        { name: 'Joint United Nations Programme on HIV/AIDS', first: 57e6, last: 0 },
+        { name: 'Australia', first: 51e6, last: 1e6 },
+        { name: 'Germany', first: 29e6, last: 6e6 },
+        { name: 'United Kingdom', first: 22e6, last: 600e3 },
+        { name: 'France', first: 8e6, last: 10e6 },
+        { name: 'Norway', first: 7e6, last: 3e6 },
+    ],
+    // The 5 table countries with 2024 aid and 3 outside the table.
+    recipients: 8,
     countries: COUNTRIES,
 };

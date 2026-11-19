@@ -1,6 +1,7 @@
-// The page's dynamic words: the lede, the scope note, and the summary sentence for all
-// countries or for one.
-import type { Country, HivData } from '../_data/types.ts';
+// The page's words that carry a figure or a rule: the lede and the lines under it, the
+// summary sentence for all countries or for one, the notes under the chart, the strip and
+// the table, and the sources they cite.
+import type { Country, HivData, OtherProvider } from '../_data/types.ts';
 
 import {
     deathCount,
@@ -11,29 +12,186 @@ import {
     percent,
     perPerson,
     roundDeaths,
+    wholePercents,
 } from './format.ts';
 import { PROVIDERS } from './providers.ts';
-import { lastAid, lastShares, lastTotal, lastYear, ledeFigures, withoutPlhiv } from './summary.ts';
+import { perPersonPoints, STRIP_MIN_PLHIV } from './strip.ts';
+import {
+    aidPerPerson,
+    lastAid,
+    lastShares,
+    lastTotal,
+    lastYear,
+    ledeFigures,
+    PER_PERSON_MIN_PLHIV,
+    withoutPlhiv,
+} from './summary.ts';
 
+/** A cited web page; `date` is null for an undated page. */
+export type Source = { publisher: string; title: string; date: string | null; url: string };
+
+/** The sources behind the fixed figures in this module. */
+export const SOURCES = {
+    kff2025: {
+        publisher: 'KFF and UNAIDS',
+        title: 'Donor Government Funding for HIV in Low- and Middle-Income Countries in 2025',
+        date: '27 July 2026',
+        url: 'https://www.kff.org/global-health-policy/donor-government-funding-for-hiv-in-low-and-middle-income-countries-in-2025/',
+    },
+    unaids2026: {
+        publisher: 'UNAIDS',
+        title: 'A perilous moment for the response to HIV warns UNAIDS',
+        date: '12 June 2026',
+        url: 'https://unaids.org/en/resources/presscentre/pressreleaseandstatementarchive/2026/june/20260612_PR_global_aids_brief',
+    },
+    globalFundHiv: {
+        publisher: 'The Global Fund',
+        title: 'HIV and AIDS',
+        date: null,
+        url: 'https://www.theglobalfund.org/en/hivaids/',
+    },
+    globalFundUsCap: {
+        publisher: 'The Global Fund',
+        title: 'President Biden Signals a $6 billion U.S. Pledge for the Seventh Replenishment',
+        date: '28 March 2022',
+        url: 'https://www.theglobalfund.org/en/news/2022/2022-03-28-president-biden-signals-a-6-billion-pledge-for-the-seventh-replenishment/',
+    },
+} as const satisfies Record<string, Source>;
+
+/** The line under the lede on where the Global Fund's money comes from. Source: `SOURCES.globalFundUsCap`. */
+export const UNDER_LEDE =
+    "The page shows who pays out HIV aid, not who pays for it. The Global Fund spends money that governments and foundations give it. By US law, the United States cannot give more than a third of the Global Fund's contributions, and most other donors' HIV money reaches countries through the Global Fund.";
+
+/** The scope note under the lede. Source: `SOURCES.unaids2026`. */
 export const SCOPE_NOTE =
-    "This page shows aid from donors and multilateral funds. Governments' own spending on HIV is not in the DFO, so it does not show what share of a country's HIV response donors pay for.";
+    "Governments in low- and middle-income countries paid for 52% of their HIV responses in 2024, by UNAIDS's estimate. That spending is not in this data.";
+
+/** The dated line under the chart on funding after the data end. Source: `SOURCES.kff2025`. */
+export const FUNDING_2025 = {
+    text: "Donor governments' HIV funding was $8.3bn in 2024 and $6.2bn in 2025, by KFF's count.",
+    source: SOURCES.kff2025,
+} as const;
+
+/** The How to interpret line on measures that give the US and the Global Fund lower shares.
+ *  Sources: `SOURCES.globalFundHiv` and `SOURCES.kff2025`. */
+export const OTHER_MEASURES = {
+    text: 'Other measures give lower shares. The Global Fund says it provides 28% of all international financing for HIV programmes, and KFF puts the United States at 74% of donor-government HIV funding in 2025, a figure that includes the US contribution to the Global Fund.',
+    sources: [SOURCES.globalFundHiv, SOURCES.kff2025],
+} as const;
+
+/** Why aid per person is a ratio, and when the page leaves it blank. */
+export const PER_PERSON_NOTE = `Aid per person living with HIV is a ratio of a country's HIV aid to the number of people living with HIV there. Aid also pays for prevention, testing and health systems, so the ratio does not measure spending per patient. The page leaves it blank where fewer than ${PER_PERSON_MIN_PLHIV.toLocaleString('en-GB')} people live with HIV, because a small count makes the ratio swing.`;
+
+/** The caveat beside the strip's median. */
+export const MEDIAN_CAVEAT =
+    "The median is the middle country's ratio. It does not measure what a typical patient receives.";
 
 /** The Notes line naming the countries kept in the table with no estimate of people living with HIV. */
 export const plhivGapNote = (data: HivData): string => {
     const names = withoutPlhiv(data);
+    const them = names.length === 1 ? 'it' : 'them';
 
     return names.length === 0
-        ? 'The DFO holds a UNAIDS estimate of people living with HIV for every country in the table.'
-        : `The DFO holds no UNAIDS estimate of people living with HIV for ${listOf(names)}, so the page gives no aid per person for ${names.length === 1 ? 'it' : 'them'} and leaves ${names.length === 1 ? 'it' : 'them'} off the dot strip.`;
+        ? "The DFO's UNAIDS source holds an estimate of people living with HIV for every country in the table."
+        : `Estimates of people living with HIV for ${listOf(names)} are missing from the DFO's UNAIDS source, so the page gives no aid per person for ${them} and leaves ${them} off the dot strip.`;
 };
 
 /** A provider's share is named in the country sentence from half a percentage point up. */
 const NAMED_SHARE = 0.005;
 
 export const ledeSentence = (data: HivData): string => {
-    const { usGfShare, over1m, oneProviderMajority } = ledeFigures(data);
+    const { over1m, gfMajority, usMajority, usNothing } = ledeFigures(data);
+    const split = `Of the ${over1m} countries that received more than $1m, the Global Fund paid out more than half in ${gfMajority} and the United States in ${usMajority}`;
 
-    return `In ${lastYear(data)} the United States and the Global Fund gave ${pct(usGfShare)} of the external HIV financing that donors assigned to countries. In ${oneProviderMajority} of the ${over1m} countries that received more than $1m, one of the two gave more than half.`;
+    return [
+        `In ${lastYear(data)} almost all HIV aid recorded for countries was paid out through two channels: the US government and the Global Fund.`,
+        usNothing > 0
+            ? `${split}, and the United States paid out nothing in ${usNothing}.`
+            : `${split}.`,
+    ].join(' ');
+};
+
+/**
+ * The channel share the lede leaves out, for How to interpret: the US and Global Fund share of
+ * HIV aid recorded for countries, and the US-majority countries that also received Global
+ * Fund multi-disease grants under other codes.
+ */
+export const channelNote = (data: HivData): string => {
+    const { usGfShare, usMajority, usMajorityGfMulti } = ledeFigures(data);
+
+    return [
+        `On this page's measure, the United States and the Global Fund paid out ${pct(usGfShare)} of the HIV aid that official donors recorded for countries in ${lastYear(data)}.`,
+        usMajorityGfMulti > 0
+            ? `In ${usMajorityGfMulti} of the ${usMajority} countries where the United States paid out more than half, the Global Fund also gave multi-disease grants recorded under other codes.`
+            : null,
+    ]
+        .filter((sentence) => sentence !== null)
+        .join(' ');
+};
+
+/** How the page prints a provider's DFO label; a label not here prints as given. */
+export const OTHER_PROVIDER_LABELS: Readonly<Record<string, string>> = {
+    'International Development Association': 'World Bank IDA',
+    'Joint United Nations Programme on HIV/AIDS': 'UNAIDS',
+    'United Kingdom': 'the United Kingdom',
+    Netherlands: 'the Netherlands',
+};
+
+/**
+ * Facts the summary sentence attaches to a named provider, by DFO label. They cannot be
+ * computed from first and last values, so they are fixed text, and `largestOtherFalls`
+ * throws when a label here is missing from `HivData.otherProviders`.
+ */
+export const OTHER_PROVIDER_FACTS: Readonly<Record<string, string>> = {
+    'International Development Association': 'which has lent about $2m a year since 2020',
+    'Joint United Nations Programme on HIV/AIDS':
+        'which reports most of its HIV money under another code',
+};
+
+/** How many providers the summary sentence names. */
+export const OTHER_FALLS_NAMED = 5;
+
+/** The providers whose money to countries fell most from the first year to the last,
+ *  largest fall first, at most `count`, falls above 0 only. */
+export const largestOtherFalls = (data: HivData, count = OTHER_FALLS_NAMED): OtherProvider[] => {
+    for (const name of Object.keys(OTHER_PROVIDER_FACTS)) {
+        if (!data.otherProviders.some((provider) => provider.name === name)) {
+            throw new Error(`HivData.otherProviders has no "${name}"`);
+        }
+    }
+
+    return data.otherProviders
+        .filter((provider) => provider.first > provider.last)
+        .toSorted((a, b) => b.first - b.last - (a.first - a.last) || a.name.localeCompare(b.name))
+        .slice(0, count);
+};
+
+const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+
+/** "Five providers account for $231m, or 78%, of that fall: World Bank IDA, ...". */
+const fallSentence = (data: HivData): string | null => {
+    const others = data.allocated.other;
+    const fall = (others[0] ?? 0) - (others.at(-1) ?? 0);
+    const named = largestOtherFalls(data);
+
+    if (fall <= 0 || named.length === 0) {
+        return null;
+    }
+
+    const part = named.reduce((sum, provider) => sum + provider.first - provider.last, 0);
+    const items = named.map(({ name }) => {
+        const label = OTHER_PROVIDER_LABELS[name] ?? name;
+        const fact = OTHER_PROVIDER_FACTS[name];
+
+        return fact === undefined ? label : `${label}, ${fact}`;
+    });
+    // Semicolons separate the items once one of them carries a comma.
+    const list = items.some((item) => item.includes(','))
+        ? `${items.slice(0, -1).join('; ')}; and ${items.at(-1) ?? ''}`
+        : listOf(items);
+    const subject = `${NUMBER_WORDS[named.length] ?? named.length} ${named.length === 1 ? 'provider accounts' : 'providers account'}`;
+
+    return `${subject} for ${money(part)}, or ${pct(part / fall)}, of that fall: ${list}.`;
 };
 
 /** The summary sentence with no country selected. */
@@ -42,15 +200,71 @@ export const allSentence = (data: HivData): string => {
     const last = lastYear(data);
     const others = data.allocated.other;
 
-    return `In ${last} donors assigned ${money(lastTotal(data.allocated))} of HIV aid to ${data.recipients} countries and reported another ${money(lastTotal(data.unallocated))} for regions or no country. Providers other than the United States and the Global Fund gave ${money(others.at(-1) ?? 0)} to countries, against ${money(others[0] ?? 0)} in ${first}.`;
+    return [
+        `In ${last} donors assigned ${money(lastTotal(data.allocated))} of HIV aid to ${data.recipients} countries, ${data.countries.length} in the table.`,
+        `Providers other than the United States and the Global Fund gave ${money(others.at(-1) ?? 0)} to countries in ${last}, against ${money(others[0] ?? 0)} in ${first}.`,
+        fallSentence(data),
+    ]
+        .filter((sentence) => sentence !== null)
+        .join(' ');
+};
+
+/** US bilateral HIV spending in 2024, from `SOURCES.kff2025`. */
+const KFF_US_BILATERAL_2024 = '$5.4bn';
+
+/** From this year US money to countries held in a narrow range. */
+const US_STEADY_FROM = 2020;
+
+/**
+ * The note under the chart on money reported for regions or no country, which the chart
+ * leaves out, and on the US total that runs above US government reports.
+ */
+export const unallocatedNote = (data: HivData): string => {
+    const last = lastYear(data);
+    const previous = data.years.at(-2) ?? last;
+    const usAll = data.allocated.us.map(
+        (value, index) => value + (data.unallocated.us[index] ?? 0),
+    );
+    const steady = data.allocated.us.filter(
+        (_, index) => (data.years[index] ?? 0) >= US_STEADY_FROM,
+    );
+
+    return [
+        `Donors also reported ${money(lastTotal(data.unallocated))} of HIV aid in ${last} for regions or no country, which the chart leaves out.`,
+        `US money under this code, for countries and for regions or no country together, was ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
+        `KFF puts US bilateral HIV spending at ${KFF_US_BILATERAL_2024} in 2024.`,
+        `US money to countries held at ${money(Math.min(...steady))} to ${money(Math.max(...steady))} a year from ${US_STEADY_FROM} to ${last}, so the extra sits in money reported for regions or no country.`,
+    ].join(' ');
+};
+
+/** The strip's caption: how many countries it holds and the rule that picks them. */
+export const stripCaption = (data: HivData): string => {
+    const count = perPersonPoints(data.countries).length;
+
+    return `${count} ${count === 1 ? 'country' : 'countries'} with ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} or more people living with HIV and some aid in ${lastYear(data)}`;
+};
+
+/** The line under the table's heading: the inclusion rule and the money outside the table. */
+export const tableRule = (data: HivData): string => {
+    const year = lastYear(data);
+    const inTable = data.countries.filter((country) => lastAid(country) > 0);
+    const outside = data.recipients - inTable.length;
+    const outsideMoney =
+        lastTotal(data.allocated) - inTable.reduce((sum, country) => sum + lastAid(country), 0);
+    const rule = `The table lists the ${data.countries.length} countries that received more than $1m of HIV aid in ${year} or have ${STRIP_MIN_PLHIV.toLocaleString('en-GB')} or more people living with HIV.`;
+
+    return outside > 0
+        ? `${rule} Another ${outside} ${outside === 1 ? 'country' : 'countries'} received ${money(outsideMoney)} between them.`
+        : rule;
 };
 
 const mixClause = (country: Country): string | null => {
     const shares = lastShares(country.aid);
+    const printed = wholePercents(shares);
     // The first item carries the verb: "66% came from the United States, 33% from ...".
     const named = PROVIDERS.filter(({ key }) => shares[key] >= NAMED_SHARE).map(
         ({ key, label }, index) =>
-            `${pct(shares[key])} ${index === 0 ? 'came from' : 'from'} ${key === 'other' ? 'all other providers' : `the ${label}`}`,
+            `${printed[key]} ${index === 0 ? 'came from' : 'from'} ${key === 'other' ? 'all other providers' : `the ${label}`}`,
     );
 
     if (named.length === 0) {
@@ -58,6 +272,16 @@ const mixClause = (country: Country): string | null => {
     }
 
     return `Of that, ${listOf(named)}.`;
+};
+
+/** Where the mix would show no Global Fund money under 13040 in the last year although the
+ *  Global Fund gave multi-disease grants under other codes. */
+const multiClause = (country: Country, year: number): string | null => {
+    const multi = country.globalFundMulti.at(-1) ?? 0;
+
+    return multi > 0 && (country.aid.globalFund.at(-1) ?? 0) === 0
+        ? `The Global Fund's multi-disease grants to ${country.name}, ${money(multi)} in ${year}, are recorded under other codes and are not in this figure.`
+        : null;
 };
 
 const treatmentClause = (country: Country): string | null =>
@@ -88,19 +312,21 @@ const deathsClause = (country: Country, years: readonly number[]): string | null
 export const countrySentence = (country: Country, years: readonly number[]): string => {
     const aid = lastAid(country);
     const year = lastYear({ years });
+    const ratio = aidPerPerson(country);
     let opening: string;
 
     if (aid === 0) {
         opening = `In ${year} ${country.name} received no HIV aid.`;
-    } else if (country.plhiv === null || country.plhiv === 0) {
+    } else if (ratio === null) {
         opening = `In ${year} ${country.name} received ${money(aid)} in HIV aid.`;
     } else {
-        opening = `In ${year} ${country.name} received ${money(aid)} in HIV aid, ${perPerson(aid / country.plhiv)} per person living with HIV.`;
+        opening = `In ${year} ${country.name} received ${money(aid)} in HIV aid, ${perPerson(ratio)} per person living with HIV.`;
     }
 
     return [
         opening,
         aid > 0 ? mixClause(country) : null,
+        multiClause(country, year),
         treatmentClause(country),
         deathsClause(country, years),
     ]

@@ -2,7 +2,7 @@
  "provenance": {
   "sdk": "development-finance==0.3.0",
   "query": "HIV/AIDS aid by donor and recipient, 2015 to 2024 (OECD CRS, purpose code 13040, gross disbursements, current US dollars); UNAIDS people living with HIV, antiretroviral therapy coverage and AIDS-related deaths for each country, 2015 to 2024",
-  "retrieved": "2026-11-19T13:42:01.488Z",
+  "retrieved": "2026-11-19T15:14:47.149Z",
   "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory; OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
   "dfo": [
    {
@@ -56,19 +56,52 @@
     ]
    },
    {
+    "key": "gf-12250",
+    "sentence": "Global Fund's gross ODA disbursements to 54 recipients for infectious disease control, 2015 to 2019. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_61c18d2087af58a8ba376445772b1311"
+    ],
+    "versions": [
+     "cv_f48c62e9b2e9a08c246facd9dba95bdf"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 162,
+    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
+    "warnings": [
+     "Search's reading differs from your question:",
+     "The served coverage falls short of the requested scope. Requested 2015 to 2024; the data covers 2015 to 2019. [coverage_below_scope]"
+    ]
+   },
+   {
+    "key": "gf-12110",
+    "sentence": "Global Fund's gross ODA disbursements to 39 recipients for health policy and administrative management, 2015 to 2024. Current US dollars · OECD Creditor Reporting System (CRS).",
+    "specIds": [
+     "spec_39649f9c723ff28a2130f1a3b176f408"
+    ],
+    "versions": [
+     "cv_c99be9d7485c2ad0af5307eb47a9cbe3"
+    ],
+    "citation": "OECD Creditor Reporting System (CRS) (2026), via the Development Finance Observatory",
+    "rows": 175,
+    "page": "https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem",
+    "warnings": [
+     "Search's reading differs from your question:"
+    ]
+   },
+   {
     "key": "deaths-1",
     "sentence": "AIDS-related deaths in 30 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
     "specIds": [
      "spec_290f7d852f3fcff95da1609d521cb9f5"
     ],
     "versions": [
-     "cv_27b9fad44dde6bc1093fbd47b0068875"
+     "cv_b0dc8106a8443c6c0dad29fb29c6f9a3"
     ],
     "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 276,
+    "rows": 256,
     "page": null,
     "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 2 requested entities. [coverage_below_scope]"
+     "The served coverage falls short of the requested scope. No observations were served for 4 requested entities. [coverage_below_scope]"
     ]
    },
    {
@@ -78,13 +111,13 @@
      "spec_290f7d852f3fcff95da1609d521cb9f5"
     ],
     "versions": [
-     "cv_de0928af68fc2c0eb4d5af2dd0de6386"
+     "cv_4c97b7d410242b7edde5c51e4c4925b3"
     ],
     "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 287,
+    "rows": 267,
     "page": null,
     "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 1 requested entity. [coverage_below_scope]"
+     "The served coverage falls short of the requested scope. No observations were served for 3 requested entities. [coverage_below_scope]"
     ]
    },
    {
@@ -94,13 +127,13 @@
      "spec_290f7d852f3fcff95da1609d521cb9f5"
     ],
     "versions": [
-     "cv_2440b9d11ba335f6088354702138f438"
+     "cv_26b8b25c1918aacb777d60c536af4007"
     ],
     "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 242,
+    "rows": 212,
     "page": null,
     "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 4 requested entities. [coverage_below_scope]"
+     "The served coverage falls short of the requested scope. No observations were served for 7 requested entities. [coverage_below_scope]"
     ]
    },
    {
@@ -110,12 +143,14 @@
      "spec_290f7d852f3fcff95da1609d521cb9f5"
     ],
     "versions": [
-     "cv_1a2d380f8d7c88677b3f106c77a10d82"
+     "cv_d2f36166fe922cb7ac7a3f999e05f2e5"
     ],
     "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 299,
+    "rows": 259,
     "page": null,
-    "warnings": []
+    "warnings": [
+     "The served coverage falls short of the requested scope. No observations were served for 4 requested entities. [coverage_below_scope]"
+    ]
    },
    {
     "key": "deaths-5",
@@ -124,13 +159,29 @@
      "spec_290f7d852f3fcff95da1609d521cb9f5"
     ],
     "versions": [
-     "cv_043a79b13fd56556462999f50b599de3"
+     "cv_d24e858186eb9a4ef4694e82edd2c9e5"
     ],
     "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
-    "rows": 287,
+    "rows": 227,
     "page": null,
     "warnings": [
-     "The served coverage falls short of the requested scope. No observations were served for 1 requested entity. [coverage_below_scope]"
+     "The served coverage falls short of the requested scope. No observations were served for 7 requested entities. [coverage_below_scope]"
+    ]
+   },
+   {
+    "key": "deaths-6",
+    "sentence": "AIDS-related deaths in 29 places, 2015 to 2024. Joint United Nations Programme on HIV/AIDS (UNAIDS).",
+    "specIds": [
+     "spec_290f7d852f3fcff95da1609d521cb9f5"
+    ],
+    "versions": [
+     "cv_f4e9148924c53db1539e1c0e35e68bce"
+    ],
+    "citation": "Joint United Nations Programme on HIV/AIDS (UNAIDS) (2026), via the Development Finance Observatory",
+    "rows": 170,
+    "page": null,
+    "warnings": [
+     "The served coverage falls short of the requested scope. No observations were served for 12 requested entities. [coverage_below_scope]"
     ]
    }
   ]
@@ -224,6 +275,125 @@
     103908576
    ]
   },
+  "globalFundMulti": [
+   382263730,
+   409943580,
+   623884918,
+   656022924,
+   742205279,
+   108102998,
+   210459301,
+   322852667,
+   347075558,
+   520357859
+  ],
+  "otherProviders": [
+   {
+    "name": "International Development Association",
+    "first": 87468288,
+    "last": 1584996
+   },
+   {
+    "name": "Joint United Nations Programme on HIV/AIDS",
+    "first": 57292145,
+    "last": 7623146
+   },
+   {
+    "name": "Australia",
+    "first": 51401598,
+    "last": 542510
+   },
+   {
+    "name": "Germany",
+    "first": 28553377,
+    "last": 6178621
+   },
+   {
+    "name": "United Kingdom",
+    "first": 22271551,
+    "last": 626218
+   },
+   {
+    "name": "United Nations Children's Fund",
+    "first": 18313976,
+    "last": 2661000
+   },
+   {
+    "name": "World Health Organization",
+    "first": 13357470,
+    "last": 0
+   },
+   {
+    "name": "France",
+    "first": 8145702,
+    "last": 10118024
+   },
+   {
+    "name": "Norway",
+    "first": 7526625,
+    "last": 2931113
+   },
+   {
+    "name": "Canada",
+    "first": 7316185,
+    "last": 3132134
+   },
+   {
+    "name": "Asian Development Bank",
+    "first": 7188540,
+    "last": 0
+   },
+   {
+    "name": "United Nations Population Fund",
+    "first": 6509659,
+    "last": 0
+   },
+   {
+    "name": "United Nations Development Programme",
+    "first": 4640020,
+    "last": 973628
+   },
+   {
+    "name": "Sweden",
+    "first": 4296528,
+    "last": 1660959
+   },
+   {
+    "name": "Japan",
+    "first": 3613874,
+    "last": 438779
+   },
+   {
+    "name": "Ireland",
+    "first": 3104296,
+    "last": 317422
+   },
+   {
+    "name": "Switzerland",
+    "first": 2437313,
+    "last": 2533098
+   },
+   {
+    "name": "Belgium",
+    "first": 1762033,
+    "last": 478914
+   },
+   {
+    "name": "Italy",
+    "first": 1609224,
+    "last": 1941487
+   },
+   {
+    "name": "European Union institutions",
+    "first": 1536838,
+    "last": 51732
+   },
+   {
+    "name": "Netherlands",
+    "first": 125244,
+    "last": 1029798
+   }
+  ],
   "recipients": 113,
   "countries": [
    {
@@ -280,6 +450,18 @@
      55171,
      54230,
      53299
+    ],
+    "globalFundMulti": [
+     73002380,
+     56075620,
+     81189315,
+     115097358,
+     83172786,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -336,6 +518,18 @@
      48766,
      46296,
      44044
+    ],
+    "globalFundMulti": [
+     66942760,
+     6958570,
+     10645535,
+     4909606,
+     10689153,
+     0,
+     0,
+     0,
+     0,
+     16426546
     ]
    },
    {
@@ -392,6 +586,18 @@
      28776,
      27195,
      25995
+    ],
+    "globalFundMulti": [
+     76283260,
+     10025070,
+     7516126,
+     7325534,
+     13919939,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -448,6 +654,18 @@
      18493,
      17376,
      16373
+    ],
+    "globalFundMulti": [
+     26461680,
+     41236800,
+     80150602,
+     76022957,
+     67767256,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -504,6 +722,18 @@
      51024,
      46036,
      42176
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     10395709,
+     27154336,
+     32261143,
+     88211923,
+     71251004,
+     55750541
     ]
    },
    {
@@ -560,6 +790,18 @@
      21995,
      21181,
      20335
+    ],
+    "globalFundMulti": [
+     2336420,
+     6267770,
+     12456569,
+     9590311,
+     5604326,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -616,6 +858,18 @@
      23089,
      21199,
      20849
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -672,6 +926,18 @@
      19502,
      17934,
      16723
+    ],
+    "globalFundMulti": [
+     1050000,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -728,6 +994,18 @@
      14958,
      14417,
      13694
+    ],
+    "globalFundMulti": [
+     0,
+     78536960,
+     160330456,
+     109363706,
+     148228268,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -784,6 +1062,18 @@
      16128,
      14870,
      13692
+    ],
+    "globalFundMulti": [
+     6090270,
+     551100,
+     0,
+     39823918,
+     67148256,
+     0,
+     10404895,
+     15235661,
+     16319605,
+     10981350
     ]
    },
    {
@@ -840,6 +1130,18 @@
      11127,
      10301,
      9599
+    ],
+    "globalFundMulti": [
+     10497560,
+     13815890,
+     21243689,
+     10265724,
+     9924955,
+     11506627,
+     11089518,
+     20431165,
+     44980384,
+     25022180
     ]
    },
    {
@@ -896,6 +1198,18 @@
      11875,
      10393,
      9438
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -952,6 +1266,18 @@
      10487,
      9347,
      8366
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     7961662,
+     13428734,
+     22246655,
+     14169364
     ]
    },
    {
@@ -1008,6 +1334,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     44626530,
+     58082070,
+     27165330,
+     42125691,
+     47847190,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1064,6 +1402,18 @@
      1321,
      1313,
      1344
+    ],
+    "globalFundMulti": [
+     0,
+     14575040,
+     36794699,
+     23448697,
+     23941926,
+     0,
+     2180291,
+     7640923,
+     9167130,
+     6623490
     ]
    },
    {
@@ -1120,6 +1470,18 @@
      3022,
      2938,
      2765
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     1950619,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1176,6 +1538,18 @@
      13380,
      12604,
      12614
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     11222646,
+     28208327,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1232,6 +1606,18 @@
      4263,
      4131,
      3956
+    ],
+    "globalFundMulti": [
+     679270,
+     9488790,
+     25808120,
+     19340570,
+     19295427,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1288,6 +1674,18 @@
      2916,
      2934,
      2861
+    ],
+    "globalFundMulti": [
+     4643460,
+     0,
+     0,
+     8058732,
+     11254460,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1344,6 +1742,18 @@
      6550,
      5547,
      5055
+    ],
+    "globalFundMulti": [
+     0,
+     1510410,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1400,6 +1810,18 @@
      3317,
      3317,
      3208
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     15181650,
+     12123041,
+     2317688,
+     12984534,
+     12656992,
+     13924828,
+     16438339
     ]
    },
    {
@@ -1456,6 +1878,18 @@
      null,
      null,
      32163
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     2908303,
+     3293609,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1512,6 +1946,18 @@
      4037,
      3851,
      3759
+    ],
+    "globalFundMulti": [
+     0,
+     1760260,
+     10704460,
+     10271974,
+     7224948,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1568,6 +2014,18 @@
      6358,
      6503,
      6151
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1624,6 +2082,18 @@
      4248,
      4335,
      4169
+    ],
+    "globalFundMulti": [
+     11838240,
+     8997650,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1680,6 +2150,18 @@
      4393,
      3810,
      3236
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     2679034,
+     14131545,
+     24006133,
+     17077813
     ]
    },
    {
@@ -1736,6 +2218,18 @@
      27160,
      26749,
      23757
+    ],
+    "globalFundMulti": [
+     33350,
+     2467230,
+     2413537,
+     417804,
+     0,
+     0,
+     0,
+     0,
+     2046058,
+     3798853
     ]
    },
    {
@@ -1792,6 +2286,18 @@
      10765,
      9936,
      9067
+    ],
+    "globalFundMulti": [
+     19191930,
+     5635070,
+     16371125,
+     11447789,
+     12281185,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1848,6 +2354,18 @@
      3983,
      3737,
      3317
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     3732455,
+     5757493,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -1904,6 +2422,18 @@
      2512,
      2331,
      2149
+    ],
+    "globalFundMulti": [
+     3887990,
+     8745970,
+     13276459,
+     1902968,
+     2588021,
+     0,
+     0,
+     0,
+     0,
+     8910841
     ]
    },
    {
@@ -1960,6 +2490,18 @@
      1211,
      1167,
      1113
+    ],
+    "globalFundMulti": [
+     0,
+     2924160,
+     9180708,
+     3657106,
+     18045636,
+     0,
+     202674,
+     2402237,
+     3309583,
+     78328192
     ]
    },
    {
@@ -2016,6 +2558,18 @@
      1180,
      1110,
      1018
+    ],
+    "globalFundMulti": [
+     3892160,
+     2963590,
+     6296296,
+     16617240,
+     24970267,
+     0,
+     1531749,
+     1005937,
+     1367264,
+     0
     ]
    },
    {
@@ -2072,6 +2626,18 @@
      12897,
      13435,
      14026
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     396899,
+     1217592,
+     85606,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2128,6 +2694,18 @@
      1164,
      993,
      898
+    ],
+    "globalFundMulti": [
+     0,
+     7198990,
+     9815233,
+     9654064,
+     7821724,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2184,6 +2762,18 @@
      1844,
      1912,
      1830
+    ],
+    "globalFundMulti": [
+     856470,
+     15092060,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2240,6 +2830,18 @@
      1676,
      1398,
      1269
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2296,6 +2898,18 @@
      875,
      715,
      577
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2352,6 +2966,18 @@
      4024,
      3706,
      3476
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2408,6 +3034,18 @@
      15032,
      14180,
      13458
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     14522140,
+     48639890,
+     20024549,
+     19395441,
+     48385932
     ]
    },
    {
@@ -2464,6 +3102,18 @@
      2141,
      2350,
      2542
+    ],
+    "globalFundMulti": [
+     0,
+     7625730,
+     7254820,
+     1572138,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2520,6 +3170,18 @@
      209,
      204,
      200
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2576,6 +3238,18 @@
      3612,
      3489,
      3435
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     6058663,
+     7792653,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2632,6 +3306,18 @@
      3391,
      3057,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2688,6 +3374,18 @@
      1625,
      1903,
      2304
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2744,6 +3442,18 @@
      978,
      969,
      966
+    ],
+    "globalFundMulti": [
+     0,
+     1820440,
+     2713048,
+     4342099,
+     4524269,
+     4637487,
+     25769312,
+     21791498,
+     15312356,
+     32064417
     ]
    },
    {
@@ -2800,6 +3510,18 @@
      3303,
      2935,
      2715
+    ],
+    "globalFundMulti": [
+     4745010,
+     15450610,
+     15884772,
+     7990316,
+     19319215,
+     0,
+     0,
+     0,
+     0,
+     41206624
     ]
    },
    {
@@ -2856,6 +3578,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2912,6 +3646,18 @@
      1101,
      1031,
      979
+    ],
+    "globalFundMulti": [
+     2502700,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -2968,6 +3714,18 @@
      1514,
      1353,
      1299
+    ],
+    "globalFundMulti": [
+     4353920,
+     5459310,
+     8273100,
+     5745177,
+     300825,
+     3162651,
+     4983763,
+     3774742,
+     4721311,
+     15936470
     ]
    },
    {
@@ -3024,6 +3782,18 @@
      1113,
      1037,
      952
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     8291500,
+     4964404,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3080,6 +3850,18 @@
      3113,
      3130,
      3076
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     7688930,
+     10313370,
+     5619036,
+     5744674
     ]
    },
    {
@@ -3136,6 +3918,18 @@
      336,
      304,
      299
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3192,6 +3986,18 @@
      262,
      259,
      264
+    ],
+    "globalFundMulti": [
+     0,
+     7773940,
+     10601571,
+     12842552,
+     5856737,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3248,6 +4054,18 @@
      424,
      373,
      340
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     2172029,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3304,6 +4122,18 @@
      890,
      855,
      873
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3360,6 +4190,18 @@
      223,
      198,
      169
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3416,6 +4258,18 @@
      2315,
      1973,
      1799
+    ],
+    "globalFundMulti": [
+     0,
+     9808260,
+     25729512,
+     29880441,
+     20138959,
+     15127900,
+     21653912,
+     39547122,
+     52958828,
+     58345985
     ]
    },
    {
@@ -3472,6 +4326,18 @@
      6540,
      6273,
      6017
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     3905103,
+     5140032,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3528,6 +4394,18 @@
      1799,
      1885,
      1988
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3584,6 +4462,18 @@
      643,
      560,
      499
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     4796113,
+     4697791,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3640,6 +4530,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     5702531,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3696,6 +4598,18 @@
      382,
      366,
      337
+    ],
+    "globalFundMulti": [
+     875680,
+     1882930,
+     720511,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3752,6 +4666,18 @@
      607,
      588,
      561
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3808,6 +4734,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3864,6 +4802,18 @@
      1354,
      1265,
      1192
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     2135309,
+     2554873,
+     4109213,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3920,6 +4870,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -3976,6 +4938,18 @@
      478,
      434,
      412
+    ],
+    "globalFundMulti": [
+     0,
+     1554190,
+     2618667,
+     0,
+     2460044,
+     212583,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4032,6 +5006,18 @@
      24,
      25,
      25
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4088,6 +5074,18 @@
      66,
      75,
      80
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4144,6 +5142,18 @@
      363,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4200,6 +5210,18 @@
      37,
      31,
      29
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4256,6 +5278,18 @@
      525,
      370,
      363
+    ],
+    "globalFundMulti": [
+     1927760,
+     701250,
+     1916802,
+     2783090,
+     1218107,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4312,6 +5346,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4368,6 +5414,18 @@
      129,
      116,
      88
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4424,6 +5482,18 @@
      654,
      605,
      527
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4480,6 +5550,18 @@
      null,
      null,
      1650
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4536,6 +5618,18 @@
      297,
      321,
      384
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4592,6 +5686,18 @@
      413,
      390,
      377
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4648,6 +5754,18 @@
      108,
      111,
      124
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     458031,
+     2024984,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4704,6 +5822,18 @@
      13,
      14,
      14
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4760,6 +5890,18 @@
      310,
      294,
      279
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4816,6 +5958,18 @@
      350,
      337,
      347
+    ],
+    "globalFundMulti": [
+     487970,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4872,6 +6026,18 @@
      12090,
      12299,
      12339
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4928,6 +6094,18 @@
      1478,
      1419,
      1357
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     706545,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -4984,6 +6162,18 @@
      129,
      115,
      102
+    ],
+    "globalFundMulti": [
+     0,
+     171290,
+     2306154,
+     0,
+     0,
+     0,
+     597924,
+     275400,
+     0,
+     6937184
     ]
    },
    {
@@ -5040,6 +6230,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5096,6 +6298,18 @@
      4,
      3,
      3
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5152,6 +6366,18 @@
      335,
      328,
      333
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5208,6 +6434,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5264,6 +6502,18 @@
      2276,
      2324,
      2200
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5320,6 +6570,18 @@
      20,
      21,
      22
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5376,6 +6638,18 @@
      239,
      210,
      184
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     447792,
+     8028464,
+     3887900,
+     5512454,
+     14997048,
+     6001517
     ]
    },
    {
@@ -5432,6 +6706,18 @@
      125,
      117,
      105
+    ],
+    "globalFundMulti": [
+     1887350,
+     0,
+     311269,
+     1048501,
+     490177,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5488,6 +6774,18 @@
      165,
      156,
      158
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5544,6 +6842,18 @@
      2116,
      1877,
      1690
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     728592
     ]
    },
    {
@@ -5600,6 +6910,18 @@
      1255,
      1300,
      1253
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5656,6 +6978,18 @@
      null,
      null,
      null
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    {
@@ -5712,6 +7046,18 @@
      4139,
      4378,
      4408
+    ],
+    "globalFundMulti": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    }
   ]

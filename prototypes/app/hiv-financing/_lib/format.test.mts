@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { axisMoney, deathCount, listOf, money, people, peopleShort, pct } from './format.ts';
+import {
+    axisMoney,
+    deathCount,
+    listOf,
+    money,
+    people,
+    peopleShort,
+    perPerson,
+    pct,
+    wholePercents,
+} from './format.ts';
 
 test('money follows the mock-up: two decimals under $10bn, one above, whole millions from $10m', () => {
     const cases: [number, string][] = [
@@ -48,4 +58,20 @@ test('head counts, shares, deaths and lists', () => {
     assert.deepEqual([20_810, 640.4].map(deathCount), ['20,800', '640']);
     assert.equal(listOf(['a', 'b', 'c']), 'a, b, and c');
     assert.equal(listOf(['a', 'b']), 'a and b');
+});
+
+test('aid per person has a thousands separator and reads "under $1" for a value that rounds to 0', () => {
+    assert.deepEqual([134.4, 8_736.2, 0.4, 0].map(perPerson), ['$134', '$8,736', 'under $1', '$0']);
+});
+
+test('wholePercents rounds by largest remainder to sum to 100, with "<1%" for a small share', () => {
+    assert.deepEqual(wholePercents({ a: 1, b: 1, c: 1 }), { a: '34%', b: '33%', c: '33%' });
+    // Plain rounding gives 34%, 34% and 33%, summing to 101.
+    assert.deepEqual(wholePercents({ a: 0.335, b: 0.335, c: 0.33 }), {
+        a: '34%',
+        b: '33%',
+        c: '33%',
+    });
+    assert.deepEqual(wholePercents({ a: 0.996, b: 0.004, c: 0 }), { a: '100%', b: '<1%', c: '0%' });
+    assert.deepEqual(wholePercents({ a: 0, b: 0 }), { a: '0%', b: '0%' });
 });

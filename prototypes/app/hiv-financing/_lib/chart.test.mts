@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { barTicks, labelledYears, providerLayers, stackExtent, valueTicks } from './chart.ts';
+import {
+    barTicks,
+    labelledYears,
+    multiLayer,
+    providerLayers,
+    stackExtent,
+    valueTicks,
+} from './chart.ts';
 import { DATA } from './fixture.mts';
 import { axisMoney } from './format.ts';
 
@@ -13,11 +20,26 @@ test('provider layers stack US, Global Fund, then others, with the shared colour
         [
             ['us', '#6467de'],
             ['globalFund', '#2a9d8f'],
-            ['other', '#c9a227'],
+            ['other', '#a5841f'],
         ],
     );
     assert.deepEqual(stackExtent(layers), { low: 0, high: 6.447e9 });
     assert.deepEqual(valueTicks(0, 6.447e9), [0, 2e9, 4e9, 6e9, 8e9]);
+});
+
+test('the hatched multi-disease layer stacks above the providers and widens the extent', () => {
+    const layers = [...providerLayers(DATA.allocated), multiLayer(DATA.globalFundMulti)];
+
+    assert.deepEqual(
+        layers.map(({ key, hatched }) => [key, hatched]),
+        [
+            ['us', false],
+            ['globalFund', false],
+            ['other', false],
+            ['globalFundMulti', true],
+        ],
+    );
+    assert.deepEqual(stackExtent(layers), { low: 0, high: 6.447e9 + 600e6 });
 });
 
 test('the bar axis reaches $1m, so a tiny series gets distinct tick labels', () => {

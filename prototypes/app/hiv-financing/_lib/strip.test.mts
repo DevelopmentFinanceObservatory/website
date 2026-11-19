@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { COUNTRIES } from './fixture.mts';
+import { COUNTRIES, country } from './fixture.mts';
 import { buildStrip, dodge, median, perPersonPoints } from './strip.ts';
 
 test('the strip holds countries with 50,000+ people living with HIV and some aid, ascending', () => {
@@ -19,6 +19,14 @@ test('the strip holds countries with 50,000+ people living with HIV and some aid
         perPersonPoints(COUNTRIES, 10_000).map(({ iso3 }) => iso3),
         ['COD', 'COG', 'KEN', 'CIV'],
     );
+
+    // Under 5,000 people living with HIV the ratio is blank, whatever `min` is.
+    const small = country({
+        aid: { us: [0, 1e6], globalFund: [0, 0], other: [0, 0] },
+        plhiv: 4_000,
+    });
+
+    assert.deepEqual(perPersonPoints([small], 1_000), []);
 });
 
 test('median is the standard median', () => {

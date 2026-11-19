@@ -8,18 +8,26 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
+import { SourceLink } from './SourceLink';
 
 import type { HivData } from '../_data/types.ts';
-import { allSentence, countrySentence } from '../_lib/copy.ts';
-import { money } from '../_lib/format.ts';
-import { findCountry, lastTotal, lastYear, scopeSeries } from '../_lib/summary.ts';
+import {
+    allSentence,
+    countrySentence,
+    FUNDING_2025,
+    SOURCES,
+    stripCaption,
+    tableRule,
+    unallocatedNote,
+} from '../_lib/copy.ts';
+import { findCountry, lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 
 export type Section = { id: string; title: string };
 
 const ALL_COUNTRIES = 'All countries';
 
 const chartTitle = (name: string, years: readonly number[]) =>
-    `${name}, ${years[0]} to ${years.at(-1)}, US dollars`;
+    `${name}, ${years[0]} to ${years.at(-1)}, current US dollars`;
 
 /**
  * The interactive part of the page: the scope row, the summary sentence, the bars and the
@@ -103,15 +111,24 @@ export const HivFinancing = ({
                 <h3 className={styles.chartTitle}>
                     <Reserved text={title} variants={variants.titles} block />
                 </h3>
-                <ProviderBars series={scopeSeries(data, selected)} years={data.years} />
-                <p className={styles.note} data-hidden={chosen !== undefined}>
-                    Not shown: {money(lastTotal(data.unallocated))} in {year} reported for regions
-                    or no country.
+                <ProviderBars
+                    series={scopeSeries(data, selected)}
+                    multi={scopeMulti(data, selected)}
+                    years={data.years}
+                />
+                <p className={styles.note}>
+                    {unallocatedNote(data)}
+                    <SourceLink sources={[SOURCES.kff2025]} />
+                </p>
+                <p className={styles.note}>
+                    {FUNDING_2025.text}
+                    <SourceLink sources={[FUNDING_2025.source]} />
                 </p>
                 <div className={styles.below}>
                     <PerPersonStrip
                         countries={data.countries}
                         year={year}
+                        caption={stripCaption(data)}
                         selected={selected}
                         onSelect={toggle}
                     />
@@ -122,6 +139,7 @@ export const HivFinancing = ({
                 <h2 id={tableSection.id} className={styles.heading}>
                     {tableSection.title}
                 </h2>
+                <p className={styles.rule}>{tableRule(data)}</p>
                 <CountryTable
                     countries={data.countries}
                     year={year}

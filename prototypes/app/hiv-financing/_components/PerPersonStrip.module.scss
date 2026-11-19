@@ -36,6 +36,13 @@
     font-variant-numeric: tabular-nums;
 }
 
+// What the median does not measure, under the strip. The strip's label reads it out.
+.caveat {
+    margin: 6px 0 0;
+    color: #5e5e52;
+    font-size: 12px;
+}
+
 .medianSwatch {
     width: 2px;
     height: 11px;

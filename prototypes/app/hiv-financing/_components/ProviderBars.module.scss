@@ -43,6 +43,26 @@
     stroke-width: 1;
 }
 
+// The hatched layer is drawn at pixel size, so its height glides in place of a scale.
+.hatched {
+    stroke-width: 1;
+    transition: height $move-ms $ease-out;
+}
+
+// The dashed line and label between the years either side of a reporting change.
+.break {
+    line {
+        stroke: #484842;
+        stroke-dasharray: 3 3;
+        stroke-width: 1;
+    }
+
+    text {
+        font: 400 10.5px var(--font-outfit);
+        fill: #484842;
+    }
+}
+
 // The pale column behind the year being read follows the pointer at once.
 .column {
     fill: #f4f4ea;
@@ -77,7 +97,8 @@
 
 @media (prefers-reduced-motion: reduce) {
     .mark,
-    .bar {
+    .bar,
+    .hatched {
         transition: none;
     }
 }

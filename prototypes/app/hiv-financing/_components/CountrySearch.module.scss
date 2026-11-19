@@ -22,7 +22,10 @@
 .input {
     box-sizing: border-box;
     width: 100%;
-    padding: 5px 28px 5px 10px;
+
+    // The scope button's height, so the two sit level.
+    height: 30px;
+    padding: 0 28px 0 10px;
     border: 1px solid #cfcfbf;
     border-radius: 4px;
     background: #fff;

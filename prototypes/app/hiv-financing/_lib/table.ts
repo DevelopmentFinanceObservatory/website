@@ -1,7 +1,8 @@
 // The country table's rows, their sort, and the CSV download of them.
 import type { Country, ProviderKey } from '../_data/types.ts';
 
-import { lastAid, lastShares } from './summary.ts';
+import { roundDeaths, wholePercents } from './format.ts';
+import { aidPerPerson, gfMultiFlag, lastAid, lastShares } from './summary.ts';
 
 export type TableRow = {
     iso3: string;
@@ -12,8 +13,15 @@ export type TableRow = {
     byProvider: Record<ProviderKey, number>;
     /** each provider's share of `aid`; all 0 where `aid` is 0 */
     shares: Record<ProviderKey, number>;
+    /** `shares` as printed: whole percentages summing to 100, "<1%" for a small share above 0 */
+    mixPercents: Record<ProviderKey, string>;
+    /** last-year Global Fund multi-disease grants under codes 12110 and 12250, in US dollars,
+     *  outside `aid` */
+    globalFundMulti: number;
+    /** the row understates the Global Fund: it gave multi-disease grants in the last year */
+    flagged: boolean;
     plhiv: number | null;
-    /** last-year aid per person living with HIV, in US dollars */
+    /** last-year aid per person living with HIV, in US dollars; null under 5,000 people */
     perPerson: number | null;
     /** antiretroviral therapy coverage, in percent */
     art: number | null;
@@ -23,20 +31,23 @@ export type TableRow = {
 
 export const tableRows = (countries: readonly Country[]): TableRow[] =>
     countries.map((country) => {
-        const aid = lastAid(country);
+        const shares = lastShares(country.aid);
 
         return {
             iso3: country.iso3,
             name: country.name,
-            aid,
+            aid: lastAid(country),
             byProvider: {
                 us: country.aid.us.at(-1) ?? 0,
                 globalFund: country.aid.globalFund.at(-1) ?? 0,
                 other: country.aid.other.at(-1) ?? 0,
             },
-            shares: lastShares(country.aid),
+            shares,
+            mixPercents: wholePercents(shares),
+            globalFundMulti: country.globalFundMulti.at(-1) ?? 0,
+            flagged: gfMultiFlag(country),
             plhiv: country.plhiv,
-            perPerson: country.plhiv === null || country.plhiv === 0 ? null : aid / country.plhiv,
+            perPerson: aidPerPerson(country),
             art: country.art,
             deaths: country.deaths.at(-1) ?? null,
         };
@@ -92,6 +103,7 @@ export const csvHeader = (year: number): string[] => [
     `us_${year}_usd`,
     `global_fund_${year}_usd`,
     `other_${year}_usd`,
+    `global_fund_multi_${year}_usd`,
     `people_living_with_hiv_${year}`,
     `aid_per_person_${year}_usd`,
     `art_coverage_${year}_pct`,
@@ -104,10 +116,14 @@ const csvCell = (value: string | number | null): string => {
     return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 
+/** Leads the file so Excel reads it as UTF-8 and keeps "Côte d'Ivoire" intact. */
+export const CSV_BOM = '\uFEFF';
+
 /**
- * One line per row, in the order given, with raw numbers: dollars, people and deaths as
- * held, aid per person to the cent. A missing value is an empty cell. RFC 4180 quoting,
- * CRLF line ends.
+ * One line per row, in the order given, after a UTF-8 byte order mark: dollars and people
+ * as held, aid per person to the cent, deaths rounded as the table prints them. Global Fund
+ * multi-disease grants sit in their own column, outside HIV aid. A missing value is an
+ * empty cell. RFC 4180 quoting, CRLF line ends.
  */
 export const toCsv = (rows: readonly TableRow[], year: number): string => {
     const lines = rows.map((row) => [
@@ -117,13 +133,16 @@ export const toCsv = (rows: readonly TableRow[], year: number): string => {
         row.byProvider.us,
         row.byProvider.globalFund,
         row.byProvider.other,
+        row.globalFundMulti,
         row.plhiv,
         row.perPerson === null ? null : Number(row.perPerson.toFixed(2)),
         row.art,
-        row.deaths,
+        row.deaths === null ? null : roundDeaths(row.deaths),
     ]);
 
     return (
-        [csvHeader(year), ...lines].map((line) => line.map(csvCell).join(',')).join('\r\n') + '\r\n'
+        CSV_BOM +
+        [csvHeader(year), ...lines].map((line) => line.map(csvCell).join(',')).join('\r\n') +
+        '\r\n'
     );
 };

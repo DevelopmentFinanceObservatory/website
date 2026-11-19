@@ -1,9 +1,20 @@
 import { prototype, prototypeMetadata } from '../../registry';
 
 import { PrototypePage } from '../../components/PrototypePage/PrototypePage';
+import prose from '../../components/Prose/Prose.module.scss';
 
 import { HivFinancing } from './_components/HivFinancing';
-import { ledeSentence, plhivGapNote, SCOPE_NOTE } from './_lib/copy';
+import { SourceEntry, SourceLink } from './_components/SourceLink';
+import {
+    channelNote,
+    ledeSentence,
+    OTHER_MEASURES,
+    PER_PERSON_NOTE,
+    plhivGapNote,
+    SCOPE_NOTE,
+    SOURCES,
+    UNDER_LEDE,
+} from './_lib/copy';
 import { money } from './_lib/format';
 import { lastYear } from './_lib/summary';
 import hiv from './_data/hiv.json';
@@ -16,12 +27,14 @@ export const metadata = prototypeMetadata(entry);
 
 export const SECTIONS = [
     { id: 'by-provider', title: 'HIV aid by provider' },
-    { id: 'every-country', title: `Every country, ${LAST_YEAR}` },
+    { id: 'every-country', title: `${hiv.data.countries.length} countries, ${LAST_YEAR}` },
 ];
 
-export const years = hiv.data.years;
+export const usToCountries = (year) => money(hiv.data.allocated.us[hiv.data.years.indexOf(year)]);
 
-export const usUnallocated = hiv.data.unallocated.us;
+export const gfToCountries = (year) => money(hiv.data.allocated.globalFund[hiv.data.years.indexOf(year)]);
+
+export const gfMultiToCountries = (year) => money(hiv.data.globalFundMulti[hiv.data.years.indexOf(year)]);
 
 export default ({ children }) => (
     <PrototypePage
@@ -38,28 +51,67 @@ export default ({ children }) => (
     </PrototypePage>
 );
 
-<p>{SCOPE_NOTE}</p>
+<p className={prose.p}>
+    {UNDER_LEDE}
+    <SourceLink sources={[SOURCES.globalFundUsCap]} className={prose.a} />
+</p>
+
+<p className={prose.p}>
+    {SCOPE_NOTE}
+    <SourceLink sources={[SOURCES.unaids2026]} className={prose.a} />
+</p>
 
 <HivFinancing data={hiv.data} sections={SECTIONS} />
 
 ## How to interpret
 
-HIV aid is gross ODA disbursements under CRS purpose code 13040, STD control including HIV/AIDS, in current US dollars. HIV work recorded under other codes, such as health systems or reproductive health, is left out.
+<p className={prose.p}>{channelNote(hiv.data)}</p>
 
-The Global Fund reports to the CRS as a provider. Money donors give the Global Fund is counted once, under the Global Fund.
+<p className={prose.p}>
+    {OTHER_MEASURES.text}
+    <SourceLink sources={OTHER_MEASURES.sources} className={prose.a} />
+</p>
 
-People living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths are UNAIDS estimates.
+HIV aid is gross ODA disbursements under CRS purpose code 13040, STD control including HIV/AIDS, in current US dollars. The code covers all sexually transmitted diseases, and it holds about $467m of ODA loans to countries from 2015 to 2024, mostly from World Bank IDA ($303m) and the Asian Development Bank ($164m). HIV work recorded under other codes, such as health systems or reproductive health, is left out.
 
-The table lists countries the CRS records as HIV aid recipients from {years[0]} to {LAST_YEAR} that received $1m or more in {LAST_YEAR} or have 50,000 or more people living with HIV. The dot strip holds those with 50,000 or more people living with HIV and some aid in {LAST_YEAR}.
+The Global Fund reports to the CRS as a provider, so money donors give the Global Fund is counted once, under the Global Fund. It also records part of its HIV money under other codes: combined HIV and tuberculosis grants under code 12250 from 2015 to 2019, and multi-disease grants under code 12110 from 2020. Only part of each of these grants is for HIV, so the chart draws them hatched above the bars and leaves them out of the total, and the table marks the countries that received them in {LAST_YEAR}. From 2019 to 2020 its multi-disease money to countries fell from {gfMultiToCountries(2019)} to {gfMultiToCountries(2020)}, while its money under the HIV code rose from {gfToCountries(2019)} to {gfToCountries(2020)}, so much of the jump in its bars between those years is a change of code. A dashed line marks it.
+
+Figures are in current US dollars, with no adjustment for inflation, and follow the timing of donors' reports. US money to countries fell from {usToCountries(2018)} in 2018 to {usToCountries(2019)} in 2019 and rose to {usToCountries(2020)} in 2020, so read single-year changes with care.
+
+The data cover official donors. Private foundations, such as the Gates Foundation, are not counted. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from these.
+
+<p className={prose.p}>{PER_PERSON_NOTE}</p>
+
+People living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths are UNAIDS estimates for {LAST_YEAR}. The table's deaths are for {LAST_YEAR}; a country's summary sentence compares them with {hiv.data.years[0]}.
 
 ## Notes
 
-- The United States reports a varying amount without a country: {money(usUnallocated.at(-2))} in {years.at(-2)} and {money(usUnallocated.at(-1))} in {years.at(-1)}. A country's US figure moves with that reporting as well as with disbursements.
-- {plhivGapNote(hiv.data)}
+<p className={prose.p}>{plhivGapNote(hiv.data)}</p>
 
 ## Sources
 
-- [OECD Creditor Reporting System](https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem), purpose code 13040
-- [UNAIDS](https://aidsinfo.unaids.org), people living with HIV, coverage of antiretroviral therapy, and AIDS-related deaths
+<ul className={prose.list}>
+    <li>
+        OECD,{' '}
+        <a
+            href="https://developmentfinance.org/data/sources/provenance/OECDCreditorReportingSystem"
+            className={prose.a}
+        >
+            Creditor Reporting System
+        </a>
+        , purpose codes 13040, 12110 and 12250
+    </li>
+    <li>
+        UNAIDS, <a href="https://aidsinfo.unaids.org" className={prose.a}>
+            AIDSinfo
+        </a>, people living with HIV, coverage
+        of antiretroviral therapy, and AIDS-related deaths
+    </li>
+    {Object.values(SOURCES).map((source) => (
+        <li key={source.url}>
+            <SourceEntry source={source} className={prose.a} />
+        </li>
+    ))}
+</ul>
 
 Fetched from the [Development Finance Observatory](https://developmentfinance.org/data) on {hiv.provenance.retrieved.slice(0, 10)}.

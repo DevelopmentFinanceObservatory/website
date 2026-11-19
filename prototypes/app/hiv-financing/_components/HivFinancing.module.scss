@@ -18,7 +18,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 10px 22px;
-    align-items: center;
+
+    // The search's label can wrap above its box, so the button lines up with the box.
+    align-items: flex-end;
     padding-block: 12px;
 }
 
@@ -83,13 +85,22 @@
 
 // Kept in the layout when hidden, so the strip below stays put.
 .note {
+    max-width: 900px;
     margin: 10px 0 0;
     color: #5e5e52;
     font-size: 13px;
 
-    &[data-hidden="true"] {
-        visibility: hidden;
+    a {
+        color: inherit;
     }
+}
+
+// The table's inclusion rule, under its heading.
+.rule {
+    max-width: 900px;
+    margin: -4px 0 12px;
+    color: #5e5e52;
+    font-size: 13px;
 }
 
 .below {

@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 
+import { hatchBackground } from './ChartKey';
 import styles from './CountryTable.module.scss';
 
 import type { Country } from '../_data/types.ts';
-import { deathCount, money, pct, peopleShort, percent, perPerson } from '../_lib/format.ts';
-import { PROVIDERS } from '../_lib/providers.ts';
+import { deathCount, money, peopleShort, percent, perPerson } from '../_lib/format.ts';
+import { GF_MULTI, PROVIDERS } from '../_lib/providers.ts';
 import {
     DEFAULT_SORT,
     firstDirection,
@@ -29,25 +30,25 @@ const columns = (year: number): readonly Column[] => [
     { key: 'name', label: 'Country', cell: (row) => row.name },
     { key: 'aid', label: `HIV aid, ${year}`, cell: (row) => money(row.aid) },
     // The header names its sort: the mix column sorts on the US share.
-    { key: 'mix', label: 'Who provides it, by US share', cell: () => '' },
+    { key: 'mix', label: `Who provides it, ${year}, by US share`, cell: () => '' },
     {
         key: 'plhiv',
-        label: 'People living with HIV',
+        label: `People living with HIV, ${year}`,
         cell: (row) => (row.plhiv === null ? MISSING : peopleShort(row.plhiv)),
     },
     {
         key: 'perPerson',
-        label: 'Aid per person',
+        label: `Aid per person living with HIV, ${year}`,
         cell: (row) => (row.perPerson === null ? MISSING : perPerson(row.perPerson)),
     },
     {
         key: 'art',
-        label: 'On treatment',
+        label: `On treatment, ${year}`,
         cell: (row) => (row.art === null ? MISSING : percent(row.art)),
     },
     {
         key: 'deaths',
-        label: 'AIDS-related deaths',
+        label: `AIDS-related deaths, ${year}`,
         cell: (row) => (row.deaths === null ? MISSING : deathCount(row.deaths)),
     },
 ];
@@ -55,19 +56,46 @@ const columns = (year: number): readonly Column[] => [
 const mixLabel = (row: TableRow): string =>
     row.aid === 0
         ? 'No aid'
-        : PROVIDERS.map((provider) => `${provider.label} ${pct(row.shares[provider.key])}`).join(
+        : PROVIDERS.map((provider) => `${provider.label} ${row.mixPercents[provider.key]}`).join(
               ', ',
           );
 
-const MixBar = ({ row }: { row: TableRow }) => (
-    <span className={styles.mix} role="img" aria-label={mixLabel(row)}>
-        {PROVIDERS.map((provider) => (
-            <span
-                key={provider.key}
-                style={{ flexGrow: row.shares[provider.key], background: provider.colour }}
-            />
-        ))}
+/** The shares as a bar, with the US and Global Fund shares printed beside it. */
+const Mix = ({ row }: { row: TableRow }) => (
+    <span className={styles.mixCell}>
+        <span className={styles.mix} role="img" aria-label={mixLabel(row)}>
+            {PROVIDERS.map((provider) => (
+                <span
+                    key={provider.key}
+                    style={{ flexGrow: row.shares[provider.key], background: provider.colour }}
+                />
+            ))}
+        </span>
+        <span className={styles.mixText} aria-hidden="true">
+            {row.aid === 0
+                ? MISSING
+                : `US ${row.mixPercents.us} · GF ${row.mixPercents.globalFund}`}
+        </span>
     </span>
+);
+
+/** The hatched mark on a row whose Global Fund money the row understates, with its note
+ *  for screen readers. */
+const FlagMark = ({ row, year }: { row: TableRow; year: number }) => (
+    <>
+        <span
+            className={styles.flag}
+            style={{
+                background: hatchBackground(GF_MULTI.colour),
+                boxShadow: `inset 0 0 0 1px ${GF_MULTI.colour}`,
+            }}
+            title={`Global Fund multi-disease grants, ${money(row.globalFundMulti)} in ${year}, not in this row`}
+            aria-hidden="true"
+        />
+        <span className={styles.srOnly}>
+            {`, Global Fund multi-disease grants of ${money(row.globalFundMulti)} in ${year} are recorded under other codes and not in this row`}
+        </span>
+    </>
 );
 
 const download = (rows: readonly TableRow[], year: number) => {
@@ -160,11 +188,12 @@ export const CountryTable = ({
                                             >
                                                 {row.name}
                                             </button>
+                                            {row.flagged && <FlagMark row={row} year={year} />}
                                         </th>
                                     ) : (
                                         <td key={column.key}>
                                             {column.key === 'mix' ? (
-                                                <MixBar row={row} />
+                                                <Mix row={row} />
                                             ) : (
                                                 column.cell(row)
                                             )}
@@ -176,6 +205,18 @@ export const CountryTable = ({
                     </tbody>
                 </table>
             </div>
+            <p className={styles.legend}>
+                <span
+                    className={styles.flag}
+                    style={{
+                        background: hatchBackground(GF_MULTI.colour),
+                        boxShadow: `inset 0 0 0 1px ${GF_MULTI.colour}`,
+                    }}
+                    aria-hidden="true"
+                />
+                Marked rows: the Global Fund also gave the country multi-disease grants in {year},
+                which are recorded under other codes and are not in the row&apos;s figures.
+            </p>
             <div className={styles.foot}>
                 <button
                     type="button"

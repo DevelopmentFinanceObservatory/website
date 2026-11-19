@@ -2,14 +2,39 @@
 // the axis ticks.
 import type { ProviderKey, ProviderSeries } from '../_data/types.ts';
 
-import { PROVIDERS } from './providers.ts';
+import { GF_MULTI, PROVIDERS } from './providers.ts';
 
-/** One stacked layer: values by year, positive above the axis, negative below. */
-export type Layer = { key: ProviderKey; colour: string; values: (number | null)[] };
+export type LayerKey = ProviderKey | typeof GF_MULTI.key;
+
+/**
+ * One stacked layer: values by year, positive above the axis, negative below. A hatched
+ * layer holds money only partly for HIV and stays out of the totals.
+ */
+export type Layer = {
+    key: LayerKey;
+    colour: string;
+    values: readonly (number | null)[];
+    hatched: boolean;
+};
 
 /** The bars' layers, bottom to top: the United States, the Global Fund, all others. */
 export const providerLayers = (series: ProviderSeries): Layer[] =>
-    PROVIDERS.map(({ key, colour }) => ({ key, colour, values: series[key] }));
+    PROVIDERS.map(({ key, colour }) => ({ key, colour, values: series[key], hatched: false }));
+
+/** The hatched layer of Global Fund multi-disease grants, stacked above `providerLayers`. */
+export const multiLayer = (values: readonly number[]): Layer => ({
+    key: GF_MULTI.key,
+    colour: GF_MULTI.colour,
+    values,
+    hatched: true,
+});
+
+/** The first year the Global Fund recorded most of its HIV grants under code 13040. Before
+ *  it, combined HIV and TB grants sat under 12250, so the bars jump between 2019 and 2020. */
+export const BREAK_YEAR = 2020;
+
+/** The short label on the break between `BREAK_YEAR - 1` and `BREAK_YEAR`. */
+export const BREAK_LABEL = 'Global Fund reporting change';
 
 /** The tallest stack above the axis and the deepest below it across the years. */
 export const stackExtent = (layers: readonly Layer[]): { low: number; high: number } => {

@@ -18,7 +18,8 @@
 }
 
 .item,
-.total {
+.total,
+.outside {
     display: grid;
     grid-template-columns: 10px minmax(0, 1fr) auto;
     gap: 8px;
@@ -37,6 +38,12 @@
     font-weight: 500;
 }
 
+// A layer that sits outside the total, below it and apart from it.
+.outside {
+    align-items: start;
+    margin-top: 8px;
+}
+
 .swatch {
     box-sizing: border-box;
     width: 10px;
@@ -46,6 +53,12 @@
 
 .name {
     min-width: 0;
+}
+
+.note {
+    display: block;
+    color: #5e5e52;
+    font-size: 11.5px;
 }
 
 .value {

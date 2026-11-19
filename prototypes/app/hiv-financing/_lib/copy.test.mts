@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { allSentence, countrySentence, ledeSentence, plhivGapNote } from './copy.ts';
+import {
+    allSentence,
+    channelNote,
+    countrySentence,
+    ledeSentence,
+    largestOtherFalls,
+    plhivGapNote,
+    stripCaption,
+    tableRule,
+    unallocatedNote,
+} from './copy.ts';
 import {
     CONGO,
     country,
@@ -10,21 +20,99 @@ import {
     IVORY_COAST,
     KENYA,
     MEXICO,
+    NAMIBIA,
     UKRAINE,
     YEARS,
 } from './fixture.mts';
 
-test('the lede states the US and Global Fund share and the single-provider majority count', () => {
+test('the lede names the two channels and the majority split; the channel note carries the share', () => {
     assert.equal(
         ledeSentence(DATA),
-        'In 2024 the United States and the Global Fund gave 99% of the external HIV financing that donors assigned to countries. In 3 of the 4 countries that received more than $1m, one of the two gave more than half.',
+        'In 2024 almost all HIV aid recorded for countries was paid out through two channels: the US government and the Global Fund. Of the 4 countries that received more than $1m, the Global Fund paid out more than half in 1 and the United States in 2.',
+    );
+    assert.equal(
+        channelNote(DATA),
+        "On this page's measure, the United States and the Global Fund paid out 99% of the HIV aid that official donors recorded for countries in 2024. In 1 of the 2 countries where the United States paid out more than half, the Global Fund also gave multi-disease grants recorded under other codes.",
+    );
+
+    const gfOnly = country({
+        iso3: 'ZZZ',
+        name: 'Zeta',
+        aid: { us: [0, 0], globalFund: [0, 5e6], other: [0, 0] },
+    });
+
+    assert.match(
+        ledeSentence({ ...DATA, countries: [...DATA.countries, gfOnly] }),
+        /Of the 5 countries that received more than \$1m, the Global Fund paid out more than half in 2 and the United States in 2, and the United States paid out nothing in 1\.$/,
     );
 });
 
-test('the all-countries sentence: allocated, recipients, unallocated, others now and then', () => {
+test('the all-countries sentence: allocated, recipients and table count, others now and then, the largest falls', () => {
+    // Falls: IDA $86m, UNAIDS $57m, Australia $50m, Germany $23m, the UK $21.4m, against a
+    // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024 donors assigned $6.45bn of HIV aid to 96 countries and reported another $4.24bn for regions or no country. Providers other than the United States and the Global Fund gave $47m to countries, against $342m in 2015.',
+        'In 2024 donors assigned $6.45bn of HIV aid to 8 countries, 6 in the table. Providers other than the United States and the Global Fund gave $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+    );
+});
+
+test('the falls name only the largest, and a fact attaches only to a named provider', () => {
+    assert.deepEqual(
+        largestOtherFalls(DATA, 2).map(({ name }) => name),
+        ['International Development Association', 'Joint United Nations Programme on HIV/AIDS'],
+    );
+
+    const otherProviders = DATA.otherProviders.map((provider) =>
+        provider.name === 'Joint United Nations Programme on HIV/AIDS'
+            ? { ...provider, first: 1e6, last: 0 }
+            : provider,
+    );
+
+    // With a $1m fall UNAIDS drops out of the five, and its fact with it.
+    assert.match(
+        allSentence({ ...DATA, otherProviders }),
+        /fall: World Bank IDA, which has lent about \$2m a year since 2020; Australia; Germany; the United Kingdom; and Norway\.$/,
+    );
+});
+
+test('the falls throw when a provider with a fixed fact is missing from the data', () => {
+    const otherProviders = DATA.otherProviders.filter(
+        ({ name }) => name !== 'International Development Association',
+    );
+
+    assert.throws(
+        () => allSentence({ ...DATA, otherProviders }),
+        /"International Development Association"/,
+    );
+});
+
+test('the unallocated note compares the US total with KFF and gives the range to countries', () => {
+    const us = (values: number[]) => ({
+        us: values,
+        globalFund: [0, 0, 0, 0],
+        other: [0, 0, 0, 0],
+    });
+
+    assert.equal(
+        unallocatedNote({
+            ...DATA,
+            years: [2019, 2020, 2023, 2024],
+            allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
+            unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
+        }),
+        'Donors also reported $4.60bn of HIV aid in 2024 for regions or no country, which the chart leaves out. US money under this code, for countries and for regions or no country together, was $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. US money to countries held at $3.20bn to $3.90bn a year from 2020 to 2024, so the extra sits in money reported for regions or no country.',
+    );
+});
+
+test('the strip caption and the table rule count from the data', () => {
+    assert.equal(
+        stripCaption(DATA),
+        '3 countries with 50,000 or more people living with HIV and some aid in 2024',
+    );
+    // Five table countries had 2024 aid, so 3 of the 8 recipients sit outside the table.
+    assert.equal(
+        tableRule(DATA),
+        'The table lists the 6 countries that received more than $1m of HIV aid in 2024 or have 50,000 or more people living with HIV. Another 3 countries received $5.99bn between them.',
     );
 });
 
@@ -46,6 +134,23 @@ test('missing data leaves its clause out', () => {
         [
             countrySentence(UKRAINE, YEARS),
             'In 2024 Ukraine received $52m in HIV aid. Of that, 58% came from the United States, 38% from the Global Fund, and 4% from all other providers.',
+        ],
+        // All US under 13040, with Global Fund multi-disease grants under other codes.
+        [
+            countrySentence(NAMIBIA, YEARS),
+            "In 2024 Namibia received $71m in HIV aid, $323 per person living with HIV. Of that, 100% came from the United States. The Global Fund's multi-disease grants to Namibia, $16m in 2024, are recorded under other codes and are not in this figure. 95% of its 220,000 people living with HIV were on antiretroviral therapy. AIDS-related deaths fell from 3,800 in 2015 to 3,200 in 2024.",
+        ],
+        // Under 5,000 people living with HIV: no per-person figure.
+        [
+            countrySentence(
+                country({
+                    name: 'Gamma',
+                    aid: { us: [0, 2e6], globalFund: [0, 0], other: [0, 0] },
+                    plhiv: 4_999,
+                }),
+                YEARS,
+            ),
+            'In 2024 Gamma received $2.0m in HIV aid. Of that, 100% came from the United States.',
         ],
         // No aid: no per-person figure and no mix.
         [
@@ -70,6 +175,18 @@ test('the deaths verb compares the printed figures', () => {
     );
 });
 
+test('the mix prints largest-remainder percentages that sum to 100', () => {
+    const thirds = country({
+        name: 'Delta',
+        aid: { us: [0, 1e6], globalFund: [0, 1e6], other: [0, 1e6] },
+    });
+
+    assert.match(
+        countrySentence(thirds, YEARS),
+        /Of that, 34% came from the United States, 33% from the Global Fund, and 33% from all other providers\.$/,
+    );
+});
+
 test('a share under half a point is not named', () => {
     const mostlyUs = country({
         name: 'Beta',
@@ -85,6 +202,6 @@ test('a share under half a point is not named', () => {
 test('the Notes line names the countries with no estimate of people living with HIV', () => {
     assert.equal(
         plhivGapNote(DATA),
-        'The DFO holds no UNAIDS estimate of people living with HIV for Ukraine, so the page gives no aid per person for it and leaves it off the dot strip.',
+        "Estimates of people living with HIV for Ukraine are missing from the DFO's UNAIDS source, so the page gives no aid per person for it and leaves it off the dot strip.",
     );
 });

@@ -6,8 +6,9 @@ import styles from './PerPersonStrip.module.scss';
 import { useWidth } from './useWidth';
 
 import type { Country } from '../_data/types.ts';
-import { perPerson, people } from '../_lib/format.ts';
-import { buildStrip, scalePosition, STRIP_MIN_PLHIV, type StripDot } from '../_lib/strip.ts';
+import { MEDIAN_CAVEAT } from '../_lib/copy.ts';
+import { perPerson } from '../_lib/format.ts';
+import { buildStrip, scalePosition, type StripDot } from '../_lib/strip.ts';
 
 const RADIUS = 4.5;
 /** Lanes sit one dot and a hairline apart. */
@@ -26,8 +27,8 @@ const dotValue = (dot: StripDot) => `${perPerson(dot.value)} per person`;
 const tickText = (tick: number) => `$${Number(tick.toFixed(1))}`;
 
 /**
- * Last-year HIV aid per person living with HIV, one dot per country with 50,000 or more
- * people living with HIV and some aid, on a fixed axis with the median marked. Dots stay
+ * The ratio of last-year HIV aid to people living with HIV, one dot per country with 50,000
+ * or more people living with HIV and some aid, on a fixed axis with the median marked. Dots stay
  * put; the selected country's dot gets a ring and a label and the others sit back.
  * Hovering or the arrow keys read a dot's name and value; a click or Enter selects its
  * country.
@@ -35,12 +36,15 @@ const tickText = (tick: number) => `$${Number(tick.toFixed(1))}`;
 export const PerPersonStrip = ({
     countries,
     year,
+    caption,
     selected,
     onSelect,
 }: {
     countries: readonly Country[];
     /** The year the aid figures are for. */
     year: number;
+    /** Which countries the strip holds, under its title. */
+    caption: string;
     /** The selected country's iso3, or null for all countries. */
     selected: string | null;
     onSelect: (iso3: string) => void;
@@ -121,8 +125,8 @@ export const PerPersonStrip = ({
               ? 'end'
               : 'middle';
     const summary =
-        `Dot strip of ${year} HIV aid per person living with HIV in ${dots.length} ` +
-        `countries.${median === null ? '' : ` The median is ${perPerson(median)}.`}` +
+        `Dot strip of the ratio of ${year} HIV aid to people living with HIV, ${caption}.` +
+        (median === null ? '' : ` The median is ${perPerson(median)}. ${MEDIAN_CAVEAT}`) +
         (chosenText === '' ? '' : ` ${chosenText}.`) +
         ' Use the arrow keys to read each country and Enter to select one.';
 
@@ -130,11 +134,8 @@ export const PerPersonStrip = ({
         <div className={styles.strip}>
             <p className={styles.head}>
                 <span className={styles.label}>
-                    HIV aid per person living with HIV, {year}
-                    <span className={styles.count}>
-                        {dots.length} countries with {people(STRIP_MIN_PLHIV)} or more people living
-                        with HIV
-                    </span>
+                    Ratio of HIV aid to people living with HIV, {year}
+                    <span className={styles.count}>{caption}</span>
                 </span>
                 {medianText !== '' && (
                     <span className={styles.median}>
@@ -257,6 +258,11 @@ export const PerPersonStrip = ({
                     {shown === null ? '' : `${shown.name}, ${dotValue(shown)}`}
                 </p>
             </div>
+            {median !== null && (
+                <p className={styles.caveat} aria-hidden="true">
+                    {MEDIAN_CAVEAT}
+                </p>
+            )}
         </div>
     );
 };

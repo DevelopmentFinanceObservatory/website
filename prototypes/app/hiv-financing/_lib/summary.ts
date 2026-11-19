@@ -51,27 +51,54 @@ export const findCountry = (data: HivData, iso3: string): Country | undefined =>
 export const scopeSeries = (data: HivData, iso3: string | null): ProviderSeries =>
     (iso3 === null ? undefined : findCountry(data, iso3))?.aid ?? data.allocated;
 
+/** The Global Fund multi-disease grants the hatched layer shows: the sum over every recipient
+ *  country for null, else the country's own. An iso3 not in the data shows the sum. */
+export const scopeMulti = (data: HivData, iso3: string | null): readonly number[] =>
+    (iso3 === null ? undefined : findCountry(data, iso3))?.globalFundMulti ?? data.globalFundMulti;
+
+/** The Global Fund gave the country multi-disease grants in the last year, which code 13040
+ *  leaves out, so its row understates the Global Fund. */
+export const gfMultiFlag = (country: Country): boolean => (country.globalFundMulti.at(-1) ?? 0) > 0;
+
+/** Aid per person is left blank below this many people living with HIV, where a small count
+ *  makes the ratio swing (681 people in Mongolia give $8,736 each). */
+export const PER_PERSON_MIN_PLHIV = 5_000;
+
+/** Last-year HIV aid over people living with HIV, in US dollars; null with no estimate of
+ *  people living with HIV or fewer than `PER_PERSON_MIN_PLHIV`. */
+export const aidPerPerson = (country: Country): number | null =>
+    country.plhiv === null || country.plhiv < PER_PERSON_MIN_PLHIV
+        ? null
+        : lastAid(country) / country.plhiv;
+
 export type LedeFigures = {
     /** the US and Global Fund share of allocated money in the last year */
     usGfShare: number;
     /** countries that received more than $1m in the last year */
     over1m: number;
-    /** of those, the countries where the US alone or the Global Fund alone gave more than half */
-    oneProviderMajority: number;
+    /** of those, the countries where the Global Fund gave more than half */
+    gfMajority: number;
+    /** of those, the countries where the United States gave more than half */
+    usMajority: number;
+    /** of the US-majority countries, those with Global Fund multi-disease grants (`gfMultiFlag`) */
+    usMajorityGfMulti: number;
+    /** of the countries over $1m, those where the United States gave nothing */
+    usNothing: number;
 };
 
 export const ledeFigures = (data: HivData): LedeFigures => {
     const allocated = lastShares(data.allocated);
-    const funded = data.countries.filter((country) => lastAid(country) > LEDE_THRESHOLD);
-    const majority = funded.filter((country) => {
-        const shares = lastShares(country.aid);
-
-        return shares.us > 0.5 || shares.globalFund > 0.5;
-    });
+    const funded = data.countries
+        .filter((country) => lastAid(country) > LEDE_THRESHOLD)
+        .map((country) => ({ country, shares: lastShares(country.aid) }));
+    const usMajority = funded.filter(({ shares }) => shares.us > 0.5);
 
     return {
         usGfShare: allocated.us + allocated.globalFund,
         over1m: funded.length,
-        oneProviderMajority: majority.length,
+        gfMajority: funded.filter(({ shares }) => shares.globalFund > 0.5).length,
+        usMajority: usMajority.length,
+        usMajorityGfMulti: usMajority.filter(({ country }) => gfMultiFlag(country)).length,
+        usNothing: funded.filter(({ shares }) => shares.us === 0).length,
     };
 };
