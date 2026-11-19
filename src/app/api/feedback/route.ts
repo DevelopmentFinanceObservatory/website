@@ -1,7 +1,9 @@
-import { NextRequest } from 'next/server';
+import { after, NextRequest } from 'next/server';
 import { mailerConfigured, sendFeedbackEmail } from '@/lib/feedback/mailer';
 import { slackConfigured, sendFeedbackSlack } from '@/lib/feedback/slack';
 import { storageConfigured, storeFeedback } from '@/lib/feedback/store';
+import { auth } from '@/lib/auth/auth';
+import { anonymousWho } from '@/lib/events/internalEng';
 import { track } from '@/lib/events/track';
 
 // Feedback intake (POST /api/feedback). Three independent sinks, each active only when configured: storage in the website tenant database, a Slack channel via incoming webhook, and email through the site's mail transport (src/lib/mail). Any subset is a valid deployment phase.
@@ -35,11 +37,18 @@ export const POST = async (req: NextRequest) => {
 
     const message = typeof body.message === 'string' ? body.message.trim() : '';
     if (message === '' || message.length > MAX_MESSAGE) {
-        return json(400, false, `Feedback needs a message between 1 and ${MAX_MESSAGE} characters.`);
+        return json(
+            400,
+            false,
+            `Feedback needs a message between 1 and ${MAX_MESSAGE} characters.`,
+        );
     }
 
     const emailRaw = typeof body.email === 'string' ? body.email.trim() : '';
-    if (emailRaw.length > MAX_EMAIL || (emailRaw !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw))) {
+    if (
+        emailRaw.length > MAX_EMAIL ||
+        (emailRaw !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw))
+    ) {
         return json(400, false, 'That email address does not look right.');
     }
     const email = emailRaw === '' ? null : emailRaw;
@@ -92,11 +101,23 @@ export const POST = async (req: NextRequest) => {
     }
 
     // Usage event (src/lib/events): the chat box's report opens with its own heading; the widget's is free text.
-    void track(
-        'feedback.submit',
-        { kind: message.startsWith('Studio chat feedback') ? 'chat' : 'widget' },
-        { page, headers: req.headers },
-    );
+    // internal_eng reads the session's email, and the email typed into the form plays no part. The user id stays off the event.
+    // Run after the response, so the reply does not wait on the session read.
+    after(async () => {
+        // The request's headers are read here because the cached getSession() reads the request scope, which has ended.
+        const session = await auth.api
+            .getSession({ headers: req.headers, query: { disableRefresh: true } })
+            .catch((error) => {
+                console.warn('feedback.submit: session read failed', error);
+                return null;
+            });
+
+        await track(
+            'feedback.submit',
+            { kind: message.startsWith('Studio chat feedback') ? 'chat' : 'widget' },
+            { ...anonymousWho(session?.user), page, headers: req.headers },
+        );
+    });
 
     return json(200, true, 'Thanks for your feedback!');
 };

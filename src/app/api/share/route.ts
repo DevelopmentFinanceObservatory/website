@@ -9,7 +9,7 @@ import { readStudioShareRequest, shareCreateProps } from '@/lib/chat/shareMode';
 import { getShare, makeShare, slotDepsFor } from '@/lib/chat/shareStore';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
-import { track } from '@/lib/events/track';
+import { track, userWho } from '@/lib/events/track';
 import { createSearchShare } from '@/lib/search/searchShare';
 import { readSearchShareRequest } from '@/lib/search/searchShareRequest';
 import { liveCardsRefusal } from '@/lib/studio/slotCards';
@@ -71,7 +71,7 @@ const shareSearch = async (body: any, headers: Headers) => {
         track(
             'share.create',
             shareCreateProps({ id: created.id, kind: 'search', mode: request.mode }),
-            { userId: user?.id ?? null, headers },
+            { ...userWho(user), headers },
         ),
     );
 
@@ -185,7 +185,7 @@ export const POST = async (request: NextRequest) => {
         track(
             'share.create',
             shareCreateProps({ id: created.id, kind: read.kind, mode: read.mode }),
-            { userId: user?.id ?? null, headers: request.headers },
+            { ...userWho(user), headers: request.headers },
         ),
     );
 

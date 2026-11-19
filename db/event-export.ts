@@ -29,6 +29,7 @@ import {
     within,
 } from './bounded.ts';
 import { requiredEnv } from './connection.ts';
+import { MAX_LIST_IDS, NO_ID, TOKEN_PATTERN } from '../src/lib/events/limits.ts';
 
 /**
  * The event export (db/export-events.ts): copies the `event` table into the
@@ -60,10 +61,12 @@ type PropRule =
     | 'token'
     // a token that leaves as its HMAC-SHA256 digest
     | 'digest'
+    // a list of up to MAX_LIST_IDS tokens, each a token or NO_ID
+    | 'tokens'
     // one of these strings
     | readonly string[];
 
-const TOKEN = /^[A-Za-z0-9][\w.:/-]{0,127}$/;
+const TOKEN = TOKEN_PATTERN;
 
 // Every member of the union T, so tsc fails when the site adds a member
 // that the list lacks and the export would drop. Known<> keeps the named
@@ -143,19 +146,34 @@ const ANSWER: Record<string, PropRule> = {
     kind: ANSWER_KINDS,
     reason: DECLINED_REASONS,
     truncated: 'boolean',
+    // Flat copies of the nested `resolved` list, which is not exported, holding
+    // each resolved part's spec id and measure token (measureToken).
+    specIds: 'tokens',
+    measures: 'tokens',
 };
+
+// Set by track() on every event, true when the signed-in user's email is on
+// INTERNAL_ENG_EMAILS (src/lib/events/internalEng.ts).
+const EVERY_EVENT: Record<string, PropRule> = { internal_eng: 'boolean' };
 
 /** The props each event keeps, from its emit sites (docs/analytics.md). */
 export const PROP_RULES = {
-    'search.query': { ...RUN, ...SETTLE, ...ANSWER },
-    'search.empty': { ...RUN, ...SETTLE, ...ANSWER },
-    'search.edit': { ...RUN, ...SETTLE, ...ANSWER },
+    'search.query': { ...EVERY_EVENT, ...RUN, ...SETTLE, ...ANSWER },
+    'search.empty': { ...EVERY_EVENT, ...RUN, ...SETTLE, ...ANSWER },
+    'search.edit': { ...EVERY_EVENT, ...RUN, ...SETTLE, ...ANSWER },
     // `query` is left out.
-    'search.error': { ...RUN, error: 'token', status: 'count' },
-    'search.abandon': { ...RUN, reason: ABANDON_REASONS, step: 'token' },
-    'search.start_point': { source: SEARCH_SOURCES },
-    'search.studio_handoff': { ...ANSWER, searchId: 'token', traceId: 'token', seeds: 'count' },
+    'search.error': { ...EVERY_EVENT, ...RUN, error: 'token', status: 'count' },
+    'search.abandon': { ...EVERY_EVENT, ...RUN, reason: ABANDON_REASONS, step: 'token' },
+    'search.start_point': { ...EVERY_EVENT, source: SEARCH_SOURCES },
+    'search.studio_handoff': {
+        ...EVERY_EVENT,
+        ...ANSWER,
+        searchId: 'token',
+        traceId: 'token',
+        seeds: 'count',
+    },
     'search.action': {
+        ...EVERY_EVENT,
         searchId: 'token',
         traceId: 'token',
         // DataSearch.tsx's SearchAction, which src/ does not export.
@@ -168,22 +186,56 @@ export const PROP_RULES = {
         shareId: 'digest',
     },
     'studio.prompt': {
+        ...EVERY_EVENT,
         turn: 'count',
         intent: PROMPT_INTENTS,
         length: 'count',
         guest: 'boolean',
     },
     // `unit` is text built from labels, and `years` an object of two years.
-    'studio.card': { kind: CARD_KINDS, turn: 'count', source: 'token', guest: 'boolean' },
-    'studio.session_end': { turns: 'count', cards: 'count', pins: 'count', guest: 'boolean' },
-    'auth.signin': { provider: 'token' },
-    'guest.wall_hit': { prompts: 'count' },
+    'studio.card': {
+        ...EVERY_EVENT,
+        kind: CARD_KINDS,
+        turn: 'count',
+        source: 'token',
+        guest: 'boolean',
+    },
+    'studio.download': {
+        ...EVERY_EVENT,
+        format: DATASET_FORMATS,
+        bundle: 'boolean',
+        kind: CARD_KINDS,
+        cardId: 'token',
+        shared: 'boolean',
+    },
+    'studio.session_end': {
+        ...EVERY_EVENT,
+        turns: 'count',
+        cards: 'count',
+        pins: 'count',
+        guest: 'boolean',
+    },
+    'auth.signin': { ...EVERY_EVENT, provider: 'token' },
+    'guest.wall_hit': { ...EVERY_EVENT, prompts: 'count' },
     // Literals in src/app/api/feedback/route.ts, without a named type.
-    'feedback.submit': { kind: ['chat', 'widget'] },
-    'embed.view': { shareId: 'digest', kind: SHARE_KINDS, host: 'token' },
-    'share.create': { shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES },
-    'share.open': { shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES, host: 'token' },
-    'gallery.open': { slug: 'token', kind: GALLERY_KINDS },
+    'feedback.submit': { ...EVERY_EVENT, kind: ['chat', 'widget'] },
+    'embed.view': {
+        ...EVERY_EVENT,
+        shareId: 'digest',
+        kind: SHARE_KINDS,
+        host: 'token',
+        owner: 'boolean',
+    },
+    'share.create': { ...EVERY_EVENT, shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES },
+    'share.open': {
+        ...EVERY_EVENT,
+        shareId: 'digest',
+        kind: SHARE_KINDS,
+        mode: SHARE_MODES,
+        host: 'token',
+        owner: 'boolean',
+    },
+    'gallery.open': { ...EVERY_EVENT, slug: 'token', kind: GALLERY_KINDS },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
 // A change to digest, passes, exportProps, exportPage or exportRow bumps
@@ -200,6 +252,14 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'token':
         case 'digest':
             return typeof value === 'string' && TOKEN.test(value);
+        case 'tokens':
+            return (
+                Array.isArray(value) &&
+                value.length <= MAX_LIST_IDS &&
+                value.every(
+                    (item) => item === NO_ID || (typeof item === 'string' && TOKEN.test(item)),
+                )
+            );
         default:
             return typeof value === 'string' && rule.includes(value);
     }
@@ -303,7 +363,7 @@ const exportPage = (page: string | null): string | null => {
 // change reaches every day (exportRules). READ_DAY_SQL, which shapes the
 // rows they take, enters the digest as its text and needs no bump. The
 // golden rows in db/test/event-export.test.ts pin each version's output.
-export const ROW_SHAPE_VERSION = 1;
+export const ROW_SHAPE_VERSION = 2;
 
 /**
  * One page of a UTC day's events (pgEventSource's readDay), with
@@ -332,6 +392,8 @@ export const ROW_SHAPE = {
     SHARE_PATH: SHARE_PATH.source,
     EXPORT_SCHEMA,
     READ_DAY_SQL,
+    MAX_LIST_IDS,
+    NO_ID,
     ROW_SHAPE_VERSION,
 };
 

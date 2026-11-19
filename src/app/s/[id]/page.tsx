@@ -4,7 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 import { after } from 'next/server';
 
 import Studio from '@/components/organisms/Studio/Studio';
-import { getShare, slotDepsFor } from '@/lib/chat/shareStore';
+import { auth } from '@/lib/auth/auth';
+import { getShare, slotDepsFor, viewerOwnsShare } from '@/lib/chat/shareStore';
+import { anonymousWho } from '@/lib/events/internalEng';
 import { refererHost } from '@/lib/events/referer';
 import { track } from '@/lib/events/track';
 import { sharedViewOfRecord } from '@/lib/studio/slotCards';
@@ -37,17 +39,33 @@ const SharePage = async ({ params }: SharePageProps) => {
     }
 
     // Counted here, server-side, with no identifier and nothing stored on the
-    // device, so it needs no consent. Headers are read during render: inside
-    // after() they throw. Scheduled before the redirect below, which throws.
+    // device, so it needs no consent. The event holds whether the viewer owns
+    // the share and `internal_eng`, read from the session's verified email. The
+    // user id is left off the event.
+    // Headers are read during render: inside after() they throw. Scheduled before the redirect below, which throws.
     const incoming = await headers();
     const host = refererHost(incoming.get('referer'));
-    after(() =>
-        track(
+    after(async () => {
+        // The session is read here, after the response, so the render does not wait on it.
+        const session = await auth.api
+            .getSession({ headers: incoming, query: { disableRefresh: true } })
+            .catch((error) => {
+                console.warn('share.open: session read failed', row.id, error);
+                return null;
+            });
+
+        await track(
             'share.open',
-            { shareId: row.id, kind: row.kind, mode: row.mode, host },
-            { headers: incoming },
-        ),
-    );
+            {
+                shareId: row.id,
+                kind: row.kind,
+                mode: row.mode,
+                host,
+                owner: await viewerOwnsShare(row.id, session?.user.id),
+            },
+            { ...anonymousWho(session?.user), headers: incoming },
+        );
+    });
 
     // A search result opens on the search page itself, which loads the
     // share's references and replays (or reads back) the data.

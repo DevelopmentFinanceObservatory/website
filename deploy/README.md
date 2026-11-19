@@ -261,6 +261,7 @@ The app defines the definitive contract once it exists. Known so far:
 | `GOOGLE_CLIENT_ID`                    | Google sign-in OAuth client ID; optional, from Secret Manager                                                                                                                                           |
 | `GOOGLE_CLIENT_SECRET`                | Google sign-in OAuth client secret; optional, from Secret Manager                                                                                                                                       |
 | `GRAPH_EXPLORER_EMAIL_DOMAINS`        | Comma-separated email domains the Graph Explorer admits (`src/lib/auth/reader.ts`), matched exactly against a signed-in user's verified email; unset or empty admits nobody; plain env var              |
+| `INTERNAL_ENG_EMAILS`                 | Comma-separated emails or bare domains whose signed-in users' events (verified email only) carry `internal_eng: true` (`src/lib/events/internalEng.ts`, `docs/analytics.md`); matched exactly; unset or empty marks nobody; plain env var |
 
 The public MCP URL is `/mcp`. Next redirects `/mcp/` to `/mcp` with a 308,
 which keeps the method and body. The proxy forwards either form to the

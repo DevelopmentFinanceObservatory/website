@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getSession } from '@/lib/auth/session';
 import { fitsProps, MAX_PROPS_BYTES } from '@/lib/events/limits';
-import { EVENT_NAMES, type EventName, track } from '@/lib/events/track';
+import { EVENT_NAMES, type EventName, track, userWho } from '@/lib/events/track';
 import { problem, requestInvalidProblem } from '@/lib/proxy/problem';
 
 /**
@@ -45,7 +45,7 @@ export const POST = async (request: Request) => {
 
     // Not awaited on purpose — the answer doesn't wait on the insert.
     void track(name as EventName, props, {
-        userId: session?.user.id ?? null,
+        ...userWho(session?.user),
         visitorId: clip(body?.visitorId, MAX_ID),
         page: clip(body?.page, MAX_PAGE),
         headers: request.headers,
