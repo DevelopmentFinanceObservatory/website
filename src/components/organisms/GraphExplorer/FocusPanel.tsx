@@ -330,11 +330,13 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                         </li>
                     ))}
                 </ol>
-                <div>
-                    <SheetLink href={seedHref({ dataset: view.id }, carried)}>
-                        Seed a Dataset Like This
-                    </SheetLink>
-                </div>
+                {view.patterns.length > 0 && (
+                    <div>
+                        <SheetLink href={seedHref({ dataset: view.id }, carried)}>
+                            Seed a Dataset Like This
+                        </SheetLink>
+                    </div>
+                )}
             </section>
             {facets && (
                 <section className={styles.section}>

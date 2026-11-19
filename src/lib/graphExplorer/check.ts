@@ -15,7 +15,7 @@ import {
     type WaitCause,
 } from './load.ts';
 import { KIND_WORDS, openLiterals, type Model } from './model.ts';
-import { camelCase, findingColumn, sheetRow, type Mapping } from './pasted.ts';
+import { findingColumn, sheetRow, type Mapping } from './pasted.ts';
 import { columnName } from './seed.ts';
 import type { SentencePart } from './sentence.ts';
 import {
@@ -326,7 +326,7 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
         finding.property === null
             ? [
                   text(
-                      `This row has no ${fieldWords(finding.field)}, and every row needs one. Fill the cell, or add a ${camelCase(finding.field)} column if the sheet has none.`,
+                      `This row has no ${fieldWords(finding.field)}, and every row needs one. Fill the cell, or add a ${finding.field} column if the sheet has none.`,
                   ),
               ]
             : [
@@ -341,9 +341,9 @@ const MESSAGES: Readonly<Record<FindingCode, (context: MessageContext) => Messag
     ],
     not_a_class: (context) => [
         context.term(context.value),
-        context.text(' is not a kind of thing'),
+        context.text(' is not a class'),
         ...kindAside(context),
-        context.text('. The population type must be a kind of thing.'),
+        context.text('. The population type must be a class.'),
     ],
     value_outside_range: (context) => {
         const { finding, value, valueLists, text, term } = context;

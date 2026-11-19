@@ -63,7 +63,13 @@ export type SeedChoice = {
 
 export const NO_SEED_CHOICE: SeedChoice = Object.freeze({ dropped: [], added: [] });
 
-/** A property dcid as a seed column name: `dac2aAidType` is `dac2a_aid_type`. */
+/**
+ * A property dcid as a seed column name, splitting before each capital that
+ * follows a lower-case letter or digit and before the last capital of a run:
+ * `dac2aAidType` is `dac2a_aid_type`, `includesIMFCredit` is
+ * `includes_imf_credit`. Reading a seed header back to its property uses the
+ * same rule (pasted.ts).
+ */
 export const columnName = (property: string): string =>
     property.replace(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/g, '_').toLowerCase();
 
@@ -158,31 +164,38 @@ export function seedColumns(
     ]);
 }
 
+/** The seed's rows, and how many pasted lines repeated an earlier code and were merged into its row. */
+export type SeedRows = {
+    readonly rows: readonly (readonly string[])[];
+    readonly merged: number;
+};
+
 /**
- * The rows pasted codes make: one per non-blank line, the text before the
- * first tab the code and the text after it the label. Every other cell is the
- * column's fill.
+ * The rows pasted codes make: one per code, read from each non-blank line,
+ * the first tab-separated cell the code and the second the label. A code
+ * repeated on a later line is merged into its first row, which takes the
+ * first label any of its lines give. Every other cell is the column's fill.
  */
-export function seedRows(
-    columns: readonly SeedColumn[],
-    pasted: string,
-): readonly (readonly string[])[] {
-    const rows: (readonly string[])[] = [];
+export function seedRows(columns: readonly SeedColumn[], pasted: string): SeedRows {
+    const labels = new Map<string, string>();
+    let merged = 0;
     for (const line of pasted.split(/\r\n|\r|\n/)) {
-        if (line.trim() === '') continue;
-        const tab = line.indexOf('\t');
-        const code = (tab < 0 ? line : line.slice(0, tab)).trim();
-        const label = tab < 0 ? '' : line.slice(tab + 1).trim();
+        const [first = '', second = ''] = line.split('\t');
+        const code = first.trim();
         if (code === '') continue;
-        rows.push(
-            columns.map((column) => {
-                if (column.name === 'source_code') return code;
-                if (column.name === 'statvar_name') return label;
-                return column.fill;
-            }),
-        );
+        const label = second.trim();
+        const held = labels.get(code);
+        if (held !== undefined) merged += 1;
+        if (held === undefined || held === '') labels.set(code, label);
     }
-    return rows;
+    const rows = [...labels].map(([code, label]) =>
+        columns.map((column) => {
+            if (column.name === 'source_code') return code;
+            if (column.name === 'statvar_name') return label;
+            return column.fill;
+        }),
+    );
+    return { rows, merged };
 }
 
 /** A CSV field: RFC 4180 quoting for a comma, quote or line break, and the value otherwise as it is. */
@@ -198,19 +211,15 @@ export const seedCsv = (
         .map((row) => row.map(csvField).join(','))
         .join('\r\n');
 
-/** The seed's name for a dataset: its label in snake_case, as `oecd_dac2a_indicator_mapping`. */
-export const seedName = (dataset: Pick<SeedDataset, 'label'>): string => {
-    const stem = dataset.label
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
-    return `${stem || 'dataset'}_indicator_mapping`;
-};
+/** The name a new seed's file and `seeds.yml` entry take until the author renames them. */
+export const NEW_SEED_NAME = 'new_indicator_mapping';
 
-/** The columns whose cells every row must fill: the fields that make a StatVar's identity. */
-const NOT_NULL = ['population_type', 'measured_property', 'stat_type'];
-
-/** The `seeds.yml` entry for a seed: every column a string, with a description. */
+/**
+ * The `seeds.yml` entry for a seed: every column a string, with a
+ * description, and `source_code` tested unique and not null. The identity
+ * columns carry no test, since a row that reuses a StatVar defined
+ * elsewhere leaves them empty.
+ */
 export function seedsYml(name: string, columns: readonly SeedColumn[]): string {
     const lines = [
         'version: 2',
@@ -227,12 +236,8 @@ export function seedsYml(name: string, columns: readonly SeedColumn[]): string {
             `      - name: ${column.name}`,
             `        description: ${JSON.stringify(column.description)}`,
         );
-        const tests = [
-            ...(column.name === 'source_code' ? ['unique'] : []),
-            ...(NOT_NULL.includes(column.name) ? ['not_null'] : []),
-        ];
-        if (tests.length > 0) {
-            lines.push('        data_tests:', ...tests.map((test) => `          - ${test}`));
+        if (column.name === 'source_code') {
+            lines.push('        data_tests:', '          - unique', '          - not_null');
         }
     }
     return `${lines.join('\n')}\n`;

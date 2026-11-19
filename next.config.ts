@@ -30,9 +30,8 @@ const nextConfig: NextConfig = {
     },
     // ONE's privacy policy covers this site, and its Terms and Conditions
     // section sets the terms of use; /privacy and /terms are the addresses
-    // the MCP directory listings give for them. Each redirect is temporary, so
-    // a later page of our own can take the path without browsers holding the
-    // old target.
+    // the MCP directory listings give for them. Temporary, so a later page of
+    // our own can take either path without browsers holding the old target.
     async redirects() {
         return [
             {
@@ -42,13 +41,12 @@ const nextConfig: NextConfig = {
             },
             {
                 source: '/terms',
-                destination:
-                    'https://www.one.org/info/privacy-policy/#h-terms-and-conditions-nbsp',
+                destination: 'https://www.one.org/info/privacy-policy/#h-terms-and-conditions-nbsp',
                 permanent: false,
             },
-            // Start a sheet became Seed a dataset. The query passes through, so
-            // `dataset` preselects the dataset; the page ignores the old
-            // `class`, `measured`, `split` and `pattern`.
+            // The old Start a sheet address. The query passes through, so
+            // `dataset` preselects the dataset; the page ignores `class`,
+            // `measured`, `split` and `pattern`.
             {
                 source: '/graph-explorer/new-sheet',
                 destination: '/graph-explorer/seed',

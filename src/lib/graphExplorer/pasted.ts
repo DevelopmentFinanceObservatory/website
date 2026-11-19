@@ -4,6 +4,7 @@
  */
 import { plural } from './counts.ts';
 import type { Model } from './model.ts';
+import { columnName } from './seed.ts';
 import {
     CHECK_MAX_CONSTRAINT_PROPERTIES,
     CHECK_MAX_OBSERVATION_PROPERTIES,
@@ -219,9 +220,6 @@ const settle = (columns: readonly MappedColumn[]): Mapping => {
     });
 };
 
-const snakeCase = (name: string): string =>
-    name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-
 export const camelCase = (name: string): string =>
     name.replace(/_+([a-z0-9])/gi, (_, char: string) => char.toUpperCase());
 
@@ -232,10 +230,10 @@ const fieldOf = (header: string): DefinitionField | undefined =>
 export const pastedKind = (headers: readonly string[]): PastedKind =>
     headers.some((header) => fieldOf(header.trim()) === 'dcid') ? 'statvars' : 'seed';
 
-/** The property a header names, which is the dcid itself or the one whose snake case form it is. */
+/** The property a header names, which is the dcid itself or the one whose seed column name (`columnName`) it is. */
 const propertyOf = (model: Model, header: string, properties: readonly string[]) => {
     if (model.kind(header) === 'property') return header;
-    const named = properties.filter((id) => snakeCase(id) === header);
+    const named = properties.filter((id) => columnName(id) === header);
     return named.length === 1 ? named[0] : undefined;
 };
 
@@ -269,7 +267,7 @@ export function mapHeaders(
         headers.map((raw, index): MappedColumn => {
             const header = raw.trim();
             const field = fieldOf(header);
-            const never = field === undefined && NEVER_CONSTRAINT.has(snakeCase(header));
+            const never = field === undefined && NEVER_CONSTRAINT.has(columnName(header));
             const property =
                 field === undefined && !never ? propertyOf(model, header, properties) : undefined;
             let wanted: ColumnTarget = { kind: 'ignored' };
@@ -571,22 +569,27 @@ export type PrefixFinding = {
 
 /**
  * The unprefixed cells of each checked property column of a seed that also
- * holds `dcid:`-prefixed cells. The column stays checked and each cell is
- * still sent. StatVar output carries bare values and is never flagged.
+ * holds `dcid:`-prefixed cells, read from the rows `sheet` sends to the check.
+ * The column stays checked and each cell is still sent. StatVar output
+ * carries bare values and is never flagged.
  */
 export function prefixFindings(
     kind: PastedKind,
     mapping: Mapping,
     rows: readonly (readonly string[])[],
+    sheet: SheetCheck,
 ): PrefixFinding[] {
     if (kind !== 'seed') return [];
+    const sent = new Set(sheet.sheetRows);
     const found: PrefixFinding[] = [];
     for (const { index, header, target } of mapping) {
         if (target.kind !== 'property') continue;
-        const cells = rows.map((cells, dataIndex) => ({
-            row: sheetRow(dataIndex),
-            value: (cells[index] ?? '').trim(),
-        }));
+        const cells = rows
+            .map((cells, dataIndex) => ({
+                row: sheetRow(dataIndex),
+                value: (cells[index] ?? '').trim(),
+            }))
+            .filter(({ row }) => sent.has(row));
         const present = cells.filter(({ value }) => value !== '');
         if (!present.some(({ value }) => value.startsWith('dcid:'))) continue;
         for (const { row, value } of present) {
@@ -655,16 +658,17 @@ export function readPasted(
         mapping,
         sheet,
         summary: readSummary(kind, mapping, sheet),
-        prefixFindings: prefixFindings(kind, mapping, range.rows),
+        prefixFindings: prefixFindings(kind, mapping, range.rows, sheet),
     };
 }
 
-const REASON_TEXT: Record<SkipReason, string> = {
-    no_field: 'the check has no field for them',
-    never_constraint: 'never constraints',
-    codes: 'hold codes',
-    duplicate: 'repeat an earlier column',
-    switched: 'set to ignored',
+/** Why columns are not checked, for one column and for several. */
+const REASON_TEXT: Record<SkipReason, readonly [string, string]> = {
+    no_field: ['the check has no field for it', 'the check has no field for them'],
+    never_constraint: ['never a constraint', 'never constraints'],
+    codes: ['holds codes', 'hold codes'],
+    duplicate: ['repeats an earlier column', 'repeat earlier columns'],
+    switched: ['set to ignored', 'set to ignored'],
 };
 
 /** "aid_type", "aid_type and unit", "a, b and c". */
@@ -673,22 +677,29 @@ const listText = (names: readonly string[]): string =>
 
 /**
  * The line above the findings: how the paste was read, how many rows and
- * columns, and why each skipped column is not checked.
+ * columns, why rows were skipped, and why each skipped column is not
+ * checked. When every row is skipped, it says the check waits for a row.
  */
 export function readSummaryText(summary: ReadSummary): string {
     const kind =
         summary.kind === 'seed' ? 'a seed (no dcid column)' : 'StatVar output (dcid column)';
+    const one = summary.skippedRows === 1;
     const skippedRows =
-        summary.skippedRows === 0 ? '' : `, ${plural(summary.skippedRows, 'row')} skipped`;
-    const lines = [
-        `Read as ${kind}, ${plural(summary.rows, 'row')}${skippedRows}.`,
-        `Checked: ${plural(summary.checked.length, 'column')}.`,
-    ];
+        summary.skippedRows === 0
+            ? ''
+            : `, ${plural(summary.skippedRows, 'row')} skipped (${one ? 'it fills' : 'they fill'} no population type, measured property or stat type, so ${one ? 'it reuses' : 'they reuse'} a StatVar defined elsewhere)`;
+    const lines = [`Read as ${kind}, ${plural(summary.rows, 'row')}${skippedRows}.`];
+    if (summary.rows > 0 && summary.skippedRows === summary.rows) {
+        lines.push('There is nothing to check until a row fills one of those columns.');
+    }
+    lines.push(`Checked: ${plural(summary.checked.length, 'column')}.`);
     const reasons = (Object.keys(REASON_TEXT) as SkipReason[]).flatMap((reason) => {
         const names = summary.skipped.filter((column) => column.reason === reason);
         return names.length === 0
             ? []
-            : [`${listText(names.map(({ header }) => header))} (${REASON_TEXT[reason]})`];
+            : [
+                  `${listText(names.map(({ header }) => header))} (${REASON_TEXT[reason][names.length === 1 ? 0 : 1]})`,
+              ];
     });
     if (reasons.length > 0) lines.push(`Not checked: ${reasons.join(', ')}.`);
     return lines.join(' ');

@@ -695,8 +695,9 @@ const CheckSheet = ({ title }: { title: string }) => {
                     <details className={styles.more}>
                         <summary>Change how a column is read</summary>
                         <p className={styles.note}>
-                            Each column is read as a definition field, a constraint property or not
-                            checked. Switch any column between property and ignored.
+                            Each column is read as an identity field (population type, measured
+                            property, stat type and the others), a constraint, or not checked.
+                            Switch any column between Property and Ignored.
                         </p>
                         <ul className={styles.columns}>
                             {mapping.map((column) => (

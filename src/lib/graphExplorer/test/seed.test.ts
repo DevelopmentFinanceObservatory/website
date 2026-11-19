@@ -5,14 +5,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NO_CARRIED, readCarried } from '../explore.ts';
+import { NO_CARRIED, readCarried, type Carried } from '../explore.ts';
 import {
     activeConstraints,
     columnName,
+    NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
     seedCsv,
-    seedName,
     seedQuery,
     seedHref,
     seedRows,
@@ -142,6 +142,7 @@ test('the columns follow the minimal layout, with the constraints as a union in 
     );
     assert.equal(columnName('dac2aAidType'), 'dac2a_aid_type');
     assert.equal(columnName('dacTypeOfFinance'), 'dac_type_of_finance');
+    assert.equal(columnName('includesIMFCredit'), 'includes_imf_credit');
 });
 
 test('dropping and adding constraint columns changes the columns and the constraint list', () => {
@@ -162,19 +163,24 @@ test('dropping and adding constraint columns changes the columns and the constra
     ]);
 });
 
-test('pasted codes make one row each, the label after a tab filling statvar_name', () => {
+test('pasted codes make one row each, the second tab-separated cell filling statvar_name', () => {
     const columns = seedColumns(dac2a);
-    const rows = seedRows(columns, '106\tBilateral, total\r\n\n 218 \n=SUM\t"quoted"\n');
+    const { rows, merged } = seedRows(
+        columns,
+        '106\tBilateral, total\tUSD\r\n\n 218 \n=SUM\t"quoted"\n218\tMultilateral\n106\tOther\n',
+    );
     assert.equal(rows.length, 3);
+    assert.equal(merged, 2);
     assert.deepEqual(rows[0]?.slice(0, 3), ['106', 'Bilateral, total', 'dcid:FinancialFlow']);
-    assert.deepEqual(rows[1]?.slice(0, 2), ['218', '']);
+    // A repeated code merges into its first row, which takes the first label given.
+    assert.deepEqual(rows[1]?.slice(0, 2), ['218', 'Multilateral']);
     assert.deepEqual(rows[2]?.slice(0, 2), ['=SUM', '"quoted"']);
     assert.ok(rows.every((row) => row.length === columns.length));
 });
 
 test('the CSV writes cells verbatim and quotes only what RFC 4180 requires', () => {
     const columns = seedColumns(crdf);
-    const csv = seedCsv(columns, seedRows(columns, '-1\tSay "hi", then\n+2\t=x'));
+    const csv = seedCsv(columns, seedRows(columns, '-1\tSay "hi", then\n+2\t=x').rows);
     const lines = csv.split('\r\n');
     assert.equal(lines[0], columns.map((column) => column.name).join(','));
     assert.ok(lines[1]?.startsWith('-1,"Say ""hi"", then",dcid:FinancialObligation'));
@@ -182,21 +188,26 @@ test('the CSV writes cells verbatim and quotes only what RFC 4180 requires', () 
     assert.equal(lines.length, 3);
 });
 
-test('the seeds.yml stub types every column as a string and tests the identity columns', () => {
+test('the seeds.yml stub types every column as a string and tests source_code alone', () => {
     const columns = seedColumns(dac2a);
-    const name = seedName(dac2a);
-    assert.equal(name, 'oecd_dac2a_indicator_mapping');
+    const name = NEW_SEED_NAME;
     const yml = seedsYml(name, columns);
     assert.ok(yml.startsWith(`version: 2\n\nseeds:\n  - name: ${name}\n`));
     const types = yml.match(/^ {8}\w+: string$/gm) ?? [];
     assert.equal(types.length, columns.length);
     const block = (column: string) =>
         yml.split('      - name: ').find((part) => part.startsWith(`${column}\n`)) ?? '';
-    assert.match(block('source_code'), /data_tests:\n\s+- unique\n$/);
-    for (const column of ['population_type', 'measured_property', 'stat_type']) {
-        assert.match(block(column), /data_tests:\n\s+- not_null\n$/);
-    }
-    for (const column of ['statvar_name', 'financial_flow_type', 'unit', 'measurement_qualifier']) {
+    assert.match(block('source_code'), /data_tests:\n\s+- unique\n\s+- not_null\n$/);
+    // A row that reuses a StatVar leaves the identity columns empty.
+    for (const column of [
+        'population_type',
+        'measured_property',
+        'stat_type',
+        'statvar_name',
+        'financial_flow_type',
+        'unit',
+        'measurement_qualifier',
+    ]) {
         assert.doesNotMatch(block(column), /data_tests/);
     }
     assert.match(block('dac2a_aid_type'), /description: ".*dac2aAidType/);
@@ -216,7 +227,7 @@ test('the URL state round-trips the dataset, dropped and added columns and the c
 });
 
 test('a seed link keeps the carried dataset filter and base switch', () => {
-    const carried = { show: { kind: 'all' }, base: true } as const;
+    const carried: Carried = { ...NO_CARRIED, show: { kind: 'all' }, base: true };
     const url = new URL(
         seedHref({ dataset: 'provenance/OECDDAC2A' }, carried),
         'https://x.invalid',

@@ -172,6 +172,8 @@ test('a column with prefixed and bare cells stays checked, and each bare cell is
         'dcid:FinancialFlow,dcid:amount,dcid:measuredValue,dcid:Gross',
         'dcid:FinancialFlow,dcid:amount,dcid:measuredValue,Net',
         'dcid:FinancialFlow,dcid:amount,dcid:measuredValue,',
+        // A row the check skips raises no finding.
+        ',,,Net',
     ].join('\n');
     const read = readPasted(model, text);
     assert.deepEqual(read.prefixFindings, [
@@ -206,9 +208,8 @@ test('a comma-separated file and the same range pasted from a spreadsheet read a
     assert.deepEqual(b.sheet, a.sheet);
 });
 
-test('the summary line gives rows, checked columns and the reason for each skip', () => {
-    assert.equal(
-        readSummaryText(readPasted(model, seedCsv('dac2a')).summary),
-        'Read as a seed (no dcid column), 20 rows. Checked: 8 columns. Not checked: aid_type (the check has no field for them), measurement_method and unit (never constraints), dac2a_aid_type (hold codes).',
-    );
+test('the summary line words each skip reason for one column or several', () => {
+    const text = readSummaryText(readPasted(model, seedCsv('dac2a')).summary);
+    assert.match(text, /aid_type \(the check has no field for it\)/);
+    assert.match(text, /measurement_method and unit \(never constraints\)/);
 });

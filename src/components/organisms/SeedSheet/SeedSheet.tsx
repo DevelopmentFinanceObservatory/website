@@ -26,10 +26,10 @@ import { patternId, type Model } from '@/lib/graphExplorer/model';
 import {
     columnName,
     datasetConstraints,
+    NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
     seedCsv,
-    seedName,
     seedQuery,
     seedRows,
     seedsYml,
@@ -40,9 +40,6 @@ import {
 
 /** The rows the seed table shows before it counts the rest. */
 const SHOWN_ROWS = 5;
-
-/** The name the new seed's file and `seeds.yml` entry take until the author renames them. */
-const NEW_SEED_NAME = seedName({ label: 'new' });
 
 /**
  * Replaces the page's query in place and keeps the path and the carried
@@ -307,17 +304,26 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         () => (dataset === null ? [] : seedColumns(dataset, choice)),
         [dataset, choice],
     );
-    const rows = useMemo(() => seedRows(columns, codes), [columns, codes]);
+    const { rows, merged } = useMemo(() => seedRows(columns, codes), [columns, codes]);
 
     useEffect(() => {
         if (openAt === 'check') checkStep.current?.scrollIntoView({ block: 'start' });
     }, [openAt]);
 
+    const checkSection = (title: string) => (
+        <div ref={checkStep} className={styles.step}>
+            <CheckSheet title={title} />
+        </div>
+    );
+
     if (dataset === null) {
         return (
-            <p className={styles.lead} role="status">
-                No dataset on the graph has patterns yet, so there is nothing to start from.
-            </p>
+            <>
+                <p className={styles.lead} role="status">
+                    No dataset on the graph has patterns yet, so there is nothing to start from.
+                </p>
+                {checkSection('Check a seed')}
+            </>
         );
     }
 
@@ -466,6 +472,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 <p className={styles.note}>
                     {plural(rows.length, 'row')}
                     {rows.length > SHOWN_ROWS && `, first ${SHOWN_ROWS} shown`}.{' '}
+                    {merged > 0 &&
+                        `Merged ${plural(merged, 'line')} that repeated an earlier code. `}
                     {prefilled &&
                         `Grey cells are filled because every StatVar of ${dataset.label} uses that value. `}
                     Hatched cells are yours to fill. An empty constraint cell means the StatVar has
@@ -493,9 +501,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 </p>
             </SheetSection>
 
-            <div ref={checkStep} className={styles.step}>
-                <CheckSheet title="4. Check it" />
-            </div>
+            {checkSection('4. Check it')}
         </>
     );
 };

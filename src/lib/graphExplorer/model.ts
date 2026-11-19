@@ -269,7 +269,7 @@ const fnv1a = (text: string, seed: number): string => {
 };
 
 /**
- * A pattern's identity, as a key and in a URL: 16 hex digits hashed from the fields that
+ * A pattern's identity, as a React key: 16 hex digits hashed from the fields that
  * define it (population type, measured property, stat type, qualifier,
  * denominator, and the constraint and observation properties as sets). The
  * StatVar count and the examples change as usage grows and the API orders
