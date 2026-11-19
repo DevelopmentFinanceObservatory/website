@@ -2,6 +2,7 @@
 // server-only imports) so src/lib/test/events-data-view.test.ts can run it
 // under plain node.
 
+import { requestCaller } from '../proxy/caller.ts';
 import { MAX_LIST_IDS, MAX_PROPS_BYTES, NO_ID, PAGE_PATH, TOKEN_PATTERN } from './limits.ts';
 
 /** The most a data.view body may weigh. The route answers 413 past it. */
@@ -70,11 +71,27 @@ export type DataViewProps = {
     host?: string;
     // Whether the sending origin is on DFO_CORS_ORIGINS.
     listed: boolean;
+    // The reader's `ip:<32 hex>` digest, as the proxy names the caller to
+    // dfo-apis (requestCaller). Set by the server, never read from the body.
+    // Null when no client address resolves.
+    caller: string | null;
 };
+
+/** What parseDataView takes from the body and the Origin header. */
+export type DataViewBodyProps = Omit<DataViewProps, 'caller'>;
+
+/**
+ * The props to record: the parsed ones plus the reader's caller digest from
+ * `incoming`'s headers, null when no client address resolves.
+ */
+export const withCaller = (props: DataViewBodyProps, incoming: Headers): DataViewProps => ({
+    ...props,
+    caller: requestCaller(incoming) ?? null,
+});
 
 type Refusal = { ok: false; detail: string; pointer: string };
 
-export type DataViewParse = { ok: true; props: DataViewProps; page: string | null } | Refusal;
+export type DataViewParse = { ok: true; props: DataViewBodyProps; page: string | null } | Refusal;
 
 const refuse = (detail: string, pointer = ''): Refusal => ({ ok: false, detail, pointer });
 

@@ -98,6 +98,7 @@ test('a bad body is refused with a pointer to the field at fault', async (t) => 
         ['a share id that is not a token', { ...VALID, via: 'share', shareId: 'a b' }, '/shareId'],
         ['a share id without a share', { ...VALID, shareId: 'aB3dE5fG7h' }, ''],
         ['an unknown key', { ...VALID, email: 'ana@example.org' }, ''],
+        ['a caller, which only the server sets', { ...VALID, caller: 'ip:' + 'a'.repeat(32) }, ''],
         ['a page that is not a string', { ...VALID, page: 3 }, '/page'],
         ['an array', [VALID], ''],
     ];

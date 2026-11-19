@@ -6,6 +6,7 @@ import {
     MAX_DATA_VIEW_BODY,
     parseCorsOrigins,
     parseDataView,
+    withCaller,
 } from '@/lib/events/dataView';
 import { track, userWho } from '@/lib/events/track';
 import { readBoundedText } from '@/lib/proxy/boundedBody';
@@ -88,7 +89,7 @@ export const POST = async (req: NextRequest) => {
                 return null;
             });
 
-        await track('data.view', parsed.props, {
+        await track('data.view', withCaller(parsed.props, req.headers), {
             ...userWho(session?.user),
             page: parsed.page,
             headers: req.headers,

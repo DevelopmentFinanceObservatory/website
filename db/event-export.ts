@@ -62,12 +62,15 @@ type PropRule =
     | 'token'
     // a token that leaves as its HMAC-SHA256 digest
     | 'digest'
+    // the caller digest `ip:` plus 32 lower-case hex, kept as it is
+    | 'caller'
     // a list of up to MAX_LIST_IDS tokens, each a token or NO_ID
     | 'tokens'
     // one of these strings
     | readonly string[];
 
 const TOKEN = TOKEN_PATTERN;
+const CALLER = /^ip:[0-9a-f]{32}$/;
 
 // Every member of the union T, so tsc fails when the site adds a member
 // that the list lacks and the export would drop. Known<> keeps the named
@@ -248,6 +251,7 @@ export const PROP_RULES = {
         surface: ['page'],
         host: 'token',
         listed: 'boolean',
+        caller: 'caller',
     },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
@@ -265,6 +269,8 @@ const passes = (rule: PropRule, value: unknown): boolean => {
         case 'token':
         case 'digest':
             return typeof value === 'string' && TOKEN.test(value);
+        case 'caller':
+            return typeof value === 'string' && CALLER.test(value);
         case 'tokens':
             return (
                 Array.isArray(value) &&
@@ -393,6 +399,7 @@ const READ_DAY_SQL = `SELECT id::float8 AS id,
 export const ROW_SHAPE = {
     PROP_RULES,
     TOKEN: TOKEN.source,
+    CALLER: CALLER.source,
     PAGE_PATH: PAGE_PATH.source,
     SHARE_PATH: SHARE_PATH.source,
     EXPORT_SCHEMA,
