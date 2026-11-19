@@ -22,9 +22,10 @@
  * when the upstream encoded the body, since fetch has decoded it by then.
  * Matching `mcp-*` by prefix means a protocol header added later needs no
  * change here. Of the `x-dfo-*` names only x-dfo-client goes upstream from the
- * client by default; authorization, x-dfo-caller and x-dfo-caller-principal
- * are set by forward.ts. A route can carry more in both directions with a
- * HeaderPass, as the Presentation API's routes do (PRESENTATION_HEADERS).
+ * client by default; authorization, x-dfo-caller, x-dfo-caller-principal,
+ * x-dfo-surface and x-dfo-account are set by forward.ts. A route can carry
+ * more in both directions with a HeaderPass, as the Presentation API's routes do
+ * (PRESENTATION_HEADERS).
  */
 const REQUEST_PREFIXES = ['mcp-'];
 const RESPONSE_PREFIXES = ['mcp-'];
