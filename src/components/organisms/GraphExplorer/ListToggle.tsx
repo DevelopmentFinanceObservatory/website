@@ -12,6 +12,7 @@ import {
     LIST_HEAD,
     termOrigin,
     type ListHead,
+    type Matches,
     type TermSources,
 } from '@/lib/graphExplorer/lists';
 import type { Model } from '@/lib/graphExplorer/model';
@@ -47,6 +48,28 @@ export const ListToggle = ({
         >
             {`${words} ${noun}`}
         </button>
+    );
+};
+
+/**
+ * "The first N of M." and any `then` under a list cut at its ceiling
+ * (LIST_CEILING), as firstMatches gives it. Nothing when every entry is on
+ * show.
+ */
+export const CeilingNote = ({
+    matches,
+    then,
+}: {
+    matches: Matches<unknown>;
+    /** What the reader can do to reach the rest, as a sentence, where there is a way. */
+    then?: string;
+}) => {
+    if (matches.total <= matches.hits.length) return null;
+    return (
+        <p className={styles.note} role="status">
+            The first {count(matches.hits.length)} of {count(matches.total)}.
+            {then !== undefined && ` ${then}`}
+        </p>
     );
 };
 

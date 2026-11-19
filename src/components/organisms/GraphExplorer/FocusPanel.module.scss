@@ -114,31 +114,6 @@
     }
 }
 
-.patterns {
-    border-top: 1px solid var(--color-net-mid);
-}
-
-.pattern {
-    @include flex(column, flex-start, stretch);
-
-    gap: rem(4);
-    padding-block: rem(10);
-    border-bottom: 1px solid var(--color-net-mid);
-}
-
-.sentence {
-    @include font-size(16px, 1.4);
-}
-
-.meta {
-    @include font-size(12px, 1.3);
-
-    font-family: var(--font-dm-mono);
-    color: var(--color-stone);
-    letter-spacing: -0.02em;
-    overflow-wrap: break-word;
-}
-
 .full {
     @include flex(column, flex-start, stretch);
 
@@ -177,4 +152,22 @@
     text-decoration-color: var(--color-sage);
     text-decoration-thickness: 1px;
     text-underline-offset: rem(3);
+}
+
+.filter {
+    @include font-size(13px, 1);
+
+    width: rem(280);
+    max-width: 100%;
+    height: rem(34);
+    padding: 0 rem(10);
+    font-family: var(--font-dm-mono);
+    letter-spacing: -0.02em;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(4);
+
+    &::placeholder {
+        color: var(--color-stone);
+    }
 }

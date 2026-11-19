@@ -6,7 +6,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { scopedListTable, valueListFileName, valueListTable } from '../tables.ts';
+import {
+    patternFileName,
+    patternTable,
+    scopedListTable,
+    valueListFileName,
+    valueListTable,
+} from '../tables.ts';
 import { readSchema, readUsage, type ProvenanceUsage } from '../wire.ts';
 import { baseUsageBody, schemaBody, usageBody } from './fixtures.ts';
 
@@ -124,3 +130,31 @@ for (const [listId, fileName] of [
         assert.equal(valueListFileName(model, listId), fileName);
     });
 }
+
+test("a dataset's patterns are written group by group, one row per pattern", () => {
+    const [head, ...rows] = patternTable(model, 'provenance/OECDDAC2A');
+    assert.deepEqual(head?.slice(0, 3), [
+        'split_combination',
+        'population_type',
+        'measured_property',
+    ]);
+    assert.equal(rows.length, 6);
+    const column = (name: string) => head?.indexOf(name) ?? -1;
+    assert.deepEqual(
+        rows.map((row) => row[column('split_combination')]),
+        ['1', '2', '2', '2', '2', '3'],
+    );
+    assert.deepEqual(
+        rows
+            .filter((row) => row[column('split_combination')] === '2')
+            .map((row) => row[column('measurement_denominator')])
+            .toSorted(),
+        [
+            '',
+            '',
+            'Count_Person',
+            'PrimaryIncome_EconomicUnit_GrossOfFixedCapitalConsumption_Nominal',
+        ],
+    );
+    assert.equal(patternFileName(model, 'provenance/OECDDAC2A'), 'oecd-dac2a-patterns.csv');
+});

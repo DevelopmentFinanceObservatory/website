@@ -11,7 +11,14 @@ import { OriginTag, TermLink } from './ExploreLink';
 import FocusEntry, { useLens } from './FocusEntry';
 import styles from './FocusPanel.module.scss';
 import { GapNote } from './GapNote';
-import { ListToggle, useListOrigins, useTermSources, type ListOrigins } from './ListToggle';
+import {
+    CeilingNote,
+    ListToggle,
+    useListOrigins,
+    useTermSources,
+    type ListOrigins,
+} from './ListToggle';
+import { PatternGroups } from './PatternGroups';
 import ValueTree from './ValueTree';
 
 import Button from '@/components/atoms/Button/Button';
@@ -24,8 +31,8 @@ import {
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { datasetHead } from '@/lib/graphExplorer/lists';
-import { declarerWords, kindWords, patternId, type DatasetView } from '@/lib/graphExplorer/model';
+import { datasetHead, firstMatches, listHead, termFilter } from '@/lib/graphExplorer/lists';
+import { declarerWords, kindWords, type DatasetView } from '@/lib/graphExplorer/model';
 import {
     leftOutLine,
     leftOutProperties,
@@ -34,7 +41,6 @@ import {
     type ListGap,
 } from '@/lib/graphExplorer/nodeView';
 import { seedHref } from '@/lib/graphExplorer/seed';
-import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
 import type { SchemaFacets } from '@/lib/graphExplorer/wire';
 
@@ -233,6 +239,52 @@ const MemberBars = ({ id, lens }: { id: string; lens: PanelLens }) => {
 };
 
 /**
+ * `lead`, then `items` separated by commas, then `end`: the first LIST_HEAD,
+ * then all of them up to the ceiling once "All N values" is pressed.
+ */
+const ValueLine = <TItem,>({
+    lead,
+    items,
+    itemKey,
+    renderItem,
+    end = '',
+}: {
+    lead: React.ReactNode;
+    items: readonly TItem[];
+    itemKey: (item: TItem, index: number) => string;
+    renderItem: (item: TItem) => React.ReactNode;
+    end?: string;
+}) => {
+    const [open, setOpen] = useState(false);
+    const listId = useId();
+    const head = listHead(items, { open });
+    const shown = firstMatches(head.shown);
+
+    return (
+        <>
+            <p id={listId} className={styles.line}>
+                {lead}
+                {shown.hits.map((item, index) => (
+                    <span key={itemKey(item, index)}>
+                        {index > 0 && ', '}
+                        {renderItem(item)}
+                    </span>
+                ))}
+                {end}
+            </p>
+            <CeilingNote matches={shown} />
+            <ListToggle
+                head={head}
+                noun="values"
+                controls={listId}
+                open={open}
+                onToggle={() => setOpen((was) => !was)}
+            />
+        </>
+    );
+};
+
+/**
  * A node's open properties, each a line beside the named fields: links to
  * nodes the model holds, the rest as text. A line whose listing stopped at
  * its cap (openLineCut) says so beneath it.
@@ -242,21 +294,22 @@ const OpenLines = ({ id, completeness }: { id: string; completeness: Completenes
 
     return openEntries(model, id).map(({ property, label, values }) => (
         <Fragment key={property}>
-            <p className={styles.line}>
-                {label}:{' '}
-                {values.map((value, index) => (
-                    <span key={value.kind === 'node' ? value.id : `${index}:${value.text}`}>
-                        {index > 0 && ', '}
-                        {value.kind === 'node' ? (
-                            <TermLink id={value.id} name={value.name} />
-                        ) : (
-                            <span className={styles.mono}>
-                                <BreakableId text={value.text} />
-                            </span>
-                        )}
-                    </span>
-                ))}
-            </p>
+            <ValueLine
+                lead={`${label}: `}
+                items={values}
+                itemKey={(value, index) =>
+                    value.kind === 'node' ? value.id : `${index}:${value.text}`
+                }
+                renderItem={(value) =>
+                    value.kind === 'node' ? (
+                        <TermLink id={value.id} name={value.name} />
+                    ) : (
+                        <span className={styles.mono}>
+                            <BreakableId text={value.text} />
+                        </span>
+                    )
+                }
+            />
             {openLineCut(completeness, id, property) && (
                 <GapNote gaps={['capped']} className={styles.note} />
             )}
@@ -328,16 +381,13 @@ export const NodePanel = ({
             )}
             {node.declared_by === 'base' && <BrowserLink id={id} />}
             {domain && (
-                <p className={styles.line}>
-                    Declared for{' '}
-                    {domain.map((classId, index) => (
-                        <span key={classId}>
-                            {index > 0 && ', '}
-                            <TermLink id={classId} />
-                        </span>
-                    ))}
-                    .
-                </p>
+                <ValueLine
+                    lead="Declared for "
+                    items={domain}
+                    itemKey={(classId) => classId}
+                    renderItem={(classId) => <TermLink id={classId} />}
+                    end="."
+                />
             )}
             <OpenLines id={id} completeness={completeness} />
             {leftOut !== null && <p className={styles.note}>{leftOut}</p>}
@@ -379,7 +429,7 @@ const FACETS: { key: keyof SchemaFacets; label: string; text?: (code: string) =>
     { key: 'scaling_factors', label: 'Scaling factors' },
 ];
 
-/** A dataset: its description, its StatVar count, its patterns as sentences and its facet facts. */
+/** A dataset: its description, its StatVar count, its patterns by split combination and its facet facts. */
 export const DatasetPanel = ({ view }: { view: DatasetView }) => {
     const model = useModel();
     const carried = useCarried();
@@ -403,41 +453,11 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
             <p className={styles.line}>{plural(view.statVarCount, 'StatVar')}</p>
             <section className={styles.section}>
                 <Label>How its StatVars are formed</Label>
-                <ol className={styles.patterns}>
-                    {view.patterns.map((pattern) => (
-                        <li key={patternId(pattern)} className={styles.pattern}>
-                            <p className={styles.sentence}>
-                                {patternSentence(model, pattern).map((part, at) =>
-                                    part.kind === 'term' ? (
-                                        <TermLink key={at} id={part.id} />
-                                    ) : (
-                                        <span key={at}>{part.text}</span>
-                                    ),
-                                )}
-                            </p>
-                            <p className={styles.meta}>
-                                {plural(pattern.stat_var_count, 'StatVar')}
-                                {view.statVarCount > 0 &&
-                                    `, ${sharePercent(pattern.stat_var_count, view.statVarCount)}%`}
-                            </p>
-                            {pattern.examples[0] !== undefined && (
-                                <p className={styles.meta}>
-                                    For example{' '}
-                                    <span className={styles.mono}>
-                                        <BreakableId text={pattern.examples[0]} />
-                                    </span>
-                                </p>
-                            )}
-                        </li>
-                    ))}
-                </ol>
-                {view.patterns.length > 0 && (
-                    <div>
-                        <SheetLink href={seedHref({ dataset: view.id }, carried)}>
-                            Seed a Dataset Like This
-                        </SheetLink>
-                    </div>
-                )}
+                <PatternGroups datasetId={view.id}>
+                    <SheetLink href={seedHref({ dataset: view.id }, carried)}>
+                        Seed a Dataset Like This
+                    </SheetLink>
+                </PatternGroups>
             </section>
             {facets && facetLines.length > 0 && (
                 <section className={styles.section}>
@@ -492,9 +512,16 @@ type FullListProps = {
     onClose: () => void;
 };
 
-/** Every entry of one box of the picture, with what it may leave out and a way back to the definition. */
+/**
+ * The entries of one box of the picture that the filter keeps, up to the
+ * ceiling, with what the box may leave out and a way back to the
+ * definition.
+ */
 export const FullList = ({ box, lens, gaps, onClose }: FullListProps) => {
-    const entries = useLens(lens.dataset, box.ids);
+    const model = useModel();
+    const [filter, setFilter] = useState('');
+    const shown = firstMatches(box.ids, termFilter(model, filter));
+    const entries = useLens(lens.dataset, shown.hits);
     const heading = useRef<HTMLHeadingElement>(null);
 
     useEffect(() => heading.current?.focus({ preventScroll: true }), []);
@@ -505,17 +532,35 @@ export const FullList = ({ box, lens, gaps, onClose }: FullListProps) => {
                 {box.title} <span className={styles.total}>({count(box.ids.length)})</span>
             </h2>
             <GapNote gaps={gaps} className={styles.note} />
-            <ul className={styles.full}>
-                {box.ids.map((id) => (
-                    <FocusEntry
-                        key={id}
-                        id={id}
-                        lens={entries?.get(id) ?? null}
-                        datasetLabel={lens.label}
-                        values={box.values?.get(id) ?? null}
-                    />
-                ))}
-            </ul>
+            <input
+                type="search"
+                className={styles.filter}
+                placeholder="Filter by name or dcid"
+                aria-label="Filter this list by name or dcid"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+            />
+            {shown.total === 0 ? (
+                <p className={styles.note} role="status">
+                    No entry matches “{filter.trim()}”.
+                </p>
+            ) : (
+                <ul className={styles.full}>
+                    {shown.hits.map((id) => (
+                        <FocusEntry
+                            key={id}
+                            id={id}
+                            lens={entries?.get(id) ?? null}
+                            datasetLabel={lens.label}
+                            values={box.values?.get(id) ?? null}
+                        />
+                    ))}
+                </ul>
+            )}
+            <CeilingNote
+                matches={shown}
+                then={filter.trim() === '' ? 'Filter to find the rest.' : 'Type more to narrow.'}
+            />
             <div>
                 <Button onClick={onClose}>Back to Definition</Button>
             </div>

@@ -10,9 +10,12 @@ import {
     datasetOrigin,
     datasetsByUse,
     datasetsDfoFirst,
+    firstMatches,
     kindsDfoFirst,
     landedUsage,
+    LIST_CEILING,
     listHead,
+    termFilter,
     termOrigin,
 } from '../lists.ts';
 import { buildModel } from '../model.ts';
@@ -199,4 +202,21 @@ test('the start screen lists the kinds of thing without an outside tag first, ea
     );
     const dfo = buildModel(schema, readUsage(usageBody()));
     assert.equal(kindsDfoFirst(dfo.populationTypes(), origin), dfo.populationTypes());
+});
+
+test('a list past the ceiling shows its first matches and counts them all', () => {
+    // As many ids as the property `value` is used with across the UN System's series.
+    const ids = Array.from({ length: 1_700 }, (_, index) => `undata/SERIES-${index}`);
+    const all = firstMatches(ids);
+    assert.equal(all.hits.length, LIST_CEILING);
+    assert.equal(all.total, 1_700);
+    assert.deepEqual(all.hits.slice(0, 2), ['undata/SERIES-0', 'undata/SERIES-1']);
+
+    const model = { label: (id: string) => (id.endsWith('-7') ? 'Births' : id) };
+    const filtered = firstMatches(ids, termFilter(model, '  births '));
+    assert.deepEqual(filtered, { hits: ['undata/SERIES-7'], total: 1 });
+    const byDcid = firstMatches(ids, termFilter(model, 'SERIES-16'));
+    assert.equal(byDcid.total, 111);
+    assert.equal(byDcid.hits.length, LIST_CEILING);
+    assert.equal(termFilter(model, '   '), null);
 });

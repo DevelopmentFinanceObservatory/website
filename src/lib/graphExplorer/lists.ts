@@ -40,6 +40,49 @@ export function listHead<TItem>(
 }
 
 /**
+ * The most rows a list puts on screen at once, once open or filtered. A
+ * longer list shows its first rows and a note saying how many it holds.
+ */
+export const LIST_CEILING = 60;
+
+/** The first matches of a list on show, and how many entries match in all. */
+export type Matches<TItem> = { readonly hits: readonly TItem[]; readonly total: number };
+
+/**
+ * The first `limit` entries of `items` that `matches` keeps, in list order,
+ * and how many it keeps in all. With no `matches`, every entry is kept.
+ */
+export function firstMatches<TItem>(
+    items: readonly TItem[],
+    matches: ((item: TItem) => boolean) | null = null,
+    limit = LIST_CEILING,
+): Matches<TItem> {
+    if (matches === null) return { hits: items.slice(0, limit), total: items.length };
+    const hits: TItem[] = [];
+    let total = 0;
+    for (const item of items) {
+        if (!matches(item)) continue;
+        total += 1;
+        if (hits.length < limit) hits.push(item);
+    }
+    return { hits, total };
+}
+
+/**
+ * A filter over terms by label or dcid, ignoring case and surrounding
+ * space, or null for blank text, which keeps every term.
+ */
+export const termFilter = (
+    model: Pick<Model, 'label'>,
+    text: string,
+): ((id: string) => boolean) | null => {
+    const needle = text.trim().toLowerCase();
+    if (needle === '') return null;
+    return (id) =>
+        id.toLowerCase().includes(needle) || model.label(id).toLowerCase().includes(needle);
+};
+
+/**
  * The head of a list of datasets' entries, as listHead gives it, keeping
  * the entry of the filtered dataset (`dataset`, null for none) past the
  * head, so the bars show the dataset the reader chose.

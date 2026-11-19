@@ -788,6 +788,16 @@ export const pictureLens = (centre: Centre, show: DatasetFilter): string | null 
 export const sharePercent = (part: number, whole: number): number =>
     part <= 0 || whole <= 0 ? 0 : Math.max(1, Math.round((100 * part) / whole));
 
+/**
+ * `part`'s share of `whole` in words: "60%", or "under 1%" below half a
+ * percent, where sharePercent's floor of 1 would make a long tail of rows
+ * each read "1%".
+ */
+export const shareWords = (part: number, whole: number): string =>
+    part > 0 && whole > 0 && (100 * part) / whole < 0.5
+        ? 'under 1%'
+        : `${sharePercent(part, whole)}%`;
+
 /** The reader's words for the ISO 8601 durations a dataset's series are observed over. */
 const PERIOD_WORDS: Readonly<Record<string, string>> = {
     P1Y: 'Yearly',
