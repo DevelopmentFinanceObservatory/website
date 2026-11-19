@@ -1,0 +1,22 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+.toggle {
+    @include font-size(12px, 1.1);
+
+    align-self: flex-start;
+    padding: rem(6) rem(10);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-net-light);
+    border: 0;
+    border-radius: rem(4);
+    cursor: pointer;
+
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--color-net-mid);
+        }
+    }
+}

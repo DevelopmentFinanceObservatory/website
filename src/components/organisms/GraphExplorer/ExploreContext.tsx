@@ -30,6 +30,7 @@ export type ExploreNavigation = {
 
 const NavigationContext = createContext<ExploreNavigation | null>(null);
 const ModelContext = createContext<Model | null>(null);
+const FullModelContext = createContext<Model | null>(null);
 
 /** The parameters every Graph Explorer link keeps, read from the URL query. */
 export const useCarried = (): Carried => {
@@ -70,6 +71,8 @@ export const useExploreState = (): ExploreNavigation => {
 
 export const NavigationProvider = NavigationContext.Provider;
 export const ModelProvider = ModelContext.Provider;
+/** Provides the full model, over every usage document loaded, beside the model `useModel` reads. */
+export const FullModelProvider = FullModelContext.Provider;
 
 /** Explore's navigation, or null outside GraphExplorer. */
 export const useOptionalExplore = (): ExploreNavigation | null => useContext(NavigationContext);
@@ -85,5 +88,16 @@ export const useExplore = (): ExploreNavigation => {
 export const useModel = (): Model => {
     const model = useContext(ModelContext);
     if (!model) throw new Error('useModel is used before the model is loaded');
+    return model;
+};
+
+/**
+ * The full model, over every usage document loaded whatever the switches
+ * say. The scoped list and the Show pills read it for a chosen dataset the
+ * switches leave out. Throws where no FullModelProvider is above.
+ */
+export const useFullModel = (): Model => {
+    const model = useContext(FullModelContext);
+    if (!model) throw new Error('useFullModel is used outside a FullModelProvider');
     return model;
 };

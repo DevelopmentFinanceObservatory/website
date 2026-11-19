@@ -26,4 +26,8 @@ test('a CSV file name is the label in lower case with hyphens', () => {
     assert.equal(csvFileName('Financial flow'), 'financial-flow.csv');
     assert.equal(csvFileName('  DAC 1 aid type (list)  '), 'dac-1-aid-type-list.csv');
     assert.equal(csvFileName('—'), 'sheet.csv');
+    assert.equal(
+        csvFileName('Properties of Person', { partial: true }),
+        'properties-of-person-partial.csv',
+    );
 });

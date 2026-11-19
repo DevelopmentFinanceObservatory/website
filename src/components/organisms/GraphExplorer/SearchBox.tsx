@@ -10,7 +10,7 @@ import { OriginTag } from './ExploreLink';
 import styles from './SearchBox.module.scss';
 
 import { exploreHref, type ExploreView } from '@/lib/graphExplorer/explore';
-import { declarerPlace, KIND_WORDS, type Model } from '@/lib/graphExplorer/model';
+import { declarerPlace, KIND_WORDS, kindWords, type Model } from '@/lib/graphExplorer/model';
 import {
     enterChoice,
     escapeAction,
@@ -22,8 +22,9 @@ import {
 import type { SchemaTerm } from '@/lib/graphExplorer/wire';
 
 /**
- * What a hit is, in a few words: its kind, the list a value sits in, or the
- * Data Commons outside the model that holds it.
+ * What a hit is, in a few words: its kind, the list a value sits in, the
+ * types of a value no list holds, or the Data Commons outside the model
+ * that holds it.
  */
 const describe = (model: Model, hit: SearchHit): string => {
     if (!hit.inModel) {
@@ -33,7 +34,7 @@ const describe = (model: Model, hit: SearchHit): string => {
         const list = model.valueListOf(hit.id);
         if (list !== undefined) return `Value in ${model.label(list)}`;
     }
-    return KIND_WORDS[hit.kind];
+    return kindWords(model, hit.kind, model.node(hit.id)?.types ?? []);
 };
 
 type SearchBoxProps = {

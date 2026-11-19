@@ -91,14 +91,39 @@ const TermsLine = ({
 };
 
 /**
+ * One line for the outside usage documents that failed, however many. The
+ * DFO views, and those over any other document that loaded, stand without
+ * them.
+ */
+const UsageLine = ({
+    failed,
+    onRetry,
+}: {
+    failed: readonly OriginSwitch[];
+    onRetry: () => void;
+}) => {
+    const names = failed.map((name) => ORIGIN_NAMES[name].replace(/ Data Commons$/, ''));
+    return (
+        <div className={styles.terms} role="alert">
+            <span>
+                {`${capitalise(names.join(' and '))} Data Commons usage could not be loaded, so terms leave out ${failed.length === 1 ? 'its' : 'their'} datasets.`}
+            </span>
+            <Button small onClick={onRetry}>
+                Try Again
+            </Button>
+        </div>
+    );
+};
+
+/**
  * The wordmark, the search box, the origin switches under "Also search",
  * and the three screens, over the section's loaded documents. Every link
  * keeps the carried parameters, and each switch writes its carried
  * parameter. Each switched-on terms list's progress, failure, or absence
- * shows under the bar, except the list `termsInMain` names, which the main
- * area shows.
+ * shows under the bar, and so does one line for any outside usage document
+ * that failed.
  */
-const TopBar = ({ termsInMain = null }: { termsInMain?: OriginSwitch | null }) => {
+const TopBar = () => {
     const screen = screenOf(usePathname());
     const carried = useCarried();
     const data = useExplorerData();
@@ -145,7 +170,7 @@ const TopBar = ({ termsInMain = null }: { termsInMain?: OriginSwitch | null }) =
             </nav>
             {ORIGIN_SWITCHES.map((name) => {
                 const terms = data.terms[name];
-                if (name === termsInMain || terms === null || terms.status === 'ready') {
+                if (terms === null || terms.status === 'ready') {
                     return null;
                 }
                 return (
@@ -157,6 +182,9 @@ const TopBar = ({ termsInMain = null }: { termsInMain?: OriginSwitch | null }) =
                     />
                 );
             })}
+            {data.usageFailed.length > 0 && (
+                <UsageLine failed={data.usageFailed} onRetry={data.retryUsage} />
+            )}
         </header>
     );
 };

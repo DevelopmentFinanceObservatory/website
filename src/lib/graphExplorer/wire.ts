@@ -62,12 +62,19 @@ export type SchemaNode = {
     domain_includes: string[];
     range_includes: string[];
     classification_code: string[];
-    /** The provenances declaring the node's `typeOf` arc. */
+    /**
+     * The provenances declaring the node's `typeOf` arc. On a node view's
+     * neighbour, the provenances of the arcs read from it: a member's
+     * `typeOf`, an in-arc subject's `rangeIncludes`, `domainIncludes` or
+     * `subClassOf` arc, a chain class's `subClassOf` edges. Empty on a
+     * neighbour no arc was read from, such as a target of the centre's arcs.
+     */
     provenances: string[];
     /**
      * The origin declaring the node: one of DECLARERS, or an origin the
      * server names that DECLARERS lacks. Null when the graph names no
-     * declaring provenance for the node.
+     * declaring provenance for the node. On a node view's neighbour it follows
+     * from `provenances` as read there.
      */
     declared_by: string | null;
     /** Set on a Class that lists its instances, null on every other node. */
@@ -135,6 +142,11 @@ export type SchemaPattern = {
     measurement_denominator: string | null;
     constraint_properties: string[];
     observation_properties: string[];
+    /**
+     * On an outside usage document, true when the StatVars' denominator arc
+     * names no value or only provisional nodes. Absent on the DFO document.
+     */
+    measurement_denominator_unresolved?: boolean;
     stat_var_count: number;
     /** Up to three StatVar dcids that follow the pattern. */
     examples: string[];
@@ -169,14 +181,61 @@ export type ProvenanceUsage = {
     stat_var_count: number;
     /** Sorted by StatVar count, largest first. */
     patterns: SchemaPattern[];
+    /** One entry per constraint property that names a value. A pattern's constraint property can have none. */
     constraint_values: SchemaConstraintValues[];
     facets: SchemaFacets;
 };
 
-/** GET /api/graph/schema/usage: how each provenance uses the model. */
+/** One node an outside usage document's patterns or constraint values name. */
+export type UsageTerm = {
+    ref: string;
+    /** Null when the arcs naming the node give no name, as for `Person`. */
+    label: string | null;
+    /** Sorted. Empty when the arcs naming the node give none. */
+    types: string[];
+};
+
+/**
+ * GET /api/graph/schema/usage: how each provenance uses the model. GET
+ * /api/graph/schema/usage/base and /api/graph/schema/usage/un_system have
+ * the same shape for the base and UN System Data Commons datasets the
+ * deployment serves, and add `terms`.
+ */
 export type SchemaUsage = {
     provenances: ProvenanceUsage[];
+    /** On an outside usage document: every node its patterns and constraint values name, sorted by ref. */
+    terms?: UsageTerm[];
 };
+
+/**
+ * GET /api/graph/schema/node/{dcid}: one node and its schema neighbours.
+ * `{generation, nodes}` has the shape of a SchemaDocument.
+ */
+export type SchemaNodeView = {
+    generation: string | null;
+    /** The node, with every outgoing arc the graph holds. `nodes` leaves it out. */
+    centre: SchemaNode;
+    /**
+     * The centre's neighbours, sorted by ref, each with its label, its types
+     * and the arcs the graph answered that tie it to the centre or to the
+     * centre's `subClassOf` chain.
+     */
+    nodes: SchemaNode[];
+    /**
+     * The listings that stopped at their cap, sorted by ref then property:
+     * `typeOf` on the centre for a value list's members, one of the centre's
+     * own schema arcs, `subClassOf+` on the centre while unread classes
+     * remain below it, `rangeIncludes/subClassOf+` on a Property centre
+     * for its range classes, `typeOf/rangeIncludes` on a value centre for
+     * its type classes, or `rangeIncludes` on a value's type class. Any
+     * entry means the view leaves out neighbours the graph holds. cutsOf
+     * in nodeView.ts maps each to the listings it cuts.
+     */
+    capped: CappedListing[];
+};
+
+/** One listing of a node view that stopped at its cap, with the node listed and the arc it was listed by. */
+export type CappedListing = { ref: string; property: string };
 
 /** A constraint value as sent: a node dcid, or a literal or null the check flags. */
 export type CheckConstraintValue = string | number | boolean | null;
@@ -337,14 +396,18 @@ const list =
         for (let at = 0; at < value.length; at += 1) item(value[at], `${path}[${at}]`);
     };
 
+/** An object holding every one of `members`, and each of `optional` it holds passing its check. */
 const obj =
-    (members: Record<string, Check>): Check =>
+    (members: Record<string, Check>, optional: Record<string, Check> = {}): Check =>
     (value, path) => {
         const record = asRecord(value);
         if (!record) return fail(path, 'an object');
         for (const [key, check] of Object.entries(members)) {
             if (!(key in record)) fail(`${path}.${key}`, 'a member');
             check(record[key], `${path}.${key}`);
+        }
+        for (const [key, check] of Object.entries(optional)) {
+            if (key in record) check(record[key], `${path}.${key}`);
         }
     };
 
@@ -371,27 +434,34 @@ const openMap: Check = (value, path) => {
         openValues(values, `${path}.${property}`);
 };
 
+const schemaNode = obj({
+    ref: str,
+    label: nullable(str),
+    description: nullable(str),
+    types: strList,
+    alternate_name: strList,
+    sub_class_of: strList,
+    sub_property_of: strList,
+    specialization_of: strList,
+    domain_includes: strList,
+    range_includes: strList,
+    classification_code: strList,
+    provenances: strList,
+    declared_by: nullable(str),
+    instances: nullable(obj({ refs: strList, complete: bool })),
+    other_properties: openMap,
+});
+
 const schemaDocument = obj({
     generation: nullable(str),
-    nodes: list(
-        obj({
-            ref: str,
-            label: nullable(str),
-            description: nullable(str),
-            types: strList,
-            alternate_name: strList,
-            sub_class_of: strList,
-            sub_property_of: strList,
-            specialization_of: strList,
-            domain_includes: strList,
-            range_includes: strList,
-            classification_code: strList,
-            provenances: strList,
-            declared_by: nullable(str),
-            instances: nullable(obj({ refs: strList, complete: bool })),
-            other_properties: openMap,
-        }),
-    ),
+    nodes: list(schemaNode),
+});
+
+const schemaNodeView = obj({
+    generation: nullable(str),
+    centre: schemaNode,
+    nodes: list(schemaNode),
+    capped: list(obj({ ref: str, property: str })),
 });
 
 const schemaTerms = obj({
@@ -407,42 +477,48 @@ const schemaTerms = obj({
     ),
 });
 
-const schemaUsage = obj({
-    provenances: list(
-        obj({
-            ref: str,
-            label: nullable(str),
-            description: nullable(str),
-            stat_var_count: num,
-            patterns: list(
-                obj({
-                    population_type: nullable(str),
-                    measured_property: str,
-                    stat_type: nullable(str),
-                    measurement_qualifier: nullable(str),
-                    measurement_denominator: nullable(str),
-                    constraint_properties: strList,
-                    observation_properties: strList,
-                    stat_var_count: num,
-                    examples: strList,
+const schemaUsage = obj(
+    {
+        provenances: list(
+            obj({
+                ref: str,
+                label: nullable(str),
+                description: nullable(str),
+                stat_var_count: num,
+                patterns: list(
+                    obj(
+                        {
+                            population_type: nullable(str),
+                            measured_property: str,
+                            stat_type: nullable(str),
+                            measurement_qualifier: nullable(str),
+                            measurement_denominator: nullable(str),
+                            constraint_properties: strList,
+                            observation_properties: strList,
+                            stat_var_count: num,
+                            examples: strList,
+                        },
+                        { measurement_denominator_unresolved: bool },
+                    ),
+                ),
+                constraint_values: list(
+                    obj({
+                        property: str,
+                        values: list(obj({ value: str, stat_var_count: num })),
+                    }),
+                ),
+                facets: obj({
+                    units: strList,
+                    scaling_factors: strList,
+                    measurement_methods: strList,
+                    observation_periods: strList,
+                    currencies: strList,
                 }),
-            ),
-            constraint_values: list(
-                obj({
-                    property: str,
-                    values: list(obj({ value: str, stat_var_count: num })),
-                }),
-            ),
-            facets: obj({
-                units: strList,
-                scaling_factors: strList,
-                measurement_methods: strList,
-                observation_periods: strList,
-                currencies: strList,
             }),
-        }),
-    ),
-});
+        ),
+    },
+    { terms: list(obj({ ref: str, label: nullable(str), types: strList })) },
+);
 
 const findingValue: Check = (value, path) => {
     if (Array.isArray(value)) return strList(value, path);
@@ -527,7 +603,19 @@ export const readUsage = (body: unknown): SchemaUsage => {
     schemaUsage(body, 'usage');
     const document = body as SchemaUsage;
     onePerRef(document.provenances, 'usage.provenances');
+    if (document.terms) onePerRef(document.terms, 'usage.terms');
     return document;
+};
+
+/**
+ * A node view, or a WireShapeError naming the first member out of shape or
+ * the first neighbour listed twice.
+ */
+export const readNodeView = (body: unknown): SchemaNodeView => {
+    schemaNodeView(body, 'node');
+    const view = body as SchemaNodeView;
+    onePerRef(view.nodes, 'node.nodes');
+    return view;
 };
 
 /** A check response, or a WireShapeError naming the first member out of shape. */

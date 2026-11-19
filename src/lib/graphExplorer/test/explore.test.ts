@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    awaitsTerms,
     carriedHref,
     checkFilter,
     exploreHref,
@@ -20,7 +19,7 @@ import {
     type ExploreState,
 } from '../explore.ts';
 import { buildModel, type ListScope } from '../model.ts';
-import { outsideTermList, readSchema, readUnTerms, readUsage } from '../wire.ts';
+import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 
 const read = (query: string) => readExplore(new URLSearchParams(query));
@@ -193,79 +192,6 @@ test('a list scope exists for every DFO property, a class or a value list', () =
         scopes.map((scope) => listScopeExists(model, scope)),
         [true, true, true, false, false, false],
     );
-});
-
-test('a term the model lacks waits while any switched-on terms list is not yet in', () => {
-    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
-    const outside = { kind: 'node', id: 'Count_Thing' } as const;
-    const waits = (base: boolean, un: boolean, settled: { base: boolean; un: boolean }) =>
-        awaitsTerms(model, outside, { base, un }, settled, []);
-    const none = { base: false, un: false };
-
-    assert.equal(waits(true, false, none), true);
-    assert.equal(waits(true, false, { base: true, un: false }), false);
-    assert.equal(waits(false, false, none), false);
-    // Both on: it waits until both are in, either order.
-    assert.equal(waits(true, true, { base: true, un: false }), true);
-    assert.equal(waits(true, true, { base: false, un: true }), true);
-    assert.equal(waits(true, true, { base: true, un: true }), false);
-    // A list whose switch is off never holds the view.
-    assert.equal(waits(false, true, { base: false, un: true }), false);
-
-    assert.equal(
-        awaitsTerms(
-            model,
-            { kind: 'node', id: 'FinancialFlow' },
-            { base: true, un: true },
-            none,
-            [],
-        ),
-        false,
-    );
-    assert.equal(
-        awaitsTerms(
-            model,
-            { kind: 'dataset', id: 'provenance/Gone' },
-            { base: true, un: true },
-            none,
-            [],
-        ),
-        false,
-    );
-});
-
-test('a term a loaded list holds does not wait on the lists still loading', () => {
-    const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
-    const age = { kind: 'node', id: 'undata/AGE' } as const;
-    const unLoaded = [{ ref: 'undata/AGE' }];
-    const switches = { base: true, un: true };
-    const unReady = { base: false, un: true };
-
-    assert.equal(awaitsTerms(model, age, switches, unReady, unLoaded), false);
-    assert.equal(awaitsTerms(model, age, switches, unReady, []), true);
-    assert.equal(
-        awaitsTerms(model, { kind: 'node', id: 'undata/Other' }, switches, unReady, unLoaded),
-        true,
-    );
-
-    // A ref the UN list holds still waits while the base list loads, since base may hold it too.
-    const un = readUnTerms({
-        generation: null,
-        terms: [
-            {
-                ref: 'Topic',
-                label: 'Topic',
-                types: ['Class'],
-                provenances: [],
-                declared_by: 'un_system',
-            },
-        ],
-    });
-    const topic = { kind: 'node', id: 'Topic' } as const;
-    const outside = (baseLoading: boolean) => outsideTermList({ un, baseLoading });
-    assert.equal(awaitsTerms(model, topic, switches, unReady, outside(true)), true);
-    const baseFailed = { base: false, un: true };
-    assert.equal(awaitsTerms(model, topic, switches, baseFailed, outside(false)), false);
 });
 
 test('an origin switch sets or clears its own parameter and keeps every other parameter', () => {

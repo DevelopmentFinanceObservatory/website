@@ -22,11 +22,15 @@ export const toCsv = (
     { verbatim = false }: { readonly verbatim?: boolean } = {},
 ): string => rows.map((row) => row.map((cell) => csvField(cell, verbatim)).join(',')).join('\r\n');
 
-/** A file name from a label: lower case, runs of other characters as one hyphen. */
-export const csvFileName = (label: string): string => {
+/**
+ * A file name from a label: lower case, runs of other characters as one
+ * hyphen, ending `-partial.csv` for a list that leaves out entries the
+ * graph holds.
+ */
+export const csvFileName = (label: string, { partial = false } = {}): string => {
     const stem = label
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
-    return `${stem || 'sheet'}.csv`;
+    return `${stem || 'sheet'}${partial ? '-partial' : ''}.csv`;
 };
