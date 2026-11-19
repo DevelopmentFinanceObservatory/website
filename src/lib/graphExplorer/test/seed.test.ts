@@ -9,6 +9,12 @@ import { NO_CARRIED, readCarried, type Carried } from '../explore.ts';
 import {
     activeConstraints,
     columnName,
+    constraintBoxes,
+    constraintFilter,
+    constraintsByShare,
+    defaultDrops,
+    dropsOutside,
+    keptThenMatches,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -17,9 +23,11 @@ import {
     seedHref,
     seedRows,
     seedsYml,
+    splitChoice,
     formulaRows,
     type SeedDataset,
 } from '../seed.ts';
+import { patternGroups } from '../sentence.ts';
 import { readUsage, type SchemaConstraintValues, type SchemaPattern } from '../wire.ts';
 import { usageBody } from './fixtures.ts';
 
@@ -200,6 +208,217 @@ test('dropping and adding constraint columns changes the columns and the constra
     ]);
 });
 
+/**
+ * A dataset shaped like the UN System's WHO: many split combinations over
+ * one large constraint set, with a long tail of properties. The first
+ * pattern names a small property, so first-named order differs from share.
+ */
+const who: SeedDataset = {
+    id: 'undata/p/WHO',
+    label: 'World Health Organization (WHO)',
+    stat_var_count: 26157,
+    patterns: [
+        pattern({ constraint_properties: ['undataAge', 'undataFbHazard'], stat_var_count: 1115 }),
+        pattern({
+            population_type: 'undata/who/SERIES-GHE_YLD',
+            constraint_properties: ['undataAge', 'undataGheCause', 'undataSex'],
+            stat_var_count: 2512,
+        }),
+        pattern({
+            population_type: 'undata/who/SERIES-GHE_DALY',
+            constraint_properties: ['undataSex', 'undataAge', 'undataGheCause'],
+            stat_var_count: 14243,
+        }),
+        pattern({ constraint_properties: ['undataGheCause', 'undataSex'], stat_var_count: 2591 }),
+        pattern({ constraint_properties: ['undataGheCause'], stat_var_count: 1458 }),
+        pattern({ constraint_properties: ['undataAirPolType', 'undataSex'], stat_var_count: 1321 }),
+        pattern({ constraint_properties: ['undataWealthQuantile'], stat_var_count: 766 }),
+        pattern({ constraint_properties: ['undataEstBasis'], stat_var_count: 549 }),
+        pattern({ constraint_properties: ['undataNutStatus'], stat_var_count: 523 }),
+        pattern({ constraint_properties: ['undataIycfPrac'], stat_var_count: 271 }),
+        pattern({ constraint_properties: ['undataUrbanization'], stat_var_count: 210 }),
+        pattern({ constraint_properties: ['undataEducationLevel'], stat_var_count: 198 }),
+    ],
+    constraint_values: [],
+};
+
+const WHO_BY_SHARE = [
+    'undataGheCause',
+    'undataSex',
+    'undataAge',
+    'undataAirPolType',
+    'undataFbHazard',
+    'undataWealthQuantile',
+    'undataEstBasis',
+    'undataNutStatus',
+    'undataIycfPrac',
+    'undataUrbanization',
+    'undataEducationLevel',
+];
+
+test("a split combination's drop list leaves the seed with that combination's columns", () => {
+    const groups = patternGroups(who.patterns);
+    assert.equal(groups.length, 11);
+    const [largest] = groups;
+    assert.deepEqual(dropsOutside(who, largest?.split ?? []), [
+        'undataFbHazard',
+        'undataAirPolType',
+        'undataWealthQuantile',
+        'undataEstBasis',
+        'undataNutStatus',
+        'undataIycfPrac',
+        'undataUrbanization',
+        'undataEducationLevel',
+    ]);
+    for (const group of groups) {
+        const dropped = dropsOutside(who, group.split);
+        assert.deepEqual(
+            activeConstraints(who, { dropped, added: [] }).toSorted(),
+            group.split.toSorted(),
+        );
+    }
+});
+
+test('the constraint boxes run by StatVar share and keep every ticked box past the head', () => {
+    assert.deepEqual(constraintsByShare(who), WHO_BY_SHARE);
+
+    const everyTicked = constraintBoxes(who, { dropped: [], open: false });
+    assert.deepEqual(everyTicked.shown, WHO_BY_SHARE);
+    assert.equal(everyTicked.long, false);
+
+    const dropped = dropsOutside(who, ['undataEducationLevel']);
+    const chosen = constraintBoxes(who, { dropped, open: false });
+    assert.deepEqual(chosen.shown, [...WHO_BY_SHARE.slice(0, 8), 'undataEducationLevel']);
+    assert.equal(chosen.long, true);
+    assert.equal(chosen.total, 11);
+    assert.deepEqual(constraintBoxes(who, { dropped, open: true }).shown, WHO_BY_SHARE);
+
+    const allDropped = dropsOutside(who, []);
+    assert.deepEqual(
+        constraintBoxes(who, { dropped: allDropped, open: false }).shown,
+        WHO_BY_SHARE.slice(0, 8),
+    );
+    assert.deepEqual(
+        constraintBoxes(who, {
+            dropped: allDropped,
+            touched: ['undataEducationLevel'],
+            open: false,
+        }).shown,
+        [...WHO_BY_SHARE.slice(0, 8), 'undataEducationLevel'],
+    );
+});
+
+test('the more constraints list keeps ticked and toggled entries first, past the filter and ceiling', () => {
+    const items = Array.from({ length: 70 }, (_, at) => `p${at}`);
+    const keep = (item: string) => item === 'p69';
+    const blank = keptThenMatches(items, { keep, matches: null });
+    assert.deepEqual(blank.kept, ['p69']);
+    assert.equal(blank.rest.hits.length, 60);
+    assert.equal(blank.rest.total, 69);
+    const filtered = keptThenMatches(items, { keep, matches: (item) => item === 'p1' });
+    assert.deepEqual(filtered.kept, ['p69']);
+    assert.deepEqual(filtered.rest.hits, ['p1']);
+});
+
+test('the default columns are the non-empty constraint set with the most StatVars', () => {
+    // Thirteen one-StatVar patterns put each dataset past ALL_CONSTRAINTS_UP_TO.
+    const filler = Array.from({ length: 13 }, (_, at) =>
+        pattern({ constraint_properties: [`filler${at}`], stat_var_count: 1 }),
+    );
+    const startsWith = (patterns: SchemaPattern[]) => {
+        const dataset = { patterns: [...patterns, ...filler] };
+        return activeConstraints(dataset, {
+            dropped: defaultDrops(dataset),
+            added: [],
+        }).toSorted();
+    };
+
+    assert.deepEqual(
+        startsWith([
+            pattern({ constraint_properties: [], stat_var_count: 1000 }),
+            pattern({ constraint_properties: ['a', 'b'], stat_var_count: 50 }),
+        ]),
+        ['a', 'b'],
+    );
+    assert.deepEqual(
+        startsWith([
+            pattern({ constraint_properties: ['c'], stat_var_count: 100 }),
+            pattern({
+                measurement_qualifier: 'Nominal',
+                constraint_properties: ['a', 'b'],
+                stat_var_count: 60,
+            }),
+            pattern({
+                observation_properties: ['x'],
+                constraint_properties: ['b', 'a'],
+                stat_var_count: 60,
+            }),
+        ]),
+        ['a', 'b'],
+    );
+    assert.deepEqual(defaultDrops({ patterns: [] }), []);
+    const one = Array.from({ length: 13 }, (_, at) => `one${at}`);
+    assert.deepEqual(defaultDrops({ patterns: [pattern({ constraint_properties: one })] }), []);
+});
+
+test('a seed starts with the largest combination only past 12 constraints, unless the URL names a drop list', () => {
+    const wide: SeedDataset = {
+        ...who,
+        patterns: [
+            ...who.patterns,
+            pattern({ constraint_properties: ['undataAtProduct'], stat_var_count: 184 }),
+            pattern({ constraint_properties: ['undataRefPerCd'], stat_var_count: 162 }),
+        ],
+    };
+    const started = (dataset: SeedDataset, search: string) => {
+        const dropped = readSeedQuery(new URLSearchParams(search)).dropped;
+        return activeConstraints(dataset, {
+            dropped: dropped ?? defaultDrops(dataset),
+            added: [],
+        }).toSorted();
+    };
+
+    assert.deepEqual(started(wide, '?dataset=undata/p/WHO'), [
+        'undataAge',
+        'undataGheCause',
+        'undataSex',
+    ]);
+    assert.deepEqual(started(who, '?dataset=undata/p/WHO'), WHO_BY_SHARE.toSorted());
+    assert.deepEqual(
+        started(wide, '?dataset=undata/p/WHO&drop='),
+        [...WHO_BY_SHARE, 'undataAtProduct', 'undataRefPerCd'].toSorted(),
+    );
+    const everything = { dataset: 'undata/p/WHO', dropped: [], added: [] };
+    assert.deepEqual(
+        readSeedQuery(new URLSearchParams(seedQuery(everything, NO_CARRIED))),
+        everything,
+    );
+});
+
+test("a group's button sets exactly its split, clearing added columns", () => {
+    const [, ...dacSplit] = DAC2A_CONSTRAINTS;
+    const choice = splitChoice(dac2a, dacSplit);
+    assert.deepEqual(choice, { dropped: ['dac2aAidType'], added: [] });
+    const query = { dataset: dac2a.id, ...choice };
+    const written = readSeedQuery(new URLSearchParams(seedQuery(query, NO_CARRIED)));
+    assert.deepEqual(
+        activeConstraints(dac2a, { dropped: written.dropped ?? [], added: written.added }),
+        dacSplit,
+    );
+});
+
+test('the constraint filter matches the column name a box shows, as well as label and dcid', () => {
+    const model = {
+        label: (id: string) => (id === 'climatePolicyObjective' ? 'Climate policy objective' : id),
+    };
+    const matches = (text: string) => constraintFilter(model, text)?.('climatePolicyObjective');
+    assert.equal(matches('climate_policy_objective'), true);
+    assert.equal(matches('Policy objective'), true);
+    assert.equal(matches('climatePolicy'), true);
+    assert.equal(matches('netting'), false);
+    assert.equal(constraintFilter(model, '  '), null);
+});
+
 test('pasted codes make one row each, the second tab-separated cell filling statvar_name', () => {
     const columns = seedColumns(dac2a);
     const { rows, merged } = seedRows(
@@ -271,7 +490,7 @@ test('the URL state round-trips the dataset, dropped and added columns and the c
     };
     const text = seedQuery(query, NO_CARRIED);
     assert.deepEqual(readSeedQuery(new URLSearchParams(text)), query);
-    assert.equal(seedQuery({ dataset: null, dropped: [], added: [] }, NO_CARRIED), '');
+    assert.equal(seedQuery({ dataset: null, dropped: null, added: [] }, NO_CARRIED), '');
     assert.deepEqual(readSeedQuery(new URLSearchParams('?drop=a,a,,b')).dropped, ['a', 'b']);
     assert.equal(readSeedQuery(new URLSearchParams('?dataset=')).dataset, null);
 });

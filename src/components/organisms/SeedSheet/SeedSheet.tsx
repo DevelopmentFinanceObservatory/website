@@ -14,23 +14,42 @@ import {
     useCarried,
     useModel,
 } from '@/components/organisms/GraphExplorer/ExploreContext';
-import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
+import { OriginTag, TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
-import { TermSourcesProvider } from '@/components/organisms/GraphExplorer/ListToggle';
+import {
+    FilterBox,
+    FilterNoteLine,
+    ListToggle,
+    TermSourcesProvider,
+} from '@/components/organisms/GraphExplorer/ListToggle';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
+import { PatternGroups } from '@/components/organisms/GraphExplorer/PatternGroups';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
 import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
 import { downloadBlob } from '@/lib/download';
 import { plural, valueCount } from '@/lib/graphExplorer/counts';
 import type { Carried } from '@/lib/graphExplorer/explore';
-import { patternId, type Model } from '@/lib/graphExplorer/model';
-import { datasetOrigin, landedUsage } from '@/lib/graphExplorer/lists';
+import type { Model } from '@/lib/graphExplorer/model';
+import {
+    datasetOrigin,
+    datasetsDfoFirst,
+    firstMatches,
+    landedUsage,
+    listHead,
+    textFilter,
+} from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
+import type { PatternGroup } from '@/lib/graphExplorer/sentence';
 import {
     columnName,
+    constraintBoxes,
+    constraintFilter,
     datasetConstraints,
+    defaultDrops,
+    dropsOutside,
     formulaRows,
+    keptThenMatches,
     NEW_SEED_NAME,
     readSeedQuery,
     seedColumns,
@@ -38,6 +57,7 @@ import {
     seedQuery,
     seedRows,
     seedsYml,
+    splitChoice,
     type SeedColumn,
     type SeedDataset,
     type SeedQuery,
@@ -64,6 +84,10 @@ const copyText = (state: CopyState): string => {
     if (state === 'done') return 'Copied.';
     return state === 'blocked' ? 'Copying is blocked here.' : '';
 };
+
+/** True when two lists hold the same entries, whatever their order. */
+const sameMembers = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && b.every((entry) => a.includes(entry));
 
 /** The constraint properties some dataset's patterns name, each once, by label. */
 const usedConstraints = (model: Model): readonly string[] =>
@@ -114,8 +138,18 @@ const ValuePanel = ({
 }) => {
     const model = useModel();
     const [copied, setCopied] = useState<{ value: string; state: CopyState } | null>(null);
+    const [filter, setFilter] = useState('');
     const values = model.valueListOfProperty(property);
     if (values === undefined) return null;
+
+    const shown = firstMatches(
+        values.members,
+        textFilter(filter, (value: string) => [
+            value,
+            model.label(value),
+            ...(model.node(value)?.classification_code ?? []),
+        ]),
+    );
 
     const copy = (value: string) => {
         navigator.clipboard.writeText(`dcid:${value}`).then(
@@ -145,6 +179,12 @@ const ValuePanel = ({
             <p className={styles.note}>
                 Copy a value as it goes in the cell. <span role="status">{status}</span>
             </p>
+            <FilterBox
+                value={filter}
+                onChange={setFilter}
+                label={`Filter the values of ${columnName(property)} by code, name or dcid`}
+                placeholder="Filter by code, name or dcid"
+            />
             <div className={styles.values}>
                 <table className={styles.sheet}>
                     <caption className={styles.hidden}>
@@ -158,7 +198,7 @@ const ValuePanel = ({
                         </tr>
                     </thead>
                     <tbody>
-                        {values.members.map((value) => (
+                        {shown.hits.map((value) => (
                             <tr key={value}>
                                 <td>{model.node(value)?.classification_code.join(', ')}</td>
                                 <td className={styles.name}>{model.label(value)}</td>
@@ -175,6 +215,7 @@ const ValuePanel = ({
                     </tbody>
                 </table>
             </div>
+            <FilterNoteLine text={filter} matches={shown} />
         </section>
     );
 };
@@ -288,13 +329,21 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const scrolled = useRef(false);
     const [codes, setCodes] = useState('');
     const [open, setOpen] = useState<string | null>(null);
+    const [picksOpen, setPicksOpen] = useState(false);
+    const [boxesOpen, setBoxesOpen] = useState(false);
+    const [moreFilter, setMoreFilter] = useState('');
+    // The tick boxes the reader toggled since picking a dataset or a set of columns, kept on show.
+    const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
+    const picksId = useId();
+    const boxesId = useId();
     // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
     const [copied, setCopied] = useState<{ state: CopyState; yml: string } | null>(null);
 
     const query = useMemo(() => readSeedQuery(params), [params]);
+    const outside = useMemo(() => landedUsage(data.usage), [data.usage]);
     const datasets = useMemo(
-        () => model.datasets.filter((dataset) => dataset.patterns.length > 0),
-        [model],
+        () => datasetsDfoFirst(model, outside).filter((dataset) => dataset.patterns.length > 0),
+        [model, outside],
     );
     const named = query.dataset === null ? undefined : full.dataset(query.dataset);
     const awaited =
@@ -306,8 +355,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
               ? datasets[0]
               : undefined;
     const picks = usage === undefined || datasets.includes(usage) ? datasets : [...datasets, usage];
-    const outsideDataset =
-        usage !== undefined && datasetOrigin(usage, landedUsage(data.usage)) !== null;
+    const outsideDataset = usage !== undefined && datasetOrigin(usage, outside) !== null;
     const dataset = useMemo(
         (): SeedDataset | null =>
             usage === undefined
@@ -325,10 +373,10 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     // An added id makes a column only when some dataset uses it, so the page lists a tick box for it.
     const choice = useMemo(
         () => ({
-            dropped: query.dropped,
+            dropped: query.dropped ?? (dataset === null ? [] : defaultDrops(dataset)),
             added: query.added.filter((id) => used.includes(id)),
         }),
-        [used, query],
+        [used, query, dataset],
     );
     const columns = useMemo(
         () => (dataset === null ? [] : seedColumns(dataset, choice)),
@@ -389,16 +437,51 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const added = new Set(choice.added);
     const write = (next: Partial<SeedQuery>) =>
         writeQuery({ dataset: dataset.id, ...choice, ...next }, carried);
-    const toggle = (list: 'dropped' | 'added', property: string) =>
+    const toggle = (list: 'dropped' | 'added', property: string) => {
+        setTouched((was) => new Set(was).add(property));
         write({
             [list]: choice[list].includes(property)
                 ? choice[list].filter((id) => id !== property)
                 : [...choice[list], property],
         });
+    };
+    const chooseColumns = (split: readonly string[]) => {
+        setOpen(null);
+        setTouched(new Set());
+        write(splitChoice(dataset, split));
+    };
+    const keepAllColumns = () => {
+        setTouched(new Set());
+        write({ dropped: [] });
+    };
+    const anyDropped = own.some((property) => dropped.has(property));
+    // Several groups can share a split; the first of them carries the pressed state.
+    const pressed = (group: PatternGroup, groups: readonly PatternGroup[]): boolean =>
+        choice.added.length === 0 &&
+        groups.find((each) => sameMembers(each.split, group.split)) === group &&
+        sameMembers(choice.dropped, dropsOutside(dataset, group.split));
+    const pickHead = listHead(picks, {
+        open: picksOpen,
+        keep: (each) => each.ref === dataset.id,
+    });
+    const boxes = constraintBoxes(dataset, {
+        dropped: choice.dropped,
+        touched: [...touched],
+        open: boxesOpen,
+    });
+    const more = keptThenMatches(others, {
+        keep: (property) => added.has(property) || touched.has(property),
+        matches: constraintFilter(model, moreFilter),
+    });
     const shownOpen = columns.some((column) => column.property !== null && column.property === open)
         ? open
         : null;
     const prefilled = columns.some((column) => column.fill !== '');
+    // Only a constraint whose property has a value list opens a panel from its heading.
+    const listedHeading = columns.some(
+        (column) =>
+            column.property !== null && model.valueListOfProperty(column.property) !== undefined,
+    );
     const formulas = formulaRows(rows).length;
     const yml = seedsYml(NEW_SEED_NAME, columns);
 
@@ -426,8 +509,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 </p>
             )}
             <SheetSection title="1. Which existing dataset is closest?">
-                <div className={styles.pick} role="group" aria-label="Dataset">
-                    {picks.map((each) => (
+                <div id={picksId} className={styles.pick} role="group" aria-label="Dataset">
+                    {pickHead.shown.map((each) => (
                         <Button
                             key={each.ref}
                             variant="card"
@@ -435,10 +518,17 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             aria-pressed={each.ref === dataset.id}
                             onClick={() => {
                                 setOpen(null);
-                                writeQuery({ dataset: each.ref, dropped: [], added: [] }, carried);
+                                setTouched(new Set());
+                                writeQuery(
+                                    { dataset: each.ref, dropped: null, added: [] },
+                                    carried,
+                                );
                             }}
                         >
-                            <span className={styles.choiceName}>{full.label(each.ref)}</span>
+                            <span className={styles.choiceName}>
+                                {full.label(each.ref)}
+                                <OriginTag declaredBy={datasetOrigin(each, outside)} dataset />
+                            </span>
                             <span className={styles.choiceMeta}>
                                 {plural(each.stat_var_count, 'StatVar')},{' '}
                                 {plural(each.patterns.length, 'pattern')}
@@ -446,24 +536,34 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         </Button>
                     ))}
                 </div>
-                <ul className={styles.patterns}>
-                    {dataset.patterns.map((pattern) => (
-                        <li key={patternId(pattern)}>
-                            Population type <code>{pattern.population_type ?? 'none'}</code>,
-                            measured property <code>{pattern.measured_property}</code>
-                            {pattern.constraint_properties.length > 0 && ', constraints '}
-                            {pattern.constraint_properties.map((property, at) => (
-                                <span key={property}>
-                                    {at > 0 && ', '}
-                                    <code>
-                                        <BreakableId text={property} />
-                                    </code>
-                                </span>
-                            ))}{' '}
-                            ({plural(pattern.stat_var_count, 'StatVar')})
-                        </li>
-                    ))}
-                </ul>
+                <ListToggle
+                    head={pickHead}
+                    noun="datasets"
+                    controls={picksId}
+                    open={picksOpen}
+                    onToggle={() => setPicksOpen((was) => !was)}
+                />
+                {/* The full model holds a dataset the URL names from outside the switches' scope. */}
+                <ModelProvider value={full}>
+                    <PatternGroups
+                        key={dataset.id}
+                        datasetId={dataset.id}
+                        action={(group, groups) => {
+                            if (groups.length <= 1) return null;
+                            const inUse = pressed(group, groups);
+                            return (
+                                <Button
+                                    variant={inUse ? 'dark' : 'bordered'}
+                                    small
+                                    aria-pressed={inUse}
+                                    onClick={() => chooseColumns(group.split)}
+                                >
+                                    {inUse ? 'Columns in Use' : 'Use These Columns'}
+                                </Button>
+                            );
+                        }}
+                    />
+                </ModelProvider>
             </SheetSection>
 
             <SheetSection title="2. Paste the source’s codes">
@@ -489,8 +589,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                         Constraint columns. Each ticked constraint becomes a column, named from the
                         property beside it.
                     </legend>
-                    <div className={styles.checks}>
-                        {own.map((property) => (
+                    <div id={boxesId} className={styles.checks}>
+                        {boxes.shown.map((property) => (
                             <ConstraintBox
                                 key={property}
                                 property={property}
@@ -499,6 +599,20 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             />
                         ))}
                     </div>
+                    <ListToggle
+                        head={boxes}
+                        noun="constraints"
+                        controls={boxesId}
+                        open={boxesOpen}
+                        onToggle={() => setBoxesOpen((was) => !was)}
+                    />
+                    {anyDropped && (
+                        <div>
+                            <Button variant="bordered" small onClick={keepAllColumns}>
+                                Use All Columns
+                            </Button>
+                        </div>
+                    )}
                     {others.length > 0 && (
                         <details
                             className={styles.more}
@@ -508,8 +622,13 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                             <summary>
                                 {plural(others.length, 'more constraint')} other datasets use
                             </summary>
+                            <FilterBox
+                                value={moreFilter}
+                                onChange={setMoreFilter}
+                                label="Filter the other datasets' constraints by name or dcid"
+                            />
                             <div className={styles.checks}>
-                                {others.map((property) => (
+                                {[...more.kept, ...more.rest.hits].map((property) => (
                                     <ConstraintBox
                                         key={property}
                                         property={property}
@@ -518,6 +637,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                     />
                                 ))}
                             </div>
+                            <FilterNoteLine text={moreFilter} matches={more.rest} />
                         </details>
                     )}
                 </fieldset>
@@ -538,8 +658,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     Hatched cells are yours to fill. An empty constraint cell means the StatVar has
                     no such constraint. A row that reuses a StatVar defined elsewhere leaves{' '}
                     <code>population_type</code>, <code>measured_property</code> and{' '}
-                    <code>stat_type</code> empty, so clear any grey cell there. Open a constraint
-                    heading to see its values.
+                    <code>stat_type</code> empty, so clear any grey cell there.
+                    {listedHeading && ' Open a constraint heading to see its values.'}
                 </p>
                 {formulas > 0 && (
                     <p className={styles.warning}>
@@ -550,7 +670,12 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                     </p>
                 )}
                 {shownOpen !== null && (
-                    <ValuePanel id={panelId} property={shownOpen} onClose={() => setOpen(null)} />
+                    <ValuePanel
+                        key={shownOpen}
+                        id={panelId}
+                        property={shownOpen}
+                        onClose={() => setOpen(null)}
+                    />
                 )}
                 <div className={styles.exports}>
                     <Button variant="dark" onClick={download}>

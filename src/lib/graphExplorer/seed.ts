@@ -25,7 +25,8 @@
  *   names the rows a spreadsheet would run as a formula.
  * - The query holds `dataset`, `drop` (the dropped constraint properties) and
  *   `add` (the added ones), each a comma-separated list of dcids, with the
- *   carried parameters (explore.ts).
+ *   carried parameters (explore.ts). A query with no `drop` takes the
+ *   dataset's default (defaultDrops); an empty `drop=` drops nothing.
  */
 import {
     queryString,
@@ -35,6 +36,8 @@ import {
     type QueryReader,
 } from './explore.ts';
 import { scan } from './delimited.ts';
+import { firstMatches, listHead, textFilter, type ListHead, type Matches } from './lists.ts';
+import type { Model } from './model.ts';
 import { SEED_PATH } from './paths.ts';
 import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
@@ -85,6 +88,134 @@ export const columnName = (property: string): string =>
 export const datasetConstraints = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => [
     ...new Set(dataset.patterns.flatMap((pattern) => pattern.constraint_properties)),
 ];
+
+/**
+ * The dataset's constraint properties that a split combination leaves out,
+ * in first-named order: the `drop` list that seeds a table with the
+ * combination's columns only.
+ */
+export const dropsOutside = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    split: readonly string[],
+): readonly string[] => {
+    const kept = new Set(split);
+    return datasetConstraints(dataset).filter((property) => !kept.has(property));
+};
+
+/**
+ * The columns a split combination's "Use These Columns" sets: exactly its
+ * split, so every other dataset constraint is dropped and nothing is added.
+ */
+export const splitChoice = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    split: readonly string[],
+): SeedChoice => ({ dropped: dropsOutside(dataset, split), added: [] });
+
+/**
+ * A filter over constraint tick boxes by what each box shows: the column
+ * name, the label and the dcid. Null for blank text.
+ */
+export const constraintFilter = (
+    model: Pick<Model, 'label'>,
+    text: string,
+): ((property: string) => boolean) | null =>
+    textFilter(text, (property: string) => [columnName(property), model.label(property), property]);
+
+/**
+ * The dataset's constraint properties by the StatVars of the patterns that
+ * name each, most first, ties in first-named order.
+ */
+export const constraintsByShare = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => {
+    const share = new Map<string, number>();
+    for (const pattern of dataset.patterns) {
+        for (const property of pattern.constraint_properties) {
+            share.set(property, (share.get(property) ?? 0) + pattern.stat_var_count);
+        }
+    }
+    return datasetConstraints(dataset).toSorted(
+        (a, b) => (share.get(b) ?? 0) - (share.get(a) ?? 0),
+    );
+};
+
+/**
+ * The dataset's constraint tick boxes on show, as constraintsByShare orders
+ * them: the head, plus every box past it that is ticked (not in `dropped`)
+ * or that the reader toggled (`touched`), or every box when `open`. A
+ * toggled box therefore stays under the pointer once unticked. A list whose
+ * head and kept boxes already hold every box reads as short, so it offers
+ * no "All N".
+ */
+export const constraintBoxes = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    {
+        dropped,
+        touched = [],
+        open,
+    }: { dropped: readonly string[]; touched?: readonly string[]; open: boolean },
+): ListHead<string> => {
+    const ordered = constraintsByShare(dataset);
+    const unticked = new Set(dropped);
+    const toggled = new Set(touched);
+    const closed = listHead(ordered, {
+        open: false,
+        keep: (property) => !unticked.has(property) || toggled.has(property),
+    });
+    if (closed.shown.length === ordered.length) return { ...closed, long: false };
+    return open ? listHead(ordered, { open: true }) : closed;
+};
+
+/**
+ * The most constraint properties a dataset's seed starts with all of. Past
+ * it, a column for every property the patterns name (WHO's 96) gives a
+ * table no single source fills, so the seed starts with one combination's.
+ */
+export const ALL_CONSTRAINTS_UP_TO = 12;
+
+/**
+ * The constraint properties a seed drops when the URL names none: nothing
+ * for a dataset with at most ALL_CONSTRAINTS_UP_TO, else every one outside
+ * the non-empty constraint set its patterns' StatVars use most, summed over
+ * every pattern with that set (ties to the set met first).
+ */
+export const defaultDrops = (dataset: Pick<SeedDataset, 'patterns'>): readonly string[] => {
+    if (datasetConstraints(dataset).length <= ALL_CONSTRAINTS_UP_TO) return [];
+    const sets = new Map<string, { split: readonly string[]; statVars: number }>();
+    for (const pattern of dataset.patterns) {
+        if (pattern.constraint_properties.length === 0) continue;
+        const key = JSON.stringify(pattern.constraint_properties.toSorted());
+        const held = sets.get(key);
+        if (held === undefined) {
+            sets.set(key, {
+                split: pattern.constraint_properties,
+                statVars: pattern.stat_var_count,
+            });
+        } else held.statVars += pattern.stat_var_count;
+    }
+    let largest: { split: readonly string[]; statVars: number } | undefined;
+    for (const set of sets.values()) {
+        if (largest === undefined || set.statVars > largest.statVars) largest = set;
+    }
+    return largest === undefined ? [] : dropsOutside(dataset, largest.split);
+};
+
+/**
+ * The "more constraints" boxes on show: every entry `keep` names (ticked
+ * or toggled this visit), first and whatever the filter, then the first
+ * LIST_CEILING others that `matches` keeps.
+ */
+export const keptThenMatches = (
+    items: readonly string[],
+    {
+        keep,
+        matches,
+    }: { keep: (item: string) => boolean; matches: ((item: string) => boolean) | null },
+): { readonly kept: readonly string[]; readonly rest: Matches<string> } => ({
+    kept: items.filter(keep),
+    rest: firstMatches(
+        items.filter((item) => !keep(item)),
+        matches,
+    ),
+});
 
 /** The constraint properties the seed holds: the dataset's, minus dropped, plus added. */
 export const activeConstraints = (
@@ -268,10 +399,17 @@ export function seedsYml(name: string, columns: readonly SeedColumn[]): string {
     return `${lines.join('\n')}\n`;
 }
 
-/** The page state as the URL holds it. */
-export type SeedQuery = SeedChoice & { readonly dataset: string | null };
+/**
+ * The page state as the URL holds it. `dropped` is null when the URL names
+ * no drop list, so the dataset's default applies (defaultDrops).
+ */
+export type SeedQuery = {
+    readonly dataset: string | null;
+    readonly dropped: readonly string[] | null;
+    readonly added: readonly string[];
+};
 
-export const NO_SEED_QUERY: SeedQuery = Object.freeze({ dataset: null, ...NO_SEED_CHOICE });
+export const NO_SEED_QUERY: SeedQuery = Object.freeze({ dataset: null, dropped: null, added: [] });
 
 const readList = (params: QueryReader, name: string): readonly string[] => [
     ...new Set((queryValue(params, name) ?? '').split(',').filter((id) => id !== '')),
@@ -280,7 +418,7 @@ const readList = (params: QueryReader, name: string): readonly string[] => [
 /** The page state a query string holds. */
 export const readSeedQuery = (params: QueryReader): SeedQuery => ({
     dataset: queryValue(params, 'dataset'),
-    dropped: readList(params, 'drop'),
+    dropped: params.get('drop') === null ? null : readList(params, 'drop'),
     added: readList(params, 'add'),
 });
 
@@ -288,7 +426,7 @@ export const readSeedQuery = (params: QueryReader): SeedQuery => ({
 export const seedQuery = (query: SeedQuery, carried: Carried): string => {
     const params = new URLSearchParams();
     if (query.dataset !== null) params.set('dataset', query.dataset);
-    if (query.dropped.length > 0) params.set('drop', query.dropped.join(','));
+    if (query.dropped !== null) params.set('drop', query.dropped.join(','));
     if (query.added.length > 0) params.set('add', query.added.join(','));
     writeCarried(params, carried);
     return queryString(params);
