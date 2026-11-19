@@ -38,7 +38,7 @@ const MAX_CLIENT_LABEL_LENGTH = 256;
 // What Python's str.isprintable() rejects, bar the plain space: control, format
 // (soft hyphen), surrogate, private-use and unassigned characters, line and
 // paragraph separators, and every space separator other than U+0020.
-const NON_PRINTABLE = /[\p{C}\p{Zl}\p{Zp}]|(?! )\p{Zs}/gu;
+export const NON_PRINTABLE = /[\p{C}\p{Zl}\p{Zp}]|(?! )\p{Zs}/gu;
 
 // Response headers worth carrying back; the rest is the upstream's own
 // business (server, date, transfer-encoding…).
