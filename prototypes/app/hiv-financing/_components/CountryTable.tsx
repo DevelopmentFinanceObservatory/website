@@ -168,6 +168,7 @@ export const CountryTable = ({
                                 <th
                                     key={column.key}
                                     scope="col"
+                                    className={column.key === 'mix' ? styles.mixColumn : undefined}
                                     aria-sort={sort.key === column.key ? sort.direction : undefined}
                                 >
                                     <button type="button" onClick={() => sortBy(column.key)}>
@@ -198,7 +199,12 @@ export const CountryTable = ({
                                             {row.flagged && <FlagMark row={row} year={year} />}
                                         </th>
                                     ) : (
-                                        <td key={column.key}>
+                                        <td
+                                            key={column.key}
+                                            className={
+                                                column.key === 'mix' ? styles.mixColumn : undefined
+                                            }
+                                        >
                                             {column.key === 'mix' ? (
                                                 <Mix row={row} />
                                             ) : (

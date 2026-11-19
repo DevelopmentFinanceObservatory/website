@@ -14,7 +14,8 @@ import {
     stripCaption,
     tableRule,
     unaidsGapNote,
-    unallocatedNote,
+    unallocatedCaption,
+    usTotalNote,
     usSwingSentence,
 } from './copy.ts';
 import {
@@ -37,7 +38,7 @@ test('the lede names the two providers and the majority split; the share note ca
     );
     assert.equal(
         shareNote(DATA),
-        'In these CRS figures, the United States and the Global Fund disbursed 99% of the HIV aid that official donors recorded for countries in 2024. In 1 of the 2 countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.',
+        'The United States and the Global Fund disbursed 99% of HIV aid recorded for countries in 2024. Of the 2 countries where the United States disbursed more than half, 1 also received Global Fund multi-disease grants.',
     );
 });
 
@@ -46,7 +47,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS, which reports most of its HIV money under another CRS code; Australia; Germany; and the United Kingdom.',
+        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -62,7 +63,7 @@ test('the falls name only the largest, and a fact attaches only to a named provi
             : provider,
     );
 
-    // With a $1m fall UNAIDS drops out of the five, and its fact with it.
+    // With a $1m fall UNAIDS drops out of the five.
     assert.match(
         allSentence({ ...DATA, otherProviders }),
         /fall: World Bank IDA, which lent \$2\.0m in 2024; Australia; Germany; the United Kingdom; and Norway\.$/,
@@ -93,23 +94,27 @@ test('the unallocated note compares the US total with KFF and places the excess'
         allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
         unallocated: { ...us([0, 0, 0.1e9, 4.5e9]), other: [0, 0, 0, 0.1e9] },
     };
-    const parts = unallocatedNote(recent);
+    const parts = usTotalNote(recent);
 
     assert.equal(
+        unallocatedCaption(recent),
+        'The chart excludes $4.60bn of 2024 HIV aid reported for regions or no country, $4.50bn of it from the United States.',
+    );
+    assert.equal(
         text(parts),
-        "The chart excludes $4.60bn of 2024 HIV aid reported for regions or with no country specified. Including those flows, total US disbursements under the CRS HIV code were $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. Of the 2024 US total, $3.50bn went to named countries, so the entire excess over KFF's figure lies in the $4.50bn reported for regions or no country. US disbursements to countries stayed between $3.20bn and $3.90bn a year from 2020 to 2024.",
+        "Including aid for regions or no country, US disbursements under the HIV code totalled $4.00bn in 2023 and $8.00bn in 2024. KFF puts US bilateral HIV spending at $5.4bn in 2024. In 2024, $3.50bn went to named countries, so the excess over KFF's figure lies in the $4.50bn reported for regions or no country. US disbursements to countries stayed between $3.20bn and $3.90bn a year from 2020 to 2024.",
     );
     // The KFF citation sits on the part that quotes KFF.
     assert.match(parts[0]?.sources?.[0]?.url ?? '', /kff\.org/);
     // With US money to countries above KFF's figure, the excess cannot be placed.
     assert.doesNotMatch(
-        text(unallocatedNote({ ...recent, allocated: us([2e9, 3.2e9, 3.9e9, 5.5e9]) })),
+        text(usTotalNote({ ...recent, allocated: us([2e9, 3.2e9, 3.9e9, 5.5e9]) })),
         /excess over KFF/,
     );
     // Before 2020 there is no range, and outside KFF's year no excess sentence.
     assert.match(
         text(
-            unallocatedNote({
+            usTotalNote({
                 ...DATA,
                 years: [2016, 2017, 2018, 2019],
                 allocated: us([2e9, 3.2e9, 3.9e9, 3.5e9]),
@@ -128,7 +133,7 @@ test('the flag legend counts the multi-disease money to countries outside the ta
 test('the UNAIDS gap note names missing coverage and deaths outside the PLHIV gap', () => {
     assert.equal(
         unaidsGapNote(DATA),
-        'The same data have no figures on treatment coverage for Côte d\'Ivoire. The table shows "–" where a figure is missing. With no 2015 figure for AIDS-related deaths in Côte d\'Ivoire, its summary leaves out the comparison with 2015.',
+        'The same data have no figures on treatment coverage for Côte d\'Ivoire. Missing cells show "–". With no 2015 AIDS-related deaths figure for Côte d\'Ivoire, its summary leaves out the 2015 comparison.',
     );
     assert.equal(unaidsGapNote({ ...DATA, countries: [DR_CONGO, UKRAINE] }), null);
 });
@@ -138,7 +143,7 @@ test('the strip caption counts from the data, and the table rule names the year'
         stripCaption(DATA),
         '3 countries that received HIV aid in 2024 and have at least 50,000 people living with HIV',
     );
-    assert.equal(tableRule(DATA), 'The table lists every country that received HIV aid in 2024.');
+    assert.equal(tableRule(DATA), 'Every country that received HIV aid in 2024.');
 });
 
 test('a country sentence with every clause', () => {
@@ -254,7 +259,7 @@ test('the fall sentence drops its share when the named falls exceed the net fall
 test('the loans sentence names the lenders, with "from" only when they make up the total', () => {
     assert.equal(
         loansSentence(DATA),
-        'Between 2015 and 2024, gross disbursements to countries included $467m in ODA loans, all from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
+        'Disbursements to countries from 2015 to 2024 included $467m in ODA loans, all from World Bank IDA ($303m) and the Asian Development Bank ($164m).',
     );
     assert.match(
         loansSentence({ ...DATA, loans: { ...DATA.loans, total: 500e6 } }) ?? '',
@@ -266,7 +271,7 @@ test('the loans sentence names the lenders, with "from" only when they make up t
 test('the Notes line names the countries with no estimate of people living with HIV', () => {
     assert.equal(
         plhivGapNote(DATA),
-        "The Development Finance Observatory's UNAIDS data have no estimate of people living with HIV for Ukraine, so aid per person is blank for it and the dot strip excludes it.",
+        'The UNAIDS data here lack an estimate of people living with HIV for Ukraine, so aid per person is blank and the strip excludes it.',
     );
 });
 
@@ -276,7 +281,7 @@ test('the code-change sentence reads the jump only when the multi-disease fall e
 
     assert.equal(
         codeChangeSentence({ ...around, globalFundMulti: [742e6, 108e6] }),
-        "Between 2019 and 2020, the Global Fund's multi-disease grants to countries fell from $742m to $108m, while its disbursements under the HIV code rose from $1.06bn to $2.10bn. Much of the jump in its bars reflects that reclassification, marked by the dashed line.",
+        "From 2019 to 2020, the Global Fund's multi-disease grants to countries fell from $742m to $108m, while its HIV-code disbursements rose from $1.06bn to $2.10bn. That reclassification, marked by the dashed line, explains much of the jump.",
     );
     assert.doesNotMatch(
         codeChangeSentence({ ...around, globalFundMulti: [742e6, 600e6] }) ?? '',
@@ -296,7 +301,7 @@ test('the US swing sentence appears only for a dip or spike in 2019, with verbs 
 
     assert.equal(
         usSwingSentence(us([3.65e9, 2.11e9, 3.72e9])),
-        'For example, US disbursements to countries fell from $3.65bn in 2018 to $2.11bn in 2019, then rose to $3.72bn in 2020.',
+        'US disbursements to countries fell from $3.65bn in 2018 to $2.11bn in 2019, then rose to $3.72bn in 2020.',
     );
     assert.match(
         usSwingSentence(us([2e9, 3e9, 2e9])) ?? '',

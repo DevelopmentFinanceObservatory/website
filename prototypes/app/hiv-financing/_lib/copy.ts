@@ -105,39 +105,38 @@ export const SOURCES = {
     },
 } as const satisfies Record<string, Source>;
 
-/** The line under the lede on where the Global Fund's money comes from. */
-export const UNDER_LEDE: Cited = {
-    text: 'Each provider is the government or agency that reported disbursing the aid to the country. The Global Fund reports as a provider in its own right, so money that governments and foundations give it counts once, as Global Fund aid. By US law, the United States may give at most a third of all contributions to the Global Fund.',
+/** The How to interpret line on what a provider is and where the Global Fund's money comes from. */
+export const PROVIDER_NOTE: Cited = {
+    text: 'A provider is the government or agency that reported disbursing aid. Because the Global Fund reports as a provider, contributions from governments and foundations count as Global Fund aid. By law, the United States may give at most a third of all contributions to the Global Fund.',
     sources: [SOURCES.globalFundUsCap],
 };
 
-/** The scope note under the lede. */
+/** The How to interpret line on domestic money, which the data leave out. */
 export const SCOPE_NOTE: Cited = {
-    text: 'UNAIDS estimates that around 52% of the money available for HIV in low- and middle-income countries in 2024 came from domestic sources. The figures here cover external aid only.',
+    text: 'UNAIDS estimates that around 52% of the money available for HIV in low- and middle-income countries in 2024 came from domestic sources.',
     sources: [SOURCES.unaidsFactSheet2025],
 };
 
-/** The note near the top on funding in 2025, after the OECD data end. */
+/** The Notes item on funding in 2025, after the OECD data end. */
 export const FUNDING_2025: Cited = {
-    text: 'The OECD data end in 2024. KFF reports that donor-government HIV funding fell from $8.3bn in 2024 to $6.2bn in 2025, in current dollars. UNAIDS reports that international HIV funding fell from $8.8bn to $7.3bn over the same years. Both use their own counting rules, so their totals differ from the OECD figures here. This page will add 2025 figures when the OECD publishes them.',
+    text: 'The OECD data end in 2024. KFF reports that donor-government HIV funding fell from $8.3bn in 2024 to $6.2bn in 2025, in current dollars, and UNAIDS that international HIV funding fell from $8.8bn to $7.3bn over the same years. Both count differently from the OECD.',
     sources: [SOURCES.kff2025, SOURCES.unaidsSpecialReport2026],
 };
 
 /** The How to interpret line on how other measures count the US and the Global Fund. */
 export const OTHER_MEASURES: Cited = {
-    text: 'Other measures count the United States and the Global Fund differently. The Global Fund counts itself as a separate source and says it provides 28% of all international financing for HIV programmes. KFF credits Global Fund money to the governments that gave it, which puts the United States at 80% of donor-government HIV funding in 2024 and 74% in 2025.',
+    text: 'The Global Fund says it provides 28% of all international financing for HIV programmes. KFF credits Global Fund contributions to donor governments, which puts the United States at 80% of donor-government HIV funding in 2024 and 74% in 2025.',
     sources: [SOURCES.globalFundHiv, SOURCES.kff2024, SOURCES.kff2025],
 };
 
 /** Why aid per person is a ratio, and when the page leaves it blank. */
 export const PER_PERSON_NOTE: Cited = {
-    text: `Aid per person living with HIV divides a country's HIV aid by its number of people living with HIV. Because aid also pays for prevention, testing, and health systems, this ratio does not measure spending per patient. It also excludes domestic spending, so it reads low where governments pay most of the cost. South Africa funds 77% of its AIDS response, by UNAIDS's estimate. The ratio is blank where fewer than ${PER_PERSON_MIN_PLHIV.toLocaleString('en-GB')} people live with HIV, because small counts make it swing.`,
+    text: `Aid per person living with HIV is a ratio, not spending per patient. Aid also funds prevention, testing, and health systems. Because the ratio excludes domestic spending, it reads low where governments pay most of the cost. South Africa funds 77% of its AIDS response. The ratio is blank below ${PER_PERSON_MIN_PLHIV.toLocaleString('en-GB')} people living with HIV, where small counts make it swing.`,
     sources: [SOURCES.unaidsGlobalAidsUpdate2025],
 };
 
 /** The caveat beside the strip's median. */
-export const MEDIAN_CAVEAT =
-    "The median is the middle country's ratio. It does not measure what a typical patient receives.";
+export const MEDIAN_CAVEAT = "The middle country's ratio, not spending per patient.";
 
 /** The Notes line naming the countries kept in the table with no estimate of people living with HIV. */
 export const plhivGapNote = (data: HivData): string => {
@@ -145,8 +144,8 @@ export const plhivGapNote = (data: HivData): string => {
     const them = names.length === 1 ? 'it' : 'them';
 
     return names.length === 0
-        ? "The Development Finance Observatory's UNAIDS data include an estimate of people living with HIV for every country in the table."
-        : `The Development Finance Observatory's UNAIDS data have no estimate of people living with HIV for ${listOf(names)}, so aid per person is blank for ${them} and the dot strip excludes ${them}.`;
+        ? 'The UNAIDS data here include an estimate of people living with HIV for every country in the table.'
+        : `The UNAIDS data here lack an estimate of people living with HIV for ${listOf(names)}, so aid per person is blank and the strip excludes ${them}.`;
 };
 
 /** The Notes line on the other UNAIDS figures missing for countries that do have an
@@ -167,10 +166,10 @@ export const unaidsGapNote = (data: HivData): string | null => {
         [
             missing.length === 0
                 ? null
-                : `The same data have no figures on ${missing.join(', or ')}. The table shows "–" where a figure is missing.`,
+                : `The same data have no figures on ${missing.join(', or ')}. Missing cells show "–".`,
             noFirst.length === 0
                 ? null
-                : `With no ${first} figure for AIDS-related deaths in ${listOf(noFirst)}, ${noFirst.length === 1 ? 'its summary leaves' : 'their summaries leave'} out the comparison with ${first}.`,
+                : `With no ${first} AIDS-related deaths figure for ${listOf(noFirst)}, ${noFirst.length === 1 ? 'its summary leaves' : 'their summaries leave'} out the ${first} comparison.`,
         ]
             .filter((sentence) => sentence !== null)
             .join(' ') || null
@@ -204,9 +203,9 @@ export const shareNote = (data: HivData): string => {
     const { usGfShare, usMajority, usMajorityGfMulti } = ledeFigures(data);
 
     return [
-        `In these CRS figures, the United States and the Global Fund disbursed ${pct(usGfShare)} of the HIV aid that official donors recorded for countries in ${lastYear(data)}.`,
+        `The United States and the Global Fund disbursed ${pct(usGfShare)} of HIV aid recorded for countries in ${lastYear(data)}.`,
         usMajorityGfMulti > 0
-            ? `In ${usMajorityGfMulti} of the ${usMajority} countries where the United States disbursed more than half, the Global Fund also disbursed multi-disease grants under other codes.`
+            ? `Of the ${usMajority} countries where the United States disbursed more than half, ${usMajorityGfMulti} also received Global Fund multi-disease grants.`
             : null,
     ]
         .filter((sentence) => sentence !== null)
@@ -232,8 +231,6 @@ export const OTHER_PROVIDER_FACTS: Readonly<
 > = {
     'International Development Association': (provider, year) =>
         `which lent ${money(provider.last)} in ${year}`,
-    'Joint United Nations Programme on HIV/AIDS': () =>
-        'which reports most of its HIV money under another CRS code',
 };
 
 /** How many providers the summary sentence names. */
@@ -292,7 +289,7 @@ export const allSentence = (data: HivData): string => {
 
     return [
         `In ${last}, donors disbursed ${money(lastTotal(data.allocated))} in HIV aid to ${data.recipients} countries.`,
-        `Providers other than the United States and the Global Fund disbursed ${money(others.at(-1) ?? 0)} to countries in ${last}, against ${money(others[0] ?? 0)} in ${first}.`,
+        `Providers other than the United States and the Global Fund disbursed ${money(others.at(-1) ?? 0)} in ${last}, against ${money(others[0] ?? 0)} in ${first}.`,
         fallSentence(data),
     ]
         .filter((sentence) => sentence !== null)
@@ -307,11 +304,17 @@ const KFF_YEAR = 2024;
 /** From this year US money to countries held in a narrow range. */
 const US_STEADY_FROM = 2020;
 
-/**
- * The note under the chart on money reported for regions or no country, which the chart
- * leaves out, and on the US total that runs above US government reports.
- */
-export const unallocatedNote = (data: HivData): Cited[] => {
+/** The line under the chart on money reported for regions or no country, which the chart
+ *  leaves out. */
+export const unallocatedCaption = (data: HivData): string => {
+    const last = lastYear(data);
+    const usElsewhere = data.unallocated.us.at(-1) ?? 0;
+
+    return `The chart excludes ${money(lastTotal(data.unallocated))} of ${last} HIV aid reported for regions or no country, ${money(usElsewhere)} of it from the United States.`;
+};
+
+/** The Notes item on the US total with those flows, which runs above US government reports. */
+export const usTotalNote = (data: HivData): Cited[] => {
     const last = lastYear(data);
     const previous = data.years.at(-2) ?? last;
     const usAll = data.allocated.us.map(
@@ -331,14 +334,13 @@ export const unallocatedNote = (data: HivData): Cited[] => {
         last === KFF_YEAR &&
         usCountries <= KFF_US_BILATERAL &&
         usCountries + usElsewhere > KFF_US_BILATERAL
-            ? `Of the ${last} US total, ${money(usCountries)} went to named countries, so the entire excess over KFF's figure lies in the ${money(usElsewhere)} reported for regions or no country.`
+            ? `In ${last}, ${money(usCountries)} went to named countries, so the excess over KFF's figure lies in the ${money(usElsewhere)} reported for regions or no country.`
             : null;
 
     return [
         {
             text: [
-                `The chart excludes ${money(lastTotal(data.unallocated))} of ${last} HIV aid reported for regions or with no country specified.`,
-                `Including those flows, total US disbursements under the CRS HIV code were ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
+                `Including aid for regions or no country, US disbursements under the HIV code totalled ${money(usAll.at(-2) ?? 0)} in ${previous} and ${money(usAll.at(-1) ?? 0)} in ${last}.`,
                 `KFF puts US bilateral HIV spending at $${KFF_US_BILATERAL / 1e9}bn in ${KFF_YEAR}.`,
             ].join(' '),
             sources: [SOURCES.kff2025],
@@ -358,7 +360,7 @@ export const flagLegend = (data: HivData): string => {
     const outside = (data.globalFundMulti.at(-1) ?? 0) - inTable;
 
     return [
-        `Marked countries also received Global Fund multi-disease grants in ${last}, with the amount shown beside each name. These grants are recorded under other CRS codes and excluded from the table's HIV aid figures.`,
+        `Marked countries also received Global Fund multi-disease grants in ${last}, shown beside each name. These grants are recorded under other CRS codes and excluded from HIV aid totals.`,
         outside >= 0.5e6
             ? `A further ${money(outside)} went to countries with no HIV aid in ${last}.`
             : null,
@@ -404,10 +406,10 @@ export const codeChangeSentence = (data: HivData): string | null => {
         return null;
     }
 
-    const moves = `Between ${before} and ${after}, the Global Fund's multi-disease grants to countries fell from ${money(multi[0])} to ${money(multi[1])}, while its disbursements under the HIV code rose from ${money(hiv[0])} to ${money(hiv[1])}.`;
+    const moves = `From ${before} to ${after}, the Global Fund's multi-disease grants to countries fell from ${money(multi[0])} to ${money(multi[1])}, while its HIV-code disbursements rose from ${money(hiv[0])} to ${money(hiv[1])}.`;
 
     return fall >= CODE_CHANGE_SHARE * rise
-        ? `${moves} Much of the jump in its bars reflects that reclassification, marked by the dashed line.`
+        ? `${moves} That reclassification, marked by the dashed line, explains much of the jump.`
         : moves;
 };
 
@@ -434,7 +436,7 @@ export const usSwingSentence = (data: HivData): string | null => {
 
     const [first, second] = dip ? ['fell', 'rose'] : ['rose', 'fell'];
 
-    return `For example, US disbursements to countries ${first} from ${money(a)} in 2018 to ${money(b)} in 2019, then ${second} to ${money(c)} in 2020.`;
+    return `US disbursements to countries ${first} from ${money(a)} in 2018 to ${money(b)} in 2019, then ${second} to ${money(c)} in 2020.`;
 };
 
 /** A lender is named in the loans sentence from this share of the loans up. */
@@ -456,7 +458,7 @@ export const loansSentence = (data: HivData): string | null => {
     // "from" when the named lenders make up the printed total, else "including".
     const from = money(covered) === money(total) ? 'all from' : 'including';
 
-    return `Between ${data.years[0] ?? 0} and ${lastYear(data)}, gross disbursements to countries included ${money(total)} in ODA loans, ${from} ${listOf(items)}.`;
+    return `Disbursements to countries from ${data.years[0] ?? 0} to ${lastYear(data)} included ${money(total)} in ODA loans, ${from} ${listOf(items)}.`;
 };
 
 /** The strip's caption: how many countries it holds and the rule that picks them. */
@@ -468,7 +470,7 @@ export const stripCaption = (data: HivData): string => {
 
 /** The line under the table's heading: which countries it lists. */
 export const tableRule = (data: HivData): string =>
-    `The table lists every country that received HIV aid in ${lastYear(data)}.`;
+    `Every country that received HIV aid in ${lastYear(data)}.`;
 
 /** Countries whose name takes "the" in running text, by ISO3 code. */
 const WITH_ARTICLE: ReadonlySet<string> = new Set(['CAF', 'COG', 'DOM', 'PHL']);

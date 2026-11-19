@@ -8,7 +8,6 @@ import styles from './HivFinancing.module.scss';
 import { PerPersonStrip } from './PerPersonStrip';
 import { ProviderBars } from './ProviderBars';
 import { Reserved } from './Reserved';
-import { CitedText } from './SourceLink';
 
 import type { HivData } from '../_data/types.ts';
 import {
@@ -17,7 +16,7 @@ import {
     flagLegend,
     stripCaption,
     tableRule,
-    unallocatedNote,
+    unallocatedCaption,
 } from '../_lib/copy.ts';
 import { findCountry, lastYear, scopeMulti, scopeSeries } from '../_lib/summary.ts';
 
@@ -135,9 +134,7 @@ export const HivFinancing = ({
                     years={data.years}
                     scope={selected ?? ALL_COUNTRIES}
                 />
-                <p className={styles.note}>
-                    <CitedText parts={unallocatedNote(data)} />
-                </p>
+                <p className={styles.note}>{unallocatedCaption(data)}</p>
                 <div className={styles.below}>
                     <PerPersonStrip
                         countries={data.countries}
