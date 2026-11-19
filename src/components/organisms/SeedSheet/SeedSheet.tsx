@@ -342,7 +342,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         others.some((property) => choice.added.includes(property)),
     );
 
-    // Check a sheet scrolls to the check step once, when it first mounts, which waits for an
+    // The page scrolls to the check step once, on the step's first mount, which may wait for an
     // awaited dataset.
     const scrollToCheck = useCallback(
         (element: HTMLDivElement | null) => {

@@ -303,9 +303,9 @@ const fnv1a = (text: string, seed: number): string => {
  * A pattern's identity, as a React key: 16 hex digits hashed from the fields that
  * define it (population type, measured property, stat type, qualifier,
  * denominator and whether it is unresolved, and the constraint and observation
- * properties as sets). The
- * StatVar count and the examples change as usage grows and the API orders
- * patterns by count, so neither the position nor those fields enter the id.
+ * properties as sets). The StatVar count and the examples change as usage
+ * grows and the API orders patterns by count, so neither the position nor
+ * those fields enter the id.
  */
 export const patternId = (pattern: SchemaPattern): string => {
     const defining = JSON.stringify([

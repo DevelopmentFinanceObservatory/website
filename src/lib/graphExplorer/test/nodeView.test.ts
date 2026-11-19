@@ -401,7 +401,7 @@ test("a box and a class's list name the gaps their listings leave", () => {
     };
 
     assert.deepEqual(gapsOf([]), { up: '', measured: '', split: '', down: '' });
-    // The direct listing capped: its box is cut, and the walk below stopped with it.
+    // With the direct listing capped, its box is cut and the walk below stops with it.
     assert.deepEqual(
         gapsOf([
             { ref: CLASS, property: 'subClassOf' },

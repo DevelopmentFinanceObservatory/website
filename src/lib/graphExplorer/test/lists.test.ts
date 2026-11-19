@@ -177,7 +177,7 @@ test("a term takes its schema node's origin, else the terms list's, else its usa
     assert.equal(termOrigin(model, sources([]), SERIES), 'un_system');
     assert.equal(termOrigin(model, sources([]), 'gender'), 'base');
     assert.equal(termOrigin(model, sources([listed]), 'undata/AGE'), 'un_system');
-    // UN patterns name the base property `value`: its terms list row names the declarer.
+    // UN patterns name the base property `value`, and its terms list row names the declarer.
     const value: SchemaTerm = { ...listed, ref: 'value', label: 'Value', declared_by: 'base' };
     assert.equal(termOrigin(model, sources([]), 'value'), 'un_system');
     assert.equal(termOrigin(model, sources([value]), 'value'), 'base');

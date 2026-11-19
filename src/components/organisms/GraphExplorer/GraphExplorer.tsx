@@ -55,7 +55,7 @@ const UnknownFilter = ({ id, onClear }: { id: string; onClear: () => void }) => 
     </p>
 );
 
-/** The line over a view drawn unfiltered while the filtered dataset may still arrive with an outside usage document. */
+/** The line over a view drawn unfiltered while an outside usage document that may hold the filtered dataset loads. */
 const AwaitedFilter = ({ id }: { id: string }) => (
     <p className={styles.filterNote} role="status">
         <Spinner size={16} label="Loading" />
@@ -225,7 +225,7 @@ const GraphExplorer = () => {
                                         <ViewLoading id={awaited} waiting={null} />
                                     ) : (
                                         <>
-                                            {/* The start screen reads no filter, so it says nothing of one still loading. */}
+                                            {/* The start screen reads no filter, so it says nothing of a filter dataset that is loading. */}
                                             {awaitedFilter !== null && view.kind !== 'start' && (
                                                 <AwaitedFilter id={awaitedFilter} />
                                             )}

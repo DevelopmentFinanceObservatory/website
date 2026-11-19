@@ -554,7 +554,7 @@ const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
 
 /** The status line for a check whose columns read differently since it ran. */
 const STALE_TEXT =
-    'The columns read differently from when this check ran, so its result is not shown. Check again to see one for them.';
+    'The columns read differently from when this check ran, so its result is not shown. Check again for a result that matches the current columns.';
 
 /**
  * The check step. A filled seed or StatVar output, pasted or chosen as a

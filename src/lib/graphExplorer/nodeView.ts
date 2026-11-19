@@ -146,9 +146,9 @@ const CENTRE_CUTS: ReadonlyMap<string, readonly DrawnListing[]> = new Map([
     ['subClassOf', [{ kind: 'arc', property: 'subClassOf', direction: 'in' }, WALK]],
     ['domainIncludes', [DECLARED]],
     ['typeOf', [MEMBERS]],
-    // A Property centre's range classes past the first few, so "Takes its value from" is cut.
+    // A cap on a Property centre's range classes (past the first few) cuts "Takes its value from".
     ['rangeIncludes/subClassOf+', [{ kind: 'arc', property: 'rangeIncludes', direction: 'out' }]],
-    // A value centre's type classes past the first few, so "Value list" is cut.
+    // A cap on a value centre's type classes (past the first few) cuts "Value list".
     ['typeOf/rangeIncludes', [{ kind: 'arc', property: 'typeOf', direction: 'out' }]],
 ]);
 

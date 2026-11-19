@@ -166,7 +166,7 @@ test('a seed copied from a UN dataset checks the UN property its column names, v
     // A sheet for a DFO dataset reads its headers against the schema alone, as a DFO seed always has.
     const dfo = readPasted(full, text);
     assert.equal(skips(dfo.summary).sex, 'no_field');
-    // A check of one reading is stale against the other, and not against a fresh copy of itself.
+    // A check of one reading is stale against the other, and current against a fresh copy of itself.
     assert.equal(sameReading(dfo.mapping, mapping), false);
     assert.equal(sameReading(readPasted(full, text, new Map(), outside).mapping, mapping), true);
 });

@@ -305,7 +305,7 @@ const CompletenessLine = ({
                 {cuts.lists.length > 0 &&
                     `The ${one ? 'list' : 'lists'} ${quotedList(cuts.lists)} ${one ? 'is' : 'are'} cut short. The graph holds more links than one view reads. `}
                 {cuts.walk &&
-                    `Counts over kinds of ${name} leave some out. The graph holds more narrower kinds than one view reads.`}
+                    `Counts over narrower kinds of ${name} leave some out. The graph holds more of them than one view reads.`}
             </span>
         </p>
     );
@@ -351,7 +351,7 @@ const RefusalText = ({
             return <>The graph could not finish reading {term}.</>;
         case 'tooLarge':
             return drawn ? (
-                <>Its links on the graph are too many to load here.</>
+                <>The graph holds too many links for it to load here.</>
             ) : (
                 <>The graph&rsquo;s view of {term} is too large to show here.</>
             );
@@ -369,9 +369,9 @@ const RefusedLine = ({ refusal, id }: { refusal: RefusalKind; id: string }) => (
 
 /**
  * The line over a centre's picture: its node view's failure or refusal, or
- * else what its model may leave out (`completeness`, complete when not
- * given, for a screen that marks its own list) and the drawn lists that
- * leaves cut (`cuts`).
+ * else what its model may leave out (`completeness`, complete by default
+ * for a screen that marks its own list) and which drawn lists are cut
+ * (`cuts`).
  */
 export const CentreNotice = ({
     id,
@@ -443,10 +443,10 @@ export const Refused = ({
 
 /**
  * Focus after Try Again, whose button unmounts once the retried node view
- * settles: the screen's heading (`heading`) when it draws one, else the
- * text of the refusal or missing screen it ends on (`text`). `onRetry`
- * loads the view again through `retry`. `failing` is true while the
- * screen shows the view's failure line.
+ * settles. Focus goes to the screen's heading (`heading`) when it draws
+ * one, else to the text of the refusal or missing screen it ends on
+ * (`text`). `onRetry` loads the view again through `retry`. `failing` is
+ * true while the screen shows the view's failure line.
  */
 export const useRetryFocus = (failing: boolean, retry: () => void) => {
     const heading = useRef<HTMLHeadingElement | null>(null);
@@ -476,8 +476,8 @@ export const useRetryFocus = (failing: boolean, retry: () => void) => {
  * usage documents name it or a loaded terms list holds it. A failed view
  * keeps what the full model shows, with a line that loads it again, and
  * the heading or the refusal takes focus once a retried view settles
- * (`useRetryFocus`). The line over the
- * picture says what the model may leave out (`Completeness`).
+ * (`useRetryFocus`). The line over the picture says what the model may
+ * leave out (`Completeness`).
  */
 const FocusView = ({ centre, show, full }: FocusViewProps) => {
     const sources = useTermSources();

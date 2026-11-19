@@ -114,7 +114,7 @@ const targetKey = (target: ColumnTarget): string | null => {
 
 /**
  * True when two mappings read every column alike: the same header, target,
- * skip and earlier column repeated. A check run against one mapping still
+ * skip and earlier column repeated. A check run against one mapping
  * describes the columns of the other.
  */
 export const sameReading = (a: Mapping, b: Mapping): boolean =>
