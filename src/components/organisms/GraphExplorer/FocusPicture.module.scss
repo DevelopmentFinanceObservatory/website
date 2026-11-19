@@ -236,7 +236,7 @@ $stack-below: 720px;
 }
 
 // A join is a line in two halves with its words. Across, the words sit over
-// the line; down, they sit between the halves, or beside a chain's dot. A
+// the line. Down, they sit between the halves, or beside a chain's dot. A
 // chain's dashed line has a dot between the halves. Each half may end in an
 // arrowhead, placed per layout: `headStart` and `headEnd` in the wide layout,
 // `stackStart` and `stackEnd` in the stacked one.
@@ -294,7 +294,7 @@ $head: 7px;
 }
 
 @mixin segment-across($start, $end) {
-    // Half a join drawn across: the head at the start (left) or end (right).
+    // Half a join drawn across, with its head at the start (left) or end (right).
     width: auto;
     height: $head;
 
@@ -328,7 +328,7 @@ $head: 7px;
 }
 
 @mixin segment-down($start, $end) {
-    // Half a join drawn down: the head at the start (top) or end (bottom).
+    // Half a join drawn down, with its head at the start (top) or end (bottom).
     width: $head;
     height: rem(16);
 
@@ -504,7 +504,7 @@ $head: 7px;
     }
 }
 
-// The box's link as a sentence, for a screen reader; the drawn line is hidden from it.
+// The box's link as a sentence for a screen reader. The drawn line is hidden from it.
 .hidden {
     position: absolute;
     width: 1px;
@@ -564,8 +564,8 @@ $spine-half: rem(8);
         }
     }
 
-    // Above the centre the spine runs down from each branch to the card;
-    // below it, up from each branch to the card.
+    // Above the centre the spine runs down from each branch to the card.
+    // Below it, the spine runs up from each branch to the card.
     .up > .column::before,
     .left > .row::before {
         top: 0;

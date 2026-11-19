@@ -99,9 +99,9 @@ export type LinkShape =
 /**
  * The arrowheads of a box's join. One arc points from subject to object.
  * StatVars are the subject of both their arcs, so both heads point away from
- * the dot; a value list is the object of both, so both point at it. A
- * dataset's StatVars hold no arc to the dataset the usage document states, so
- * that half has no head.
+ * the dot. A value list is the object of both, so both point at it. A
+ * dataset's link to its StatVars comes from the usage document, which states
+ * no arc between them, so that half has no head.
  */
 export const linkShape = (via: Via): LinkShape => {
     switch (via.kind) {
@@ -117,12 +117,12 @@ export const linkShape = (via: Via): LinkShape => {
     }
 };
 
-/** One end of a half of a join, in reading order: top or left, bottom or right. */
+/** One end of a half of a join in reading order: `start` is top or left, `end` is bottom or right. */
 export type End = 'start' | 'end';
 
 /**
- * Where the arrowhead sits on each half of a join, the half read first then
- * the other: an end of that half, or null for none. `boxFirst` says whether
+ * Where the arrowhead sits on each half of a join, the half read first and
+ * then the other. Each is an end of that half, or null for none. `boxFirst` says whether
  * the box sits before the join in reading order (above it, or left of it).
  */
 export const headsOf = (shape: LinkShape, boxFirst: boolean): readonly [End | null, End | null] => {
@@ -242,7 +242,7 @@ const patternsAbout = (model: Model, classId: string): readonly SchemaPattern[] 
 };
 
 /**
- * A class's role box: StatVars about the class, or a narrower one, use each
+ * A class's role box, where StatVars about the class or a narrower one use each
  * entry in `role`. `about` holds the patterns about the class or a narrower one.
  */
 const classRoleVia = (
@@ -271,7 +271,7 @@ const classRoleVia = (
     });
 };
 
-/** A property's "Used with" box: StatVars about each entry use the property in some role. */
+/** A property's "Used with" box, where StatVars about each entry use the property in some role. */
 const usedWithVia = (model: Model, propertyId: string, ids: readonly string[]): Via => {
     const classes = new Set(ids);
     const roles = new Set<Role>();
@@ -295,7 +295,7 @@ const usedWithVia = (model: Model, propertyId: string, ids: readonly string[]): 
     });
 };
 
-/** A dataset's box: the dataset's StatVars that name an entry by `arc`. */
+/** A dataset's box, built from the dataset's StatVars that name an entry by `arc`. */
 const datasetVia = (
     view: DatasetView,
     ids: readonly string[],

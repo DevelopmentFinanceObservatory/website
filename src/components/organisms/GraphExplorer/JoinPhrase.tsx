@@ -12,7 +12,7 @@ type JoinPhraseProps = {
     note: string | null;
 };
 
-/** Closes the bubble open now, so only one shows at a time. */
+/** Closes the open bubble, so only one shows at a time. */
 let closeOpen: (() => void) | null = null;
 
 /**
@@ -57,7 +57,7 @@ export const JoinPhrase = ({ phrase, triple, note }: JoinPhraseProps) => {
         if (event.pointerType === 'mouse') setHovered(entering);
     };
 
-    // A press flips what the reader sees: it hides a bubble the pointer previews, and
+    // A press flips what the reader sees. It hides a bubble the pointer previews, and
     // shows a closed one until it is closed.
     const onPress = () => {
         setHovered(false);

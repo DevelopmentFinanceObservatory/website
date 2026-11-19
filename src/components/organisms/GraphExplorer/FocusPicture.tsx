@@ -133,7 +133,7 @@ const Legend = ({ boxes }: { boxes: readonly FocusBox[] }) => {
                         className={classNames(styles.sample, styles.sampleChain)}
                         aria-hidden="true"
                     />
-                    A path through StatVars or a value list, at the dot
+                    A path through StatVars or a value list, marked by a dot
                 </li>
             )}
         </ul>
