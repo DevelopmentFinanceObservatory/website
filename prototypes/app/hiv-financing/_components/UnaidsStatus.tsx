@@ -10,7 +10,7 @@ const errorCode = (error: Error): string =>
  * Where the UNAIDS figures are not yet on the page, says why: a loading line while the reads
  * run, or the failure with its code. Renders nothing once the figures are in. Every place
  * waiting on the figures shows the failure, and one of them, `announce`, raises it to screen
- * readers; useUnaids logs the full error to the console.
+ * readers. useUnaids logs the full error to the console.
  */
 export const UnaidsStatus = ({
     state,

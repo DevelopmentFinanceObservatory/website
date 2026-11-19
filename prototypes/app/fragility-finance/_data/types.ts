@@ -10,11 +10,11 @@ export type Dimension = { score: number; category: number };
 /** The OECD's two fragile tiers. */
 export type Tier = 'extreme' | 'high';
 
-/** One year of the money a context receives and pays out; null where no figure is held. */
+/** One year of the money a context receives and pays out, null where no figure is held. */
 export type FlowYear = {
     year: number;
     oda: number | null;
-    /** Gross other official flows; 0 in a year the CRS records none. */
+    /** Gross other official flows, 0 in a year the CRS records none. */
     oof: number | null;
     remittances: number | null;
     fdi: number | null;
@@ -44,7 +44,7 @@ export type Context = {
     iso3: string;
     name: string;
     tier: Tier;
-    /** The OECD's aggregate fragility score; lower is more fragile. */
+    /** The OECD's aggregate fragility score. Lower is more fragile. */
     score: number;
     /** 1 for the most fragile of the 62. */
     rank: number;
@@ -53,13 +53,13 @@ export type Context = {
     pillars: PillarYear[];
     /** 2015 to 2024. */
     flows: FlowYear[];
-    /** The years from 2015 to 2033 that IDS holds; empty for a context outside IDS. */
+    /** The years from 2015 to 2033 that IDS holds, empty for a context outside IDS. */
     debtService: DebtYear[];
     /** The largest providers in 2024, largest first. */
     donors: DonorShare[];
-    /** 2024 for every context; null where none is recorded in 2024. */
+    /** The 2024 split, null where none is recorded in 2024. */
     climate: ClimateSplit | null;
-    /** Population in 2024, keyed by the year as text; empty where UNICEF holds none. */
+    /** Population in 2024, keyed by the year as text, empty where UNICEF holds none. */
     population: Record<string, number>;
     indicators: Record<IndicatorKey, Reading | null>;
 };
@@ -67,7 +67,7 @@ export type Context = {
 /** The groups the page can show: all 62 contexts, or one tier. */
 export type GroupKey = 'all' | 'extreme' | 'high';
 
-/** What _data/groups.json holds per group; every other group figure is summed in _lib. */
+/** What _data/groups.json holds per group. Every other group figure is summed in _lib. */
 export type Group = {
     /** The six largest providers of ODA to the group's contexts in 2024, largest first. */
     donors: DonorShare[];

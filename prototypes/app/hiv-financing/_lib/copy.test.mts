@@ -46,7 +46,7 @@ test('the lede names the two providers and the majority split; the share note ca
 
 test('the all-countries sentence: allocated, recipients and table count, others now and then, the largest falls', () => {
     // Falls: IDA $86m, UNAIDS $57m, Australia $50m, Germany $23m, the UK $21.4m, against a
-    // total fall of $295m; France's rise is left out.
+    // total fall of $295m. France's rise is left out.
     assert.equal(
         allSentence(DATA),
         'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS; Australia; Germany; and the United Kingdom.',

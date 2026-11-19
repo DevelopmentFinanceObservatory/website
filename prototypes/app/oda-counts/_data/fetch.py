@@ -58,7 +58,7 @@ RESOLVE = "https://developmentfinance.org/api/v1/search/resolve"
 RESOLVE_ENTRIES = 6
 
 # The currencies of the 32 DAC members, the only currencies the page converts to. DAC1
-# publishes their exchange rates itself; ONE's tables take every other rate from the IMF.
+# publishes their exchange rates itself. ONE's tables take every other rate from the IMF.
 DAC_CURRENCIES = (
     "USD",  # United States
     "EUR",  # 20 members, among them the EU institutions
@@ -77,8 +77,8 @@ DAC_CURRENCIES = (
     "HUF",  # Hungary
     "PLN",  # Poland
 )
-# A spec id no definition hashes to. A build refuses it with the id the server computed;
-# a conversion posts the identity alone, and Search names the converted spec.
+# A spec id no definition hashes to. A build refuses it with the id the server computed.
+# A conversion posts the identity alone, and Search names the converted spec.
 PLACEHOLDER_ID = "spec_" + "0" * 32
 RECOMPUTED = re.compile(r"recomputed id '(spec_[0-9a-f]+)'")
 
@@ -397,7 +397,7 @@ def fetch_offer() -> dict:
     """Return the conversion offer every monetary series shares, failing when they differ.
 
     Each series is resolved with every provider open, so the offer covers each currency
-    any provider converts to; the page keeps only the DAC members' currencies. The offer
+    any provider converts to. The page keeps only the DAC members' currencies. The offer
     keeps each currency's code, noun, years and base years, and the base year a
     constant-price request completes to.
     """
@@ -640,7 +640,7 @@ def main() -> int:
             }
         else:
             retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-            # Pin only once the checks hold: each new pin counts against a daily allowance.
+            # Pin only once the checks hold, since each new pin counts against a daily allowance.
             datasets = {key: client.pin(data) for key, data in datasets.items()}
             log.info("Pinned %d members.", sum(len(data.members) for data in datasets.values()))
             records = {key: data.provenance for key, data in datasets.items()}

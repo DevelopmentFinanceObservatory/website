@@ -18,7 +18,7 @@ export type TransfersState =
 
 /**
  * Reads the transfers ref in the browser and joins its rows to `members`. The server
- * renders and the first client render show `loading`; nothing on the page derives from
+ * renders and the first client render show `loading`. Nothing on the page derives from
  * the rows before this resolves. A failure goes to `console.error` in full.
  */
 export const useTransfers = (members: TransfersMembers): TransfersState => {

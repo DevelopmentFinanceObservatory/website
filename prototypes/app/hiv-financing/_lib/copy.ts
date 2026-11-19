@@ -29,7 +29,7 @@ import {
 } from './summary.ts';
 import type { NamedFigures, UnaidsCountry } from './unaids.ts';
 
-/** A cited web page; `date` is null for an undated page, and `detail` names what the page
+/** A cited web page. `date` is null for an undated page, and `detail` names what the page
  *  takes from it. */
 export type Source = {
     publisher: string;
@@ -177,7 +177,7 @@ export const plhivGapNote = (countries: readonly NamedFigures[]): string => {
 };
 
 /** The Notes line on the other UNAIDS figures missing for countries that do have an
- *  estimate of people living with HIV; null when none is missing. */
+ *  estimate of people living with HIV. Null when none is missing. */
 export const unaidsGapNote = (
     countries: readonly NamedFigures[],
     years: readonly number[],
@@ -207,7 +207,7 @@ export const unaidsGapNote = (
     );
 };
 
-/** The lede says "almost all" from this US and Global Fund share up; below it the lede throws. */
+/** The lede says "almost all" from this US and Global Fund share up. Below it the lede throws. */
 const ALMOST_ALL = 0.95;
 
 export const ledeSentence = (data: HivData): string => {
@@ -243,7 +243,7 @@ export const shareNote = (data: HivData): string => {
         .join(' ');
 };
 
-/** How the page prints a provider's DFO label; a label not here prints as given. */
+/** How the page prints a provider's DFO label. A label not here prints as given. */
 export const OTHER_PROVIDER_LABELS: Readonly<Record<string, string>> = {
     'International Development Association': 'World Bank IDA',
     'Joint United Nations Programme on HIV/AIDS': 'UNAIDS',

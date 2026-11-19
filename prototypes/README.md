@@ -35,7 +35,7 @@ Folders starting with `_` become no route. `template/` sits outside `app/`, so i
 
 ## Write the data step
 
-A data step runs by hand, writes JSON, and the page imports that JSON at build time, so a page opens on committed data. A page may also call the site's API from the browser on the same origin, as `oda-counts` does to convert figures to a currency the reader picks; `pnpm dev` rewrites `/api/v1` to developmentfinance.org for that:
+A data step runs by hand, writes JSON, and the page imports that JSON at build time, so a page opens on committed data. A page may also call the site's API from the browser on the same origin, as `oda-counts` does to convert figures to a currency the reader picks. `pnpm dev` rewrites `/api/v1` to developmentfinance.org for that. Run a step with:
 
 ```sh
 pnpm data debt-diagnostic
@@ -52,7 +52,10 @@ import { writeDataFile } from '#lib/dataFile.mts';
 
 const answer = await new Client().search(QUERY);
 const dataset = await answer.fetch();
-const data = (await dataset.toRows()).map((row) => ({ year: Number(row.time_period), value: Number(row.value) }));
+const data = (await dataset.toRows()).map((row) => ({
+    year: Number(row.time_period),
+    value: Number(row.value),
+}));
 
 writeDataFile(new URL('./series.json', import.meta.url), {
     query: QUERY,
@@ -72,7 +75,7 @@ In Python, the script carries its own dependencies as PEP 723 inline metadata, a
 # ///
 ```
 
-`uv run --script _data/fetch.py` runs it, and `pnpm data` does that for you. The template's `fetch.py` builds the same envelope by hand. The part that matters is six lines:
+`uv run --script _data/fetch.py` runs it, and `pnpm data` does that for you. The template's `fetch.py` builds the same envelope by hand. The core is:
 
 ```python
 envelope = {
@@ -89,14 +92,14 @@ Every JSON file under `app/*/_data/` has this shape:
 
 ```json
 {
-  "provenance": {
-    "sdk": "@developmentfinance/client@0.4.1",
-    "query": "ODA from Germany to Nigeria",
-    "retrieved": "2026-11-16T09:30:00.000Z",
-    "sentence": "Germany's net disbursements (bilateral flows) to Nigeria ...",
-    "citation": "OECD DAC2A (2026), via the Development Finance Observatory"
-  },
-  "data": []
+    "provenance": {
+        "sdk": "@developmentfinance/client@0.4.1",
+        "query": "ODA from Germany to Nigeria",
+        "retrieved": "2026-11-16T09:30:00.000Z",
+        "sentence": "Germany's net disbursements (bilateral flows) to Nigeria ...",
+        "citation": "OECD DAC2A (2026), via the Development Finance Observatory"
+    },
+    "data": []
 }
 ```
 
@@ -104,16 +107,23 @@ Every JSON file under `app/*/_data/` has this shape:
 
 ### Pinned reads and refs
 
-A data step that wants its numbers to reproduce reads through refs. A ref names the exact dataset versions a read returned, so a later run fetches the same bytes and the output does not drift when DFO revises its data. `data.ref.to_json()` (Python) and `data.ref.toJSON()` (TypeScript) write one, and `DatasetRef.from_json` and `DatasetRef.fromJSON` read it back. Pin a dataset's versions before committing its ref; an unpinned version expires.
+A data step that wants its numbers to reproduce reads through refs. A ref names the exact dataset versions a read returned, so a later run fetches the same bytes and the output does not drift when DFO revises its data. `data.ref.to_json()` (Python) and `data.ref.toJSON()` (TypeScript) write one, and `DatasetRef.from_json` and `DatasetRef.fromJSON` read it back. Pin a dataset's versions before committing its ref, because an unpinned version expires.
 
 `app/<slug>/_data/refs.json` is an envelope whose `provenance` is `{ "sdk": "development-finance==0.4.1", "query": "<prototype> pinned reads", "retrieved": <time of the refresh run> }`. Its `data` maps each read key to the ref and the dataset's provenance:
 
 ```json
 {
-  "provenance": { "sdk": "development-finance==0.4.1", "query": "oda-counts pinned reads", "retrieved": "2026-11-19T09:30:00.000Z" },
-  "data": {
-    "germany-kenya": { "ref": { "format_version": 1, "members": [] }, "provenance": { "...": "data.provenance.to_json()" } }
-  }
+    "provenance": {
+        "sdk": "development-finance==0.4.1",
+        "query": "oda-counts pinned reads",
+        "retrieved": "2026-11-19T09:30:00.000Z"
+    },
+    "data": {
+        "germany-kenya": {
+            "ref": { "format_version": 1, "members": [] },
+            "provenance": { "...": "data.provenance.to_json()" }
+        }
+    }
 }
 ```
 
@@ -129,9 +139,9 @@ To check that a step reproduces, run it plain with an empty `DFO_CACHE_DIR`, con
 
 ### Reads in the browser
 
-A figure a page derives on the client reads from the browser instead of the static JSON. The read is of a pinned ref, a fixed version, so the rows match what the step committed and do not move when DFO's data changes. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. The field leaves the committed JSON, and no server-rendered text derives from it.
+A figure a page derives on the client reads its rows in the browser from a pinned ref, a fixed version, so the rows match what the step committed. The step writes the refs for those reads to `_data/live-refs.json`, the same envelope with `data` mapping each key to a ref object. A field the browser reads is left out of the committed JSON, and no server-rendered text derives from it, so the page has one source for each number.
 
-`lib/pinnedRef.ts` reads one ref. It builds an anonymous client on the production API, which answers a pinned read with 200 and cache headers; the shared edge cache arrives with DevelopmentFinanceObservatory/infra#154. It returns the dataset and its rows:
+`lib/pinnedRef.ts` reads one ref. It builds an anonymous client on the production API, which answers a pinned read with 200 and cache headers. It returns the dataset and its rows:
 
 ```tsx
 'use client';

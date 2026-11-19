@@ -135,8 +135,8 @@ INDICATORS = (
 FLOW_SERIES = ("oda", "oof", "remittances", "fdi", "debtService")
 GROUPS = {"all": ("extreme", "high"), "extreme": ("extreme",), "high": ("high",)}
 
-# Values read from DFO when this step was written. A refetch that moves one fails here,
-# so a change in the source is seen before it reaches the page.
+# Debt service values read from DFO. A refetch that moves one fails the check, so a change
+# in the source is seen before it reaches the page.
 KNOWN = {
     ("MOZ", 2024): 916_663_899.7,
     ("MOZ", 2033): 462_640_455.4,
@@ -151,7 +151,7 @@ class Reads:
 
     Each read has a key in `refs.json`. A plain run fetches the committed ref and keeps
     the committed record. The other modes fetch anew, and `keep` pins every read once the
-    checks pass and records it; with `pin` false, `keep` records the reads unpinned and
+    checks pass and records it. With `pin` false, `keep` records the reads unpinned and
     `write` leaves `refs.json` alone, for a trial run.
     """
 
@@ -254,7 +254,7 @@ class Reads:
         return found
 
     def write(self, retrieved: str) -> None:
-        """Rewrite `refs.json`; a plain run and a trial run leave it as committed."""
+        """Rewrite `refs.json`. A plain run and a trial run leave it as committed."""
         if self.mode == "plain" or not self.pin:
             return
 

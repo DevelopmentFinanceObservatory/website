@@ -17,11 +17,11 @@ export type TransfersMembers = {
 export type TransfersData = {
     release: string;
     years: number[];
-    /** Every member, in membership order, with its net transfers by year; null where missing. */
+    /** Every member, in membership order, with its net transfers by year, null where missing. */
     countries: (TransferMember & { values: (number | null)[] })[];
 };
 
-/** A transfers row; the port reads `financingRecipient`, `time_period` and `value`. */
+/** A transfers row. The port reads `financingRecipient`, `time_period` and `value`. */
 export type TransferRow = Record<string, unknown>;
 
 /** The year in a `time_period`, read as Python's `int(str(value))` reads it. */
@@ -118,9 +118,9 @@ export type LineKey = Group | 'outside';
 
 export type TransferLine = {
     key: LineKey;
-    /** Members' ISO3 codes, sorted; the set-aside country is left out. */
+    /** Members' ISO3 codes, sorted, without the set-aside country. */
     members: string[];
-    /** The members' sum by year; null in a year where none reports. */
+    /** The members' sum by year, null in a year where none reports. */
     values: (number | null)[];
 };
 

@@ -2,9 +2,10 @@
 // (lib/dataFile.mts) with `provenance.sdk` naming a DFO SDK release,
 // `provenance.query` and `provenance.retrieved` as an ISO 8601 UTC time, and
 // `data`. `refs.json` and `live-refs.json` also map each read key to its ref
-// (check-data-rules.mts): each ref lists members, its provenance members are pinned,
-// and a live ref names only versions that refs.json pins. A page prints its source line from these fields, and CI cannot
-// refetch them, so a file without them fails here.
+// (check-data-rules.mts): each ref lists members, its provenance members are
+// pinned, and a live ref names only versions that refs.json pins. A page prints
+// its source line from these fields, and CI cannot refetch them, so a file
+// without them fails here.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -49,7 +50,7 @@ for (const file of dataFiles) {
                 (JSON.parse(readFileSync(sibling, 'utf8')) as { data?: unknown }).data,
             );
         } catch {
-            // No readable refs.json beside it: every live member then fails as unpinned.
+            // Without a readable refs.json beside it, every live member fails as unpinned.
         }
     }
 

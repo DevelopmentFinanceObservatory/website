@@ -24,7 +24,7 @@ const COUNTRY = 'country/';
 /**
  * Rounds as Python's `round(value, digits)` does: to the nearest, with an exact half going to
  * the even digit. An exact half at `digits` places is an odd multiple of 2^-(digits + 1), so
- * the test for one is exact in binary; every other value rounds as `toFixed` does, from its
+ * the test for one is exact in binary. Every other value rounds as `toFixed` does, from its
  * exact binary value.
  */
 export const pythonRound = (value: number, digits = 0): number => {

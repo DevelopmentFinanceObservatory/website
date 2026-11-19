@@ -44,8 +44,9 @@ const standIns = (years: readonly number[]): UnaidsFigures[] =>
 const chartTitle = (name: string, data: HivData) =>
     `${name}, ${data.years[0]} to ${data.years.at(-1)}, constant ${data.priceBase} US dollars`;
 
-/** An in-page scroll's behaviour: instant under reduced motion. `auto` would defer to the
- *  site's `scroll-behavior: smooth` on the root, so it is not used. */
+/** An in-page scroll's behaviour: instant under reduced motion, otherwise smooth. `auto`
+ *  would defer to the site's `scroll-behavior: smooth` on the root and so scroll smoothly
+ *  under reduced motion. */
 const scrollBehaviour = (): ScrollBehavior =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
 
@@ -108,7 +109,7 @@ export const HivFinancing = ({
         [data, countries],
     );
 
-    // Text fades in on a change of scope, not on first paint (_motion.scss).
+    // Text fades in on each change of scope after first paint (_motion.scss).
     useEffect(() => {
         islandRef.current?.setAttribute('data-ready', '');
     }, []);

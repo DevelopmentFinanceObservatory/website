@@ -7,7 +7,7 @@ import type { UnaidsFigures } from '../_data/types.ts';
 import { pythonRound, unaidsByCountry, type UnaidsRows } from './unaids.ts';
 
 // Real rows from the pinned reads, with the figures `unaids_by_country` in fetch.py gives for
-// them; the step rewrites the file on every run.
+// them. The step rewrites the file on every run.
 const fixture = JSON.parse(
     readFileSync(new URL('../_data/unaids-fixture.json', import.meta.url), 'utf8'),
 ).data as {

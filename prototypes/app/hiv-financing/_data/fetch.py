@@ -32,7 +32,7 @@ Three modes:
 - `--refresh`: fetch the newest versions of each committed ref, pin them, rewrite
   `refs.json`. A ref keeps its places, so the run fails when a kept country lies outside
   the deaths read's places, or when the newest versions lose a UNAIDS figure the committed
-  versions gave a kept country; `--search` reads the places afresh;
+  versions gave a kept country. `--search` reads the places afresh;
 - `--search`: search for each read afresh, pin, rewrite `refs.json`. A ref keeps its
   window and reading, so a change to either takes this mode.
 
@@ -40,10 +40,10 @@ The last two modes pin once every check passes, since each pin counts against a 
 allowance. `--no-pin` skips the pins, for trial runs: it writes `hiv.json` and the fixture
 and leaves `refs.json` and `live-refs.json` as they are.
 
-Checks that the data are what the page assumes (the right datasets and units, every
-provider present, countries summing to the totals, and the claims fixed in the page's
-prose), failing loudly when one is not. It logs each headline figure against the last
-`hiv.json`, flagging moves over 10%. The page covers aid recipients, so a country is kept
+The step checks that the data are what the page assumes (the right datasets and units,
+every provider present, countries summing to the totals, and the claims fixed in the
+page's prose) and fails loudly when one is not. It logs each headline figure against the
+last `hiv.json`, flagging moves over 10%. The page covers aid recipients, so a country is kept
 when it received HIV aid in the last year, which leaves out donors such as Germany that have
 UNAIDS estimates and receive no HIV aid.
 """
@@ -103,7 +103,7 @@ NAMES = {
 
 # Countries in the UNAIDS reads that DFO's UN source refused to answer for, as the
 # un_system_unavailable warning names them. Greece and Slovenia are donors and Western Sahara
-# has no HIV aid, so the page leaves out all three; the source refuses Western Sahara on some
+# has no HIV aid, so the page leaves out all three. The source refuses Western Sahara on some
 # runs only. A refusal for any other place would blank a country the page keeps, so it fails
 # the step.
 KNOWN_UN_GAPS = {"GRC", "SVN", "ESH"}

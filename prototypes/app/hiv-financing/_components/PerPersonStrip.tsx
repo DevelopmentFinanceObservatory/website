@@ -29,8 +29,8 @@ const tickText = (tick: number) => `$${Number(tick.toFixed(1))}`;
 /**
  * The ratio of last-year HIV aid to people living with HIV, one dot per country with 50,000
  * or more people living with HIV and some aid, on a fixed axis with the median marked. Dots stay
- * put; the selected country's dot gets a ring and a label and the others sit back.
- * Hovering or the arrow keys read a dot's name and value; a click or Enter selects its
+ * put. The selected country's dot gets a ring and a label and the others sit back.
+ * Hovering or the arrow keys read a dot's name and value, and a click or Enter selects its
  * country.
  */
 export const PerPersonStrip = ({

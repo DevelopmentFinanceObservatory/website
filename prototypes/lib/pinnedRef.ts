@@ -2,8 +2,8 @@
 // `_data/live-refs.json` goes in, and the Dataset with its rows comes out. A
 // pinned file is a fixed version that anyone may read, so no key is needed and
 // the numbers match what the step committed. Errors reach the caller as the
-// client raises them; there is no fallback to other data. Pages own the React
-// hook that calls this.
+// client raises them, with no fallback to other data. Pages own the React hook
+// that calls this.
 import { Client, DatasetRef, type Dataset } from '@developmentfinance/client';
 import type { Row } from '@developmentfinance/client/types';
 

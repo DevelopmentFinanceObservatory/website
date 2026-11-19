@@ -128,11 +128,11 @@ const download = (rows: readonly TableRow[], year: number) => {
 
 /**
  * Every country's last-year HIV aid, who provides it, and the UNAIDS figures beside it.
- * Header buttons sort; each Country cell holds a button that selects the row. Shows the
- * top rows of the current sort, plus the selected country wherever it ranks. The CSV holds
- * every row in the current sort order. The UNAIDS columns show "…" while `unaids` loads, and
- * the CSV waits for them; after a failure the columns show FAILED and the CSV leaves their
- * cells empty.
+ * Header buttons sort, and each Country cell holds a button that selects the row. The table
+ * shows the top rows of the current sort, plus the selected country wherever it ranks. The
+ * CSV holds every row in the current sort order. The UNAIDS columns show "…" while `unaids`
+ * loads, and the CSV waits for them. After a failure the columns show FAILED and the CSV
+ * leaves their cells empty.
  */
 export const CountryTable = ({
     countries,

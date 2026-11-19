@@ -111,7 +111,7 @@ export type StripDot = PerPersonPoint & {
 export type Strip = {
     scale: StripScale;
     dots: StripDot[];
-    /** the median of the dots' values; null when the strip is empty */
+    /** the median of the dots' values, or null when the strip is empty */
     median: number | null;
 };
 
