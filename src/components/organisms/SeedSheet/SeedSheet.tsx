@@ -37,7 +37,6 @@ import {
     firstMatches,
     landedUsage,
     listHead,
-    termFilter,
     textFilter,
 } from '@/lib/graphExplorer/lists';
 import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
@@ -45,6 +44,7 @@ import type { PatternGroup } from '@/lib/graphExplorer/sentence';
 import {
     columnName,
     constraintBoxes,
+    constraintFilter,
     datasetConstraints,
     defaultDrops,
     dropsOutside,
@@ -57,6 +57,7 @@ import {
     seedQuery,
     seedRows,
     seedsYml,
+    splitChoice,
     type SeedColumn,
     type SeedDataset,
     type SeedQuery,
@@ -447,7 +448,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const chooseColumns = (split: readonly string[]) => {
         setOpen(null);
         setTouched(new Set());
-        write({ dropped: dropsOutside(dataset, split) });
+        write(splitChoice(dataset, split));
     };
     const keepAllColumns = () => {
         setTouched(new Set());
@@ -470,7 +471,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     });
     const more = keptThenMatches(others, {
         keep: (property) => added.has(property) || touched.has(property),
-        matches: termFilter(model, moreFilter),
+        matches: constraintFilter(model, moreFilter),
     });
     const shownOpen = columns.some((column) => column.property !== null && column.property === open)
         ? open

@@ -36,7 +36,8 @@ import {
     type QueryReader,
 } from './explore.ts';
 import { scan } from './delimited.ts';
-import { firstMatches, listHead, type ListHead, type Matches } from './lists.ts';
+import { firstMatches, listHead, textFilter, type ListHead, type Matches } from './lists.ts';
+import type { Model } from './model.ts';
 import { SEED_PATH } from './paths.ts';
 import { toCsv } from './sheet.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
@@ -100,6 +101,25 @@ export const dropsOutside = (
     const kept = new Set(split);
     return datasetConstraints(dataset).filter((property) => !kept.has(property));
 };
+
+/**
+ * The columns a split combination's "Use These Columns" sets: exactly its
+ * split, so every other dataset constraint is dropped and nothing is added.
+ */
+export const splitChoice = (
+    dataset: Pick<SeedDataset, 'patterns'>,
+    split: readonly string[],
+): SeedChoice => ({ dropped: dropsOutside(dataset, split), added: [] });
+
+/**
+ * A filter over constraint tick boxes by what each box shows: the column
+ * name, the label and the dcid. Null for blank text.
+ */
+export const constraintFilter = (
+    model: Pick<Model, 'label'>,
+    text: string,
+): ((property: string) => boolean) | null =>
+    textFilter(text, (property: string) => [columnName(property), model.label(property), property]);
 
 /**
  * The dataset's constraint properties by the StatVars of the patterns that

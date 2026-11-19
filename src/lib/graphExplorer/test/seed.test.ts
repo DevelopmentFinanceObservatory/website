@@ -10,6 +10,7 @@ import {
     activeConstraints,
     columnName,
     constraintBoxes,
+    constraintFilter,
     constraintsByShare,
     defaultDrops,
     dropsOutside,
@@ -22,6 +23,7 @@ import {
     seedHref,
     seedRows,
     seedsYml,
+    splitChoice,
     formulaRows,
     type SeedDataset,
 } from '../seed.ts';
@@ -391,6 +393,30 @@ test('a seed starts with the largest combination only past 12 constraints, unles
         readSeedQuery(new URLSearchParams(seedQuery(everything, NO_CARRIED))),
         everything,
     );
+});
+
+test("a group's button sets exactly its split, clearing added columns", () => {
+    const [, ...dacSplit] = DAC2A_CONSTRAINTS;
+    const choice = splitChoice(dac2a, dacSplit);
+    assert.deepEqual(choice, { dropped: ['dac2aAidType'], added: [] });
+    const query = { dataset: dac2a.id, ...choice };
+    const written = readSeedQuery(new URLSearchParams(seedQuery(query, NO_CARRIED)));
+    assert.deepEqual(
+        activeConstraints(dac2a, { dropped: written.dropped ?? [], added: written.added }),
+        dacSplit,
+    );
+});
+
+test('the constraint filter matches the column name a box shows, as well as label and dcid', () => {
+    const model = {
+        label: (id: string) => (id === 'climatePolicyObjective' ? 'Climate policy objective' : id),
+    };
+    const matches = (text: string) => constraintFilter(model, text)?.('climatePolicyObjective');
+    assert.equal(matches('climate_policy_objective'), true);
+    assert.equal(matches('Policy objective'), true);
+    assert.equal(matches('climatePolicy'), true);
+    assert.equal(matches('netting'), false);
+    assert.equal(constraintFilter(model, '  '), null);
 });
 
 test('pasted codes make one row each, the second tab-separated cell filling statvar_name', () => {
