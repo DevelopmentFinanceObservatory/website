@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BreakableId } from './BreakableId';
 import { ModelProvider, useExplore, useModel } from './ExploreContext';
 import { OriginTag } from './ExploreLink';
-import { DatasetPanel, FullList, NodePanel, OutsidePanel, type PanelLens } from './FocusPanel';
+import { DatasetPanel, FullList, NodePanel, TermPanel, type PanelLens } from './FocusPanel';
 import FocusPicture from './FocusPicture';
 import styles from './FocusView.module.scss';
 import { useNodeView } from './useNodeView';
@@ -27,7 +27,7 @@ import {
 import { waitText, type Waiting } from '@/lib/graphExplorer/load';
 import type { DatasetFilter, Model } from '@/lib/graphExplorer/model';
 import { needsNodeView, routeCentre, type NodeViewFailure } from '@/lib/graphExplorer/nodeView';
-import type { SchemaTerm } from '@/lib/graphExplorer/wire';
+import type { SchemaNodeView } from '@/lib/graphExplorer/wire';
 
 type FocusViewProps = {
     centre: Centre;
@@ -35,8 +35,6 @@ type FocusViewProps = {
     show: DatasetFilter;
     /** The full model, over every usage document loaded. */
     full: Model;
-    /** The terms lists whose switches are on and that have loaded. */
-    outside?: readonly SchemaTerm[];
 };
 
 type CentredProps = Omit<FocusViewProps, 'full'> & {
@@ -99,7 +97,7 @@ const FilterLine = ({ lens, dataset }: { lens: PanelLens; dataset: string | null
  * the notice, the dataset filter's line, the focus picture and the panel
  * beside it with the definition, or with a box's full list while one is open.
  */
-const Centred = ({ centre, show, outside, notice }: CentredProps) => {
+const Centred = ({ centre, show, notice }: CentredProps) => {
     const model = useModel();
     const { go } = useExplore();
     const [open, setOpen] = useState<string | null>(null);
@@ -113,7 +111,7 @@ const Centred = ({ centre, show, outside, notice }: CentredProps) => {
     const marked = pictureLens(centre, show);
     const markLens: PanelLens = marked === null ? { dataset: null, label: null } : lens;
 
-    const heading = useMemo(() => centreHeading(model, centre, outside), [model, centre, outside]);
+    const heading = useMemo(() => centreHeading(model, centre), [model, centre]);
     useDocumentTitle(heading?.name ?? centre.id);
 
     if (heading === null) {
@@ -145,7 +143,7 @@ const Centred = ({ centre, show, outside, notice }: CentredProps) => {
     ) : kind ? (
         <NodePanel id={centre.id} lens={lens} />
     ) : (
-        <OutsidePanel id={centre.id} term={heading.term} />
+        <TermPanel id={centre.id} lens={lens} />
     );
 
     const openList = (key: string) => {
@@ -208,6 +206,26 @@ const FailedLine = ({ failure, onRetry }: { failure: NodeViewFailure; onRetry: (
     </p>
 );
 
+/** The line over a picture whose node view stopped some listings at their cap. */
+const CappedLine = () => (
+    <p className={styles.filter} role="status">
+        <span>
+            Some lists here are cut short, as the graph holds more links than one view reads.
+        </span>
+    </p>
+);
+
+/** The line over a centre's picture: its node view's failure, or its cut lists. */
+const viewNotice = (
+    failed: NodeViewFailure | null,
+    view: SchemaNodeView | null,
+    retry: () => void,
+) => {
+    if (failed !== null) return <FailedLine failure={failed} onRetry={retry} />;
+    if (view !== null && view.capped.length > 0) return <CappedLine />;
+    return null;
+};
+
 /** The screen while the node view of a term the DFO document lacks loads, or waits before a retry. */
 const ViewLoading = ({ id, waiting }: { id: string; waiting: Waiting | null }) => (
     <div className={styles.loading}>
@@ -261,7 +279,7 @@ const Refused = ({ id, notHeld }: { id: string; notHeld: boolean }) => {
  * served here" when the view is refused. A failed view keeps what the full
  * model shows, with a line that loads it again.
  */
-const FocusView = ({ centre, show, full, outside }: FocusViewProps) => {
+const FocusView = ({ centre, show, full }: FocusViewProps) => {
     const { state, retry } = useNodeView(needsNodeView(full, centre) ? centre.id : null);
     const route = routeCentre(full, centre, state);
 
@@ -277,10 +295,11 @@ const FocusView = ({ centre, show, full, outside }: FocusViewProps) => {
                     <Centred
                         centre={centre}
                         show={show}
-                        outside={outside}
-                        notice={
-                            route.failed && <FailedLine failure={route.failed} onRetry={retry} />
-                        }
+                        notice={viewNotice(
+                            route.failed,
+                            state?.status === 'ready' ? state.value : null,
+                            retry,
+                        )}
                     />
                 </ModelProvider>
             );

@@ -91,7 +91,7 @@ const GraphExplorer = () => {
             }
             case 'node':
             case 'dataset':
-                return <FocusView centre={view} show={show} full={full} outside={data.outside} />;
+                return <FocusView centre={view} show={show} full={full} />;
         }
     };
 

@@ -12,9 +12,7 @@
  */
 import { count, plural } from './counts.ts';
 import {
-    declarerPlace,
     KIND_WORDS,
-    kindOfTerm,
     plainName,
     ROLES,
     type DatasetFilter,
@@ -24,7 +22,7 @@ import {
     type Role,
     type ValuesUsed,
 } from './model.ts';
-import type { SchemaNode, SchemaPattern, SchemaTerm } from './wire.ts';
+import type { Declarer, SchemaNode, SchemaPattern, SchemaUsage, UsageTerm } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -474,23 +472,32 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
             via: arcVia(model, id, ids, ['rangeIncludes'], 'in'),
         });
 
+    // The properties StatVars about the term use, by role: a class's, or a UN series' (a value).
+    const roleBoxes = (more: FocusBox['more']): FocusBox[] => {
+        const { groups } = model.propertiesOf(id);
+        const about = patternsAbout(model, id);
+        const role = (group: Role, title: string, phrase: string) => {
+            const ids = groups[group].map((entry) => entry.id);
+            return make({
+                key: group,
+                side: 'right',
+                title,
+                ids,
+                via: classRoleVia(id, group, ids, about),
+                phrase,
+                more,
+            });
+        };
+        return [
+            role('measured', 'What is measured', 'measured as'),
+            role('between', 'Between whom', 'between'),
+            role('split', 'Split by', 'split by'),
+        ];
+    };
+
     const boxes: FocusBox[] = [];
     switch (kind) {
         case 'class': {
-            const { groups } = model.propertiesOf(id);
-            const about = patternsAbout(model, id);
-            const role = (group: Role, title: string, phrase: string) => {
-                const ids = groups[group].map((entry) => entry.id);
-                return make({
-                    key: group,
-                    side: 'right',
-                    title,
-                    ids,
-                    via: classRoleVia(id, group, ids, about),
-                    phrase,
-                    more: 'list',
-                });
-            };
             boxes.push(
                 broaderBox('A kind of', model.byUse(ofKind(model.broader(id)))),
                 rangeBox(
@@ -498,9 +505,7 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     'It can be the value of',
                     model.byUse(model.propertiesWithRange(id)),
                 ),
-                role('measured', 'What is measured', 'measured as'),
-                role('between', 'Between whom', 'between'),
-                role('split', 'Split by', 'split by'),
+                ...roleBoxes('list'),
                 narrowerBox('Kinds of it'),
             );
             break;
@@ -561,6 +566,8 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     }),
                 );
             }
+            // A value has no scoped list, so "All N" opens the panel.
+            if (model.isPopulationType(id)) boxes.push(...roleBoxes('panel'));
             boxes.push(narrowerBox('Narrower values'));
             break;
         }
@@ -694,22 +701,30 @@ export type CentreHeading = {
     readonly sub: CentreSub | null;
     /**
      * The origin declaring the centre, as a node's `declared_by`, for the tag
-     * after its name. Null for a dataset and for a term no list holds.
+     * after its name. Null for a dataset and for a term no node holds.
      */
     readonly declaredBy: string | null;
-    /** The term outside the model, when a terms list holds it. */
-    readonly term: SchemaTerm | undefined;
 };
 
 /**
- * The heading for a centred dataset, model term, or term outside the model
- * (found in the merged `outside` list). Null for a dataset the model lacks.
+ * What a term the model knows only from a usage document's `terms` is, read
+ * from its types: a Class, a Property, or a value such as a UN series, whose
+ * type is its series class. "Not in the DFO model" when no usage document
+ * names it.
  */
-export function centreHeading(
-    model: Model,
-    centre: Centre,
-    outside: readonly SchemaTerm[] = [],
-): CentreHeading | null {
+export const termKindWords = (term: UsageTerm | undefined): string => {
+    if (term === undefined) return 'Not in the DFO model';
+    if (term.types.includes('Class')) return KIND_WORDS.class;
+    if (term.types.includes('Property')) return KIND_WORDS.property;
+    return KIND_WORDS.value;
+};
+
+/**
+ * The heading for a centred dataset, a term the model holds as a node, or a
+ * term it knows only from a usage document (`model.term`), named by its
+ * label or else its dcid. Null for a dataset the model lacks.
+ */
+export function centreHeading(model: Model, centre: Centre): CentreHeading | null {
     if (centre.kind === 'dataset') {
         const view = model.datasetView(centre.id);
         if (!view) return null;
@@ -718,7 +733,6 @@ export function centreHeading(
             name: view.label,
             sub: { kind: 'statVars', count: view.statVarCount },
             declaredBy: null,
-            term: undefined,
         };
     }
     const kind = model.kind(centre.id);
@@ -729,28 +743,60 @@ export function centreHeading(
             name: model.label(centre.id),
             sub: codes.length > 0 ? { kind: 'codes', codes } : null,
             declaredBy: model.node(centre.id)?.declared_by ?? null,
-            term: undefined,
         };
     }
-    const term = outside.find((entry) => entry.ref === centre.id);
     return {
-        kind: outsideKind(term),
-        name: term?.label ?? centre.id,
+        kind: termKindWords(model.term(centre.id)),
+        name: model.label(centre.id),
         sub: { kind: 'dcid', id: centre.id },
-        declaredBy: term?.declared_by ?? null,
-        term,
+        declaredBy: null,
     };
 }
 
+/** The usage documents of the two outside origins, each once loaded. */
+export type OutsideUsage = { readonly base?: SchemaUsage; readonly un?: SchemaUsage };
+
+const datasetRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
+
+const refsOf = (document: SchemaUsage): ReadonlySet<string> => {
+    let refs = datasetRefs.get(document);
+    if (refs === undefined) {
+        refs = new Set(document.provenances.map((dataset) => dataset.ref));
+        datasetRefs.set(document, refs);
+    }
+    return refs;
+};
+
 /**
- * What a term outside the model is, for its heading and its panel's label:
- * its kind and where it sits, such as "Property in the UN System Data
- * Commons", so two terms with one label read apart.
+ * The origin of the usage document a dataset of the model comes from, as a
+ * `declared_by` for its origin tag: `base` or `un_system` for an outside
+ * document, `dfo` for any other. A dataset two documents list comes from the
+ * first, as the model counts it. Null for a dataset the model lacks.
  */
-export const outsideKind = (term: SchemaTerm | undefined): string =>
-    term
-        ? `${KIND_WORDS[kindOfTerm(term)]} ${declarerPlace(term.declared_by)}`
-        : 'Not in the DFO model';
+export function datasetOrigin(model: Model, id: string, outside: OutsideUsage): Declarer | null {
+    const document = model.usageDocuments.find((entry) => refsOf(entry).has(id));
+    if (document === undefined) return null;
+    if (document === outside.base) return 'base';
+    if (document === outside.un) return 'un_system';
+    return 'dfo';
+}
+
+const termRefs = new WeakMap<SchemaUsage, ReadonlySet<string>>();
+
+/**
+ * True when the base usage document's `terms` name the ref. Base datasets
+ * use such a term, so the base Data Commons browser has a page for it.
+ */
+export const inBaseUsage = (id: string, outside: OutsideUsage): boolean => {
+    const { base } = outside;
+    if (base === undefined) return false;
+    let refs = termRefs.get(base);
+    if (refs === undefined) {
+        refs = new Set((base.terms ?? []).map((term) => term.ref));
+        termRefs.set(base, refs);
+    }
+    return refs.has(id);
+};
 
 /**
  * The dataset whose use the picture marks: the filtered dataset, except on
