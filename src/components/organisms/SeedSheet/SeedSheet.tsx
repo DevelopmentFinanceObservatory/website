@@ -1,11 +1,12 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 
 import styles from './SeedSheet.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
+import Spinner from '@/components/atoms/Spinner/Spinner';
 import CheckSheet from '@/components/organisms/CheckSheet/CheckSheet';
 import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
 import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
+import { TermSourcesProvider } from '@/components/organisms/GraphExplorer/ListToggle';
 import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
 import TopBar from '@/components/organisms/GraphExplorer/TopBar';
@@ -23,6 +25,8 @@ import { downloadBlob } from '@/lib/download';
 import { plural, valueCount } from '@/lib/graphExplorer/counts';
 import type { Carried } from '@/lib/graphExplorer/explore';
 import { patternId, type Model } from '@/lib/graphExplorer/model';
+import { datasetOrigin, landedUsage } from '@/lib/graphExplorer/lists';
+import { awaitedDataset } from '@/lib/graphExplorer/nodeView';
 import {
     columnName,
     datasetConstraints,
@@ -265,14 +269,23 @@ const SeedTable = ({ columns, rows, open, panelId, onOpen }: SeedTableProps) => 
     );
 };
 
-/** Steps 1 to 4 over the model and the URL's choices. */
+/**
+ * Steps 1 to 4 over the model and the URL's choices. The picker lists the
+ * scoped model's datasets. A dataset the URL names is read from the full
+ * model, so a link from an outside dataset's view seeds that dataset
+ * whatever the switches say. While an outside usage document that may hold
+ * it loads, the steps wait. A named dataset with no patterns, once every
+ * document has settled, gives way to the first dataset, with a line saying so.
+ */
 const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
     const model = useModel();
+    const data = useExplorerData();
+    const full = data.full ?? model;
     const params = useSearchParams();
     const carried = useCarried();
     const codesId = useId();
     const panelId = useId();
-    const checkStep = useRef<HTMLDivElement | null>(null);
+    const scrolled = useRef(false);
     const [codes, setCodes] = useState('');
     const [open, setOpen] = useState<string | null>(null);
     // What the last copy did, and the stub it copied, so a changed stub shows no stale note.
@@ -283,19 +296,30 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         () => model.datasets.filter((dataset) => dataset.patterns.length > 0),
         [model],
     );
-    const usage = datasets.find((dataset) => dataset.ref === query.dataset) ?? datasets[0];
+    const named = query.dataset === null ? undefined : full.dataset(query.dataset);
+    const awaited =
+        query.dataset === null ? null : awaitedDataset(full, [query.dataset], data.usage);
+    const usage =
+        named !== undefined && named.patterns.length > 0
+            ? named
+            : awaited === null
+              ? datasets[0]
+              : undefined;
+    const picks = usage === undefined || datasets.includes(usage) ? datasets : [...datasets, usage];
+    const outsideDataset =
+        usage !== undefined && datasetOrigin(usage, landedUsage(data.usage)) !== null;
     const dataset = useMemo(
         (): SeedDataset | null =>
             usage === undefined
                 ? null
                 : {
                       id: usage.ref,
-                      label: model.label(usage.ref),
+                      label: full.label(usage.ref),
                       stat_var_count: usage.stat_var_count,
                       patterns: usage.patterns,
                       constraint_values: usage.constraint_values,
                   },
-        [model, usage],
+        [full, usage],
     );
     const used = useMemo(() => usedConstraints(model), [model]);
     // An added id makes a column only when some dataset uses it, so the page lists a tick box for it.
@@ -318,15 +342,37 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         others.some((property) => choice.added.includes(property)),
     );
 
-    useEffect(() => {
-        if (openAt === 'check') checkStep.current?.scrollIntoView({ block: 'start' });
-    }, [openAt]);
+    // The page scrolls to the check step once, on the step's first mount, which may wait for an
+    // awaited dataset.
+    const scrollToCheck = useCallback(
+        (element: HTMLDivElement | null) => {
+            if (element === null || openAt !== 'check' || scrolled.current) return;
+            scrolled.current = true;
+            element.scrollIntoView({ block: 'start' });
+        },
+        [openAt],
+    );
 
     const checkSection = (title: string) => (
-        <div ref={checkStep} className={styles.step}>
-            <CheckSheet title={title} />
+        <div ref={scrollToCheck} className={styles.step}>
+            <CheckSheet title={title} outsideDataset={outsideDataset} />
         </div>
     );
+
+    if (awaited !== null) {
+        return (
+            <p className={styles.lead} role="status">
+                <Spinner size={16} label="Loading" />{' '}
+                <span>
+                    Loading{' '}
+                    <code>
+                        <BreakableId text={awaited} />
+                    </code>{' '}
+                    from the graph.
+                </span>
+            </p>
+        );
+    }
 
     if (dataset === null) {
         return (
@@ -381,7 +427,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
             )}
             <SheetSection title="1. Which existing dataset is closest?">
                 <div className={styles.pick} role="group" aria-label="Dataset">
-                    {datasets.map((each) => (
+                    {picks.map((each) => (
                         <Button
                             key={each.ref}
                             variant="card"
@@ -392,7 +438,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                 writeQuery({ dataset: each.ref, dropped: [], added: [] }, carried);
                             }}
                         >
-                            <span className={styles.choiceName}>{model.label(each.ref)}</span>
+                            <span className={styles.choiceName}>{full.label(each.ref)}</span>
                             <span className={styles.choiceMeta}>
                                 {plural(each.stat_var_count, 'StatVar')},{' '}
                                 {plural(each.patterns.length, 'pattern')}
@@ -545,28 +591,30 @@ const SeedSheet = ({ openAt = 'start' }: { openAt?: 'start' | 'check' }) => {
 
     return (
         <ModelProvider value={model}>
-            <div className={shell.explorer}>
-                <TopBar />
-                <main className={shell.main}>
-                    <div className={styles.page}>
-                        <header className={styles.header}>
-                            <p className={styles.label}>Pipeline seeds</p>
-                            <h1 className={styles.title}>{title}</h1>
-                            <p className={styles.lead}>
-                                Start a new dataset&rsquo;s seed from the closest existing dataset
-                                and the source&rsquo;s codes, then check the filled seed against the
-                                graph. The download is the file a pipeline commits under{' '}
-                                <code>dbt/seeds/</code>.
-                            </p>
-                        </header>
-                        {data.model.status === 'ready' ? (
-                            <SeedSteps openAt={openAt} />
-                        ) : (
-                            <LoadStatus state={data.model} onRetry={data.retryModel} />
-                        )}
-                    </div>
-                </main>
-            </div>
+            <TermSourcesProvider>
+                <div className={shell.explorer}>
+                    <TopBar />
+                    <main className={shell.main}>
+                        <div className={styles.page}>
+                            <header className={styles.header}>
+                                <p className={styles.label}>Pipeline seeds</p>
+                                <h1 className={styles.title}>{title}</h1>
+                                <p className={styles.lead}>
+                                    Start a new dataset&rsquo;s seed from the closest existing
+                                    dataset and the source&rsquo;s codes, then check the filled seed
+                                    against the graph. The download is the file a pipeline commits
+                                    under <code>dbt/seeds/</code>.
+                                </p>
+                            </header>
+                            {data.model.status === 'ready' ? (
+                                <SeedSteps openAt={openAt} />
+                            ) : (
+                                <LoadStatus state={data.model} onRetry={data.retryModel} />
+                            )}
+                        </div>
+                    </main>
+                </div>
+            </TermSourcesProvider>
         </ModelProvider>
     );
 };

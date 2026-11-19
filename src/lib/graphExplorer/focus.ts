@@ -11,10 +11,12 @@
  * BOX_LIMIT and opens the rest where `more` says.
  */
 import { count, plural } from './counts.ts';
+import { outsideTerm, termOrigin, type TermSources } from './lists.ts';
 import {
     declarerPlace,
     KIND_WORDS,
     kindOfTerm,
+    kindWords,
     plainName,
     ROLES,
     type DatasetFilter,
@@ -24,7 +26,7 @@ import {
     type Role,
     type ValuesUsed,
 } from './model.ts';
-import type { SchemaNode, SchemaPattern, SchemaTerm } from './wire.ts';
+import type { SchemaNode, SchemaPattern, UsageTerm } from './wire.ts';
 
 export type Side = 'up' | 'left' | 'right' | 'down';
 
@@ -474,23 +476,32 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
             via: arcVia(model, id, ids, ['rangeIncludes'], 'in'),
         });
 
+    // The properties StatVars about the term use, by role: a class's, or a UN series' (a value).
+    const roleBoxes = (more: FocusBox['more']): FocusBox[] => {
+        const { groups } = model.propertiesOf(id);
+        const about = patternsAbout(model, id);
+        const role = (group: Role, title: string, phrase: string) => {
+            const ids = groups[group].map((entry) => entry.id);
+            return make({
+                key: group,
+                side: 'right',
+                title,
+                ids,
+                via: classRoleVia(id, group, ids, about),
+                phrase,
+                more,
+            });
+        };
+        return [
+            role('measured', 'What is measured', 'measured as'),
+            role('between', 'Between whom', 'between'),
+            role('split', 'Split by', 'split by'),
+        ];
+    };
+
     const boxes: FocusBox[] = [];
     switch (kind) {
         case 'class': {
-            const { groups } = model.propertiesOf(id);
-            const about = patternsAbout(model, id);
-            const role = (group: Role, title: string, phrase: string) => {
-                const ids = groups[group].map((entry) => entry.id);
-                return make({
-                    key: group,
-                    side: 'right',
-                    title,
-                    ids,
-                    via: classRoleVia(id, group, ids, about),
-                    phrase,
-                    more: 'list',
-                });
-            };
             boxes.push(
                 broaderBox('A kind of', model.byUse(ofKind(model.broader(id)))),
                 rangeBox(
@@ -498,9 +509,7 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     'It can be the value of',
                     model.byUse(model.propertiesWithRange(id)),
                 ),
-                role('measured', 'What is measured', 'measured as'),
-                role('between', 'Between whom', 'between'),
-                role('split', 'Split by', 'split by'),
+                ...roleBoxes('list'),
                 narrowerBox('Kinds of it'),
             );
             break;
@@ -561,6 +570,8 @@ function buildNodeBoxes(model: Model, id: string): readonly FocusBox[] {
                     }),
                 );
             }
+            // A value has no scoped list, so "All N" opens the panel.
+            if (model.isPopulationType(id)) boxes.push(...roleBoxes('panel'));
             boxes.push(narrowerBox('Narrower values'));
             break;
         }
@@ -694,21 +705,38 @@ export type CentreHeading = {
     readonly sub: CentreSub | null;
     /**
      * The origin declaring the centre, as a node's `declared_by`, for the tag
-     * after its name. Null for a dataset and for a term no list holds.
+     * after its name (termOrigin). Null for a dataset and for a term whose
+     * origin nothing loaded names.
      */
     readonly declaredBy: string | null;
-    /** The term outside the model, when a terms list holds it. */
-    readonly term: SchemaTerm | undefined;
 };
 
 /**
- * The heading for a centred dataset, model term, or term outside the model
- * (found in the merged `outside` list). Null for a dataset the model lacks.
+ * What a term the model knows only from a usage document's `terms` is, read
+ * from its types: a Class, a Property, or a value such as a UN series, read
+ * as kindWords reads a value, so a series reads as its series class. "Not in
+ * the DFO model" when no usage document names it.
+ */
+export const termKindWords = (model: Model, term: UsageTerm | undefined): string => {
+    if (term === undefined) return 'Not in the DFO model';
+    if (term.types.includes('Class')) return KIND_WORDS.class;
+    if (term.types.includes('Property')) return KIND_WORDS.property;
+    return kindWords(model, 'value', term.types);
+};
+
+/**
+ * The heading for a centred dataset, a term the model holds as a node, a
+ * term it knows only from a usage document (`model.term`), or a term only a
+ * loaded terms list holds, named by its label or else its dcid. A term's
+ * origin is termOrigin's over `sources`, or its node's alone without them.
+ * A term the model holds no node for has its kind followed by where its
+ * origin sits, such as "Property in the UN System Data Commons", so two
+ * terms with one label read apart. Null for a dataset the model lacks.
  */
 export function centreHeading(
     model: Model,
     centre: Centre,
-    outside: readonly SchemaTerm[] = [],
+    sources: TermSources = { usage: {}, terms: [] },
 ): CentreHeading | null {
     if (centre.kind === 'dataset') {
         const view = model.datasetView(centre.id);
@@ -718,39 +746,31 @@ export function centreHeading(
             name: view.label,
             sub: { kind: 'statVars', count: view.statVarCount },
             declaredBy: null,
-            term: undefined,
         };
     }
+    const declaredBy = termOrigin(model, sources, centre.id);
     const kind = model.kind(centre.id);
     if (kind !== undefined) {
-        const codes = model.node(centre.id)?.classification_code ?? [];
+        const node = model.node(centre.id);
+        const codes = node?.classification_code ?? [];
         return {
-            kind: KIND_WORDS[kind],
+            kind: kindWords(model, kind, node?.types ?? []),
             name: model.label(centre.id),
             sub: codes.length > 0 ? { kind: 'codes', codes } : null,
-            declaredBy: model.node(centre.id)?.declared_by ?? null,
-            term: undefined,
+            declaredBy,
         };
     }
-    const term = outside.find((entry) => entry.ref === centre.id);
+    const term = model.term(centre.id);
+    const row = term === undefined ? outsideTerm(sources.terms, centre.id) : undefined;
+    const words = row === undefined ? termKindWords(model, term) : KIND_WORDS[kindOfTerm(row)];
+    const known = term !== undefined || row !== undefined;
     return {
-        kind: outsideKind(term),
-        name: term?.label ?? centre.id,
+        kind: known && declaredBy !== null ? `${words} ${declarerPlace(declaredBy)}` : words,
+        name: row?.label ?? model.label(centre.id),
         sub: { kind: 'dcid', id: centre.id },
-        declaredBy: term?.declared_by ?? null,
-        term,
+        declaredBy,
     };
 }
-
-/**
- * What a term outside the model is, for its heading and its panel's label:
- * its kind and where it sits, such as "Property in the UN System Data
- * Commons", so two terms with one label read apart.
- */
-export const outsideKind = (term: SchemaTerm | undefined): string =>
-    term
-        ? `${KIND_WORDS[kindOfTerm(term)]} ${declarerPlace(term.declared_by)}`
-        : 'Not in the DFO model';
 
 /**
  * The dataset whose use the picture marks: the filtered dataset, except on

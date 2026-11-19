@@ -1,0 +1,72 @@
+{
+    "provenances": [
+        {
+            "ref": "undata/p/ECLAC",
+            "label": "Economic Commission for Latin America and the Caribbean (ECLAC)",
+            "description": null,
+            "stat_var_count": 4,
+            "patterns": [
+                {
+                    "population_type": "undata/eclac/SERIES-INSUF_PENSION",
+                    "measured_property": "value",
+                    "stat_type": "measuredValue",
+                    "measurement_qualifier": null,
+                    "measurement_denominator": null,
+                    "constraint_properties": ["sex"],
+                    "observation_properties": [],
+                    "stat_var_count": 4,
+                    "examples": ["sv/u1", "sv/u2", "sv/u3"]
+                }
+            ],
+            "constraint_values": [
+                {
+                    "property": "sex",
+                    "values": [
+                        {
+                            "value": "undata/SEX-F",
+                            "stat_var_count": 2
+                        },
+                        {
+                            "value": "undata/SEX-M",
+                            "stat_var_count": 2
+                        }
+                    ]
+                }
+            ],
+            "facets": {
+                "units": [],
+                "scaling_factors": [],
+                "measurement_methods": [],
+                "observation_periods": [],
+                "currencies": []
+            }
+        }
+    ],
+    "terms": [
+        {
+            "ref": "sex",
+            "label": "Sex",
+            "types": ["Property"]
+        },
+        {
+            "ref": "undata/SEX-F",
+            "label": "Female",
+            "types": ["undata/SEX"]
+        },
+        {
+            "ref": "undata/SEX-M",
+            "label": "Male",
+            "types": ["undata/SEX"]
+        },
+        {
+            "ref": "undata/eclac/SERIES-INSUF_PENSION",
+            "label": "Older adults receiving insufficient pensions",
+            "types": ["undata/eclac/SERIES"]
+        },
+        {
+            "ref": "value",
+            "label": "Value",
+            "types": ["Property"]
+        }
+    ]
+}

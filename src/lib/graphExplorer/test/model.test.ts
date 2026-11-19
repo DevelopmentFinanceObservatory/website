@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
     buildModel,
+    buildModels,
     datasetName,
     declarerWords,
     filterScopedList,
@@ -16,13 +17,14 @@ import {
     kindOfTerm,
     memberFields,
     openColumns,
+    patternId,
     plainName,
     searchMembers,
     type MemberTree,
 } from '../model.ts';
 import { openEntries } from '../focus.ts';
 import { readSchema, readUsage, type SchemaNode } from '../wire.ts';
-import { schemaBody, usageBody } from './fixtures.ts';
+import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
 import { withListedParties } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
@@ -606,4 +608,133 @@ test('a scoped list filter keeps rows by label or dcid, and blank text keeps eve
 test('a term outside the model is a class when it is a Class, else a property', () => {
     assert.equal(kindOfTerm({ types: ['Class'] }), 'class');
     assert.equal(kindOfTerm({ types: ['Property'] }), 'property');
+});
+
+/** A base Data Commons class the DFO document holds, as it holds Person. */
+const PERSON: SchemaNode = {
+    ref: 'Person',
+    label: null,
+    description: null,
+    types: ['Class'],
+    alternate_name: [],
+    sub_class_of: ['Thing'],
+    sub_property_of: [],
+    specialization_of: [],
+    domain_includes: [],
+    range_includes: [],
+    classification_code: [],
+    provenances: ['dc/base/Schema'],
+    declared_by: 'base',
+    instances: null,
+    other_properties: {},
+};
+const schemaWithPerson = (() => {
+    const schema = readSchema(schemaBody());
+    return { ...schema, nodes: [...schema.nodes, PERSON] };
+})();
+const dfoUsage = readUsage(usageBody());
+const baseUsage = readUsage(baseUsageBody());
+const unUsage = readUsage(unUsageBody());
+const BIRTHS = 'dc/base/Adolescent_Birth_Rate';
+const ECLAC = 'undata/p/ECLAC';
+const SERIES = 'undata/eclac/SERIES-INSUF_PENSION';
+
+test('the full model counts every usage document, so a held base class shows its base use', () => {
+    const { full, scoped } = buildModels(
+        schemaWithPerson,
+        { dfo: dfoUsage, base: baseUsage, un: unUsage },
+        { base: false, un: false },
+    );
+    assert.deepEqual(full.usage('Person'), {
+        byDataset: [{ dataset: BIRTHS, count: 5 }],
+        total: 5,
+    });
+    assert.deepEqual(full.usedWith('fertilityRate'), [{ classId: 'Person', count: 3 }]);
+    assert.deepEqual(
+        full.datasets.map((dataset) => dataset.ref),
+        [DAC1, DAC2A, DAC2B, CLIMATE, BIRTHS, ECLAC],
+    );
+    // The scoped model keeps to DFO usage while both switches are off.
+    assert.equal(scoped.usage('Person').total, 0);
+    assert.deepEqual(
+        scoped.datasets.map((dataset) => dataset.ref),
+        [DAC1, DAC2A, DAC2B, CLIMATE],
+    );
+    // The two read the same schema.
+    assert.equal(scoped.node('Person')?.declared_by, 'base');
+});
+
+test('a switched-on origin widens the scoped model, and all switches on build one model', () => {
+    const usage = { dfo: dfoUsage, base: baseUsage, un: unUsage };
+    const baseOn = buildModels(schemaWithPerson, usage, { base: true, un: false });
+    assert.equal(baseOn.scoped.usage('Person').total, 5);
+    assert.equal(baseOn.scoped.dataset(ECLAC), undefined);
+    assert.ok(baseOn.full.dataset(ECLAC));
+
+    const allOn = buildModels(schemaWithPerson, usage, { base: true, un: true });
+    assert.equal(allOn.scoped, allOn.full);
+    // An outside document not yet loaded leaves both models on what has landed.
+    const dfoOnly = buildModels(schemaWithPerson, { dfo: dfoUsage }, { base: false, un: false });
+    assert.equal(dfoOnly.scoped, dfoOnly.full);
+    // The full model is one object per set of documents, whatever the switches say.
+    assert.equal(baseOn.full, allOn.full);
+    assert.equal(buildModels(schemaWithPerson, usage, { base: false, un: false }).full, allOn.full);
+    assert.notEqual(dfoOnly.full, allOn.full);
+});
+
+test('a term a usage document names takes its label from `terms`, then its dcid, and stays out of the nodes', () => {
+    const full = buildModel(schemaWithPerson, dfoUsage, baseUsage, unUsage);
+    assert.equal(full.label(SERIES), 'Older adults receiving insufficient pensions');
+    assert.equal(full.label('gender'), 'Gender');
+    // A null label on the term falls back to the dcid.
+    assert.equal(full.label('Person'), 'Person');
+    // A held node's own name wins, and a held node with none takes the term's.
+    assert.equal(full.label('FinancialFlow'), model.label('FinancialFlow'));
+    assert.equal(model.label('amount'), 'amount');
+    assert.equal(full.label('amount'), 'Amount on base');
+    assert.equal(full.node(SERIES), undefined);
+    assert.equal(full.kind(SERIES), undefined);
+    assert.deepEqual(full.term(SERIES)?.types, ['undata/eclac/SERIES']);
+    assert.equal(full.nodes.length, schemaWithPerson.nodes.length);
+});
+
+test('a value patterns use as population type reads as one, with its measured and split properties', () => {
+    const full = buildModel(schemaWithPerson, dfoUsage, baseUsage, unUsage);
+    assert.equal(full.isPopulationType(SERIES), true);
+    assert.equal(full.isPopulationType('Person'), true);
+    assert.equal(full.isPopulationType('gender'), false);
+    const { groups } = full.propertiesOf(SERIES);
+    assert.deepEqual(
+        groups.measured.map((entry) => entry.id),
+        ['value'],
+    );
+    assert.deepEqual(
+        groups.split.map((entry) => entry.id),
+        ['sex'],
+    );
+});
+
+test('a constraint property with no constraint values row reads as using no listed values', () => {
+    const full = buildModel(schemaWithPerson, dfoUsage, baseUsage, unUsage);
+    // `age` splits the births dataset's StatVars, and the document lists no values for it.
+    assert.deepEqual(full.roles('age', BIRTHS), ['split']);
+    assert.equal(full.valuesUsed(BIRTHS, 'age'), null);
+    assert.deepEqual(
+        full.datasetView(BIRTHS)?.splits.map((split) => split.property),
+        ['gender', 'age'],
+    );
+    assert.equal(full.usageIn('Female', BIRTHS), 4);
+});
+
+test('two patterns that differ only in an unresolved denominator have different ids', () => {
+    const [pattern] = readUsage(baseUsageBody()).provenances[0]!.patterns.filter(
+        (each) => each.measurement_denominator_unresolved === true,
+    );
+    assert.ok(pattern);
+    const resolved = { ...pattern, measurement_denominator_unresolved: false };
+    assert.notEqual(patternId(pattern), patternId(resolved));
+    // An absent flag reads as false.
+    const absent = { ...pattern };
+    delete absent.measurement_denominator_unresolved;
+    assert.equal(patternId(absent), patternId(resolved));
 });

@@ -14,7 +14,6 @@ import {
     linkShape,
     nodeBoxes,
     openEntries,
-    outsideKind,
     periodText,
     pictureLens,
     sharePercent,
@@ -22,16 +21,15 @@ import {
     type FocusBox,
 } from '../focus.ts';
 import { buildModel, type Model } from '../model.ts';
+import { centreModel } from '../nodeView.ts';
 import {
-    outsideTermList,
     readSchema,
     readUsage,
-    readTerms,
-    readUnTerms,
     type SchemaNode,
     type SchemaPattern,
+    type SchemaTerm,
 } from '../wire.ts';
-import { schemaBody, usageBody, termsBody } from './fixtures.ts';
+import { baseUsageBody, schemaBody, unUsageBody, usageBody } from './fixtures.ts';
 import { withListedParties } from './sheetFixtures.ts';
 
 const model = buildModel(readSchema(schemaBody()), readUsage(usageBody()));
@@ -391,7 +389,69 @@ test('broader and range boxes order their entries by use, as every other box doe
     assert.deepEqual(boxes.find((entry) => entry.key === 'up')?.ids, ['amount', unusedProperty]);
 });
 
-test('the centre heading reads a dataset, a model term, a base term and an unknown id', () => {
+const SERIES = 'undata/eclac/SERIES-INSUF_PENSION';
+const SERIES_CLASS = 'undata/eclac/SERIES';
+
+const baseUsage = readUsage(baseUsageBody());
+const unUsage = readUsage(unUsageBody());
+const full = buildModel(readSchema(schemaBody()), readUsage(usageBody()), baseUsage, unUsage);
+
+/** A schema node with every list empty and `fields` set. */
+const viewNode = (ref: string, fields: Partial<SchemaNode>): SchemaNode => ({
+    ref,
+    label: null,
+    description: null,
+    types: [],
+    alternate_name: [],
+    sub_class_of: [],
+    sub_property_of: [],
+    specialization_of: [],
+    domain_includes: [],
+    range_includes: [],
+    classification_code: [],
+    provenances: [],
+    declared_by: null,
+    instances: null,
+    other_properties: {},
+    ...fields,
+});
+
+test('a UN series is a value under its series class, with what its StatVars measure and split by', () => {
+    const model = centreModel(full, {
+        generation: null,
+        centre: viewNode(SERIES, {
+            label: 'Older adults receiving insufficient pensions',
+            types: [SERIES_CLASS],
+            declared_by: 'un_system',
+        }),
+        nodes: [
+            viewNode(SERIES_CLASS, {
+                types: ['Class'],
+                sub_class_of: ['Enumeration'],
+                instances: { refs: [SERIES], complete: false },
+            }),
+        ],
+        capped: [],
+    });
+    assert.equal(model.kind(SERIES), 'value');
+    assert.deepEqual(layout(nodeBoxes(model, SERIES)), [
+        `list up: ${SERIES_CLASS}`,
+        'measured right: value',
+        'split right: sex',
+    ]);
+    const measured = nodeBoxes(model, SERIES).find((entry) => entry.key === 'measured');
+    assert.equal(measured?.more, 'panel');
+    assert.deepEqual(measured?.via, {
+        kind: 'statVars',
+        centre: ['populationType'],
+        entries: ['measuredProperty'],
+        statVars: 4,
+        kinds: false,
+        kindsOnly: 0,
+    });
+});
+
+test('the centre heading reads a dataset, a model term, a usage term and an unknown id', () => {
     const dataset = centreHeading(model, { kind: 'dataset', id: 'provenance/OECDDAC2B' });
     assert.deepEqual(
         [dataset?.name, dataset?.sub],
@@ -400,81 +460,114 @@ test('the centre heading reads a dataset, a model term, a base term and an unkno
     assert.equal(centreHeading(model, { kind: 'dataset', id: 'provenance/Gone' }), null);
 
     const term = centreHeading(model, { kind: 'node', id: 'FinancialFlow' });
-    assert.deepEqual(
-        [term?.name, term?.declaredBy, term?.term],
-        [model.label('FinancialFlow'), 'dfo', undefined],
-    );
+    assert.deepEqual([term?.name, term?.declaredBy], [model.label('FinancialFlow'), 'dfo']);
 
-    const baseTerms = readTerms(termsBody());
-    const outside = 'ABSState';
-    const base = centreHeading(model, { kind: 'node', id: outside }, baseTerms.terms);
+    // A term only the usage documents name takes its kind from its types, and its name else its dcid.
+    const age = centreHeading(full, { kind: 'node', id: 'age' });
+    const person = centreHeading(full, { kind: 'node', id: 'Person' });
+    const series = centreHeading(full, { kind: 'node', id: SERIES });
     assert.deepEqual(
-        [base?.declaredBy, base?.term?.ref, base?.sub],
-        ['base', outside, { kind: 'dcid', id: outside }],
+        [age?.kind, age?.name, age?.sub],
+        [
+            centreHeading(model, { kind: 'node', id: 'amount' })?.kind,
+            'Age',
+            { kind: 'dcid', id: 'age' },
+        ],
     );
-    assert.notEqual(outsideKind(base?.term), outsideKind(undefined));
+    assert.equal(person?.name, 'Person');
+    assert.notEqual(person?.kind, age?.kind);
+    assert.equal(series?.name, 'Older adults receiving insufficient pensions');
+    assert.notEqual(series?.kind, age?.kind);
+    assert.notEqual(series?.kind, person?.kind);
 
-    // Without the terms list the same id reads as outside the model, with no term.
-    const unknown = centreHeading(model, { kind: 'node', id: outside });
-    assert.deepEqual(
-        [unknown?.declaredBy, unknown?.term, unknown?.name],
-        [null, undefined, outside],
+    // No usage document names it.
+    const unknown = centreHeading(full, { kind: 'node', id: 'ABSState' });
+    assert.deepEqual([unknown?.declaredBy, unknown?.name], [null, 'ABSState']);
+    assert.notEqual(unknown?.kind, age?.kind);
+
+    // With the loaded documents, a usage term takes its document's origin, and a
+    // term only a terms list holds takes its row's kind, label and origin.
+    const row = {
+        ref: 'ABSState',
+        label: 'Australian state',
+        types: ['Class' as const],
+        provenances: [],
+        declared_by: 'base',
+    };
+    const sources = { usage: { base: baseUsage, un: unUsage }, terms: [row] };
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: SERIES }, sources)?.declaredBy,
+        'un_system',
     );
-    assert.notEqual(unknown?.kind, base?.kind);
+    assert.equal(centreHeading(full, { kind: 'node', id: 'age' }, sources)?.declaredBy, 'base');
+    const listed = centreHeading(full, { kind: 'node', id: 'ABSState' }, sources);
+    assert.deepEqual(
+        [listed?.kind, listed?.name, listed?.declaredBy],
+        [`${person?.kind} in base Data Commons`, 'Australian state', 'base'],
+    );
 });
 
-test('a term outside the model is headed by the origin declaring it', () => {
-    const headingFor = (declaredBy: string | null) => {
-        const body = termsBody() as { terms: { ref: string; declared_by: string | null }[] };
-        const term = body.terms.find((entry) => entry.ref === 'ABSState');
-        assert.ok(term);
-        term.declared_by = declaredBy;
-        const heading = centreHeading(
-            model,
-            { kind: 'node', id: 'ABSState' },
-            readTerms(body).terms,
-        );
-        return [heading?.kind, heading?.declaredBy];
+test('a term the model holds no node for is headed by its kind and where its origin sits', () => {
+    const headingFor = (declaredBy: string | null, types: SchemaTerm['types'] = ['Class']) => {
+        const row = {
+            ref: 'ABSState',
+            label: 'Age',
+            types,
+            provenances: [],
+            declared_by: declaredBy,
+        };
+        const sources = { usage: {}, terms: [row] };
+        return centreHeading(full, { kind: 'node', id: 'ABSState' }, sources)?.kind;
     };
-    assert.deepEqual(headingFor('base'), ['Kind of thing in base Data Commons', 'base']);
-    assert.deepEqual(headingFor('un_system'), [
-        'Kind of thing in the UN System Data Commons',
-        'un_system',
-    ]);
-    assert.deepEqual(headingFor('some_new_origin'), [
-        'Kind of thing in another origin',
-        'some_new_origin',
-    ]);
-    assert.deepEqual(headingFor(null), ['Kind of thing on the graph', null]);
+    assert.deepEqual(
+        [
+            headingFor('base'),
+            headingFor('un_system'),
+            headingFor('un_system', ['Property']),
+            headingFor('some_new_origin'),
+            headingFor(null),
+        ],
+        [
+            'Kind of thing in base Data Commons',
+            'Kind of thing in the UN System Data Commons',
+            'Property in the UN System Data Commons',
+            'Kind of thing in another origin',
+            'Kind of thing',
+        ],
+    );
+    // A usage term takes the place of the document naming it; a model node keeps its kind alone.
+    const sources = { usage: { base: baseUsage, un: unUsage }, terms: [] };
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: 'age' }, sources)?.kind,
+        'Property in base Data Commons',
+    );
+    assert.equal(
+        centreHeading(full, { kind: 'node', id: 'FinancialFlow' }, sources)?.kind,
+        'Kind of thing',
+    );
 });
 
-test('two UN System terms with one label are told apart by their kind', () => {
-    const row = (ref: string, types: string[]) => ({
-        ref,
-        label: 'Age',
-        types,
-        provenances: ['undata/p/UNData'],
-        declared_by: 'un_system',
-    });
-    const un = readUnTerms({
-        generation: null,
-        terms: [row('undata/AGE', ['Class']), row('undataAge', ['Property'])],
-    });
-    const outside = outsideTermList({ un, baseLoading: false });
-    const heading = (id: string) => {
-        const centre = centreHeading(model, { kind: 'node', id }, outside);
-        return [centre?.kind, centre?.name, centre?.declaredBy];
-    };
-    assert.deepEqual(heading('undata/AGE'), [
-        'Kind of thing in the UN System Data Commons',
-        'Age',
-        'un_system',
-    ]);
-    assert.deepEqual(heading('undataAge'), [
-        'Property in the UN System Data Commons',
-        'Age',
-        'un_system',
-    ]);
+test('a value no value list holds is headed by its types, a list member by its kind', () => {
+    const body = schemaBody() as { nodes: Record<string, unknown>[] };
+    const template = body.nodes.find((node) => node.ref === 'Number');
+    assert.ok(template);
+    const add = (ref: string, label: string | null, types: string[]) =>
+        body.nodes.push({ ...template, ref, label, types });
+    const country = body.nodes.find((node) => node.ref === 'Country');
+    assert.ok(country);
+    country.label = 'Country';
+    // The fixture's Place has no label, so it reads as its dcid, as Number's DataType does.
+    add('country/USA', 'United States', ['Country', 'Place']);
+    add('flow/1', null, ['FinancialFlow']);
+    const edited = buildModel(readSchema(body), readUsage(usageBody()));
+    const kind = (id: string) => centreHeading(edited, { kind: 'node', id })?.kind;
+    assert.deepEqual(
+        [kind('country/USA'), kind('flow/1'), kind('CurrencyCHF'), kind('Number')],
+        ['Country, Place', edited.label('FinancialFlow'), 'Value', 'DataType'],
+    );
+    assert.notEqual(edited.label('FinancialFlow'), 'FinancialFlow');
+    // A UN series the model knows only from its usage document reads as its series class.
+    assert.equal(centreHeading(full, { kind: 'node', id: SERIES })?.kind, 'undata/eclac/SERIES');
 });
 
 test('a dataset’s own view under its own filter carries no marks', () => {

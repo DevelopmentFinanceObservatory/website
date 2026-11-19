@@ -21,6 +21,8 @@ import {
 type FocusPictureProps = {
     /** The centre: what it is, its name (the page's heading) and a line under it. */
     kind: string;
+    /** The centre's heading, which a screen may move focus to. */
+    headingRef?: React.Ref<HTMLHeadingElement>;
     name: React.ReactNode;
     sub: string | null;
     boxes: readonly FocusBox[];
@@ -149,7 +151,10 @@ const Box = ({
     lensDataset,
     lensLabel,
     onOpen,
-}: { box: FocusBox } & Omit<FocusPictureProps, 'kind' | 'name' | 'sub' | 'boxes' | 'unused'>) => {
+}: { box: FocusBox } & Omit<
+    FocusPictureProps,
+    'kind' | 'headingRef' | 'name' | 'sub' | 'boxes' | 'unused'
+>) => {
     const shown = box.ids.slice(0, BOX_LIMIT);
     const lens = useLens(lensDataset, shown);
     const more = box.ids.length > BOX_LIMIT;
@@ -196,7 +201,15 @@ const Box = ({
  * declares that no dataset uses yet. On a narrow screen it is one column in
  * that reading order, each box joined to a spine that runs to the centre.
  */
-const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictureProps) => {
+const FocusPicture = ({
+    kind,
+    headingRef,
+    name,
+    sub,
+    boxes,
+    unused,
+    ...shared
+}: FocusPictureProps) => {
     const on = (side: Side) => boxes.filter((box) => box.side === side);
     const [up, left, right, down] = (['up', 'left', 'right', 'down'] as const).map(on);
     const unusedClass = unused > 0 ? shared.listClass : null;
@@ -238,7 +251,9 @@ const FocusPicture = ({ kind, name, sub, boxes, unused, ...shared }: FocusPictur
                 >
                     <div className={styles.self}>
                         <p className={styles.kind}>{kind}</p>
-                        <h1 className={styles.name}>{name}</h1>
+                        <h1 className={styles.name} ref={headingRef} tabIndex={-1}>
+                            {name}
+                        </h1>
                         {sub && (
                             <p className={styles.sub}>
                                 <BreakableId text={sub} />

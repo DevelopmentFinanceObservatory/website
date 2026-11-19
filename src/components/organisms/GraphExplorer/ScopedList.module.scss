@@ -30,6 +30,12 @@
     color: var(--color-stone);
 }
 
+.note {
+    @include font-size(13px, 1.4);
+
+    color: var(--color-stone);
+}
+
 .controls {
     display: flex;
     flex-wrap: wrap;
