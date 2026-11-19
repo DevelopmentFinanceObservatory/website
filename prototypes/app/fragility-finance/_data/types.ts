@@ -49,7 +49,7 @@ export type Context = {
     /** 1 for the most fragile of the 62. */
     rank: number;
     dimensions: Record<DimensionKey, Dimension>;
-    /** The years from 2010 to 2024 in which the CRS holds aid to the context. */
+    /** The years from 2015 to 2024 in which the CRS holds aid to the context. */
     pillars: PillarYear[];
     /** 2015 to 2024. */
     flows: FlowYear[];
@@ -59,7 +59,7 @@ export type Context = {
     donors: DonorShare[];
     /** 2024 for every context; null where none is recorded in 2024. */
     climate: ClimateSplit | null;
-    /** Population by year, keyed by the year as text. */
+    /** Population in 2024, keyed by the year as text; empty where UNICEF holds none. */
     population: Record<string, number>;
     indicators: Record<IndicatorKey, Reading | null>;
 };

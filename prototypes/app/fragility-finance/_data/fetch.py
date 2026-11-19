@@ -1,13 +1,13 @@
 # /// script
 # requires-python = ">=3.12,<3.13"
-# dependencies = ["development-finance[pandas]==0.3.0"]
+# dependencies = ["development-finance[pandas]==0.4.1"]
 # ///
 """The fragility-finance data step, run by hand with `pnpm data fragility-finance`.
 
 Reads the OECD's 2026 fragility classification from `fragility-2026.tsv` and fetches,
 for each of its 62 contexts, the money that reaches it and the money it pays out:
 
-- gross ODA disbursements from the OECD CRS, 2010 to 2024, split into the OECD's
+- gross ODA disbursements from the OECD CRS, 2015 to 2024, split into the OECD's
   humanitarian, development and peace pillars by purpose code, and by provider in 2024;
 - each DAC member's total ODA in 2024 and 2025 from DAC1, for the change in 2025;
 - gross other official flows (OOF) disbursements from the OECD CRS, 2015 to 2024, zero in a
@@ -16,12 +16,26 @@ for each of its 62 contexts, the money that reaches it and the money it pays out
 - public external debt service from World Bank IDS, 2015 to 2033, projected after 2025;
 - climate finance received from ONE Data in 2024 under ONE's own method, for adaptation,
   mitigation and both;
-- population (UNICEF) and three living-conditions indicators (SDG database), latest year.
+- population (UNICEF) in 2024 and three living-conditions indicators (SDG database), latest
+  year.
 
-Each search runs once, with one context as its example, and each reading is then
-fetched for all 62 contexts. Checks known values, failing loudly when one differs, then
-writes `profiles.json` beside this file, and `groups.json` with the six largest providers
-of ODA in 2024 to all 62 contexts and to each tier. All money is in current US dollars.
+Every read is pinned, and `refs.json` beside this file keeps each read's ref and provenance.
+The step runs in one of three modes:
+
+- plain, the default: fetch each committed ref, so the outputs reproduce byte for byte;
+  provenance and the retrieval time come from `refs.json`;
+- `--refresh`: fetch the newest versions of each committed ref, pin them and rewrite
+  `refs.json`;
+- `--search`: ask each question again, with one context as its example, fetch each reading
+  for all 62 contexts, pin it and rewrite `refs.json`. A ref keeps its window and spec, so a
+  change to either takes this mode.
+
+`--no-pin`, with `--refresh` or `--search`, writes the outputs, pins nothing and leaves
+`refs.json` as it is, for a trial run. Pins come out of a daily allowance.
+
+Checks known values, failing loudly when one differs, then writes `profiles.json` and
+`groups.json`, with the six largest providers of ODA in 2024 to all 62 contexts and to each
+tier. All money is in current US dollars.
 
 `fragility-2026.tsv` is the OECD's data file behind its fragility chart, linked from the
 OECD's multidimensional fragility dashboard
@@ -30,13 +44,15 @@ country, overall score, tier, the six dimension scores and each dimension's cate
 from 1 (most fragile) to 5.
 """
 
+import argparse
 import csv
 import json
 import logging
-import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
+from typing import Literal
 
 import dfo
 import pandas as pd
@@ -47,14 +63,17 @@ HERE = Path(__file__).parent
 CLASSIFICATION = HERE / "fragility-2026.tsv"
 TARGET = HERE / "profiles.json"
 GROUPS_TARGET = HERE / "groups.json"
+REFS = HERE / "refs.json"
 
 EXAMPLE = "Mozambique"
-AID_YEARS = (2010, 2024)
 FLOW_YEARS = (2015, 2024)
 DEBT_YEARS = (2015, 2033)
 DONOR_YEAR = 2024
 CLIMATE_YEAR = 2024
+# The page draws each indicator's latest reading, which can be years old.
 INDICATOR_YEARS = (2010, 2025)
+# The page draws population in 2024 alone, beside that year's flows.
+POPULATION_YEAR = 2024
 # IDS reports debt service paid to 2025 and projects it on signed loans after that.
 LAST_PAID_YEAR = 2025
 # ONE Data's own climate method: each project's climate share (UNFCCC coefficients, else 40% of
@@ -124,7 +143,131 @@ KNOWN = {
 }
 TOLERANCE = 0.01
 
-READS: list[dict] = []
+type Mode = Literal["plain", "refresh", "search"]
+
+
+class Reads:
+    """The step's DFO reads under one mode, and what `refs.json` records of each.
+
+    Each read has a key in `refs.json`. A plain run fetches the committed ref and keeps
+    the committed record. The other modes fetch anew, and `keep` pins every read once the
+    checks pass and records it; with `pin` false, `keep` records the reads unpinned and
+    `write` leaves `refs.json` alone, for a trial run.
+    """
+
+    def __init__(self, mode: Mode, *, pin: bool = True) -> None:
+        self.mode = mode
+        self.pin = pin
+        self.committed = json.loads(REFS.read_text()) if mode != "search" else None
+        self.fetched: dict[str, dfo.Dataset] = {}
+        self.records: dict[str, dict] = {}
+        self.rows: dict[str, int] = {}
+        self.pins = 0
+
+    def read(
+        self,
+        key: str,
+        ask: Callable[[], dfo.Answer],
+        *,
+        role: str | None = None,
+        places: Iterable[str] = (),
+        window: tuple[int, int] | None = None,
+        facets: dict[str, str] | None = None,
+    ) -> dfo.Dataset:
+        """Fetch read `key`: its committed ref, the ref's newest versions, or `ask()`'s
+        answer for `places` under `role`."""
+        if key in self.rows:
+            raise SystemExit(f"{key}: read twice")
+
+        if self.committed is None:
+            options = {}
+
+            if window is not None:
+                options["window"] = window
+
+            if facets is not None:
+                options["facets"] = facets
+
+            if role is not None:
+                options["entities"] = {role: list(places)}
+
+            data = ask().fetch(**options)
+        else:
+            if key not in self.committed["data"]:
+                raise SystemExit(f"{key}: {REFS.name} holds no ref; run with --search")
+
+            ref = dfo.DatasetRef.from_json(json.dumps(self.committed["data"][key]["ref"]))
+            data = dfo.fetch(ref, latest=self.mode == "refresh")
+
+        if self.mode == "plain":
+            if not data.provenance.pinned:
+                raise SystemExit(f"{key}: the committed ref names a version not pinned")
+
+            self.records[key] = self.committed["data"][key]
+        else:
+            self.fetched[key] = data
+
+        self.rows[key] = len(data)
+        log.info("%s: %s rows, %s", key, f"{len(data):,}", data.sentence)
+        return data
+
+    def keep(self) -> None:
+        """Pin each read fetched anew and record its ref and provenance."""
+        for key, data in self.fetched.items():
+            if self.pin:
+                self.pins += sum(1 for member in data.members if not member.pinned)
+                data = dfo.pin(data)
+
+            self.records[key] = {
+                "ref": json.loads(data.ref.to_json()),
+                "provenance": json.loads(data.provenance.to_json()),
+            }
+
+    def retrieved(self) -> str:
+        """The time of the run that pinned the reads, which a plain run copies."""
+        if self.committed is not None and self.mode == "plain":
+            return self.committed["provenance"]["retrieved"]
+
+        return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    def summary(self, prefixes: tuple[str, ...] = ("",)) -> list[dict]:
+        """Each read whose key starts with one of `prefixes`, as the outputs record it."""
+        found = []
+
+        for key, record in self.records.items():
+            if not key.startswith(prefixes):
+                continue
+
+            provenance = dfo.Provenance.from_json(record["provenance"])
+            found.append(
+                {
+                    "key": key,
+                    "sentence": provenance.sentence,
+                    "specIds": [member.spec.spec_id for member in provenance.members],
+                    "versions": [member.content_version for member in provenance.members],
+                    "citation": provenance.citation.text,
+                    "rows": self.rows[key],
+                    "warnings": sorted({notice.code for notice in provenance.warnings}),
+                }
+            )
+
+        return found
+
+    def write(self, retrieved: str) -> None:
+        """Rewrite `refs.json`; a plain run and a trial run leave it as committed."""
+        if self.mode == "plain" or not self.pin:
+            return
+
+        envelope = {
+            "provenance": {
+                "sdk": f"development-finance=={dfo.__version__}",
+                "query": "fragility-finance pinned reads",
+                "retrieved": retrieved,
+            },
+            "data": self.records,
+        }
+        REFS.write_text(json.dumps(envelope, indent=1, ensure_ascii=False) + "\n")
+        log.info("Wrote %s; pinned %d new versions.", REFS, self.pins)
 
 
 def read_classification() -> list[dict]:
@@ -158,54 +301,21 @@ def read_classification() -> list[dict]:
     return contexts
 
 
-def answer_for(key: str, question: str | None = None, **search) -> dfo.Answer:
-    """Search once and fail unless every part of the answer has one reading."""
-    answer = dfo.search(question, **search) if question else dfo.search(**search)
+def asking(key: str, question: str | None = None, **search) -> Callable[[], dfo.Answer]:
+    """A search run at most once, on the first call, failing unless every part of the
+    answer has one reading. A plain run never calls it."""
 
-    if not answer.complete:
-        raise SystemExit(f"{key}: the search has no single reading.\n{answer}")
+    @cache
+    def answer() -> dfo.Answer:
+        found = dfo.search(question, **search) if question else dfo.search(**search)
 
-    log.info("%s: %s", key, answer.sentence)
+        if not found.complete:
+            raise SystemExit(f"{key}: the search has no single reading.\n{found}")
+
+        log.info("%s: %s", key, found.sentence)
+        return found
+
     return answer
-
-
-def fetch(
-    key: str,
-    answer: dfo.Answer,
-    *,
-    role: str | None = None,
-    places: Iterable[str] = (),
-    window: tuple[int, int] | None = None,
-    facets: dict[str, str] | None = None,
-) -> pd.DataFrame:
-    """Fetch every reading of `answer`, for `places` under `role`, recording what was read."""
-    options = {}
-
-    if window is not None:
-        options["window"] = window
-
-    if facets is not None:
-        options["facets"] = facets
-
-    if role is not None:
-        options["entities"] = {role: list(places)}
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        data = answer.fetch(**options)
-
-    READS.append(
-        {
-            "key": key,
-            "sentence": data.sentence,
-            "specIds": [spec.spec_id for spec in answer.specs],
-            "versions": [member.content_version for member in data.members],
-            "citation": data.citation.text,
-            "rows": len(data),
-            "warnings": sorted({str(warning.message).splitlines()[0] for warning in caught}),
-        }
-    )
-    return data.to_pandas()
 
 
 def by_place(frame: pd.DataFrame, column: str) -> dict[str, pd.DataFrame]:
@@ -247,12 +357,14 @@ def latest(rows: pd.DataFrame | None) -> dict | None:
     return {"year": year, "value": round(values[year], 2)}
 
 
-def fetch_aid(places: list[str]) -> dict[str, pd.DataFrame]:
-    answer = answer_for("aid", f"ODA to {EXAMPLE} by sector")
+def fetch_aid(reads: Reads, places: list[str]) -> dict[str, pd.DataFrame]:
+    ask = asking("aid", f"ODA to {EXAMPLE} by sector")
     aid = pd.concat(
         [
-            fetch("aid", answer, role="destination", places=group, window=AID_YEARS)
-            for group in crs_groups(places)
+            reads.read(
+                f"aid-{index}", ask, role="destination", places=group, window=FLOW_YEARS
+            ).to_pandas()
+            for index, group in enumerate(crs_groups(places), start=1)
         ],
         ignore_index=True,
     )
@@ -265,30 +377,31 @@ def crs_groups(places: list[str]) -> list[list[str]]:
     return [places[start : start + CRS_GROUP] for start in range(0, len(places), CRS_GROUP)]
 
 
-def fetch_oof(places: list[str]) -> dict[str, pd.DataFrame]:
-    answer = answer_for("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}")
+def fetch_oof(reads: Reads, places: list[str]) -> dict[str, pd.DataFrame]:
+    ask = asking("oof", f"gross other official flows (OOF) disbursements to {EXAMPLE}")
     oof = pd.concat(
         [
-            fetch("oof", answer, role="destination", places=group, window=FLOW_YEARS)
-            for group in crs_groups(places)
+            reads.read(
+                f"oof-{index}", ask, role="destination", places=group, window=FLOW_YEARS
+            ).to_pandas()
+            for index, group in enumerate(crs_groups(places), start=1)
         ],
         ignore_index=True,
     )
     return by_place(oof, RECIPIENT)
 
 
-def donor_change() -> dict[str, float]:
+def donor_change(reads: Reads) -> dict[str, float]:
     """Each DAC member's change in total ODA from 2024 to 2025, as a fraction."""
-    question = "total ODA of each DAC donor in 2024 and 2025"
-    answer = answer_for("donors2025", question)
+    ask = asking("donors2025", "total ODA of each DAC donor in 2024 and 2025")
     # DFO's DAC members group holds the 32 member countries and leaves out EU institutions,
     # also a DAC member. A question naming EU institutions resolves to the EU's members or to
     # the EU as a recipient, so the EU is read from the same answer, named as the origin.
     # Its DAC1 code, EuropeanUnionInstitutions, is the provider code the CRS uses.
     frame = pd.concat(
         [
-            fetch("donors2025", answer),
-            fetch("donors2025-eu", answer, role="origin", places=[EU_INSTITUTIONS]),
+            reads.read("donors2025", ask).to_pandas(),
+            reads.read("donors2025-eu", ask, role="origin", places=[EU_INSTITUTIONS]).to_pandas(),
         ],
         ignore_index=True,
     )
@@ -397,29 +510,56 @@ def log_panels(contexts: list[dict]) -> None:
         )
 
 
+def parse_arguments() -> tuple[Mode, bool]:
+    """The mode, and whether to pin what a refresh or a search fetches."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--refresh", action="store_true", help="pin the newest versions of the committed refs"
+    )
+    group.add_argument(
+        "--search", action="store_true", help="search again and pin what the answers build"
+    )
+    parser.add_argument(
+        "--no-pin",
+        action="store_true",
+        help="with --refresh or --search, write the outputs but pin nothing and keep refs.json",
+    )
+    arguments = parser.parse_args()
+    mode: Mode = "refresh" if arguments.refresh else "search" if arguments.search else "plain"
+
+    if arguments.no_pin and mode == "plain":
+        parser.error("--no-pin needs --refresh or --search")
+
+    return mode, not arguments.no_pin
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    mode, pin = parse_arguments()
+    reads = Reads(mode, pin=pin)
     contexts = read_classification()
     places = [f"country/{context['iso3']}" for context in contexts]
 
     def place_reading(key: str, question: str, window: tuple[int, int]) -> dict:
-        frame = fetch(key, answer_for(key, question), role="place", places=places, window=window)
-        return by_place(frame, PLACE)
+        data = reads.read(key, asking(key, question), role="place", places=places, window=window)
+        return by_place(data.to_pandas(), PLACE)
 
     def recipient_reading(
         key: str, window: tuple[int, int], facets: dict[str, str] | None = None, **search
     ) -> dict:
-        answer = answer_for(key, **search)
-        frame = fetch(key, answer, role="destination", places=places, window=window, facets=facets)
+        ask = asking(key, **search)
+        data = reads.read(key, ask, role="destination", places=places, window=window, facets=facets)
+        frame = data.to_pandas()
         for column, value in (facets or {}).items():
             held = set(frame[column].dropna().unique())
             if held != {value}:
                 raise SystemExit(f"{key}: expected {column} {value}, got {sorted(held)}")
         return by_place(frame, RECIPIENT)
 
-    aid = fetch_aid(places)
-    oof = fetch_oof(places)
-    change = donor_change()
+    aid = fetch_aid(reads, places)
+    oof = fetch_oof(reads, places)
+    change = donor_change(reads)
     remittances = place_reading(
         "remittances", f"inward remittances to {EXAMPLE} in US dollars", FLOW_YEARS
     )
@@ -437,7 +577,7 @@ def main() -> int:
         )
     }
     population = place_reading(
-        "population", f"population of {EXAMPLE}", (FLOW_YEARS[0], INDICATOR_YEARS[1])
+        "population", f"population of {EXAMPLE}", (POPULATION_YEAR, POPULATION_YEAR)
     )
     indicators = {
         key: place_reading(key, question, INDICATOR_YEARS) for key, question, _ in INDICATORS
@@ -485,8 +625,10 @@ def main() -> int:
     groups = group_donors(contexts, aid, change)
     check(contexts, groups)
     log_panels(contexts)
+    reads.keep()
 
-    retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    retrieved = reads.retrieved()
+    every_read = reads.summary()
     envelope = {
         "provenance": {
             "sdk": f"development-finance=={dfo.__version__}",
@@ -499,14 +641,14 @@ def main() -> int:
                 "population (UNICEF) and three living-conditions indicators (SDG database)"
             ),
             "retrieved": retrieved,
-            "citation": "; ".join(sorted({read["citation"] for read in READS})),
+            "citation": "; ".join(sorted({read["citation"] for read in every_read})),
             "classification": "OECD, States of Fragility 2026 update",
             "units": {key: unit for key, _, unit in INDICATORS},
-            "dfo": READS,
+            "dfo": every_read,
         },
         "data": contexts,
     }
-    donor_reads = [read for read in READS if read["key"].startswith(("aid", "donors2025"))]
+    donor_reads = reads.summary(("aid-", "donors2025"))
     group_envelope = {
         "provenance": {
             "sdk": envelope["provenance"]["sdk"],
@@ -523,6 +665,8 @@ def main() -> int:
         },
         "data": groups,
     }
+
+    reads.write(retrieved)
 
     for target, content in ((TARGET, envelope), (GROUPS_TARGET, group_envelope)):
         target.write_text(json.dumps(content, indent=1, ensure_ascii=False) + "\n")
