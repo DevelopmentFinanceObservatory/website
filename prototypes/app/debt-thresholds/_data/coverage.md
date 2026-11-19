@@ -1,6 +1,6 @@
 # Coverage of the debt-thresholds data
 
-Written by `fetch.py` on 2026-11-16. Core series are debt stock, debt service, GDP and revenue in the base year. The step fails when more than 6 countries lack one in the default year, 2025.
+Written by `fetch.py` on 2026-11-19. Core series are debt stock, debt service, GDP and revenue in the base year. The step fails when more than 6 countries lack one in the default year, 2025.
 
 ## Base year 2024
 

@@ -1,17 +1,17 @@
-"""Tests for the transfers grouping and sums."""
-
-from datetime import UTC, datetime
+"""Tests for transfers.json, the page's series and the parity fixture."""
 
 import pytest
 
 from pipeline.errors import DataError
 from pipeline.transfers import (
     FIRST_YEAR,
+    FIXTURE_ISO3,
     INDICATOR,
-    STAT_VAR,
     build_transfers,
     countries_without_values,
+    parity_fixture,
     parse_groups,
+    transfers_by_country,
     transfers_provenance,
     values_by_country,
 )
@@ -24,10 +24,10 @@ MEMBERS = [
 ]
 
 
-def row(iso3: str, year: int, value: float | None, stat_var: str = STAT_VAR) -> dict:
+def row(iso3: str, year: int, value: float | None) -> dict:
     return {
-        "stat_var": stat_var,
-        "time_period": str(year),
+        "stat_var": "dcid:x",
+        "time_period": year,
         "value": value,
         "financingRecipient": f"country/{iso3}",
     }
@@ -45,38 +45,47 @@ ROWS = [
 ]
 
 
-def test_build_transfers_sums_and_counts_reporting() -> None:
-    data = build_transfers(ROWS, MEMBERS, release="November 2026")
-    assert list(data) == ["release", "years", "groups", "countries"]
-    assert data["years"] == [2010, 2011]
-    by_group = {g["group"]: g for g in data["groups"]}
-    assert by_group["lower-risk"]["values"] == [15.1, 1.0]
-    assert by_group["lower-risk"]["reporting"] == [2, 1]
-    assert by_group["lower-risk"]["members"] == 2
-    assert by_group["insolvent"]["values"] == [-3.0, -4.0]
-    assert by_group["insolvent"]["reporting"] == [1, 1]
-    assert by_group["not-in-dsa"]["values"] == [None, None]
-    assert by_group["not-in-dsa"]["members"] == 0
-    assert list(by_group) == [
-        "lower-risk",
-        "illiquid-issuer",
-        "illiquid-no-issuer",
-        "insolvent",
-        "not-in-dsa",
+def test_transfers_by_country_ends_at_the_last_year_half_report() -> None:
+    years, countries = transfers_by_country(ROWS, MEMBERS)
+    assert years == [2010, 2011]
+    assert [c["values"] for c in countries] == [
+        [10.04, 1.0],
+        [5.04, None],
+        [-3.0, -4.0],
+        [None, None],
     ]
-    delta = data["countries"][3]
-    assert delta["values"] == [None, None]
-    assert countries_without_values(data["countries"]) == ["DDD"]
+    assert countries[0] == {**MEMBERS[0], "values": [10.04, 1.0]}
+    assert countries_without_values(countries) == ["DDD"]
 
 
-def test_build_transfers_rejects_another_measure() -> None:
-    with pytest.raises(DataError, match="another measure"):
-        build_transfers([row("AAA", 2010, 1.0, stat_var="x")], MEMBERS, release="r")
-
-
-def test_build_transfers_rejects_empty_fetch() -> None:
+def test_transfers_by_country_rejects_an_empty_fetch() -> None:
     with pytest.raises(DataError, match="no values"):
-        build_transfers([row("AAA", 2005, 1.0)], MEMBERS, release="r")
+        transfers_by_country([row("AAA", 2005, 1.0)], MEMBERS)
+
+
+def test_build_transfers_keeps_the_release_and_members_only() -> None:
+    assert build_transfers(MEMBERS, release="November 2026") == {
+        "release": "November 2026",
+        "countries": MEMBERS,
+    }
+
+
+def test_parity_fixture_keeps_its_countries_rows_and_the_output_for_them() -> None:
+    kept, other = FIXTURE_ISO3[0], "AAA"
+    members = [{"iso3": kept, "name": "K", "group": "insolvent"}, *MEMBERS]
+    rows = [row(kept, 2011, 2.0), row(kept, 2010, None), row(other, 2010, 1.0)]
+    fixture = parity_fixture(rows, members)
+    assert fixture["rows"] == [
+        {"financingRecipient": f"country/{kept}", "time_period": 2010, "value": None},
+        {"financingRecipient": f"country/{kept}", "time_period": 2011, "value": 2.0},
+    ]
+    assert fixture["members"] == members[:1]
+    assert fixture["expected"] == {
+        "valuesByCountry": {kept: {"2011": 2.0}},
+        "lastActualYear": 2011,
+        "years": [2010, 2011],
+        "countries": [{"iso3": kept, "name": "K", "group": "insolvent", "values": [None, 2.0]}],
+    }
 
 
 def test_parse_groups_skips_comments_and_rejects_unknown() -> None:
@@ -86,10 +95,10 @@ def test_parse_groups_skips_comments_and_rejects_unknown() -> None:
         parse_groups(["iso3,name,group\n", "AAA,Alpha,nope\n"])
 
 
-def test_transfers_provenance_key_order_and_stamp() -> None:
+def test_transfers_provenance_key_order() -> None:
     provenance = transfers_provenance(
-        sdk_version="0.2.0",
-        retrieved=datetime(2026, 11, 16, 18, 24, 49, 132000, tzinfo=UTC),
+        sdk_version="0.4.1",
+        retrieved="2026-11-16T18:24:49.132Z",
         release="November 2026",
         sentence="s",
         citation="c",
@@ -107,7 +116,7 @@ def test_transfers_provenance_key_order_and_stamp() -> None:
     ]
     assert provenance["retrieved"] == "2026-11-16T18:24:49.132Z"
     assert provenance["indicator"] == INDICATOR
-    assert provenance["sdk"] == "development-finance==0.2.0"
+    assert provenance["sdk"] == "development-finance==0.4.1"
 
 
 def test_values_by_country_reads_a_missing_country_as_empty() -> None:

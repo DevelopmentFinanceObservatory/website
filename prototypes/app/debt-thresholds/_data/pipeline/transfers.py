@@ -1,23 +1,29 @@
-"""Net transfers on external debt by FDL group, as written to transfers.json.
+"""Net transfers on external debt: transfers.json, and the series the page builds from the ref.
 
-The DFO read happens in `pipeline.sources.transfers`. This module takes the rows
-it returns and the rows of groups.csv, and builds the file's data and provenance.
-Group totals sum the countries that report a value in that year; `reporting`
-counts them, so a gap in the data shows in the file.
+The page reads the net-transfers rows in the browser, from the ref in
+live-refs.json, and builds each country's series with ports of
+`values_by_country`, `last_actual_year` and `transfers_by_country`. transfers.json
+holds what the rows lack: the 75 countries with their FDL group, and the IDS
+release label. `parity_fixture` writes real rows and this module's output for
+them, which the page's port is tested against.
 """
 
 import csv
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, datetime
 from typing import TypedDict
 
 from pipeline.errors import DataError
+from pipeline.provenance import base_provenance
 
-QUERY = "Net transfers on external debt for Kenya"
-STAT_VAR = "dcid:Amount_FinancialFlow_Net_Disbursement_ServicingPayment_Nominal"
 INDICATOR = "DT.NTR.DECT.CD"
+QUERY = f"{INDICATOR} for the 75 countries in groups.csv, by series code"
 FIRST_YEAR = 2010
+# The read's years. A ref keeps its window, so a release past 2031 takes a new search.
+WINDOW = (FIRST_YEAR, 2031)
+# Countries whose rows the parity fixture keeps, with every year the read holds. The
+# read has no rows for South Sudan, so its series is all null.
+FIXTURE_ISO3 = ("BTN", "KEN", "IND", "SOM", "ZWE", "LBN", "SSD")
 
 TRANSFER_GROUPS = {
     "lower-risk": "Lower risk",
@@ -30,27 +36,26 @@ TRANSFER_GROUPS = {
 type Values = dict[str, dict[int, float]]  # ISO3 -> year -> value
 
 
-class Country(TypedDict):
+class Member(TypedDict):
     iso3: str
     name: str
     group: str
+
+
+class Country(Member):
     values: list[float | None]
 
 
-def parse_groups(lines: Iterable[str]) -> list[dict[str, str]]:
+def parse_groups(lines: Iterable[str]) -> list[Member]:
     """Return the rows of groups.csv from its lines, skipping the `#` source comment."""
-    rows = list(csv.DictReader(line for line in lines if not line.startswith("#")))
+    rows = [
+        Member(iso3=row["iso3"], name=row["name"], group=row["group"])
+        for row in csv.DictReader(line for line in lines if not line.startswith("#"))
+    ]
     unknown = {row["group"] for row in rows} - TRANSFER_GROUPS.keys()
     if unknown:
         raise DataError(f"groups.csv names unknown groups: {sorted(unknown)}")
     return rows
-
-
-def check_stat_vars(rows: Sequence[Mapping[str, object]]) -> None:
-    """Raise `DataError` unless every fetched row is the net-transfers measure."""
-    stat_vars = {row["stat_var"] for row in rows}
-    if stat_vars != {STAT_VAR}:
-        raise DataError(f"Search read another measure: {stat_vars}")
 
 
 def values_by_country(rows: Sequence[Mapping[str, object]]) -> Values:
@@ -71,7 +76,7 @@ def values_by_country(rows: Sequence[Mapping[str, object]]) -> Values:
 
 
 def last_actual_year(values: Values) -> int:
-    """Return the latest year that at least half the countries report.
+    """Return the latest year that at least half the countries with any value report.
 
     The latest year counts as actual once most countries report it.
     """
@@ -82,70 +87,80 @@ def last_actual_year(values: Values) -> int:
     return max(year for year, n in counts.items() if n >= len(values) / 2)
 
 
-def build_transfers(
-    rows: Sequence[Mapping[str, object]],
-    members: Sequence[Mapping[str, str]],
-    *,
-    release: str,
-) -> dict:
-    """Return the data of transfers.json from fetched `rows` and the groups.csv `members`.
+def transfers_by_country(
+    rows: Sequence[Mapping[str, object]], members: Sequence[Member]
+) -> tuple[list[int], list[Country]]:
+    """Return the years from `FIRST_YEAR` to the last actual one, and each member's values.
 
-    `release` names the IDS release; it sits in the data too, so the chart's
-    source line can name it.
+    A member's value is null in a year it does not report. This is the series the
+    page draws.
     """
-    check_stat_vars(rows)
     values = values_by_country(rows)
     years = list(range(FIRST_YEAR, last_actual_year(values) + 1))
-
-    countries: list[Country] = [
-        {
-            "iso3": row["iso3"],
-            "name": row["name"],
-            "group": row["group"],
-            "values": [values.get(row["iso3"], {}).get(year) for year in years],
-        }
-        for row in members
-    ]
-
-    groups = []
-    for key, label in TRANSFER_GROUPS.items():
-        inside = [c for c in countries if c["group"] == key]
-        totals: list[float | None] = []
-        reporting: list[int] = []
-        for i in range(len(years)):
-            present = [v for c in inside if (v := c["values"][i]) is not None]
-            totals.append(round(sum(present), 1) if present else None)
-            reporting.append(len(present))
-        groups.append(
-            {
-                "group": key,
-                "label": label,
-                "members": len(inside),
-                "values": totals,
-                "reporting": reporting,
-            }
+    countries = [
+        Country(
+            iso3=member["iso3"],
+            name=member["name"],
+            group=member["group"],
+            values=[values.get(member["iso3"], {}).get(year) for year in years],
         )
-    return {"release": release, "years": years, "groups": groups, "countries": countries}
+        for member in members
+    ]
+    return years, countries
+
+
+def build_transfers(members: Sequence[Member], *, release: str) -> dict:
+    """Return the data of transfers.json: the IDS release label and the 75 members."""
+    return {"release": release, "countries": [dict(member) for member in members]}
+
+
+def parity_fixture(rows: Sequence[Mapping[str, object]], members: Sequence[Member]) -> dict:
+    """Return real rows of `FIXTURE_ISO3` and this module's output for them.
+
+    Each row keeps the three columns the functions read. `expected` holds
+    `values_by_country` (years as keys), `last_actual_year` and
+    `transfers_by_country` for the fixture's members.
+    """
+    kept = [
+        {
+            "financingRecipient": row["financingRecipient"],
+            "time_period": row["time_period"],
+            "value": row["value"],
+        }
+        for row in rows
+        if str(row["financingRecipient"]).removeprefix("country/") in FIXTURE_ISO3
+    ]
+    kept.sort(key=lambda row: (str(row["financingRecipient"]), int(str(row["time_period"]))))
+    chosen = [member for member in members if member["iso3"] in FIXTURE_ISO3]
+    values = values_by_country(kept)
+    years, countries = transfers_by_country(kept, chosen)
+    return {
+        "rows": kept,
+        "members": chosen,
+        "expected": {
+            "valuesByCountry": {
+                iso3: {str(year): value for year, value in sorted(series.items())}
+                for iso3, series in sorted(values.items())
+            },
+            "lastActualYear": last_actual_year(values),
+            "years": years,
+            "countries": countries,
+        },
+    }
 
 
 def transfers_provenance(
     *,
     sdk_version: str,
-    retrieved: datetime,
+    retrieved: str,
     release: str,
     sentence: str,
     citation: str,
     version: str,
 ) -> dict:
-    """Return the provenance block of transfers.json.
-
-    `retrieved` is a timezone-aware time, written in UTC with millisecond precision.
-    """
-    stamp = retrieved.astimezone(UTC).isoformat(timespec="milliseconds")
+    """Return the provenance block of transfers.json; `retrieved` is the refs' UTC stamp."""
     return {
-        "sdk": f"development-finance=={sdk_version}",
-        "query": QUERY,
-        "retrieved": stamp.replace("+00:00", "Z"),
+        **base_provenance(sdk_version=sdk_version, query=QUERY, retrieved=retrieved),
         "ids": release,
         "indicator": INDICATOR,
         "sentence": sentence,
