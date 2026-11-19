@@ -44,9 +44,9 @@ const nextConfig: NextConfig = {
                 destination: 'https://www.one.org/info/privacy-policy/#h-terms-and-conditions-nbsp',
                 permanent: false,
             },
-            // The old Start a sheet address. The query passes through, so
-            // `dataset` preselects the dataset; the page ignores `class`,
-            // `measured`, `split` and `pattern`.
+            // Links to the Start a sheet address reach Seed a dataset. The query
+            // passes through, so `dataset` preselects the dataset. The page
+            // ignores `class`, `measured`, `split` and `pattern`.
             {
                 source: '/graph-explorer/new-sheet',
                 destination: '/graph-explorer/seed',

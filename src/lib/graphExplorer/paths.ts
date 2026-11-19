@@ -10,7 +10,7 @@ export const EXPLORE_PATH = GRAPH_EXPLORER_PATH;
 /** The Seed a dataset screen. */
 export const SEED_PATH = `${GRAPH_EXPLORER_PATH}/seed`;
 
-/** The Check a sheet screen: the Seed a dataset page opened at its check step. */
+/** The Check a sheet screen, which is the Seed a dataset page opened at its check step. */
 export const CHECK_SHEET_PATH = `${GRAPH_EXPLORER_PATH}/check-sheet`;
 
 /** The section's three screens. */

@@ -13,7 +13,7 @@
  * - A constraint column is pre-filled the same way when every pattern of the
  *   dataset carries the property and the dataset's constraint values hold one
  *   value for it (DAC2A's `financial_flow_type` is `dcid:Disbursement`).
- *   Other constraint cells, `unit` and `statvar_name` start empty; a pasted
+ *   Other constraint cells, `unit` and `statvar_name` start empty. A pasted
  *   label fills `statvar_name`.
  * - The CSV writes cells verbatim, RFC 4180 quoting only. A seed is read by
  *   dbt, so a leading `=`, `+`, `-` or `@` stays as written.
@@ -31,7 +31,7 @@ import {
 import { SEED_PATH } from './paths.ts';
 import type { ProvenanceUsage, SchemaPattern } from './wire.ts';
 
-/** What a seed's columns are read from: a dataset's patterns and the values its constraints take. */
+/** The dataset patterns and constraint values a seed's columns are read from. */
 export type SeedSource = Pick<ProvenanceUsage, 'patterns' | 'constraint_values'>;
 
 /** The dataset a seed copies: its id, label, patterns and constraint values. */
@@ -55,7 +55,7 @@ export type SeedColumn = {
     readonly description: string;
 };
 
-/** The columns a reader changed: constraint properties dropped from, or added to, the dataset's. */
+/** The columns a reader changed, as constraint properties dropped from or added to the dataset's. */
 export type SeedChoice = {
     readonly dropped: readonly string[];
     readonly added: readonly string[];
@@ -171,10 +171,10 @@ export type SeedRows = {
 };
 
 /**
- * The rows pasted codes make: one per code, read from each non-blank line,
- * the first tab-separated cell the code and the second the label. A code
- * repeated on a later line is merged into its first row, which takes the
- * first label any of its lines give. Every other cell is the column's fill.
+ * The rows pasted codes make, one per code. Each non-blank line gives a code
+ * (its first tab-separated cell) and a label (its second). A code repeated
+ * on a later line is merged into its first row, which takes the first label
+ * any of its lines give. Every other cell is the column's fill.
  */
 export function seedRows(columns: readonly SeedColumn[], pasted: string): SeedRows {
     const labels = new Map<string, string>();
@@ -198,7 +198,7 @@ export function seedRows(columns: readonly SeedColumn[], pasted: string): SeedRo
     return { rows, merged };
 }
 
-/** A CSV field: RFC 4180 quoting for a comma, quote or line break, and the value otherwise as it is. */
+/** A CSV field, quoted per RFC 4180 when it holds a comma, quote or line break and verbatim otherwise. */
 const csvField = (raw: string): string =>
     /[",\r\n]/.test(raw) ? `"${raw.replaceAll('"', '""')}"` : raw;
 

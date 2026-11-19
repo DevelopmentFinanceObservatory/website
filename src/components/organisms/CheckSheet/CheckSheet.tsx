@@ -522,9 +522,9 @@ const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
 };
 
 /**
- * The check step: a filled seed or StatVar output, pasted or chosen as a
- * `.csv` file, read into check rows, said what was read, and checked against
- * the graph.
+ * The check step. A filled seed or StatVar output, pasted or chosen as a
+ * `.csv` file, is read into check rows, summarised, and checked against the
+ * graph.
  */
 const CheckSheet = ({ title }: { title: string }) => {
     const model = useModel();

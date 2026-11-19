@@ -246,9 +246,9 @@ const filled = (cell: string | undefined): cell is string => (cell ?? '').trim()
  * ignored, with `duplicateOf` naming the earlier column.
  *
  * In a seed (no `dcid` column), a property column with a filled cell and no
- * cell carrying the `dcid:` prefix holds source codes and is skipped, which
- * `rows` decides; with no `rows` no column is. StatVar output checks every
- * column that maps.
+ * cell carrying the `dcid:` prefix holds source codes and is skipped. That
+ * decision reads `rows`, so with none no column is skipped. StatVar output
+ * checks every column that maps.
  */
 export function mapHeaders(
     model: Model,
@@ -570,8 +570,8 @@ export type PrefixFinding = {
 /**
  * The unprefixed cells of each checked property column of a seed that also
  * holds `dcid:`-prefixed cells, read from the rows `sheet` sends to the check.
- * The column stays checked and each cell is still sent. StatVar output
- * carries bare values and is never flagged.
+ * The column is checked and each cell is sent. StatVar output carries bare
+ * values and gets no findings.
  */
 export function prefixFindings(
     kind: PastedKind,
@@ -603,7 +603,7 @@ export function prefixFindings(
 /** What the reader did with a paste, for the line above the findings. */
 export type ReadSummary = {
     readonly kind: PastedKind;
-    /** Data rows read, blank rows apart: those sent to the check and those skipped. */
+    /** Data rows read, blank rows excluded, counting both the rows sent to the check and the skipped ones. */
     readonly rows: number;
     readonly skippedRows: number;
     /** The columns the check reads, in order. Blank headers are left out. */

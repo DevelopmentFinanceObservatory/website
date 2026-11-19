@@ -180,7 +180,7 @@ test('a column with prefixed and bare cells stays checked, and each bare cell is
         { code: 'missing_prefix', column: 3, header: 'netting_basis', row: 3, value: 'Net' },
     ]);
     assert.ok(headers(read.summary.checked).includes('netting_basis'));
-    // The bare cell is still sent.
+    // The bare cell is sent to the check.
     assert.equal(read.sheet.rows[1]?.constraint_properties?.nettingBasis, 'Net');
 });
 

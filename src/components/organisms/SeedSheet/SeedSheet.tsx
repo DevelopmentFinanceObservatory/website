@@ -320,7 +320,7 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
         return (
             <>
                 <p className={styles.lead} role="status">
-                    No dataset on the graph has patterns yet, so there is nothing to start from.
+                    No dataset on the graph has patterns, so there is nothing to start from.
                 </p>
                 {checkSection('Check a seed')}
             </>
@@ -401,8 +401,8 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                                         <BreakableId text={property} />
                                     </code>
                                 </span>
-                            ))}
-                            : {plural(pattern.stat_var_count, 'StatVar')}
+                            ))}{' '}
+                            ({plural(pattern.stat_var_count, 'StatVar')})
                         </li>
                     ))}
                 </ul>
@@ -495,9 +495,9 @@ const SeedSteps = ({ openAt }: { openAt: 'start' | 'check' }) => {
                 </div>
                 <p className={styles.note}>
                     Left to you: the seed&rsquo;s name (the file downloads as{' '}
-                    <code>{NEW_SEED_NAME}.csv</code>), the value for each code in the empty cells,
-                    the key name if it is not <code>source_code</code>, <code>unit</code>,{' '}
-                    <code>measurement_method</code>, and the SQL that reads the seed.
+                    <code>{NEW_SEED_NAME}.csv</code>), a value in each empty constraint cell, the{' '}
+                    <code>unit</code> and <code>measurement_method</code> of each row, and the SQL
+                    that reads the seed.
                 </p>
             </SheetSection>
 
