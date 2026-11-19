@@ -1,8 +1,9 @@
 /**
  * forwardDatasets() serves the Datasets read routes for pages: a file's
  * storage redirect followed and streamed within bounds, Cache-Control and
- * Cache-Tag by route and tier, revalidation, CORS for DFO origins, and one log
- * line per read. Every other datasets route is forwarded untouched.
+ * Cache-Tag by route and tier, revalidation, CORS for DFO origins, and one
+ * `gateway.delivery` line per read. Every other datasets route is forwarded
+ * untouched.
  */
 import '../../test/serverModules.ts';
 
@@ -14,6 +15,10 @@ import test, { mock } from 'node:test';
 
 import type { NextRequest } from 'next/server';
 
+// The caller settings forward() and the delivery line both read at import.
+process.env.DFO_CALLER_PRINCIPAL = 'principal-secret';
+process.env.CALLER_HMAC_KEY = 'caller-key';
+
 const { dropPerRequestHeaders, forwardDatasets, isDfoOrigin } = await import('../datasetReads.ts');
 
 const SPEC = 'spec_abc';
@@ -21,12 +26,16 @@ const CV = 'cv_123';
 const PARQUET = Buffer.concat([Buffer.from('PAR1'), Buffer.alloc(4096, 7), Buffer.from('PAR1')]);
 const STORED_ETAG = '"stored-etag"';
 const MANIFEST_ETAG = '"manifest-etag"';
+const MANIFEST_TRACE = 'trace-of-one-request';
+const FILE_TRACE = 'trace-of-a-file-link';
+const CLIENT_ADDRESS = '203.0.113.7';
 // What dfo-apis sends on a route the gateway does not handle as a read.
 const OTHER_CACHE_CONTROL = 'private, max-age=5';
 
 // Storage responses held open, for the streaming test to finish.
 const held: ServerResponse[] = [];
 const storageRequests: Record<string, string | string[] | undefined>[] = [];
+const apisRequests: Record<string, string | string[] | undefined>[] = [];
 
 // One server plays dfo-apis under /api/datasets/ and storage under /bucket/.
 // A file digest picks the upstream's answer: `<tier>` redirects to a stored
@@ -71,6 +80,8 @@ const server = createServer((req, res) => {
         return;
     }
 
+    apisRequests.push(req.headers);
+
     if (spec !== SPEC || !cv?.startsWith('cv_') || parts.length > 7) {
         res.writeHead(200, {
             'content-type': 'application/json',
@@ -86,7 +97,7 @@ const server = createServer((req, res) => {
             'content-type': 'application/json',
             'cache-control': 'no-store',
             etag: MANIFEST_ETAG,
-            'x-dfo-trace-id': 'trace-of-one-request',
+            'x-dfo-trace-id': MANIFEST_TRACE,
             'server-timing': 'app;dur=12',
         });
         res.end('{"artifacts": []}');
@@ -104,6 +115,7 @@ const server = createServer((req, res) => {
         res.writeHead(302, {
             location: `${base}/bucket/${object}`,
             'cache-control': 'no-store',
+            'x-dfo-trace-id': FILE_TRACE,
             ...(digest === 'none' || !digest ? {} : { 'x-dfo-artifact-tier': digest }),
         });
         res.end();
@@ -119,13 +131,16 @@ test.after(() => {
 
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
+// forward() names the caller only to dfo-apis, read from SEARCH_API_BASE per call.
+process.env.SEARCH_API_BASE = base;
+
 // Every read logs a line; the log tests read them from here. Failures log
 // at error level.
 const logged = mock.method(console, 'log', () => {});
 const loggedErrors = mock.method(console, 'error', () => {});
 const lines = (calls: { arguments: unknown[] }[]) =>
     calls.map((c) => JSON.parse(String(c.arguments[0])));
-const loggedReads = () => lines(logged.mock.calls).filter((e) => e.message === 'dataset read');
+const loggedReads = () => lines(logged.mock.calls).filter((e) => e.message === 'gateway.delivery');
 
 const call = (
     rest: string,
@@ -140,7 +155,10 @@ const call = (
     } = {},
 ): Promise<Response> =>
     forwardDatasets(
-        new Request(`http://site.test/api/v1/datasets/${rest}`, { method, headers }) as NextRequest,
+        new Request(`http://site.test/api/v1/datasets/${rest}`, {
+            method,
+            headers: { 'x-forwarded-for': CLIENT_ADDRESS, ...headers },
+        }) as NextRequest,
         {
             segments: rest.split('?')[0]!.split('/'),
             target: `${base}/api/datasets/${rest}`,
@@ -329,8 +347,9 @@ test(
         const [entry] = lines(loggedErrors.mock.calls);
 
         assert.equal(entry.severity, 'ERROR');
-        assert.equal(entry.message, 'dataset storage failed');
+        assert.equal(entry.message, 'gateway.delivery_failed');
         assert.equal(entry.path, `/api/v1/datasets/${file('hang')}`);
+        assert.equal(entry.trace_id, FILE_TRACE);
         assert.equal(entry.error, 'TimeoutError');
     },
 );
@@ -343,8 +362,8 @@ test('storage: a refusal logs an error with the storage status', async () => {
 
     const [entry] = lines(loggedErrors.mock.calls);
 
-    assert.equal(entry.message, 'dataset storage failed');
-    assert.equal(entry.storageStatus, 403);
+    assert.equal(entry.message, 'gateway.delivery_failed');
+    assert.equal(entry.storage_status, 403);
 });
 
 test(
@@ -362,7 +381,14 @@ test(
         const [entry] = lines(loggedErrors.mock.calls);
 
         assert.equal(entry.severity, 'ERROR');
-        assert.equal(entry.message, 'dataset read');
+        assert.equal(entry.message, 'gateway.delivery');
+        assert.equal(entry.door, 'files');
+        assert.equal(entry.digest, 'stall');
+        assert.equal(entry.trace_id, FILE_TRACE);
+        assert.equal(entry.caller, apisRequests.at(-1)?.['x-dfo-caller']);
+        assert.equal(entry.caller_source, 'vouched');
+        assert.equal(entry.served_by, 'gateway');
+        assert.equal(entry.status, 200);
         assert.equal(entry.complete, false);
         assert.equal(entry.bytes, 4);
         assert.match(entry.error, /^StorageStallError/);
@@ -468,9 +494,10 @@ test('cors: a preflight from another origin is forwarded, gets no CORS headers, 
     const [entry] = lines(logged.mock.calls);
 
     assert.equal(entry.severity, 'INFO');
-    assert.equal(entry.message, 'dataset cors refused');
+    assert.equal(entry.message, 'gateway.cors_refused');
+    assert.equal(entry.door, 'snapshot');
     assert.equal(entry.method, 'OPTIONS');
-    assert.equal(entry.origin, 'https://example.org');
+    assert.equal(entry.origin_host, 'example.org');
 });
 
 test('cors: a read from another origin is logged as refused', async () => {
@@ -479,11 +506,11 @@ test('cors: a read from another origin is logged as refused', async () => {
 
     await res.arrayBuffer();
 
-    const refused = lines(logged.mock.calls).filter((e) => e.message === 'dataset cors refused');
+    const refused = lines(logged.mock.calls).filter((e) => e.message === 'gateway.cors_refused');
 
     assert.deepEqual(
-        refused.map((e) => [e.method, e.origin]),
-        [['GET', 'https://example.org']],
+        refused.map((e) => [e.method, e.origin_host]),
+        [['GET', 'example.org']],
     );
 });
 
@@ -498,13 +525,15 @@ test('cors: a HEAD preflight gets no gateway answer', async () => {
     await res.body?.cancel();
 });
 
-test('log: one line per read, written when the body ends', async () => {
+test('log: a file read is one gateway.delivery line, written when the body ends', async () => {
     logged.mock.resetCalls();
     const res = await call(file('pinned'), {
         headers: {
             origin: 'http://localhost:3000',
             referer: 'http://localhost:3000/prototypes/debt/?token=secret#x',
-            'x-dfo-client': 'dfo-ts/0.4.0',
+            'x-dfo-client': 'dfo-ts/0.4.0 (node 24)',
+            'user-agent': 'node',
+            'sec-fetch-site': 'cross-site',
         },
     });
 
@@ -512,28 +541,76 @@ test('log: one line per read, written when the body ends', async () => {
     await res.arrayBuffer();
     assert.equal(logged.mock.callCount(), 1);
 
+    const sent = apisRequests.at(-1)!;
     const [entry] = loggedReads();
 
-    assert.equal(entry.message, 'dataset read');
-    assert.equal(entry.read, 'file');
-    assert.equal(entry.status, 200);
-    assert.equal(entry.tier, 'pinned');
-    assert.equal(entry.bytes, PARQUET.byteLength);
-    assert.equal(entry.complete, true);
-    assert.equal(typeof entry.durationMs, 'number');
-    assert.equal(entry.origin, 'http://localhost:3000');
-    assert.equal(entry.referer, 'http://localhost:3000/prototypes/debt/');
-    assert.equal(entry.client, 'dfo-ts/0.4.0');
+    // The referer's path, query and fragment, a share token among them, stay out of the line.
+    assert.doesNotMatch(JSON.stringify(entry), /prototypes|token|secret/);
+
+    // The trace id is dfo-apis's, though the cached answer drops the header.
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    assert.match(String(sent['x-dfo-caller']), /^ip:[0-9a-f]{32}$/);
+    assert.deepEqual(
+        { ...entry, duration_ms: typeof entry.duration_ms },
+        {
+            severity: 'INFO',
+            message: 'gateway.delivery',
+            door: 'files',
+            trace_id: FILE_TRACE,
+            spec_id: SPEC,
+            content_version: CV,
+            digest: 'pinned',
+            caller: sent['x-dfo-caller'],
+            caller_source: 'vouched',
+            surface: 'api',
+            client: 'dfo-ts/0.4.0',
+            user_agent: 'node',
+            origin_host: 'localhost:3000',
+            referer_host: 'localhost:3000',
+            served_by: 'gateway',
+            status: 200,
+            tier: 'pinned',
+            bytes: PARQUET.byteLength,
+            complete: true,
+            duration_ms: 'number',
+        },
+    );
 });
 
-test('log: the selector and the manifest are logged by kind', async () => {
+test('log: a manifest read is a snapshot line with the trace id dfo-apis sent', async () => {
+    logged.mock.resetCalls();
+    const res = await call(`${SPEC}/${CV}`, {
+        headers: { 'sec-fetch-site': 'same-origin', 'x-dfo-client': 'not a token' },
+    });
+
+    await res.arrayBuffer();
+
+    const [entry] = loggedReads();
+
+    assert.equal(res.headers.get('x-dfo-trace-id'), null);
+    assert.equal(entry.door, 'snapshot');
+    assert.equal(entry.trace_id, MANIFEST_TRACE);
+    assert.equal(entry.spec_id, SPEC);
+    assert.equal(entry.content_version, CV);
+    assert.equal('digest' in entry, false);
+    assert.equal(entry.caller, apisRequests.at(-1)?.['x-dfo-caller']);
+    assert.equal(entry.caller_source, 'vouched');
+    assert.equal(entry.surface, 'website');
+    assert.equal(entry.client, null);
+    assert.equal(entry.origin_host, null);
+    assert.equal(entry.served_by, 'gateway');
+    assert.equal(entry.status, 200);
+    assert.equal(entry.bytes, '{"artifacts": []}'.length);
+});
+
+test('log: the selector and the manifest are logged by door', async () => {
     logged.mock.resetCalls();
 
     await (await call(`${SPEC}/${CV}/file?format=csv`)).arrayBuffer();
     await (await call(`${SPEC}/${CV}`)).arrayBuffer();
 
     assert.deepEqual(
-        loggedReads().map((entry) => entry.read),
-        ['selector', 'manifest'],
+        loggedReads().map((entry) => entry.door),
+        ['file_selector', 'snapshot'],
     );
 });

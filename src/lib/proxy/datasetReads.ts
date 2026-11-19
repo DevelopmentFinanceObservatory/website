@@ -2,8 +2,9 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
-import { forward, type ForwardOptions } from './forward';
-import { clientLabel, pick } from './headers';
+import { apisCallerFor } from './caller';
+import { forward, isApisTarget, type ForwardOptions } from './forward';
+import { clientLabel, NON_PRINTABLE, pick } from './headers';
 
 /**
  * The Datasets API's read routes as the gateway serves them to pages, under
@@ -48,17 +49,34 @@ import { clientLabel, pick } from './headers';
  * A page on a DFO origin (DFO_ORIGINS, isDfoOrigin) reads these routes
  * cross-origin: the gateway answers its preflight and labels each answer with
  * `Access-Control-Allow-Origin`. Any other Origin gets no CORS headers, and
- * its preflight or read logs one `dataset cors refused` line, so third-party
- * use shows in the logs. Each GET writes one `dataset read` log line when its
- * body ends (logDatasetRead).
+ * its preflight or read logs one `gateway.cors_refused` line, so third-party
+ * use shows in the logs. A failure on the storage hop logs one
+ * `gateway.delivery_failed` line.
+ *
+ * Each GET writes one `gateway.delivery` log line when its body ends
+ * (GatewayDeliveryEntry). The line takes the field names of dfo-apis's
+ * `datasets.delivery` line (datasets_api/delivery.py) where the fact is the
+ * same, so the two can be read as one table. dfo-apis logs its own line for
+ * the same call under the same trace_id, and `served_by: "gateway"` marks this
+ * one, so a reader counts one use per trace_id.
  */
 export type DatasetReadKind = 'manifest' | 'file' | 'selector';
+
+/** dfo-apis's door name for each read route, as its `datasets.delivery` line gives it. */
+export const DELIVERY_DOORS = {
+    manifest: 'snapshot',
+    file: 'files',
+    selector: 'file_selector',
+} as const satisfies Record<DatasetReadKind, string>;
+
+export type DeliveryDoor = (typeof DELIVERY_DOORS)[DatasetReadKind];
 
 export type DatasetRead = { kind: DatasetReadKind; contentVersion: string };
 
 export const STORAGE_ORIGIN = 'https://storage.googleapis.com';
 
 const TIER_HEADER = 'x-dfo-artifact-tier';
+const TRACE_HEADER = 'x-dfo-trace-id';
 
 const PINNED_CACHE = 'public, max-age=3600, s-maxage=31536000';
 const SHORT_CACHE = 'public, max-age=60, s-maxage=300';
@@ -189,12 +207,13 @@ const errorText = (error: unknown): string =>
 
 const logStorageFailure = (fields: {
     path: string;
+    trace_id: string | null;
     tier: string | null;
-    storageStatus?: number;
+    storage_status?: number;
     error?: string;
 }): void => {
     console.error(
-        JSON.stringify({ severity: 'ERROR', message: 'dataset storage failed', ...fields }),
+        JSON.stringify({ severity: 'ERROR', message: 'gateway.delivery_failed', ...fields }),
     );
 };
 
@@ -241,8 +260,8 @@ type StorageHop = {
     req: NextRequest;
     storageOrigin: string;
     bounds: StorageBounds;
-    // Receives the tier dfo-apis named.
-    onTier: (tier: string | null) => void;
+    // Receives the tier and trace id dfo-apis named, before either header is dropped.
+    onUpstream: (tier: string | null, traceId: string | null) => void;
 };
 
 /**
@@ -251,12 +270,13 @@ type StorageHop = {
  * answer, and a redirect that cannot be followed, goes back unchanged.
  */
 const followStorage =
-    ({ req, storageOrigin, bounds, onTier }: StorageHop) =>
+    ({ req, storageOrigin, bounds, onUpstream }: StorageHop) =>
     async (upstream: Response): Promise<Response> => {
         const tier = upstream.headers.get(TIER_HEADER);
+        const traceId = upstream.headers.get(TRACE_HEADER);
         const path = new URL(req.url).pathname;
 
-        onTier(tier);
+        onUpstream(tier, traceId);
 
         const location = upstream.headers.get('location');
 
@@ -294,7 +314,7 @@ const followStorage =
         } catch (error) {
             // A client that left aborted the hop itself, so nothing failed.
             if (!req.signal.aborted) {
-                logStorageFailure({ path, tier, error: errorName(error) });
+                logStorageFailure({ path, trace_id: traceId, tier, error: errorName(error) });
             }
 
             return upstream;
@@ -303,7 +323,12 @@ const followStorage =
         }
 
         if (stored.status !== 200 && stored.status !== 304) {
-            logStorageFailure({ path, tier, storageStatus: stored.status });
+            logStorageFailure({
+                path,
+                trace_id: traceId,
+                tier,
+                storage_status: stored.status,
+            });
             await stored.body?.cancel();
 
             return upstream;
@@ -332,37 +357,89 @@ const followStorage =
         return new Response(body, { status: 200, headers: relayed });
     };
 
-export type DatasetReadLogEntry = {
+/** Where the gateway's dfo-apis call got its caller (dfo-apis's CallerSource). */
+export type CallerSource = 'vouched' | 'none';
+
+/**
+ * Where a read came from, as website#171's requestSurface (src/lib/proxy/caller.ts)
+ * names it in x-dfo-surface.
+ */
+export type DeliverySurface = 'website' | 'api';
+
+/** One `gateway.delivery` line. */
+export type GatewayDeliveryEntry = {
     // ERROR when the body failed before the client had it all.
     severity: 'INFO' | 'ERROR';
-    message: 'dataset read';
-    read: DatasetReadKind;
-    path: string;
+    message: 'gateway.delivery';
+    door: DeliveryDoor;
+    // dfo-apis's x-dfo-trace-id for the call, which its own line carries too.
+    trace_id: string | null;
+    spec_id: string;
+    content_version: string;
+    // The file's SHA-256 name, on a `files` line only.
+    digest?: string;
+    // What forward() sent dfo-apis in x-dfo-caller, vouched by the principal.
+    caller: string | null;
+    caller_source: CallerSource;
+    surface: DeliverySurface;
+    // X-DFO-Client's `<name>/<version>` product token, as dfo-apis reads it.
+    client: string | null;
+    user_agent: string | null;
+    origin_host: string | null;
+    referer_host: string | null;
+    served_by: 'gateway';
     status: number;
     tier: string | null;
     bytes: number;
     complete: boolean;
-    durationMs: number;
-    origin: string | null;
-    referer: string | null;
-    client: string | null;
+    duration_ms: number;
     // Why the body failed, on an ERROR line.
     error?: string;
 };
 
-// A Referer as origin and path: its query string and fragment can carry
+// The host of an Origin or Referer: a Referer's path and query can carry
 // whatever the page put there.
-const refererPage = (referer: string | null): string | null => {
-    if (referer === null || !URL.canParse(referer)) {
-        return null;
+const hostOf = (url: string | null): string | null =>
+    url !== null && URL.canParse(url) ? new URL(url).host || null : null;
+
+const MAX_FIELD_LENGTH = 256;
+
+const cleaned = (value: string | null): string | null =>
+    [...(value ?? '').replace(NON_PRINTABLE, '').trim()].slice(0, MAX_FIELD_LENGTH).join('') ||
+    null;
+
+// dfo-apis's _CLIENT_FORMAT: `<name>/<version>`, with an optional `(runtime)`.
+const CLIENT_FORMAT = /^([^/\s()]+\/[^\s()]+)(?: \([^()]+\))?$/u;
+
+/** X-DFO-Client's product token, or null when it is absent or has another shape. */
+export const clientToken = (headers: Headers): string | null =>
+    CLIENT_FORMAT.exec(clientLabel(headers))?.[1] ?? null;
+
+// TODO(website#171): use requestSurface from ./caller once #171 merges; this
+// is its rule, kept here until then.
+const requestSurface = (headers: Headers): DeliverySurface =>
+    headers.get('sec-fetch-site') === 'same-origin' ? 'website' : 'api';
+
+// The caller forward() sends dfo-apis, from the same env and resolver
+// (apisCallerFor); forward()'s own resolver logs the missing-settings warning.
+const apisCaller = apisCallerFor(process.env, () => {});
+
+const sentCaller = (
+    req: NextRequest,
+    target: string,
+): { caller: string | null; caller_source: CallerSource } => {
+    if (!isApisTarget(target)) {
+        return { caller: null, caller_source: 'none' };
     }
 
-    const url = new URL(referer);
+    const { principal, caller } = apisCaller(req.headers.get('x-forwarded-for'));
 
-    return `${url.origin}${url.pathname}`;
+    return principal && caller
+        ? { caller, caller_source: 'vouched' }
+        : { caller: null, caller_source: 'none' };
 };
 
-const logDatasetRead = (entry: DatasetReadLogEntry): void => {
+const logDelivery = (entry: GatewayDeliveryEntry): void => {
     (entry.severity === 'ERROR' ? console.error : console.log)(JSON.stringify(entry));
 };
 
@@ -421,13 +498,13 @@ const logCorsRefused = (req: NextRequest, read: DatasetReadKind, origin: string)
     console.log(
         JSON.stringify({
             severity: 'INFO',
-            message: 'dataset cors refused',
-            read,
+            message: 'gateway.cors_refused',
+            door: DELIVERY_DOORS[read],
             method: req.method,
             path: new URL(req.url).pathname,
-            origin,
-            referer: refererPage(req.headers.get('referer')),
-            client: clientLabel(req.headers) || null,
+            origin_host: hostOf(origin),
+            referer_host: hostOf(req.headers.get('referer')),
+            client: clientToken(req.headers),
         }),
     );
 };
@@ -464,6 +541,7 @@ export const forwardDatasets = async (
 
     const started = performance.now();
     let tier: string | null = null;
+    let traceId: string | null = null;
 
     const relayed = await forward(req, {
         ...options,
@@ -475,12 +553,18 @@ export const forwardDatasets = async (
                       req,
                       storageOrigin,
                       bounds: storageBounds,
-                      onTier: (named) => {
-                          tier = named;
+                      onUpstream: (namedTier, namedTrace) => {
+                          tier = namedTier;
+                          traceId = namedTrace;
                       },
                   })
                 : undefined,
     });
+
+    // A followed file's trace id came from dfo-apis's 302 (followStorage).
+    if (read.kind !== 'file') {
+        traceId = relayed.headers.get(TRACE_HEADER);
+    }
 
     const headers = new Headers(relayed.headers);
     const cacheControl = readCacheControl(read.kind, relayed.status, tier);
@@ -504,23 +588,35 @@ export const forwardDatasets = async (
         headers.set('Access-Control-Expose-Headers', exposed.join(', '));
     }
 
+    const [specId = '', , , digest] = segments;
+    const identity = {
+        ...sentCaller(req, options.target),
+        surface: requestSurface(req.headers),
+        client: clientToken(req.headers),
+        user_agent: cleaned(req.headers.get('user-agent')),
+        origin_host: hostOf(origin),
+        referer_host: hostOf(req.headers.get('referer')),
+    };
+
     const log = (bytes: number, complete: boolean, error?: unknown): void => {
         // A client that left takes the body with it, which is not a failure.
         const failed = error !== undefined && !req.signal.aborted;
 
-        logDatasetRead({
+        logDelivery({
             severity: failed ? 'ERROR' : 'INFO',
-            message: 'dataset read',
-            read: read.kind,
-            path: new URL(req.url).pathname,
+            message: 'gateway.delivery',
+            door: DELIVERY_DOORS[read.kind],
+            trace_id: traceId,
+            spec_id: specId,
+            content_version: read.contentVersion,
+            ...(read.kind === 'file' && digest ? { digest } : {}),
+            ...identity,
+            served_by: 'gateway',
             status: relayed.status,
             tier,
             bytes,
             complete,
-            durationMs: Math.round(performance.now() - started),
-            origin,
-            referer: refererPage(req.headers.get('referer')),
-            client: clientLabel(req.headers) || null,
+            duration_ms: Math.round(performance.now() - started),
             ...(failed ? { error: errorText(error) } : {}),
         });
     };
