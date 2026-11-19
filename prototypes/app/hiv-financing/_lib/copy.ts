@@ -14,6 +14,7 @@ import {
     roundDeaths,
     wholePercents,
 } from './format.ts';
+import { BREAK_YEAR } from './chart.ts';
 import { PROVIDERS } from './providers.ts';
 import { perPersonPoints, STRIP_MIN_PLHIV } from './strip.ts';
 import {
@@ -167,13 +168,16 @@ export const OTHER_PROVIDER_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Facts the summary sentence attaches to a named provider, by DFO label. They cannot be
- * computed from first and last values, so they are fixed text, and `largestOtherFalls`
- * throws when a label here is missing from `HivData.otherProviders`.
+ * Facts the summary sentence attaches to a named provider, by DFO label, built from the
+ * provider's figures where they carry a number. `largestOtherFalls` throws when a label here
+ * is missing from `HivData.otherProviders`.
  */
-export const OTHER_PROVIDER_FACTS: Readonly<Record<string, string>> = {
-    'International Development Association': 'which has lent about $2m a year since 2020',
-    'Joint United Nations Programme on HIV/AIDS':
+export const OTHER_PROVIDER_FACTS: Readonly<
+    Record<string, (provider: OtherProvider, year: number) => string>
+> = {
+    'International Development Association': (provider, year) =>
+        `which lent ${money(provider.last)} in ${year}`,
+    'Joint United Nations Programme on HIV/AIDS': () =>
         'which reports most of its HIV money under another code',
 };
 
@@ -208,11 +212,11 @@ const fallSentence = (data: HivData): string | null => {
     }
 
     const part = named.reduce((sum, provider) => sum + provider.first - provider.last, 0);
-    const items = named.map(({ name }) => {
-        const label = OTHER_PROVIDER_LABELS[name] ?? name;
-        const fact = OTHER_PROVIDER_FACTS[name];
+    const items = named.map((provider) => {
+        const label = OTHER_PROVIDER_LABELS[provider.name] ?? provider.name;
+        const fact = OTHER_PROVIDER_FACTS[provider.name];
 
-        return fact === undefined ? label : `${label}, ${fact}`;
+        return fact === undefined ? label : `${label}, ${fact(provider, lastYear(data))}`;
     });
     // Semicolons separate the items once one of them carries a comma.
     const list = items.some((item) => item.includes(','))
@@ -272,6 +276,76 @@ export const unallocatedNote = (data: HivData): string => {
     ]
         .filter((sentence) => sentence !== null)
         .join(' ');
+};
+
+/** A value by year, 0 for a year the series does not hold. */
+const inYear = (data: HivData, series: readonly number[], year: number): number => {
+    const index = data.years.indexOf(year);
+
+    return index < 0 ? 0 : (series[index] ?? 0);
+};
+
+/** The Global Fund's move between codes counts as most of its jump from this share up. */
+const CODE_CHANGE_SHARE = 0.5;
+
+/**
+ * How to interpret's sentence on the Global Fund's change of codes in `BREAK_YEAR`: its
+ * multi-disease grants and its HIV-code money either side, and the reading of the jump only
+ * when the multi-disease fall makes up at least `CODE_CHANGE_SHARE` of the HIV-code rise.
+ * Null when the years are missing or the two did not move apart.
+ */
+export const codeChangeSentence = (data: HivData): string | null => {
+    const [before, after] = [BREAK_YEAR - 1, BREAK_YEAR];
+
+    if (!data.years.includes(before) || !data.years.includes(after)) {
+        return null;
+    }
+
+    const multi = [
+        inYear(data, data.globalFundMulti, before),
+        inYear(data, data.globalFundMulti, after),
+    ];
+    const hiv = [
+        inYear(data, data.allocated.globalFund, before),
+        inYear(data, data.allocated.globalFund, after),
+    ];
+    const [fall, rise] = [multi[0] - multi[1], hiv[1] - hiv[0]];
+
+    if (fall <= 0 || rise <= 0) {
+        return null;
+    }
+
+    const moves = `Between ${before} and ${after}, Global Fund multi-disease grants to countries fell from ${money(multi[0])} to ${money(multi[1])}, while its disbursements under the HIV code rose from ${money(hiv[0])} to ${money(hiv[1])}.`;
+
+    return fall >= CODE_CHANGE_SHARE * rise
+        ? `${moves} Much of the jump in its bars reflects that reclassification, marked by the dashed line.`
+        : moves;
+};
+
+/** A middle year counts as a swing when it differs from both neighbours by this share. */
+const SWING_SHARE = 0.2;
+
+/**
+ * How to interpret's sentence on the US swing from 2018 to 2020; null unless 2019 moved more
+ * than `SWING_SHARE` against both 2018 and 2020, in the same direction.
+ */
+export const usSwingSentence = (data: HivData): string | null => {
+    const [a, b, c] = [2018, 2019, 2020].map((year) => inYear(data, data.allocated.us, year));
+
+    if (a <= 0 || c <= 0) {
+        return null;
+    }
+
+    const dip = b < a * (1 - SWING_SHARE) && b < c * (1 - SWING_SHARE);
+    const spike = b > a * (1 + SWING_SHARE) && b > c * (1 + SWING_SHARE);
+
+    if (!dip && !spike) {
+        return null;
+    }
+
+    const [first, second] = dip ? ['fell', 'rose'] : ['rose', 'fell'];
+
+    return `US disbursements to countries ${first} from ${money(a)} in 2018 to ${money(b)} in 2019, then ${second} to ${money(c)} in 2020, so single-year swings can reflect reporting timing.`;
 };
 
 /** A lender is named in the loans sentence from this share of the loans up. */

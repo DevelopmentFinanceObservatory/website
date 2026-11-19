@@ -1,6 +1,7 @@
 // The shape of _data/hiv.json's `data`, written by fetch.py and read by the page's
 // components with `import type`. Money is gross ODA disbursements from the OECD CRS
-// under purpose code 13040, in current US dollars rounded to the dollar.
+// under purpose code 13040, in constant US dollars of `HivData.priceBase` at donor prices,
+// rounded to the dollar.
 
 /** The three providers the page separates. The Global Fund counts as a provider, so
  *  donors' contributions to it are counted under the Global Fund. */
@@ -37,6 +38,8 @@ export type Lender = { name: string; value: number };
 export type HivData = {
     /** the years every series covers, ascending, 2015 to 2024 */
     years: number[];
+    /** the base year of the constant US dollars every money figure is in */
+    priceBase: number;
     /** money the CRS assigns to a recipient country, summed over every such country,
      *  including those left out of `countries` */
     allocated: ProviderSeries;

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     allSentence,
+    codeChangeSentence,
     shareNote,
     countrySentence,
     ledeSentence,
@@ -12,6 +13,7 @@ import {
     stripCaption,
     tableRule,
     unallocatedNote,
+    usSwingSentence,
 } from './copy.ts';
 import {
     CONGO,
@@ -42,7 +44,7 @@ test('the all-countries sentence: allocated, recipients and table count, others 
     // total fall of $295m; France's rise is left out.
     assert.equal(
         allSentence(DATA),
-        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which has lent about $2m a year since 2020; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
+        'In 2024, donors disbursed $6.45bn in HIV aid to 8 countries. Providers other than the United States and the Global Fund disbursed $47m to countries in 2024, against $342m in 2015. Five providers account for $237m, or 80%, of that fall: World Bank IDA, which lent $2.0m in 2024; UNAIDS, which reports most of its HIV money under another code; Australia; Germany; and the United Kingdom.',
     );
 });
 
@@ -61,7 +63,7 @@ test('the falls name only the largest, and a fact attaches only to a named provi
     // With a $1m fall UNAIDS drops out of the five, and its fact with it.
     assert.match(
         allSentence({ ...DATA, otherProviders }),
-        /fall: World Bank IDA, which has lent about \$2m a year since 2020; Australia; Germany; the United Kingdom; and Norway\.$/,
+        /fall: World Bank IDA, which lent \$2\.0m in 2024; Australia; Germany; the United Kingdom; and Norway\.$/,
     );
 });
 
@@ -239,4 +241,40 @@ test('the Notes line names the countries with no estimate of people living with 
         plhivGapNote(DATA),
         "Estimates of people living with HIV for Ukraine are missing from the Development Finance Observatory's UNAIDS data, so aid per person is blank for it and the dot strip excludes it.",
     );
+});
+
+test('the code-change sentence reads the jump only when the multi-disease fall explains most of it', () => {
+    const flat = { us: [0, 0], globalFund: [1061e6, 2100e6], other: [0, 0] };
+    const around = { ...DATA, years: [2019, 2020], allocated: flat };
+
+    assert.equal(
+        codeChangeSentence({ ...around, globalFundMulti: [742e6, 108e6] }),
+        'Between 2019 and 2020, Global Fund multi-disease grants to countries fell from $742m to $108m, while its disbursements under the HIV code rose from $1.06bn to $2.10bn. Much of the jump in its bars reflects that reclassification, marked by the dashed line.',
+    );
+    assert.doesNotMatch(
+        codeChangeSentence({ ...around, globalFundMulti: [742e6, 600e6] }) ?? '',
+        /Much of the jump/,
+    );
+    assert.equal(codeChangeSentence({ ...around, globalFundMulti: [100e6, 200e6] }), null);
+    assert.equal(codeChangeSentence(DATA), null);
+});
+
+test('the US swing sentence appears only for a dip or spike in 2019, with verbs from the data', () => {
+    const years = [2018, 2019, 2020];
+    const us = (values: number[]) => ({
+        ...DATA,
+        years,
+        allocated: { us: values, globalFund: [0, 0, 0], other: [0, 0, 0] },
+    });
+
+    assert.equal(
+        usSwingSentence(us([3.65e9, 2.11e9, 3.72e9])),
+        'US disbursements to countries fell from $3.65bn in 2018 to $2.11bn in 2019, then rose to $3.72bn in 2020, so single-year swings can reflect reporting timing.',
+    );
+    assert.match(
+        usSwingSentence(us([2e9, 3e9, 2e9])) ?? '',
+        /rose from \$2\.00bn in 2018 to \$3\.00bn in 2019, then fell/,
+    );
+    assert.equal(usSwingSentence(us([3.6e9, 3.5e9, 3.7e9])), null);
+    assert.equal(usSwingSentence(DATA), null);
 });

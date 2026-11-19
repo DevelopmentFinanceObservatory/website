@@ -7,23 +7,27 @@
 Fetches, for 2015 to 2024:
 
 - gross ODA disbursements from the OECD CRS under purpose code 13040 (HIV/AIDS), by
-  provider and recipient, in current US dollars. Each provider counts as the United
-  States, the Global Fund or other. Money to a recipient country is allocated; money to
-  a region or to no country is unallocated;
+  provider and recipient, in constant US dollars at donor prices, with the last year as the
+  base. The same read in current dollars gives the Global Fund's deflator for each year.
+  Each provider counts as the United States, the Global Fund or other. Money to a recipient
+  country is allocated; money to a region or to no country is unallocated;
 - the Global Fund's gross ODA disbursements under purpose codes 12250 (infectious disease
   control) and 12110 (health policy and administrative management), both codes in every
   year. It recorded combined HIV and TB grants under 12250 to 2019 and multi-disease grants
   under 12110 from 2020. Only part of that money is for HIV, so the page shows it as its own
-  layer beside the 13040 figures;
+  layer beside the 13040 figures. The DFO serves these codes in current dollars only, so
+  the step deflates them with the Global Fund's 13040 deflator;
 - UNAIDS estimates of people living with HIV and antiretroviral therapy coverage, for
   every country;
 - UNAIDS estimates of AIDS-related deaths, fetched for every UNAIDS country and every CRS
   recipient in groups, because a search for the phrase without a place matches OECD regional data.
 
-Checks known values, failing loudly when one differs, then writes `hiv.json` beside this
-file. The page covers aid recipients, so a country is kept when it received HIV aid in the
-last year, which leaves out donors such as Germany that have UNAIDS estimates and receive
-no HIV aid.
+Checks that the data are what the page assumes (the right datasets and units, every
+provider present, countries summing to the totals, and the claims fixed in the page's
+prose), failing loudly when one is not. It logs each headline figure against the last
+`hiv.json`, flagging moves over 10%, then writes `hiv.json` beside this file. The page
+covers aid recipients, so a country is kept when it received HIV aid in the last year,
+which leaves out donors such as Germany that have UNAIDS estimates and receive no HIV aid.
 """
 
 import json
@@ -50,7 +54,11 @@ MIN_PLHIV = 50_000
 DEATHS_GROUP = 30
 COUNTRY = "country/"
 
-AID_QUESTION = "HIV/AIDS aid by donor and recipient, 2015 to 2024"
+AID_QUESTION = "HIV/AIDS aid by donor and recipient, 2015 to 2024, in constant prices"
+# The same read in current dollars, for the Global Fund's deflator.
+AID_CURRENT_QUESTION = "HIV/AIDS aid by donor and recipient, 2015 to 2024"
+# The unit the constant read must carry; its year is the base the page prints.
+CONSTANT_UNIT = re.compile(r"^Constant (\d{4}) US dollars, donor prices$")
 PLHIV_QUESTION = "people living with HIV, 2015 to 2024"
 ART_QUESTION = "coverage of antiretroviral therapy among people living with HIV, 2015 to 2024"
 # Any country works as the example. A question naming no place matches OECD regional data.
@@ -78,70 +86,25 @@ NAMES = {
     "TUR": "Türkiye",
 }
 
-# Expected values from the DFO. A refetch that moves one fails here, so a change in the
-# source is seen before it reaches the page.
-KNOWN_RECIPIENTS = 113
 # Countries in the UNAIDS reads that DFO's UN source refused to answer for, as the
 # un_system_unavailable warning names them. Greece and Slovenia are donors and Western Sahara
 # has no HIV aid, so the page leaves out all three; the source refuses Western Sahara on some
 # runs only. A refusal for any other place would blank a country the page keeps, so it fails
 # the step.
 KNOWN_UN_GAPS = {"GRC", "SVN", "ESH"}
-# Kept countries with no UNAIDS people-living-with-HIV figure in the DFO's UNAIDS source.
-# UNAIDS publishes estimates for some of them, so the page says the figure is missing from
-# the DFO's source. The set fails the step when it changes.
-KNOWN_UNAIDS_GAPS = {"CHN", "GNQ", "KIR", "MUS", "NIC", "TKL", "TON", "TUR", "UKR", "UZB", "XKS"}
-# Printed figures, pinned to within half of the last digit printed: (what, value, unit of
-# the last printed digit).
-PINNED_MONEY = {
-    "allocated aid 2024": (6.38e9, 1e7),
-    "unallocated aid 2024": (4.24e9, 1e7),
-    "US unallocated aid 2022": (3.72e9, 1e7),
-    "US unallocated aid 2023": (626e6, 1e6),
-    "US unallocated aid 2024": (4.11e9, 1e7),
-    "other providers' aid to countries 2015": (342e6, 1e6),
-    "other providers' aid to countries 2024": (46e6, 1e6),
-    "five largest falls among other providers, 2015 to 2024": (230e6, 1e6),
-    "US 13040 to all recipients 2023": (4.01e9, 1e7),
-    "US 13040 to all recipients 2024": (8.01e9, 1e7),
-    "US aid to countries 2018": (3.65e9, 1e7),
-    "US aid to countries 2019": (2.11e9, 1e7),
-    "US aid to countries 2020": (3.72e9, 1e7),
-    "lowest US aid to countries 2020 to 2024": (3.20e9, 1e7),
-    "highest US aid to countries 2020 to 2024": (3.90e9, 1e7),
-    "Global Fund aid to countries 2019": (1.06e9, 1e7),
-    "Global Fund aid to countries 2020": (2.10e9, 1e7),
-    "Global Fund multi-disease grants to countries 2019": (742e6, 1e6),
-    "Global Fund multi-disease grants to countries 2020": (108e6, 1e6),
-    "ODA loans under 13040 to countries 2015 to 2024": (467e6, 1e6),
-}
-# Printed whole numbers.
-PINNED_COUNTS = {
-    "United States and Global Fund share of allocated aid 2024, %": 99,
-    "countries over $1m in 2024": 94,
-    "countries over $1m where the Global Fund gives over half": 64,
-    "countries over $1m where the United States gives over half": 27,
-    "of the US-majority countries, those with Global Fund multi-disease grants": 10,
-}
-# (what, value, expected, tolerance as a fraction)
-KNOWN_GF_MULTI = {
-    # The review's $599m counts every recipient, regions included; $520m goes to countries.
-    "Global Fund 12110 to countries 2024": (520e6, 0.005),
-    "Namibia 12110 2024": (16e6, 0.05),
-}
-# The Global Fund's 12250 money to every recipient, each year 2015 to 2019, between these
-# bounds ($346m in 2016 to $706m in 2019, to within half a percent), and its 12110 money to
-# every recipient in 2020 and 2024.
-KNOWN_GF_12250 = (346e6 * 0.995, 706e6 * 1.005)
-KNOWN_GF_12110_ALL = {2020: (121e6, 0.01), 2024: (599e6, 0.005)}
-# South Africa's 12250 disbursements, 2017 to 2019, between these bounds.
-KNOWN_ZAF_12250 = (81e6, 116e6)
-KNOWN_KENYA = {
-    "AIDS deaths 2015": (36_400, 0.05),
-    "AIDS deaths 2024": (20_800, 0.05),
+# Plausible ranges for Kenya's UNAIDS figures. They are wide enough to pass any UNAIDS
+# revision and narrow enough to fail when a search reads another dataset or unit.
+KENYA_RANGES = {
+    "AIDS deaths 2015": (5_000, 100_000),
+    "AIDS deaths 2024": (5_000, 100_000),
     # A percentage, so a fraction such as 0.87 fails.
-    "ART coverage 2024": (87, 0.02),
+    "ART coverage 2024": (10, 100),
 }
+# The lede says the United States and the Global Fund disbursed almost all HIV aid recorded
+# for countries in the last year.
+ALMOST_ALL = 0.95
+# The refresh report flags a headline figure that moves more than this against the last run.
+FLAG_MOVE = 0.10
 
 READS: list[dict] = []
 # ISO3 codes named by an un_system_unavailable warning, by read key.
@@ -200,10 +163,38 @@ def provider_series(rows: pd.DataFrame) -> dict[str, list[int]]:
     }
 
 
-def read_aid() -> pd.DataFrame:
+def read_aid() -> tuple[pd.DataFrame, int]:
+    """The 13040 money in constant dollars, and the base year of its prices."""
     frame = fetch("aid", dfo.search(AID_QUESTION))
+    units = set(frame["unit_label"])
+    match = CONSTANT_UNIT.match(next(iter(units))) if len(units) == 1 else None
+
+    if match is None:
+        raise SystemExit(f"aid: expected constant US dollars at donor prices, read {sorted(units)}")
+
     frame["provider"] = frame["financingProvider_label"].map(provider_key)
-    return frame
+    return frame, int(match.group(1))
+
+
+def gf_deflators(constant: pd.DataFrame) -> dict[int, float]:
+    """The Global Fund's current-to-constant ratio for each year, from its 13040 money."""
+    current = fetch("aid-current", dfo.search(AID_CURRENT_QUESTION))
+
+    if set(current["unit_label"]) != {"Current US dollars"}:
+        raise SystemExit(
+            f"aid-current: expected current US dollars, read {set(current['unit_label'])}"
+        )
+
+    def by_year(frame: pd.DataFrame) -> pd.Series:
+        rows = frame[frame["financingProvider_label"] == "Global Fund"]
+        return rows.groupby(rows["time_period"].astype(int))["value"].sum()
+
+    ratios = (by_year(current) / by_year(constant)).to_dict()
+
+    if sorted(ratios) != YEARS or not all(0.5 < ratio < 1.5 for ratio in ratios.values()):
+        raise SystemExit(f"Global Fund deflators missing or implausible: {ratios}")
+
+    return {int(year): float(ratio) for year, ratio in ratios.items()}
 
 
 def read_gf_multi() -> pd.DataFrame:
@@ -223,6 +214,12 @@ def read_gf_multi() -> pd.DataFrame:
 
     frame = pd.concat(frames, ignore_index=True)
     frame["year"] = frame["time_period"].astype(int)
+
+    if set(frame["unit_label"]) != {"Current US dollars"}:
+        raise SystemExit(
+            f"Global Fund codes: expected current US dollars, read {set(frame['unit_label'])}"
+        )
+
     return frame
 
 
@@ -306,6 +303,7 @@ def loans(allocated: pd.DataFrame) -> dict:
 
 def build(
     aid: pd.DataFrame,
+    price_base: int,
     plhiv: pd.DataFrame,
     art: pd.DataFrame,
     deaths: pd.DataFrame,
@@ -367,6 +365,7 @@ def build(
     countries.sort(key=lambda country: -sum(values[-1] for values in country["aid"].values()))
     return {
         "years": YEARS,
+        "priceBase": price_base,
         "allocated": provider_series(allocated),
         "unallocated": provider_series(unallocated),
         "globalFundMulti": multi_series(multi),
@@ -377,17 +376,81 @@ def build(
     }
 
 
-def close(value: float | None, expected: float, tolerance: float) -> bool:
-    return value is not None and abs(value - expected) <= tolerance * expected
+def figures(data: dict) -> dict[str, float]:
+    """The headline figures the page prints from the data, for the refresh report."""
+    allocated = data["allocated"]
+    us_all = [
+        us + other for us, other in zip(allocated["us"], data["unallocated"]["us"], strict=True)
+    ]
+    last = [{key: values[-1] for key, values in c["aid"].items()} for c in data["countries"]]
+    big = [aid for aid in last if sum(aid.values()) > MIN_AID]
+    total = sum(values[-1] for values in allocated.values())
+
+    def at(series: list, year: int) -> float:
+        return series[YEARS.index(year)]
+
+    return {
+        f"aid to countries {LAST_YEAR}": total,
+        f"aid for regions or no country {LAST_YEAR}": sum(
+            v[-1] for v in data["unallocated"].values()
+        ),
+        f"other providers' aid to countries {YEARS[0]}": allocated["other"][0],
+        f"other providers' aid to countries {LAST_YEAR}": allocated["other"][-1],
+        "US 13040 to all recipients 2023": at(us_all, 2023),
+        f"US 13040 to all recipients {LAST_YEAR}": at(us_all, LAST_YEAR),
+        "US aid to countries 2018": at(allocated["us"], 2018),
+        "US aid to countries 2019": at(allocated["us"], 2019),
+        "US aid to countries 2020": at(allocated["us"], 2020),
+        "Global Fund aid to countries 2019": at(allocated["globalFund"], 2019),
+        "Global Fund aid to countries 2020": at(allocated["globalFund"], 2020),
+        "Global Fund multi-disease grants to countries 2019": at(data["globalFundMulti"], 2019),
+        "Global Fund multi-disease grants to countries 2020": at(data["globalFundMulti"], 2020),
+        "ODA loans to countries": data["loans"]["total"],
+        "recipient countries": data["recipients"],
+        "US and Global Fund share, %": 100
+        * (allocated["us"][-1] + allocated["globalFund"][-1])
+        / total,
+        "countries over $1m": len(big),
+        "countries over $1m, Global Fund over half": sum(
+            1 for aid in big if aid["globalFund"] > 0.5 * sum(aid.values())
+        ),
+        "countries over $1m, United States over half": sum(
+            1 for aid in big if aid["us"] > 0.5 * sum(aid.values())
+        ),
+        "countries without a people-living-with-HIV estimate": sum(
+            1 for c in data["countries"] if c["plhiv"] is None
+        ),
+    }
 
 
-def pinned(value: float, printed: float, unit: float) -> bool:
-    """Whether `value` prints as `printed`, to the digit worth `unit`."""
-    return abs(value - printed) <= unit / 2
+def report(old: dict | None, new: dict) -> None:
+    """Log each headline figure against the last run, flagging moves over `FLAG_MOVE`."""
+    if old is None:
+        log.info("Refresh report: no earlier hiv.json to compare with.")
+        return
+
+    before, after = figures(old), figures(new)
+    lines = []
+
+    for what, value in after.items():
+        was = before.get(what)
+        moved = was is not None and was != 0 and abs(value - was) / abs(was) > FLAG_MOVE
+        lines.append(
+            f"{'FLAG ' if moved else '     '}{what}: {was:,.0f} -> {value:,.0f}"
+            if was is not None
+            else f"     {what}: new, {value:,.0f}"
+        )
+
+    if old.get("priceBase") != new["priceBase"]:
+        lines.insert(
+            0, f"FLAG price base: {old.get('priceBase', 'current dollars')} -> {new['priceBase']}"
+        )
+
+    log.info("Refresh report, last hiv.json -> this run:\n%s", "\n".join(lines))
 
 
 def check(data: dict, multi: pd.DataFrame) -> None:
-    """Fail on a known value that moved, a missing provider or a series of the wrong length."""
+    """Fail when the data are not what the page assumes. The printed values may move freely."""
     problems = []
     kenya = next((country for country in data["countries"] if country["iso3"] == "KEN"), None)
     found = {
@@ -396,145 +459,57 @@ def check(data: dict, multi: pd.DataFrame) -> None:
         "ART coverage 2024": kenya and kenya["art"],
     }
 
-    for what, (expected, tolerance) in KNOWN_KENYA.items():
-        if not close(found[what], expected, tolerance):
-            problems.append(f"Kenya {what}: expected about {expected:,}, found {found[what]}")
+    for what, (low, high) in KENYA_RANGES.items():
+        if found[what] is None or not low <= found[what] <= high:
+            problems.append(f"Kenya {what}: expected {low:,} to {high:,}, found {found[what]}")
 
-    allocated = sum(values[-1] for values in data["allocated"].values())
-    unallocated = sum(values[-1] for values in data["unallocated"].values())
-    others = {provider["name"]: provider for provider in data["otherProviders"]}
-    other_first = data["allocated"]["other"][0]
-    other_last = data["allocated"]["other"][-1]
-    us_all = [
-        us + elsewhere
-        for us, elsewhere in zip(data["allocated"]["us"], data["unallocated"]["us"], strict=True)
-    ]
-    us_steady = data["allocated"]["us"][YEARS.index(2020) :]
-    falls = sorted(
-        (provider["first"] - provider["last"] for provider in data["otherProviders"]),
-        reverse=True,
-    )
+    allocated = data["allocated"]
 
-    def at(series: list, year: int) -> float:
-        return series[YEARS.index(year)]
+    # Every last-year recipient is in the table, so in the last year the countries sum to the
+    # allocated totals, to within a dollar of rounding per country. Earlier years also hold
+    # countries that received nothing in the last year.
+    for key in PROVIDERS:
+        summed = sum(country["aid"][key][-1] for country in data["countries"])
 
-    money = {
-        "allocated aid 2024": allocated,
-        "unallocated aid 2024": unallocated,
-        "US unallocated aid 2022": data["unallocated"]["us"][-3],
-        "US unallocated aid 2023": data["unallocated"]["us"][-2],
-        "US unallocated aid 2024": data["unallocated"]["us"][-1],
-        "other providers' aid to countries 2015": other_first,
-        "other providers' aid to countries 2024": other_last,
-        "five largest falls among other providers, 2015 to 2024": sum(
-            fall for fall in falls[:5] if fall > 0
-        ),
-        "US 13040 to all recipients 2023": at(us_all, 2023),
-        "US 13040 to all recipients 2024": at(us_all, 2024),
-        "US aid to countries 2018": at(data["allocated"]["us"], 2018),
-        "US aid to countries 2019": at(data["allocated"]["us"], 2019),
-        "US aid to countries 2020": at(data["allocated"]["us"], 2020),
-        "lowest US aid to countries 2020 to 2024": min(us_steady),
-        "highest US aid to countries 2020 to 2024": max(us_steady),
-        "Global Fund aid to countries 2019": at(data["allocated"]["globalFund"], 2019),
-        "Global Fund aid to countries 2020": at(data["allocated"]["globalFund"], 2020),
-        "Global Fund multi-disease grants to countries 2019": at(data["globalFundMulti"], 2019),
-        "Global Fund multi-disease grants to countries 2020": at(data["globalFundMulti"], 2020),
-        "ODA loans under 13040 to countries 2015 to 2024": data["loans"]["total"],
-    }
-
-    for what, (printed, unit) in PINNED_MONEY.items():
-        if not pinned(money[what], printed, unit):
+        if abs(summed - allocated[key][-1]) > len(data["countries"]):
             problems.append(
-                f"{what}: expected {printed:,.0f} to within {unit / 2:,.0f}, found {money[what]:,}"
+                f"{key} {LAST_YEAR}: countries sum to {summed:,}, "
+                f"allocated is {allocated[key][-1]:,}"
             )
 
-    last = [
-        {key: values[-1] for key, values in country["aid"].items()} for country in data["countries"]
-    ]
-    big = [
-        (aid, country["globalFundMulti"][-1])
-        for aid, country in zip(last, data["countries"], strict=True)
-        if sum(aid.values()) > MIN_AID
-    ]
-    us_majority = [multi for aid, multi in big if aid["us"] > 0.5 * sum(aid.values())]
-    share = (data["allocated"]["us"][-1] + data["allocated"]["globalFund"][-1]) / allocated
-    counts = {
-        "United States and Global Fund share of allocated aid 2024, %": round(100 * share),
-        "countries over $1m in 2024": len(big),
-        "countries over $1m where the Global Fund gives over half": sum(
-            1 for aid, _ in big if aid["globalFund"] > 0.5 * sum(aid.values())
-        ),
-        "countries over $1m where the United States gives over half": len(us_majority),
-        "of the US-majority countries, those with Global Fund multi-disease grants": sum(
-            1 for multi in us_majority if multi > 0
-        ),
-    }
+    for key in PROVIDERS:
+        if any(value <= 0 for value in allocated[key]):
+            problems.append(f"{key}: no money to countries in some year, {allocated[key]}")
 
-    for what, expected in PINNED_COUNTS.items():
-        if counts[what] != expected:
-            problems.append(f"{what}: expected {expected}, found {counts[what]}")
+    total = sum(values[-1] for values in allocated.values())
+    share = (allocated["us"][-1] + allocated["globalFund"][-1]) / total
 
-    if not others:
-        problems.append("otherProviders is empty")
-
-    countries = multi[multi["financingRecipient"].str.startswith(COUNTRY, na=False)]
-    gf_12110 = countries[countries["crsPurpose"] == "CRSPurposeCode12110"]
-    in_2024 = gf_12110[gf_12110["year"] == LAST_YEAR]
-    namibia = in_2024[in_2024["financingRecipient"] == "country/NAM"]["value"].sum()
-    zaf = countries[
-        (countries["crsPurpose"] == "CRSPurposeCode12250")
-        & (countries["financingRecipient"] == "country/ZAF")
-        & countries["year"].between(2017, 2019)
-    ].sort_values("year")["value"]
-    gf_found = {
-        "Global Fund 12110 to countries 2024": float(in_2024["value"].sum()),
-        "Namibia 12110 2024": float(namibia),
-    }
-
-    for what, (expected, tolerance) in KNOWN_GF_MULTI.items():
-        if not close(gf_found[what], expected, tolerance):
-            problems.append(
-                f"{what}: expected about ${expected / 1e6:,.0f}m, found {gf_found[what]:,.0f}"
-            )
-
-    by_code = multi.groupby(["crsPurpose", "year"])["value"].sum()
-    low12250, high12250 = KNOWN_GF_12250
-
-    for year in range(2015, 2020):
-        total = float(by_code.get(("CRSPurposeCode12250", year), 0.0))
-
-        if not low12250 <= total <= high12250:
-            problems.append(
-                f"Global Fund 12250 to all recipients {year}: expected $346m to $706m, "
-                f"found {total:,.0f}"
-            )
-
-    for year, (expected, tolerance) in KNOWN_GF_12110_ALL.items():
-        total = float(by_code.get(("CRSPurposeCode12110", year), 0.0))
-        gf_found[f"Global Fund 12110 to all recipients {year}"] = total
-
-        if not close(total, expected, tolerance):
-            problems.append(
-                f"Global Fund 12110 to all recipients {year}: expected about "
-                f"${expected / 1e6:,.0f}m, found {total:,.0f}"
-            )
-
-    gf_found["Global Fund 12250 to all recipients 2015 to 2019"] = [
-        round(float(by_code.get(("CRSPurposeCode12250", year), 0.0))) for year in range(2015, 2020)
-    ]
-
-    low, high = KNOWN_ZAF_12250
-    if len(zaf) != 3 or not all(low <= value <= high for value in zaf):
+    if share < ALMOST_ALL:
         problems.append(
-            f"South Africa 12250 2017 to 2019: expected ${low / 1e6:.0f}m to "
-            f"${high / 1e6:.0f}m a year, found {list(zaf)}"
+            f"the lede says almost all HIV aid went through the United States and the Global "
+            f"Fund, but their share is {share:.1%}"
         )
 
-    if sum(data["globalFundMulti"]) <= 0 or any(
-        len(country["globalFundMulti"]) != len(YEARS) for country in data["countries"]
-    ):
-        problems.append("the Global Fund multi-disease series are missing or of the wrong length")
+    # How to interpret says the Global Fund recorded these grants mostly under 12250 to 2019
+    # and mostly under 12110 from 2020.
+    by_code = (
+        multi[multi["financingRecipient"].str.startswith(COUNTRY, na=False)]
+        .groupby(["crsPurpose", "year"])["value"]
+        .sum()
+    )
+
+    for year in YEARS:
+        early = float(by_code.get(("CRSPurposeCode12250", year), 0.0))
+        late = float(by_code.get(("CRSPurposeCode12110", year), 0.0))
+
+        if (year < 2020 and early < late) or (year >= 2020 and late < early):
+            problems.append(
+                f"How to interpret says 12250 leads to 2019 and 12110 from 2020, but {year} "
+                f"has 12250 ${early / 1e6:,.0f}m and 12110 ${late / 1e6:,.0f}m"
+            )
+
+    if not data["otherProviders"]:
+        problems.append("otherProviders is empty")
 
     if len(data["countries"]) != data["recipients"]:
         problems.append(
@@ -542,46 +517,28 @@ def check(data: dict, multi: pd.DataFrame) -> None:
             f"found {len(data['countries'])}"
         )
 
-    if data["recipients"] != KNOWN_RECIPIENTS:
-        problems.append(f"recipients: expected {KNOWN_RECIPIENTS}, found {data['recipients']}")
-
-    if sum(data["allocated"]["globalFund"]) <= 0:
-        problems.append("the Global Fund is not present as a provider")
-
     for country in data["countries"]:
         lengths = {len(values) for values in country["aid"].values()}
 
-        if lengths != {len(YEARS)} or len(country["deaths"]) != len(YEARS):
+        if (
+            lengths != {len(YEARS)}
+            or len(country["deaths"]) != len(YEARS)
+            or len(country["globalFundMulti"]) != len(YEARS)
+        ):
             problems.append(f"{country['iso3']}: series do not cover {len(YEARS)} years")
-
-    gaps = {country["iso3"] for country in data["countries"] if country["plhiv"] is None}
-
-    if gaps != KNOWN_UNAIDS_GAPS:
-        problems.append(
-            f"kept countries with no UNAIDS people living with HIV: expected "
-            f"{sorted(KNOWN_UNAIDS_GAPS)}, found {sorted(gaps)}"
-        )
-
-    log.info("Found: %s %s %s %s", money, counts, gf_found, [round(v) for v in zaf])
 
     if problems:
         raise SystemExit("Checks failed:\n  " + "\n  ".join(problems))
 
+    gaps = sorted(country["name"] for country in data["countries"] if country["plhiv"] is None)
     log.info(
-        "Checks passed: %d countries kept of %d recipients; allocated $%.2fbn and "
-        "unallocated $%.2fbn in %d.",
+        "Checks passed: %d countries; $%.2fbn to countries in %d, in constant %d dollars. "
+        "No UNAIDS people-living-with-HIV estimate: %s.",
         len(data["countries"]),
-        data["recipients"],
-        allocated / 1e9,
-        unallocated / 1e9,
+        total / 1e9,
         LAST_YEAR,
-    )
-    log.info(
-        "%d kept countries have no aid in %d. Other providers: %s. Loans: %s.",
-        sum(1 for aid in last if sum(aid.values()) == 0),
-        LAST_YEAR,
-        data["otherProviders"],
-        data["loans"],
+        data["priceBase"],
+        ", ".join(gaps) or "none",
     )
 
 
@@ -613,26 +570,32 @@ def check_unaids_gaps(data: dict) -> None:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    aid = read_aid()
+    aid, price_base = read_aid()
+    deflators = gf_deflators(aid)
     plhiv = read_unaids("plhiv", PLHIV_QUESTION)
     art = read_unaids("art", ART_QUESTION)
     multi = read_gf_multi()
+    # To constant prices with the Global Fund's own deflator for each year.
+    multi["value"] = multi["value"] / multi["year"].map(deflators)
     recipients = aid["financingRecipient"].dropna()
     places = sorted(
         set(plhiv["observationAbout"]) | set(recipients[recipients.str.startswith(COUNTRY)])
     )
     deaths = read_deaths(places)
-    data = build(aid, plhiv, art, deaths, multi)
+    data = build(aid, price_base, plhiv, art, deaths, multi)
     check_unaids_gaps(data)
     check(data, multi)
+    old = json.loads(TARGET.read_text())["data"] if TARGET.exists() else None
+    report(old, data)
 
     retrieved = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     envelope = {
         "provenance": {
             "sdk": f"development-finance=={dfo.__version__}",
             "query": (
-                f"{AID_QUESTION} (OECD CRS, purpose code 13040, gross disbursements, current "
-                "US dollars); UNAIDS people living with HIV, antiretroviral therapy coverage "
+                f"{AID_QUESTION} (OECD CRS, purpose code 13040, gross disbursements, constant "
+                f"{price_base} US dollars at donor prices); UNAIDS people living with HIV, "
+                "antiretroviral therapy coverage "
                 "and AIDS-related deaths for each country, 2015 to 2024"
             ),
             "retrieved": retrieved,

@@ -26,8 +26,8 @@ export type Section = { id: string; title: string };
 
 const ALL_COUNTRIES = 'All countries';
 
-const chartTitle = (name: string, years: readonly number[]) =>
-    `${name}, ${years[0]} to ${years.at(-1)}, current US dollars`;
+const chartTitle = (name: string, data: HivData) =>
+    `${name}, ${data.years[0]} to ${data.years.at(-1)}, constant ${data.priceBase} US dollars`;
 
 /**
  * The interactive part of the page: the scope row, the summary sentence, the bars and the
@@ -49,7 +49,7 @@ export const HivFinancing = ({
     const year = lastYear(data);
 
     const sentence = chosen === undefined ? allSentence(data) : countrySentence(chosen, data.years);
-    const title = chartTitle(chosen?.name ?? ALL_COUNTRIES, data.years);
+    const title = chartTitle(chosen?.name ?? ALL_COUNTRIES, data);
     // Every text a scope can show, so the sentence and the chart title take the room of
     // their longest at any width and a change of scope never moves the page below.
     const variants = useMemo(
@@ -59,7 +59,7 @@ export const HivFinancing = ({
                 ...data.countries.map((country) => countrySentence(country, data.years)),
             ],
             titles: [ALL_COUNTRIES, ...data.countries.map((country) => country.name)].map((name) =>
-                chartTitle(name, data.years),
+                chartTitle(name, data),
             ),
         }),
         [data],

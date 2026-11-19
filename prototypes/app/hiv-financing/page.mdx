@@ -6,7 +6,7 @@ import prose from '../../components/Prose/Prose.module.scss';
 import { HivFinancing } from './_components/HivFinancing';
 import { SourceEntry, SourceLink } from './_components/SourceLink';
 import {
-    shareNote,
+    codeChangeSentence,
     DATA_SOURCES,
     ledeSentence,
     loansSentence,
@@ -14,10 +14,11 @@ import {
     PER_PERSON_NOTE,
     plhivGapNote,
     SCOPE_NOTE,
+    shareNote,
     SOURCES,
     UNDER_LEDE,
+    usSwingSentence,
 } from './_lib/copy';
-import { money } from './_lib/format';
 import { lastYear } from './_lib/summary';
 import hiv from './_data/hiv.json';
 
@@ -31,14 +32,6 @@ export const SECTIONS = [
     { id: 'by-provider', title: 'HIV aid by provider' },
     { id: 'every-country', title: `${hiv.data.countries.length} countries, ${LAST_YEAR}` },
 ];
-
-export const usToCountries = (year) => money(hiv.data.allocated.us[hiv.data.years.indexOf(year)]);
-
-export const gfToCountries = (year) =>
-    money(hiv.data.allocated.globalFund[hiv.data.years.indexOf(year)]);
-
-export const gfMultiToCountries = (year) =>
-    money(hiv.data.globalFundMulti[hiv.data.years.indexOf(year)]);
 
 export default ({ children }) => (
     <PrototypePage
@@ -76,13 +69,13 @@ export default ({ children }) => (
     <SourceLink sources={OTHER_MEASURES.sources} className={prose.a} />
 </p>
 
-HIV aid here is gross ODA disbursements under CRS purpose code 13040 (STD control including HIV/AIDS) in current US dollars. The code covers all sexually transmitted diseases. {loansSentence(hiv.data)} These totals exclude HIV work recorded under other codes, such as health systems or reproductive health.
+HIV aid here is gross ODA disbursements under CRS purpose code 13040 (STD control including HIV/AIDS) in constant {hiv.data.priceBase} US dollars. The code covers all sexually transmitted diseases. {loansSentence(hiv.data)} These totals exclude HIV work recorded under other codes, such as health systems or reproductive health.
 
-The Global Fund reports to the CRS as a provider in its own right, so contributions from donors appear once, under the Global Fund. It also records part of its HIV funding under other codes, with combined HIV and tuberculosis grants mostly under 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Both codes are tracked in every year. Because these grants are only partly for HIV, the chart shows them as a hatched layer above the bars, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. Between 2019 and 2020, Global Fund multi-disease grants to countries fell from {gfMultiToCountries(2019)} to {gfMultiToCountries(2020)}, while its disbursements under the HIV code rose from {gfToCountries(2019)} to {gfToCountries(2020)}. Much of the jump in its bars reflects that reclassification, marked by the dashed line.
+The Global Fund reports to the CRS as a provider in its own right, so contributions from donors appear once, under the Global Fund. It also records part of its HIV funding under other codes, with combined HIV and tuberculosis grants mostly under 12250 to 2019 and multi-disease grants mostly under 12110 from 2020. Both codes are tracked in every year. Because these grants are only partly for HIV, the chart shows them as a hatched layer above the bars, outside the totals, and the table marks the countries that received them in {LAST_YEAR}. {codeChangeSentence(hiv.data)}
 
-Figures are unadjusted for inflation and follow the timing of donors' reports. US disbursements to countries fell from {usToCountries(2018)} in 2018 to {usToCountries(2019)} in 2019, then rose to {usToCountries(2020)} in 2020, so single-year swings can reflect reporting timing.
+Figures are in constant {hiv.data.priceBase} US dollars at donor prices: the OECD's deflators adjust each donor's money for inflation and exchange rates, so {hiv.data.priceBase} figures equal current dollars and earlier years are expressed in {hiv.data.priceBase} prices. The Global Fund's multi-disease grants use the Global Fund's own deflator. Figures follow the timing of donors' reports. {usSwingSentence(hiv.data)}
 
-The data cover official donors and exclude private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from the totals here.
+The data cover official donors and exclude private foundations, such as the Gates Foundation. KFF counts donor governments' HIV spending, including their contributions to the Global Fund, so its totals differ from the totals here. KFF's figures are in current dollars.
 
 <p className={prose.p}>{PER_PERSON_NOTE}</p>
 

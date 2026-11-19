@@ -112,6 +112,7 @@ export const DATA: HivData = {
         { name: 'France', first: 8e6, last: 10e6 },
         { name: 'Norway', first: 7e6, last: 3e6 },
     ],
+    priceBase: 2024,
     loans: {
         total: 467e6,
         lenders: [
