@@ -1,7 +1,11 @@
 /**
- * The knowledge-graph model as one immutable index over two documents: the
- * schema (terms and how they relate) and the usage document (how each
+ * The knowledge-graph model as one immutable index over a schema document
+ * (terms and how they relate) and one or more usage documents (how each
  * dataset's StatVars use those terms). Every answer is derived from the documents.
+ *
+ * Usage documents merge into one model: the DFO document, and the base and
+ * UN System documents, which also name the terms their patterns use. Nodes
+ * merge only into a model built for one centre (`nodeView.ts`).
  *
  * Words for readers: a Class is a `class`, a Class that descends from
  * `Enumeration` and lists its instances is a `valueList`, a Property is a
@@ -20,7 +24,9 @@ import {
     type ProvenanceUsage,
     type SchemaUsage,
     type SchemaTerm,
+    type UsageTerm,
 } from './wire.ts';
+import type { OriginSwitch } from './explore.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
 
@@ -207,14 +213,24 @@ export type Model = {
     readonly generation: string | null;
     /** Every node, sorted by dcid. */
     readonly nodes: readonly SchemaNode[];
-    /** Every dataset, in document order. */
+    /** Every dataset, in the order of the usage documents and then of each document. */
     readonly datasets: readonly ProvenanceUsage[];
+    /** The usage documents the model was built from, in order. */
+    readonly usageDocuments: readonly SchemaUsage[];
     node(id: string): SchemaNode | undefined;
     dataset(id: string): ProvenanceUsage | undefined;
+    /**
+     * A node an outside usage document's patterns name, as that document
+     * names it. Such a term is not one of `nodes` unless the schema holds it.
+     */
+    term(id: string): UsageTerm | undefined;
     kind(id: string): Kind | undefined;
     /** True for a Class that lists its instances: a `valueList`, or a `class` that also offers one. */
     hasValueList(id: string): boolean;
-    /** The name, else a dataset's `datasetName`, else the dcid. */
+    /**
+     * The node's name, else a dataset's `datasetName`, else the name a usage
+     * document's `terms` gives, else the dcid.
+     */
     label(id: string): string;
     /** `sub_class_of`, `sub_property_of` and `specialization_of`. */
     broader(id: string): readonly string[];
@@ -245,6 +261,11 @@ export type Model = {
     usedWith(id: string): readonly ClassCount[];
     /** The population types the datasets' patterns name: most datasets first, then most StatVars. */
     populationTypes(): readonly PopulationTypeUse[];
+    /**
+     * True when some pattern names the node as its population type, whatever
+     * its kind: a UN series is a `value` that StatVars are about.
+     */
+    isPopulationType(id: string): boolean;
     propertiesOf(classId: string): ClassProperties;
     /** The ids, each once, most used first, then by label. */
     byUse(ids: Iterable<string>): readonly string[];
@@ -374,17 +395,27 @@ const distinctLists = (node: SchemaNode): SchemaNode => ({
 });
 
 /**
- * The index over a schema document and a usage document, each
- * listing a dcid once (the wire guards refuse a repeat). Every list on a
- * node holds an id once, so no list the model answers repeats an id.
+ * The index over a schema document and the usage documents, each listing a
+ * dcid once (the wire guards refuse a repeat). A dataset or term two usage
+ * documents list counts once, as the first lists it. Every list on a node
+ * holds an id once, so no list the model answers repeats an id.
  */
-export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): Model {
+export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsage[]): Model {
     const nodes = Object.freeze(
         schema.nodes.map(distinctLists).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
     );
-    const datasets = Object.freeze([...usageDocument.provenances]);
     const byId = new Map(nodes.map((node) => [node.ref, node]));
-    const datasetById = new Map(datasets.map((dataset) => [dataset.ref, dataset]));
+    const datasetById = new Map<string, ProvenanceUsage>();
+    const termById = new Map<string, UsageTerm>();
+    for (const document of usageDocuments) {
+        for (const dataset of document.provenances) {
+            if (!datasetById.has(dataset.ref)) datasetById.set(dataset.ref, dataset);
+        }
+        for (const term of document.terms ?? []) {
+            if (!termById.has(term.ref)) termById.set(term.ref, term);
+        }
+    }
+    const datasets = Object.freeze([...datasetById.values()]);
     const isEnumeration = (node: SchemaNode): boolean => {
         const seen = new Set<string>();
         const queue = [...node.sub_class_of];
@@ -410,7 +441,8 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         const name = byId.get(id)?.label;
         if (name) return name;
         const dataset = datasetById.get(id);
-        return dataset ? datasetName(dataset) : id;
+        if (dataset) return datasetName(dataset);
+        return termById.get(id)?.label ?? id;
     };
     const byLabel = (a: string, b: string): number =>
         label(a).localeCompare(label(b), 'en') || (a < b ? -1 : a > b ? 1 : 0);
@@ -669,6 +701,8 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         );
     })();
 
+    const populationTypeIds = new Set(populationTypes.map((use) => use.classId));
+
     const moreUsed = (a: string, b: string): number =>
         usage(b).total - usage(a).total || byLabel(a, b);
 
@@ -846,8 +880,10 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         generation: schema.generation,
         nodes,
         datasets,
+        usageDocuments: Object.freeze([...usageDocuments]),
         node: (id: string) => byId.get(id),
         dataset: (id: string) => datasetById.get(id),
+        term: (id: string) => termById.get(id),
         kind: (id: string) => kinds.get(id),
         hasValueList: (id: string) => lists.has(id),
         label,
@@ -866,6 +902,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         roles,
         usedWith,
         populationTypes: () => populationTypes,
+        isPopulationType: (id: string) => populationTypeIds.has(id),
         propertiesOf,
         byUse,
         dfoProperties,
@@ -875,6 +912,51 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         lens,
         memberUse,
     });
+}
+
+/** The usage documents an Explore visit loads: the DFO document, and each outside one once it lands. */
+export type UsageDocuments = {
+    readonly dfo: SchemaUsage;
+    readonly base?: SchemaUsage;
+    readonly un?: SchemaUsage;
+};
+
+/** The two models an Explore visit reads, built from the same documents. */
+export type ExploreModels = {
+    /**
+     * DFO usage and the outside usage whose origin switch is on. The start
+     * screen, the lists, search, seeding and checking read it.
+     */
+    readonly scoped: Model;
+    /**
+     * Every usage document loaded, whatever the switches say. A centred term
+     * or dataset and the dataset filter read it, so a term's view shows every
+     * model's use of it.
+     */
+    readonly full: Model;
+};
+
+/**
+ * The scoped and full models over one schema document. When every outside
+ * document loaded has its switch on, the two are one object, built once.
+ */
+export function buildModels(
+    schema: SchemaDocument,
+    usage: UsageDocuments,
+    switches: Readonly<Record<OriginSwitch, boolean>>,
+): ExploreModels {
+    const outside = [
+        { origin: 'base', document: usage.base },
+        { origin: 'un', document: usage.un },
+    ] as const;
+    const loaded = outside.flatMap(({ origin, document }) =>
+        document === undefined ? [] : [{ origin, document }],
+    );
+    const full = buildModel(schema, usage.dfo, ...loaded.map(({ document }) => document));
+    const switchedOn = loaded.filter(({ origin }) => switches[origin]);
+    if (switchedOn.length === loaded.length) return Object.freeze({ scoped: full, full });
+    const scoped = buildModel(schema, usage.dfo, ...switchedOn.map(({ document }) => document));
+    return Object.freeze({ scoped, full });
 }
 
 /** An open property value as text: a node's dcid, else the literal. */

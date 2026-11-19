@@ -9,13 +9,14 @@ import { asRecord } from '../../asRecord.ts';
 import {
     outsideTermList,
     readCheckResponse,
+    readNodeView,
     readSchema,
     readTerms,
     readUnTerms,
     readUsage,
     WireShapeError,
 } from '../wire.ts';
-import { schemaBody, usageBody, termsBody } from './fixtures.ts';
+import { baseUsageBody, schemaBody, usageBody, termsBody } from './fixtures.ts';
 
 /** The record at `path` in a parsed document; fails the test when there is none. */
 const at = (body: unknown, path: (string | number)[]): Record<string, unknown> => {
@@ -189,6 +190,63 @@ test('the usage guard checks patterns, constraint values and facets', () => {
     const facets = usageBody();
     delete at(facets, ['provenances', 0, 'facets']).currencies;
     refuses(readUsage, facets, 'usage.provenances[0].facets.currencies');
+});
+
+test("the usage guard reads an outside document's terms and unresolved denominators", () => {
+    const outside = readUsage(baseUsageBody());
+    assert.equal(outside.terms?.length, 8);
+    assert.equal(outside.provenances[0]?.patterns[1]?.measurement_denominator_unresolved, true);
+    // The DFO document carries neither member.
+    assert.equal(readUsage(usageBody()).terms, undefined);
+
+    const unlabelled = baseUsageBody();
+    at(unlabelled, ['terms', 0]).label = 7;
+    refuses(readUsage, unlabelled, 'usage.terms[0].label');
+
+    const untyped = baseUsageBody();
+    delete at(untyped, ['terms', 0]).types;
+    refuses(readUsage, untyped, 'usage.terms[0].types');
+
+    const flag = baseUsageBody();
+    at(flag, ['provenances', 0, 'patterns', 1]).measurement_denominator_unresolved = 'yes';
+    refuses(readUsage, flag, 'usage.provenances[0].patterns[1].measurement_denominator_unresolved');
+
+    const repeated = baseUsageBody();
+    const terms = at(repeated, []).terms;
+    assert.ok(Array.isArray(terms));
+    terms.push(terms[0]);
+    refuses(readUsage, repeated, 'usage.terms[8].ref');
+});
+
+/** A node view body: the fixture schema's first node at the centre, the next two as neighbours. */
+const nodeViewBody = (): unknown => {
+    const nodes = at(schemaBody(), []).nodes;
+    assert.ok(Array.isArray(nodes));
+    return { generation: 'g1', centre: nodes[0], nodes: nodes.slice(1, 3), capped: ['typeOf'] };
+};
+
+test('the node view guard reads the centre, its neighbours and the capped listings', () => {
+    const view = readNodeView(nodeViewBody());
+    assert.equal(view.nodes.length, 2);
+    assert.deepEqual(view.capped, ['typeOf']);
+
+    const noCapped = nodeViewBody();
+    delete at(noCapped, []).capped;
+    refuses(readNodeView, noCapped, 'node.capped');
+
+    const centre = nodeViewBody();
+    delete at(centre, ['centre']).instances;
+    refuses(readNodeView, centre, 'node.centre.instances');
+
+    const neighbour = nodeViewBody();
+    at(neighbour, ['nodes', 1]).types = 'Class';
+    refuses(readNodeView, neighbour, 'node.nodes[1].types');
+
+    const repeated = nodeViewBody();
+    const nodes = at(repeated, []).nodes;
+    assert.ok(Array.isArray(nodes));
+    nodes.push(nodes[0]);
+    refuses(readNodeView, repeated, 'node.nodes[2].ref');
 });
 
 test('each guard checks every element of every list, not only the first', () => {
