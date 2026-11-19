@@ -97,6 +97,22 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
 
     return (
         <div className={styles.keys}>
+            {/* The account's limit is apart from the keys: every key's calls
+                count against it, beside each key's own daily quota. */}
+            <label className={styles.accountLimit}>
+                <span className={styles.toolLabel}>Rate limit for this account</span>
+                <span className={styles.accountLimitRow}>
+                    <AdminLimitInput
+                        value={user.accountLimit}
+                        placeholder={`${defaultLimit.toLocaleString('en-GB')} default`}
+                        label={`Per-minute API call limit for ${user.email}`}
+                        save={(limit) => actions.setAccountLimit(user.email, limit)}
+                    />
+                    <span className={styles.accountLimitUnit}>
+                        calls a minute, shared by all of this account&apos;s keys
+                    </span>
+                </span>
+            </label>
             {revealed && (
                 <div className={styles.once} role="status">
                     <p className={styles.onceTitle}>
@@ -186,15 +202,6 @@ const AdminUserKeys = ({ user, defaultLimit, actions }: AdminUserKeysProps) => {
                         </span>
                     )}
                 </form>
-                <label className={styles.toolField}>
-                    <span className={styles.toolLabel}>Per-minute limit (all keys)</span>
-                    <AdminLimitInput
-                        value={user.accountLimit}
-                        placeholder={`${defaultLimit.toLocaleString('en-GB')} default`}
-                        label={`Per-minute API call limit for ${user.email}`}
-                        save={(limit) => actions.setAccountLimit(user.email, limit)}
-                    />
-                </label>
             </div>
         </div>
     );
