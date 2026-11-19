@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
 
-import CheckSheet from '@/components/organisms/CheckSheet/CheckSheet';
+import SeedSheet from '@/components/organisms/SeedSheet/SeedSheet';
 
-/** The Check a sheet page. The client organism reads the carried parameters from the URL query, so it renders inside Suspense. */
+/** The Check a sheet page: Seed a dataset opened at its check step. The client organism reads the URL query, so it renders inside Suspense. */
 const CheckSheetPage = () => (
     <Suspense fallback={null}>
-        <CheckSheet />
+        <SeedSheet openAt="check" />
     </Suspense>
 );
 

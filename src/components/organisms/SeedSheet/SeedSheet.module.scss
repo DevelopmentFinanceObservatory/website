@@ -92,43 +92,6 @@
     opacity: 0.75;
 }
 
-.choiceText {
-    @include font-size(14px, 1.35);
-}
-
-.pills {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-self: flex-start;
-    max-width: 100%;
-    background-color: var(--color-net-light);
-    border-radius: rem(16);
-}
-
-.pill {
-    @include font-size(12px, 1.1);
-
-    padding: rem(8) rem(14);
-    font-family: var(--font-dm-mono);
-    color: var(--color-charcoal);
-    letter-spacing: -0.02em;
-    background: none;
-    border: 0;
-    border-radius: rem(24);
-    cursor: pointer;
-
-    @media (hover: hover) {
-        &:hover {
-            background-color: var(--color-net-mid);
-        }
-    }
-
-    &[aria-pressed="true"] {
-        color: var(--color-bg);
-        background-color: var(--color-charcoal);
-    }
-}
-
 .checks {
     border-top: 1px solid var(--color-net-mid);
 }
@@ -161,27 +124,6 @@
 .dcid {
     @include font-size(12px, 1.3);
 
-    font-family: var(--font-dm-mono);
-    color: var(--color-stone);
-    letter-spacing: -0.02em;
-    overflow-wrap: break-word;
-}
-
-.from {
-    @include font-size(13px, 1.3);
-
-    display: block;
-    color: var(--color-stone);
-}
-
-.size {
-    color: var(--color-stone);
-}
-
-.users {
-    @include font-size(12px, 1.3);
-
-    min-width: 0;
     font-family: var(--font-dm-mono);
     color: var(--color-stone);
     letter-spacing: -0.02em;
@@ -229,11 +171,6 @@
     }
 }
 
-.example {
-    font-style: italic;
-    color: var(--color-stone);
-}
-
 .hidden {
     position: absolute;
     width: 1px;
@@ -246,50 +183,138 @@
 .exports {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: rem(8);
 }
 
-// A message under the export buttons, whichever button it belongs to.
-.exportStatus {
-    flex-basis: 100%;
-    order: 1;
-    margin: 0;
-    @include font-size(14px, 1.4);
+.status {
+    @include font-size(13px, 1.3);
+
+    color: var(--color-stone);
 
     &:empty {
         display: none;
     }
 }
 
-// A refusal or a request for consent, set apart from the notes around it.
-.exportProblem {
-    padding: rem(10) rem(12);
-    border: 1px solid var(--color-stone-light);
-    border-radius: rem(4);
-}
-
-.exportFailed {
-    color: var(--color-red);
-}
-
-.exportAction {
-    order: 1;
-}
-
-.lists {
+.patterns {
     @include flex(column, flex-start, stretch);
-    @include font-size(14px, 1.4);
+    @include font-size(14px, 1.45);
 
     gap: rem(4);
-    list-style: none;
+    padding-left: rem(18);
+    list-style: disc;
+    overflow-wrap: break-word;
+
+    code {
+        font-family: var(--font-dm-mono);
+        letter-spacing: -0.02em;
+    }
+}
+
+.paste {
+    @include font-size(12px, 1.4);
+
+    width: 100%;
+    padding: rem(10) rem(12);
+    font-family: var(--font-dm-mono);
+    color: var(--color-charcoal);
+    letter-spacing: -0.02em;
+    background-color: var(--color-white);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(6);
+    resize: vertical;
+
+    // Lines do not wrap, so the box scrolls both ways and shows its scrollbars.
+    @include scrollbar-visible(var(--color-stone), both);
+}
+
+.constraints {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+
+    legend {
+        margin-bottom: rem(8);
+    }
+}
+
+// A constraint heading that opens the column's values.
+.heading {
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--color-sage);
+    text-underline-offset: rem(3);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.headingId {
+    display: block;
+    font-weight: 400;
+    color: var(--color-stone);
+}
+
+// A cell every StatVar of the dataset fills alike.
+.fill {
+    color: var(--color-stone);
+    background-color: var(--color-net-light);
+}
+
+// A cell the author fills.
+.empty {
+    background-image: repeating-linear-gradient(
+        -45deg,
+        transparent 0 rem(4),
+        var(--color-net-mid) rem(4) rem(5)
+    );
+}
+
+.panel {
+    @include flex(column, flex-start, stretch);
+
+    gap: rem(8);
+    padding: rem(12) rem(14);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(6);
+}
+
+.panelHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: rem(8);
+}
+
+// A long value list scrolls inside the panel.
+.values {
+    @include scrollbar-visible(var(--color-stone), both);
+
+    max-width: 100%;
+    max-height: rem(320);
+}
+
+.name {
+    font-family: var(--font-outfit);
+    white-space: normal;
+}
+
+.cellValue {
+    display: inline-flex;
+    align-items: center;
+    gap: rem(8);
+}
+
+.step {
+    scroll-margin-top: rem(16);
 }
 
 @include breakpoint(phone) {
     .title {
         @include font-size(26px, 1.05);
-    }
-
-    .pill {
-        @include font-size(13px, 1.1);
     }
 }

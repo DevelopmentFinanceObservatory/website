@@ -33,42 +33,12 @@ import {
     type Carried,
     type QueryReader,
 } from './explore.ts';
-import type { Model } from './model.ts';
-import { NEW_SHEET_PATH } from './paths.ts';
+import { patternId, type Model } from './model.ts';
 import type { SheetSpec } from './sheet.ts';
 import { CHECK_MAX_CONSTRAINT_PROPERTIES, type SchemaPattern } from './wire.ts';
 
 /** A pattern named by its dataset and its patternId. */
 export type PatternRef = { readonly dataset: string; readonly id: string };
-
-/** A 32-bit FNV-1a hash of `text` from `seed`, as 8 hex digits. */
-const fnv1a = (text: string, seed: number): string => {
-    let hash = seed;
-    for (let at = 0; at < text.length; at += 1) {
-        hash = Math.imul(hash ^ text.charCodeAt(at), 0x01000193);
-    }
-    return (hash >>> 0).toString(16).padStart(8, '0');
-};
-
-/**
- * A pattern's identity in the URL: 16 hex digits hashed from the fields that
- * define it (population type, measured property, stat type, qualifier,
- * denominator, and the constraint and observation properties as sets). The
- * StatVar count and the examples change as usage grows and the API orders
- * patterns by count, so neither the position nor those fields enter the id.
- */
-export const patternId = (pattern: SchemaPattern): string => {
-    const defining = JSON.stringify([
-        pattern.population_type,
-        pattern.measured_property,
-        pattern.stat_type,
-        pattern.measurement_qualifier,
-        pattern.measurement_denominator,
-        [...pattern.constraint_properties].sort(),
-        [...pattern.observation_properties].sort(),
-    ]);
-    return fnv1a(defining, 0x811c9dc5) + fnv1a(defining, 0x9747b28c);
-};
 
 /** The page state as the URL holds it, before the model fills the defaults. */
 export type SheetQuery = {
@@ -121,10 +91,6 @@ export const sheetQuery = (query: SheetQuery, carried: Carried): string => {
     writeCarried(params, carried);
     return queryString(params);
 };
-
-/** The Start a sheet address for a page state and the carried parameters. */
-export const sheetHref = (query: Partial<SheetQuery>, carried: Carried): string =>
-    `${NEW_SHEET_PATH}${sheetQuery({ ...NO_SHEET_QUERY, ...query }, carried)}`;
 
 /** A pattern with its dataset and id. */
 export type PlacedPattern = PatternRef & { readonly pattern: SchemaPattern };

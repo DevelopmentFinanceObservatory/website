@@ -16,6 +16,7 @@ import {
 } from './load.ts';
 import { KIND_WORDS, openLiterals, type Model } from './model.ts';
 import { camelCase, findingColumn, sheetRow, type Mapping } from './pasted.ts';
+import { columnName } from './seed.ts';
 import type { SentencePart } from './sentence.ts';
 import {
     CHECK_DEADLINE_MS,
@@ -805,7 +806,7 @@ const misspell = (value: string): string | null => {
     return null;
 };
 
-/** What the example sheet is and where it came from. */
+/** What the example seed is and where it came from. */
 export type ExampleSheet = {
     /** The range as tab-separated text, header first, as a spreadsheet copies it. */
     readonly text: string;
@@ -816,11 +817,12 @@ export type ExampleSheet = {
 };
 
 /**
- * A small sheet from the first dataset pattern whose constraint properties
- * all have values in use. It holds the definition fields as the pattern
- * names them, and each property cycles through the values the dataset uses.
- * One row carries a misspelt value on a property with a value list. Null when no
- * pattern qualifies.
+ * A small seed from the first dataset pattern whose constraint properties
+ * all have values in use, in the seed layout: `source_code`, `statvar_name`,
+ * the identity columns the pattern fills and one snake_case column per
+ * constraint property, each value a `dcid:` cell. Each constraint cycles
+ * through the values the dataset uses, and one row carries a misspelt value
+ * on a constraint with a value list. Null when no pattern qualifies.
  */
 export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
     for (const dataset of model.datasets) {
@@ -836,18 +838,19 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
             if (!properties.every((id) => (used.get(id)?.length ?? 0) > 0)) continue;
 
             const definition = [
-                ['populationType', pattern.population_type],
-                ['measuredProperty', pattern.measured_property],
-                ['statType', pattern.stat_type],
-                ['measurementQualifier', pattern.measurement_qualifier],
+                ['population_type', pattern.population_type],
+                ['measured_property', pattern.measured_property],
+                ['stat_type', pattern.stat_type],
+                ['measurement_qualifier', pattern.measurement_qualifier],
             ].filter((entry): entry is [string, string] => entry[1] !== null);
             const rows = Array.from({ length: count }, (_, row) => [
-                `EX-${row + 1}`,
+                `EX${row + 1}`,
                 `Example row ${row + 1}`,
-                ...definition.map(([, value]) => value),
+                ...definition.map(([, value]) => `dcid:${value}`),
                 ...properties.map((id) => {
                     const values = used.get(id) ?? [];
-                    return values[row % values.length] ?? '';
+                    const value = values[row % values.length];
+                    return value === undefined ? '' : `dcid:${value}`;
                 }),
             ]);
 
@@ -857,7 +860,7 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
                 .map((id, at) => ({
                     id,
                     column: firstProperty + at,
-                    spelt: misspell(typoCells[firstProperty + at] ?? ''),
+                    spelt: misspell((typoCells[firstProperty + at] ?? '').replace(/^dcid:/, '')),
                 }))
                 .find(
                     ({ id, spelt }) =>
@@ -866,18 +869,18 @@ export function exampleSheet(model: Model, count = 5): ExampleSheet | null {
                         model.node(spelt) === undefined,
                 );
             if (typo === undefined || typo.spelt === null) continue;
-            typoCells[typo.column] = typo.spelt;
+            typoCells[typo.column] = `dcid:${typo.spelt}`;
 
             const header = [
                 'source_code',
-                'source_label',
+                'statvar_name',
                 ...definition.map(([field]) => field),
-                ...properties,
+                ...properties.map(columnName),
             ];
             return {
                 text: [header, ...rows].map((cells) => cells.join('\t')).join('\n'),
                 dataset: dataset.ref,
-                misspelt: typo.id,
+                misspelt: columnName(typo.id),
             };
         }
     }

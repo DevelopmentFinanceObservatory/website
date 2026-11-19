@@ -15,14 +15,14 @@ import { carriedHref, START_VIEW, switchBase } from '@/lib/graphExplorer/explore
 import { waitText, type Loadable } from '@/lib/graphExplorer/load';
 import {
     CHECK_SHEET_PATH,
-    NEW_SHEET_PATH,
     screenOf,
+    SEED_PATH,
     type GraphExplorerScreen,
 } from '@/lib/graphExplorer/paths';
 import type { SchemaTerms } from '@/lib/graphExplorer/wire';
 
 const SHEET_LINKS: { screen: GraphExplorerScreen; path: string; label: string }[] = [
-    { screen: 'new-sheet', path: NEW_SHEET_PATH, label: 'Start a sheet' },
+    { screen: 'seed', path: SEED_PATH, label: 'Seed a dataset' },
     { screen: 'check-sheet', path: CHECK_SHEET_PATH, label: 'Check a sheet' },
 ];
 

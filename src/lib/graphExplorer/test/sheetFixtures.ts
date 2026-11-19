@@ -3,8 +3,7 @@
  * hold as read: one pattern's population type, or party classes that list
  * their instances.
  */
-import { buildModel, type Model } from '../model.ts';
-import { patternId } from '../newSheet.ts';
+import { buildModel, patternId, type Model } from '../model.ts';
 import { readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 

@@ -7,15 +7,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildModel } from '../model.ts';
-import { NO_CARRIED, readCarried } from '../explore.ts';
-import {
-    queryOf,
-    readSheetQuery,
-    resolveSheet,
-    sheetHref,
-    sheetQuery,
-    splitOptions,
-} from '../newSheet.ts';
+import { NO_CARRIED } from '../explore.ts';
+import { queryOf, readSheetQuery, resolveSheet, sheetQuery, splitOptions } from '../newSheet.ts';
 import { CHECK_MAX_CONSTRAINT_PROPERTIES, readSchema, readUsage } from '../wire.ts';
 import { schemaBody, usageBody } from './fixtures.ts';
 import { patternIdAt, withPatternClass, withReversedPatterns } from './sheetFixtures.ts';
@@ -71,19 +64,6 @@ test('a written query reads back as the same state', () => {
             NO_CARRIED,
         ),
         '?class=FinancialFlow&split=a%2Cb',
-    );
-});
-
-test('a sheet link keeps the carried dataset filter and base switch', () => {
-    const carried = { show: { kind: 'all' }, base: true } as const;
-    const href = sheetHref({ from: { dataset: DAC1, id: grantId } }, carried);
-    const params = new URL(href, 'https://x.invalid').searchParams;
-    assert.equal(new URL(href, 'https://x.invalid').pathname, '/graph-explorer/new-sheet');
-    assert.deepEqual(readCarried(params), carried);
-    assert.deepEqual(readSheetQuery(params).from, { dataset: DAC1, id: grantId });
-    assert.equal(
-        sheetHref({ classId: 'FinancialFlow' }, NO_CARRIED),
-        '/graph-explorer/new-sheet?class=FinancialFlow',
     );
 });
 

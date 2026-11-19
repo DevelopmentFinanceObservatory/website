@@ -2,7 +2,7 @@
 
 import classNames from 'classnames';
 
-import styles from './NewSheet.module.scss';
+import styles from './SheetExports.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';

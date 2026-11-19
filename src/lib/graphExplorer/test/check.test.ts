@@ -34,7 +34,7 @@ import {
 } from '../check.ts';
 import type { WaitCause } from '../load.ts';
 import { buildModel, openLiterals } from '../model.ts';
-import { mapHeaders, parsePasted, rowsToCheck } from '../pasted.ts';
+import { mapHeaders, readPasted } from '../pasted.ts';
 import {
     CHECK_MAX_ROWS,
     FINDING_CODES,
@@ -735,31 +735,34 @@ test('no members are offered for other codes, definition fields or an unknown pr
     );
 });
 
-test('the example sheet follows a dataset pattern with one misspelt value', () => {
+test('the example is a seed that follows a dataset pattern with one misspelt value', () => {
     const example = exampleSheet(model);
     assert.ok(example);
-    const { header, rows } = parsePasted(example.text);
-    const mapping = mapHeaders(model, header);
-    assert.deepEqual(
-        mapping.map((column) => column.target.kind),
-        [
-            'ignored',
-            'ignored',
-            'definition',
-            'definition',
-            'definition',
-            'definition',
-            'property',
-            'property',
-            'property',
+    const read = readPasted(model, example.text);
+    assert.deepEqual(read.summary, {
+        kind: 'seed',
+        rows: 5,
+        skippedRows: 0,
+        checked: [
+            'population_type',
+            'measured_property',
+            'stat_type',
+            'measurement_qualifier',
+            'dac1_aid_type',
+            'financial_flow_type',
+            'netting_basis',
+        ].map((header, at) => ({ index: at + 2, header })),
+        skipped: [
+            { index: 0, header: 'source_code', reason: 'no_field' },
+            { index: 1, header: 'statvar_name', reason: 'never_constraint' },
         ],
-    );
-    const checkRows = rowsToCheck(mapping, rows).rows;
-    assert.equal(checkRows.length, 5);
+    });
+    assert.deepEqual(read.prefixFindings, []);
+    const checkRows = read.sheet.rows;
     const values = checkRows.flatMap((row) => Object.values(row.constraint_properties ?? {}));
     const unheld = values.filter((value) => typeof value === 'string' && !model.node(value));
     assert.equal(unheld.length, 1);
-    assert.equal(example.misspelt, 'dac1AidType');
+    assert.equal(example.misspelt, 'dac1_aid_type');
     assert.equal(checkRows[2]?.constraint_properties?.dac1AidType, unheld[0]);
 });
 

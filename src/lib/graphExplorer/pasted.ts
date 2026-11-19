@@ -148,7 +148,38 @@ export type MappedColumn = {
     readonly target: ColumnTarget;
     /** The earlier column that holds the same property or field, when this one is ignored for it. */
     readonly duplicateOf: number | null;
+    /** Why the check skips the column, or null when it reads it. */
+    readonly skip: SkipReason | null;
+    /** Why the header's own reading is ignored, kept so a reader's switch back to a property can undo it. */
+    readonly defaultSkip: SkipReason | null;
+    /** The model property the header names, which a switch to a property uses in place of the header text. */
+    readonly candidate: string | null;
 };
+
+/**
+ * Why a column is not checked:
+ * - `no_field`: the header names no member of the model.
+ * - `never_constraint`: the header names something that is never a constraint
+ *   (see NEVER_CONSTRAINT).
+ * - `codes`: in a seed, the column names a property but holds source codes,
+ *   with no cell carrying the `dcid:` prefix.
+ * - `duplicate`: an earlier column holds the same property or field.
+ * - `switched`: the reader set the column to ignored.
+ */
+export type SkipReason = 'no_field' | 'never_constraint' | 'codes' | 'duplicate' | 'switched';
+
+/** Headers that read as a property of the model by name yet are never constraints of a StatVar. */
+export const NEVER_CONSTRAINT: ReadonlySet<string> = new Set([
+    'unit',
+    'measurement_method',
+    'entity_property',
+    'name',
+    'statvar_name',
+    'constraint_properties',
+]);
+
+/** A seed has no `dcid` column. StatVar output (`dc_<dataset>_statvars`) has one. */
+export type PastedKind = 'seed' | 'statvars';
 
 /** One entry per header, in order. No two columns share a property or a definition field. */
 export type Mapping = readonly MappedColumn[];
@@ -172,12 +203,19 @@ const settle = (columns: readonly MappedColumn[]): Mapping => {
         if (key !== null && holder === undefined) first.set(key, column.index);
         const duplicateOf = holder ?? null;
         const target: ColumnTarget = duplicateOf === null ? column.wanted : { kind: 'ignored' };
+        const skip: SkipReason | null =
+            duplicateOf !== null
+                ? 'duplicate'
+                : target.kind === 'ignored'
+                  ? (column.defaultSkip ?? 'switched')
+                  : null;
         const unchanged =
             column.duplicateOf === duplicateOf &&
+            column.skip === skip &&
             (duplicateOf === null
                 ? column.target === column.wanted
                 : column.target.kind === 'ignored');
-        return unchanged ? column : { ...column, target, duplicateOf };
+        return unchanged ? column : { ...column, target, duplicateOf, skip };
     });
 };
 
@@ -190,6 +228,10 @@ export const camelCase = (name: string): string =>
 const fieldOf = (header: string): DefinitionField | undefined =>
     DEFINITION_FIELDS.find((field) => field === header || field === camelCase(header));
 
+/** Whether the headers carry a `dcid` column. */
+export const pastedKind = (headers: readonly string[]): PastedKind =>
+    headers.some((header) => fieldOf(header.trim()) === 'dcid') ? 'statvars' : 'seed';
+
 /** The property a header names, which is the dcid itself or the one whose snake case form it is. */
 const propertyOf = (model: Model, header: string, properties: readonly string[]) => {
     if (model.kind(header) === 'property') return header;
@@ -197,33 +239,64 @@ const propertyOf = (model: Model, header: string, properties: readonly string[])
     return named.length === 1 ? named[0] : undefined;
 };
 
+/** Whether a cell is filled. */
+const filled = (cell: string | undefined): cell is string => (cell ?? '').trim() !== '';
+
 /**
  * Reads each header as a definition field, a property of the model, or
  * neither. A column naming the same property or field as an earlier one is
  * ignored, with `duplicateOf` naming the earlier column.
+ *
+ * In a seed (no `dcid` column), a property column with a filled cell and no
+ * cell carrying the `dcid:` prefix holds source codes and is skipped, which
+ * `rows` decides; with no `rows` no column is. StatVar output checks every
+ * column that maps.
  */
-export function mapHeaders(model: Model, headers: readonly string[]): Mapping {
+export function mapHeaders(
+    model: Model,
+    headers: readonly string[],
+    rows: readonly (readonly string[])[] = [],
+): Mapping {
     const properties = model.nodes
         .filter((node) => model.kind(node.ref) === 'property')
         .map((node) => node.ref);
-    const read = (header: string): ColumnTarget => {
-        const field = fieldOf(header);
-        if (field !== undefined) return { kind: 'definition', field };
-        const property = propertyOf(model, header, properties);
-        return property === undefined ? { kind: 'ignored' } : { kind: 'property', property };
+    const seed = pastedKind(headers) === 'seed';
+    const holdsCodes = (index: number): boolean => {
+        const cells = rows.map((row) => row[index]).filter(filled);
+        return cells.length > 0 && cells.every((cell) => !cell.trim().startsWith('dcid:'));
     };
     return settle(
         headers.map((raw, index): MappedColumn => {
             const header = raw.trim();
-            const wanted = read(header);
-            return { index, header, wanted, target: wanted, duplicateOf: null };
+            const field = fieldOf(header);
+            const never = field === undefined && NEVER_CONSTRAINT.has(snakeCase(header));
+            const property =
+                field === undefined && !never ? propertyOf(model, header, properties) : undefined;
+            let wanted: ColumnTarget = { kind: 'ignored' };
+            let defaultSkip: SkipReason | null = null;
+            if (field !== undefined) wanted = { kind: 'definition', field };
+            else if (never) defaultSkip = 'never_constraint';
+            else if (property === undefined) defaultSkip = 'no_field';
+            else if (seed && holdsCodes(index)) defaultSkip = 'codes';
+            else wanted = { kind: 'property', property };
+            return {
+                index,
+                header,
+                wanted,
+                target: wanted,
+                duplicateOf: null,
+                skip: null,
+                defaultSkip,
+                candidate: property ?? null,
+            };
         }),
     );
 }
 
 /**
- * Switches one column between a property and ignored. A property column
- * names the header as typed, which the check reports when the graph lacks it.
+ * Switches one column between a property and ignored, which overrides the
+ * default skip. A property column names the property its header reads as, or
+ * else the header as typed, which the check reports when the graph lacks it.
  * Duplicates are settled again, so ignoring the first of two columns hands
  * its property or field to the second.
  */
@@ -234,8 +307,14 @@ export function switchColumn(mapping: Mapping, index: number, to: 'property' | '
             const wanted: ColumnTarget =
                 to === 'ignored'
                     ? { kind: 'ignored' }
-                    : { kind: 'property', property: column.header };
-            return { ...column, wanted, target: wanted, duplicateOf: null };
+                    : { kind: 'property', property: column.candidate ?? column.header };
+            return {
+                ...column,
+                wanted,
+                target: wanted,
+                duplicateOf: null,
+                defaultSkip: to === 'ignored' ? (column.defaultSkip ?? 'switched') : null,
+            };
         }),
     );
 }
@@ -267,11 +346,16 @@ export type SheetCheck = {
     readonly rows: readonly SchemaCheckRow[];
     /** The sheet row of `rows[i]`, at `i`. */
     readonly sheetRows: readonly number[];
+    /** The sheet rows left out of `rows` because they define no StatVar, in order. */
+    readonly skipped: readonly number[];
 };
 
 /** A node reference as the check reads it: a leading `dcid:`, as dcp-tools sheets write it, dropped. */
 const nodeRef = (cell: string): string =>
     cell.startsWith('dcid:') ? cell.slice('dcid:'.length).trim() : cell;
+
+/** The definition fields whose cells all being empty mark a row that defines no StatVar. */
+const IDENTITY_FIELDS = ['populationType', 'measuredProperty', 'statType'] as const;
 
 /**
  * Check rows in the wire shape, with `sheetRows` naming the sheet row of
@@ -279,11 +363,17 @@ const nodeRef = (cell: string): string =>
  * mapping gives it, the column `findingColumn` places its findings on, and
  * a leading `dcid:` is dropped from each value. An empty cell leaves its
  * property or field out (null), and the route reports a missing measured
- * property as a finding. Blank rows are skipped.
+ * property as a finding. Blank rows are skipped. So is a row whose
+ * population type, measured property and stat type cells are all empty, when
+ * the sheet has any of those columns; `skipped` names it.
  */
 export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])[]): SheetCheck {
     const checked: SchemaCheckRow[] = [];
     const sheetRows: number[] = [];
+    const skipped: number[] = [];
+    const identity = IDENTITY_FIELDS.filter((field) =>
+        mapping.some(({ target }) => target.kind === 'definition' && target.field === field),
+    );
     rows.forEach((cells, dataIndex) => {
         if (isBlank(cells)) return;
         const cell = (index: number): string => nodeRef((cells[index] ?? '').trim());
@@ -293,6 +383,11 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
             );
             return column === undefined ? '' : cell(column.index);
         };
+        // A row that fills none of the identity columns reuses a StatVar defined elsewhere.
+        if (identity.length > 0 && identity.every((field) => definition(field) === '')) {
+            skipped.push(sheetRow(dataIndex));
+            return;
+        }
         const constraints: Record<string, string> = {};
         for (const { target, index } of mapping) {
             if (target.kind !== 'property') continue;
@@ -315,7 +410,7 @@ export function rowsToCheck(mapping: Mapping, rows: readonly (readonly string[])
         });
         sheetRows.push(sheetRow(dataIndex));
     });
-    return { rows: checked, sheetRows };
+    return { rows: checked, sheetRows, skipped };
 }
 
 /**
@@ -462,4 +557,139 @@ export function findingColumn(mapping: Mapping, finding: SchemaFinding): number 
             : target.kind === 'definition' && target.field === camelCase(finding.field),
     );
     return column?.index ?? null;
+}
+
+/** A cell of a mixed seed column that lacks the `dcid:` prefix its column's other cells carry. */
+export type PrefixFinding = {
+    readonly code: 'missing_prefix';
+    readonly column: number;
+    readonly header: string;
+    /** The sheet row of the cell. */
+    readonly row: number;
+    readonly value: string;
+};
+
+/**
+ * The unprefixed cells of each checked property column of a seed that also
+ * holds `dcid:`-prefixed cells. The column stays checked and each cell is
+ * still sent. StatVar output carries bare values and is never flagged.
+ */
+export function prefixFindings(
+    kind: PastedKind,
+    mapping: Mapping,
+    rows: readonly (readonly string[])[],
+): PrefixFinding[] {
+    if (kind !== 'seed') return [];
+    const found: PrefixFinding[] = [];
+    for (const { index, header, target } of mapping) {
+        if (target.kind !== 'property') continue;
+        const cells = rows.map((cells, dataIndex) => ({
+            row: sheetRow(dataIndex),
+            value: (cells[index] ?? '').trim(),
+        }));
+        const present = cells.filter(({ value }) => value !== '');
+        if (!present.some(({ value }) => value.startsWith('dcid:'))) continue;
+        for (const { row, value } of present) {
+            if (!value.startsWith('dcid:'))
+                found.push({ code: 'missing_prefix', column: index, header, row, value });
+        }
+    }
+    return found;
+}
+
+/** What the reader did with a paste, for the line above the findings. */
+export type ReadSummary = {
+    readonly kind: PastedKind;
+    /** Data rows read, blank rows apart: those sent to the check and those skipped. */
+    readonly rows: number;
+    readonly skippedRows: number;
+    /** The columns the check reads, in order. Blank headers are left out. */
+    readonly checked: readonly { readonly index: number; readonly header: string }[];
+    readonly skipped: readonly {
+        readonly index: number;
+        readonly header: string;
+        readonly reason: SkipReason;
+    }[];
+};
+
+/** The summary of reading `sheet` through `mapping`. */
+export function readSummary(kind: PastedKind, mapping: Mapping, sheet: SheetCheck): ReadSummary {
+    const named = mapping.filter(({ header }) => header !== '');
+    return {
+        kind,
+        rows: sheet.rows.length + sheet.skipped.length,
+        skippedRows: sheet.skipped.length,
+        checked: named
+            .filter(({ skip }) => skip === null)
+            .map(({ index, header }) => ({ index, header })),
+        skipped: named.flatMap(({ index, header, skip }) =>
+            skip === null ? [] : [{ index, header, reason: skip }],
+        ),
+    };
+}
+
+/** A pasted or loaded text read to the end. */
+export type PastedRead = {
+    readonly range: PastedRange;
+    readonly mapping: Mapping;
+    readonly sheet: SheetCheck;
+    readonly summary: ReadSummary;
+    readonly prefixFindings: readonly PrefixFinding[];
+};
+
+/**
+ * Reads a paste, or the text of a chosen `.csv` file, which parse alike,
+ * with the reader's column `switches` applied.
+ */
+export function readPasted(
+    model: Model,
+    text: string,
+    switches: ReadonlyMap<number, ColumnSwitch> = new Map(),
+): PastedRead {
+    const range = parsePasted(text);
+    const kind = pastedKind(range.header);
+    const mapping = applySwitches(mapHeaders(model, range.header, range.rows), switches);
+    const sheet = rowsToCheck(mapping, range.rows);
+    return {
+        range,
+        mapping,
+        sheet,
+        summary: readSummary(kind, mapping, sheet),
+        prefixFindings: prefixFindings(kind, mapping, range.rows),
+    };
+}
+
+const REASON_TEXT: Record<SkipReason, string> = {
+    no_field: 'the check has no field for them',
+    never_constraint: 'never constraints',
+    codes: 'hold codes',
+    duplicate: 'repeat an earlier column',
+    switched: 'set to ignored',
+};
+
+/** "aid_type", "aid_type and unit", "a, b and c". */
+const listText = (names: readonly string[]): string =>
+    names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+
+/**
+ * The line above the findings: how the paste was read, how many rows and
+ * columns, and why each skipped column is not checked.
+ */
+export function readSummaryText(summary: ReadSummary): string {
+    const kind =
+        summary.kind === 'seed' ? 'a seed (no dcid column)' : 'StatVar output (dcid column)';
+    const skippedRows =
+        summary.skippedRows === 0 ? '' : `, ${plural(summary.skippedRows, 'row')} skipped`;
+    const lines = [
+        `Read as ${kind}, ${plural(summary.rows, 'row')}${skippedRows}.`,
+        `Checked: ${plural(summary.checked.length, 'column')}.`,
+    ];
+    const reasons = (Object.keys(REASON_TEXT) as SkipReason[]).flatMap((reason) => {
+        const names = summary.skipped.filter((column) => column.reason === reason);
+        return names.length === 0
+            ? []
+            : [`${listText(names.map(({ header }) => header))} (${REASON_TEXT[reason]})`];
+    });
+    if (reasons.length > 0) lines.push(`Not checked: ${reasons.join(', ')}.`);
+    return lines.join(' ');
 }

@@ -351,9 +351,9 @@ test('a repeated property keeps its first column, and the check reads and marks 
 });
 
 test('a repeated definition field keeps its first column', () => {
-    const mapping = mapHeaders(model, ['measured_property', 'measuredProperty']);
+    const mapping = mapHeaders(model, ['measured_property', 'measuredProperty', 'population_type']);
     assert.equal(mapping[1]?.duplicateOf, 0);
-    const [row] = rowsToCheck(mapping, [['', 'amount']]).rows;
+    const [row] = rowsToCheck(mapping, [['', 'amount', 'FinancialFlow']]).rows;
     assert.equal(row?.measured_property, null);
 });
 

@@ -1,0 +1,29 @@
+@use "variables" as *;
+@use "mixins" as *;
+
+// A message under the export buttons, whichever button it belongs to.
+.exportStatus {
+    flex-basis: 100%;
+    order: 1;
+    margin: 0;
+    @include font-size(14px, 1.4);
+
+    &:empty {
+        display: none;
+    }
+}
+
+// A refusal or a request for consent, set apart from the notes around it.
+.exportProblem {
+    padding: rem(10) rem(12);
+    border: 1px solid var(--color-stone-light);
+    border-radius: rem(4);
+}
+
+.exportFailed {
+    color: var(--color-red);
+}
+
+.exportAction {
+    order: 1;
+}

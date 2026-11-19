@@ -22,8 +22,8 @@ import {
     sharePercent,
     type FocusBox,
 } from '@/lib/graphExplorer/focus';
-import { declarerWords, KIND_WORDS, type DatasetView } from '@/lib/graphExplorer/model';
-import { patternId, sheetHref } from '@/lib/graphExplorer/newSheet';
+import { declarerWords, KIND_WORDS, patternId, type DatasetView } from '@/lib/graphExplorer/model';
+import { seedHref } from '@/lib/graphExplorer/seed';
 import { patternSentence } from '@/lib/graphExplorer/sentence';
 import { valueListFileName, valueListTable } from '@/lib/graphExplorer/tables';
 import type { SchemaFacets, SchemaTerm } from '@/lib/graphExplorer/wire';
@@ -72,7 +72,7 @@ const IdLine = ({ id, codes = [] }: { id: string; codes?: readonly string[] }) =
     );
 };
 
-/** A link to the sheet page, styled as an action. Prefetch is off for the dynamic page. */
+/** A link to the Seed a dataset page, styled as an action. Prefetch is off for the dynamic page. */
 const SheetLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
     <Link href={href} prefetch={false} className={styles.action}>
         {children}
@@ -192,7 +192,6 @@ const OpenLines = ({ id }: { id: string }) => {
 /** A term the model holds: what it is, its names, its definition, its source and its use. */
 export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
     const model = useModel();
-    const carried = useCarried();
     const node = model.node(id);
     const kind = model.kind(id);
     if (!node || !kind) return null;
@@ -272,13 +271,6 @@ export const NodePanel = ({ id, lens }: { id: string; lens: PanelLens }) => {
             )}
             {kind !== 'valueList' && <UsageBars id={id} lens={lens} />}
             {hasList && <MemberBars id={id} lens={lens} />}
-            {kind === 'class' && (
-                <div>
-                    <SheetLink href={sheetHref({ classId: id }, carried)}>
-                        Start a Sheet for This Class
-                    </SheetLink>
-                </div>
-            )}
         </>
     );
 };
@@ -335,19 +327,14 @@ export const DatasetPanel = ({ view }: { view: DatasetView }) => {
                                     </span>
                                 </p>
                             )}
-                            <div>
-                                <SheetLink
-                                    href={sheetHref(
-                                        { from: { dataset: view.id, id: patternId(pattern) } },
-                                        carried,
-                                    )}
-                                >
-                                    Start a Sheet Like This
-                                </SheetLink>
-                            </div>
                         </li>
                     ))}
                 </ol>
+                <div>
+                    <SheetLink href={seedHref({ dataset: view.id }, carried)}>
+                        Seed a Dataset Like This
+                    </SheetLink>
+                </div>
             </section>
             {facets && (
                 <section className={styles.section}>

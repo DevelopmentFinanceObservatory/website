@@ -7,15 +7,11 @@ import styles from './CheckSheet.module.scss';
 
 import Button from '@/components/atoms/Button/Button';
 import { downloadCsv } from '@/components/organisms/GraphExplorer/downloadCsv';
-import { ModelProvider, useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
+import { useModel } from '@/components/organisms/GraphExplorer/ExploreContext';
 import { BreakableId } from '@/components/organisms/GraphExplorer/BreakableId';
 import { TermLink } from '@/components/organisms/GraphExplorer/ExploreLink';
-import { plural } from '@/lib/graphExplorer/counts';
-import shell from '@/components/organisms/GraphExplorer/GraphExplorer.module.scss';
-import LoadStatus from '@/components/organisms/GraphExplorer/LoadStatus';
 import SheetSection from '@/components/organisms/GraphExplorer/SheetSection';
-import TopBar from '@/components/organisms/GraphExplorer/TopBar';
-import { useExplorerData } from '@/components/organisms/GraphExplorer/useExplorerData';
+import { plural } from '@/lib/graphExplorer/counts';
 import {
     cellKey,
     CheckError,
@@ -38,16 +34,15 @@ import {
 } from '@/lib/graphExplorer/check';
 import { waitText, type WaitCause } from '@/lib/graphExplorer/load';
 import {
-    applySwitches,
-    mapHeaders,
-    parsePasted,
-    rowsToCheck,
+    readPasted,
+    readSummaryText,
     sheetProblems,
     sheetProblemText,
     type ColumnSwitch,
     type ColumnTarget,
     type Mapping,
     type PastedRange,
+    type PrefixFinding,
 } from '@/lib/graphExplorer/pasted';
 
 type Switch = 'property' | 'ignored';
@@ -471,7 +466,7 @@ const Results = ({ checked }: { checked: Checked }) => {
                     onClick={() =>
                         downloadCsv(
                             findingsCsvRows(lines, result.refused, sheetRows),
-                            'sheet-findings.csv',
+                            'seed-findings.csv',
                         )
                     }
                 >
@@ -488,7 +483,10 @@ const statusText = (run: Run): string => {
         return `Checked ${run.checked.toLocaleString('en-GB')} of ${plural(run.total, 'row')}.`;
     }
     if (run.status === 'done') {
-        return resultSentence(run.checked.result, run.checked.sheetRows.length);
+        const sentence = resultSentence(run.checked.result, run.checked.sheetRows.length);
+        return flaggedRowCount(run.checked.result) === 0
+            ? `${sentence} The check does not cover unit or measurement_method.`
+            : sentence;
     }
     if (run.status === 'failed') return run.message;
     return '';
@@ -497,13 +495,46 @@ const statusText = (run: Run): string => {
 /** How long typing in the paste box pauses before the pasted text is read again. */
 const READ_PAUSE_MS = 300;
 
-/** The three steps over a pasted range: paste, review the columns, check. */
-const CheckSteps = () => {
+/** The cells of a mixed seed column that lack the `dcid:` prefix, one line each. */
+const PrefixLines = ({ found }: { found: readonly PrefixFinding[] }) => {
+    if (found.length === 0) return null;
+    return (
+        <ul className={styles.findings}>
+            {found.map(({ column, header, row, value }) => (
+                <li key={`${row}:${column}`} className={styles.finding}>
+                    <span className={classNames(styles.tag, styles.tagWarning)}>Warning</span>
+                    <span className={styles.findingText}>
+                        <span>
+                            <b className={styles.placeText}>
+                                Row {row}, {header}
+                            </b>
+                            . <code className={styles.value}>{value}</code> has no{' '}
+                            <code className={styles.value}>dcid:</code> prefix, which the other
+                            cells of the column carry. Write{' '}
+                            <code className={styles.value}>dcid:{value}</code> if it names a node of
+                            the graph.
+                        </span>
+                    </span>
+                </li>
+            ))}
+        </ul>
+    );
+};
+
+/**
+ * The check step: a filled seed or StatVar output, pasted or chosen as a
+ * `.csv` file, read into check rows, said what was read, and checked against
+ * the graph.
+ */
+const CheckSheet = ({ title }: { title: string }) => {
     const model = useModel();
     const textId = useId();
+    const fileInput = useRef<HTMLInputElement | null>(null);
     const [text, setText] = useState('');
     // The text the columns and rows are read from, which is `text` once typing pauses.
     const [settled, setSettled] = useState('');
+    // What came of the last chosen file, until the text changes.
+    const [fileNote, setFileNote] = useState<string | null>(null);
     const [switches, setSwitches] = useState<ReadonlyMap<number, ColumnSwitch>>(new Map());
     const [run, setRun] = useState<Run>({ status: 'idle' });
     const controller = useRef<AbortController | null>(null);
@@ -515,10 +546,13 @@ const CheckSteps = () => {
         return () => clearTimeout(timer);
     }, [text, settled]);
 
-    const pasted = useMemo(() => parsePasted(settled), [settled]);
-    const read = useMemo(() => mapHeaders(model, pasted.header), [model, pasted.header]);
-    const mapping = useMemo(() => applySwitches(read, switches), [read, switches]);
-    const sheet = useMemo(() => rowsToCheck(mapping, pasted.rows), [mapping, pasted.rows]);
+    // The page's own reading of each column, which a reader's switch overrides.
+    const read = useMemo(() => readPasted(model, settled), [model, settled]);
+    const current = useMemo(
+        () => (switches.size === 0 ? read : readPasted(model, settled, switches)),
+        [model, settled, switches, read],
+    );
+    const { range: pasted, mapping, sheet, summary } = current;
     const problems = useMemo(() => sheetProblems(mapping, sheet), [mapping, sheet]);
     const example = useMemo(() => exampleSheet(model), [model]);
     const reading = text !== settled;
@@ -529,15 +563,26 @@ const CheckSteps = () => {
     };
     const paste = (value: string) => {
         setText(value);
+        setFileNote(null);
         reset();
     };
     const pasteNow = (value: string) => {
         paste(value);
         setSettled(value);
     };
+    const choose = async (chosen: File | undefined) => {
+        if (chosen === undefined) return;
+        try {
+            pasteNow(await chosen.text());
+            setFileNote(`Read from ${chosen.name}.`);
+        } catch (error) {
+            console.error('Graph Explorer: the chosen file could not be read', error);
+            setFileNote(`${chosen.name} could not be read.`);
+        }
+    };
     const switchTo = (index: number, to: Switch | null) => {
         const next = new Map(switches);
-        const header = read[index]?.header;
+        const header = read.mapping[index]?.header;
         if (to === null || header === undefined) next.delete(index);
         else next.set(index, { header, to });
         setSwitches(next);
@@ -584,85 +629,95 @@ const CheckSteps = () => {
     const canCheck = sheet.rows.length > 0 && problems.length === 0;
     // A check with nothing to show is its result line alone, marked as passed.
     const clean = run.status === 'done' && flaggedRowCount(run.checked.result) === 0;
-    const repeated = mapping
-        .filter((column) => column.duplicateOf !== null)
-        .map(
-            (column) =>
-                `${column.header || '(no header)'} (column ${column.index + 1}, repeating column ${(column.duplicateOf ?? 0) + 1})`,
-        );
 
     return (
-        <>
-            <SheetSection title="1. Paste the sheet">
-                <label htmlFor={textId} className={styles.lead}>
-                    Copy the header row and the rows from a spreadsheet and paste them here.
-                </label>
-                <textarea
-                    id={textId}
-                    className={styles.paste}
-                    value={text}
-                    onChange={(event) => paste(event.target.value)}
-                    rows={8}
-                    spellCheck={false}
-                    autoComplete="off"
-                    wrap="off"
+        <SheetSection title={title}>
+            <label htmlFor={textId} className={styles.lead}>
+                Paste the filled seed or the output of <code>dc_&lt;dataset&gt;_statvars</code>,
+                header row first, or choose a .csv file. The page reads either and says what it
+                read.
+            </label>
+            <textarea
+                id={textId}
+                className={styles.paste}
+                value={text}
+                onChange={(event) => paste(event.target.value)}
+                rows={8}
+                spellCheck={false}
+                autoComplete="off"
+                wrap="off"
+            />
+            <div className={styles.actions}>
+                <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className={styles.hidden}
+                    // The button below opens the picker, so the input takes no tab stop.
+                    tabIndex={-1}
+                    aria-hidden
+                    onChange={(event) => {
+                        void choose(event.target.files?.[0]);
+                        event.target.value = '';
+                    }}
                 />
-                <div className={styles.actions}>
-                    {example && (
-                        <Button variant="bordered" small onClick={() => pasteNow(example.text)}>
-                            Try an Example
-                        </Button>
-                    )}
-                    <p className={styles.note}>
-                        The pasted sheet stays in this page and goes to the Graph API only to be
-                        checked. Nothing is saved.
-                    </p>
-                </div>
-                {example && text === example.text && (
-                    <p className={styles.note}>
-                        The example follows a pattern of <TermLink id={example.dataset} />, with one
-                        value misspelt in the {example.misspelt} column.
-                    </p>
+                <Button variant="bordered" small onClick={() => fileInput.current?.click()}>
+                    Choose a .csv File
+                </Button>
+                {example && (
+                    <Button variant="bordered" small onClick={() => pasteNow(example.text)}>
+                        Try an Example
+                    </Button>
                 )}
-            </SheetSection>
-
-            {pasted.header.length > 0 && (
-                <SheetSection title="2. The columns">
-                    <p className={styles.note}>
-                        {plural(sheet.rows.length, 'row')} to check. Each column is read as a
-                        definition field, a property or ignored. Switch any column between property
-                        and ignored.
-                    </p>
-                    {repeated.length > 0 && (
-                        <p className={styles.note}>
-                            Set to Ignored because an earlier column has the same property or field:{' '}
-                            {repeated.join(', ')}.
-                        </p>
-                    )}
-                    <ul className={styles.columns}>
-                        {mapping.map((column) => (
-                            <ColumnRow
-                                key={column.index}
-                                header={column.header}
-                                read={read[column.index]?.wanted ?? column.wanted}
-                                target={column.target}
-                                repeats={
-                                    column.duplicateOf === null
-                                        ? null
-                                        : {
-                                              index: column.duplicateOf,
-                                              header: mapping[column.duplicateOf]?.header ?? '',
-                                          }
-                                }
-                                onSwitch={(to) => switchTo(column.index, to)}
-                            />
-                        ))}
-                    </ul>
-                </SheetSection>
+                <p className={styles.note}>
+                    The seed stays in this page and goes to the Graph API only to be checked.
+                    Nothing is saved.
+                </p>
+            </div>
+            {fileNote !== null && (
+                <p className={styles.note} role="status">
+                    {fileNote}
+                </p>
+            )}
+            {example && text === example.text && (
+                <p className={styles.note}>
+                    The example follows a pattern of <TermLink id={example.dataset} />, with one
+                    value misspelt in the {example.misspelt} column.
+                </p>
             )}
 
             {pasted.header.length > 0 && (
-                <SheetSection title="3. Check against the graph">
+                <>
+                    <p className={styles.summary} role="status">
+                        {readSummaryText(summary)}
+                    </p>
+                    <PrefixLines found={current.prefixFindings} />
+                    <details className={styles.more}>
+                        <summary>Change how a column is read</summary>
+                        <p className={styles.note}>
+                            Each column is read as a definition field, a constraint property or not
+                            checked. Switch any column between property and ignored.
+                        </p>
+                        <ul className={styles.columns}>
+                            {mapping.map((column) => (
+                                <ColumnRow
+                                    key={column.index}
+                                    header={column.header}
+                                    read={read.mapping[column.index]?.wanted ?? column.wanted}
+                                    target={column.target}
+                                    repeats={
+                                        column.duplicateOf === null
+                                            ? null
+                                            : {
+                                                  index: column.duplicateOf,
+                                                  header: mapping[column.duplicateOf]?.header ?? '',
+                                              }
+                                    }
+                                    onSwitch={(to) => switchTo(column.index, to)}
+                                />
+                            ))}
+                        </ul>
+                    </details>
                     {problems.length > 0 && (
                         <ul className={styles.problems}>
                             {problems.map((problem) => (
@@ -692,45 +747,9 @@ const CheckSteps = () => {
                         {statusText(run)}
                     </p>
                     {run.status === 'done' && !clean && <Results checked={run.checked} />}
-                </SheetSection>
+                </>
             )}
-        </>
-    );
-};
-
-/**
- * Check a sheet: a range pasted from a filled mapping sheet, read into
- * candidate StatVar rows and checked against the graph. The model is the
- * one the section's layout loaded.
- */
-const CheckSheet = () => {
-    const data = useExplorerData();
-    const model = data.model.status === 'ready' ? data.model.value : null;
-
-    return (
-        <ModelProvider value={model}>
-            <div className={shell.explorer}>
-                <TopBar />
-                <main className={shell.main}>
-                    <div className={styles.page}>
-                        <header className={styles.header}>
-                            <p className={styles.label}>Mapping sheets</p>
-                            <h1 className={styles.title}>Check a sheet</h1>
-                            <p className={styles.lead}>
-                                Check a filled mapping sheet against the graph before any pipeline
-                                code is written: every kind of thing, property and value it names,
-                                and whether each value belongs to its property&rsquo;s value list.
-                            </p>
-                        </header>
-                        {data.model.status === 'ready' ? (
-                            <CheckSteps />
-                        ) : (
-                            <LoadStatus state={data.model} onRetry={data.retryModel} />
-                        )}
-                    </div>
-                </main>
-            </div>
-        </ModelProvider>
+        </SheetSection>
     );
 };
 
