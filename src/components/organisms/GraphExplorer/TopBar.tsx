@@ -134,7 +134,12 @@ const TopBar = () => {
             <ExploreLink view={START_VIEW} className={styles.wordmark}>
                 Graph Explorer
             </ExploreLink>
-            <SearchBox model={model} modelStatus={data.model.status} outside={data.outside} />
+            <SearchBox
+                model={model}
+                modelStatus={data.model.status}
+                outside={data.outside}
+                switches={data.switches}
+            />
             <fieldset className={styles.switches}>
                 <legend className={styles.legend}>Also search</legend>
                 {ORIGIN_SWITCHES.map((name) => (
