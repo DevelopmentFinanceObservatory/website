@@ -2,11 +2,10 @@
  * Better Auth endpoints that answer a signed-in browser with a provider's
  * tokens: the access token (`/get-access-token`), a renewed access and
  * refresh token (`/refresh-token`), and the provider's account details read
- * with that token (`/account-info`). The Google token carries the Drive
- * scope, so the HTTP router refuses all three with a 404. Better Auth checks
+ * with that token (`/account-info`). No page needs a provider token in the
+ * browser, so the HTTP router refuses all three with a 404. Better Auth checks
  * `disabledPaths` only in that router (`onRequest` in
- * better-auth/dist/api/index.mjs), so server code can call
- * `auth.api.getAccessToken`.
+ * better-auth/dist/api/index.mjs), so server code keeps `auth.api` access.
  */
 export const TOKEN_PATHS: readonly string[] = [
     '/get-access-token',

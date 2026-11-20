@@ -1,0 +1,235 @@
+// The per-person dot strip. Dots stay put; the selected country's ring glides from dot to
+// dot, and its label fades in where it lands (_motion.scss).
+@use "motion" as *;
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 2px;
+    color: #484842;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.label {
+    font-weight: 500;
+}
+
+// How many countries the strip holds, under the label.
+.count {
+    display: block;
+    color: #5e5e52;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.median {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: #5e5e52;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+// What the median does not measure, under the strip. The strip's label reads it out.
+.caveat {
+    margin: 6px 0 0;
+    color: #5e5e52;
+    font-size: 12px;
+}
+
+.medianSwatch {
+    width: 2px;
+    height: 11px;
+    background: #484842;
+}
+
+// The plot's width is the strip's, which sets how many lanes the dots stack in.
+.strip {
+    container-type: inline-size;
+}
+
+.plot {
+    position: relative;
+    min-width: 0;
+
+    // Until measured the plot has no SVG, so it takes the height the strip draws at its
+    // width: 49px plus 10px a lane. The steps are where buildStrip adds a lane for the
+    // current data; they reserve room before hydration and give way to the drawn height.
+    &:not(:has(> svg)) {
+        min-height: 149px;
+
+        @container (min-width: 285px) {
+            min-height: 139px;
+        }
+
+        @container (min-width: 309px) {
+            min-height: 129px;
+        }
+
+        @container (min-width: 334px) {
+            min-height: 119px;
+        }
+
+        @container (min-width: 377px) {
+            min-height: 109px;
+        }
+
+        @container (min-width: 578px) {
+            min-height: 99px;
+        }
+
+        @container (min-width: 652px) {
+            min-height: 89px;
+        }
+
+        @container (min-width: 973px) {
+            min-height: 79px;
+        }
+
+        @container (min-width: 1231px) {
+            min-height: 69px;
+        }
+    }
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #6467de;
+        outline-offset: 4px;
+    }
+
+    @include still;
+}
+
+.svg {
+    display: block;
+    overflow: visible;
+    touch-action: pan-y;
+
+    &[data-pointing="true"] {
+        cursor: pointer;
+    }
+}
+
+.mark,
+.dot,
+.ring {
+    transform-box: view-box;
+    transform-origin: 0 0;
+}
+
+.grid {
+    stroke: #ececdb;
+    stroke-width: 1;
+}
+
+.medianTick {
+    stroke: #484842;
+    stroke-width: 2;
+}
+
+.tick {
+    font: 400 10.5px var(--font-outfit);
+    fill: #75756b;
+}
+
+// The dots are neutral grey, since each shows a country's aid from every provider.
+.dot {
+    fill: #8a8a7c;
+    stroke: #fff;
+    stroke-width: 0.75;
+    transition: opacity $fade-ms $ease-out;
+
+    &[data-dimmed="true"] {
+        opacity: 0.35;
+    }
+
+    &[data-selected="true"] {
+        fill: #484842;
+    }
+
+    &[data-active="true"] {
+        stroke: #484842;
+        stroke-width: 1.5;
+        opacity: 1;
+    }
+}
+
+.ring {
+    fill: none;
+    stroke: #484842;
+    stroke-width: 2;
+    transition:
+        transform $move-ms $ease-out,
+        opacity $fade-ms $ease-out;
+
+    @starting-style {
+        opacity: 0;
+    }
+}
+
+// The selected country's label, or a line saying it is not on the strip, remounts with its
+// text and fades in where it lands.
+.chosen,
+.offStrip {
+    font: 500 12px var(--font-outfit);
+    fill: #484842;
+
+    @include fade-in;
+}
+
+.offStrip {
+    fill: #75756b;
+    font-weight: 400;
+}
+
+// The hover reading, drawn as a tooltip centred over the dot at --x and kept inside the
+// plot's --width: the translate's percentages are the tooltip's own width.
+.tip {
+    position: absolute;
+    left: var(--x, 0);
+    z-index: 2;
+    margin: 0;
+    padding: 4px 8px;
+    border: 1px solid #ececdb;
+    border-radius: 4px;
+    background: #fff;
+    color: #484842;
+    font-size: 12px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgb(72 72 66 / 12%);
+    pointer-events: none;
+    transform: translate(
+        clamp(calc(-1 * var(--x)), -50%, calc(var(--width) - var(--x) - 100%)),
+        -100%
+    );
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+// Under reduced motion the ring jumps to its dot; it and the labels fade in.
+
+@media (prefers-reduced-motion: reduce) {
+    .ring {
+        transition: opacity $fade-ms $ease-out;
+    }
+}

@@ -1,0 +1,30 @@
+// Motion for the hiv-financing charts, matching fragility-finance's _motion.scss. A
+// change of scope glides bars, rings and gridlines to their new places, with value text
+// cross-fading, all within 300ms on one strong ease-out curve. Shapes stay put on first
+// draw and on resize (`data-still`, set by useWidth). Under reduced motion shapes jump
+// to their places and values fade in. Text on first paint does not fade.
+$ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+$move-ms: 280ms;
+$fade-ms: 180ms;
+
+// Transitions off while the container settles.
+
+@mixin still {
+    &[data-still] * {
+        transition: none;
+    }
+}
+
+// A value's text, remounted when it changes, fades in. Only inside a hydrated island
+// (`data-ready`, set by HivFinancing), so server-rendered text appears on first paint
+// without a fade.
+
+@mixin fade-in {
+    :where([data-ready]) & {
+        transition: opacity $fade-ms $ease-out;
+
+        @starting-style {
+            opacity: 0;
+        }
+    }
+}

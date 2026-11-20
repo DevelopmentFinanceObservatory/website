@@ -6,8 +6,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { asRecord } from '../../asRecord.ts';
-import { readCheckResponse, readSchema, readUsage, readTerms, WireShapeError } from '../wire.ts';
-import { schemaBody, usageBody, termsBody } from './fixtures.ts';
+import {
+    outsideTermList,
+    readCheckResponse,
+    readNodeView,
+    readSchema,
+    readTerms,
+    readUnTerms,
+    readUsage,
+    WireShapeError,
+} from '../wire.ts';
+import { baseUsageBody, schemaBody, usageBody, termsBody } from './fixtures.ts';
 
 /** The record at `path` in a parsed document; fails the test when there is none. */
 const at = (body: unknown, path: (string | number)[]): Record<string, unknown> => {
@@ -109,6 +118,66 @@ test('the terms guard refuses a term with a member removed', () => {
     refuses(readTerms, body, 'terms.terms[0].types');
 });
 
+/** A terms body whose every row is a Class, each `[ref, declared_by]`. */
+const listOf = (rows: [string, string | null][]) => ({
+    generation: null,
+    terms: rows.map(([ref, declaredBy]) => ({
+        ref,
+        label: ref,
+        types: ['Class'],
+        provenances: [],
+        declared_by: declaredBy,
+    })),
+});
+
+test('the UN System reader keeps only the rows the UN System declares', () => {
+    const un = readUnTerms(
+        listOf([
+            ['undata/AGE', 'un_system'],
+            ['undata/Stray', 'base'],
+            ['undata/Unowned', null],
+        ]),
+    );
+    assert.deepEqual(
+        un.terms.map((term) => term.ref),
+        ['undata/AGE'],
+    );
+});
+
+test('the outside list holds one row per ref, the base row winning, and UN rows wait while base loads', () => {
+    const base = readTerms(
+        listOf([
+            ['Topic', 'base'],
+            ['Amount', 'base'],
+        ]),
+    );
+    const un = readUnTerms(
+        listOf([
+            ['Topic', 'un_system'],
+            ['undata/AGE', 'un_system'],
+        ]),
+    );
+    const rows = (lists: Parameters<typeof outsideTermList>[0]) =>
+        outsideTermList(lists).map((term) => [term.ref, term.declared_by]);
+
+    assert.deepEqual(rows({ base, un, baseLoading: false }), [
+        ['Topic', 'base'],
+        ['Amount', 'base'],
+        ['undata/AGE', 'un_system'],
+    ]);
+    assert.deepEqual(rows({ base, baseLoading: false }), [
+        ['Topic', 'base'],
+        ['Amount', 'base'],
+    ]);
+    // With the base list off, failed or not served, the UN rows stand alone.
+    assert.deepEqual(rows({ un, baseLoading: false }), [
+        ['Topic', 'un_system'],
+        ['undata/AGE', 'un_system'],
+    ]);
+    // While the base list loads, a shared ref such as Topic must not read as UN first.
+    assert.deepEqual(rows({ un, baseLoading: true }), []);
+});
+
 test('the usage guard checks patterns, constraint values and facets', () => {
     const pattern = usageBody();
     delete at(pattern, ['provenances', 0, 'patterns', 0]).observation_properties;
@@ -121,6 +190,72 @@ test('the usage guard checks patterns, constraint values and facets', () => {
     const facets = usageBody();
     delete at(facets, ['provenances', 0, 'facets']).currencies;
     refuses(readUsage, facets, 'usage.provenances[0].facets.currencies');
+});
+
+test("the usage guard reads an outside document's terms and unresolved denominators", () => {
+    const outside = readUsage(baseUsageBody());
+    assert.equal(outside.terms?.length, 8);
+    assert.equal(outside.provenances[0]?.patterns[1]?.measurement_denominator_unresolved, true);
+    // The DFO document omits `terms`.
+    assert.equal(readUsage(usageBody()).terms, undefined);
+
+    const unlabelled = baseUsageBody();
+    at(unlabelled, ['terms', 0]).label = 7;
+    refuses(readUsage, unlabelled, 'usage.terms[0].label');
+
+    const untyped = baseUsageBody();
+    delete at(untyped, ['terms', 0]).types;
+    refuses(readUsage, untyped, 'usage.terms[0].types');
+
+    const flag = baseUsageBody();
+    at(flag, ['provenances', 0, 'patterns', 1]).measurement_denominator_unresolved = 'yes';
+    refuses(readUsage, flag, 'usage.provenances[0].patterns[1].measurement_denominator_unresolved');
+
+    const repeated = baseUsageBody();
+    const terms = at(repeated, []).terms;
+    assert.ok(Array.isArray(terms));
+    terms.push(terms[0]);
+    refuses(readUsage, repeated, 'usage.terms[8].ref');
+});
+
+/** A node view body: the fixture schema's first node at the centre, the next two as neighbours. */
+const nodeViewBody = (): unknown => {
+    const nodes = at(schemaBody(), []).nodes;
+    assert.ok(Array.isArray(nodes));
+    return {
+        generation: 'g1',
+        centre: nodes[0],
+        nodes: nodes.slice(1, 3),
+        capped: [{ ref: 'FinancialFlow', property: 'typeOf' }],
+    };
+};
+
+test('the node view guard reads the centre, its neighbours and the capped listings', () => {
+    const view = readNodeView(nodeViewBody());
+    assert.equal(view.nodes.length, 2);
+    assert.deepEqual(view.capped, [{ ref: 'FinancialFlow', property: 'typeOf' }]);
+
+    const noCapped = nodeViewBody();
+    delete at(noCapped, []).capped;
+    refuses(readNodeView, noCapped, 'node.capped');
+
+    const bareProperty = nodeViewBody();
+    at(bareProperty, []).capped = ['typeOf'];
+    refuses(readNodeView, bareProperty, 'node.capped[0]');
+
+    const centre = nodeViewBody();
+    delete at(centre, ['centre']).instances;
+    refuses(readNodeView, centre, 'node.centre.instances');
+
+    const neighbour = nodeViewBody();
+    at(neighbour, ['nodes', 1]).types = 'Class';
+    refuses(readNodeView, neighbour, 'node.nodes[1].types');
+
+    const repeated = nodeViewBody();
+    const nodes = at(repeated, []).nodes;
+    assert.ok(Array.isArray(nodes));
+    nodes.push(nodes[0]);
+    refuses(readNodeView, repeated, 'node.nodes[2].ref');
 });
 
 test('each guard checks every element of every list, not only the first', () => {

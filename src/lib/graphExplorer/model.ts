@@ -1,7 +1,11 @@
 /**
- * The knowledge-graph model as one immutable index over two documents: the
- * schema (terms and how they relate) and the usage document (how each
+ * The knowledge-graph model as one immutable index over a schema document
+ * (terms and how they relate) and one or more usage documents (how each
  * dataset's StatVars use those terms). Every answer is derived from the documents.
+ *
+ * Usage documents merge into one model: the DFO document, and the base and
+ * UN System documents, which also name the terms their patterns use. Nodes
+ * merge only into a model built for one centre (`nodeView.ts`).
  *
  * Words for readers: a Class is a `class`, a Class that descends from
  * `Enumeration` and lists its instances is a `valueList`, a Property is a
@@ -20,7 +24,10 @@ import {
     type ProvenanceUsage,
     type SchemaUsage,
     type SchemaTerm,
+    type UsageTerm,
 } from './wire.ts';
+import type { OriginSwitch } from './explore.ts';
+import { firstMatches, LIST_CEILING, type Matches } from './lists.ts';
 
 export type Kind = 'class' | 'valueList' | 'property' | 'value';
 
@@ -47,6 +54,34 @@ const DECLARER_WORDS: Readonly<Record<Declarer, string>> = {
 export const declarerWords = (declaredBy: string | null): string | null => {
     if (declaredBy === null) return null;
     return isDeclarer(declaredBy) ? DECLARER_WORDS[declaredBy] : 'another origin';
+};
+
+/**
+ * Where a term outside the model sits, as its label and search hit say it
+ * after its kind: "in base Data Commons", "in the UN System Data Commons",
+ * "in another origin", or "on the graph" when it names no origin.
+ */
+export const declarerPlace = (declaredBy: string | null): string => {
+    if (declaredBy === 'un_system') return 'in the UN System Data Commons';
+    const words = declarerWords(declaredBy);
+    return words === null ? 'on the graph' : `in ${words}`;
+};
+
+/**
+ * The words over a term's name: its kind's words, except for a value no
+ * value list holds, such as `country/USA`, which reads as its types' labels
+ * in order ("Country, Place"). A value typed by a value list, and a value
+ * with no types, read as "Value".
+ */
+export const kindWords = (
+    model: Pick<Model, 'hasValueList' | 'label'>,
+    kind: Kind | 'dataset',
+    types: readonly string[],
+): string => {
+    if (kind !== 'value' || types.length === 0 || types.some((type) => model.hasValueList(type))) {
+        return KIND_WORDS[kind];
+    }
+    return types.map((type) => model.label(type)).join(', ');
 };
 
 /** The kind of a term on the graph outside the model: a Class is a class, anything else a property. */
@@ -196,16 +231,25 @@ export type Model = {
     readonly generation: string | null;
     /** Every node, sorted by dcid. */
     readonly nodes: readonly SchemaNode[];
-    /** Every dataset, in document order. */
+    /** Every dataset, in the order of the usage documents and then of each document. */
     readonly datasets: readonly ProvenanceUsage[];
+    /** The usage documents the model was built from, in order. */
+    readonly usageDocuments: readonly SchemaUsage[];
     node(id: string): SchemaNode | undefined;
     dataset(id: string): ProvenanceUsage | undefined;
+    /**
+     * A node an outside usage document's patterns name, as that document
+     * names it. Such a term is not one of `nodes` unless the schema holds it.
+     */
+    term(id: string): UsageTerm | undefined;
     kind(id: string): Kind | undefined;
     /** True for a Class that lists its instances: a `valueList`, or a `class` that also offers one. */
     hasValueList(id: string): boolean;
-    /** The name, else a dataset's `datasetName`, else the dcid. */
+    /**
+     * The node's name, else a dataset's `datasetName`, else the name a usage
+     * document's `terms` gives, else the dcid.
+     */
     label(id: string): string;
-    isBase(id: string): boolean;
     /** `sub_class_of`, `sub_property_of` and `specialization_of`. */
     broader(id: string): readonly string[];
     /** Nodes whose broader terms include `id`, by label. */
@@ -235,6 +279,11 @@ export type Model = {
     usedWith(id: string): readonly ClassCount[];
     /** The population types the datasets' patterns name: most datasets first, then most StatVars. */
     populationTypes(): readonly PopulationTypeUse[];
+    /**
+     * True when some pattern names the node as its population type, whatever
+     * its kind. A UN series is a `value` that StatVars are about.
+     */
+    isPopulationType(id: string): boolean;
     propertiesOf(classId: string): ClassProperties;
     /** The ids, each once, most used first, then by label. */
     byUse(ids: Iterable<string>): readonly string[];
@@ -258,6 +307,37 @@ const NO_USAGE: Usage = Object.freeze({ byDataset: Object.freeze([]), total: 0 }
 /** True for a Class that lists its instances. */
 const listsInstances = (node: SchemaNode): boolean =>
     node.types.includes('Class') && node.instances !== null;
+
+/** A 32-bit FNV-1a hash of `text` from `seed`, as 8 hex digits. */
+const fnv1a = (text: string, seed: number): string => {
+    let hash = seed;
+    for (let at = 0; at < text.length; at += 1) {
+        hash = Math.imul(hash ^ text.charCodeAt(at), 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+/**
+ * A pattern's identity, as a React key: 16 hex digits hashed from the fields that
+ * define it (population type, measured property, stat type, qualifier,
+ * denominator and whether it is unresolved, and the constraint and observation
+ * properties as sets). The StatVar count and the examples change as usage
+ * grows and the API orders patterns by count, so neither the position nor
+ * those fields enter the id.
+ */
+export const patternId = (pattern: SchemaPattern): string => {
+    const defining = JSON.stringify([
+        pattern.population_type,
+        pattern.measured_property,
+        pattern.stat_type,
+        pattern.measurement_qualifier,
+        pattern.measurement_denominator,
+        pattern.measurement_denominator_unresolved ?? false,
+        [...pattern.constraint_properties].sort(),
+        [...pattern.observation_properties].sort(),
+    ]);
+    return fnv1a(defining, 0x811c9dc5) + fnv1a(defining, 0x9747b28c);
+};
 
 /** The node ids a pattern names, each once. */
 const patternIds = (pattern: SchemaPattern): Set<string> => {
@@ -334,18 +414,173 @@ const distinctLists = (node: SchemaNode): SchemaNode => ({
     },
 });
 
+/** A pattern with the dataset whose StatVars it forms. */
+type DatasetPattern = { readonly dataset: string; readonly pattern: SchemaPattern };
+
 /**
- * The index over a schema document and a usage document, each
- * listing a dcid once (the wire guards refuse a repeat). Every list on a
- * node holds an id once, so no list the model answers repeats an id.
+ * What the usage documents say, indexed once. No node changes it, so a
+ * model built for one centre shares its full model's index.
  */
-export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): Model {
+type UsageIndex = {
+    readonly documents: readonly SchemaUsage[];
+    readonly datasets: readonly ProvenanceUsage[];
+    readonly datasetById: ReadonlyMap<string, ProvenanceUsage>;
+    readonly termById: ReadonlyMap<string, UsageTerm>;
+    /** StatVars per node and dataset. */
+    readonly counts: ReadonlyMap<string, ReadonlyMap<string, number>>;
+    /** The roles a property has per dataset. */
+    readonly roleIndex: ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<Role>>>;
+    readonly patterns: readonly DatasetPattern[];
+    /** The values each dataset's StatVars give each property. */
+    readonly constraintValues: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+    /** StatVars per property and population type, over the patterns that give the property a role. */
+    readonly usedWithCounts: ReadonlyMap<string, ReadonlyMap<string, number>>;
+    /** The datasets whose patterns are about each population type. */
+    readonly populationDatasets: ReadonlyMap<string, ReadonlySet<string>>;
+    /** StatVars per population type. */
+    readonly populationStatVars: ReadonlyMap<string, number>;
+};
+
+/**
+ * The index over usage documents, each listing a dcid once (the wire guards
+ * refuse a repeat). A dataset or term two usage documents list counts once,
+ * as the first lists it.
+ */
+const indexUsage = (documents: readonly SchemaUsage[]): UsageIndex => {
+    const datasetById = new Map<string, ProvenanceUsage>();
+    const termById = new Map<string, UsageTerm>();
+    for (const document of documents) {
+        for (const dataset of document.provenances) {
+            if (!datasetById.has(dataset.ref)) datasetById.set(dataset.ref, dataset);
+        }
+        for (const term of document.terms ?? []) {
+            if (!termById.has(term.ref)) termById.set(term.ref, term);
+        }
+    }
+    const datasets = Object.freeze([...datasetById.values()]);
+
+    const counts = new Map<string, Map<string, number>>();
+    const roleIndex = new Map<string, Map<string, Set<Role>>>();
+    const patterns: DatasetPattern[] = [];
+    const constraintValues = new Map<string, Map<string, readonly string[]>>();
+
+    const add = (id: string, dataset: string, count: number, combine: 'sum' | 'max') => {
+        const perDataset = counts.get(id) ?? new Map<string, number>();
+        const held = perDataset.get(dataset) ?? 0;
+        perDataset.set(dataset, combine === 'sum' ? held + count : Math.max(held, count));
+        counts.set(id, perDataset);
+    };
+
+    for (const dataset of datasets) {
+        for (const pattern of dataset.patterns) {
+            patterns.push({ dataset: dataset.ref, pattern });
+            for (const id of patternIds(pattern)) {
+                add(id, dataset.ref, pattern.stat_var_count, 'sum');
+            }
+            for (const [id, role] of patternRoles(pattern)) {
+                const perDataset = roleIndex.get(id) ?? new Map<string, Set<Role>>();
+                perDataset.set(dataset.ref, (perDataset.get(dataset.ref) ?? new Set()).add(role));
+                roleIndex.set(id, perDataset);
+            }
+        }
+        const values = new Map<string, readonly string[]>();
+        for (const constraint of dataset.constraint_values) {
+            values.set(
+                constraint.property,
+                Object.freeze(constraint.values.map((value) => value.value)),
+            );
+            // A value can also sit in a pattern field. The larger count stands, so no StatVar
+            // counts twice.
+            for (const value of constraint.values) {
+                add(value.value, dataset.ref, value.stat_var_count, 'max');
+            }
+        }
+        constraintValues.set(dataset.ref, values);
+    }
+
+    const usedWithCounts = new Map<string, Map<string, number>>();
+    const populationDatasets = new Map<string, Set<string>>();
+    const populationStatVars = new Map<string, number>();
+    for (const { dataset, pattern } of patterns) {
+        const classId = pattern.population_type;
+        if (classId === null) continue;
+        for (const property of new Set(patternRoles(pattern).map(([id]) => id))) {
+            const totals = usedWithCounts.get(property) ?? new Map<string, number>();
+            totals.set(classId, (totals.get(classId) ?? 0) + pattern.stat_var_count);
+            usedWithCounts.set(property, totals);
+        }
+        populationDatasets.set(
+            classId,
+            (populationDatasets.get(classId) ?? new Set()).add(dataset),
+        );
+        populationStatVars.set(
+            classId,
+            (populationStatVars.get(classId) ?? 0) + pattern.stat_var_count,
+        );
+    }
+
+    return {
+        documents: Object.freeze([...documents]),
+        datasets,
+        datasetById,
+        termById,
+        counts,
+        roleIndex,
+        patterns: Object.freeze(patterns),
+        constraintValues,
+        usedWithCounts,
+        populationDatasets,
+        populationStatVars,
+    };
+};
+
+/** Each model's usage index, for withNodes to share. */
+const usageIndexes = new WeakMap<Model, UsageIndex>();
+
+/**
+ * The index over a schema document and the usage documents, each listing a
+ * dcid once (the wire guards refuse a repeat). A dataset or term two usage
+ * documents list counts once, as the first lists it. Every list on a node
+ * holds an id once, so no list the model answers repeats an id.
+ */
+export function buildModel(schema: SchemaDocument, ...usageDocuments: SchemaUsage[]): Model {
+    return modelOver(schema, indexUsage(usageDocuments));
+}
+
+/**
+ * The model over `schema`'s nodes and the usage documents `model` was built
+ * from. It shares `model`'s usage index, so its cost follows the nodes and
+ * not the usage.
+ */
+export function withNodes(model: Model, schema: SchemaDocument): Model {
+    return modelOver(schema, usageIndexes.get(model) ?? indexUsage(model.usageDocuments));
+}
+
+/** Nodes distinctLists made, which a model built from another model's nodes keeps as they are. */
+const distinctNodes = new WeakSet<SchemaNode>();
+
+const distinctNode = (node: SchemaNode): SchemaNode => {
+    if (distinctNodes.has(node)) return node;
+    const made = distinctLists(node);
+    distinctNodes.add(made);
+    return made;
+};
+
+function modelOver(schema: SchemaDocument, index: UsageIndex): Model {
     const nodes = Object.freeze(
-        schema.nodes.map(distinctLists).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
+        schema.nodes.map(distinctNode).sort((a, b) => (a.ref < b.ref ? -1 : 1)),
     );
-    const datasets = Object.freeze([...usageDocument.provenances]);
     const byId = new Map(nodes.map((node) => [node.ref, node]));
-    const datasetById = new Map(datasets.map((dataset) => [dataset.ref, dataset]));
+    const {
+        datasets,
+        datasetById,
+        termById,
+        counts,
+        roleIndex,
+        patterns,
+        constraintValues,
+        usedWithCounts,
+    } = index;
     const isEnumeration = (node: SchemaNode): boolean => {
         const seen = new Set<string>();
         const queue = [...node.sub_class_of];
@@ -371,7 +606,8 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         const name = byId.get(id)?.label;
         if (name) return name;
         const dataset = datasetById.get(id);
-        return dataset ? datasetName(dataset) : id;
+        if (dataset) return datasetName(dataset);
+        return termById.get(id)?.label ?? id;
     };
     const byLabel = (a: string, b: string): number =>
         label(a).localeCompare(label(b), 'en') || (a < b ? -1 : a > b ? 1 : 0);
@@ -514,46 +750,6 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         return Object.freeze(roots.map(build));
     };
 
-    // Usage: StatVar counts per node and dataset.
-    const counts = new Map<string, Map<string, number>>();
-    const roleIndex = new Map<string, Map<string, Set<Role>>>();
-    const patterns: { dataset: string; pattern: SchemaPattern }[] = [];
-    const constraintValues = new Map<string, Map<string, readonly string[]>>();
-
-    const add = (id: string, dataset: string, count: number, combine: 'sum' | 'max') => {
-        const perDataset = counts.get(id) ?? new Map<string, number>();
-        const held = perDataset.get(dataset) ?? 0;
-        perDataset.set(dataset, combine === 'sum' ? held + count : Math.max(held, count));
-        counts.set(id, perDataset);
-    };
-
-    for (const dataset of datasets) {
-        for (const pattern of dataset.patterns) {
-            patterns.push({ dataset: dataset.ref, pattern });
-            for (const id of patternIds(pattern)) {
-                add(id, dataset.ref, pattern.stat_var_count, 'sum');
-            }
-            for (const [id, role] of patternRoles(pattern)) {
-                const perDataset = roleIndex.get(id) ?? new Map<string, Set<Role>>();
-                perDataset.set(dataset.ref, (perDataset.get(dataset.ref) ?? new Set()).add(role));
-                roleIndex.set(id, perDataset);
-            }
-        }
-        const values = new Map<string, readonly string[]>();
-        for (const constraint of dataset.constraint_values) {
-            values.set(
-                constraint.property,
-                Object.freeze(constraint.values.map((value) => value.value)),
-            );
-            // A value can also sit in a pattern field. The larger count stands, so no StatVar
-            // counts twice.
-            for (const value of constraint.values) {
-                add(value.value, dataset.ref, value.stat_var_count, 'max');
-            }
-        }
-        constraintValues.set(dataset.ref, values);
-    }
-
     const usageCache = new Map<string, Usage>();
     const usage = (id: string): Usage => {
         const cached = usageCache.get(id);
@@ -579,17 +775,6 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         return orderRoles([...perDataset.values()].flatMap((held) => [...held]));
     };
 
-    // StatVars per property and population type, over the patterns that give the property a role.
-    const usedWithCounts = new Map<string, Map<string, number>>();
-    for (const { pattern } of patterns) {
-        const classId = pattern.population_type;
-        if (classId === null) continue;
-        for (const property of new Set(patternRoles(pattern).map(([id]) => id))) {
-            const totals = usedWithCounts.get(property) ?? new Map<string, number>();
-            totals.set(classId, (totals.get(classId) ?? 0) + pattern.stat_var_count);
-            usedWithCounts.set(property, totals);
-        }
-    }
     const usedWithCache = new Map<string, readonly ClassCount[]>();
     const usedWith = (id: string): readonly ClassCount[] => {
         const cached = usedWithCache.get(id);
@@ -603,22 +788,15 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         return result;
     };
 
-    const populationTypes: readonly PopulationTypeUse[] = (() => {
-        const datasetsOf = new Map<string, Set<string>>();
-        const statVars = new Map<string, number>();
-        for (const { dataset, pattern } of patterns) {
-            const id = pattern.population_type;
-            if (id === null) continue;
-            datasetsOf.set(id, (datasetsOf.get(id) ?? new Set()).add(dataset));
-            statVars.set(id, (statVars.get(id) ?? 0) + pattern.stat_var_count);
-        }
-        return Object.freeze(
-            [...datasetsOf]
+    let populationTypeList: readonly PopulationTypeUse[] | undefined;
+    const populationTypes = (): readonly PopulationTypeUse[] =>
+        (populationTypeList ??= Object.freeze(
+            [...index.populationDatasets]
                 .map(([classId, using]) =>
                     Object.freeze({
                         classId,
                         datasets: using.size,
-                        statVars: statVars.get(classId) ?? 0,
+                        statVars: index.populationStatVars.get(classId) ?? 0,
                     }),
                 )
                 .sort(
@@ -627,8 +805,7 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
                         b.statVars - a.statVars ||
                         byLabel(a.classId, b.classId),
                 ),
-        );
-    })();
+        ));
 
     const moreUsed = (a: string, b: string): number =>
         usage(b).total - usage(a).total || byLabel(a, b);
@@ -803,16 +980,17 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
             }),
         );
 
-    return Object.freeze({
+    const model: Model = Object.freeze({
         generation: schema.generation,
         nodes,
         datasets,
+        usageDocuments: index.documents,
         node: (id: string) => byId.get(id),
         dataset: (id: string) => datasetById.get(id),
+        term: (id: string) => termById.get(id),
         kind: (id: string) => kinds.get(id),
         hasValueList: (id: string) => lists.has(id),
         label,
-        isBase: (id: string) => byId.get(id)?.declared_by === 'base',
         broader: (id: string) => broaderOf.get(id) ?? EMPTY,
         narrower: (id: string) => narrowerIndex.get(id) ?? EMPTY,
         ancestors,
@@ -827,7 +1005,8 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         usageIn,
         roles,
         usedWith,
-        populationTypes: () => populationTypes,
+        populationTypes,
+        isPopulationType: (id: string) => index.populationDatasets.has(id),
         propertiesOf,
         byUse,
         dfoProperties,
@@ -836,6 +1015,93 @@ export function buildModel(schema: SchemaDocument, usageDocument: SchemaUsage): 
         scopedList,
         lens,
         memberUse,
+    });
+    usageIndexes.set(model, index);
+    return model;
+}
+
+/** The usage documents an Explore visit loads: the DFO document, and each outside one once it lands. */
+export type UsageDocuments = {
+    readonly dfo: SchemaUsage;
+    readonly base?: SchemaUsage;
+    readonly un?: SchemaUsage;
+};
+
+/** The two models an Explore visit reads, built from the same documents. */
+export type ExploreModels = {
+    /**
+     * DFO usage and the outside usage whose origin switch is on. The start
+     * screen, the DFO property list, the Show pills, search and the seed
+     * picker read it.
+     */
+    readonly scoped: Model;
+    /**
+     * Every usage document loaded, whatever the switches say. A centred term
+     * or dataset, the dataset filter, a dataset a link names to Seed a
+     * dataset and the check's reading of seed headers read it, so a term's
+     * view shows every model's use of it.
+     */
+    readonly full: Model;
+};
+
+/** Stands for an outside usage document not loaded, as a WeakMap key. */
+const NOT_LOADED = Object.freeze({});
+
+/** The model by schema, DFO, base and UN usage document, in that order of keys. */
+const models = new WeakMap<
+    SchemaDocument,
+    WeakMap<SchemaUsage, WeakMap<object, WeakMap<object, Model>>>
+>();
+
+/** A WeakMap's entry for `key`, set to `create()` when it has none. */
+const entryOf = <TKey extends object, TValue>(
+    map: WeakMap<TKey, TValue>,
+    key: TKey,
+    create: () => TValue,
+): TValue => {
+    const held = map.get(key);
+    if (held !== undefined) return held;
+    const value = create();
+    map.set(key, value);
+    return value;
+};
+
+/**
+ * The model over the schema and the usage documents given, built once per
+ * set of documents, so a switch toggle or the arrival of a document a model
+ * leaves out keeps that model and what is cached on it.
+ */
+const modelOf = (schema: SchemaDocument, usage: UsageDocuments): Model => {
+    const byDfo = entryOf(models, schema, () => new WeakMap());
+    const byBase = entryOf(byDfo, usage.dfo, () => new WeakMap());
+    const byUn = entryOf(byBase, usage.base ?? NOT_LOADED, () => new WeakMap());
+    return entryOf(byUn, usage.un ?? NOT_LOADED, () =>
+        buildModel(
+            schema,
+            usage.dfo,
+            ...[usage.base, usage.un].filter((document) => document !== undefined),
+        ),
+    );
+};
+
+/**
+ * The scoped and full models over one schema document. Each is one object
+ * per set of documents it reads, so the scoped model keeps its identity
+ * while a document whose switch is off arrives. When every outside document
+ * loaded has its switch on, the scoped model is the full model.
+ */
+export function buildModels(
+    schema: SchemaDocument,
+    usage: UsageDocuments,
+    switches: Readonly<Record<OriginSwitch, boolean>>,
+): ExploreModels {
+    return Object.freeze({
+        scoped: modelOf(schema, {
+            dfo: usage.dfo,
+            base: switches.base ? usage.base : undefined,
+            un: switches.un ? usage.un : undefined,
+        }),
+        full: modelOf(schema, usage),
     });
 }
 
@@ -908,9 +1174,8 @@ export type OpenColumns = {
 };
 
 /**
- * The open property columns of `members`. The tree, the value-list CSV and
- * the Google Sheet's value-list tab all read their cells from it, so the
- * three name a reference the same way.
+ * The open property columns of `members`. The tree and the value-list CSV
+ * both read their cells from it, so the two name a reference the same way.
  */
 export function openColumns(model: Model, members: readonly string[]): OpenColumns {
     const fields = memberFields(model, members);
@@ -965,35 +1230,36 @@ export function cellWidth(cells: readonly string[], head: string): number {
     );
 }
 
-/** The most matches a value-list member search returns. */
-export const MEMBER_HIT_LIMIT = 60;
-
 /**
  * The members of a value list whose label, dcid, classification code, other
  * name, open property literal or label of a held node it refers to holds
  * `text`, ignoring case and surrounding space, in list order. Returns the
- * first `limit` and how many match in all. Empty for blank text.
+ * first `limit` (firstMatches) and how many match in all. Empty for blank
+ * text.
  */
 export function searchMembers(
     model: Model,
     listId: string,
     text: string,
-    limit = MEMBER_HIT_LIMIT,
-): { readonly hits: readonly string[]; readonly total: number } {
+    limit = LIST_CEILING,
+): Matches<string> {
     const needle = text.trim().toLowerCase();
     if (needle === '') return { hits: [], total: 0 };
-    const matched = model.members(listId).filter((id) => {
-        const node = model.node(id);
-        return [
-            model.label(id),
-            id,
-            ...(node?.classification_code ?? []),
-            ...(node?.alternate_name ?? []),
-            ...openLiterals(node),
-            ...heldReferenceLabels(model, node),
-        ].some((name) => name.toLowerCase().includes(needle));
-    });
-    return { hits: matched.slice(0, limit), total: matched.length };
+    return firstMatches(
+        model.members(listId),
+        (id) => {
+            const node = model.node(id);
+            return [
+                model.label(id),
+                id,
+                ...(node?.classification_code ?? []),
+                ...(node?.alternate_name ?? []),
+                ...openLiterals(node),
+                ...heldReferenceLabels(model, node),
+            ].some((name) => name.toLowerCase().includes(needle));
+        },
+        limit,
+    );
 }
 
 /**
