@@ -50,15 +50,12 @@ export const getShare = cache(async (id: string): Promise<ShareRecord | null> =>
     readShare(sharesBackendFor(await headers()), id),
 );
 
-/** Whether `userId` made the share, for the `owner` prop of its view events. */
+/** Whether `userId` made the share, for the `viewer` prop of its view
+ *  events. A failed read rejects, so shareViewEvent records `unknown`. */
 export const viewerOwnsShare = (
     shareId: string,
     userId: string | null | undefined,
-): Promise<boolean> =>
-    ownsShare(db, { shareId, userId }).catch((error) => {
-        console.warn('share owner lookup failed', shareId, error);
-        return false;
-    });
+): Promise<boolean> => ownsShare(db, { shareId, userId });
 
 /** Make a share for `userId` (null for a guest), keeping a signed-in
  *  maker's write token. */

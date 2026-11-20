@@ -30,49 +30,60 @@ test('boundedLookup answers the fallback for a lookup that never settles, throws
 
 const SESSION = { user: { id: 'u1', email: 'Ana@Example.org', emailVerified: true } };
 
-// The two never-settling share-view reads each wait LOOKUP_TIMEOUT_MS (500 ms).
-test('a share view records a signed-out view when the session read never settles', async (t) => {
+test('a share view records who viewed it, and only a confirmed non-owner view keeps the share id', async (t) => {
     t.mock.method(console, 'warn', () => {});
 
-    const event = await shareViewEvent({
-        shareId: 's1',
-        props: { kind: 'card' },
-        label: 'share.open',
-        readSession: never,
-        ownsShare: () => Promise.resolve(true),
-    });
+    const owns = (shareId: string, userId: string) =>
+        Promise.resolve(shareId === 's1' && userId === 'u1');
+    const cases = [
+        ['signed out', () => Promise.resolve(null), owns, { shareId: 's1', viewer: 'signed_out' }],
+        ['the owner', () => Promise.resolve(SESSION), owns, { viewer: 'owner' }],
+        [
+            'another signed-in user',
+            () => Promise.resolve({ user: { ...SESSION.user, id: 'u2' } }),
+            owns,
+            { shareId: 's1', viewer: 'other' },
+        ],
+        [
+            'a session read that rejects',
+            () => Promise.reject(new Error('db')),
+            owns,
+            { viewer: 'unknown' },
+        ],
+        [
+            'an owner read that rejects',
+            () => Promise.resolve(SESSION),
+            () => Promise.reject(new Error('db')),
+            { viewer: 'unknown' },
+        ],
+    ] as const;
 
-    assert.deepEqual(event.props, { kind: 'card', shareId: 's1', owner: false });
-    assert.equal(event.who.userId, null);
-    assert.equal(event.who.email, null);
+    for (const [label, readSession, ownsShare, expected] of cases) {
+        await t.test(label, async () => {
+            const event = await shareViewEvent({
+                shareId: 's1',
+                props: { kind: 'card' },
+                label: 'share.open',
+                readSession,
+                ownsShare,
+            });
+
+            assert.deepEqual(event.props, { kind: 'card', ...expected });
+            assert.equal(event.who.userId, null);
+        });
+    }
 });
 
-test('a share view counts the viewer as a non-owner when the owner read never settles', async (t) => {
-    t.mock.method(console, 'warn', () => {});
-
+test("a share view's who keeps the session email's domain alone", async () => {
     const event = await shareViewEvent({
         shareId: 's1',
         props: { kind: 'card' },
         label: 'embed.view',
         readSession: () => Promise.resolve(SESSION),
-        ownsShare: never,
+        ownsShare: () => Promise.resolve(true),
     });
 
-    assert.deepEqual(event.props, { kind: 'card', shareId: 's1', owner: false });
-});
-
-test("an owner's own view keeps owner and drops the share id; no view carries the user id", async () => {
-    const owned = await shareViewEvent({
-        shareId: 's1',
-        props: { kind: 'card' },
-        label: 'share.open',
-        readSession: () => Promise.resolve(SESSION),
-        ownsShare: (shareId, userId) => Promise.resolve(shareId === 's1' && userId === 'u1'),
-    });
-
-    assert.deepEqual(owned.props, { kind: 'card', owner: true });
-    assert.equal(owned.who.userId, null);
-    assert.equal(owned.who.email, '@example.org');
+    assert.equal(event.who.email, '@example.org');
 });
 
 test('ttlMemo loads a key once within the TTL, again after it, and forgets a rejected load', async () => {

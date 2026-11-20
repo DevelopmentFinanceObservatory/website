@@ -256,7 +256,7 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
     sourceEvent({
         id: 6,
         name: 'embed.view',
-        props: { shareId: 'aB3dE5fG7h', kind: 'card', owner: true, internal_eng: false },
+        props: { shareId: 'aB3dE5fG7h', kind: 'card', viewer: 'other', internal_eng: false },
     }),
     sourceEvent({
         id: 7,
@@ -284,7 +284,7 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
             shareId: 'aB3dE5fG7h',
             surface: 'page',
             host: 'blog.example',
-            listed: false,
+            originAllowed: false,
             caller: 'ip:0123456789abcdef0123456789abcdef',
             internal_eng: false,
         },
@@ -298,7 +298,7 @@ const GOLDEN_SAMPLE: SourceEvent[] = [
             contentVersions: ['cv_9f2e'],
             via: 'embedded',
             surface: 'page',
-            listed: 'yes',
+            originAllowed: 'yes',
             caller: 'ip:ABC',
             internal_eng: true,
         },
@@ -396,7 +396,7 @@ const GOLDEN_ROWS: Record<number, ExportRow[]> = {
             props: {
                 shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
                 kind: 'card',
-                owner: true,
+                viewer: 'other',
                 internal_eng: false,
             },
             export_rules: 'r',
@@ -451,7 +451,7 @@ const GOLDEN_ROWS: Record<number, ExportRow[]> = {
                 shareId: '7e8148cb3a5192589abc81da275c6e151ebb4c2d702234f8a68e870138326bc4',
                 surface: 'page',
                 host: 'blog.example',
-                listed: false,
+                originAllowed: false,
                 caller: 'ip:0123456789abcdef0123456789abcdef',
                 internal_eng: false,
             },
@@ -465,7 +465,7 @@ const GOLDEN_ROWS: Record<number, ExportRow[]> = {
             signed_in: true,
             visitor_hash: null,
             user_hash: 'e0e98314ed3ee6ea685abd3f0862870e2a07b68d95d053c7f483cda192ae40c4',
-            // A `via` the site never sends, a string `listed` and a malformed `caller` are dropped.
+            // A `via` the site never sends, a string `originAllowed` and a malformed `caller` are dropped.
             props: {
                 specIds: ['spec_a1'],
                 contentVersions: ['cv_9f2e'],

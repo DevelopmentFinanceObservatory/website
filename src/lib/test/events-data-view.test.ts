@@ -27,17 +27,23 @@ const parse = (body: unknown, request = NO_ORIGIN) => parseDataView(JSON.stringi
 test('a valid body gives the props, with surface set and shareId only on a share', () => {
     assert.deepEqual(parse({ ...VALID, page: '/report' }), {
         ok: true,
-        props: { ...VALID, surface: 'page', listed: false },
+        props: { ...VALID, surface: 'page', originAllowed: false },
         page: '/report',
     });
     assert.deepEqual(parse({ ...VALID, via: 'share', shareId: 'aB3dE5fG7h', page: null }), {
         ok: true,
-        props: { ...VALID, via: 'share', shareId: 'aB3dE5fG7h', surface: 'page', listed: false },
+        props: {
+            ...VALID,
+            via: 'share',
+            shareId: 'aB3dE5fG7h',
+            surface: 'page',
+            originAllowed: false,
+        },
         page: null,
     });
 });
 
-test('host is the Origin hostname, else the page URL host, and listed follows the allow-list', async (t) => {
+test('host is the Origin hostname, else the page URL host, and originAllowed follows the allow-list', async (t) => {
     const allowed = ['https://partner.example'];
     const cases: [string, string | null, string | undefined, string | undefined, boolean][] = [
         ['a listed origin', 'https://partner.example', '/a', 'partner.example', true],
@@ -53,13 +59,13 @@ test('host is the Origin hostname, else the page URL host, and listed follows th
         ['no origin and no page', null, undefined, undefined, false],
     ];
 
-    for (const [label, origin, page, host, listed] of cases) {
+    for (const [label, origin, page, host, originAllowed] of cases) {
         await t.test(label, () => {
             const parsed = parse({ ...VALID, page }, { origin, allowed });
 
             assert.ok(parsed.ok);
             assert.equal(parsed.props.host, host);
-            assert.equal(parsed.props.listed, listed);
+            assert.equal(parsed.props.originAllowed, originAllowed);
         });
     }
 });

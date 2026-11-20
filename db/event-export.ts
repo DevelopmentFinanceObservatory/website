@@ -10,6 +10,7 @@ import type { ShareMode } from '../src/lib/chat/shareMode.ts';
 import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
 import type { DataViewVia } from '../src/lib/events/dataView.ts';
+import type { ShareViewer } from '../src/lib/events/shareView.ts';
 import type { EventName } from '../src/lib/events/track.ts';
 import { exportDigest } from '../src/lib/proxy/account.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
@@ -133,6 +134,7 @@ const CARD_KINDS = every<Widget['kind']>()(['key_number', 'chart', 'table', 'tex
 const GALLERY_KINDS = every<GalleryKind>()(['conversation', 'canvas', 'card', 'dataset']);
 const DATASET_FORMATS = every<DatasetFormat>()(['csv', 'xlsx', 'parquet']);
 const DATA_VIEW_VIA = every<DataViewVia>()(['pinned_ref', 'saved_file', 'share', 'baked']);
+const SHARE_VIEWERS = every<ShareViewer>()(['owner', 'other', 'signed_out', 'unknown']);
 
 // The fields every search post's events carry (searchPostTracker in
 // src/lib/search/searchEvents.ts).
@@ -240,7 +242,7 @@ export const PROP_RULES = {
         shareId: 'digest',
         kind: SHARE_KINDS,
         host: 'token',
-        owner: 'boolean',
+        viewer: SHARE_VIEWERS,
     },
     'share.create': { ...EVERY_EVENT, shareId: 'digest', kind: SHARE_KINDS, mode: SHARE_MODES },
     'share.open': {
@@ -249,7 +251,7 @@ export const PROP_RULES = {
         kind: SHARE_KINDS,
         mode: SHARE_MODES,
         host: 'token',
-        owner: 'boolean',
+        viewer: SHARE_VIEWERS,
     },
     'gallery.open': { ...EVERY_EVENT, slug: 'token', kind: GALLERY_KINDS },
     // POST /api/events/data-view (src/lib/events/dataView.ts).
@@ -261,7 +263,7 @@ export const PROP_RULES = {
         shareId: 'digest',
         surface: ['page'],
         host: 'token',
-        listed: 'boolean',
+        originAllowed: 'boolean',
         caller: 'caller',
     },
 } satisfies Record<EventName, Record<string, PropRule>>;

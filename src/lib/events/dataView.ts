@@ -69,8 +69,11 @@ export type DataViewProps = {
     surface: 'page';
     // The hostname of the page that sent the event, absent when unknown.
     host?: string;
-    // Whether the sending origin is on DFO_CORS_ORIGINS.
-    listed: boolean;
+    // Whether the request's Origin header is on DFO_CORS_ORIGINS, the list of
+    // sites whose pages may read the route's answers. It says which site the
+    // browser named, and is no evidence of a render: any non-browser client
+    // can send any Origin.
+    originAllowed: boolean;
     // The reader's `ip:<32 hex>` digest, as the proxy names the caller to
     // dfo-apis (requestCaller). Set by the server, never read from the body.
     // Null when no client address resolves.
@@ -125,8 +128,8 @@ const readIds = (value: unknown, key: string): string[] | Refusal => {
  * absent). A key outside those is refused. The refusal names the failing
  * field as a JSON pointer, or the whole body (an empty pointer) for a key
  * it does not take. `origin` is the request's Origin header. Its hostname,
- * else the page URL's, becomes `host`, and `listed` says whether it is on
- * `allowed`.
+ * else the page URL's, becomes `host`, and `originAllowed` says whether it is
+ * on `allowed`.
  */
 export const parseDataView = (
     text: string,
@@ -207,7 +210,7 @@ export const parseDataView = (
             ...share,
             surface: 'page',
             ...(host !== null && { host }),
-            listed: origin !== null && allowed.includes(origin),
+            originAllowed: origin !== null && allowed.includes(origin),
         },
         page: pagePath(page),
     };

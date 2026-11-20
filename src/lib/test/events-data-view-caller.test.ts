@@ -13,7 +13,7 @@ const PROPS = {
     contentVersions: ['cv_1'],
     via: 'pinned_ref' as const,
     surface: 'page' as const,
-    listed: false,
+    originAllowed: false,
 };
 
 const digest = (address: string) =>
