@@ -33,5 +33,5 @@ export const MEASURE_PATTERN = /^[A-Za-z0-9][\w.:/|-]{0,127}$/;
  *  UUIDs (/studio/<id>) and share ids (/s/<id>, /embed/<id>), all within
  *  that set. Spaces, `@`, `,` and `%` escapes are refused, so text a visitor
  *  typed does not pass. The export keeps a page only when it matches
- *  (db/event-export.ts), and POST /api/events/data-view stores one only then. */
+ *  (db/event-export.ts). */
 export const PAGE_PATH = /^\/[\w.:/-]{0,299}$/;

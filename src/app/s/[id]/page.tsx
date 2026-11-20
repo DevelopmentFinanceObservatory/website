@@ -39,8 +39,8 @@ const SharePage = async ({ params }: SharePageProps) => {
     }
 
     // Counted here, server-side, with no identifier and nothing stored on the
-    // device, so it needs no consent. The event holds whether the viewer owns
-    // the share and `internal_eng`, read from the domain of the session's
+    // device, so it needs no consent. The event holds who viewed the share
+    // (`viewer`: owner, other, signed_out or unknown) and `internal_eng`, read from the domain of the session's
     // verified email, and leaves off the user id (src/lib/events/shareView).
     // Headers are read during render: inside after() they throw. Scheduled before the redirect below, which throws.
     const incoming = await headers();
