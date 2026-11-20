@@ -67,6 +67,17 @@
     cursor: pointer;
 }
 
+.group {
+    @include font-size(11px, 1.2);
+
+    padding: rem(10) rem(10) rem(4);
+    font-family: var(--font-dm-mono);
+    color: var(--color-stone);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-top: 1px solid var(--color-net-light);
+}
+
 .optionActive {
     background-color: var(--color-net-light);
     outline: 1px solid var(--color-charcoal);

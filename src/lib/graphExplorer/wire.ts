@@ -109,6 +109,32 @@ export type SchemaTerms = {
     terms: SchemaTerm[];
 };
 
+/** How the graph search found a hit: the dcid as typed, a name, or a StatVar's description. */
+export type GraphSearchVia = 'dcid' | 'name' | 'indicator';
+
+/** A part of the graph search that can fail on its own. `labels` is the read of the hits' names and types. */
+export type GraphSearchSource = 'dcid' | 'names' | 'dfo' | 'base' | 'un_system' | 'labels';
+
+/** One node the graph search found. */
+export type GraphSearchHit = {
+    ref: string;
+    label: string | null;
+    types: string[];
+    declared_by: string | null;
+    via: GraphSearchVia;
+};
+
+/**
+ * GET /api/graph/schema/search: the nodes the graph finds for a query, the
+ * exact dcid first, then names, then StatVars by description, and the parts
+ * that did not answer.
+ */
+export type GraphSearch = {
+    query: string;
+    hits: GraphSearchHit[];
+    unavailable: GraphSearchSource[];
+};
+
 /** The terms lists searched beside the model, each present once loaded. */
 export type OutsideTerms = {
     /** The base terms list. */
@@ -559,6 +585,20 @@ const onePerRef = (entries: readonly { readonly ref: string }[], path: string): 
     }
 };
 
+const graphSearch = obj({
+    query: str,
+    hits: list(
+        obj({
+            ref: str,
+            label: nullable(str),
+            types: strList,
+            declared_by: nullable(str),
+            via: oneOf(['dcid', 'name', 'indicator']),
+        }),
+    ),
+    unavailable: list(oneOf(['dcid', 'names', 'dfo', 'base', 'un_system', 'labels'])),
+});
+
 // Each guard runs its checks, then narrows. The checks make the cast true.
 
 /**
@@ -605,6 +645,12 @@ export const readUsage = (body: unknown): SchemaUsage => {
     onePerRef(document.provenances, 'usage.provenances');
     if (document.terms) onePerRef(document.terms, 'usage.terms');
     return document;
+};
+
+/** A graph search answer, or a WireShapeError naming the first member out of shape. */
+export const readGraphSearch = (body: unknown): GraphSearch => {
+    graphSearch(body, 'search');
+    return body as GraphSearch;
 };
 
 /**
