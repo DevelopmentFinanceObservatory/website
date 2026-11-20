@@ -16,7 +16,7 @@
     "motion-kit": "node motion-kit/cli.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p motion-kit",
     "check:client-provenance": "node scripts/check-client-provenance.mjs",
-    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/auth/test/*.test.ts src/lib/mail/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/graphExplorer/test/*.test.ts src/lib/test/*.test.ts src/lib/docs/test/*.test.ts motion-kit/test/*.test.ts",
+    "test": "node --test db/test/*.test.ts src/lib/search/test/*.test.ts src/lib/studio/test/*.test.ts src/lib/chat/test/*.test.ts src/lib/proxy/test/*.test.ts src/lib/auth/test/*.test.ts src/lib/apiKeys/test/*.test.ts src/lib/mail/test/*.test.ts src/lib/sources/test/*.test.ts src/lib/graphExplorer/test/*.test.ts src/lib/test/*.test.ts src/lib/docs/test/*.test.ts motion-kit/test/*.test.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,scss}\"",
     "optimize:svg": "svgo -f src/assets -r",
     "db:generate": "drizzle-kit generate",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@aws-sdk/client-sesv2": "3.1150.0",
     "@aws-sdk/credential-providers": "3.1150.0",
+    "@better-auth/api-key": "1.7.7",
     "@developmentfinance/client": "file:vendor/developmentfinance-client-0.1.0.tgz",
     "@fontsource/dm-mono": "^5.3.0",
     "@fontsource/outfit": "^5.3.0",

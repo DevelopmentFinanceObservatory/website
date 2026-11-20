@@ -98,6 +98,7 @@ test('problem: titles the statuses the site refuses with and spreads the extra m
 
 test('problem: type links the registry codes and is about:blank for any other code', async () => {
     for (const [code, type] of [
+        ['invalid_api_key', '/codes/invalid_api_key'],
         ['request_invalid', '/codes/request_invalid'],
         ['not_found', '/codes/not_found'],
         ['rate_limited', '/codes/rate_limited'],

@@ -3,22 +3,22 @@ import 'server-only';
 import { counterDb } from '@/lib/db';
 
 import { limiterBucket } from './caller';
-import { countHit, pruneCounters } from './limitCounter';
+import { countHit, DAY_S, dailyCounterKey, pruneCounters, type CounterDb } from './limitCounter';
+import { createFallbackCounter, type FallbackCounter } from './limitFallback';
 import type { RateVerdict } from './rateHeaders';
 
 /**
- * Per-IP rate limit for the platform proxy's /api/*, /openapi.json, /codes
- * and /mcp calls (src/lib/proxy/forward): a fixed window counted in Postgres
- * (./limitCounter), shared by every instance. An IPv6 client is counted by
- * its /64 (see limiterBucket). A count runs on its own small pool
- * (src/lib/db's counterDb), which gives up after 400 ms in Postgres, 500 ms
- * in the client, or 2 s waiting for a connection. A database error or a
- * timed-out count fails open: the
- * platform's own doors are the backstop, and the limit is a courtesy.
- *
- * A fail-open call gets a verdict with `counted: false`, and the response
- * carries no X-RateLimit-* headers (see rateHeaders), so the proxy advertises
- * a limit only while one is counted.
+ * Rate limit for the platform proxy's /api/*, /openapi.json, /codes and /mcp
+ * calls (src/lib/proxy/forward): a fixed window counted in Postgres
+ * (./limitCounter), shared by every instance. A caller is an address or an
+ * account (a key's owner). An IPv6 address is counted by its /64 (see
+ * limiterBucket). A count runs on its own small pool (src/lib/db's
+ * counterDb), which gives up after 400 ms in Postgres, 500 ms in the client,
+ * or 2 s waiting for a connection. A database error or a timed-out count does
+ * not let the call through uncounted: this instance counts it in memory
+ * instead (./limitFallback), going on from the last shared count it saw for
+ * that caller, so a burst is held near its limit on each instance while the
+ * database is slow, and the proxy stays available.
  *
  * The window and the allowance per surface are env-tunable:
  *   RATE_LIMIT_WINDOW_S   (default 60)
@@ -27,8 +27,16 @@ import type { RateVerdict } from './rateHeaders';
  *   RATE_LIMIT_PIN        calls per window per IP on /api/download-pin
  *                         (default 10)
  *   RATE_LIMIT_MCP        requests per window per IP on /mcp (default 300)
+ *   RATE_LIMIT_KEYED      calls per window per account on the 'api' surface,
+ *                         for an account with no limit of its own (default
+ *                         600)
+ *   API_KEY_DAILY_LIMIT   API calls per UTC day per API key, for a key with
+ *                         no limit of its own (`apikey.daily_limit`; default
+ *                         1000). Counted apart from the window above, in a
+ *                         one-day window (hitDaily).
  */
-const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
+/** The rate-limit window in seconds, which the key pages show too. */
+export const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S) || 60;
 
 // How often each instance deletes dead counters.
 const PRUNE_EVERY_MS = 60 * 60 * 1000;
@@ -44,37 +52,99 @@ export const LIMITS = {
     mcp: Number(process.env.RATE_LIMIT_MCP) || 300,
 } as const;
 
+/**
+ * An account's calls per window when it sets none of its own
+ * (`user.api_rate_limit`). An account is one caller, not a vendor's address
+ * with many users behind it.
+ */
+export const KEYED_LIMIT = Number(process.env.RATE_LIMIT_KEYED) || 600;
+
+/** A key's API calls per UTC day when it sets none of its own (`apikey.daily_limit`). */
+export const KEY_DAILY_LIMIT = Number(process.env.API_KEY_DAILY_LIMIT) || 1000;
+
 export type Surface = keyof typeof LIMITS;
 
-let lastPrune = 0;
-
-/**
- * Count one call for `ip` on `surface` and say whether it is within the
- * allowance. A database that fails or is slow lets the call through, uncounted. Each
- * instance also deletes dead counters, at most once an hour, the Studio's
- * included (every Studio call passes here too). The delete uses the same
- * bounded counter pool as the counts.
- */
-export const hit = async (surface: Surface, ip: string): Promise<RateVerdict> => {
-    const limit = LIMITS[surface];
-
-    if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
-        lastPrune = Date.now();
-        pruneCounters(counterDb).catch((error) => console.warn('limit counters not pruned', error));
-    }
-
-    try {
-        const verdict = await countHit(
-            counterDb,
-            `${surface}:${limiterBucket(ip)}`,
-            limit,
-            WINDOW_S,
-        );
-
-        return { ...verdict, counted: true };
-    } catch (error) {
-        console.warn('rate limit unavailable, passing', error);
-
-        return { allowed: true, counted: false, limit, remaining: limit, reset: WINDOW_S };
-    }
+export type Limiter = {
+    /**
+     * Count one call by `callerKey` on `surface` against `limit` and say
+     * whether it is within it. `callerKey` is the limiter bucket of an
+     * address (limiterBucket) or `acct:<account id>`.
+     */
+    hitKey(surface: Surface, callerKey: string, limit: number): Promise<RateVerdict>;
+    /**
+     * Count one API call by the key `keyId` against its quota of `limit`
+     * calls in the current UTC day (`dailyCounterKey`).
+     */
+    hitDaily(keyId: string, limit: number): Promise<RateVerdict>;
 };
+
+export const createLimiter = (
+    db: CounterDb,
+    {
+        windowS = WINDOW_S,
+        fallback = createFallbackCounter(windowS),
+        dailyFallback = createFallbackCounter(DAY_S),
+        warn = console.warn,
+        prune = true,
+    }: {
+        windowS?: number;
+        fallback?: FallbackCounter;
+        dailyFallback?: FallbackCounter;
+        warn?: (message: string, error: unknown) => void;
+        prune?: boolean;
+    } = {},
+): Limiter => {
+    let lastPrune = 0;
+
+    // Each instance deletes dead counters, at most once an hour, the
+    // Studio's included (every Studio call passes here too). The delete uses
+    // the same bounded counter pool as the counts.
+    const pruneOften = (): void => {
+        if (prune && Date.now() - lastPrune > PRUNE_EVERY_MS) {
+            lastPrune = Date.now();
+            pruneCounters(db).catch((error) => warn('limit counters not pruned', error));
+        }
+    };
+
+    const count = async (
+        counter: FallbackCounter,
+        key: string,
+        limit: number,
+        window: number,
+    ): Promise<RateVerdict> => {
+        pruneOften();
+
+        try {
+            const sentAt = Date.now();
+            const verdict = await countHit(db, key, limit, window);
+
+            counter.record(key, verdict, sentAt);
+
+            return verdict;
+        } catch (error) {
+            warn('rate limit unavailable, counting in memory', error);
+
+            return counter.hit(key, limit);
+        }
+    };
+
+    return {
+        hitKey: (surface, callerKey, limit) =>
+            count(fallback, `${surface}:${callerKey}`, limit, windowS),
+        hitDaily: (keyId, limit) => count(dailyFallback, dailyCounterKey(keyId), limit, DAY_S),
+    };
+};
+
+const limiter = createLimiter(counterDb);
+
+/** Count one call by `callerKey` on `surface` against `limit` (see Limiter). */
+export const hitKey = (surface: Surface, callerKey: string, limit: number): Promise<RateVerdict> =>
+    limiter.hitKey(surface, callerKey, limit);
+
+/** Count one call from the address `ip` against `surface`'s anonymous allowance. */
+export const hit = (surface: Surface, ip: string): Promise<RateVerdict> =>
+    hitKey(surface, limiterBucket(ip), LIMITS[surface]);
+
+/** Count one API call by the key `keyId` against its daily quota (see Limiter). */
+export const hitDaily = (keyId: string, limit: number): Promise<RateVerdict> =>
+    limiter.hitDaily(keyId, limit);

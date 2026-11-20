@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
-import { buildCounterPool, buildRuntimePool } from '../../../db/connection';
+import { buildCounterPool, buildKeyPool, buildRuntimePool } from '../../../db/connection';
 import * as schema from '../../../db/schema';
 
 /**
@@ -14,7 +14,7 @@ import * as schema from '../../../db/schema';
  * is safe to call at import time: nothing in it throws with no DB env at
  * all, which is how `next build` runs.
  */
-const globalForDb = globalThis as unknown as { pool?: Pool; counterPool?: Pool };
+const globalForDb = globalThis as unknown as { pool?: Pool; counterPool?: Pool; keyPool?: Pool };
 
 const pool = globalForDb.pool ?? buildRuntimePool();
 
@@ -26,13 +26,21 @@ const pool = globalForDb.pool ?? buildRuntimePool();
 // quiet instance does again after 30 s idle.
 const counterPool = globalForDb.counterPool ?? buildCounterPool();
 
+// The proxy's API key lookups get a pool of their own for the same reason,
+// with a tighter connect bound (buildKeyPool).
+const keyPool = globalForDb.keyPool ?? buildKeyPool();
+
 globalForDb.pool = pool;
 globalForDb.counterPool = counterPool;
+globalForDb.keyPool = keyPool;
 
 /** Accounts, conversation history, and shares. */
 export const db = drizzle(pool, { schema });
 
 /** Per-address rate limits, Studio prompt allowances and sign-in code caps. */
 export const counterDb = drizzle(counterPool, { schema });
+
+/** The proxy's API key lookups (src/lib/proxy/keyVerifier). */
+export const keyDb = drizzle(keyPool, { schema });
 
 export type Db = typeof db;

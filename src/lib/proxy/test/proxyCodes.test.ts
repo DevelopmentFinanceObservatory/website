@@ -5,7 +5,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { REGISTRY_CODES, rateLimitedProblem, unreachableProblem } from '../problem.ts';
+import {
+    REGISTRY_CODES,
+    invalidKeyProblem,
+    rateLimitedProblem,
+    unreachableProblem,
+} from '../problem.ts';
 import { proxyCodeEntry } from '../proxyCodes.ts';
 
 // Read from the file, so the expected split does not come from the module under test.
@@ -45,4 +50,13 @@ test('proxyCodeEntry: the body has the API registry entry shape, titled as the p
         proxyCodeEntry('transient_unavailable')?.title,
         (await unreachableProblem('x', {}).json()).title,
     );
+});
+
+test('proxyCodeEntry: invalid_api_key is the 401 the proxy answers a bad key with', async () => {
+    const problem = await invalidKeyProblem().json();
+    const entry = proxyCodeEntry('invalid_api_key');
+
+    assert.equal(problem.type, '/codes/invalid_api_key');
+    assert.equal(entry?.title, problem.title);
+    assert.equal(codes.find(({ code }) => code === 'invalid_api_key')?.status, 401);
 });

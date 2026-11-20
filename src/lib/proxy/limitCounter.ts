@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { limitCounter } from '../../../db/schema.ts';
@@ -30,6 +30,12 @@ export type Reservation = {
 export type ReservationVerdict =
     | { admitted: true; receipt: Reservation; limit: number; remaining: number; reset: number }
     | { admitted: false; limit: number; remaining: 0; reset: number };
+
+/** The window of a key's daily API quota in seconds: a UTC day, epoch-aligned. */
+export const DAY_S = 86_400;
+
+/** The counter key of an API key's daily API quota. */
+export const dailyCounterKey = (keyId: string): string => `apiday:key:${keyId}`;
 
 // Rows whose window started this long ago are dead for any window of a day
 // or less, the longest the site uses.
@@ -164,4 +170,34 @@ export const pruneCounters = async (db: CounterDb): Promise<void> => {
         delete from ${limitCounter}
         where ${limitCounter.windowStart} < now() - make_interval(secs => ${PRUNE_AFTER_S})
     `);
+};
+
+/**
+ * How many API calls each of the keys `keyIds` has made in the current UTC
+ * day, counted refused calls included. A key with no counter, or a counter
+ * from an earlier day, is 0.
+ */
+export const dailyUsage = async (
+    db: Pick<NodePgDatabase, 'select'>,
+    keyIds: string[],
+): Promise<Map<string, number>> => {
+    const used = new Map(keyIds.map((id) => [id, 0]));
+
+    if (keyIds.length === 0) {
+        return used;
+    }
+
+    const rows = await db
+        .select({ key: limitCounter.key, count: limitCounter.count })
+        .from(limitCounter)
+        .where(
+            sql`${inArray(limitCounter.key, keyIds.map(dailyCounterKey))}
+                and ${limitCounter.windowStart} >= date_bin(make_interval(secs => ${DAY_S}), now(), timestamptz 'epoch')`,
+        );
+
+    for (const { key, count } of rows) {
+        used.set(key.slice(dailyCounterKey('').length), count);
+    }
+
+    return used;
 };
