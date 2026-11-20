@@ -236,10 +236,9 @@ test('the export reader reads accounts per UTC day and organisation, and not "us
         byHash(
             users
                 .filter(([email]) => email in organisationOf)
-                .map(([email, back]) => ({
+                .map(([email]) => ({
                     user_hash: eventUserHash(idOf(email))!,
                     organisation: organisationOf[email]!,
-                    created_day: day(back),
                 })),
         ),
     );
@@ -286,6 +285,34 @@ test('account_daily and account_organisation name a domain only once it holds 3 
             ['b@three.org', 'Other organisations'],
         ],
     );
+});
+
+test('account_daily and account_organisation leave out an account being deleted', async (t) => {
+    const database = await createTestDatabase();
+    t.after(() => database.teardown());
+
+    await migrate(database);
+    // Three live accounts at one domain, and a fourth being deleted.
+    await database.runtimePool().query(
+        `insert into "user" (id, name, email, created_at, deleting_at)
+         select email, 'Name', email, (now() at time zone 'UTC')::date - 2,
+                case when email like 'gone%' then now() end
+         from unnest(array['a@three.org', 'b@three.org', 'c@three.org', 'gone@three.org']) as seed (email)`,
+    );
+
+    const { rows, organisations } = await readAccounts(database.adminPool());
+
+    assert.deepEqual(
+        rows
+            .filter((row) => row.accounts > 0)
+            .map(({ organisation, accounts }) => [organisation, accounts]),
+        [['three.org', 3]],
+    );
+    assert.deepEqual(organisations.map(({ userId }) => userId).sort(), [
+        'a@three.org',
+        'b@three.org',
+        'c@three.org',
+    ]);
 });
 
 test('account_daily holds no rows while webmail_domain is empty, and the export fails', async (t) => {
@@ -454,8 +481,8 @@ const ROWS: AccountRow[] = [
 ];
 
 const ORGANISATIONS: AccountRead['organisations'] = [
-    { userId: 'user-1', organisation: 'Personal email', createdDay: '2026-10-20' },
-    { userId: 'user-2', organisation: 'one.org', createdDay: '2026-10-21' },
+    { userId: 'user-1', organisation: 'Personal email' },
+    { userId: 'user-2', organisation: 'one.org' },
 ];
 
 test('runAccountExport loads each table in one file, digests the user ids, and removes the file', async () => {
@@ -484,9 +511,8 @@ test('runAccountExport loads each table in one file, digests the user ids, and r
         {
             user_hash: eventUserHash('user-1'),
             organisation: 'Personal email',
-            created_day: '2026-10-20',
         },
-        { user_hash: eventUserHash('user-2'), organisation: 'one.org', created_day: '2026-10-21' },
+        { user_hash: eventUserHash('user-2'), organisation: 'one.org' },
     ]);
     await assert.rejects(fs.access(file));
 });

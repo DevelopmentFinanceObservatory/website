@@ -9,7 +9,7 @@ import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './
 
 /**
  * The account export, which the event export Job (db/export-events.ts) runs
- * before the event export. It copies the Postgres view `account_daily`
+ * after the event export, so the event days load first. It copies the Postgres view `account_daily`
  * (migrations 0020, 0021 and 0025) into the BigQuery table `account_daily`,
  * and the view `account_organisation` (migration 0025) into the table
  * `account_organisation`, replacing each whole table in one load job, so a
@@ -17,7 +17,8 @@ import { callWithin, loadWithin, QUERY_GRACE_MS, STATEMENT_TIMEOUT_MS } from './
  * accounts per UTC day and organisation, for every day from the first
  * account's through yesterday's. `account_organisation` holds one row per
  * account counted there, keyed by `user_hash`, the digest the event export
- * writes for the account's events. Neither table holds an email address or
+ * writes for the account's events, with its organisation and no creation
+ * day. Both views leave out accounts being deleted. Neither table holds an email address or
  * a user id.
  */
 
@@ -58,8 +59,6 @@ export type AccountOrganisationRow = {
     // exportDigest of the user id under EXPORT_ID_HMAC_KEY, the events' `user_hash`
     user_hash: string;
     organisation: string;
-    // UTC, 2026-10-20
-    created_day: string;
 };
 
 export const ACCOUNT_ORGANISATION_SCHEMA: TableField[] = [
@@ -80,19 +79,12 @@ export const ACCOUNT_ORGANISATION_SCHEMA: TableField[] = [
             '`Personal email` for a webmail domain, `Other organisations` for any other. ' +
             'The `organisation` of `account_daily`',
     },
-    {
-        name: 'created_day',
-        type: 'DATE',
-        mode: 'REQUIRED',
-        description: 'The UTC day the account was created',
-    },
 ];
 
 /** One row of the view `account_organisation`, as the Job reads it. */
 export type AccountOrganisationSource = {
     userId: string;
     organisation: string;
-    createdDay: string;
 };
 
 /**
@@ -120,10 +112,9 @@ const readInTransaction = async (client: PoolClient): Promise<AccountRead> => {
         webmailDomains: boolean;
     }>(`SELECT accounts, webmail_domains AS "webmailDomains" FROM account_daily_source`);
     const { rows: organisations } = await client.query<AccountOrganisationSource>(
-        `SELECT user_id AS "userId", organisation,
-                to_char(created_day, 'YYYY-MM-DD') AS "createdDay"
+        `SELECT user_id AS "userId", organisation
          FROM account_organisation
-         ORDER BY created_day, user_id`,
+         ORDER BY user_id`,
     );
 
     await client.query('COMMIT');
@@ -138,8 +129,10 @@ const ACCOUNT_READ_MS = 3 * STATEMENT_TIMEOUT_MS + QUERY_GRACE_MS;
  * Every row of `account_daily`, oldest day first, every row of
  * `account_organisation`, and the facts that say why `account_daily` holds
  * none. One read-only transaction reads all three, so they share one
- * `now()` and one snapshot, and the organisations sum to the daily counts. A read still running at `timeoutMs`, as over a
- * connection that stalls past Postgres's timeout, throws.
+ * `now()` and one snapshot. The two loads that follow are separate, so for
+ * one run the BigQuery tables can differ, and the next run reconciles them.
+ * A read still running at `timeoutMs`, as over a connection that stalls
+ * past Postgres's timeout, throws.
  */
 export const readAccounts = async (
     pool: Pool,
@@ -172,12 +165,11 @@ export const readAccounts = async (
  * `user_hash` with, and the row keeps no other trace of it.
  */
 export const accountOrganisationRow = (
-    { userId, organisation, createdDay }: AccountOrganisationSource,
+    { userId, organisation }: AccountOrganisationSource,
     hmacKey: string,
 ): AccountOrganisationRow => ({
     user_hash: exportDigest(userId, hmacKey),
     organisation,
-    created_day: createdDay,
 });
 
 /** The BigQuery tables the account export replaces, with their schemas. */

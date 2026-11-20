@@ -904,10 +904,12 @@ export const runExport = async ({
 };
 
 /**
- * The export Job's run (db/export-events.ts): the account export, then the
- * event export, which runs whether or not the account export failed, so a
- * failing one leaves the other's tables current. Rejects once both are
- * done with the one that failed, or with both in one AggregateError.
+ * The export Job's run (db/export-events.ts): the event export, then the
+ * account export, so the event days load before the account export's reads
+ * and loads spend any of the Job's time. The account export runs whether or
+ * not the event export failed, so a failing one leaves the other's tables
+ * current. Rejects once both are done with the one that failed, or with both
+ * in one AggregateError.
  */
 export const runExportJob = async ({
     exportAccounts,
@@ -918,10 +920,23 @@ export const runExportJob = async ({
     exportEvents: () => Promise<unknown>;
     progress?: JobProgress;
 }): Promise<void> => {
+    let eventFailure: Error | null = null;
     let accountFailure: Error | null = null;
+    const earlierFaults = progress.faults;
+
+    progress.faults = () => [
+        ...earlierFaults(),
+        ...(accountFailure !== null ? [accountFailure.message] : []),
+    ];
+
+    try {
+        await exportEvents();
+    } catch (error) {
+        eventFailure = error instanceof Error ? error : new Error(messageOf(error));
+    }
 
     progress.phase = 'the account export';
-    progress.faults = () => (accountFailure !== null ? [accountFailure.message] : []);
+    progress.unstarted = [];
 
     try {
         await exportAccounts();
@@ -929,21 +944,17 @@ export const runExportJob = async ({
         accountFailure = new Error(`account export failed: ${messageOf(error)}`, { cause: error });
     }
 
-    try {
-        await exportEvents();
-    } catch (error) {
-        throw accountFailure === null
-            ? error
-            : new AggregateError(
-                  [accountFailure, error],
-                  `${accountFailure.message}; ${messageOf(error)}`,
-              );
-    }
-
     progress.phase = "the run's report";
 
-    if (accountFailure !== null) {
-        throw accountFailure;
+    if (eventFailure !== null && accountFailure !== null) {
+        throw new AggregateError(
+            [accountFailure, eventFailure],
+            `${accountFailure.message}; ${messageOf(eventFailure)}`,
+        );
+    }
+
+    if (eventFailure !== null || accountFailure !== null) {
+        throw eventFailure ?? accountFailure;
     }
 };
 
