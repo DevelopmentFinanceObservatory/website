@@ -2,9 +2,9 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
-import { apisCallerFor } from './caller';
+import { apisCallerFor, requestSurface, type ApisSurface } from './caller';
 import { forward, isApisTarget, type ForwardOptions } from './forward';
-import { clientLabel, NON_PRINTABLE, pick } from './headers';
+import { clientToken, NON_PRINTABLE, pick } from './headers';
 
 /**
  * The Datasets API's read routes as the gateway serves them to pages, under
@@ -386,12 +386,6 @@ const followStorage =
 /** Where the gateway's dfo-apis call got its caller (dfo-apis's CallerSource). */
 export type CallerSource = 'vouched' | 'none';
 
-/**
- * Where a read came from, as website#171's requestSurface (src/lib/proxy/caller.ts)
- * names it in x-dfo-surface.
- */
-export type DeliverySurface = 'website' | 'api';
-
 /** One `gateway.delivery` line. */
 export type GatewayDeliveryEntry = {
     // ERROR when the body failed before the client had it all.
@@ -408,7 +402,7 @@ export type GatewayDeliveryEntry = {
     // What forward() sent dfo-apis in x-dfo-caller, vouched by the principal.
     caller: string | null;
     caller_source: CallerSource;
-    surface: DeliverySurface;
+    surface: ApisSurface;
     // X-DFO-Client's `<name>/<version>` product token, as dfo-apis reads it.
     client: string | null;
     user_agent: string | null;
@@ -434,18 +428,6 @@ const MAX_FIELD_LENGTH = 256;
 const cleaned = (value: string | null): string | null =>
     [...(value ?? '').replace(NON_PRINTABLE, '').trim()].slice(0, MAX_FIELD_LENGTH).join('') ||
     null;
-
-// dfo-apis's _CLIENT_FORMAT: `<name>/<version>`, with an optional `(runtime)`.
-const CLIENT_FORMAT = /^([^/\s()]+\/[^\s()]+)(?: \([^()]+\))?$/u;
-
-/** X-DFO-Client's product token, or null when it is absent or has another shape. */
-export const clientToken = (headers: Headers): string | null =>
-    CLIENT_FORMAT.exec(clientLabel(headers))?.[1] ?? null;
-
-// TODO(website#171): use requestSurface from ./caller once #171 merges; this
-// is its rule, kept here until then.
-const requestSurface = (headers: Headers): DeliverySurface =>
-    headers.get('sec-fetch-site') === 'same-origin' ? 'website' : 'api';
 
 // The caller forward() sends dfo-apis, from the same env and resolver
 // (apisCallerFor); forward()'s own resolver logs the missing-settings warning.

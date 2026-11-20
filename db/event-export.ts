@@ -11,6 +11,7 @@ import type { ShareKind } from '../src/lib/chat/sharePrune.ts';
 import type { Widget } from '../src/lib/chat/widgets.ts';
 import type { DataViewVia } from '../src/lib/events/dataView.ts';
 import type { EventName } from '../src/lib/events/track.ts';
+import { exportDigest } from '../src/lib/proxy/account.ts';
 import type { DatasetFormat } from '../src/lib/search/searchClient.ts';
 import type {
     AbandonReason,
@@ -255,10 +256,11 @@ export const PROP_RULES = {
     },
 } satisfies Record<EventName, Record<string, PropRule>>;
 
-// A change to digest, passes, exportProps, exportPage or exportRow bumps
-// ROW_SHAPE_VERSION.
+// A change to digest (or exportDigest), passes, exportProps, exportPage or
+// exportRow bumps ROW_SHAPE_VERSION. exportDigest also names a Studio
+// account to the harness, so a turn joins the account's events.
 const digest = (key: string, id: string | null): string | null =>
-    id === null ? null : createHmac('sha256', key).update(id).digest('hex');
+    id === null ? null : exportDigest(id, key);
 
 const passes = (rule: PropRule, value: unknown): boolean => {
     switch (rule) {
