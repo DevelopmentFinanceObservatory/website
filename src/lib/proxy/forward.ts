@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 
 import { apisFetch } from '@/lib/apisAuth';
 
+import { setAccount } from './account';
 import { limiterKeyFor, setApisCaller, setCaller, trustedHops } from './caller';
 import {
     clientResponseHeaders,
@@ -49,9 +50,10 @@ import { hit, type Surface } from './rateLimit';
  *
  * A call to SEARCH_API_BASE carries the site's ID token on Cloud Run
  * (src/lib/apisAuth matches on the target's origin), and names the caller in
- * x-dfo-caller beside the x-dfo-caller-principal secret (setApisCaller in
- * src/lib/proxy/caller), matched on the same origin. The other upstreams get
- * neither.
+ * x-dfo-caller and its surface in x-dfo-surface beside the
+ * x-dfo-caller-principal secret (setApisCaller in src/lib/proxy/caller),
+ * matched on the same origin. The other upstreams get none of them. A route
+ * names the caller to one in x-dfo-caller and x-dfo-account instead.
  *
  * The unversioned /api/search|datasets|graph|studio/* paths rewrite onto the
  * same handlers (next.config.ts), so both addresses answer alike.
@@ -83,6 +85,11 @@ export type ForwardOptions = {
     // which gets its own (src/lib/proxy/caller). Any value the client sent is
     // dropped either way.
     caller?: string;
+    // The x-dfo-account digest to send to an upstream other than dfo-apis
+    // (src/lib/proxy/account), resolved once after the rate limit and admit
+    // checks so a refused call costs no lookup. Any value the client sent is
+    // dropped either way.
+    account?: () => Promise<string | undefined>;
     // Headers carried beyond the defaults (src/lib/proxy/headers).
     pass?: HeaderPass;
     // What to answer when the upstream is unreachable.
@@ -165,6 +172,7 @@ export const forward = async (req: NextRequest, options: ForwardOptions): Promis
         setApisCaller(headers, req.headers);
     } else {
         setCaller(headers, options.caller);
+        setAccount(headers, await options.account?.());
     }
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';

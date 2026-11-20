@@ -1,7 +1,7 @@
 /**
  * `requestLog.ts`: which requests are logged and as what, and that the line
- * carries the caller digest, the response status and the bot verdict but no
- * raw address, query string or user agent.
+ * carries the caller digest, the response status, the agent and the bot
+ * verdict but no raw address, query string or user agent.
  */
 import assert from 'node:assert/strict';
 import crypto, { createHash, createHmac } from 'node:crypto';
@@ -177,6 +177,36 @@ test('requestLogEntry: bot is true for crawlers, tools and a missing user agent,
     }
 });
 
+test('requestLogEntry: agent and agent_name beside the isbot verdict, with the MCP route read from the path', () => {
+    const cases: [string, Record<string, string>, string, string | null, boolean][] = [
+        [
+            '/api/v1/datasets',
+            { 'user-agent': 'python-httpx/0.28.1', 'x-dfo-client': 'dfo-python/0.4.1' },
+            'sdk',
+            'dfo-python',
+            true,
+        ],
+        ['/mcp', { 'user-agent': 'Claude-User' }, 'mcp_client', 'Claude-User', true],
+        ['/mcp/', { 'user-agent': 'Claude-User' }, 'mcp_client', 'Claude-User', true],
+        ['/', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
+        ['/mcpx', { 'user-agent': 'Claude-User' }, 'user_fetcher', 'Claude-User', true],
+    ];
+
+    for (const [path, headers, agent, agentName, bot] of cases) {
+        const entry = requestLogEntry(
+            { path, method: 'GET', headers: new Headers(headers) },
+            undefined,
+            { status: 200, finished: true },
+        );
+
+        assert.deepEqual(
+            { agent: entry.agent, agent_name: entry.agent_name, bot: entry.bot },
+            { agent, agent_name: agentName, bot },
+            `${path} ${JSON.stringify(headers)}`,
+        );
+    }
+});
+
 // A server request as the HTTP parser hands it over: a raw target and raw headers.
 const serverRequest = (target: string, headers: Record<string, string> = {}): IncomingMessage => {
     const request = new IncomingMessage(new Socket());
@@ -228,6 +258,8 @@ test('logRequest: one line with the caller digest and no address or query', () =
             status: 404,
             finished: true,
             bot: false,
+            agent: 'browser',
+            agent_name: null,
             prerender: false,
         },
     ]);
@@ -442,6 +474,8 @@ test(
                 status: 200,
                 finished: true,
                 bot: true,
+                agent: 'other_bot',
+                agent_name: null,
                 prerender: false,
             },
         ]);
