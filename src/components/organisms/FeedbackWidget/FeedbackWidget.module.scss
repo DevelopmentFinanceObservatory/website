@@ -18,10 +18,16 @@
     --fb-send: var(--color-sage);
     --fb-send-text: var(--color-charcoal);
 
+    // The scrollbar a dialog's scroll lock removes (Header.module.scss),
+    // added to the right offset. Its unit stays, since calc() rejects a
+    // unitless 0.
+
+    --fb-lock-gap: var(--removed-body-scroll-bar-size, 0px);
+
     @include flex(column, flex-end, flex-end);
 
     position: fixed;
-    right: calc(#{band-offset(rem(10))} + env(safe-area-inset-right));
+    right: calc(#{band-offset(rem(10))} + env(safe-area-inset-right) + var(--fb-lock-gap));
     bottom: env(safe-area-inset-bottom);
     z-index: $z-header + 1;
     gap: rem(8);
