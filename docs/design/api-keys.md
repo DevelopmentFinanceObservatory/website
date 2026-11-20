@@ -1,4 +1,4 @@
-# API Keys for the Platform Proxy
+# API Keys for the DFO API and SDKs
 
 [Issue #142][issue] · [User stories][stories]
 
@@ -36,6 +36,8 @@
 - [Open Questions][]
 
 ## Summary
+
+API keys are for programmatic use of the DFO API: scripts, pipelines and applications that call it directly or through the Python and TypeScript SDKs. A key is optional, raises the caller's limits, and is counted per account and per key. The MCP server and DFO Studio do not use keys. They stay anonymous, with generous per-address and per-user allowances, and ignore any key they are sent.
 
 This feature is to add per-user access to the Development Finance Observatory backend. This will enable:
 
@@ -86,6 +88,7 @@ A key is optional, and it is read only on the API. On `/api/v1/*`, `/openapi.jso
 How the key is sent is a design choice. We propose sending the key as a bearer token in a standard header, `Authorization: Bearer dfo_…`. The proxy also accepts `X-API-Key` as an alias. We don't plan to accept the key in a query string, as that's an outmoded style, although some people like it for ease of use and debuggability.
 
 - Bearer is what a programmatic partner reaches for first, and what scripts, pipelines and SDKs set most easily.
+- The Python and TypeScript SDKs send the key this way. They read it from a client option (`api_key`, `apiKey`), the `DFO_API_KEY` environment variable, or the credentials file `dfo auth login` writes, check its format and checksum before sending, and print it masked (`dfo_k_***Qjsd`). They need no change for keys.
 - The `dfo_` prefix lets the proxy tell our key from any other bearer token.
 - The alias costs a few lines. It leaves `Authorization` free if `/mcp` later gains sign-in, where one call could carry a user's token and an application's key.
 - A call that sends both headers with different keys is refused with a 400.
@@ -157,34 +160,6 @@ Not covered by an account's limit or a key's quota:
 - The proxy's third allowance, `/api/download-pin` at 10 calls a minute, belongs to the site's download UI and is not part of the public API.
 - The Studio's daily prompt allowance is for the site's own chat UI.
 - dfo-apis keeps its own daily allowances per caller: 10 shares and 500 presentation cards, plus pins. A keyed API caller is named by its account and gets these at the default values. Raising them for a partner would be a dfo-apis setting, not part of the account's limit.
-
-**Refusals on MCP**
-
-The proxy enforces its limits before a call reaches the MCP harness, so as built every MCP refusal is an HTTP 429 with a problem document. That rarely reaches the person using an MCP client. The official TypeScript SDK client, which many clients are built on, has [no special handling for 429][ts-sdk-transport]: any non-OK POST throws `Error POSTing to endpoint: <body text>`, with no retry and no reading of `Retry-After`. A 429 on a tool call reaches the model, if at all, as a transport failure carrying the problem document as raw text, and a 429 on `initialize` fails the connection.
-
-The MCP spec has [two kinds of error][mcp-spec-errors]. Protocol errors are JSON-RPC errors, for unknown tools, invalid arguments and server errors. Tool execution errors are a normal result with `isError: true`, for API failures and business logic errors, and the model sees them. The spec's own example of a tool execution error is `"Failed to fetch weather data: API rate limit exceeded"`. It says servers must rate-limit tool calls, and nothing about HTTP status codes for limits.
-
-We propose answering by method:
-
-- **`tools/call` over the limit:** HTTP 200 with a JSON-RPC result, `isError: true`, and one short text block the model can act on: that the address's per-minute limit was reached, how long to wait, and not to retry sooner. The model can then explain it to the user. `Retry-After` and `X-RateLimit-*` stay on the response for programmatic clients.
-- **Anything else over the limit** (`initialize`, `tools/list`, notifications, GET streams): the 429 and problem document, with a one-sentence `detail`. There is no tool result to put it in, and clients show the body text as is.
-- **Not JSON-RPC errors.** The spec keeps them for protocol problems, and clients do not pass them to the model reliably.
-
-What it costs:
-
-- The proxy streams `/mcp` request bodies upstream unread. To answer a refused `tools/call`, it reads the body for the method and the JSON-RPC `id`, only on the refused path, where nothing is forwarded anyway.
-- A refused tool call shows as a 200 in request metrics. Limit counts come from the usage log's `limited` outcome (see [Logs and Docs][]), which is already the source of truth.
-- Client behaviour changes often, and none of this is tested against our server yet. The [user stories][stories] (U3) include a hand check in Claude Code and a Claude connector.
-
-**Comparables: How Other MCP Servers Do It**
-
-| Server                                               | How a limit is reported                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [GitHub MCP server][github-mcp-errors]               | A failed tool call (`isError`). Its guide calls rate limits "user-actionable errors" and keeps Go and JSON-RPC errors for developer errors. An [open issue][github-mcp-issue] asks for a clean message with the wait ("Retry after 47s"), because agents could not act on a raw HTTP string |
-| [Buildkite remote MCP server][buildkite-mcp]         | HTTP 429 with `RateLimit-*` headers and a JSON body: "Please wait 28 seconds before making more requests." It does not document what the client shows                                                                                                                                       |
-| Smaller servers ([Veeva Vault][vault-mcp], Telebugs) | A JSON-RPC error, code -32000                                                                                                                                                                                                                                                               |
-
-The tool-result form follows the spec's own example and the largest of these servers.
 
 ### Cloudflare Integration
 
@@ -437,18 +412,15 @@ Phase 1 should avoid choices that Phase 2 has to undo. Every key has an owning a
 
 ### Local Test Results
 
-Run against the local stack: the website on the implementation branch, the ai harness, and the dev apis proxy. These runs predate the signed tag; keys made then have no tag and are refused. They also predate the surface split: the MCP rows ran with a key counted on `/mcp`, which now ignores keys and counts the call anonymously at 300 a minute, and the API rows show the keyed behaviour the API has. Sign-in used an emailed code caught by a local mail catcher, and the key was created through the account's self-service key management. The key went in as `Authorization: Bearer dfo_live_…`.
+Run against the local stack: the website on the implementation branch and the dev apis proxy. These runs predate the signed tag and the client contract's key format, so the key went in as `Authorization: Bearer dfo_live_…`; keys in that form are refused. Sign-in used an emailed code caught by a local mail catcher, and the key was created through the account's self-service key management.
 
-| Test                              | How                                                                                                                                                          | Result                                                                                                                                                                                  |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Question and answer through MCP   | The pi coding agent, with a small local model, connected to the site's `/mcp` with the key as its bearer and was asked how much money Kenya received in 2025 | Answered from OECD DAC2A, citing the dataset and the partial 2025 data. The figures came from the tools. The small model's totals were unreliable: it mixed official and private donors |
-| MCP session with a key            | A scripted session: `initialize`, then `tools/list`                                                                                                          | 16 tools. `X-RateLimit-Limit: 600`, the keyed default, where an anonymous MCP caller gets 300                                                                                           |
-| Usage counted against the account | The limiter's rows after keyed calls                                                                                                                         | Counted as `mcp:acct:<user id>` and `api:acct:<user id>`, not by address. The key's last use advanced as calls were made                                                                |
-| Anonymous traffic unaffected      | An anonymous call during the keyed burst below                                                                                                               | 200, counted against its address at the anonymous limit (120)                                                                                                                           |
-| Limit enforced on the API         | Account limit set to 5; seven keyed `GET /openapi.json` calls at the start of a window                                                                       | Calls 1 to 5 answered 200, with remaining counting down from 4 to 0. Calls 6 and 7 answered 429 with `Retry-After: 58`                                                                  |
-| Limit enforced on MCP             | Two MCP sessions under the limit of 5                                                                                                                        | The first used 3 calls. The second was refused at `initialize` with 429, because the account's calls are shared across sessions                                                         |
-| An MCP client under a low limit   | Account limit set to 2; pi asked the same question                                                                                                           | pi finished, in about 4 minutes against 2 at the default limit                                                                                                                          |
-| Limit changes take effect         | The limit set to 5, then 2, then cleared                                                                                                                     | Each change reached the proxy within 8 seconds, inside the cache lifetime of about a minute                                                                                             |
+| Test                              | How                                                                                    | Result                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Usage counted against the account | The limiter's rows after keyed API calls                                               | Counted as `api:acct:<user id>`, not by address. The key's last use advanced as calls were made                        |
+| Anonymous traffic unaffected      | An anonymous call during the keyed burst below                                         | 200, counted against its address at the anonymous limit (120)                                                          |
+| Limit enforced on the API         | Account limit set to 5; seven keyed `GET /openapi.json` calls at the start of a window | Calls 1 to 5 answered 200, with remaining counting down from 4 to 0. Calls 6 and 7 answered 429 with `Retry-After: 58` |
+| Limit changes take effect         | The limit set to 5, then 2, then cleared                                               | Each change reached the proxy within 8 seconds, inside the cache lifetime of about a minute                            |
+| SDK format check                  | A key minted by the site's generator, passed to the Python SDK's `check_key_format`    | Accepted with no warning. `keyChecksum` matches the contract's `key-format` test vectors                               |
 
 A refused call is answered with a problem document, the `Retry-After` header and the `X-RateLimit-*` headers:
 
@@ -469,7 +441,7 @@ Observations:
 
 - **Refused calls count.** A refused call adds to the window's count, because the limiter counts every attempt. Usage read from the counters therefore includes refusals, and the usage bar shows that count. Reports that separate allowed from refused calls come from the usage log line, which records the outcome of each call.
 - **Backends not exercised.** The local stack sends no caller to the backends, because the caller key and the shared secret are unset there. dfo-apis seeing the account as a `user:` caller has to be tested on dev, after its change is deployed.
-- **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests so far.
+- **Not tested locally.** Cloudflare's edge rules, and a store outage on a live stack, are covered only by unit tests. A run of the Python or TypeScript SDK with a `dfo_k_` key against the local stack, through to a daily-quota refusal, is to do before release.
 
 ## Runbook
 
@@ -492,6 +464,7 @@ Most of the work is in the website. This split holds for both options: Use and B
 | website    | Most of it | The plugin and its table migration (or our own `api_key`), and migration 0026 for `apikey.daily_limit`; key check on the API surface, per-account per-minute limit, per-key daily quota, burst-safe counter fallback and key usage logging in `forward()`; the self-service side panel and the admin User management page, each with the usage bar; tests beside the existing proxy tests |
 | dfo-apis   | Small      | Accept a keyed caller in `x-dfo-caller` beside the website's shared secret, so allowances count per account. The website sends `user:` for a keyed API call. Today only `ip:<digest>` is accepted, and anything else gets a 400                                                                                                                                                           |
 | dfo-ai     | None       | `/mcp` ignores keys, so dfo-ai sees only `ip:<digest>` callers                                                                                                                                                                                                                                                                                                                            |
+| sdk        | None       | The Python and TypeScript SDKs already read a key, check the client contract's format and send it as a bearer                                                                                                                                                                                                                                                                             |
 | infra      | Small      | `API_KEY_TAG_SECRETS`, a dedicated secret list per environment, before the first key is issued. The admin page covers operator changes in production; a Cloud Run Job for a scripted admin command is optional                                                                                                                                                                            |
 | docs       | Small      | The API quickstart, which says no key is needed, gains a note that a key raises limits and a link to the `build/api-keys` page. That page covers the 52-character key format, the daily quota and its 00:00 UTC reset, and says `/mcp` ignores keys                                                                                                                                       |
 | Cloudflare | Small      | Keyed calls pass the data API's per-address rule (600 a minute), which equals the keyed default. Raise it, or skip it for keyed requests, before an account's limit passes 600                                                                                                                                                                                                            |
@@ -519,7 +492,7 @@ Not planned for any phase yet. The design should not rule them out.
 - **Expiring keys.** A key carries an expiry date and stops working after it. Until then a key lives until it is revoked.
 - **Keys owned by an organization.** The plugin supports it, and existing keys keep their secrets. The move needs a migration to replace the foreign key from `0025_api_keys.sql`, a home for the account limit off `user`, and a rule for whose allowances and pins in the backends follow the organization.
 - **Usage history.** The usage bar shows today's count. Counts for earlier days exist only in log lines.
-- **Signed-in MCP access.** `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores.
+- **Signed-in MCP access** ([#176][issue-176]). `/mcp` accepts OAuth sign-in, so a signed-in user's calls count against their account. It is separate from API keys, which `/mcp` ignores. It includes how an MCP client shows a refusal: a 429 on a tool call reaches most clients as a raw transport error, so a refused `tools/call` would be better answered as a tool result with `isError: true`, as the MCP specification's own rate-limit example and the GitHub MCP server do.
 - **Terms of use at key creation.**
 - **More graceful degradation besides limits.** Depending on how often limits are hit, and the user impact of that, we could have fancier throttles in the future:
     - Soft vs. hard limits (warnings)
@@ -535,12 +508,7 @@ None of these block Phase 1.
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
 [stories]: api-keys-stories.md
-[mcp-spec-errors]: https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling
-[ts-sdk-transport]: https://github.com/modelcontextprotocol/typescript-sdk/blob/main/packages/client/src/client/streamableHttp.ts
-[github-mcp-errors]: https://github.com/github/github-mcp-server/blob/main/docs/error-handling.md
-[github-mcp-issue]: https://github.com/github/github-mcp-server/issues/2385
-[buildkite-mcp]: https://buildkite.com/docs/apis/mcp-server/remote/rate-limits
-[vault-mcp]: https://limited.veevavault.dev/mcp/vault-mcp-server/reference/errors/
+[issue-176]: https://github.com/DevelopmentFinanceObservatory/website/issues/176
 [cf-best-practices]: https://developers.cloudflare.com/waf/rate-limiting-rules/best-practices/
 [cf-availability]: https://developers.cloudflare.com/waf/rate-limiting-rules/
 [better-auth-api-key]: https://www.better-auth.com/docs/plugins/api-key

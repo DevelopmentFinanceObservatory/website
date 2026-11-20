@@ -9,6 +9,7 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 - [Personas][]
 - [Terms][]
 - [Stories: In-Scope][]
+    - [Using a Key][]
     - [Seeing Usage][]
     - [Hitting a Limit][]
     - [Managing Keys][]
@@ -37,6 +38,32 @@ These stories set the UX for API keys and quotas, and each acceptance criterion 
 Stories are numbered by area (`U` user, `A` admin, `T` telemetry). A story keeps its number if it moves between sections, so gaps are expected. **Status** says where this branch stands: _built_, _partial_ or _not built_.
 
 ## Stories: In-Scope
+
+### Using a Key
+
+Keys are for programmatic use of the API. The MCP server and the Studio need no key ([design: Where Keys Apply][design-where]).
+
+#### U12. Use a key from a script, a pipeline or the SDK
+
+_As a DFO user running a pipeline, I want to give my script or the Python or TypeScript SDK a key, so its calls get my account's limits instead of the anonymous per-address limit._
+
+- [ ] A key from the panel works in the SDKs as given, through a client option (`api_key`, `apiKey`), the `DFO_API_KEY` environment variable, or `dfo auth login`, and passes the SDK's format check with no warning.
+- [ ] The SDK sends it as `Authorization: Bearer`, and a plain HTTP client can do the same, or send `X-API-Key`.
+- [ ] Keyed calls count against the account's per-minute limit and the key's daily quota, and the key's usage bar and last use on the panel move with them.
+- [ ] Without a key, the SDK and plain clients still work, counted per address at the anonymous limit (120 a minute).
+- [ ] Wherever the SDK prints the key, it is masked (`dfo_k_***Qjsd`), and its last four characters match the end of the key's snippet on the panel and the admin page.
+
+Status: partial. The format check is verified against the Python SDK's `check_key_format` and the contract's test vectors, and keyed API calls are covered by the proxy tests. An SDK run with a key against the local stack is not done.
+
+#### U13. Use MCP and the Studio without a key
+
+_As a DFO user working through an MCP client or the Studio, I want them to work without a key, so connecting an assistant needs no setup._
+
+- [ ] `/mcp` and the Studio answer without a key, at their own allowances: 300 calls a minute per address on `/mcp`, and the Studio's daily prompt allowance per user.
+- [ ] A key sent to either is stripped and ignored ([U4][Hitting a Limit]), and does not count against the key's daily quota or the account's per-minute limit.
+- [ ] The panel and the docs page describe keys as being for the API and the SDKs, and say MCP and the Studio need none.
+
+Status: partial. The `/mcp` and Studio behaviour is built and tested. The panel's wording is built; the docs page is in docs#26.
 
 ### Seeing Usage
 
@@ -276,7 +303,7 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 ## Open Questions
 
 - [ ] **Support flow for a higher limit.** A support email address, a page on the site, or a ticketing system? U3, U11 and the `/codes/rate_limited` page all link to it. (Also an open question in the [design][design-open].)
-- [x] **MCP refusals in clients.** How does an over-limit MCP call reach the user? Answered in the design's [Refusals on MCP][design-limits]: refuse `tools/call` as a tool result with `isError: true`, and everything else with a 429. It applies to the anonymous MCP limit, since `/mcp` ignores keys.
+- [ ] **MCP refusals in clients.** How does an over-limit MCP call reach the user? It concerns the anonymous MCP limit, since `/mcp` ignores keys, and is part of signed-in MCP access ([design: Future Features][design-future]).
 - [ ] **Studio limit messaging.** The Studio's daily prompt allowance is separate from key limits. Should its refusal get the same treatment as U3, as a separate story?
 
 [issue]: https://github.com/DevelopmentFinanceObservatory/website/issues/142
@@ -292,6 +319,7 @@ Deliberately not part of this work. Some are listed in the design's [Future Feat
 [Personas]: #personas
 [Terms]: #terms
 [Stories: In-Scope]: #stories-in-scope
+[Using a Key]: #using-a-key
 [Seeing Usage]: #seeing-usage
 [Hitting a Limit]: #hitting-a-limit
 [Managing Keys]: #managing-keys
